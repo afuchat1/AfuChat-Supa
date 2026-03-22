@@ -19,9 +19,10 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 
-type Contact = {
+type FollowedUser = {
   id: string;
   display_name: string;
+  handle: string;
   avatar_url: string | null;
 };
 
@@ -30,29 +31,28 @@ export default function CreateGroupScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const [groupName, setGroupName] = useState("");
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [followedUsers, setFollowedUsers] = useState<FollowedUser[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
 
-  const loadContacts = useCallback(async () => {
+  const loadFollowing = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     const { data } = await supabase
-      .from("contacts")
-      .select("contact_id, profiles!contacts_contact_id_fkey(id, display_name, avatar_url)")
-      .eq("user_id", user.id)
-      .eq("status", "accepted");
+      .from("follows")
+      .select("following_id, profiles!follows_following_id_fkey(id, display_name, handle, avatar_url)")
+      .eq("follower_id", user.id);
 
     if (data) {
-      setContacts(
-        data.map((c: any) => c.profiles).filter(Boolean)
+      setFollowedUsers(
+        data.map((f: any) => f.profiles).filter(Boolean)
       );
     }
     setLoading(false);
   }, [user]);
 
-  useEffect(() => { loadContacts(); }, [loadContacts]);
+  useEffect(() => { loadFollowing(); }, [loadFollowing]);
 
   function toggleSelect(id: string) {
     Haptics.selectionAsync();
@@ -69,39 +69,39 @@ export default function CreateGroupScreen() {
       Alert.alert("Group name required", "Please enter a group name.");
       return;
     }
-    if (selected.size < 2) {
-      Alert.alert("Add members", "Select at least 2 contacts.");
+    if (selected.size < 1) {
+      Alert.alert("Add members", "Select at least 1 contact.");
       return;
     }
     if (!user) return;
     setCreating(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    const { data: conv } = await supabase
-      .from("conversations")
+    const { data: chat } = await supabase
+      .from("chats")
       .insert({
+        name: groupName.trim(),
         is_group: true,
-        group_name: groupName.trim(),
-        last_message: "",
-        last_message_at: new Date().toISOString(),
+        created_by: user.id,
+        user_id: user.id,
       })
       .select()
       .single();
 
-    if (conv) {
-      const members = [user.id, ...Array.from(selected)].map((uid) => ({
-        conversation_id: conv.id,
+    if (chat) {
+      const members = [user.id, ...Array.from(selected)].map((uid, i) => ({
+        chat_id: chat.id,
         user_id: uid,
+        is_admin: uid === user.id,
       }));
-      await supabase.from("conversation_members").insert(members);
-      router.replace({ pathname: "/chat/[id]", params: { id: conv.id } });
+      await supabase.from("chat_members").insert(members);
+      router.replace({ pathname: "/chat/[id]", params: { id: chat.id } });
     }
     setCreating(false);
   }
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* Header */}
       <View
         style={[
           styles.header,
@@ -121,7 +121,6 @@ export default function CreateGroupScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Group Name */}
       <View style={[styles.nameRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <View style={[styles.groupIconWrap, { backgroundColor: colors.inputBg }]}>
           <Ionicons name="camera-outline" size={20} color={colors.textMuted} />
@@ -136,10 +135,9 @@ export default function CreateGroupScreen() {
         />
       </View>
 
-      {/* Selected count */}
       <View style={[styles.memberCount, { backgroundColor: colors.backgroundSecondary }]}>
         <Text style={[styles.memberCountText, { color: colors.textSecondary }]}>
-          {selected.size} selected
+          {selected.size} selected from your contacts
         </Text>
       </View>
 
@@ -147,7 +145,7 @@ export default function CreateGroupScreen() {
         <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} />
       ) : (
         <FlatList
-          data={contacts}
+          data={followedUsers}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => {
             const isSelected = selected.has(item.id);
@@ -158,9 +156,10 @@ export default function CreateGroupScreen() {
                 activeOpacity={0.7}
               >
                 <Avatar uri={item.avatar_url} name={item.display_name} size={44} />
-                <Text style={[styles.contactName, { color: colors.text }]}>
-                  {item.display_name}
-                </Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.contactName, { color: colors.text }]}>{item.display_name}</Text>
+                  <Text style={[styles.contactHandle, { color: colors.textMuted }]}>@{item.handle}</Text>
+                </View>
                 <View
                   style={[
                     styles.checkbox,
@@ -179,7 +178,7 @@ export default function CreateGroupScreen() {
             <View style={styles.empty}>
               <Ionicons name="people-outline" size={48} color={colors.textMuted} />
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                No contacts to add
+                Follow people first to add them to a group
               </Text>
             </View>
           }
@@ -226,7 +225,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 12,
   },
-  contactName: { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular" },
+  contactName: { fontSize: 16, fontFamily: "Inter_400Regular" },
+  contactHandle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
   checkbox: {
     width: 24,
     height: 24,
@@ -236,5 +236,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   empty: { flex: 1, alignItems: "center", paddingTop: 60, gap: 12 },
-  emptyText: { fontSize: 15, fontFamily: "Inter_400Regular" },
+  emptyText: { fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "center", paddingHorizontal: 24 },
 });

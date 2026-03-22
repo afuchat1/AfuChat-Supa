@@ -22,19 +22,72 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 artifacts-monorepo/
 ├── artifacts/              # Deployable applications
 │   ├── api-server/         # Express API server
-│   └── mobile/             # AfuChat Expo React Native app
+│   ├── mobile/             # AfuChat Expo React Native app
+│   └── mockup-sandbox/     # Component preview server
 ├── lib/                    # Shared libraries
 │   ├── api-spec/           # OpenAPI spec + Orval codegen config
 │   ├── api-client-react/   # Generated React Query hooks
 │   ├── api-zod/            # Generated Zod schemas from OpenAPI
 │   └── db/                 # Drizzle ORM schema + DB connection
 ├── scripts/                # Utility scripts (single workspace package)
-│   └── src/                # Individual .ts scripts, run via `pnpm --filter @workspace/scripts run <script>`
-├── pnpm-workspace.yaml     # pnpm workspace (artifacts/*, lib/*, lib/integrations/*, scripts)
-├── tsconfig.base.json      # Shared TS options (composite, bundler resolution, es2022)
-├── tsconfig.json           # Root TS project references
-└── package.json            # Root package with hoisted devDeps
+│   └── src/                # Individual .ts scripts
+├── pnpm-workspace.yaml
+├── tsconfig.base.json
+├── tsconfig.json
+└── package.json
 ```
+
+## AfuChat Mobile App (artifacts/mobile)
+
+Expo React Native app — WeChat-style chat application connecting to an external Supabase backend.
+
+### Backend: Supabase (rhnsjqqtdzlkvqazfcbg.supabase.co)
+
+The app uses an **existing** Supabase project with pre-created tables. No schema migration needed.
+
+### Key Supabase Tables Used
+
+- **profiles** — `id`, `handle`, `display_name`, `avatar_url`, `bio`, `xp`, `acoin`, `current_grade`, `is_verified`, `country`, `website_url`, `phone_number`, `banner_url`, `language`, `tipping_enabled`, etc.
+- **chats** — `id`, `name`, `is_group`, `is_channel`, `created_by`, `is_pinned`, `is_archived`, `avatar_url`, `description`, `user_id`, `is_verified`, `who_can_send`, `member_limit`
+- **chat_members** — `id`, `chat_id`, `user_id`, `joined_at`, `is_admin`
+- **messages** — `id`, `chat_id`, `sender_id`, `encrypted_content`, `sent_at`, `reply_to_message_id`, `attachment_url`, `attachment_type`, `audio_url`, `edited_at`
+- **follows** — `id`, `follower_id`, `following_id` (acts as contacts system)
+- **follow_requests** — `id`, `requester_id`, `target_id`, `status`
+- **posts** — `id`, `author_id`, `content` (max 280 chars), `image_url`, `view_count`, `is_blocked`, `wall_user_id`, `language_code`
+- **post_images** — `id`, `post_id`, `image_url`, `display_order`
+- **post_replies** — `id`, `post_id`, `author_id`, `content`, `parent_reply_id`
+- **stories** — `id`, `user_id`, `media_url`, `media_type`, `caption`, `expires_at`, `view_count`
+- **gifts/gift_transactions** — virtual gift system
+- **message_reactions** — emoji reactions on messages
+- **blocked_users** — block/unblock users
+- **notifications** — system notifications
+- **acoin_transactions** / **xp_transfers** — currency system
+
+### App Architecture
+
+- **Auth**: Supabase Auth (email/password), AuthContext provider
+- **Navigation**: Expo Router with tabs (Chats, Contacts, Discover, Me)
+- **Design**: WeChat green `#07C160` brand color, Inter font family, dark/light theme
+- **Real-time**: Supabase Realtime subscriptions for incoming messages
+- **State**: React Context (AuthContext) + local component state
+
+### Key Files
+
+- `lib/supabase.ts` — Supabase client config
+- `context/AuthContext.tsx` — Auth provider with profile loading
+- `constants/colors.ts` — Brand colors + light/dark theme
+- `hooks/useTheme.ts` — Theme hook
+- `components/ui/Avatar.tsx` — Avatar with initials fallback
+- `components/ui/Separator.tsx` — List separator
+- `app/(tabs)/index.tsx` — Chats list
+- `app/(tabs)/contacts.tsx` — Contacts (follows) list
+- `app/(tabs)/discover.tsx` — Posts feed
+- `app/(tabs)/me.tsx` — Profile & settings
+- `app/chat/[id].tsx` — Chat conversation screen
+- `app/moments/create.tsx` — Create new post
+- `app/profile/edit.tsx` — Edit profile
+- `app/group/create.tsx` — Create group chat
+- `app/contact/[id].tsx` — Contact profile view
 
 ## TypeScript & Composite Projects
 

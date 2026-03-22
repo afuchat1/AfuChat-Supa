@@ -23,13 +23,14 @@ export default function RegisterScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [displayName, setDisplayName] = useState("");
+  const [handle, setHandle] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleRegister() {
-    if (!displayName || !email || !password) {
+    if (!displayName || !handle || !email || !password) {
       Alert.alert("Missing fields", "Please fill all fields.");
       return;
     }
@@ -37,17 +38,18 @@ export default function RegisterScreen() {
       Alert.alert("Weak password", "Password must be at least 6 characters.");
       return;
     }
+    const cleanHandle = handle.replace(/[^a-zA-Z0-9_]/g, "").toLowerCase();
+    if (cleanHandle.length < 3) {
+      Alert.alert("Invalid handle", "Handle must be at least 3 characters (letters, numbers, underscores).");
+      return;
+    }
     setLoading(true);
-
-    const username =
-      email.split("@")[0].toLowerCase().replace(/[^a-z0-9_]/g, "_") +
-      Math.floor(Math.random() * 1000);
 
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
-        data: { display_name: displayName, username },
+        data: { display_name: displayName, handle: cleanHandle },
       },
     });
 
@@ -60,9 +62,8 @@ export default function RegisterScreen() {
     if (data.user) {
       await supabase.from("profiles").upsert({
         id: data.user.id,
-        username,
+        handle: cleanHandle,
         display_name: displayName,
-        status: "Hey, I'm using AfuChat!",
       });
     }
 
@@ -82,7 +83,6 @@ export default function RegisterScreen() {
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.backBtn}
@@ -108,6 +108,18 @@ export default function RegisterScreen() {
               value={displayName}
               onChangeText={setDisplayName}
               autoCapitalize="words"
+            />
+          </View>
+
+          <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
+            <Ionicons name="at-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
+            <TextInput
+              style={[styles.input, { color: colors.text }]}
+              placeholder="Handle (e.g. john_doe)"
+              placeholderTextColor={colors.textMuted}
+              value={handle}
+              onChangeText={setHandle}
+              autoCapitalize="none"
             />
           </View>
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -19,10 +19,14 @@ import Colors from "@/constants/colors";
 type Profile = {
   id: string;
   display_name: string;
+  handle: string;
   avatar_url: string | null;
-  status: string;
-  username: string;
   bio: string | null;
+  is_verified: boolean;
+  xp: number;
+  current_grade: string;
+  website_url: string | null;
+  country: string | null;
 };
 
 export default function ContactProfileScreen() {
@@ -37,7 +41,7 @@ export default function ContactProfileScreen() {
     if (!id) return;
     supabase
       .from("profiles")
-      .select("id, display_name, avatar_url, status, username, bio")
+      .select("id, display_name, handle, avatar_url, bio, is_verified, xp, current_grade, website_url, country")
       .eq("id", id)
       .single()
       .then(({ data }) => {
@@ -49,39 +53,40 @@ export default function ContactProfileScreen() {
   async function startChat() {
     if (!user || !id) return;
 
-    const { data: existing } = await supabase
-      .from("conversation_members")
-      .select("conversation_id")
+    const { data: myChats } = await supabase
+      .from("chat_members")
+      .select("chat_id")
       .eq("user_id", user.id);
 
-    const existingIds = (existing || []).map((e: any) => e.conversation_id);
+    const myIds = (myChats || []).map((m: any) => m.chat_id);
 
-    if (existingIds.length > 0) {
+    if (myIds.length > 0) {
       const { data: shared } = await supabase
-        .from("conversation_members")
-        .select("conversation_id, conversations!inner(id, is_group)")
+        .from("chat_members")
+        .select("chat_id, chats!inner(id, is_group, is_channel)")
         .eq("user_id", id)
-        .in("conversation_id", existingIds)
-        .eq("conversations.is_group", false);
+        .in("chat_id", myIds)
+        .eq("chats.is_group", false)
+        .eq("chats.is_channel", false);
 
       if (shared && shared.length > 0) {
-        router.push({ pathname: "/chat/[id]", params: { id: shared[0].conversation_id } });
+        router.push({ pathname: "/chat/[id]", params: { id: shared[0].chat_id } });
         return;
       }
     }
 
-    const { data: conv } = await supabase
-      .from("conversations")
-      .insert({ is_group: false, last_message: "", last_message_at: new Date().toISOString() })
+    const { data: chat } = await supabase
+      .from("chats")
+      .insert({ is_group: false, created_by: user.id, user_id: user.id })
       .select()
       .single();
 
-    if (conv) {
-      await supabase.from("conversation_members").insert([
-        { conversation_id: conv.id, user_id: user.id },
-        { conversation_id: conv.id, user_id: id },
+    if (chat) {
+      await supabase.from("chat_members").insert([
+        { chat_id: chat.id, user_id: user.id },
+        { chat_id: chat.id, user_id: id },
       ]);
-      router.push({ pathname: "/chat/[id]", params: { id: conv.id } });
+      router.push({ pathname: "/chat/[id]", params: { id: chat.id } });
     }
   }
 
@@ -109,24 +114,34 @@ export default function ContactProfileScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        {/* Avatar + Name */}
         <View style={[styles.profileHeader, { backgroundColor: colors.surface }]}>
           <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={90} />
-          <Text style={[styles.displayName, { color: colors.text }]}>
-            {profile?.display_name}
+          <View style={styles.nameRow}>
+            <Text style={[styles.displayName, { color: colors.text }]}>
+              {profile?.display_name}
+            </Text>
+            {profile?.is_verified && (
+              <Ionicons name="checkmark-circle" size={18} color={Colors.brand} style={{ marginLeft: 6 }} />
+            )}
+          </View>
+          <Text style={[styles.handle, { color: colors.textSecondary }]}>
+            @{profile?.handle}
           </Text>
-          <Text style={[styles.username, { color: colors.textSecondary }]}>
-            @{profile?.username}
-          </Text>
-          {profile?.status ? (
-            <Text style={[styles.status, { color: colors.textSecondary }]}>{profile.status}</Text>
-          ) : null}
           {profile?.bio ? (
             <Text style={[styles.bio, { color: colors.text }]}>{profile.bio}</Text>
           ) : null}
+          <View style={styles.infoRow}>
+            <View style={styles.infoItem}>
+              <Ionicons name="flash" size={16} color="#FFD60A" />
+              <Text style={[styles.infoValue, { color: colors.text }]}>{profile?.xp || 0} XP</Text>
+            </View>
+            <Text style={[styles.infoDot, { color: colors.textMuted }]}>{profile?.current_grade}</Text>
+            {profile?.country ? (
+              <Text style={[styles.infoDot, { color: colors.textMuted }]}>{profile.country}</Text>
+            ) : null}
+          </View>
         </View>
 
-        {/* Actions */}
         <View style={[styles.actions, { backgroundColor: colors.surface }]}>
           <TouchableOpacity style={styles.actionBtn} onPress={startChat}>
             <View style={[styles.actionIcon, { backgroundColor: Colors.brand }]}>
@@ -145,6 +160,12 @@ export default function ContactProfileScreen() {
               <Ionicons name="videocam" size={22} color="#fff" />
             </View>
             <Text style={[styles.actionLabel, { color: colors.text }]}>Video</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionBtn}>
+            <View style={[styles.actionIcon, { backgroundColor: "#FF9500" }]}>
+              <Ionicons name="gift" size={22} color="#fff" />
+            </View>
+            <Text style={[styles.actionLabel, { color: colors.text }]}>Gift</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -171,10 +192,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     gap: 8,
   },
+  nameRow: { flexDirection: "row", alignItems: "center" },
   displayName: { fontSize: 22, fontFamily: "Inter_700Bold" },
-  username: { fontSize: 14, fontFamily: "Inter_400Regular" },
-  status: { fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "center", marginTop: 4 },
-  bio: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", marginTop: 4 },
+  handle: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  bio: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", marginTop: 4, lineHeight: 20 },
+  infoRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 },
+  infoItem: { flexDirection: "row", alignItems: "center", gap: 4 },
+  infoValue: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  infoDot: { fontSize: 13, fontFamily: "Inter_400Regular" },
   actions: {
     flexDirection: "row",
     justifyContent: "space-around",
@@ -183,9 +208,9 @@ const styles = StyleSheet.create({
   },
   actionBtn: { alignItems: "center", gap: 8 },
   actionIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: "center",
     justifyContent: "center",
   },

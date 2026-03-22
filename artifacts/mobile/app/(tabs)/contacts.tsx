@@ -25,9 +25,10 @@ import Colors from "@/constants/colors";
 type Contact = {
   id: string;
   display_name: string;
+  handle: string;
   avatar_url: string | null;
-  status: string;
-  username: string;
+  bio: string | null;
+  is_verified: boolean;
 };
 
 type Section = { title: string; data: Contact[] };
@@ -51,44 +52,45 @@ function ContactRow({ item }: { item: Contact }) {
   async function startChat() {
     Haptics.selectionAsync();
     if (!user) return;
-    // Find or create conversation
-    const { data: existing } = await supabase
-      .from("conversation_members")
-      .select("conversation_id, conversations!inner(id, is_group)")
+
+    const { data: myChats } = await supabase
+      .from("chat_members")
+      .select("chat_id")
       .eq("user_id", user.id);
 
-    const existingIds = (existing || []).map((e: any) => e.conversation_id);
+    const myIds = (myChats || []).map((m: any) => m.chat_id);
 
-    if (existingIds.length > 0) {
+    if (myIds.length > 0) {
       const { data: shared } = await supabase
-        .from("conversation_members")
-        .select("conversation_id, conversations!inner(id, is_group)")
+        .from("chat_members")
+        .select("chat_id, chats!inner(id, is_group, is_channel)")
         .eq("user_id", item.id)
-        .in("conversation_id", existingIds)
-        .eq("conversations.is_group", false);
+        .in("chat_id", myIds)
+        .eq("chats.is_group", false)
+        .eq("chats.is_channel", false);
 
       if (shared && shared.length > 0) {
-        router.push({
-          pathname: "/chat/[id]",
-          params: { id: shared[0].conversation_id },
-        });
+        router.push({ pathname: "/chat/[id]", params: { id: shared[0].chat_id } });
         return;
       }
     }
 
-    // Create new conversation
-    const { data: conv } = await supabase
-      .from("conversations")
-      .insert({ is_group: false, last_message: "", last_message_at: new Date().toISOString() })
+    const { data: chat } = await supabase
+      .from("chats")
+      .insert({
+        is_group: false,
+        created_by: user.id,
+        user_id: user.id,
+      })
       .select()
       .single();
 
-    if (conv) {
-      await supabase.from("conversation_members").insert([
-        { conversation_id: conv.id, user_id: user.id },
-        { conversation_id: conv.id, user_id: item.id },
+    if (chat) {
+      await supabase.from("chat_members").insert([
+        { chat_id: chat.id, user_id: user.id },
+        { chat_id: chat.id, user_id: item.id },
       ]);
-      router.push({ pathname: "/chat/[id]", params: { id: conv.id } });
+      router.push({ pathname: "/chat/[id]", params: { id: chat.id } });
     }
   }
 
@@ -100,9 +102,14 @@ function ContactRow({ item }: { item: Contact }) {
     >
       <Avatar uri={item.avatar_url} name={item.display_name} size={46} />
       <View style={styles.rowContent}>
-        <Text style={[styles.name, { color: colors.text }]}>{item.display_name}</Text>
-        <Text style={[styles.status, { color: colors.textSecondary }]} numberOfLines={1}>
-          {item.status || "@" + item.username}
+        <View style={styles.nameRow}>
+          <Text style={[styles.name, { color: colors.text }]}>{item.display_name}</Text>
+          {item.is_verified && (
+            <Ionicons name="checkmark-circle" size={14} color={Colors.brand} style={{ marginLeft: 4 }} />
+          )}
+        </View>
+        <Text style={[styles.handle, { color: colors.textSecondary }]} numberOfLines={1}>
+          @{item.handle}
         </Text>
       </View>
       <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
@@ -125,35 +132,33 @@ export default function ContactsScreen() {
 
   const loadContacts = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from("contacts")
-      .select("contact_id, profiles!contacts_contact_id_fkey(id, display_name, avatar_url, status, username)")
-      .eq("user_id", user.id)
-      .eq("status", "accepted");
 
-    if (data) {
-      setContacts(
-        data
-          .map((c: any) => c.profiles)
-          .filter(Boolean)
-          .sort((a: Contact, b: Contact) => a.display_name.localeCompare(b.display_name))
-      );
+    const { data: followRows } = await supabase
+      .from("follows")
+      .select("following_id, profiles!follows_following_id_fkey(id, display_name, handle, avatar_url, bio, is_verified)")
+      .eq("follower_id", user.id);
+
+    if (followRows) {
+      const list = followRows
+        .map((f: any) => f.profiles)
+        .filter(Boolean)
+        .sort((a: Contact, b: Contact) => a.display_name.localeCompare(b.display_name));
+      setContacts(list);
     }
     setLoading(false);
     setRefreshing(false);
   }, [user]);
 
-  useEffect(() => {
-    loadContacts();
-  }, [loadContacts]);
+  useEffect(() => { loadContacts(); }, [loadContacts]);
 
   async function searchUser() {
     if (!addQuery.trim()) return;
     setAddLoading(true);
+    setAddResult(null);
     const { data } = await supabase
       .from("profiles")
-      .select("id, display_name, avatar_url, status, username")
-      .or(`username.ilike.%${addQuery.trim()}%,display_name.ilike.%${addQuery.trim()}%`)
+      .select("id, display_name, handle, avatar_url, bio, is_verified")
+      .or(`handle.ilike.%${addQuery.trim()}%,display_name.ilike.%${addQuery.trim()}%`)
       .neq("id", user?.id)
       .limit(1)
       .single();
@@ -161,17 +166,11 @@ export default function ContactsScreen() {
     setAddLoading(false);
   }
 
-  async function sendFriendRequest() {
+  async function followUser() {
     if (!addResult || !user) return;
-    await supabase.from("contacts").upsert({
-      user_id: user.id,
-      contact_id: addResult.id,
-      status: "pending",
-    });
-    await supabase.from("contacts").upsert({
-      user_id: addResult.id,
-      contact_id: user.id,
-      status: "accepted",
+    await supabase.from("follows").upsert({
+      follower_id: user.id,
+      following_id: addResult.id,
     });
     setAdding(false);
     setAddQuery("");
@@ -183,7 +182,7 @@ export default function ContactsScreen() {
     ? contacts.filter(
         (c) =>
           c.display_name.toLowerCase().includes(search.toLowerCase()) ||
-          c.username.toLowerCase().includes(search.toLowerCase())
+          c.handle.toLowerCase().includes(search.toLowerCase())
       )
     : contacts;
 
@@ -191,7 +190,6 @@ export default function ContactsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      {/* Header */}
       <View
         style={[
           styles.header,
@@ -207,7 +205,6 @@ export default function ContactsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Search */}
       <View style={[styles.searchWrap, { backgroundColor: colors.surface }]}>
         <View style={[styles.searchBox, { backgroundColor: colors.inputBg }]}>
           <Ionicons name="search-outline" size={16} color={colors.textMuted} />
@@ -226,7 +223,6 @@ export default function ContactsScreen() {
         </View>
       </View>
 
-      {/* Add Contact Modal */}
       {adding && (
         <View style={[styles.addModal, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.addHeader}>
@@ -238,12 +234,13 @@ export default function ContactsScreen() {
           <View style={[styles.addField, { backgroundColor: colors.inputBg }]}>
             <TextInput
               style={[styles.addInput, { color: colors.text }]}
-              placeholder="Search by username or name"
+              placeholder="Search by handle or name"
               placeholderTextColor={colors.textMuted}
               value={addQuery}
               onChangeText={setAddQuery}
               onSubmitEditing={searchUser}
               autoFocus
+              autoCapitalize="none"
             />
             <TouchableOpacity onPress={searchUser}>
               <Ionicons name="search" size={18} color={Colors.brand} />
@@ -254,14 +251,16 @@ export default function ContactsScreen() {
             <View style={styles.addResultRow}>
               <Avatar uri={addResult.avatar_url} name={addResult.display_name} size={44} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.name, { color: colors.text }]}>{addResult.display_name}</Text>
-                <Text style={[styles.status, { color: colors.textSecondary }]}>@{addResult.username}</Text>
+                <View style={styles.nameRow}>
+                  <Text style={[styles.name, { color: colors.text }]}>{addResult.display_name}</Text>
+                  {addResult.is_verified && (
+                    <Ionicons name="checkmark-circle" size={14} color={Colors.brand} style={{ marginLeft: 4 }} />
+                  )}
+                </View>
+                <Text style={[styles.handle, { color: colors.textSecondary }]}>@{addResult.handle}</Text>
               </View>
-              <TouchableOpacity
-                style={styles.addBtn}
-                onPress={sendFriendRequest}
-              >
-                <Text style={styles.addBtnText}>Add</Text>
+              <TouchableOpacity style={styles.addBtn} onPress={followUser}>
+                <Text style={styles.addBtnText}>Follow</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -280,7 +279,7 @@ export default function ContactsScreen() {
           <Ionicons name="people-outline" size={64} color={colors.textMuted} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>No contacts yet</Text>
           <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-            Tap the + icon to add friends
+            Tap the + icon to find and follow people
           </Text>
         </View>
       ) : (
@@ -338,12 +337,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   rowContent: { flex: 1 },
+  nameRow: { flexDirection: "row", alignItems: "center" },
   name: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  status: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
-  sectionHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-  },
+  handle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
+  sectionHeader: { paddingHorizontal: 16, paddingVertical: 6 },
   sectionTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },

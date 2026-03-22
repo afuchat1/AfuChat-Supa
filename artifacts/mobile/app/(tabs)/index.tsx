@@ -21,19 +21,23 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Separator } from "@/components/ui/Separator";
 import Colors from "@/constants/colors";
 
-type ConversationItem = {
+type ChatItem = {
   id: string;
-  other_user_id: string;
-  other_name: string;
+  name: string | null;
+  is_group: boolean;
+  is_channel: boolean;
+  other_display_name: string;
   other_avatar: string | null;
+  other_id: string;
   last_message: string;
   last_message_at: string;
-  unread_count: number;
-  is_group: boolean;
-  group_name?: string;
+  is_pinned: boolean;
+  is_archived: boolean;
+  avatar_url: string | null;
 };
 
 function formatTime(iso: string): string {
+  if (!iso) return "";
   const d = new Date(iso);
   const now = new Date();
   const diff = now.getTime() - d.getTime();
@@ -44,8 +48,11 @@ function formatTime(iso: string): string {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-function ChatRow({ item }: { item: ConversationItem }) {
+function ChatRow({ item }: { item: ChatItem }) {
   const { colors } = useTheme();
+  const displayName = item.is_group || item.is_channel ? item.name : item.other_display_name;
+  const avatar = item.is_group || item.is_channel ? item.avatar_url : item.other_avatar;
+
   return (
     <TouchableOpacity
       style={[styles.row, { backgroundColor: colors.surface }]}
@@ -55,28 +62,27 @@ function ChatRow({ item }: { item: ConversationItem }) {
       }}
       activeOpacity={0.7}
     >
-      <Avatar uri={item.other_avatar} name={item.is_group ? item.group_name : item.other_name} size={50} />
+      <Avatar uri={avatar} name={displayName || "Chat"} size={50} />
       <View style={styles.rowContent}>
         <View style={styles.rowTop}>
-          <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
-            {item.is_group ? item.group_name : item.other_name}
-          </Text>
+          <View style={styles.nameRow}>
+            {item.is_pinned && (
+              <Ionicons name="pin" size={12} color={colors.textMuted} style={{ marginRight: 4 }} />
+            )}
+            <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
+              {displayName || "Chat"}
+            </Text>
+            {item.is_channel && (
+              <Ionicons name="megaphone" size={12} color={Colors.brand} style={{ marginLeft: 4 }} />
+            )}
+          </View>
           <Text style={[styles.time, { color: colors.textMuted }]}>
-            {formatTime(item.last_message_at)}
+            {item.last_message_at ? formatTime(item.last_message_at) : ""}
           </Text>
         </View>
-        <View style={styles.rowBottom}>
-          <Text style={[styles.preview, { color: colors.textSecondary }]} numberOfLines={1}>
-            {item.last_message || "No messages yet"}
-          </Text>
-          {item.unread_count > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>
-                {item.unread_count > 99 ? "99+" : item.unread_count}
-              </Text>
-            </View>
-          )}
-        </View>
+        <Text style={[styles.preview, { color: colors.textSecondary }]} numberOfLines={1}>
+          {item.last_message || "No messages yet"}
+        </Text>
       </View>
     </TouchableOpacity>
   );
@@ -86,69 +92,98 @@ export default function ChatsScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const [conversations, setConversations] = useState<ConversationItem[]>([]);
+  const [chats, setChats] = useState<ChatItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
 
-  const loadConversations = useCallback(async () => {
+  const loadChats = useCallback(async () => {
     if (!user) return;
-    const { data, error } = await supabase
-      .from("conversations")
-      .select(`
-        id,
-        is_group,
-        group_name,
-        last_message,
-        last_message_at,
-        conversation_members!inner(user_id),
-        conversation_members(
-          user_id,
-          profiles(id, display_name, avatar_url)
-        )
-      `)
-      .eq("conversation_members.user_id", user.id)
-      .order("last_message_at", { ascending: false });
 
-    if (!error && data) {
-      const items: ConversationItem[] = data.map((c: any) => {
-        const others = (c.conversation_members || []).filter(
-          (m: any) => m.user_id !== user.id
-        );
-        const other = others[0]?.profiles;
+    const { data: memberRows } = await supabase
+      .from("chat_members")
+      .select("chat_id")
+      .eq("user_id", user.id);
+
+    if (!memberRows || memberRows.length === 0) {
+      setChats([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
+    const chatIds = memberRows.map((m: any) => m.chat_id);
+
+    const { data: chatRows } = await supabase
+      .from("chats")
+      .select(`
+        id, name, is_group, is_channel, is_pinned, is_archived, avatar_url, updated_at,
+        chat_members(user_id, profiles(id, display_name, avatar_url))
+      `)
+      .in("id", chatIds)
+      .eq("is_archived", false)
+      .order("updated_at", { ascending: false });
+
+    if (chatRows) {
+      const lastMsgPromises = chatRows.map(async (c: any) => {
+        const { data: msgs } = await supabase
+          .from("messages")
+          .select("encrypted_content, sent_at")
+          .eq("chat_id", c.id)
+          .order("sent_at", { ascending: false })
+          .limit(1);
         return {
-          id: c.id,
-          other_user_id: other?.id || "",
-          other_name: other?.display_name || "Unknown",
-          other_avatar: other?.avatar_url || null,
-          last_message: c.last_message || "",
-          last_message_at: c.last_message_at || new Date().toISOString(),
-          unread_count: 0,
-          is_group: !!c.is_group,
-          group_name: c.group_name,
+          chatId: c.id,
+          lastMessage: msgs?.[0]?.encrypted_content || "",
+          lastMessageAt: msgs?.[0]?.sent_at || c.updated_at,
         };
       });
-      setConversations(items);
+      const lastMsgs = await Promise.all(lastMsgPromises);
+      const lastMsgMap = Object.fromEntries(lastMsgs.map((m) => [m.chatId, m]));
+
+      const items: ChatItem[] = chatRows.map((c: any) => {
+        const others = (c.chat_members || []).filter((m: any) => m.user_id !== user.id);
+        const other = others[0]?.profiles;
+        const lm = lastMsgMap[c.id];
+        return {
+          id: c.id,
+          name: c.name,
+          is_group: !!c.is_group,
+          is_channel: !!c.is_channel,
+          other_display_name: other?.display_name || "Unknown",
+          other_avatar: other?.avatar_url || null,
+          other_id: other?.id || "",
+          last_message: lm?.lastMessage || "",
+          last_message_at: lm?.lastMessageAt || "",
+          is_pinned: !!c.is_pinned,
+          is_archived: !!c.is_archived,
+          avatar_url: c.avatar_url,
+        };
+      });
+
+      items.sort((a, b) => {
+        if (a.is_pinned && !b.is_pinned) return -1;
+        if (!a.is_pinned && b.is_pinned) return 1;
+        return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
+      });
+
+      setChats(items);
     }
     setLoading(false);
     setRefreshing(false);
   }, [user]);
 
-  useEffect(() => {
-    loadConversations();
-  }, [loadConversations]);
+  useEffect(() => { loadChats(); }, [loadChats]);
 
   const filtered = search
-    ? conversations.filter((c) =>
-        (c.is_group ? c.group_name : c.other_name)
-          ?.toLowerCase()
-          .includes(search.toLowerCase())
-      )
-    : conversations;
+    ? chats.filter((c) => {
+        const name = c.is_group || c.is_channel ? c.name : c.other_display_name;
+        return name?.toLowerCase().includes(search.toLowerCase());
+      })
+    : chats;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      {/* Header */}
       <View
         style={[
           styles.header,
@@ -165,7 +200,7 @@ export default function ChatsScreen() {
             <Ionicons name="people-outline" size={22} color={colors.text} />
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => router.push("/contacts")}
+            onPress={() => router.push("/(tabs)/contacts")}
             style={styles.headerBtn}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
@@ -174,7 +209,6 @@ export default function ChatsScreen() {
         </View>
       </View>
 
-      {/* Search */}
       <View style={[styles.searchWrap, { backgroundColor: colors.surface }]}>
         <View style={[styles.searchBox, { backgroundColor: colors.inputBg }]}>
           <Ionicons name="search-outline" size={16} color={colors.textMuted} />
@@ -215,10 +249,7 @@ export default function ChatsScreen() {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                loadConversations();
-              }}
+              onRefresh={() => { setRefreshing(true); loadChats(); }}
               tintColor={Colors.brand}
             />
           }
@@ -240,10 +271,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerTitle: {
-    fontSize: 22,
-    fontFamily: "Inter_700Bold",
-  },
+  headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
   headerActions: { flexDirection: "row", gap: 16 },
   headerBtn: {},
   searchWrap: { paddingHorizontal: 12, paddingVertical: 8 },
@@ -255,12 +283,7 @@ const styles = StyleSheet.create({
     height: 36,
     gap: 6,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-    height: 36,
-  },
+  searchInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 36 },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -274,50 +297,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 3,
   },
-  name: {
-    fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
-    flex: 1,
-    marginRight: 8,
-  },
+  nameRow: { flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 },
+  name: { fontSize: 16, fontFamily: "Inter_600SemiBold", flexShrink: 1 },
   time: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  rowBottom: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  preview: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-    flex: 1,
-    marginRight: 8,
-  },
-  badge: {
-    backgroundColor: Colors.brand,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 4,
-  },
-  badgeText: {
-    color: "#fff",
-    fontSize: 10,
-    fontFamily: "Inter_700Bold",
-  },
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontFamily: "Inter_600SemiBold",
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-  },
+  preview: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
+  emptySubtitle: { fontSize: 14, fontFamily: "Inter_400Regular" },
 });

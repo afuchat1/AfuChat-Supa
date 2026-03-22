@@ -54,7 +54,6 @@ export default function LoginScreen() {
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Logo */}
         <View style={styles.logoWrap}>
           <View style={[styles.logoCircle, { backgroundColor: Colors.brand }]}>
             <Ionicons name="chatbubbles" size={40} color="#fff" />
@@ -65,7 +64,6 @@ export default function LoginScreen() {
           </Text>
         </View>
 
-        {/* Form */}
         <View style={styles.form}>
           <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
             <Ionicons name="mail-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />

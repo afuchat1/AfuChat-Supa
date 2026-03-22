@@ -27,15 +27,19 @@ export default function EditProfileScreen() {
   const insets = useSafeAreaInsets();
 
   const [displayName, setDisplayName] = useState(profile?.display_name || "");
-  const [username, setUsername] = useState(profile?.username || "");
+  const [handle, setHandle] = useState(profile?.handle || "");
   const [bio, setBio] = useState(profile?.bio || "");
-  const [status, setStatus] = useState(profile?.status || "");
-  const [phone, setPhone] = useState(profile?.phone || "");
+  const [website, setWebsite] = useState(profile?.website_url || "");
+  const [country, setCountry] = useState(profile?.country || "");
   const [loading, setLoading] = useState(false);
 
   async function save() {
     if (!displayName.trim()) {
       Alert.alert("Required", "Display name cannot be empty.");
+      return;
+    }
+    if ((bio || "").length > 150) {
+      Alert.alert("Too long", "Bio is limited to 150 characters.");
       return;
     }
     setLoading(true);
@@ -45,10 +49,10 @@ export default function EditProfileScreen() {
       .from("profiles")
       .update({
         display_name: displayName.trim(),
-        username: username.trim(),
-        bio: bio.trim(),
-        status: status.trim(),
-        phone: phone.trim(),
+        handle: handle.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_"),
+        bio: bio.trim() || null,
+        website_url: website.trim() || null,
+        country: country.trim() || null,
       })
       .eq("id", profile?.id);
 
@@ -66,7 +70,6 @@ export default function EditProfileScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={[styles.root, { backgroundColor: colors.background }]}
     >
-      {/* Header */}
       <View
         style={[
           styles.header,
@@ -87,7 +90,6 @@ export default function EditProfileScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        {/* Avatar */}
         <View style={styles.avatarSection}>
           <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={84} />
           <TouchableOpacity style={styles.changePhotoBtn}>
@@ -97,37 +99,38 @@ export default function EditProfileScreen() {
 
         <View style={styles.fields}>
           <FieldItem
-            label="Display Name"
+            label="Name"
             value={displayName}
             onChange={setDisplayName}
             placeholder="Your display name"
           />
           <FieldItem
-            label="Username"
-            value={username}
-            onChange={setUsername}
-            placeholder="@username"
+            label="Handle"
+            value={handle}
+            onChange={setHandle}
+            placeholder="your_handle"
             autoCapitalize="none"
-          />
-          <FieldItem
-            label="Status"
-            value={status}
-            onChange={setStatus}
-            placeholder="What's your status?"
           />
           <FieldItem
             label="Bio"
             value={bio}
             onChange={setBio}
-            placeholder="Tell people about yourself"
+            placeholder="Tell people about yourself (max 150)"
             multiline
           />
           <FieldItem
-            label="Phone"
-            value={phone}
-            onChange={setPhone}
-            placeholder="+1 234 567 8900"
-            keyboardType="phone-pad"
+            label="Website"
+            value={website}
+            onChange={setWebsite}
+            placeholder="https://your-website.com"
+            autoCapitalize="none"
+            keyboardType="url"
+          />
+          <FieldItem
+            label="Country"
+            value={country}
+            onChange={setCountry}
+            placeholder="Your country"
           />
         </View>
       </ScrollView>
@@ -150,7 +153,7 @@ function FieldItem({
   placeholder?: string;
   multiline?: boolean;
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
-  keyboardType?: "default" | "email-address" | "phone-pad";
+  keyboardType?: "default" | "email-address" | "phone-pad" | "url";
 }) {
   const { colors } = useTheme();
   return (
@@ -188,11 +191,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
   saveText: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
   body: { paddingBottom: 40 },
-  avatarSection: {
-    alignItems: "center",
-    paddingVertical: 24,
-    gap: 10,
-  },
+  avatarSection: { alignItems: "center", paddingVertical: 24, gap: 10 },
   changePhotoBtn: {},
   changePhotoText: { fontSize: 15, fontFamily: "Inter_500Medium" },
   fields: {},
@@ -205,7 +204,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   fieldLabel: {
-    width: 100,
+    width: 80,
     fontSize: 15,
     fontFamily: "Inter_500Medium",
     paddingTop: 2,

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -7,7 +7,6 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -23,16 +22,16 @@ import Colors from "@/constants/colors";
 
 const { width } = Dimensions.get("window");
 
-type Moment = {
+type PostItem = {
   id: string;
-  user_id: string;
+  author_id: string;
   content: string;
+  image_url: string | null;
   images: string[];
   created_at: string;
-  likes: number;
-  comments: number;
-  user_liked: boolean;
-  profile: { display_name: string; avatar_url: string | null };
+  view_count: number;
+  is_verified: boolean;
+  profile: { display_name: string; handle: string; avatar_url: string | null };
 };
 
 function formatRelative(iso: string): string {
@@ -43,32 +42,38 @@ function formatRelative(iso: string): string {
   return `${Math.floor(diff / 86400000)}d ago`;
 }
 
-function MomentCard({ item, onLike }: { item: Moment; onLike: (id: string) => void }) {
+function PostCard({ item }: { item: PostItem }) {
   const { colors } = useTheme();
-  const imgW = item.images.length === 1 ? width - 32 : (width - 44) / 2;
+  const allImages = item.images.length > 0 ? item.images : item.image_url ? [item.image_url] : [];
+  const imgW = allImages.length === 1 ? width - 48 : (width - 56) / 2;
 
   return (
     <View style={[styles.card, { backgroundColor: colors.surface }]}>
       <View style={styles.cardHeader}>
         <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={40} />
         <View style={{ flex: 1 }}>
-          <Text style={[styles.cardName, { color: colors.text }]}>{item.profile.display_name}</Text>
-          <Text style={[styles.cardTime, { color: colors.textMuted }]}>{formatRelative(item.created_at)}</Text>
+          <View style={styles.nameRow}>
+            <Text style={[styles.cardName, { color: colors.text }]}>{item.profile.display_name}</Text>
+            {item.is_verified && (
+              <Ionicons name="checkmark-circle" size={13} color={Colors.brand} style={{ marginLeft: 4 }} />
+            )}
+          </View>
+          <Text style={[styles.cardTime, { color: colors.textMuted }]}>
+            @{item.profile.handle} {formatRelative(item.created_at)}
+          </Text>
         </View>
         <Ionicons name="ellipsis-horizontal" size={18} color={colors.textMuted} />
       </View>
 
-      {item.content ? (
-        <Text style={[styles.cardContent, { color: colors.text }]}>{item.content}</Text>
-      ) : null}
+      <Text style={[styles.cardContent, { color: colors.text }]}>{item.content}</Text>
 
-      {item.images.length > 0 && (
+      {allImages.length > 0 && (
         <View style={styles.images}>
-          {item.images.map((uri, i) => (
+          {allImages.map((uri, i) => (
             <Image
               key={i}
               source={{ uri }}
-              style={[styles.img, { width: imgW, height: imgW }]}
+              style={[styles.img, { width: imgW, height: imgW * 0.75 }]}
               resizeMode="cover"
             />
           ))}
@@ -78,25 +83,22 @@ function MomentCard({ item, onLike }: { item: Moment; onLike: (id: string) => vo
       <View style={[styles.cardFooter, { borderTopColor: colors.separator }]}>
         <TouchableOpacity
           style={styles.action}
-          onPress={() => {
-            Haptics.selectionAsync();
-            onLike(item.id);
-          }}
+          onPress={() => Haptics.selectionAsync()}
         >
-          <Ionicons
-            name={item.user_liked ? "heart" : "heart-outline"}
-            size={18}
-            color={item.user_liked ? "#FF3B30" : colors.textMuted}
-          />
-          <Text style={[styles.actionText, { color: colors.textMuted }]}>{item.likes}</Text>
+          <Ionicons name="heart-outline" size={18} color={colors.textMuted} />
+          <Text style={[styles.actionText, { color: colors.textMuted }]}>Like</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.action}>
           <Ionicons name="chatbubble-outline" size={18} color={colors.textMuted} />
-          <Text style={[styles.actionText, { color: colors.textMuted }]}>{item.comments}</Text>
+          <Text style={[styles.actionText, { color: colors.textMuted }]}>Reply</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.action}>
           <Ionicons name="share-outline" size={18} color={colors.textMuted} />
         </TouchableOpacity>
+        <View style={styles.viewCount}>
+          <Ionicons name="eye-outline" size={14} color={colors.textMuted} />
+          <Text style={[styles.viewText, { color: colors.textMuted }]}>{item.view_count}</Text>
+        </View>
       </View>
     </View>
   );
@@ -104,66 +106,58 @@ function MomentCard({ item, onLike }: { item: Moment; onLike: (id: string) => vo
 
 export default function DiscoverScreen() {
   const { colors } = useTheme();
-  const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const [moments, setMoments] = useState<Moment[]>([]);
+  const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadMoments = useCallback(async () => {
+  const loadPosts = useCallback(async () => {
     const { data } = await supabase
-      .from("moments")
+      .from("posts")
       .select(`
-        id, user_id, content, images, created_at, likes, comments,
-        profiles!moments_user_id_fkey(display_name, avatar_url)
+        id, author_id, content, image_url, created_at, view_count,
+        profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified),
+        post_images(image_url, display_order)
       `)
+      .eq("is_blocked", false)
       .order("created_at", { ascending: false })
       .limit(30);
 
     if (data) {
-      const items: Moment[] = data.map((m: any) => ({
-        id: m.id,
-        user_id: m.user_id,
-        content: m.content || "",
-        images: m.images || [],
-        created_at: m.created_at,
-        likes: m.likes || 0,
-        comments: m.comments || 0,
-        user_liked: false,
+      const items: PostItem[] = data.map((p: any) => ({
+        id: p.id,
+        author_id: p.author_id,
+        content: p.content || "",
+        image_url: p.image_url,
+        images: (p.post_images || [])
+          .sort((a: any, b: any) => a.display_order - b.display_order)
+          .map((i: any) => i.image_url),
+        created_at: p.created_at,
+        view_count: p.view_count || 0,
+        is_verified: p.profiles?.is_verified || false,
         profile: {
-          display_name: m.profiles?.display_name || "User",
-          avatar_url: m.profiles?.avatar_url || null,
+          display_name: p.profiles?.display_name || "User",
+          handle: p.profiles?.handle || "user",
+          avatar_url: p.profiles?.avatar_url || null,
         },
       }));
-      setMoments(items);
+      setPosts(items);
     }
     setLoading(false);
     setRefreshing(false);
   }, []);
 
-  useEffect(() => { loadMoments(); }, [loadMoments]);
-
-  async function handleLike(id: string) {
-    setMoments((prev) =>
-      prev.map((m) =>
-        m.id === id
-          ? { ...m, user_liked: !m.user_liked, likes: m.likes + (m.user_liked ? -1 : 1) }
-          : m
-      )
-    );
-    await supabase.rpc("toggle_moment_like", { moment_id: id, liker_id: user?.id });
-  }
+  useEffect(() => { loadPosts(); }, [loadPosts]);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      {/* Header */}
       <View
         style={[
           styles.header,
           { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border },
         ]}
       >
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Moments</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Discover</Text>
         <TouchableOpacity
           onPress={() => router.push("/moments/create")}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -178,22 +172,22 @@ export default function DiscoverScreen() {
         </View>
       ) : (
         <FlatList
-          data={moments}
+          data={posts}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <MomentCard item={item} onLike={handleLike} />}
+          renderItem={({ item }) => <PostCard item={item} />}
           contentContainerStyle={{ gap: 8, paddingVertical: 8, paddingBottom: 90 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => { setRefreshing(true); loadMoments(); }}
+              onRefresh={() => { setRefreshing(true); loadPosts(); }}
               tintColor={Colors.brand}
             />
           }
           ListEmptyComponent={
             <View style={styles.center}>
-              <Ionicons name="images-outline" size={64} color={colors.textMuted} />
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>No moments yet</Text>
+              <Ionicons name="newspaper-outline" size={64} color={colors.textMuted} />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>No posts yet</Text>
               <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
                 Share what's on your mind
               </Text>
@@ -201,7 +195,7 @@ export default function DiscoverScreen() {
                 style={styles.createBtn}
                 onPress={() => router.push("/moments/create")}
               >
-                <Text style={styles.createBtnText}>Create Moment</Text>
+                <Text style={styles.createBtnText}>Create Post</Text>
               </TouchableOpacity>
             </View>
           }
@@ -235,6 +229,7 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 10,
   },
+  nameRow: { flexDirection: "row", alignItems: "center" },
   cardName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   cardTime: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   cardContent: { fontSize: 15, fontFamily: "Inter_400Regular", paddingHorizontal: 14, marginBottom: 10, lineHeight: 22 },
@@ -250,6 +245,8 @@ const styles = StyleSheet.create({
   },
   action: { flexDirection: "row", alignItems: "center", gap: 4 },
   actionText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  viewCount: { flexDirection: "row", alignItems: "center", gap: 3, marginLeft: "auto" },
+  viewText: { fontSize: 12, fontFamily: "Inter_400Regular" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingTop: 80 },
   emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   emptySub: { fontSize: 14, fontFamily: "Inter_400Regular" },

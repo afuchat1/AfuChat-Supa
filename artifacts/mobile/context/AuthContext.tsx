@@ -4,12 +4,22 @@ import { supabase } from "@/lib/supabase";
 
 type Profile = {
   id: string;
-  username: string;
+  handle: string;
   display_name: string;
   avatar_url: string | null;
+  banner_url: string | null;
   bio: string | null;
-  phone: string | null;
-  status: string;
+  phone_number: string | null;
+  xp: number;
+  acoin: number;
+  current_grade: string;
+  is_verified: boolean;
+  is_private: boolean;
+  show_online_status: boolean;
+  country: string | null;
+  website_url: string | null;
+  language: string;
+  tipping_enabled: boolean;
 };
 
 type AuthContextType = {
@@ -39,7 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function fetchProfile(userId: string) {
     const { data } = await supabase
       .from("profiles")
-      .select("*")
+      .select("id, handle, display_name, avatar_url, banner_url, bio, phone_number, xp, acoin, current_grade, is_verified, is_private, show_online_status, country, website_url, language, tipping_enabled")
       .eq("id", userId)
       .single();
     if (data) setProfile(data as Profile);

@@ -39,7 +39,7 @@ function MenuItem({ icon, iconBg, label, value, onPress, danger }: MenuItemProps
       </View>
       <Text style={[styles.menuLabel, { color: danger ? "#FF3B30" : colors.text }]}>{label}</Text>
       <View style={styles.menuRight}>
-        {value && <Text style={[styles.menuValue, { color: colors.textSecondary }]}>{value}</Text>}
+        {value ? <Text style={[styles.menuValue, { color: colors.textSecondary }]}>{value}</Text> : null}
         {!danger && <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />}
       </View>
     </TouchableOpacity>
@@ -47,7 +47,6 @@ function MenuItem({ icon, iconBg, label, value, onPress, danger }: MenuItemProps
 }
 
 function MenuGroup({ children }: { children: React.ReactNode }) {
-  const { colors } = useTheme();
   return (
     <View style={[styles.menuGroup, { borderRadius: 14, overflow: "hidden" }]}>
       {children}
@@ -74,6 +73,8 @@ export default function MeScreen() {
     ]);
   }
 
+  const gradeIcon = profile?.current_grade === "Newcomer" ? "leaf-outline" : "star-outline";
+
   return (
     <ScrollView
       style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}
@@ -83,7 +84,6 @@ export default function MeScreen() {
       ]}
       showsVerticalScrollIndicator={false}
     >
-      {/* Profile Card */}
       <TouchableOpacity
         style={[styles.profileCard, { backgroundColor: colors.surface }]}
         onPress={() => router.push("/profile/edit")}
@@ -91,70 +91,83 @@ export default function MeScreen() {
       >
         <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={68} />
         <View style={styles.profileInfo}>
-          <Text style={[styles.profileName, { color: colors.text }]}>
-            {profile?.display_name || "User"}
+          <View style={styles.nameRow}>
+            <Text style={[styles.profileName, { color: colors.text }]}>
+              {profile?.display_name || "User"}
+            </Text>
+            {profile?.is_verified && (
+              <Ionicons name="checkmark-circle" size={16} color={Colors.brand} style={{ marginLeft: 4 }} />
+            )}
+          </View>
+          <Text style={[styles.profileHandle, { color: colors.textSecondary }]}>
+            @{profile?.handle || "handle"}
           </Text>
-          <Text style={[styles.profileStatus, { color: colors.textSecondary }]} numberOfLines={1}>
-            {profile?.status || "Set a status"}
-          </Text>
-          <Text style={[styles.profileUsername, { color: colors.textMuted }]}>
-            @{profile?.username || "username"}
-          </Text>
+          {profile?.bio ? (
+            <Text style={[styles.profileBio, { color: colors.textMuted }]} numberOfLines={1}>
+              {profile.bio}
+            </Text>
+          ) : null}
         </View>
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       </TouchableOpacity>
 
-      {/* Moments */}
+      {/* XP & Acoin */}
+      <View style={[styles.statsRow, { backgroundColor: colors.surface }]}>
+        <View style={styles.statItem}>
+          <Ionicons name="flash" size={20} color="#FFD60A" />
+          <Text style={[styles.statValue, { color: colors.text }]}>{profile?.xp || 0}</Text>
+          <Text style={[styles.statLabel, { color: colors.textMuted }]}>XP</Text>
+        </View>
+        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+        <View style={styles.statItem}>
+          <Ionicons name="diamond" size={20} color="#FF9500" />
+          <Text style={[styles.statValue, { color: colors.text }]}>{profile?.acoin || 0}</Text>
+          <Text style={[styles.statLabel, { color: colors.textMuted }]}>ACoin</Text>
+        </View>
+        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+        <View style={styles.statItem}>
+          <Ionicons name={gradeIcon as any} size={20} color={Colors.brand} />
+          <Text style={[styles.statValue, { color: colors.text }]}>{profile?.current_grade || "Newcomer"}</Text>
+          <Text style={[styles.statLabel, { color: colors.textMuted }]}>Grade</Text>
+        </View>
+      </View>
+
       <MenuGroup>
-        <MenuItem
-          icon="images-outline"
-          iconBg="#FF9500"
-          label="My Moments"
-          onPress={() => router.push("/discover")}
-        />
+        <MenuItem icon="newspaper-outline" iconBg="#FF9500" label="My Posts" />
+        <Separator indent={54} />
+        <MenuItem icon="images-outline" iconBg="#5856D6" label="Stories" />
       </MenuGroup>
 
-      {/* Features */}
       <MenuGroup>
         <MenuItem icon="wallet-outline" iconBg="#07C160" label="Wallet" />
         <Separator indent={54} />
         <MenuItem icon="star-outline" iconBg="#FFD60A" label="Favorites" />
         <Separator indent={54} />
-        <MenuItem icon="videocam-outline" iconBg="#FF3B30" label="Video Calls" />
+        <MenuItem icon="gift-outline" iconBg="#FF3B30" label="Gifts" />
+        <Separator indent={54} />
+        <MenuItem icon="game-controller-outline" iconBg="#007AFF" label="Games" />
       </MenuGroup>
 
-      {/* Settings */}
       <MenuGroup>
         <MenuItem
           icon="settings-outline"
           iconBg="#8E8E93"
           label="Settings"
-          onPress={() => {}}
         />
         <Separator indent={54} />
         <MenuItem
           icon="shield-checkmark-outline"
           iconBg="#30D158"
           label="Privacy"
-          onPress={() => {}}
         />
         <Separator indent={54} />
         <MenuItem
           icon="notifications-outline"
           iconBg="#007AFF"
           label="Notifications"
-          onPress={() => {}}
-        />
-        <Separator indent={54} />
-        <MenuItem
-          icon="phone-portrait-outline"
-          iconBg="#5856D6"
-          label="Device"
-          onPress={() => {}}
         />
       </MenuGroup>
 
-      {/* Sign Out */}
       <MenuGroup>
         <MenuItem
           icon="log-out-outline"
@@ -181,9 +194,20 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   profileInfo: { flex: 1 },
-  profileName: { fontSize: 20, fontFamily: "Inter_700Bold", marginBottom: 4 },
-  profileStatus: { fontSize: 14, fontFamily: "Inter_400Regular", marginBottom: 2 },
-  profileUsername: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  nameRow: { flexDirection: "row", alignItems: "center" },
+  profileName: { fontSize: 20, fontFamily: "Inter_700Bold", marginBottom: 2 },
+  profileHandle: { fontSize: 13, fontFamily: "Inter_400Regular", marginBottom: 2 },
+  profileBio: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  statsRow: {
+    flexDirection: "row",
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+  },
+  statItem: { flex: 1, alignItems: "center", gap: 4 },
+  statValue: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  statLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  statDivider: { width: StyleSheet.hairlineWidth, marginVertical: 4 },
   menuGroup: { gap: 0 },
   menuItem: {
     flexDirection: "row",

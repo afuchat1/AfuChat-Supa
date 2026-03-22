@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -23,19 +23,22 @@ import Colors from "@/constants/colors";
 
 type Message = {
   id: string;
-  conversation_id: string;
+  chat_id: string;
   sender_id: string;
-  content: string;
-  created_at: string;
-  sender?: { display_name: string; avatar_url: string | null };
+  encrypted_content: string;
+  sent_at: string;
+  sender?: { display_name: string; avatar_url: string | null; handle: string };
+  reply_to_message_id?: string | null;
 };
 
-type ConvInfo = {
+type ChatInfo = {
   is_group: boolean;
-  group_name: string | null;
+  is_channel: boolean;
+  name: string | null;
   other_name: string;
   other_avatar: string | null;
   other_id: string;
+  avatar_url: string | null;
 };
 
 function formatMsgTime(iso: string): string {
@@ -83,12 +86,12 @@ function MessageBubble({ msg, isMe, showAvatar, showTime }: {
               { color: isMe ? "#fff" : colors.bubbleIncomingText },
             ]}
           >
-            {msg.content}
+            {msg.encrypted_content}
           </Text>
         </View>
         {showTime && (
           <Text style={[styles.msgTime, { color: colors.textMuted }, isMe && styles.msgTimeMe]}>
-            {formatMsgTime(msg.created_at)}
+            {formatMsgTime(msg.sent_at)}
           </Text>
         )}
       </View>
@@ -105,32 +108,34 @@ export default function ChatScreen() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [convInfo, setConvInfo] = useState<ConvInfo | null>(null);
+  const [chatInfo, setChatInfo] = useState<ChatInfo | null>(null);
   const flatListRef = useRef<FlatList>(null);
 
-  const loadConversation = useCallback(async () => {
+  const loadChatInfo = useCallback(async () => {
     if (!id || !user) return;
 
-    const { data: conv } = await supabase
-      .from("conversations")
+    const { data: chat } = await supabase
+      .from("chats")
       .select(`
-        is_group, group_name,
-        conversation_members(user_id, profiles(id, display_name, avatar_url))
+        is_group, is_channel, name, avatar_url,
+        chat_members(user_id, profiles(id, display_name, avatar_url, handle))
       `)
       .eq("id", id)
       .single();
 
-    if (conv) {
-      const others = (conv.conversation_members || []).filter(
+    if (chat) {
+      const others = (chat.chat_members || []).filter(
         (m: any) => m.user_id !== user.id
       );
       const other = others[0]?.profiles;
-      setConvInfo({
-        is_group: !!conv.is_group,
-        group_name: conv.group_name,
+      setChatInfo({
+        is_group: !!chat.is_group,
+        is_channel: !!chat.is_channel,
+        name: chat.name,
         other_name: other?.display_name || "Unknown",
         other_avatar: other?.avatar_url || null,
         other_id: other?.id || "",
+        avatar_url: chat.avatar_url,
       });
     }
   }, [id, user]);
@@ -140,21 +145,22 @@ export default function ChatScreen() {
     const { data } = await supabase
       .from("messages")
       .select(`
-        id, conversation_id, sender_id, content, created_at,
-        profiles!messages_sender_id_fkey(display_name, avatar_url)
+        id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id,
+        profiles!messages_sender_id_fkey(display_name, avatar_url, handle)
       `)
-      .eq("conversation_id", id)
-      .order("created_at", { ascending: false })
+      .eq("chat_id", id)
+      .order("sent_at", { ascending: false })
       .limit(50);
 
     if (data) {
       setMessages(
         data.map((m: any) => ({
           id: m.id,
-          conversation_id: m.conversation_id,
+          chat_id: m.chat_id,
           sender_id: m.sender_id,
-          content: m.content,
-          created_at: m.created_at,
+          encrypted_content: m.encrypted_content,
+          sent_at: m.sent_at,
+          reply_to_message_id: m.reply_to_message_id,
           sender: m.profiles,
         }))
       );
@@ -163,7 +169,7 @@ export default function ChatScreen() {
   }, [id]);
 
   useEffect(() => {
-    loadConversation();
+    loadChatInfo();
     loadMessages();
 
     const subscription = supabase
@@ -174,13 +180,14 @@ export default function ChatScreen() {
           event: "INSERT",
           schema: "public",
           table: "messages",
-          filter: `conversation_id=eq.${id}`,
+          filter: `chat_id=eq.${id}`,
         },
         async (payload) => {
-          const newMsg = payload.new as Message;
+          const newMsg = payload.new as any;
+          if (newMsg.sender_id === user?.id) return;
           const { data: profile } = await supabase
             .from("profiles")
-            .select("display_name, avatar_url")
+            .select("display_name, avatar_url, handle")
             .eq("id", newMsg.sender_id)
             .single();
           setMessages((prev) => [{ ...newMsg, sender: profile as any }, ...prev]);
@@ -189,7 +196,7 @@ export default function ChatScreen() {
       .subscribe();
 
     return () => { supabase.removeChannel(subscription); };
-  }, [id, loadConversation, loadMessages]);
+  }, [id, loadChatInfo, loadMessages]);
 
   async function sendMessage() {
     const text = input.trim();
@@ -202,37 +209,44 @@ export default function ChatScreen() {
     const tempId = `temp_${Date.now()}`;
     const optimistic: Message = {
       id: tempId,
-      conversation_id: id,
+      chat_id: id,
       sender_id: user.id,
-      content: text,
-      created_at: now,
-      sender: { display_name: "You", avatar_url: null },
+      encrypted_content: text,
+      sent_at: now,
+      sender: { display_name: "You", avatar_url: null, handle: "" },
     };
     setMessages((prev) => [optimistic, ...prev]);
 
-    const { data: msg } = await supabase
+    const { data: msg, error } = await supabase
       .from("messages")
-      .insert({ conversation_id: id, sender_id: user.id, content: text })
+      .insert({
+        chat_id: id,
+        sender_id: user.id,
+        encrypted_content: text,
+      })
       .select()
       .single();
 
-    if (msg) {
+    if (error) {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      Alert.alert("Send failed", "Could not send message. Try again.");
+    } else if (msg) {
       setMessages((prev) =>
-        prev.map((m) => (m.id === tempId ? { ...m, id: msg.id, created_at: msg.created_at } : m))
+        prev.map((m) => (m.id === tempId ? { ...m, id: msg.id, sent_at: msg.sent_at } : m))
       );
       await supabase
-        .from("conversations")
-        .update({ last_message: text, last_message_at: now })
+        .from("chats")
+        .update({ updated_at: now })
         .eq("id", id);
     }
     setSending(false);
   }
 
-  const title = convInfo?.is_group ? convInfo.group_name : convInfo?.other_name;
+  const title = chatInfo?.is_group || chatInfo?.is_channel ? chatInfo.name : chatInfo?.other_name;
+  const avatar = chatInfo?.is_group || chatInfo?.is_channel ? chatInfo.avatar_url : chatInfo?.other_avatar;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      {/* Header */}
       <View
         style={[
           styles.header,
@@ -246,15 +260,14 @@ export default function ChatScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Avatar
-          uri={convInfo?.other_avatar}
-          name={title || undefined}
-          size={36}
-        />
+        <Avatar uri={avatar} name={title || undefined} size={36} />
         <View style={styles.headerInfo}>
           <Text style={[styles.headerName, { color: colors.text }]} numberOfLines={1}>
             {title || "Chat"}
           </Text>
+          {chatInfo?.is_channel && (
+            <Text style={[styles.headerSub, { color: colors.textMuted }]}>Channel</Text>
+          )}
         </View>
         <TouchableOpacity style={styles.headerAction}>
           <Ionicons name="call-outline" size={22} color={colors.text} />
@@ -267,7 +280,6 @@ export default function ChatScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Messages */}
       {loading ? (
         <View style={styles.loadingCenter}>
           <ActivityIndicator color={Colors.brand} />
@@ -284,7 +296,7 @@ export default function ChatScreen() {
             const prev = messages[index + 1];
             const showAvatar = !isMe && (!next || next.sender_id !== item.sender_id);
             const showTime = !prev || prev.sender_id !== item.sender_id ||
-              new Date(item.created_at).getTime() - new Date(prev.created_at).getTime() > 120000;
+              new Date(item.sent_at).getTime() - new Date(prev.sent_at).getTime() > 120000;
             return (
               <MessageBubble
                 msg={item}
@@ -299,7 +311,6 @@ export default function ChatScreen() {
         />
       )}
 
-      {/* Input */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={0}
@@ -365,6 +376,7 @@ const styles = StyleSheet.create({
   backBtn: { padding: 4 },
   headerInfo: { flex: 1 },
   headerName: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  headerSub: { fontSize: 11, fontFamily: "Inter_400Regular" },
   headerAction: { padding: 4 },
   loadingCenter: { flex: 1, alignItems: "center", justifyContent: "center" },
   msgRow: {
