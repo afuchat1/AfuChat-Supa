@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -18,6 +19,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
+
+const logoImage = require("@/assets/images/logo.png");
 
 export default function LoginScreen() {
   const { colors } = useTheme();
@@ -55,9 +58,7 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.logoWrap}>
-          <View style={[styles.logoCircle, { backgroundColor: Colors.brand }]}>
-            <Ionicons name="chatbubbles" size={40} color="#fff" />
-          </View>
+          <Image source={logoImage} style={styles.logoImage} resizeMode="contain" />
           <Text style={[styles.appName, { color: colors.text }]}>AfuChat</Text>
           <Text style={[styles.tagline, { color: colors.textSecondary }]}>
             Connect with everyone
@@ -137,12 +138,10 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   scroll: { flexGrow: 1, paddingHorizontal: 28 },
   logoWrap: { alignItems: "center", marginBottom: 44 },
-  logoCircle: {
+  logoImage: {
     width: 88,
     height: 88,
     borderRadius: 24,
-    alignItems: "center",
-    justifyContent: "center",
     marginBottom: 16,
   },
   appName: {

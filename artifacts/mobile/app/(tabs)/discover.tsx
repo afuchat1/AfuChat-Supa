@@ -32,6 +32,9 @@ type PostItem = {
   view_count: number;
   is_verified: boolean;
   profile: { display_name: string; handle: string; avatar_url: string | null };
+  liked: boolean;
+  likeCount: number;
+  replyCount: number;
 };
 
 function formatRelative(iso: string): string {
@@ -42,7 +45,7 @@ function formatRelative(iso: string): string {
   return `${Math.floor(diff / 86400000)}d ago`;
 }
 
-function PostCard({ item }: { item: PostItem }) {
+function PostCard({ item, onToggleLike }: { item: PostItem; onToggleLike: (postId: string) => void }) {
   const { colors } = useTheme();
   const allImages = item.images.length > 0 ? item.images : item.image_url ? [item.image_url] : [];
   const imgW = allImages.length === 1 ? width - 48 : (width - 56) / 2;
@@ -89,14 +92,14 @@ function PostCard({ item }: { item: PostItem }) {
       <View style={[styles.cardFooter, { borderTopColor: colors.separator }]}>
         <TouchableOpacity
           style={styles.action}
-          onPress={(e) => { e.stopPropagation(); Haptics.selectionAsync(); }}
+          onPress={() => { onToggleLike(item.id); }}
         >
-          <Ionicons name="heart-outline" size={18} color={colors.textMuted} />
-          <Text style={[styles.actionText, { color: colors.textMuted }]}>Like</Text>
+          <Ionicons name={item.liked ? "heart" : "heart-outline"} size={18} color={item.liked ? "#FF3B30" : colors.textMuted} />
+          {item.likeCount > 0 && <Text style={[styles.actionText, { color: item.liked ? "#FF3B30" : colors.textMuted }]}>{item.likeCount}</Text>}
         </TouchableOpacity>
         <TouchableOpacity style={styles.action} onPress={openPost}>
           <Ionicons name="chatbubble-outline" size={18} color={colors.textMuted} />
-          <Text style={[styles.actionText, { color: colors.textMuted }]}>Reply</Text>
+          {item.replyCount > 0 && <Text style={[styles.actionText, { color: colors.textMuted }]}>{item.replyCount}</Text>}
         </TouchableOpacity>
         <TouchableOpacity style={styles.action}>
           <Ionicons name="share-outline" size={18} color={colors.textMuted} />
@@ -112,12 +115,14 @@ function PostCard({ item }: { item: PostItem }) {
 
 export default function DiscoverScreen() {
   const { colors } = useTheme();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadPosts = useCallback(async () => {
+    if (!user) { setLoading(false); setRefreshing(false); return; }
     const { data } = await supabase
       .from("posts")
       .select(`
@@ -130,6 +135,28 @@ export default function DiscoverScreen() {
       .limit(30);
 
     if (data) {
+      const postIds = data.map((p: any) => p.id);
+
+      const [{ data: likeCounts }, { data: myLikes }, { data: replyCounts }] = await Promise.all([
+        postIds.length > 0
+          ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds)
+          : { data: [] },
+        postIds.length > 0
+          ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id)
+          : { data: [] },
+        postIds.length > 0
+          ? supabase.from("post_replies").select("post_id").in("post_id", postIds)
+          : { data: [] },
+      ]);
+
+      const likeMap: Record<string, number> = {};
+      for (const l of (likeCounts || [])) { likeMap[l.post_id] = (likeMap[l.post_id] || 0) + 1; }
+
+      const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
+
+      const replyMap: Record<string, number> = {};
+      for (const r of (replyCounts || [])) { replyMap[r.post_id] = (replyMap[r.post_id] || 0) + 1; }
+
       const items: PostItem[] = data.map((p: any) => ({
         id: p.id,
         author_id: p.author_id,
@@ -146,14 +173,40 @@ export default function DiscoverScreen() {
           handle: p.profiles?.handle || "user",
           avatar_url: p.profiles?.avatar_url || null,
         },
+        liked: myLikeSet.has(p.id),
+        likeCount: likeMap[p.id] || 0,
+        replyCount: replyMap[p.id] || 0,
       }));
       setPosts(items);
     }
     setLoading(false);
     setRefreshing(false);
-  }, []);
+  }, [user]);
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
+
+  async function toggleLike(postId: string) {
+    if (!user) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const post = posts.find((p) => p.id === postId);
+    if (!post) return;
+
+    if (post.liked) {
+      const { error } = await supabase.from("post_acknowledgments").delete().eq("post_id", postId).eq("user_id", user.id);
+      if (!error) {
+        setPosts((prev) =>
+          prev.map((p) => p.id === postId ? { ...p, liked: false, likeCount: Math.max(0, p.likeCount - 1) } : p)
+        );
+      }
+    } else {
+      const { error } = await supabase.from("post_acknowledgments").insert({ post_id: postId, user_id: user.id });
+      if (!error) {
+        setPosts((prev) =>
+          prev.map((p) => p.id === postId ? { ...p, liked: true, likeCount: p.likeCount + 1 } : p)
+        );
+      }
+    }
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
@@ -180,7 +233,7 @@ export default function DiscoverScreen() {
         <FlatList
           data={posts}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <PostCard item={item} />}
+          renderItem={({ item }) => <PostCard item={item} onToggleLike={toggleLike} />}
           contentContainerStyle={{ gap: 8, paddingVertical: 8, paddingBottom: 90 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -250,7 +303,7 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   action: { flexDirection: "row", alignItems: "center", gap: 4 },
-  actionText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  actionText: { fontSize: 13, fontFamily: "Inter_500Medium" },
   viewCount: { flexDirection: "row", alignItems: "center", gap: 3, marginLeft: "auto" },
   viewText: { fontSize: 12, fontFamily: "Inter_400Regular" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingTop: 80 },

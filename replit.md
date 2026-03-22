@@ -67,7 +67,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 
 - **Auth**: Supabase Auth (email/password), AuthContext provider
 - **Navigation**: Expo Router with tabs (Chats, Contacts, Discover, Me)
-- **Design**: WeChat green `#07C160` brand color, Inter font family, dark/light theme
+- **Design**: AfuChat teal `#00C2CB` brand color, Inter font family, dark/light theme, custom logo
 - **Real-time**: Supabase Realtime subscriptions for incoming messages
 - **State**: React Context (AuthContext) + local component state
 
@@ -97,6 +97,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `app/red-envelope/[id].tsx` — Red envelope claim and status
 - `app/games/index.tsx` — Game challenges and scores
 - `app/mini-programs/index.tsx` — Mini programs discovery
+- `app/ai/index.tsx` — AI Assistant chat (powered by OpenAI via Replit AI Integrations)
 - `app/settings/privacy.tsx` — Privacy settings (private account, online status, hide lists)
 - `app/settings/notifications.tsx` — Notification preferences
 - `app/settings/chat.tsx` — Chat preferences (theme, bubble, font, read receipts)
@@ -123,7 +124,7 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 
 - Entry: `src/index.ts` — reads `PORT`, starts Express
 - App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
+- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health`; `src/routes/ai-chat.ts` exposes `POST /api/ai/chat` (OpenAI chat completions proxy)
 - Depends on: `@workspace/db`, `@workspace/api-zod`
 - `pnpm --filter @workspace/api-server run dev` — run the dev server
 - `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
