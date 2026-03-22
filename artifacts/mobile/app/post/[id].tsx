@@ -190,7 +190,7 @@ export default function PostDetailScreen() {
               <View style={{ flex: 1 }}>
                 <View style={styles.nameRow}>
                   <Text style={[styles.authorName, { color: colors.text }]}>{post.author.display_name}</Text>
-                  {post.author.is_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.brand} style={{ marginLeft: 4 }} />}
+                  {post.author.is_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.gold} style={{ marginLeft: 4 }} />}
                 </View>
                 <Text style={[styles.authorHandle, { color: colors.textSecondary }]}>@{post.author.handle}</Text>
               </View>
@@ -235,7 +235,7 @@ export default function PostDetailScreen() {
             <View style={{ flex: 1 }}>
               <View style={styles.replyHeader}>
                 <Text style={[styles.replyName, { color: colors.text }]}>{item.author.display_name}</Text>
-                {item.author.is_verified && <Ionicons name="checkmark-circle" size={12} color={Colors.brand} style={{ marginLeft: 3 }} />}
+                {item.author.is_verified && <Ionicons name="checkmark-circle" size={12} color={Colors.gold} style={{ marginLeft: 3 }} />}
                 <Text style={[styles.replyTime, { color: colors.textMuted }]}> {timeAgo(item.created_at)}</Text>
               </View>
               <Text style={[styles.replyContent, { color: colors.text }]}>{item.content}</Text>

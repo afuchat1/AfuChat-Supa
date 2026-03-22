@@ -105,7 +105,7 @@ function ContactRow({ item }: { item: Contact }) {
         <View style={styles.nameRow}>
           <Text style={[styles.name, { color: colors.text }]}>{item.display_name}</Text>
           {item.is_verified && (
-            <Ionicons name="checkmark-circle" size={14} color={Colors.brand} style={{ marginLeft: 4 }} />
+            <Ionicons name="checkmark-circle" size={14} color={Colors.gold} style={{ marginLeft: 4 }} />
           )}
         </View>
         <Text style={[styles.handle, { color: colors.textSecondary }]} numberOfLines={1}>
@@ -254,7 +254,7 @@ export default function ContactsScreen() {
                 <View style={styles.nameRow}>
                   <Text style={[styles.name, { color: colors.text }]}>{addResult.display_name}</Text>
                   {addResult.is_verified && (
-                    <Ionicons name="checkmark-circle" size={14} color={Colors.brand} style={{ marginLeft: 4 }} />
+                    <Ionicons name="checkmark-circle" size={14} color={Colors.gold} style={{ marginLeft: 4 }} />
                   )}
                 </View>
                 <Text style={[styles.handle, { color: colors.textSecondary }]}>@{addResult.handle}</Text>

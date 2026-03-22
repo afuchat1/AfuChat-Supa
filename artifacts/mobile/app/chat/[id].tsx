@@ -5,6 +5,7 @@ import {
   Animated,
   Dimensions,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   PanResponder,
   Platform,
@@ -19,6 +20,8 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -43,6 +46,8 @@ type Message = {
   reply_to_message_id?: string | null;
   reactions?: { emoji: string; count: number; myReaction: boolean }[];
   status?: string;
+  attachment_url?: string | null;
+  attachment_type?: string | null;
 };
 
 type ChatInfo = {
@@ -235,19 +240,42 @@ function MessageBubble({ msg, isMe, showAvatar, showTime, onLongPress, onReply, 
               </Text>
             </View>
           )}
-          <TouchableOpacity
-            onLongPress={() => onLongPress(msg)}
-            delayLongPress={300}
-            activeOpacity={0.8}
-            style={[
-              styles.bubble,
-              isMe ? { backgroundColor: Colors.brand } : { backgroundColor: colors.bubbleIncoming },
-            ]}
-          >
-            <Text style={[styles.bubbleText, { color: isMe ? "#fff" : colors.bubbleIncomingText }]}>
-              {msg.encrypted_content}
-            </Text>
-          </TouchableOpacity>
+          {msg.attachment_url && (msg.attachment_type === "image" || msg.attachment_type === "gif") ? (
+            <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.8}>
+              <Image source={{ uri: msg.attachment_url }} style={styles.attachmentImage} resizeMode="cover" />
+              {msg.encrypted_content && msg.encrypted_content !== "📷 Photo" && msg.encrypted_content !== "GIF" && (
+                <View style={[styles.bubble, isMe ? { backgroundColor: Colors.brand } : { backgroundColor: colors.bubbleIncoming }, { borderTopLeftRadius: 4, borderTopRightRadius: 4, marginTop: -4 }]}>
+                  <Text style={[styles.bubbleText, { color: isMe ? "#fff" : colors.bubbleIncomingText }]}>{msg.encrypted_content}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          ) : msg.attachment_url && msg.attachment_type === "file" ? (
+            <TouchableOpacity
+              onLongPress={() => onLongPress(msg)}
+              delayLongPress={300}
+              activeOpacity={0.8}
+              style={[styles.bubble, styles.fileBubble, isMe ? { backgroundColor: Colors.brand } : { backgroundColor: colors.bubbleIncoming }]}
+            >
+              <Ionicons name="document-outline" size={24} color={isMe ? "#fff" : colors.bubbleIncomingText} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.bubbleText, { color: isMe ? "#fff" : colors.bubbleIncomingText }]} numberOfLines={2}>{msg.encrypted_content}</Text>
+              </View>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              onLongPress={() => onLongPress(msg)}
+              delayLongPress={300}
+              activeOpacity={0.8}
+              style={[
+                styles.bubble,
+                isMe ? { backgroundColor: Colors.brand } : { backgroundColor: colors.bubbleIncoming },
+              ]}
+            >
+              <Text style={[styles.bubbleText, { color: isMe ? "#fff" : colors.bubbleIncomingText }]}>
+                {msg.encrypted_content}
+              </Text>
+            </TouchableOpacity>
+          )}
 
           {msg.reactions && msg.reactions.length > 0 && (
             <View style={styles.reactionsRow}>
@@ -303,6 +331,10 @@ export default function ChatScreen() {
   const [giftSending, setGiftSending] = useState(false);
   const [giftMsg, setGiftMsg] = useState("");
   const [giftReveal, setGiftReveal] = useState<{ content: string } | null>(null);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
+  const [gifSearch, setGifSearch] = useState("");
+  const [attachmentPreview, setAttachmentPreview] = useState<{ uri: string; type: string; name?: string } | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const typingTimeout = useRef<any>(null);
 
@@ -333,7 +365,7 @@ export default function ChatScreen() {
     if (!id || !user) return;
     const { data } = await supabase
       .from("messages")
-      .select(`id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`)
+      .select(`id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`)
       .eq("chat_id", id)
       .order("sent_at", { ascending: false })
       .limit(50);
@@ -371,6 +403,8 @@ export default function ChatScreen() {
           encrypted_content: m.encrypted_content,
           sent_at: m.sent_at,
           reply_to_message_id: m.reply_to_message_id,
+          attachment_url: m.attachment_url,
+          attachment_type: m.attachment_type,
           sender: m.profiles,
           reactions: reactionMap[m.id] || [],
           status: statusMap[m.id] || (m.sender_id === user.id ? "sent" : undefined),
@@ -568,6 +602,96 @@ export default function ChatScreen() {
     setGiftSending(false);
   }
 
+  async function pickFromCamera() {
+    setShowAttachMenu(false);
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") { Alert.alert("Permission needed", "Camera access is required to take photos."); return; }
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images", "videos"], quality: 0.8 });
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      setAttachmentPreview({ uri: asset.uri, type: asset.type === "video" ? "video" : "image" });
+    }
+  }
+
+  async function pickFromGallery() {
+    setShowAttachMenu(false);
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") { Alert.alert("Permission needed", "Gallery access is required."); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images", "videos"], quality: 0.8, allowsMultipleSelection: false });
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      setAttachmentPreview({ uri: asset.uri, type: asset.type === "video" ? "video" : "image" });
+    }
+  }
+
+  async function pickDocument() {
+    setShowAttachMenu(false);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const doc = result.assets[0];
+        setAttachmentPreview({ uri: doc.uri, type: "file", name: doc.name });
+      }
+    } catch {
+      Alert.alert("Error", "Could not pick document");
+    }
+  }
+
+  async function sendAttachment() {
+    if (!user || !attachmentPreview) return;
+    setSending(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    const ext = attachmentPreview.uri.split(".").pop() || "file";
+    const fileName = attachmentPreview.name || `${Date.now()}.${ext}`;
+    const filePath = `chat-attachments/${id}/${user.id}/${fileName}`;
+
+    const response = await fetch(attachmentPreview.uri);
+    const blob = await response.blob();
+    const { error: uploadError } = await supabase.storage.from("chat-media").upload(filePath, blob, { upsert: true });
+
+    if (uploadError) {
+      const label = attachmentPreview.type === "image" ? "📷 Photo" : attachmentPreview.type === "video" ? "🎥 Video" : `📎 ${attachmentPreview.name || "File"}`;
+      await supabase.from("messages").insert({ chat_id: id, sender_id: user.id, encrypted_content: label });
+      loadMessages();
+      setAttachmentPreview(null);
+      setSending(false);
+      return;
+    }
+
+    const { data: urlData } = supabase.storage.from("chat-media").getPublicUrl(filePath);
+    const publicUrl = urlData?.publicUrl || "";
+
+    const insertData: any = {
+      chat_id: id,
+      sender_id: user.id,
+      encrypted_content: attachmentPreview.type === "image" ? "📷 Photo" : attachmentPreview.type === "video" ? "🎥 Video" : `📎 ${attachmentPreview.name || "File"}`,
+      attachment_url: publicUrl,
+      attachment_type: attachmentPreview.type,
+    };
+
+    await supabase.from("messages").insert(insertData);
+    loadMessages();
+    setAttachmentPreview(null);
+    setSending(false);
+  }
+
+  async function sendGifMessage(gifUrl: string) {
+    if (!user) return;
+    setShowGifPicker(false);
+    setGifSearch("");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    await supabase.from("messages").insert({
+      chat_id: id,
+      sender_id: user.id,
+      encrypted_content: "GIF",
+      attachment_url: gifUrl,
+      attachment_type: "gif",
+    });
+    loadMessages();
+  }
+
   function handleTapGift(msg: Message) {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const content = msg.encrypted_content.replace("🎁 ", "");
@@ -681,6 +805,25 @@ export default function ChatScreen() {
         </View>
       )}
 
+      {attachmentPreview && (
+        <View style={[styles.attachPreviewBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+          {attachmentPreview.type === "image" || attachmentPreview.type === "gif" ? (
+            <Image source={{ uri: attachmentPreview.uri }} style={styles.attachPreviewImg} resizeMode="cover" />
+          ) : (
+            <View style={[styles.attachPreviewFile, { backgroundColor: colors.inputBg }]}>
+              <Ionicons name="document-outline" size={28} color={Colors.brand} />
+              <Text style={[styles.attachPreviewName, { color: colors.text }]} numberOfLines={1}>{attachmentPreview.name || "File"}</Text>
+            </View>
+          )}
+          <TouchableOpacity onPress={() => setAttachmentPreview(null)} style={styles.attachPreviewClose}>
+            <Ionicons name="close-circle" size={24} color={colors.textMuted} />
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.sendBtn, { backgroundColor: Colors.brand }]} onPress={sendAttachment} disabled={sending}>
+            {sending ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="arrow-up" size={18} color="#fff" />}
+          </TouchableOpacity>
+        </View>
+      )}
+
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
         <View style={[styles.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
           {isGroup && (
@@ -691,7 +834,7 @@ export default function ChatScreen() {
           <TouchableOpacity style={styles.inputAction} onPress={() => { setShowGiftPicker(true); loadGifts(); }}>
             <Ionicons name="gift-outline" size={24} color={Colors.brand} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.inputAction}>
+          <TouchableOpacity style={styles.inputAction} onPress={() => setShowAttachMenu(true)}>
             <Ionicons name="add-circle-outline" size={24} color={colors.textSecondary} />
           </TouchableOpacity>
           <View style={[styles.inputField, { backgroundColor: colors.inputBg }]}>
@@ -767,6 +910,72 @@ export default function ChatScreen() {
           </View>
         </ScrollView>
         {giftSending && <ActivityIndicator color={Colors.brand} style={{ marginTop: 8 }} />}
+      </BottomSheet>
+
+      <BottomSheet visible={showAttachMenu} onClose={() => setShowAttachMenu(false)}>
+        <Text style={[styles.sheetTitle, { color: colors.text }]}>Share</Text>
+        <View style={styles.attachGrid}>
+          <TouchableOpacity style={[styles.attachOption, { backgroundColor: colors.inputBg }]} onPress={pickFromCamera}>
+            <View style={[styles.attachIconBg, { backgroundColor: "#FF6B35" }]}>
+              <Ionicons name="camera" size={24} color="#fff" />
+            </View>
+            <Text style={[styles.attachLabel, { color: colors.text }]}>Camera</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.attachOption, { backgroundColor: colors.inputBg }]} onPress={pickFromGallery}>
+            <View style={[styles.attachIconBg, { backgroundColor: "#8B5CF6" }]}>
+              <Ionicons name="images" size={24} color="#fff" />
+            </View>
+            <Text style={[styles.attachLabel, { color: colors.text }]}>Gallery</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.attachOption, { backgroundColor: colors.inputBg }]} onPress={pickDocument}>
+            <View style={[styles.attachIconBg, { backgroundColor: "#3B82F6" }]}>
+              <Ionicons name="document" size={24} color="#fff" />
+            </View>
+            <Text style={[styles.attachLabel, { color: colors.text }]}>File</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.attachOption, { backgroundColor: colors.inputBg }]} onPress={() => { setShowAttachMenu(false); setShowGifPicker(true); }}>
+            <View style={[styles.attachIconBg, { backgroundColor: Colors.brand }]}>
+              <Text style={{ fontSize: 18, fontFamily: "Inter_700Bold", color: "#fff" }}>GIF</Text>
+            </View>
+            <Text style={[styles.attachLabel, { color: colors.text }]}>GIF</Text>
+          </TouchableOpacity>
+        </View>
+      </BottomSheet>
+
+      <BottomSheet visible={showGifPicker} onClose={() => { setShowGifPicker(false); setGifSearch(""); }}>
+        <Text style={[styles.sheetTitle, { color: colors.text }]}>Send GIF</Text>
+        <TextInput
+          style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.inputBg }]}
+          placeholder="Search GIFs..."
+          placeholderTextColor={colors.textMuted}
+          value={gifSearch}
+          onChangeText={setGifSearch}
+        />
+        <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+          <View style={styles.gifGrid}>
+            {[
+              { label: "Thumbs Up", url: "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif" },
+              { label: "Laughing", url: "https://media.giphy.com/media/ZqlvCTNHpqrio/giphy.gif" },
+              { label: "Love", url: "https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif" },
+              { label: "Dancing", url: "https://media.giphy.com/media/l0HlBO7eyXzSZkJri/giphy.gif" },
+              { label: "Clapping", url: "https://media.giphy.com/media/7rj2ZgttvgomY/giphy.gif" },
+              { label: "Mind Blown", url: "https://media.giphy.com/media/xT0xeJpnrWC3XWblEk/giphy.gif" },
+              { label: "Celebrate", url: "https://media.giphy.com/media/g9582DNuQppxC/giphy.gif" },
+              { label: "High Five", url: "https://media.giphy.com/media/3oEjHV0z8S7WM4MwnK/giphy.gif" },
+              { label: "Crying", url: "https://media.giphy.com/media/d2lcHJTG5Tscg/giphy.gif" },
+              { label: "Fire", url: "https://media.giphy.com/media/l4FATJpd4LWgeruTK/giphy.gif" },
+              { label: "Cool", url: "https://media.giphy.com/media/62PP2yEIAZF6g/giphy.gif" },
+              { label: "Wave", url: "https://media.giphy.com/media/ASd0Ukj0y3qMM/giphy.gif" },
+            ]
+              .filter((g) => !gifSearch || g.label.toLowerCase().includes(gifSearch.toLowerCase()))
+              .map((gif) => (
+                <TouchableOpacity key={gif.label} style={styles.gifItem} onPress={() => sendGifMessage(gif.url)} activeOpacity={0.7}>
+                  <Image source={{ uri: gif.url }} style={styles.gifThumb} resizeMode="cover" />
+                  <Text style={[styles.gifLabel, { color: colors.textSecondary }]}>{gif.label}</Text>
+                </TouchableOpacity>
+              ))}
+          </View>
+        </ScrollView>
       </BottomSheet>
 
       <BottomSheet visible={!!giftReveal} onClose={() => setGiftReveal(null)}>
@@ -859,4 +1068,19 @@ const styles = StyleSheet.create({
   giftRevealNote: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
   giftRevealBtn: { backgroundColor: Colors.brand, borderRadius: 14, paddingHorizontal: 40, paddingVertical: 14, marginTop: 8 },
   giftRevealBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  attachmentImage: { width: 200, height: 160, borderRadius: 14 },
+  fileBubble: { flexDirection: "row", alignItems: "center", gap: 10, maxWidth: 240 },
+  attachPreviewBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, gap: 10 },
+  attachPreviewImg: { width: 64, height: 64, borderRadius: 10 },
+  attachPreviewFile: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  attachPreviewName: { fontSize: 13, fontFamily: "Inter_500Medium", maxWidth: 160 },
+  attachPreviewClose: { marginLeft: "auto" },
+  attachGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "center", paddingVertical: 8 },
+  attachOption: { width: 72, alignItems: "center", gap: 6, paddingVertical: 12, borderRadius: 14 },
+  attachIconBg: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  attachLabel: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  gifGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  gifItem: { width: "31%", alignItems: "center", gap: 4 },
+  gifThumb: { width: "100%", height: 80, borderRadius: 10 },
+  gifLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
 });

@@ -81,7 +81,7 @@ function PostCard({ item, onToggleLike }: { item: PostItem; onToggleLike: (postI
           <View style={styles.nameRow}>
             <Text style={[styles.cardName, { color: colors.text }]}>{item.profile.display_name}</Text>
             {item.is_verified && (
-              <Ionicons name="checkmark-circle" size={13} color={Colors.brand} style={{ marginLeft: 4 }} />
+              <Ionicons name="checkmark-circle" size={13} color={Colors.gold} style={{ marginLeft: 4 }} />
             )}
           </View>
           <Text style={[styles.cardTime, { color: colors.textMuted }]}>
@@ -137,8 +137,11 @@ export default function DiscoverScreen() {
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const PAGE_SIZE = 20;
 
-  const loadPosts = useCallback(async () => {
+  const fetchPosts = useCallback(async (offset: number, isRefresh: boolean) => {
     if (!user) { setLoading(false); setRefreshing(false); return; }
     const { data } = await supabase
       .from("posts")
@@ -149,9 +152,12 @@ export default function DiscoverScreen() {
       `)
       .eq("is_blocked", false)
       .order("created_at", { ascending: false })
-      .limit(50);
+      .range(offset, offset + PAGE_SIZE - 1);
 
     if (data) {
+      if (data.length < PAGE_SIZE) setHasMore(false);
+      else setHasMore(true);
+
       const postIds = data.map((p: any) => p.id);
       const authorIds = [...new Set(data.map((p: any) => p.author_id))];
 
@@ -188,6 +194,8 @@ export default function DiscoverScreen() {
         if (authorId) likedAuthorSet.add(authorId);
       }
 
+      const randomSeed = isRefresh ? Math.random() * 10 : 0;
+
       const items: PostItem[] = data.map((p: any) => {
         const likeCount = likeMap[p.id] || 0;
         const replyCount = replyMap[p.id] || 0;
@@ -213,16 +221,34 @@ export default function DiscoverScreen() {
           liked: myLikeSet.has(p.id),
           likeCount,
           replyCount,
-          score: computeScore({ likeCount, replyCount, view_count: p.view_count || 0, created_at: p.created_at, hasLikedAuthorBefore, hasImages }),
+          score: computeScore({ likeCount, replyCount, view_count: p.view_count || 0, created_at: p.created_at, hasLikedAuthorBefore, hasImages }) + (Math.random() * randomSeed),
         };
       });
 
       items.sort((a, b) => b.score - a.score);
-      setPosts(items);
+
+      if (isRefresh) {
+        setPosts(items);
+      } else {
+        setPosts((prev) => {
+          const existingIds = new Set(prev.map((p) => p.id));
+          const newItems = items.filter((i) => !existingIds.has(i.id));
+          return [...prev, ...newItems];
+        });
+      }
     }
     setLoading(false);
     setRefreshing(false);
+    setLoadingMore(false);
   }, [user]);
+
+  const loadPosts = useCallback(() => fetchPosts(0, true), [fetchPosts]);
+
+  const loadMore = useCallback(() => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    fetchPosts(posts.length, false);
+  }, [fetchPosts, posts.length, loadingMore, hasMore]);
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
 
@@ -277,12 +303,21 @@ export default function DiscoverScreen() {
           renderItem={({ item }) => <PostCard item={item} onToggleLike={toggleLike} />}
           contentContainerStyle={{ gap: 8, paddingVertical: 8, paddingBottom: 90 }}
           showsVerticalScrollIndicator={false}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => { setRefreshing(true); loadPosts(); }}
+              onRefresh={() => { setRefreshing(true); setHasMore(true); loadPosts(); }}
               tintColor={Colors.brand}
             />
+          }
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={{ paddingVertical: 20, alignItems: "center" }}>
+                <ActivityIndicator color={Colors.brand} />
+              </View>
+            ) : null
           }
           ListEmptyComponent={
             <View style={styles.center}>
