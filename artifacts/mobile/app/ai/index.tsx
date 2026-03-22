@@ -71,7 +71,7 @@ export default function AiChatScreen() {
     } catch {
       setMessages((prev) => [
         ...prev,
-        { id: `e_${Date.now()}`, role: "assistant", content: "Could not connect to AI. Please try again." },
+        { id: `e_${Date.now()}`, role: "assistant", content: "Could not connect to AfuAi. Please try again." },
       ]);
     }
     setLoading(false);
@@ -87,7 +87,7 @@ export default function AiChatScreen() {
           <View style={[styles.aiIcon, { backgroundColor: Colors.brand }]}>
             <Ionicons name="sparkles" size={16} color="#fff" />
           </View>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>AI Assistant</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>AfuAi</Text>
         </View>
         <TouchableOpacity onPress={() => { setMessages([]); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}>
           <Ionicons name="refresh-outline" size={22} color={colors.textSecondary} />
@@ -128,9 +128,9 @@ export default function AiChatScreen() {
             <View style={[styles.emptyIcon, { backgroundColor: Colors.brand + "15" }]}>
               <Ionicons name="sparkles" size={48} color={Colors.brand} />
             </View>
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>AfuChat AI</Text>
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>AfuAi</Text>
             <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
-              Your personal AI assistant. Ask me anything!
+              Your personal AI assistant. Ask me anything or tag @AfuAi in posts and comments!
             </Text>
             <View style={styles.quickPrompts}>
               {QUICK_PROMPTS.map((p) => (
@@ -155,7 +155,7 @@ export default function AiChatScreen() {
           </View>
           <View style={[styles.typingBubble, { backgroundColor: colors.surface }]}>
             <ActivityIndicator size="small" color={Colors.brand} />
-            <Text style={[styles.typingText, { color: colors.textMuted }]}>Thinking...</Text>
+            <Text style={[styles.typingText, { color: colors.textMuted }]}>AfuAi is thinking...</Text>
           </View>
         </View>
       )}
@@ -165,7 +165,7 @@ export default function AiChatScreen() {
           <View style={[styles.inputField, { backgroundColor: colors.inputBg }]}>
             <TextInput
               style={[styles.input, { color: colors.text }]}
-              placeholder="Ask AI anything..."
+              placeholder="Ask AfuAi anything..."
               placeholderTextColor={colors.textMuted}
               value={input}
               onChangeText={setInput}

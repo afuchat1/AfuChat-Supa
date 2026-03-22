@@ -35,6 +35,7 @@ type PostItem = {
   liked: boolean;
   likeCount: number;
   replyCount: number;
+  score: number;
 };
 
 function formatRelative(iso: string): string {
@@ -43,6 +44,22 @@ function formatRelative(iso: string): string {
   if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
   return `${Math.floor(diff / 86400000)}d ago`;
+}
+
+function computeScore(post: {
+  likeCount: number;
+  replyCount: number;
+  view_count: number;
+  created_at: string;
+  hasLikedAuthorBefore: boolean;
+  hasImages: boolean;
+}): number {
+  const ageHours = (Date.now() - new Date(post.created_at).getTime()) / 3600000;
+  const recencyDecay = Math.max(0, 1 - ageHours / 168);
+  const engagementScore = post.likeCount * 2 + post.replyCount * 3 + Math.min(post.view_count, 50) * 0.1;
+  const affinityBonus = post.hasLikedAuthorBefore ? 15 : 0;
+  const mediaBonus = post.hasImages ? 3 : 0;
+  return recencyDecay * 30 + engagementScore + affinityBonus + mediaBonus;
 }
 
 function PostCard({ item, onToggleLike }: { item: PostItem; onToggleLike: (postId: string) => void }) {
@@ -68,7 +85,7 @@ function PostCard({ item, onToggleLike }: { item: PostItem; onToggleLike: (postI
             )}
           </View>
           <Text style={[styles.cardTime, { color: colors.textMuted }]}>
-            @{item.profile.handle} {formatRelative(item.created_at)}
+            @{item.profile.handle} · {formatRelative(item.created_at)}
           </Text>
         </View>
         <Ionicons name="ellipsis-horizontal" size={18} color={colors.textMuted} />
@@ -132,12 +149,13 @@ export default function DiscoverScreen() {
       `)
       .eq("is_blocked", false)
       .order("created_at", { ascending: false })
-      .limit(30);
+      .limit(50);
 
     if (data) {
       const postIds = data.map((p: any) => p.id);
+      const authorIds = [...new Set(data.map((p: any) => p.author_id))];
 
-      const [{ data: likeCounts }, { data: myLikes }, { data: replyCounts }] = await Promise.all([
+      const [{ data: likeCounts }, { data: myLikes }, { data: replyCounts }, { data: myAuthorLikes }] = await Promise.all([
         postIds.length > 0
           ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds)
           : { data: [] },
@@ -146,6 +164,13 @@ export default function DiscoverScreen() {
           : { data: [] },
         postIds.length > 0
           ? supabase.from("post_replies").select("post_id").in("post_id", postIds)
+          : { data: [] },
+        authorIds.length > 0
+          ? supabase.from("post_acknowledgments")
+              .select("post_id, posts!inner(author_id)")
+              .eq("user_id", user.id)
+              .in("posts.author_id", authorIds)
+              .limit(200)
           : { data: [] },
       ]);
 
@@ -157,26 +182,42 @@ export default function DiscoverScreen() {
       const replyMap: Record<string, number> = {};
       for (const r of (replyCounts || [])) { replyMap[r.post_id] = (replyMap[r.post_id] || 0) + 1; }
 
-      const items: PostItem[] = data.map((p: any) => ({
-        id: p.id,
-        author_id: p.author_id,
-        content: p.content || "",
-        image_url: p.image_url,
-        images: (p.post_images || [])
-          .sort((a: any, b: any) => a.display_order - b.display_order)
-          .map((i: any) => i.image_url),
-        created_at: p.created_at,
-        view_count: p.view_count || 0,
-        is_verified: p.profiles?.is_verified || false,
-        profile: {
-          display_name: p.profiles?.display_name || "User",
-          handle: p.profiles?.handle || "user",
-          avatar_url: p.profiles?.avatar_url || null,
-        },
-        liked: myLikeSet.has(p.id),
-        likeCount: likeMap[p.id] || 0,
-        replyCount: replyMap[p.id] || 0,
-      }));
+      const likedAuthorSet = new Set<string>();
+      for (const al of (myAuthorLikes || [])) {
+        const authorId = (al as any).posts?.author_id;
+        if (authorId) likedAuthorSet.add(authorId);
+      }
+
+      const items: PostItem[] = data.map((p: any) => {
+        const likeCount = likeMap[p.id] || 0;
+        const replyCount = replyMap[p.id] || 0;
+        const hasImages = (p.post_images?.length > 0) || !!p.image_url;
+        const hasLikedAuthorBefore = likedAuthorSet.has(p.author_id);
+
+        return {
+          id: p.id,
+          author_id: p.author_id,
+          content: p.content || "",
+          image_url: p.image_url,
+          images: (p.post_images || [])
+            .sort((a: any, b: any) => a.display_order - b.display_order)
+            .map((i: any) => i.image_url),
+          created_at: p.created_at,
+          view_count: p.view_count || 0,
+          is_verified: p.profiles?.is_verified || false,
+          profile: {
+            display_name: p.profiles?.display_name || "User",
+            handle: p.profiles?.handle || "user",
+            avatar_url: p.profiles?.avatar_url || null,
+          },
+          liked: myLikeSet.has(p.id),
+          likeCount,
+          replyCount,
+          score: computeScore({ likeCount, replyCount, view_count: p.view_count || 0, created_at: p.created_at, hasLikedAuthorBefore, hasImages }),
+        };
+      });
+
+      items.sort((a, b) => b.score - a.score);
       setPosts(items);
     }
     setLoading(false);

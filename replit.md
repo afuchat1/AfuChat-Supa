@@ -97,7 +97,8 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `app/red-envelope/[id].tsx` — Red envelope claim and status
 - `app/games/index.tsx` — Game challenges and scores
 - `app/mini-programs/index.tsx` — Mini programs discovery
-- `app/ai/index.tsx` — AI Assistant chat (powered by OpenAI via Replit AI Integrations)
+- `app/ai/index.tsx` — AfuAi chat (powered by OpenAI via Replit AI Integrations)
+- `app/my-posts/index.tsx` — Dedicated My Posts screen (user's own posts with delete)
 - `app/settings/privacy.tsx` — Privacy settings (private account, online status, hide lists)
 - `app/settings/notifications.tsx` — Notification preferences
 - `app/settings/chat.tsx` — Chat preferences (theme, bubble, font, read receipts)
@@ -124,7 +125,7 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 
 - Entry: `src/index.ts` — reads `PORT`, starts Express
 - App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health`; `src/routes/ai-chat.ts` exposes `POST /api/ai/chat` (OpenAI chat completions proxy)
+- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health`; `src/routes/ai-chat.ts` exposes `POST /api/ai/chat` (AfuAi chat) and `POST /api/ai/reply` (AfuAi auto-reply when @AfuAi is tagged in post comments)
 - Depends on: `@workspace/db`, `@workspace/api-zod`
 - `pnpm --filter @workspace/api-server run dev` — run the dev server
 - `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)

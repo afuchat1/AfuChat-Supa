@@ -133,9 +133,9 @@ export default function MeScreen() {
       </View>
 
       <MenuGroup>
-        <MenuItem icon="sparkles-outline" iconBg="#00C2CB" label="AI Assistant" onPress={() => router.push("/ai")} />
+        <MenuItem icon="sparkles-outline" iconBg="#00C2CB" label="AfuAi" onPress={() => router.push("/ai")} />
         <Separator indent={54} />
-        <MenuItem icon="newspaper-outline" iconBg="#FF9500" label="My Posts" onPress={() => router.push("/(tabs)/discover")} />
+        <MenuItem icon="newspaper-outline" iconBg="#FF9500" label="My Posts" onPress={() => router.push("/my-posts")} />
         <Separator indent={54} />
         <MenuItem icon="images-outline" iconBg="#5856D6" label="Stories" onPress={() => router.push("/stories/create")} />
         <Separator indent={54} />

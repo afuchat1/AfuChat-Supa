@@ -26,59 +26,39 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="chat/[id]"
-        options={{
-          headerShown: false,
-          animation: "slide_from_right",
-        }}
-      />
-      <Stack.Screen
-        name="contact/[id]"
-        options={{
-          headerShown: false,
-          animation: "slide_from_right",
-        }}
-      />
-      <Stack.Screen
-        name="moments/create"
-        options={{
-          headerShown: false,
-          animation: "slide_from_bottom",
-        }}
-      />
-      <Stack.Screen
-        name="profile/edit"
-        options={{
-          headerShown: false,
-          animation: "slide_from_bottom",
-        }}
-      />
-      <Stack.Screen
-        name="group/create"
-        options={{
-          headerShown: false,
-          animation: "slide_from_bottom",
-        }}
-      />
-      <Stack.Screen
-        name="group/[id]"
-        options={{
-          headerShown: false,
-          animation: "slide_from_right",
-        }}
-      />
-      <Stack.Screen
-        name="ai/index"
-        options={{
-          headerShown: false,
-          animation: "slide_from_right",
-        }}
-      />
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        animation: "slide_from_right",
+        animationDuration: 250,
+        gestureEnabled: true,
+        gestureDirection: "horizontal",
+      }}
+    >
+      <Stack.Screen name="index" options={{ animation: "fade" }} />
+      <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
+      <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
+      <Stack.Screen name="chat/[id]" />
+      <Stack.Screen name="contact/[id]" />
+      <Stack.Screen name="moments/create" options={{ animation: "slide_from_bottom", gestureDirection: "vertical" }} />
+      <Stack.Screen name="profile/edit" options={{ animation: "slide_from_bottom", gestureDirection: "vertical" }} />
+      <Stack.Screen name="group/create" options={{ animation: "slide_from_bottom", gestureDirection: "vertical" }} />
+      <Stack.Screen name="group/[id]" />
+      <Stack.Screen name="ai/index" />
+      <Stack.Screen name="post/[id]" />
+      <Stack.Screen name="my-posts/index" />
+      <Stack.Screen name="wallet/index" />
+      <Stack.Screen name="gifts/index" />
+      <Stack.Screen name="games/index" />
+      <Stack.Screen name="mini-programs/index" />
+      <Stack.Screen name="notifications" />
+      <Stack.Screen name="stories/create" options={{ animation: "slide_from_bottom", gestureDirection: "vertical" }} />
+      <Stack.Screen name="stories/view" options={{ animation: "fade" }} />
+      <Stack.Screen name="red-envelope/[id]" options={{ animation: "slide_from_bottom", gestureDirection: "vertical" }} />
+      <Stack.Screen name="settings/privacy" />
+      <Stack.Screen name="settings/notifications" />
+      <Stack.Screen name="settings/chat" />
+      <Stack.Screen name="settings/blocked" />
     </Stack>
   );
 }

@@ -22,6 +22,8 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 
+const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+
 type Reply = {
   id: string;
   content: string;
@@ -131,12 +133,39 @@ export default function PostDetailScreen() {
     if (!user || !post) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (post.liked) {
-      await supabase.from("post_acknowledgments").delete().eq("post_id", post.id).eq("user_id", user.id);
-      setPost({ ...post, liked: false, likeCount: post.likeCount - 1 });
+      const { error } = await supabase.from("post_acknowledgments").delete().eq("post_id", post.id).eq("user_id", user.id);
+      if (!error) setPost({ ...post, liked: false, likeCount: Math.max(0, post.likeCount - 1) });
     } else {
-      await supabase.from("post_acknowledgments").insert({ post_id: post.id, user_id: user.id });
-      setPost({ ...post, liked: true, likeCount: post.likeCount + 1 });
+      const { error } = await supabase.from("post_acknowledgments").insert({ post_id: post.id, user_id: user.id });
+      if (!error) setPost({ ...post, liked: true, likeCount: post.likeCount + 1 });
     }
+  }
+
+  async function triggerAfuAiReply(userReplyContent: string) {
+    if (!post || !user) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/ai/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          postContent: post.content,
+          replyContent: userReplyContent,
+          context: "reply",
+        }),
+      });
+      const data = await res.json();
+      if (data.reply) {
+        const { error } = await supabase.from("post_replies").insert({
+          post_id: id,
+          author_id: user.id,
+          content: `🤖 AfuAi: ${data.reply}`,
+        });
+        if (!error) {
+          loadReplies();
+          setPost((p) => p ? { ...p, replyCount: p.replyCount + 1 } : p);
+        }
+      }
+    } catch {}
   }
 
   async function sendReply() {
@@ -147,10 +176,11 @@ export default function PostDetailScreen() {
     }
     setSending(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const content = replyText.trim();
     const { error } = await supabase.from("post_replies").insert({
       post_id: id,
       author_id: user.id,
-      content: replyText.trim(),
+      content,
     });
     if (error) {
       Alert.alert("Error", "Could not post reply.");
@@ -158,6 +188,10 @@ export default function PostDetailScreen() {
       setReplyText("");
       setPost((p) => p ? { ...p, replyCount: p.replyCount + 1 } : p);
       loadReplies();
+
+      if (content.toLowerCase().includes("@afuai")) {
+        triggerAfuAiReply(content);
+      }
     }
     setSending(false);
   }
@@ -166,6 +200,21 @@ export default function PostDetailScreen() {
   if (!post) return <View style={[styles.center, { backgroundColor: colors.background }]}><Text style={{ color: colors.text }}>Post not found</Text></View>;
 
   const allImages = post.images.length > 0 ? post.images : post.image_url ? [post.image_url] : [];
+
+  function renderReplyContent(text: string) {
+    if (text.startsWith("🤖 AfuAi:")) {
+      return (
+        <View style={styles.aiReplyWrap}>
+          <View style={[styles.aiReplyBadge, { backgroundColor: Colors.brand + "15" }]}>
+            <Ionicons name="sparkles" size={10} color={Colors.brand} />
+            <Text style={[styles.aiReplyTag, { color: Colors.brand }]}>AfuAi</Text>
+          </View>
+          <Text style={[styles.replyContent, { color: colors.text }]}>{text.replace("🤖 AfuAi: ", "")}</Text>
+        </View>
+      );
+    }
+    return <Text style={[styles.replyContent, { color: colors.text }]}>{text}</Text>;
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -183,7 +232,9 @@ export default function PostDetailScreen() {
         ListHeaderComponent={
           <View style={[styles.postSection, { backgroundColor: colors.surface }]}>
             <View style={styles.postHeader}>
-              <Avatar uri={post.author.avatar_url} name={post.author.display_name} size={44} />
+              <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: post.author.id } })}>
+                <Avatar uri={post.author.avatar_url} name={post.author.display_name} size={44} />
+              </TouchableOpacity>
               <View style={{ flex: 1 }}>
                 <View style={styles.nameRow}>
                   <Text style={[styles.authorName, { color: colors.text }]}>{post.author.display_name}</Text>
@@ -204,7 +255,7 @@ export default function PostDetailScreen() {
             )}
 
             <Text style={[styles.postTime, { color: colors.textMuted }]}>
-              {new Date(post.created_at).toLocaleString()} {post.view_count} views
+              {new Date(post.created_at).toLocaleString()} · {post.view_count} views
             </Text>
 
             <View style={[styles.statsBar, { borderColor: colors.border }]}>
@@ -221,6 +272,8 @@ export default function PostDetailScreen() {
               </TouchableOpacity>
             </View>
 
+            <Text style={[styles.aiHint, { color: colors.textMuted }]}>Tip: Tag @AfuAi in your reply to get an AI response!</Text>
+
             {replies.length > 0 && (
               <Text style={[styles.repliesLabel, { color: colors.textMuted }]}>Replies</Text>
             )}
@@ -235,7 +288,7 @@ export default function PostDetailScreen() {
                 {item.author.is_verified && <Ionicons name="checkmark-circle" size={12} color={Colors.brand} style={{ marginLeft: 3 }} />}
                 <Text style={[styles.replyTime, { color: colors.textMuted }]}> {timeAgo(item.created_at)}</Text>
               </View>
-              <Text style={[styles.replyContent, { color: colors.text }]}>{item.content}</Text>
+              {renderReplyContent(item.content)}
             </View>
           </View>
         )}
@@ -247,7 +300,7 @@ export default function PostDetailScreen() {
         <View style={[styles.replyBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
           <TextInput
             style={[styles.replyInput, { color: colors.text, backgroundColor: colors.inputBg }]}
-            placeholder="Write a reply..."
+            placeholder="Write a reply... (tag @AfuAi)"
             placeholderTextColor={colors.textMuted}
             value={replyText}
             onChangeText={setReplyText}
@@ -282,12 +335,17 @@ const styles = StyleSheet.create({
   statsBar: { flexDirection: "row", borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 10, gap: 28 },
   statBtn: { flexDirection: "row", alignItems: "center", gap: 6 },
   statText: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  aiHint: { fontSize: 12, fontFamily: "Inter_400Regular", fontStyle: "italic" },
   repliesLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   replyRow: { flexDirection: "row", paddingHorizontal: 16, paddingVertical: 10, gap: 10 },
   replyHeader: { flexDirection: "row", alignItems: "center" },
   replyName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   replyTime: { fontSize: 12, fontFamily: "Inter_400Regular" },
   replyContent: { fontSize: 15, fontFamily: "Inter_400Regular", marginTop: 2, lineHeight: 21 },
+  aiReplyWrap: { marginTop: 2 },
+  aiReplyBadge: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, marginBottom: 4 },
+  aiReplyTag: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  replyBarStyle: {},
   replyBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, gap: 10 },
   replyInput: { flex: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, fontFamily: "Inter_400Regular", maxHeight: 80 },
 });

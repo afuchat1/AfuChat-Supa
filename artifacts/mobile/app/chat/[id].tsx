@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -21,6 +22,14 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
+
+type Gift = {
+  id: string;
+  name: string;
+  emoji: string;
+  base_xp_cost: number;
+  rarity: string;
+};
 
 type Message = {
   id: string;
@@ -51,7 +60,7 @@ function formatMsgTime(iso: string): string {
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function MessageBubble({ msg, isMe, showAvatar, showTime, onLongPress, onReply, replyPreview }: {
+function MessageBubble({ msg, isMe, showAvatar, showTime, onLongPress, onReply, replyPreview, onTapEnvelope }: {
   msg: Message;
   isMe: boolean;
   showAvatar: boolean;
@@ -59,8 +68,56 @@ function MessageBubble({ msg, isMe, showAvatar, showTime, onLongPress, onReply, 
   onLongPress: (msg: Message) => void;
   onReply: (msg: Message) => void;
   replyPreview?: string | null;
+  onTapEnvelope?: (msg: Message) => void;
 }) {
   const { colors } = useTheme();
+  const isRedEnvelope = msg.encrypted_content.startsWith("🧧");
+  const isGiftMsg = msg.encrypted_content.startsWith("🎁");
+
+  if (isRedEnvelope) {
+    const displayMsg = msg.encrypted_content.replace(/🧧 Red Envelope \[[a-f0-9-]+\] - /, "").replace("🧧 Red Envelope - ", "");
+    return (
+      <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
+        {!isMe && (
+          <View style={styles.avatarSlot}>
+            {showAvatar ? <Avatar uri={msg.sender?.avatar_url} name={msg.sender?.display_name} size={32} /> : null}
+          </View>
+        )}
+        <TouchableOpacity
+          style={styles.redEnvBubble}
+          onPress={() => onTapEnvelope?.(msg)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.redEnvTop}>
+            <Text style={styles.redEnvEmoji}>🧧</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.redEnvTitle}>{displayMsg}</Text>
+              <Text style={styles.redEnvSub}>Tap to open</Text>
+            </View>
+          </View>
+          <View style={styles.redEnvBottom}>
+            <Text style={styles.redEnvLabel}>AfuChat Red Envelope</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (isGiftMsg) {
+    return (
+      <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
+        {!isMe && (
+          <View style={styles.avatarSlot}>
+            {showAvatar ? <Avatar uri={msg.sender?.avatar_url} name={msg.sender?.display_name} size={32} /> : null}
+          </View>
+        )}
+        <View style={styles.giftBubble}>
+          <Text style={styles.giftBubbleText}>{msg.encrypted_content}</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
       {!isMe && (
@@ -78,7 +135,7 @@ function MessageBubble({ msg, isMe, showAvatar, showTime, onLongPress, onReply, 
         )}
         {replyPreview && (
           <View style={[styles.replyPreview, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : colors.inputBg }]}>
-            <View style={[styles.replyBar, { backgroundColor: Colors.brand }]} />
+            <View style={[styles.replyBarLine, { backgroundColor: Colors.brand }]} />
             <Text style={[styles.replyPreviewText, { color: isMe ? "rgba(255,255,255,0.8)" : colors.textSecondary }]} numberOfLines={1}>
               {replyPreview}
             </Text>
@@ -146,6 +203,10 @@ export default function ChatScreen() {
   const [envelopeAmount, setEnvelopeAmount] = useState("");
   const [envelopeMsg, setEnvelopeMsg] = useState("");
   const [envelopeCount, setEnvelopeCount] = useState("1");
+  const [showGiftPicker, setShowGiftPicker] = useState(false);
+  const [gifts, setGifts] = useState<Gift[]>([]);
+  const [giftSending, setGiftSending] = useState(false);
+  const [giftMsg, setGiftMsg] = useState("");
   const flatListRef = useRef<FlatList>(null);
   const typingTimeout = useRef<any>(null);
 
@@ -338,7 +399,7 @@ export default function ChatScreen() {
     const count = parseInt(envelopeCount) || 1;
     if (isNaN(amount) || amount <= 0) { Alert.alert("Invalid amount"); return; }
 
-    const { error } = await supabase.from("red_envelopes").insert({
+    const { data: envData, error } = await supabase.from("red_envelopes").insert({
       sender_id: user.id,
       chat_id: id,
       total_amount: amount,
@@ -347,9 +408,9 @@ export default function ChatScreen() {
       remaining_count: count,
       message: envelopeMsg.trim() || "Best wishes!",
       split_type: count > 1 ? "random" : "equal",
-    });
+    }).select("id").single();
 
-    if (error) { Alert.alert("Error", error.message); return; }
+    if (error || !envData) { Alert.alert("Error", error?.message || "Failed to create envelope"); return; }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setShowRedEnvelope(false);
@@ -360,9 +421,78 @@ export default function ChatScreen() {
     await supabase.from("messages").insert({
       chat_id: id,
       sender_id: user.id,
-      encrypted_content: `🧧 Red Envelope - ${envelopeMsg.trim() || "Best wishes!"}`,
+      encrypted_content: `🧧 Red Envelope [${envData.id}] - ${envelopeMsg.trim() || "Best wishes!"}`,
     });
     loadMessages();
+  }
+
+  async function loadGifts() {
+    const { data } = await supabase.from("gifts").select("id, name, emoji, base_xp_cost, rarity").order("base_xp_cost", { ascending: true });
+    if (data) setGifts(data);
+  }
+
+  async function sendGift(gift: Gift) {
+    if (!user || !chatInfo || giftSending) return;
+    const recipientId = chatInfo.is_group ? null : chatInfo.other_id;
+
+    setGiftSending(true);
+    if (chatInfo.is_group) {
+      const { data: members } = await supabase.from("chat_members").select("user_id").eq("chat_id", id).neq("user_id", user.id);
+      if (members && members.length > 0) {
+        const inserts = members.map((m: any) => ({
+          gift_id: gift.id,
+          sender_id: user.id,
+          receiver_id: m.user_id,
+          xp_cost: gift.base_xp_cost,
+          message: giftMsg.trim() || null,
+        }));
+        await supabase.from("gift_transactions").insert(inserts);
+      }
+    } else {
+      if (!recipientId) { setGiftSending(false); return; }
+      await supabase.from("gift_transactions").insert({
+        gift_id: gift.id,
+        sender_id: user.id,
+        receiver_id: recipientId,
+        xp_cost: gift.base_xp_cost,
+        message: giftMsg.trim() || null,
+      });
+    }
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setShowGiftPicker(false);
+    setGiftMsg("");
+
+    const recipientName = chatInfo.is_group ? "the group" : chatInfo.other_name;
+    await supabase.from("messages").insert({
+      chat_id: id,
+      sender_id: user.id,
+      encrypted_content: `🎁 Sent ${gift.emoji} ${gift.name} to ${recipientName}${giftMsg.trim() ? ` - "${giftMsg.trim()}"` : ""}`,
+    });
+    loadMessages();
+    setGiftSending(false);
+  }
+
+  async function handleTapEnvelope(msg: Message) {
+    const match = msg.encrypted_content.match(/\[([a-f0-9-]+)\]/);
+    if (match) {
+      router.push({ pathname: "/red-envelope/[id]", params: { id: match[1] } });
+      return;
+    }
+    const { data } = await supabase
+      .from("red_envelopes")
+      .select("id")
+      .eq("chat_id", id)
+      .eq("sender_id", msg.sender_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (data) {
+      router.push({ pathname: "/red-envelope/[id]", params: { id: data.id } });
+    } else {
+      Alert.alert("Red Envelope", "Could not find this red envelope.");
+    }
   }
 
   const replyMap: Record<string, string> = {};
@@ -372,6 +502,7 @@ export default function ChatScreen() {
 
   const title = chatInfo?.is_group || chatInfo?.is_channel ? chatInfo.name : chatInfo?.other_name;
   const avatar = chatInfo?.is_group || chatInfo?.is_channel ? chatInfo.avatar_url : chatInfo?.other_avatar;
+  const isGroup = chatInfo?.is_group || chatInfo?.is_channel;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
@@ -426,6 +557,7 @@ export default function ChatScreen() {
                 onLongPress={setShowReactions}
                 onReply={setReplyTo}
                 replyPreview={replyPreview}
+                onTapEnvelope={handleTapEnvelope}
               />
             );
           }}
@@ -449,11 +581,16 @@ export default function ChatScreen() {
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
         <View style={[styles.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
-          <TouchableOpacity style={styles.inputAction} onPress={() => setShowRedEnvelope(true)}>
-            <Ionicons name="gift-outline" size={26} color="#FF3B30" />
+          {isGroup && (
+            <TouchableOpacity style={styles.inputAction} onPress={() => setShowRedEnvelope(true)}>
+              <Text style={{ fontSize: 22 }}>🧧</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.inputAction} onPress={() => { setShowGiftPicker(true); loadGifts(); }}>
+            <Ionicons name="gift-outline" size={24} color={Colors.brand} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.inputAction}>
-            <Ionicons name="add-circle-outline" size={26} color={colors.textSecondary} />
+            <Ionicons name="add-circle-outline" size={24} color={colors.textSecondary} />
           </TouchableOpacity>
           <View style={[styles.inputField, { backgroundColor: colors.inputBg }]}>
             <TextInput
@@ -473,7 +610,7 @@ export default function ChatScreen() {
             </TouchableOpacity>
           ) : (
             <TouchableOpacity style={styles.inputAction}>
-              <Ionicons name="mic-outline" size={26} color={colors.textSecondary} />
+              <Ionicons name="mic-outline" size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           )}
         </View>
@@ -510,6 +647,41 @@ export default function ChatScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={showGiftPicker} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>🎁 Send a Gift</Text>
+              <TouchableOpacity onPress={() => setShowGiftPicker(false)}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
+            </View>
+            <TextInput
+              style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]}
+              placeholder="Add a message (optional)"
+              placeholderTextColor={colors.textMuted}
+              value={giftMsg}
+              onChangeText={setGiftMsg}
+            />
+            <ScrollView horizontal={false} style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
+              <View style={styles.giftGrid}>
+                {gifts.map((gift) => (
+                  <TouchableOpacity
+                    key={gift.id}
+                    style={[styles.giftItem, { backgroundColor: colors.inputBg }]}
+                    onPress={() => sendGift(gift)}
+                    disabled={giftSending}
+                  >
+                    <Text style={styles.giftEmoji}>{gift.emoji}</Text>
+                    <Text style={[styles.giftName, { color: colors.text }]} numberOfLines={1}>{gift.name}</Text>
+                    <Text style={[styles.giftCost, { color: Colors.brand }]}>{gift.base_xp_cost} XP</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+            {giftSending && <ActivityIndicator color={Colors.brand} style={{ marginTop: 8 }} />}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -532,7 +704,7 @@ const styles = StyleSheet.create({
   bubbleWrapOther: { alignItems: "flex-start" },
   senderName: { fontSize: 11, fontFamily: "Inter_500Medium", marginBottom: 2, marginLeft: 4 },
   replyPreview: { flexDirection: "row", alignItems: "center", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginBottom: 2, gap: 6 },
-  replyBar: { width: 3, height: "100%", borderRadius: 2, minHeight: 16 },
+  replyBarLine: { width: 3, height: "100%", borderRadius: 2, minHeight: 16 },
   replyPreviewText: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1 },
   bubble: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 9 },
   bubbleText: { fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 22 },
@@ -543,12 +715,21 @@ const styles = StyleSheet.create({
   timeStatusRow: { flexDirection: "row", alignItems: "center", marginTop: 2 },
   msgTime: { fontSize: 11, fontFamily: "Inter_400Regular", marginLeft: 4 },
   msgTimeMe: { marginLeft: 0, marginRight: 4 },
+  redEnvBubble: { width: 240, borderRadius: 12, overflow: "hidden" },
+  redEnvTop: { backgroundColor: "#FF3B30", flexDirection: "row", padding: 14, gap: 10, alignItems: "center" },
+  redEnvEmoji: { fontSize: 32 },
+  redEnvTitle: { color: "#fff", fontSize: 15, fontFamily: "Inter_500Medium" },
+  redEnvSub: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  redEnvBottom: { backgroundColor: "#E63329", paddingHorizontal: 14, paddingVertical: 6 },
+  redEnvLabel: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontFamily: "Inter_400Regular" },
+  giftBubble: { backgroundColor: Colors.brand + "15", borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12, maxWidth: "78%", borderWidth: 1, borderColor: Colors.brand + "30" },
+  giftBubbleText: { fontSize: 15, fontFamily: "Inter_500Medium", color: Colors.brand },
   replyBanner: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, gap: 8 },
   replyBarAccent: { width: 3, height: 32, borderRadius: 2 },
   replyBannerName: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   replyBannerText: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  inputBar: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 8, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, gap: 6 },
-  inputAction: { paddingBottom: 6 },
+  inputBar: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 8, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, gap: 4 },
+  inputAction: { paddingBottom: 6, paddingHorizontal: 2 },
   inputField: { flex: 1, borderRadius: 22, paddingHorizontal: 14, paddingVertical: 9, maxHeight: 120 },
   input: { fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 22 },
   sendBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", marginBottom: 2 },
@@ -563,4 +744,9 @@ const styles = StyleSheet.create({
   modalInput: { borderRadius: 12, padding: 14, fontSize: 15, fontFamily: "Inter_400Regular" },
   redEnvBtn: { backgroundColor: "#FF3B30", borderRadius: 14, paddingVertical: 14, alignItems: "center" },
   redEnvBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  giftGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  giftItem: { width: "30%", borderRadius: 12, padding: 10, alignItems: "center", gap: 4 },
+  giftEmoji: { fontSize: 32 },
+  giftName: { fontSize: 12, fontFamily: "Inter_500Medium", textAlign: "center" },
+  giftCost: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
 });

@@ -23,15 +23,16 @@ function checkRateLimit(ip: string): boolean {
   return entry.count <= RATE_LIMIT;
 }
 
-const SYSTEM_PROMPT = `You are AfuChat AI Assistant, a friendly and helpful AI built into the AfuChat messaging platform. You can help users with:
+const SYSTEM_PROMPT = `You are AfuAi, the intelligent AI assistant built into the AfuChat social platform. You can help users with:
 - General questions and conversations
 - Writing messages, posts, and stories
 - Translation between languages
 - Summarizing content
 - Creative writing and brainstorming
 - Advice and recommendations
+- Replying to posts and comments when tagged with @AfuAi
 
-Keep your responses concise and conversational. Use a warm, friendly tone. You can use emojis occasionally to be expressive.`;
+Keep your responses concise and conversational. Use a warm, friendly tone. You can use emojis occasionally to be expressive. Always identify yourself as AfuAi when asked.`;
 
 router.post("/ai/chat", async (req: Request, res: Response) => {
   try {
@@ -65,6 +66,46 @@ router.post("/ai/chat", async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error("AI chat error:", error?.message || error);
     res.status(500).json({ error: "Failed to get AI response" });
+  }
+});
+
+router.post("/ai/reply", async (req: Request, res: Response) => {
+  try {
+    const clientIp = req.ip || req.socket.remoteAddress || "unknown";
+    if (!checkRateLimit(clientIp)) {
+      res.status(429).json({ error: "Too many requests." });
+      return;
+    }
+
+    const { postContent, replyContent, context } = req.body;
+    if (!postContent && !replyContent) {
+      res.status(400).json({ error: "postContent or replyContent is required" });
+      return;
+    }
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `You are AfuAi, an AI assistant on AfuChat. A user tagged you (@AfuAi) in a ${context === "reply" ? "comment/reply" : "post"}. Respond helpfully and concisely. Keep it under 200 characters. Be friendly and relevant to the content.`,
+        },
+        {
+          role: "user",
+          content: context === "reply"
+            ? `Post: "${postContent}"\nComment that tagged you: "${replyContent}"\nRespond to the comment.`
+            : `Post content: "${postContent}"\nRespond to this post.`,
+        },
+      ],
+      max_tokens: 256,
+      temperature: 0.7,
+    });
+
+    const reply = completion.choices[0]?.message?.content || "Thanks for tagging me! 😊";
+    res.json({ reply });
+  } catch (error: any) {
+    console.error("AI reply error:", error?.message || error);
+    res.status(500).json({ error: "Failed to generate reply" });
   }
 });
 
