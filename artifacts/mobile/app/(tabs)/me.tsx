@@ -252,6 +252,17 @@ export default function MeScreen() {
         />
       </MenuGroup>
 
+      {profile?.is_admin && (
+        <MenuGroup>
+          <MenuItem
+            icon="shield-checkmark"
+            iconBg={Colors.brand}
+            label="Admin Dashboard"
+            onPress={() => router.push("/admin")}
+          />
+        </MenuGroup>
+      )}
+
       <MenuGroup>
         <MenuItem
           icon="log-out-outline"

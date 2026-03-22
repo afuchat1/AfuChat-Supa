@@ -60,6 +60,7 @@ function RootLayoutNav() {
       <Stack.Screen name="settings/notifications" />
       <Stack.Screen name="settings/chat" />
       <Stack.Screen name="settings/blocked" />
+      <Stack.Screen name="admin/index" />
     </Stack>
   );
 }

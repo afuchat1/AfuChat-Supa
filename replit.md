@@ -47,7 +47,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 
 ### Key Supabase Tables Used
 
-- **profiles** — `id`, `handle`, `display_name`, `avatar_url`, `bio`, `xp` (Nexa), `acoin`, `current_grade`, `is_verified`, `country`, `website_url`, `phone_number`, `banner_url`, `language`, `tipping_enabled`, etc. NOTE: No `is_premium` field — premium status comes from `user_subscriptions`.
+- **profiles** — `id`, `handle`, `display_name`, `avatar_url`, `bio`, `xp` (Nexa), `acoin`, `current_grade`, `is_verified`, `is_admin`, `country`, `website_url`, `phone_number`, `banner_url`, `language`, `tipping_enabled`, etc. NOTE: No `is_premium` field — premium status comes from `user_subscriptions`.
 - **subscription_plans** — `id`, `name`, `description`, `acoin_price`, `duration_days`, `features` (jsonb), `grants_verification`, `is_active`, `tier` (silver/gold/platinum)
 - **user_subscriptions** — `id`, `user_id` (UNIQUE), `plan_id`, `started_at`, `expires_at`, `is_active`, `acoin_paid`. Premium = active + not expired.
 - **currency_settings** — `nexa_to_acoin_rate`, `conversion_fee_percent`, `p2p_fee_percent`. Used for Nexa→ACoin conversion.
@@ -107,6 +107,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `app/games/index.tsx` — Game challenges and scores
 - `app/mini-programs/index.tsx` — Mini programs discovery
 - `app/ai/index.tsx` — AfuAi chat (powered by OpenAI via Replit AI Integrations)
+- `app/admin/index.tsx` — Admin Dashboard (admin-only, accessible from Me tab). Features: platform overview stats, user management (verify toggle, balance adjust), content moderation (block/delete posts), subscription plans view, currency settings, moderation reports. Only visible to users with `is_admin=true` in profiles.
 - `app/my-posts/index.tsx` — Dedicated My Posts screen (user's own posts with delete)
 - `app/premium.tsx` — Premium subscription with plans from `subscription_plans` table, ACoin payment, free features list, active subscription display
 - `app/linked-accounts.tsx` — Linked accounts management (premium-only, uses `linked_accounts` table, link by @handle)
