@@ -16,11 +16,15 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import * as WebBrowser from "expo-web-browser";
+import { makeRedirectUri } from "expo-auth-session";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 
 const logoImage = require("@/assets/images/logo.png");
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const { colors } = useTheme();
@@ -29,6 +33,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(null);
 
   async function handleLogin() {
     if (!email || !password) {
@@ -42,6 +47,55 @@ export default function LoginScreen() {
       Alert.alert("Login failed", error.message);
     } else {
       router.replace("/(tabs)");
+    }
+  }
+
+  async function handleOAuth(provider: "google" | "github") {
+    try {
+      setOauthLoading(provider);
+      const redirectUrl = makeRedirectUri({ path: "/(auth)/login" });
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) {
+        Alert.alert("Error", error.message);
+        setOauthLoading(null);
+        return;
+      }
+
+      if (data?.url) {
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+
+        if (result.type === "success" && result.url) {
+          const url = new URL(result.url);
+          const params = new URLSearchParams(url.hash.substring(1));
+          const accessToken = params.get("access_token");
+          const refreshToken = params.get("refresh_token");
+
+          if (accessToken && refreshToken) {
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+
+            if (sessionError) {
+              Alert.alert("Error", sessionError.message);
+            } else {
+              router.replace("/(tabs)");
+            }
+          }
+        }
+      }
+      setOauthLoading(null);
+    } catch (err: any) {
+      setOauthLoading(null);
+      Alert.alert("Error", "Could not complete sign in. Please try again.");
     }
   }
 
@@ -120,6 +174,50 @@ export default function LoginScreen() {
           </View>
 
           <TouchableOpacity
+            style={[styles.oauthBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+            onPress={() => handleOAuth("google")}
+            disabled={!!oauthLoading}
+            activeOpacity={0.7}
+          >
+            {oauthLoading === "google" ? (
+              <ActivityIndicator color={Colors.brand} />
+            ) : (
+              <>
+                <View style={styles.googleIconWrap}>
+                  <Text style={styles.googleG}>G</Text>
+                </View>
+                <Text style={[styles.oauthBtnText, { color: colors.text }]}>
+                  Continue with Google
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.oauthBtn, { backgroundColor: "#24292e" }]}
+            onPress={() => handleOAuth("github")}
+            disabled={!!oauthLoading}
+            activeOpacity={0.7}
+          >
+            {oauthLoading === "github" ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="logo-github" size={20} color="#fff" />
+                <Text style={[styles.oauthBtnText, { color: "#fff" }]}>
+                  Continue with GitHub
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.divider}>
+            <View style={[styles.line, { backgroundColor: colors.border }]} />
+            <Text style={[styles.orText, { color: colors.textMuted }]}>new here?</Text>
+            <View style={[styles.line, { backgroundColor: colors.border }]} />
+          </View>
+
+          <TouchableOpacity
             onPress={() => router.push("/(auth)/register")}
             style={[styles.registerBtn, { borderColor: colors.border }]}
             activeOpacity={0.7}
@@ -191,6 +289,34 @@ const styles = StyleSheet.create({
   },
   line: { flex: 1, height: StyleSheet.hairlineWidth },
   orText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  oauthBtn: {
+    flexDirection: "row",
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  oauthBtnText: {
+    fontSize: 16,
+    fontFamily: "Inter_500Medium",
+  },
+  googleIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#ddd",
+  },
+  googleG: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#4285F4",
+  },
   registerBtn: {
     height: 52,
     borderRadius: 14,

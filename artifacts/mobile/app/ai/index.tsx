@@ -130,7 +130,7 @@ export default function AiChatScreen() {
             </View>
             <Text style={[styles.emptyTitle, { color: colors.text }]}>AfuAi</Text>
             <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
-              Your personal AI assistant. Ask me anything or tag @AfuAi in posts and comments!
+              Your personal AI assistant. Ask me anything!
             </Text>
             <View style={styles.quickPrompts}>
               {QUICK_PROMPTS.map((p) => (

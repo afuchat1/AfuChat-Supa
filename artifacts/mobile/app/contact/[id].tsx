@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -31,6 +32,24 @@ type Profile = {
   country: string | null;
 };
 
+type UserPost = {
+  id: string;
+  content: string;
+  image_url: string | null;
+  created_at: string;
+  view_count: number;
+  likeCount: number;
+  replyCount: number;
+};
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 60000) return "just now";
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
+  return `${Math.floor(diff / 86400000)}d`;
+}
+
 export default function ContactProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
@@ -42,6 +61,8 @@ export default function ContactProfileScreen() {
   const [isBlocked, setIsBlocked] = useState(false);
   const [followerCount, setFollowerCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
+  const [posts, setPosts] = useState<UserPost[]>([]);
+  const [postsLoading, setPostsLoading] = useState(true);
 
   useEffect(() => {
     if (!id || !user) return;
@@ -60,6 +81,42 @@ export default function ContactProfileScreen() {
     supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", id).then(({ count }) => setFollowerCount(count || 0));
     supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", id).then(({ count }) => setFollowingCount(count || 0));
   }, [id, user]);
+
+  const loadPosts = useCallback(async () => {
+    if (!id) return;
+    setPostsLoading(true);
+    const { data } = await supabase
+      .from("posts")
+      .select("id, content, image_url, created_at, view_count")
+      .eq("author_id", id)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (data && data.length > 0) {
+      const postIds = data.map((p: any) => p.id);
+
+      const [likesRes, repliesRes] = await Promise.all([
+        supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds),
+        supabase.from("post_replies").select("post_id").in("post_id", postIds),
+      ]);
+
+      const likeCounts: Record<string, number> = {};
+      const replyCounts: Record<string, number> = {};
+      (likesRes.data || []).forEach((l: any) => { likeCounts[l.post_id] = (likeCounts[l.post_id] || 0) + 1; });
+      (repliesRes.data || []).forEach((r: any) => { replyCounts[r.post_id] = (replyCounts[r.post_id] || 0) + 1; });
+
+      setPosts(data.map((p: any) => ({
+        ...p,
+        likeCount: likeCounts[p.id] || 0,
+        replyCount: replyCounts[p.id] || 0,
+      })));
+    } else {
+      setPosts([]);
+    }
+    setPostsLoading(false);
+  }, [id]);
+
+  useEffect(() => { loadPosts(); }, [loadPosts]);
 
   async function startChat() {
     if (!user || !id) return;
@@ -199,6 +256,14 @@ export default function ContactProfileScreen() {
           <Text style={[styles.handle, { color: colors.textSecondary }]}>
             @{profile?.handle}
           </Text>
+
+          {profile?.is_verified && (
+            <View style={styles.businessBadge}>
+              <Ionicons name="briefcase" size={14} color="#fff" />
+              <Text style={styles.businessBadgeText}>Business Account</Text>
+            </View>
+          )}
+
           {profile?.bio ? (
             <Text style={[styles.bio, { color: colors.text }]}>{profile.bio}</Text>
           ) : null}
@@ -270,6 +335,47 @@ export default function ContactProfileScreen() {
             <Text style={[styles.actionLabel, { color: colors.text }]}>Gift</Text>
           </TouchableOpacity>
         </View>
+
+        <View style={[styles.postsSection, { backgroundColor: colors.surface }]}>
+          <View style={styles.postsSectionHeader}>
+            <Ionicons name="newspaper-outline" size={18} color={Colors.brand} />
+            <Text style={[styles.postsSectionTitle, { color: colors.text }]}>Posts</Text>
+            <Text style={[styles.postsSectionCount, { color: colors.textMuted }]}>{posts.length}</Text>
+          </View>
+
+          {postsLoading ? (
+            <ActivityIndicator color={Colors.brand} style={{ paddingVertical: 20 }} />
+          ) : posts.length === 0 ? (
+            <Text style={[styles.emptyPosts, { color: colors.textMuted }]}>No posts yet</Text>
+          ) : (
+            posts.map((p) => (
+              <TouchableOpacity
+                key={p.id}
+                style={[styles.postCard, { borderTopColor: colors.border }]}
+                onPress={() => router.push({ pathname: "/post/[id]", params: { id: p.id } })}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.postContent, { color: colors.text }]} numberOfLines={3}>
+                  {p.content}
+                </Text>
+                {p.image_url && (
+                  <Image source={{ uri: p.image_url }} style={styles.postThumb} resizeMode="cover" />
+                )}
+                <View style={styles.postMeta}>
+                  <Text style={[styles.postTime, { color: colors.textMuted }]}>{timeAgo(p.created_at)}</Text>
+                  <View style={styles.postStats}>
+                    <Ionicons name="heart-outline" size={13} color={colors.textMuted} />
+                    <Text style={[styles.postStatNum, { color: colors.textMuted }]}>{p.likeCount}</Text>
+                    <Ionicons name="chatbubble-outline" size={13} color={colors.textMuted} style={{ marginLeft: 10 }} />
+                    <Text style={[styles.postStatNum, { color: colors.textMuted }]}>{p.replyCount}</Text>
+                    <Ionicons name="eye-outline" size={13} color={colors.textMuted} style={{ marginLeft: 10 }} />
+                    <Text style={[styles.postStatNum, { color: colors.textMuted }]}>{p.view_count || 0}</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -298,6 +404,21 @@ const styles = StyleSheet.create({
   displayName: { fontSize: 22, fontFamily: "Inter_700Bold" },
   handle: { fontSize: 14, fontFamily: "Inter_400Regular" },
   bio: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", marginTop: 4, lineHeight: 20 },
+  businessBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.brand,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 16,
+    marginTop: 4,
+  },
+  businessBadgeText: {
+    color: "#fff",
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
   infoRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 },
   infoItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   infoValue: { fontSize: 13, fontFamily: "Inter_500Medium" },
@@ -329,4 +450,64 @@ const styles = StyleSheet.create({
   blockBtn: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: "#FF3B30", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24 },
   blockBtnActive: { backgroundColor: "#FF3B30" },
   blockBtnText: { color: "#FF3B30", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  postsSection: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  postsSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+  postsSectionTitle: {
+    fontSize: 17,
+    fontFamily: "Inter_600SemiBold",
+    flex: 1,
+  },
+  postsSectionCount: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+  },
+  emptyPosts: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    paddingVertical: 24,
+  },
+  postCard: {
+    paddingVertical: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  postContent: {
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+  postThumb: {
+    width: "100%",
+    height: 160,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  postMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  postTime: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+  },
+  postStats: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  postStatNum: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+  },
 });

@@ -102,6 +102,12 @@ export default function MeScreen() {
           <Text style={[styles.profileHandle, { color: colors.textSecondary }]}>
             @{profile?.handle || "handle"}
           </Text>
+          {profile?.is_verified && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: Colors.brand, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, marginTop: 2 }}>
+              <Ionicons name="briefcase" size={10} color="#fff" />
+              <Text style={{ color: "#fff", fontSize: 10, fontFamily: "Inter_600SemiBold" }}>Business</Text>
+            </View>
+          )}
           {profile?.bio ? (
             <Text style={[styles.profileBio, { color: colors.textMuted }]} numberOfLines={1}>
               {profile.bio}

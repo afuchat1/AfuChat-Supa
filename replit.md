@@ -65,7 +65,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 
 ### App Architecture
 
-- **Auth**: Supabase Auth (email/password), AuthContext provider
+- **Auth**: Supabase Auth (email/password, Google OAuth, GitHub OAuth), AuthContext provider
 - **Navigation**: Expo Router with tabs (Chats, Contacts, Discover, Me)
 - **Design**: AfuChat teal `#00C2CB` brand color, Inter font family, dark/light theme, custom logo
 - **Real-time**: Supabase Realtime subscriptions for incoming messages
@@ -87,7 +87,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `app/moments/create.tsx` — Create new post
 - `app/profile/edit.tsx` — Edit profile
 - `app/group/create.tsx` — Create group chat
-- `app/contact/[id].tsx` — Contact profile with follow/block/report
+- `app/contact/[id].tsx` — Contact profile with follow/block/report, business badge, user posts feed
 - `app/stories/create.tsx` — Create story (image + caption, 24h expiry)
 - `app/stories/view.tsx` — View stories with progress dots and view tracking
 - `app/post/[id].tsx` — Post detail with likes, replies, view count
@@ -125,7 +125,7 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 
 - Entry: `src/index.ts` — reads `PORT`, starts Express
 - App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health`; `src/routes/ai-chat.ts` exposes `POST /api/ai/chat` (AfuAi chat) and `POST /api/ai/reply` (AfuAi auto-reply when @AfuAi is tagged in post comments)
+- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health`; `src/routes/ai-chat.ts` exposes `POST /api/ai/chat` (AfuAi chat)
 - Depends on: `@workspace/db`, `@workspace/api-zod`
 - `pnpm --filter @workspace/api-server run dev` — run the dev server
 - `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
