@@ -133,38 +133,43 @@ export default function MeScreen() {
       </View>
 
       <MenuGroup>
-        <MenuItem icon="newspaper-outline" iconBg="#FF9500" label="My Posts" />
+        <MenuItem icon="newspaper-outline" iconBg="#FF9500" label="My Posts" onPress={() => router.push("/(tabs)/discover")} />
         <Separator indent={54} />
-        <MenuItem icon="images-outline" iconBg="#5856D6" label="Stories" />
+        <MenuItem icon="images-outline" iconBg="#5856D6" label="Stories" onPress={() => router.push("/stories/create")} />
+        <Separator indent={54} />
+        <MenuItem icon="notifications-outline" iconBg="#007AFF" label="Notifications" onPress={() => router.push("/notifications")} />
       </MenuGroup>
 
       <MenuGroup>
-        <MenuItem icon="wallet-outline" iconBg="#07C160" label="Wallet" />
+        <MenuItem icon="wallet-outline" iconBg="#07C160" label="Wallet" onPress={() => router.push("/wallet")} />
         <Separator indent={54} />
-        <MenuItem icon="star-outline" iconBg="#FFD60A" label="Favorites" />
+        <MenuItem icon="gift-outline" iconBg="#FF3B30" label="Gifts" onPress={() => router.push("/gifts")} />
         <Separator indent={54} />
-        <MenuItem icon="gift-outline" iconBg="#FF3B30" label="Gifts" />
+        <MenuItem icon="game-controller-outline" iconBg="#007AFF" label="Games" onPress={() => router.push("/games")} />
         <Separator indent={54} />
-        <MenuItem icon="game-controller-outline" iconBg="#007AFF" label="Games" />
+        <MenuItem icon="apps-outline" iconBg="#AF52DE" label="Mini Programs" onPress={() => router.push("/mini-programs")} />
       </MenuGroup>
 
       <MenuGroup>
         <MenuItem
-          icon="settings-outline"
-          iconBg="#8E8E93"
-          label="Settings"
+          icon="chatbubble-ellipses-outline"
+          iconBg="#34C759"
+          label="Chat Settings"
+          onPress={() => router.push("/settings/chat")}
         />
         <Separator indent={54} />
         <MenuItem
           icon="shield-checkmark-outline"
           iconBg="#30D158"
           label="Privacy"
+          onPress={() => router.push("/settings/privacy")}
         />
         <Separator indent={54} />
         <MenuItem
           icon="notifications-outline"
-          iconBg="#007AFF"
-          label="Notifications"
+          iconBg="#5856D6"
+          label="Notification Settings"
+          onPress={() => router.push("/settings/notifications")}
         />
       </MenuGroup>
 

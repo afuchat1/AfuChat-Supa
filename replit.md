@@ -79,15 +79,28 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `hooks/useTheme.ts` — Theme hook
 - `components/ui/Avatar.tsx` — Avatar with initials fallback
 - `components/ui/Separator.tsx` — List separator
-- `app/(tabs)/index.tsx` — Chats list
+- `app/(tabs)/index.tsx` — Chats list with stories bar
 - `app/(tabs)/contacts.tsx` — Contacts (follows) list
-- `app/(tabs)/discover.tsx` — Posts feed
-- `app/(tabs)/me.tsx` — Profile & settings
-- `app/chat/[id].tsx` — Chat conversation screen
+- `app/(tabs)/discover.tsx` — Posts feed (tap to post detail)
+- `app/(tabs)/me.tsx` — Profile & settings hub (nav to all feature screens)
+- `app/chat/[id].tsx` — Chat with reactions, typing indicators, read receipts, reply-to, red envelopes
 - `app/moments/create.tsx` — Create new post
 - `app/profile/edit.tsx` — Edit profile
 - `app/group/create.tsx` — Create group chat
-- `app/contact/[id].tsx` — Contact profile view
+- `app/contact/[id].tsx` — Contact profile with follow/block/report
+- `app/stories/create.tsx` — Create story (image + caption, 24h expiry)
+- `app/stories/view.tsx` — View stories with progress dots and view tracking
+- `app/post/[id].tsx` — Post detail with likes, replies, view count
+- `app/notifications.tsx` — Notifications list with mark read
+- `app/wallet/index.tsx` — XP/ACoin balance, transfer XP, transaction history
+- `app/gifts/index.tsx` — Gift shop, owned gifts, send gifts, pin favorites
+- `app/red-envelope/[id].tsx` — Red envelope claim and status
+- `app/games/index.tsx` — Game challenges and scores
+- `app/mini-programs/index.tsx` — Mini programs discovery
+- `app/settings/privacy.tsx` — Privacy settings (private account, online status, hide lists)
+- `app/settings/notifications.tsx` — Notification preferences
+- `app/settings/chat.tsx` — Chat preferences (theme, bubble, font, read receipts)
+- `app/settings/blocked.tsx` — Blocked users management
 
 ## TypeScript & Composite Projects
 

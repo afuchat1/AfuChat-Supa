@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,6 +11,7 @@ import {
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -36,9 +38,13 @@ export default function ContactProfileScreen() {
   const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [followerCount, setFollowerCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || !user) return;
     supabase
       .from("profiles")
       .select("id, display_name, handle, avatar_url, bio, is_verified, xp, current_grade, website_url, country")
@@ -48,7 +54,12 @@ export default function ContactProfileScreen() {
         setProfile(data as Profile);
         setLoading(false);
       });
-  }, [id]);
+
+    supabase.from("follows").select("id").eq("follower_id", user.id).eq("following_id", id).maybeSingle().then(({ data }) => setIsFollowing(!!data));
+    supabase.from("blocked_users").select("id").eq("blocker_id", user.id).eq("blocked_id", id).maybeSingle().then(({ data }) => setIsBlocked(!!data));
+    supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", id).then(({ count }) => setFollowerCount(count || 0));
+    supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", id).then(({ count }) => setFollowingCount(count || 0));
+  }, [id, user]);
 
   async function startChat() {
     if (!user || !id) return;
@@ -90,6 +101,61 @@ export default function ContactProfileScreen() {
     }
   }
 
+  async function toggleFollow() {
+    if (!user || !id) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (isFollowing) {
+      await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", id);
+      setIsFollowing(false);
+      setFollowerCount((c) => Math.max(0, c - 1));
+    } else {
+      await supabase.from("follows").insert({ follower_id: user.id, following_id: id });
+      setIsFollowing(true);
+      setFollowerCount((c) => c + 1);
+    }
+  }
+
+  async function toggleBlock() {
+    if (!user || !id) return;
+    if (isBlocked) {
+      await supabase.from("blocked_users").delete().eq("blocker_id", user.id).eq("blocked_id", id);
+      setIsBlocked(false);
+    } else {
+      Alert.alert("Block User", `Block ${profile?.display_name}?`, [
+        { text: "Cancel", style: "cancel" },
+        { text: "Block", style: "destructive", onPress: async () => {
+          await supabase.from("blocked_users").insert({ blocker_id: user.id, blocked_id: id });
+          setIsBlocked(true);
+          if (isFollowing) {
+            await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", id);
+            setIsFollowing(false);
+          }
+        }},
+      ]);
+    }
+  }
+
+  function reportUser() {
+    if (!user || !id) return;
+    Alert.alert("Report User", "Why are you reporting this user?", [
+      { text: "Spam", onPress: () => submitReport("spam") },
+      { text: "Harassment", onPress: () => submitReport("harassment") },
+      { text: "Inappropriate Content", onPress: () => submitReport("inappropriate") },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }
+
+  async function submitReport(reason: string) {
+    if (!user || !id) return;
+    const { error } = await supabase.from("user_reports").insert({
+      reporter_id: user.id,
+      reported_id: id,
+      reason,
+    });
+    if (error) Alert.alert("Error", "Could not submit report.");
+    else Alert.alert("Reported", "Thank you for your report. We'll review it.");
+  }
+
   if (loading) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
@@ -97,6 +163,8 @@ export default function ContactProfileScreen() {
       </View>
     );
   }
+
+  const isOwnProfile = user?.id === id;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
@@ -110,7 +178,11 @@ export default function ContactProfileScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Profile</Text>
-        <View style={{ width: 24 }} />
+        {!isOwnProfile ? (
+          <TouchableOpacity onPress={reportUser}>
+            <Ionicons name="flag-outline" size={22} color={colors.textMuted} />
+          </TouchableOpacity>
+        ) : <View style={{ width: 24 }} />}
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
@@ -130,6 +202,19 @@ export default function ContactProfileScreen() {
           {profile?.bio ? (
             <Text style={[styles.bio, { color: colors.text }]}>{profile.bio}</Text>
           ) : null}
+
+          <View style={styles.followStats}>
+            <View style={styles.followStat}>
+              <Text style={[styles.followNum, { color: colors.text }]}>{followerCount}</Text>
+              <Text style={[styles.followLabel, { color: colors.textMuted }]}>Followers</Text>
+            </View>
+            <View style={[styles.followDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.followStat}>
+              <Text style={[styles.followNum, { color: colors.text }]}>{followingCount}</Text>
+              <Text style={[styles.followLabel, { color: colors.textMuted }]}>Following</Text>
+            </View>
+          </View>
+
           <View style={styles.infoRow}>
             <View style={styles.infoItem}>
               <Ionicons name="flash" size={16} color="#FFD60A" />
@@ -140,6 +225,23 @@ export default function ContactProfileScreen() {
               <Text style={[styles.infoDot, { color: colors.textMuted }]}>{profile.country}</Text>
             ) : null}
           </View>
+
+          {!isOwnProfile && (
+            <View style={styles.profileActions}>
+              <TouchableOpacity style={[styles.followBtn, isFollowing && styles.followBtnActive]} onPress={toggleFollow}>
+                <Ionicons name={isFollowing ? "checkmark" : "person-add-outline"} size={16} color={isFollowing ? Colors.brand : "#fff"} />
+                <Text style={[styles.followBtnText, isFollowing && { color: Colors.brand }]}>
+                  {isFollowing ? "Following" : "Follow"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.blockBtn, isBlocked && styles.blockBtnActive]} onPress={toggleBlock}>
+                <Ionicons name={isBlocked ? "ban" : "ban-outline"} size={16} color={isBlocked ? "#fff" : "#FF3B30"} />
+                <Text style={[styles.blockBtnText, isBlocked && { color: "#fff" }]}>
+                  {isBlocked ? "Blocked" : "Block"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         <View style={[styles.actions, { backgroundColor: colors.surface }]}>
@@ -161,7 +263,7 @@ export default function ContactProfileScreen() {
             </View>
             <Text style={[styles.actionLabel, { color: colors.text }]}>Video</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/gifts")}>
             <View style={[styles.actionIcon, { backgroundColor: "#FF9500" }]}>
               <Ionicons name="gift" size={22} color="#fff" />
             </View>
@@ -215,4 +317,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   actionLabel: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  followStats: { flexDirection: "row", alignItems: "center", marginTop: 12, gap: 0 },
+  followStat: { alignItems: "center", paddingHorizontal: 20 },
+  followNum: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  followLabel: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  followDivider: { width: StyleSheet.hairlineWidth, height: 30 },
+  profileActions: { flexDirection: "row", gap: 10, marginTop: 12 },
+  followBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.brand, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 24 },
+  followBtnActive: { backgroundColor: "transparent", borderWidth: 1, borderColor: Colors.brand },
+  followBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  blockBtn: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: "#FF3B30", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24 },
+  blockBtnActive: { backgroundColor: "#FF3B30" },
+  blockBtnText: { color: "#FF3B30", fontSize: 14, fontFamily: "Inter_600SemiBold" },
 });

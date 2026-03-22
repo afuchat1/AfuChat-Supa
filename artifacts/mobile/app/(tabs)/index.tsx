@@ -4,6 +4,7 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -20,6 +21,13 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { Separator } from "@/components/ui/Separator";
 import Colors from "@/constants/colors";
+
+type StoryUser = {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  hasUnseen: boolean;
+};
 
 type ChatItem = {
   id: string;
@@ -87,6 +95,70 @@ function ChatRow({ item }: { item: ChatItem }) {
     </TouchableOpacity>
   );
 }
+
+function StoriesBar({ userId, colors }: { userId: string; colors: any }) {
+  const [storyUsers, setStoryUsers] = useState<StoryUser[]>([]);
+
+  useEffect(() => {
+    const now = new Date().toISOString();
+    supabase
+      .from("stories")
+      .select("user_id, profiles!stories_user_id_fkey(display_name, avatar_url)")
+      .gt("expires_at", now)
+      .order("created_at", { ascending: false })
+      .limit(30)
+      .then(({ data }) => {
+        if (!data) return;
+        const seen = new Set<string>();
+        const users: StoryUser[] = [];
+        for (const s of data as any[]) {
+          if (seen.has(s.user_id)) continue;
+          seen.add(s.user_id);
+          users.push({
+            userId: s.user_id,
+            displayName: s.profiles?.display_name || "User",
+            avatarUrl: s.profiles?.avatar_url || null,
+            hasUnseen: s.user_id !== userId,
+          });
+        }
+        setStoryUsers(users);
+      });
+  }, [userId]);
+
+  if (storyUsers.length === 0) return null;
+
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={storyBarStyles.list}>
+      <TouchableOpacity style={storyBarStyles.item} onPress={() => router.push("/stories/create")}>
+        <View style={[storyBarStyles.addCircle, { backgroundColor: colors.inputBg }]}>
+          <Ionicons name="add" size={28} color={Colors.brand} />
+        </View>
+        <Text style={[storyBarStyles.name, { color: colors.textSecondary }]} numberOfLines={1}>My Story</Text>
+      </TouchableOpacity>
+      {storyUsers.map((u) => (
+        <TouchableOpacity
+          key={u.userId}
+          style={storyBarStyles.item}
+          onPress={() => router.push({ pathname: "/stories/view", params: { userId: u.userId } })}
+        >
+          <View style={[storyBarStyles.ring, u.hasUnseen && storyBarStyles.ringActive]}>
+            <Avatar uri={u.avatarUrl} name={u.displayName} size={52} />
+          </View>
+          <Text style={[storyBarStyles.name, { color: colors.textSecondary }]} numberOfLines={1}>{u.displayName}</Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
+}
+
+const storyBarStyles = StyleSheet.create({
+  list: { paddingHorizontal: 12, paddingVertical: 10, gap: 14 },
+  item: { alignItems: "center", width: 68 },
+  addCircle: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: Colors.brand, borderStyle: "dashed" },
+  ring: { borderRadius: 30, padding: 2, borderWidth: 2, borderColor: "transparent" },
+  ringActive: { borderColor: Colors.brand },
+  name: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 4, textAlign: "center" },
+});
 
 export default function ChatsScreen() {
   const { colors } = useTheme();
@@ -246,6 +318,7 @@ export default function ChatsScreen() {
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <ChatRow item={item} />}
           ItemSeparatorComponent={() => <Separator indent={74} />}
+          ListHeaderComponent={user ? <StoriesBar userId={user.id} colors={colors} /> : null}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

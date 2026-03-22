@@ -47,10 +47,16 @@ function PostCard({ item }: { item: PostItem }) {
   const allImages = item.images.length > 0 ? item.images : item.image_url ? [item.image_url] : [];
   const imgW = allImages.length === 1 ? width - 48 : (width - 56) / 2;
 
+  function openPost() {
+    router.push({ pathname: "/post/[id]", params: { id: item.id } });
+  }
+
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface }]}>
+    <TouchableOpacity style={[styles.card, { backgroundColor: colors.surface }]} onPress={openPost} activeOpacity={0.85}>
       <View style={styles.cardHeader}>
-        <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={40} />
+        <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}>
+          <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={40} />
+        </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <View style={styles.nameRow}>
             <Text style={[styles.cardName, { color: colors.text }]}>{item.profile.display_name}</Text>
@@ -83,12 +89,12 @@ function PostCard({ item }: { item: PostItem }) {
       <View style={[styles.cardFooter, { borderTopColor: colors.separator }]}>
         <TouchableOpacity
           style={styles.action}
-          onPress={() => Haptics.selectionAsync()}
+          onPress={(e) => { e.stopPropagation(); Haptics.selectionAsync(); }}
         >
           <Ionicons name="heart-outline" size={18} color={colors.textMuted} />
           <Text style={[styles.actionText, { color: colors.textMuted }]}>Like</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.action}>
+        <TouchableOpacity style={styles.action} onPress={openPost}>
           <Ionicons name="chatbubble-outline" size={18} color={colors.textMuted} />
           <Text style={[styles.actionText, { color: colors.textMuted }]}>Reply</Text>
         </TouchableOpacity>
@@ -100,7 +106,7 @@ function PostCard({ item }: { item: PostItem }) {
           <Text style={[styles.viewText, { color: colors.textMuted }]}>{item.view_count}</Text>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 

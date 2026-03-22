@@ -1,0 +1,201 @@
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
+import { useTheme } from "@/hooks/useTheme";
+import { Avatar } from "@/components/ui/Avatar";
+import Colors from "@/constants/colors";
+
+type Envelope = {
+  id: string;
+  sender_id: string;
+  total_amount: number;
+  remaining_amount: number;
+  total_count: number;
+  remaining_count: number;
+  message: string;
+  split_type: string;
+  created_at: string;
+  sender: { display_name: string; avatar_url: string | null };
+};
+
+type Claim = {
+  id: string;
+  amount: number;
+  claimed_at: string;
+  claimer: { display_name: string; avatar_url: string | null };
+};
+
+export default function RedEnvelopeScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const [envelope, setEnvelope] = useState<Envelope | null>(null);
+  const [claims, setClaims] = useState<Claim[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [claiming, setClaiming] = useState(false);
+  const [myClaim, setMyClaim] = useState<number | null>(null);
+
+  const load = useCallback(async () => {
+    if (!id || !user) return;
+    const { data } = await supabase
+      .from("red_envelopes")
+      .select("id, sender_id, total_amount, remaining_amount, total_count, remaining_count, message, split_type, created_at, profiles!red_envelopes_sender_id_fkey(display_name, avatar_url)")
+      .eq("id", id)
+      .single();
+
+    if (data) {
+      setEnvelope({ ...data, sender: (data as any).profiles } as any);
+    }
+
+    const { data: claimData } = await supabase
+      .from("red_envelope_claims")
+      .select("id, amount, claimed_at, profiles!red_envelope_claims_claimer_id_fkey(display_name, avatar_url)")
+      .eq("envelope_id", id)
+      .order("claimed_at", { ascending: true });
+
+    if (claimData) {
+      setClaims(claimData.map((c: any) => ({ ...c, claimer: c.profiles })));
+    }
+
+    const { data: myClaimCheck } = await supabase
+      .from("red_envelope_claims")
+      .select("amount")
+      .eq("envelope_id", id)
+      .eq("claimer_id", user.id)
+      .maybeSingle();
+    if (myClaimCheck) setMyClaim(myClaimCheck.amount);
+
+    setLoading(false);
+  }, [id, user]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function claim() {
+    if (!user || !envelope || claiming) return;
+    setClaiming(true);
+
+    if (envelope.remaining_count <= 0) { Alert.alert("Gone!", "All envelopes have been claimed."); setClaiming(false); return; }
+
+    let amount: number;
+    if (envelope.split_type === "equal") {
+      amount = Math.floor(envelope.total_amount / envelope.total_count);
+    } else {
+      if (envelope.remaining_count === 1) {
+        amount = envelope.remaining_amount;
+      } else {
+        const max = Math.floor(envelope.remaining_amount / envelope.remaining_count * 2);
+        amount = Math.max(1, Math.floor(Math.random() * max));
+      }
+    }
+
+    const { error } = await supabase.from("red_envelope_claims").insert({
+      envelope_id: envelope.id,
+      claimer_id: user.id,
+      amount,
+    });
+
+    if (error) {
+      Alert.alert("Error", error.message);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setMyClaim(amount);
+      await supabase.from("red_envelopes").update({
+        remaining_amount: envelope.remaining_amount - amount,
+        remaining_count: envelope.remaining_count - 1,
+      }).eq("id", envelope.id);
+      load();
+    }
+    setClaiming(false);
+  }
+
+  if (loading) return <View style={[styles.center, { backgroundColor: colors.background }]}><ActivityIndicator color="#FF3B30" /></View>;
+  if (!envelope) return <View style={[styles.center, { backgroundColor: colors.background }]}><Text style={{ color: colors.text }}>Envelope not found</Text></View>;
+
+  return (
+    <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: "#FF3B30" }]}>
+        <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color="#fff" /></TouchableOpacity>
+        <Text style={styles.headerTitle}>🧧 Red Envelope</Text>
+        <View style={{ width: 24 }} />
+      </View>
+
+      <View style={styles.envelopeCard}>
+        <Avatar uri={envelope.sender.avatar_url} name={envelope.sender.display_name} size={56} />
+        <Text style={styles.senderName}>{envelope.sender.display_name}</Text>
+        <Text style={styles.envelopeMsg}>{envelope.message}</Text>
+
+        {myClaim !== null ? (
+          <View style={styles.claimedSection}>
+            <Text style={styles.claimedAmount}>{myClaim} XP</Text>
+            <Text style={styles.claimedLabel}>You received</Text>
+          </View>
+        ) : envelope.remaining_count > 0 ? (
+          <TouchableOpacity style={styles.claimBtn} onPress={claim} disabled={claiming}>
+            {claiming ? <ActivityIndicator color="#FF3B30" /> : <Text style={styles.claimBtnText}>Open</Text>}
+          </TouchableOpacity>
+        ) : (
+          <Text style={styles.goneText}>All claimed</Text>
+        )}
+
+        <Text style={styles.statsText}>
+          {envelope.total_count - envelope.remaining_count}/{envelope.total_count} claimed · {envelope.remaining_amount} XP remaining
+        </Text>
+      </View>
+
+      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Claims</Text>
+      <FlatList
+        data={claims}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <View style={[styles.claimRow, { backgroundColor: colors.surface }]}>
+            <Avatar uri={item.claimer.avatar_url} name={item.claimer.display_name} size={40} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.claimName, { color: colors.text }]}>{item.claimer.display_name}</Text>
+              <Text style={[styles.claimTime, { color: colors.textMuted }]}>{new Date(item.claimed_at).toLocaleTimeString()}</Text>
+            </View>
+            <Text style={[styles.claimAmount, { color: "#FF3B30" }]}>{item.amount} XP</Text>
+          </View>
+        )}
+        contentContainerStyle={{ paddingBottom: 90 }}
+        ListEmptyComponent={<Text style={[styles.emptyText, { color: colors.textMuted }]}>No claims yet</Text>}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  header: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12 },
+  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", color: "#fff" },
+  envelopeCard: { backgroundColor: "#FF3B30", paddingVertical: 32, paddingHorizontal: 24, alignItems: "center", gap: 8, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+  senderName: { fontSize: 18, fontFamily: "Inter_600SemiBold", color: "#fff" },
+  envelopeMsg: { fontSize: 15, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.85)" },
+  claimedSection: { alignItems: "center", marginVertical: 8 },
+  claimedAmount: { fontSize: 36, fontFamily: "Inter_700Bold", color: "#FFD60A" },
+  claimedLabel: { fontSize: 14, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.7)" },
+  claimBtn: { backgroundColor: "#fff", paddingHorizontal: 48, paddingVertical: 14, borderRadius: 28, marginTop: 8 },
+  claimBtnText: { color: "#FF3B30", fontSize: 18, fontFamily: "Inter_700Bold" },
+  goneText: { fontSize: 16, fontFamily: "Inter_500Medium", color: "rgba(255,255,255,0.6)", marginTop: 8 },
+  statsText: { fontSize: 13, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.6)", marginTop: 8 },
+  sectionLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold", paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
+  claimRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
+  claimName: { fontSize: 15, fontFamily: "Inter_500Medium" },
+  claimTime: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  claimAmount: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  emptyText: { textAlign: "center", marginTop: 32, fontSize: 15, fontFamily: "Inter_400Regular" },
+});
