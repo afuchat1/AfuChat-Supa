@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -28,10 +29,15 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   async function handleRegister() {
     if (!displayName || !handle || !email || !password) {
       Alert.alert("Missing fields", "Please fill all fields.");
+      return;
+    }
+    if (!agreedToTerms) {
+      Alert.alert("Terms Required", "You must agree to the Terms of Service and Privacy Policy to create an account.");
       return;
     }
     if (password.length < 6) {
@@ -155,22 +161,47 @@ export default function RegisterScreen() {
             </Pressable>
           </View>
 
-          <Text style={[styles.terms, { color: colors.textMuted }]}>
-            By creating an account, you agree to our Terms of Service and Privacy Policy.
-          </Text>
-
           <TouchableOpacity
-            style={[styles.registerBtn, loading && styles.btnDisabled]}
+            style={styles.termsRow}
+            onPress={() => setAgreedToTerms((v) => !v)}
+            activeOpacity={0.7}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: agreedToTerms }}
+          >
+            <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
+              {agreedToTerms && <Ionicons name="checkmark" size={14} color="#fff" />}
+            </View>
+            <Text style={[styles.termsText, { color: colors.textSecondary }]}>
+              I have read and agree to the{" "}
+              <Text
+                style={styles.termsLink}
+                onPress={() => Linking.openURL("https://afuchat.com/terms")}
+              >
+                Terms of Service
+              </Text>
+              {" "}and{" "}
+              <Text
+                style={styles.termsLink}
+                onPress={() => Linking.openURL("https://afuchat.com/privacy")}
+              >
+                Privacy Policy
+              </Text>
+            </Text>
+          </TouchableOpacity>
+
+          <Pressable
+            style={[styles.registerBtn, { opacity: (loading || !agreedToTerms) ? 0.5 : 1 }]}
             onPress={handleRegister}
-            disabled={loading}
-            activeOpacity={0.85}
+            disabled={loading || !agreedToTerms}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: loading || !agreedToTerms }}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.registerBtnText}>Create Account</Text>
             )}
-          </TouchableOpacity>
+          </Pressable>
 
           <TouchableOpacity
             onPress={() => router.back()}
@@ -212,10 +243,35 @@ const styles = StyleSheet.create({
     height: 52,
   },
   eyeBtn: { padding: 4 },
-  terms: {
-    fontSize: 12,
+  termsRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    paddingVertical: 4,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#CCC",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  checkboxChecked: {
+    backgroundColor: Colors.brand,
+    borderColor: Colors.brand,
+  },
+  termsText: {
+    flex: 1,
+    fontSize: 13,
     fontFamily: "Inter_400Regular",
-    lineHeight: 18,
+    lineHeight: 20,
+  },
+  termsLink: {
+    color: Colors.brand,
+    fontFamily: "Inter_600SemiBold",
   },
   registerBtn: {
     backgroundColor: Colors.brand,
@@ -225,7 +281,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 4,
   },
-  btnDisabled: { opacity: 0.6 },
+  btnDisabled: { opacity: 0.5 }, // kept for reference
   registerBtnText: {
     color: "#fff",
     fontSize: 17,

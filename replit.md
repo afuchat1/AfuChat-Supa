@@ -39,7 +39,7 @@ artifacts-monorepo/
 
 ## AfuChat Mobile App (artifacts/mobile)
 
-Expo React Native app — WeChat-style chat application connecting to an external Supabase backend.
+Expo React Native app — WeChat-style chat super app connecting to an external Supabase backend.
 
 ### Backend: Supabase (rhnsjqqtdzlkvqazfcbg.supabase.co)
 
@@ -47,7 +47,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 
 ### Key Supabase Tables Used
 
-- **profiles** — `id`, `handle`, `display_name`, `avatar_url`, `bio`, `xp`, `acoin`, `current_grade`, `is_verified`, `country`, `website_url`, `phone_number`, `banner_url`, `language`, `tipping_enabled`, etc.
+- **profiles** — `id`, `handle`, `display_name`, `avatar_url`, `bio`, `xp`, `acoin`, `current_grade`, `is_verified`, `is_premium`, `country`, `website_url`, `phone_number`, `banner_url`, `language`, `tipping_enabled`, etc.
 - **chats** — `id`, `name`, `is_group`, `is_channel`, `created_by`, `is_pinned`, `is_archived`, `avatar_url`, `description`, `user_id`, `is_verified`, `who_can_send`, `member_limit`
 - **chat_members** — `id`, `chat_id`, `user_id`, `joined_at`, `is_admin`
 - **messages** — `id`, `chat_id`, `sender_id`, `encrypted_content`, `sent_at`, `reply_to_message_id`, `attachment_url`, `attachment_type`, `audio_url`, `edited_at`
@@ -67,27 +67,29 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 
 - **Auth**: Supabase Auth (email/password, Google OAuth, GitHub OAuth), AuthContext provider
 - **Navigation**: Expo Router with tabs (Chats, Contacts, Discover, Me)
-- **Design**: AfuChat teal `#00C2CB` brand color, Inter font family, dark/light theme, custom logo
+- **Design**: AfuChat teal `#00C2CB` brand color, gold business badge `#D4A853`, Inter font family, dark/light theme, custom logo
+- **Themes**: Dark theme uses pure `#000000` black. Light theme uses cream tones (`#FDF8F3` background).
 - **Real-time**: Supabase Realtime subscriptions for incoming messages
 - **State**: React Context (AuthContext) + local component state
+- **Premium**: `is_premium` field on profiles; premium users get linked accounts, badges, etc.
 
 ### Key Files
 
 - `lib/supabase.ts` — Supabase client config
-- `context/AuthContext.tsx` — Auth provider with profile loading
-- `constants/colors.ts` — Brand colors + light/dark theme
+- `context/AuthContext.tsx` — Auth provider with profile loading (includes `is_premium`)
+- `constants/colors.ts` — Brand colors + light/dark theme + gold badge color
 - `hooks/useTheme.ts` — Theme hook
 - `components/ui/Avatar.tsx` — Avatar with initials fallback
 - `components/ui/Separator.tsx` — List separator
 - `app/(tabs)/index.tsx` — Chats list with stories bar
 - `app/(tabs)/contacts.tsx` — Contacts (follows) list
 - `app/(tabs)/discover.tsx` — Posts feed (tap to post detail)
-- `app/(tabs)/me.tsx` — Profile & settings hub (nav to all feature screens)
-- `app/chat/[id].tsx` — Chat with reactions, typing indicators, read receipts, reply-to, red envelopes
+- `app/(tabs)/me.tsx` — Profile & settings hub (nav to all feature screens, premium banner, golden badge)
+- `app/chat/[id].tsx` — Chat with swipe-to-reply, reactions, typing indicators, read receipts, gift box UI, red envelopes, swipe-to-close bottom sheets
 - `app/moments/create.tsx` — Create new post
 - `app/profile/edit.tsx` — Edit profile
 - `app/group/create.tsx` — Create group chat
-- `app/contact/[id].tsx` — Contact profile with follow/block/report, business badge, user posts feed
+- `app/contact/[id].tsx` — Contact profile with golden badge, country, join date, verification details, bio, follow/block/report, user posts feed
 - `app/stories/create.tsx` — Create story (image + caption, 24h expiry)
 - `app/stories/view.tsx` — View stories with progress dots and view tracking
 - `app/post/[id].tsx` — Post detail with likes, replies, view count
@@ -99,6 +101,10 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `app/mini-programs/index.tsx` — Mini programs discovery
 - `app/ai/index.tsx` — AfuAi chat (powered by OpenAI via Replit AI Integrations)
 - `app/my-posts/index.tsx` — Dedicated My Posts screen (user's own posts with delete)
+- `app/premium.tsx` — Premium subscription screen with plan selection and feature list
+- `app/linked-accounts.tsx` — Linked accounts management (premium-only with guard)
+- `app/(auth)/login.tsx` — Login screen with email/password, Google/GitHub OAuth (popup mode)
+- `app/(auth)/register.tsx` — Register screen with terms/privacy checkbox (must agree before account creation)
 - `app/settings/privacy.tsx` — Privacy settings (private account, online status, hide lists)
 - `app/settings/notifications.tsx` — Notification preferences
 - `app/settings/chat.tsx` — Chat preferences (theme, bubble, font, read receipts)

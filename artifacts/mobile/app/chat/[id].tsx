@@ -2,9 +2,11 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Dimensions,
   FlatList,
   KeyboardAvoidingView,
-  Modal,
+  PanResponder,
   Platform,
   ScrollView,
   StyleSheet,
@@ -54,13 +56,88 @@ type ChatInfo = {
 };
 
 const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+const SCREEN_HEIGHT = Dimensions.get("window").height;
 
 function formatMsgTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function MessageBubble({ msg, isMe, showAvatar, showTime, onLongPress, onReply, replyPreview, onTapEnvelope }: {
+function SwipeableMessage({ children, onSwipeRight }: { children: React.ReactNode; onSwipeRight: () => void }) {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 10 && g.dx > 0 && Math.abs(g.dy) < 20,
+      onPanResponderMove: (_, g) => {
+        if (g.dx > 0 && g.dx < 80) translateX.setValue(g.dx);
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dx > 50) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onSwipeRight();
+        }
+        Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+      },
+    })
+  ).current;
+
+  return (
+    <View>
+      <View style={styles.swipeReplyHint}>
+        <Ionicons name="arrow-undo" size={18} color={Colors.brand} />
+      </View>
+      <Animated.View {...panResponder.panHandlers} style={{ transform: [{ translateX }] }}>
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
+
+function BottomSheet({ visible, onClose, children }: { visible: boolean; onClose: () => void; children: React.ReactNode }) {
+  const { colors } = useTheme();
+  const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.spring(translateY, { toValue: 0, useNativeDriver: true, damping: 20 }).start();
+    } else {
+      Animated.timing(translateY, { toValue: SCREEN_HEIGHT, duration: 250, useNativeDriver: true }).start();
+    }
+  }, [visible]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 10,
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) translateY.setValue(g.dy);
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 100 || g.vy > 0.5) {
+          Animated.timing(translateY, { toValue: SCREEN_HEIGHT, duration: 200, useNativeDriver: true }).start(() => onClose());
+        } else {
+          Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
+        }
+      },
+    })
+  ).current;
+
+  if (!visible) return null;
+
+  return (
+    <View style={StyleSheet.absoluteFill}>
+      <TouchableOpacity style={styles.sheetOverlay} activeOpacity={1} onPress={onClose} />
+      <Animated.View
+        style={[styles.sheetContent, { backgroundColor: colors.surface, transform: [{ translateY }] }]}
+        {...panResponder.panHandlers}
+      >
+        <View style={styles.sheetHandle} />
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
+
+function MessageBubble({ msg, isMe, showAvatar, showTime, onLongPress, onReply, replyPreview, onTapEnvelope, onTapGift }: {
   msg: Message;
   isMe: boolean;
   showAvatar: boolean;
@@ -69,6 +146,7 @@ function MessageBubble({ msg, isMe, showAvatar, showTime, onLongPress, onReply, 
   onReply: (msg: Message) => void;
   replyPreview?: string | null;
   onTapEnvelope?: (msg: Message) => void;
+  onTapGift?: (msg: Message) => void;
 }) {
   const { colors } = useTheme();
   const isRedEnvelope = msg.encrypted_content.startsWith("🧧");
@@ -77,112 +155,129 @@ function MessageBubble({ msg, isMe, showAvatar, showTime, onLongPress, onReply, 
   if (isRedEnvelope) {
     const displayMsg = msg.encrypted_content.replace(/🧧 Red Envelope \[[a-f0-9-]+\] - /, "").replace("🧧 Red Envelope - ", "");
     return (
-      <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
-        {!isMe && (
-          <View style={styles.avatarSlot}>
-            {showAvatar ? <Avatar uri={msg.sender?.avatar_url} name={msg.sender?.display_name} size={32} /> : null}
-          </View>
-        )}
-        <TouchableOpacity
-          style={styles.redEnvBubble}
-          onPress={() => onTapEnvelope?.(msg)}
-          activeOpacity={0.8}
-        >
-          <View style={styles.redEnvTop}>
-            <Text style={styles.redEnvEmoji}>🧧</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.redEnvTitle}>{displayMsg}</Text>
-              <Text style={styles.redEnvSub}>Tap to open</Text>
+      <SwipeableMessage onSwipeRight={() => onReply(msg)}>
+        <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
+          {!isMe && (
+            <View style={styles.avatarSlot}>
+              {showAvatar ? <Avatar uri={msg.sender?.avatar_url} name={msg.sender?.display_name} size={32} /> : null}
             </View>
-          </View>
-          <View style={styles.redEnvBottom}>
-            <Text style={styles.redEnvLabel}>AfuChat Red Envelope</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
+          )}
+          <TouchableOpacity style={styles.redEnvBubble} onPress={() => onTapEnvelope?.(msg)} activeOpacity={0.8}>
+            <View style={styles.redEnvTop}>
+              <Text style={styles.redEnvEmoji}>🧧</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.redEnvTitle}>{displayMsg}</Text>
+                <Text style={styles.redEnvSub}>Tap to open</Text>
+              </View>
+            </View>
+            <View style={styles.redEnvBottom}>
+              <Text style={styles.redEnvLabel}>AfuChat Red Envelope</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      </SwipeableMessage>
     );
   }
 
   if (isGiftMsg) {
     return (
-      <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
-        {!isMe && (
-          <View style={styles.avatarSlot}>
-            {showAvatar ? <Avatar uri={msg.sender?.avatar_url} name={msg.sender?.display_name} size={32} /> : null}
-          </View>
-        )}
-        <View style={styles.giftBubble}>
-          <Text style={styles.giftBubbleText}>{msg.encrypted_content}</Text>
+      <SwipeableMessage onSwipeRight={() => onReply(msg)}>
+        <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
+          {!isMe && (
+            <View style={styles.avatarSlot}>
+              {showAvatar ? <Avatar uri={msg.sender?.avatar_url} name={msg.sender?.display_name} size={32} /> : null}
+            </View>
+          )}
+          <TouchableOpacity
+            style={styles.giftBoxBubble}
+            onPress={() => onTapGift?.(msg)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.giftBoxTop}>
+              <Text style={styles.giftBoxEmoji}>🎁</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.giftBoxTitle}>
+                  {isMe ? "You sent a gift" : `${msg.sender?.display_name || "Someone"} sent you a gift`}
+                </Text>
+                <Text style={styles.giftBoxSub}>Tap to open</Text>
+              </View>
+            </View>
+            <View style={styles.giftBoxBottom}>
+              <Text style={styles.giftBoxOpen}>Open Gift</Text>
+            </View>
+          </TouchableOpacity>
         </View>
-      </View>
+      </SwipeableMessage>
     );
   }
 
   return (
-    <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
-      {!isMe && (
-        <View style={styles.avatarSlot}>
-          {showAvatar ? (
-            <Avatar uri={msg.sender?.avatar_url} name={msg.sender?.display_name} size={32} />
-          ) : null}
-        </View>
-      )}
-      <View style={[styles.bubbleWrap, isMe ? styles.bubbleWrapMe : styles.bubbleWrapOther]}>
-        {!isMe && showAvatar && (
-          <Text style={[styles.senderName, { color: colors.textSecondary }]}>
-            {msg.sender?.display_name}
-          </Text>
-        )}
-        {replyPreview && (
-          <View style={[styles.replyPreview, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : colors.inputBg }]}>
-            <View style={[styles.replyBarLine, { backgroundColor: Colors.brand }]} />
-            <Text style={[styles.replyPreviewText, { color: isMe ? "rgba(255,255,255,0.8)" : colors.textSecondary }]} numberOfLines={1}>
-              {replyPreview}
-            </Text>
+    <SwipeableMessage onSwipeRight={() => onReply(msg)}>
+      <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
+        {!isMe && (
+          <View style={styles.avatarSlot}>
+            {showAvatar ? (
+              <Avatar uri={msg.sender?.avatar_url} name={msg.sender?.display_name} size={32} />
+            ) : null}
           </View>
         )}
-        <TouchableOpacity
-          onLongPress={() => onLongPress(msg)}
-          delayLongPress={300}
-          activeOpacity={0.8}
-          style={[
-            styles.bubble,
-            isMe ? { backgroundColor: Colors.brand } : { backgroundColor: colors.bubbleIncoming },
-          ]}
-        >
-          <Text style={[styles.bubbleText, { color: isMe ? "#fff" : colors.bubbleIncomingText }]}>
-            {msg.encrypted_content}
-          </Text>
-        </TouchableOpacity>
-
-        {msg.reactions && msg.reactions.length > 0 && (
-          <View style={styles.reactionsRow}>
-            {msg.reactions.map((r, i) => (
-              <View key={i} style={[styles.reactionBadge, r.myReaction && { borderColor: Colors.brand }]}>
-                <Text style={styles.reactionEmoji}>{r.emoji}</Text>
-                {r.count > 1 && <Text style={[styles.reactionCount, { color: colors.textSecondary }]}>{r.count}</Text>}
-              </View>
-            ))}
-          </View>
-        )}
-
-        <View style={styles.timeStatusRow}>
-          {showTime && (
-            <Text style={[styles.msgTime, { color: colors.textMuted }, isMe && styles.msgTimeMe]}>
-              {formatMsgTime(msg.sent_at)}
+        <View style={[styles.bubbleWrap, isMe ? styles.bubbleWrapMe : styles.bubbleWrapOther]}>
+          {!isMe && showAvatar && (
+            <Text style={[styles.senderName, { color: colors.textSecondary }]}>
+              {msg.sender?.display_name}
             </Text>
           )}
-          {isMe && msg.status && (
-            <Ionicons
-              name={msg.status === "read" ? "checkmark-done" : msg.status === "delivered" ? "checkmark-done-outline" : "checkmark"}
-              size={14}
-              color={msg.status === "read" ? Colors.brand : colors.textMuted}
-              style={{ marginLeft: 4 }}
-            />
+          {replyPreview && (
+            <View style={[styles.replyPreview, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : colors.inputBg }]}>
+              <View style={[styles.replyBarLine, { backgroundColor: Colors.brand }]} />
+              <Text style={[styles.replyPreviewText, { color: isMe ? "rgba(255,255,255,0.8)" : colors.textSecondary }]} numberOfLines={1}>
+                {replyPreview}
+              </Text>
+            </View>
           )}
+          <TouchableOpacity
+            onLongPress={() => onLongPress(msg)}
+            delayLongPress={300}
+            activeOpacity={0.8}
+            style={[
+              styles.bubble,
+              isMe ? { backgroundColor: Colors.brand } : { backgroundColor: colors.bubbleIncoming },
+            ]}
+          >
+            <Text style={[styles.bubbleText, { color: isMe ? "#fff" : colors.bubbleIncomingText }]}>
+              {msg.encrypted_content}
+            </Text>
+          </TouchableOpacity>
+
+          {msg.reactions && msg.reactions.length > 0 && (
+            <View style={styles.reactionsRow}>
+              {msg.reactions.map((r, i) => (
+                <View key={i} style={[styles.reactionBadge, r.myReaction && { borderColor: Colors.brand }]}>
+                  <Text style={styles.reactionEmoji}>{r.emoji}</Text>
+                  {r.count > 1 && <Text style={[styles.reactionCount, { color: colors.textSecondary }]}>{r.count}</Text>}
+                </View>
+              ))}
+            </View>
+          )}
+
+          <View style={styles.timeStatusRow}>
+            {showTime && (
+              <Text style={[styles.msgTime, { color: colors.textMuted }, isMe && styles.msgTimeMe]}>
+                {formatMsgTime(msg.sent_at)}
+              </Text>
+            )}
+            {isMe && msg.status && (
+              <Ionicons
+                name={msg.status === "read" ? "checkmark-done" : msg.status === "delivered" ? "checkmark-done-outline" : "checkmark"}
+                size={14}
+                color={msg.status === "read" ? Colors.brand : colors.textMuted}
+                style={{ marginLeft: 4 }}
+              />
+            )}
+          </View>
         </View>
       </View>
-    </View>
+    </SwipeableMessage>
   );
 }
 
@@ -207,6 +302,7 @@ export default function ChatScreen() {
   const [gifts, setGifts] = useState<Gift[]>([]);
   const [giftSending, setGiftSending] = useState(false);
   const [giftMsg, setGiftMsg] = useState("");
+  const [giftReveal, setGiftReveal] = useState<{ content: string } | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const typingTimeout = useRef<any>(null);
 
@@ -463,14 +559,19 @@ export default function ChatScreen() {
     setShowGiftPicker(false);
     setGiftMsg("");
 
-    const recipientName = chatInfo.is_group ? "the group" : chatInfo.other_name;
     await supabase.from("messages").insert({
       chat_id: id,
       sender_id: user.id,
-      encrypted_content: `🎁 Sent ${gift.emoji} ${gift.name} to ${recipientName}${giftMsg.trim() ? ` - "${giftMsg.trim()}"` : ""}`,
+      encrypted_content: `🎁 ${gift.emoji} ${gift.name}${giftMsg.trim() ? ` - "${giftMsg.trim()}"` : ""}`,
     });
     loadMessages();
     setGiftSending(false);
+  }
+
+  function handleTapGift(msg: Message) {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const content = msg.encrypted_content.replace("🎁 ", "");
+    setGiftReveal({ content });
   }
 
   async function handleTapEnvelope(msg: Message) {
@@ -505,7 +606,7 @@ export default function ChatScreen() {
   const isGroup = chatInfo?.is_group || chatInfo?.is_channel;
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -558,10 +659,11 @@ export default function ChatScreen() {
                 onReply={setReplyTo}
                 replyPreview={replyPreview}
                 onTapEnvelope={handleTapEnvelope}
+                onTapGift={handleTapGift}
               />
             );
           }}
-          contentContainerStyle={{ paddingVertical: 12, flexDirection: "column-reverse" }}
+          contentContainerStyle={{ paddingVertical: 12 }}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -616,72 +718,68 @@ export default function ChatScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      <Modal visible={!!showReactions} transparent animationType="fade" onRequestClose={() => setShowReactions(null)}>
-        <TouchableOpacity style={styles.reactionOverlay} activeOpacity={1} onPress={() => setShowReactions(null)}>
-          <View style={[styles.reactionPicker, { backgroundColor: colors.surface }]}>
-            {REACTION_EMOJIS.map((emoji) => (
-              <TouchableOpacity key={emoji} style={styles.reactionOption} onPress={() => showReactions && addReaction(showReactions, emoji)}>
-                <Text style={styles.reactionOptionEmoji}>{emoji}</Text>
+      <BottomSheet visible={!!showReactions} onClose={() => setShowReactions(null)}>
+        <View style={styles.reactionPicker}>
+          {REACTION_EMOJIS.map((emoji) => (
+            <TouchableOpacity key={emoji} style={styles.reactionOption} onPress={() => showReactions && addReaction(showReactions, emoji)}>
+              <Text style={styles.reactionOptionEmoji}>{emoji}</Text>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity style={styles.reactionOption} onPress={() => { if (showReactions) { setReplyTo(showReactions); setShowReactions(null); } }}>
+            <Ionicons name="arrow-undo" size={22} color={colors.text} />
+          </TouchableOpacity>
+        </View>
+      </BottomSheet>
+
+      <BottomSheet visible={showRedEnvelope} onClose={() => setShowRedEnvelope(false)}>
+        <Text style={[styles.sheetTitle, { color: colors.text }]}>🧧 Red Envelope</Text>
+        <TextInput style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Amount (XP)" placeholderTextColor={colors.textMuted} value={envelopeAmount} onChangeText={setEnvelopeAmount} keyboardType="numeric" />
+        <TextInput style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Number of envelopes" placeholderTextColor={colors.textMuted} value={envelopeCount} onChangeText={setEnvelopeCount} keyboardType="numeric" />
+        <TextInput style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Best wishes!" placeholderTextColor={colors.textMuted} value={envelopeMsg} onChangeText={setEnvelopeMsg} />
+        <TouchableOpacity style={styles.redEnvBtn} onPress={sendRedEnvelope}>
+          <Text style={styles.redEnvBtnText}>Send Red Envelope</Text>
+        </TouchableOpacity>
+      </BottomSheet>
+
+      <BottomSheet visible={showGiftPicker} onClose={() => setShowGiftPicker(false)}>
+        <Text style={[styles.sheetTitle, { color: colors.text }]}>🎁 Send a Gift</Text>
+        <TextInput
+          style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.inputBg }]}
+          placeholder="Add a message (optional)"
+          placeholderTextColor={colors.textMuted}
+          value={giftMsg}
+          onChangeText={setGiftMsg}
+        />
+        <ScrollView horizontal={false} style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
+          <View style={styles.giftGrid}>
+            {gifts.map((gift) => (
+              <TouchableOpacity
+                key={gift.id}
+                style={[styles.giftItem, { backgroundColor: colors.inputBg }]}
+                onPress={() => sendGift(gift)}
+                disabled={giftSending}
+              >
+                <Text style={styles.giftEmoji}>{gift.emoji}</Text>
+                <Text style={[styles.giftName, { color: colors.text }]} numberOfLines={1}>{gift.name}</Text>
+                <Text style={[styles.giftCost, { color: Colors.brand }]}>{gift.base_xp_cost} XP</Text>
               </TouchableOpacity>
             ))}
-            <TouchableOpacity style={styles.reactionOption} onPress={() => { if (showReactions) { setReplyTo(showReactions); setShowReactions(null); } }}>
-              <Ionicons name="arrow-undo" size={22} color={colors.text} />
-            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </Modal>
+        </ScrollView>
+        {giftSending && <ActivityIndicator color={Colors.brand} style={{ marginTop: 8 }} />}
+      </BottomSheet>
 
-      <Modal visible={showRedEnvelope} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>🧧 Red Envelope</Text>
-              <TouchableOpacity onPress={() => setShowRedEnvelope(false)}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
-            </View>
-            <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Amount (XP)" placeholderTextColor={colors.textMuted} value={envelopeAmount} onChangeText={setEnvelopeAmount} keyboardType="numeric" />
-            <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Number of envelopes" placeholderTextColor={colors.textMuted} value={envelopeCount} onChangeText={setEnvelopeCount} keyboardType="numeric" />
-            <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Best wishes!" placeholderTextColor={colors.textMuted} value={envelopeMsg} onChangeText={setEnvelopeMsg} />
-            <TouchableOpacity style={styles.redEnvBtn} onPress={sendRedEnvelope}>
-              <Text style={styles.redEnvBtnText}>Send Red Envelope</Text>
-            </TouchableOpacity>
-          </View>
+      <BottomSheet visible={!!giftReveal} onClose={() => setGiftReveal(null)}>
+        <View style={styles.giftRevealContent}>
+          <Text style={styles.giftRevealEmoji}>🎁</Text>
+          <Text style={[styles.giftRevealTitle, { color: colors.text }]}>Gift Received!</Text>
+          <Text style={[styles.giftRevealDetail, { color: colors.textSecondary }]}>{giftReveal?.content}</Text>
+          <Text style={[styles.giftRevealNote, { color: colors.textMuted }]}>This gift has been added to your Gift Gallery</Text>
+          <TouchableOpacity style={styles.giftRevealBtn} onPress={() => setGiftReveal(null)}>
+            <Text style={styles.giftRevealBtnText}>Awesome!</Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
-
-      <Modal visible={showGiftPicker} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>🎁 Send a Gift</Text>
-              <TouchableOpacity onPress={() => setShowGiftPicker(false)}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
-            </View>
-            <TextInput
-              style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]}
-              placeholder="Add a message (optional)"
-              placeholderTextColor={colors.textMuted}
-              value={giftMsg}
-              onChangeText={setGiftMsg}
-            />
-            <ScrollView horizontal={false} style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
-              <View style={styles.giftGrid}>
-                {gifts.map((gift) => (
-                  <TouchableOpacity
-                    key={gift.id}
-                    style={[styles.giftItem, { backgroundColor: colors.inputBg }]}
-                    onPress={() => sendGift(gift)}
-                    disabled={giftSending}
-                  >
-                    <Text style={styles.giftEmoji}>{gift.emoji}</Text>
-                    <Text style={[styles.giftName, { color: colors.text }]} numberOfLines={1}>{gift.name}</Text>
-                    <Text style={[styles.giftCost, { color: Colors.brand }]}>{gift.base_xp_cost} XP</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-            {giftSending && <ActivityIndicator color={Colors.brand} style={{ marginTop: 8 }} />}
-          </View>
-        </View>
-      </Modal>
+      </BottomSheet>
     </View>
   );
 }
@@ -695,6 +793,7 @@ const styles = StyleSheet.create({
   headerSub: { fontSize: 11, fontFamily: "Inter_400Regular" },
   headerAction: { padding: 4 },
   loadingCenter: { flex: 1, alignItems: "center", justifyContent: "center" },
+  swipeReplyHint: { position: "absolute", left: 4, top: 0, bottom: 0, justifyContent: "center", opacity: 0.4 },
   msgRow: { flexDirection: "row", paddingHorizontal: 12, marginVertical: 2 },
   msgRowMe: { justifyContent: "flex-end" },
   msgRowOther: { justifyContent: "flex-start" },
@@ -722,8 +821,13 @@ const styles = StyleSheet.create({
   redEnvSub: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   redEnvBottom: { backgroundColor: "#E63329", paddingHorizontal: 14, paddingVertical: 6 },
   redEnvLabel: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontFamily: "Inter_400Regular" },
-  giftBubble: { backgroundColor: Colors.brand + "15", borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12, maxWidth: "78%", borderWidth: 1, borderColor: Colors.brand + "30" },
-  giftBubbleText: { fontSize: 15, fontFamily: "Inter_500Medium", color: Colors.brand },
+  giftBoxBubble: { width: 240, borderRadius: 12, overflow: "hidden" },
+  giftBoxTop: { backgroundColor: Colors.brand, flexDirection: "row", padding: 14, gap: 10, alignItems: "center" },
+  giftBoxEmoji: { fontSize: 32 },
+  giftBoxTitle: { color: "#fff", fontSize: 14, fontFamily: "Inter_500Medium" },
+  giftBoxSub: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  giftBoxBottom: { backgroundColor: Colors.brandDark, paddingHorizontal: 14, paddingVertical: 8, alignItems: "center" },
+  giftBoxOpen: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
   replyBanner: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, gap: 8 },
   replyBarAccent: { width: 3, height: 32, borderRadius: 2 },
   replyBannerName: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
@@ -733,15 +837,14 @@ const styles = StyleSheet.create({
   inputField: { flex: 1, borderRadius: 22, paddingHorizontal: 14, paddingVertical: 9, maxHeight: 120 },
   input: { fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 22 },
   sendBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", marginBottom: 2 },
-  reactionOverlay: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.3)" },
-  reactionPicker: { flexDirection: "row", borderRadius: 28, paddingHorizontal: 12, paddingVertical: 8, gap: 4, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8 },
+  sheetOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
+  sheetContent: { position: "absolute", bottom: 0, left: 0, right: 0, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 14, maxHeight: SCREEN_HEIGHT * 0.7 },
+  sheetHandle: { width: 40, height: 5, borderRadius: 3, backgroundColor: "#CCC", alignSelf: "center", marginBottom: 8 },
+  sheetTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
+  sheetInput: { borderRadius: 12, padding: 14, fontSize: 15, fontFamily: "Inter_400Regular" },
+  reactionPicker: { flexDirection: "row", justifyContent: "center", paddingVertical: 8, gap: 4 },
   reactionOption: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
   reactionOptionEmoji: { fontSize: 24 },
-  modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" },
-  modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 14 },
-  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  modalTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
-  modalInput: { borderRadius: 12, padding: 14, fontSize: 15, fontFamily: "Inter_400Regular" },
   redEnvBtn: { backgroundColor: "#FF3B30", borderRadius: 14, paddingVertical: 14, alignItems: "center" },
   redEnvBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
   giftGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
@@ -749,4 +852,11 @@ const styles = StyleSheet.create({
   giftEmoji: { fontSize: 32 },
   giftName: { fontSize: 12, fontFamily: "Inter_500Medium", textAlign: "center" },
   giftCost: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  giftRevealContent: { alignItems: "center", paddingVertical: 20, gap: 12 },
+  giftRevealEmoji: { fontSize: 64 },
+  giftRevealTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
+  giftRevealDetail: { fontSize: 16, fontFamily: "Inter_500Medium", textAlign: "center" },
+  giftRevealNote: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
+  giftRevealBtn: { backgroundColor: Colors.brand, borderRadius: 14, paddingHorizontal: 40, paddingVertical: 14, marginTop: 8 },
+  giftRevealBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
 });

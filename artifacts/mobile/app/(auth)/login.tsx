@@ -70,7 +70,10 @@ export default function LoginScreen() {
       }
 
       if (data?.url) {
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {
+          showInRecents: false,
+          preferEphemeralSession: true,
+        });
 
         if (result.type === "success" && result.url) {
           const url = new URL(result.url);

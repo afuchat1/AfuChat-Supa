@@ -30,6 +30,7 @@ type Profile = {
   current_grade: string;
   website_url: string | null;
   country: string | null;
+  created_at: string | null;
 };
 
 type UserPost = {
@@ -50,6 +51,12 @@ function timeAgo(iso: string): string {
   return `${Math.floor(diff / 86400000)}d`;
 }
 
+function formatJoinDate(iso: string | null): string {
+  if (!iso) return "Unknown";
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
 export default function ContactProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
@@ -63,12 +70,13 @@ export default function ContactProfileScreen() {
   const [followingCount, setFollowingCount] = useState(0);
   const [posts, setPosts] = useState<UserPost[]>([]);
   const [postsLoading, setPostsLoading] = useState(true);
+  const [showBadgeInfo, setShowBadgeInfo] = useState(false);
 
   useEffect(() => {
     if (!id || !user) return;
     supabase
       .from("profiles")
-      .select("id, display_name, handle, avatar_url, bio, is_verified, xp, current_grade, website_url, country")
+      .select("id, display_name, handle, avatar_url, bio, is_verified, xp, current_grade, website_url, country, created_at")
       .eq("id", id)
       .single()
       .then(({ data }) => {
@@ -94,22 +102,15 @@ export default function ContactProfileScreen() {
 
     if (data && data.length > 0) {
       const postIds = data.map((p: any) => p.id);
-
       const [likesRes, repliesRes] = await Promise.all([
         supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds),
         supabase.from("post_replies").select("post_id").in("post_id", postIds),
       ]);
-
       const likeCounts: Record<string, number> = {};
       const replyCounts: Record<string, number> = {};
       (likesRes.data || []).forEach((l: any) => { likeCounts[l.post_id] = (likeCounts[l.post_id] || 0) + 1; });
       (repliesRes.data || []).forEach((r: any) => { replyCounts[r.post_id] = (replyCounts[r.post_id] || 0) + 1; });
-
-      setPosts(data.map((p: any) => ({
-        ...p,
-        likeCount: likeCounts[p.id] || 0,
-        replyCount: replyCounts[p.id] || 0,
-      })));
+      setPosts(data.map((p: any) => ({ ...p, likeCount: likeCounts[p.id] || 0, replyCount: replyCounts[p.id] || 0 })));
     } else {
       setPosts([]);
     }
@@ -120,14 +121,8 @@ export default function ContactProfileScreen() {
 
   async function startChat() {
     if (!user || !id) return;
-
-    const { data: myChats } = await supabase
-      .from("chat_members")
-      .select("chat_id")
-      .eq("user_id", user.id);
-
+    const { data: myChats } = await supabase.from("chat_members").select("chat_id").eq("user_id", user.id);
     const myIds = (myChats || []).map((m: any) => m.chat_id);
-
     if (myIds.length > 0) {
       const { data: shared } = await supabase
         .from("chat_members")
@@ -136,19 +131,12 @@ export default function ContactProfileScreen() {
         .in("chat_id", myIds)
         .eq("chats.is_group", false)
         .eq("chats.is_channel", false);
-
       if (shared && shared.length > 0) {
         router.push({ pathname: "/chat/[id]", params: { id: shared[0].chat_id } });
         return;
       }
     }
-
-    const { data: chat } = await supabase
-      .from("chats")
-      .insert({ is_group: false, created_by: user.id, user_id: user.id })
-      .select()
-      .single();
-
+    const { data: chat } = await supabase.from("chats").insert({ is_group: false, created_by: user.id, user_id: user.id }).select().single();
     if (chat) {
       await supabase.from("chat_members").insert([
         { chat_id: chat.id, user_id: user.id },
@@ -204,33 +192,20 @@ export default function ContactProfileScreen() {
 
   async function submitReport(reason: string) {
     if (!user || !id) return;
-    const { error } = await supabase.from("user_reports").insert({
-      reporter_id: user.id,
-      reported_id: id,
-      reason,
-    });
+    const { error } = await supabase.from("user_reports").insert({ reporter_id: user.id, reported_id: id, reason });
     if (error) Alert.alert("Error", "Could not submit report.");
     else Alert.alert("Reported", "Thank you for your report. We'll review it.");
   }
 
   if (loading) {
-    return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={Colors.brand} />
-      </View>
-    );
+    return <View style={[styles.center, { backgroundColor: colors.background }]}><ActivityIndicator color={Colors.brand} /></View>;
   }
 
   const isOwnProfile = user?.id === id;
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View
-        style={[
-          styles.header,
-          { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border },
-        ]}
-      >
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
@@ -245,28 +220,65 @@ export default function ContactProfileScreen() {
       <ScrollView contentContainerStyle={styles.body}>
         <View style={[styles.profileHeader, { backgroundColor: colors.surface }]}>
           <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={90} />
-          <View style={styles.nameRow}>
-            <Text style={[styles.displayName, { color: colors.text }]}>
-              {profile?.display_name}
-            </Text>
+
+          <TouchableOpacity style={styles.nameRow} onPress={() => profile?.is_verified && setShowBadgeInfo(!showBadgeInfo)}>
+            <Text style={[styles.displayName, { color: colors.text }]}>{profile?.display_name}</Text>
             {profile?.is_verified && (
-              <Ionicons name="checkmark-circle" size={18} color={Colors.brand} style={{ marginLeft: 6 }} />
+              <View style={styles.goldBadge}>
+                <Ionicons name="checkmark-circle" size={20} color={Colors.gold} />
+              </View>
             )}
-          </View>
-          <Text style={[styles.handle, { color: colors.textSecondary }]}>
-            @{profile?.handle}
-          </Text>
+          </TouchableOpacity>
+
+          <Text style={[styles.handle, { color: colors.textSecondary }]}>@{profile?.handle}</Text>
 
           {profile?.is_verified && (
-            <View style={styles.businessBadge}>
-              <Ionicons name="briefcase" size={14} color="#fff" />
-              <Text style={styles.businessBadgeText}>Business Account</Text>
+            <View style={styles.verifiedBadge}>
+              <Ionicons name="shield-checkmark" size={14} color="#fff" />
+              <Text style={styles.verifiedBadgeText}>Verified Business</Text>
+            </View>
+          )}
+
+          {showBadgeInfo && profile?.is_verified && (
+            <View style={[styles.badgeInfoCard, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+              <Text style={[styles.badgeInfoTitle, { color: colors.text }]}>Verification Details</Text>
+              <View style={styles.badgeInfoRow}>
+                <Ionicons name="shield-checkmark" size={14} color={Colors.gold} />
+                <Text style={[styles.badgeInfoText, { color: colors.textSecondary }]}>Verified Business Account</Text>
+              </View>
+              <View style={styles.badgeInfoRow}>
+                <Ionicons name="briefcase" size={14} color={Colors.gold} />
+                <Text style={[styles.badgeInfoText, { color: colors.textSecondary }]}>Official Business Profile</Text>
+              </View>
+              <View style={styles.badgeInfoRow}>
+                <Ionicons name="checkmark-done" size={14} color={Colors.gold} />
+                <Text style={[styles.badgeInfoText, { color: colors.textSecondary }]}>Identity Confirmed by AfuChat</Text>
+              </View>
             </View>
           )}
 
           {profile?.bio ? (
             <Text style={[styles.bio, { color: colors.text }]}>{profile.bio}</Text>
           ) : null}
+
+          <View style={styles.detailsSection}>
+            {profile?.country ? (
+              <View style={styles.detailRow}>
+                <Ionicons name="location-outline" size={15} color={colors.textMuted} />
+                <Text style={[styles.detailText, { color: colors.textSecondary }]}>{profile.country}</Text>
+              </View>
+            ) : null}
+            <View style={styles.detailRow}>
+              <Ionicons name="calendar-outline" size={15} color={colors.textMuted} />
+              <Text style={[styles.detailText, { color: colors.textSecondary }]}>Joined {formatJoinDate(profile?.created_at || null)}</Text>
+            </View>
+            {profile?.website_url ? (
+              <View style={styles.detailRow}>
+                <Ionicons name="link-outline" size={15} color={colors.textMuted} />
+                <Text style={[styles.detailText, { color: Colors.brand }]}>{profile.website_url}</Text>
+              </View>
+            ) : null}
+          </View>
 
           <View style={styles.followStats}>
             <View style={styles.followStat}>
@@ -286,9 +298,6 @@ export default function ContactProfileScreen() {
               <Text style={[styles.infoValue, { color: colors.text }]}>{profile?.xp || 0} XP</Text>
             </View>
             <Text style={[styles.infoDot, { color: colors.textMuted }]}>{profile?.current_grade}</Text>
-            {profile?.country ? (
-              <Text style={[styles.infoDot, { color: colors.textMuted }]}>{profile.country}</Text>
-            ) : null}
           </View>
 
           {!isOwnProfile && (
@@ -342,7 +351,6 @@ export default function ContactProfileScreen() {
             <Text style={[styles.postsSectionTitle, { color: colors.text }]}>Posts</Text>
             <Text style={[styles.postsSectionCount, { color: colors.textMuted }]}>{posts.length}</Text>
           </View>
-
           {postsLoading ? (
             <ActivityIndicator color={Colors.brand} style={{ paddingVertical: 20 }} />
           ) : posts.length === 0 ? (
@@ -355,12 +363,8 @@ export default function ContactProfileScreen() {
                 onPress={() => router.push({ pathname: "/post/[id]", params: { id: p.id } })}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.postContent, { color: colors.text }]} numberOfLines={3}>
-                  {p.content}
-                </Text>
-                {p.image_url && (
-                  <Image source={{ uri: p.image_url }} style={styles.postThumb} resizeMode="cover" />
-                )}
+                <Text style={[styles.postContent, { color: colors.text }]} numberOfLines={3}>{p.content}</Text>
+                {p.image_url && <Image source={{ uri: p.image_url }} style={styles.postThumb} resizeMode="cover" />}
                 <View style={styles.postMeta}>
                   <Text style={[styles.postTime, { color: colors.textMuted }]}>{timeAgo(p.created_at)}</Text>
                   <View style={styles.postStats}>
@@ -384,59 +388,31 @@ export default function ContactProfileScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  header: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+  header: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
   body: { gap: 12, paddingVertical: 12 },
-  profileHeader: {
-    alignItems: "center",
-    paddingVertical: 28,
-    paddingHorizontal: 24,
-    gap: 8,
-  },
+  profileHeader: { alignItems: "center", paddingVertical: 28, paddingHorizontal: 24, gap: 8 },
   nameRow: { flexDirection: "row", alignItems: "center" },
   displayName: { fontSize: 22, fontFamily: "Inter_700Bold" },
   handle: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  goldBadge: { marginLeft: 6 },
+  verifiedBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#D4A853", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, marginTop: 4 },
+  verifiedBadgeText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  badgeInfoCard: { width: "100%", borderRadius: 12, padding: 16, gap: 10, marginTop: 8, borderWidth: 1 },
+  badgeInfoTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", marginBottom: 4 },
+  badgeInfoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  badgeInfoText: { fontSize: 13, fontFamily: "Inter_400Regular" },
   bio: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", marginTop: 4, lineHeight: 20 },
-  businessBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: Colors.brand,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 16,
-    marginTop: 4,
-  },
-  businessBadgeText: {
-    color: "#fff",
-    fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
-  },
+  detailsSection: { gap: 6, marginTop: 8, alignItems: "center" },
+  detailRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  detailText: { fontSize: 13, fontFamily: "Inter_400Regular" },
   infoRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 },
   infoItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   infoValue: { fontSize: 13, fontFamily: "Inter_500Medium" },
   infoDot: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  actions: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-  },
+  actions: { flexDirection: "row", justifyContent: "space-around", paddingVertical: 20, paddingHorizontal: 16 },
   actionBtn: { alignItems: "center", gap: 8 },
-  actionIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  actionIcon: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center" },
   actionLabel: { fontSize: 13, fontFamily: "Inter_500Medium" },
   followStats: { flexDirection: "row", alignItems: "center", marginTop: 12, gap: 0 },
   followStat: { alignItems: "center", paddingHorizontal: 20 },
@@ -450,64 +426,16 @@ const styles = StyleSheet.create({
   blockBtn: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: "#FF3B30", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24 },
   blockBtnActive: { backgroundColor: "#FF3B30" },
   blockBtnText: { color: "#FF3B30", fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  postsSection: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  postsSectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
-  },
-  postsSectionTitle: {
-    fontSize: 17,
-    fontFamily: "Inter_600SemiBold",
-    flex: 1,
-  },
-  postsSectionCount: {
-    fontSize: 14,
-    fontFamily: "Inter_500Medium",
-  },
-  emptyPosts: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-    textAlign: "center",
-    paddingVertical: 24,
-  },
-  postCard: {
-    paddingVertical: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  postContent: {
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 22,
-    marginBottom: 8,
-  },
-  postThumb: {
-    width: "100%",
-    height: 160,
-    borderRadius: 10,
-    marginBottom: 8,
-  },
-  postMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  postTime: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-  },
-  postStats: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  postStatNum: {
-    fontSize: 12,
-    fontFamily: "Inter_500Medium",
-  },
+  postsSection: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
+  postsSectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  postsSectionTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", flex: 1 },
+  postsSectionCount: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  emptyPosts: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", paddingVertical: 24 },
+  postCard: { paddingVertical: 14, borderTopWidth: StyleSheet.hairlineWidth },
+  postContent: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22, marginBottom: 8 },
+  postThumb: { width: "100%", height: 160, borderRadius: 10, marginBottom: 8 },
+  postMeta: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  postTime: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  postStats: { flexDirection: "row", alignItems: "center", gap: 4 },
+  postStatNum: { fontSize: 12, fontFamily: "Inter_500Medium" },
 });

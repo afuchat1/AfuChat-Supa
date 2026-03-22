@@ -24,9 +24,10 @@ type MenuItemProps = {
   value?: string;
   onPress?: () => void;
   danger?: boolean;
+  badge?: string;
 };
 
-function MenuItem({ icon, iconBg, label, value, onPress, danger }: MenuItemProps) {
+function MenuItem({ icon, iconBg, label, value, onPress, danger, badge }: MenuItemProps) {
   const { colors } = useTheme();
   return (
     <TouchableOpacity
@@ -39,6 +40,11 @@ function MenuItem({ icon, iconBg, label, value, onPress, danger }: MenuItemProps
       </View>
       <Text style={[styles.menuLabel, { color: danger ? "#FF3B30" : colors.text }]}>{label}</Text>
       <View style={styles.menuRight}>
+        {badge ? (
+          <View style={styles.premiumBadge}>
+            <Text style={styles.premiumBadgeText}>{badge}</Text>
+          </View>
+        ) : null}
         {value ? <Text style={[styles.menuValue, { color: colors.textSecondary }]}>{value}</Text> : null}
         {!danger && <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />}
       </View>
@@ -74,6 +80,7 @@ export default function MeScreen() {
   }
 
   const gradeIcon = profile?.current_grade === "Newcomer" ? "leaf-outline" : "star-outline";
+  const isPremium = !!profile?.is_premium;
 
   return (
     <ScrollView
@@ -96,16 +103,21 @@ export default function MeScreen() {
               {profile?.display_name || "User"}
             </Text>
             {profile?.is_verified && (
-              <Ionicons name="checkmark-circle" size={16} color={Colors.brand} style={{ marginLeft: 4 }} />
+              <Ionicons name="checkmark-circle" size={18} color={Colors.gold} style={{ marginLeft: 4 }} />
+            )}
+            {isPremium && (
+              <View style={styles.premiumStarBadge}>
+                <Ionicons name="diamond" size={12} color="#fff" />
+              </View>
             )}
           </View>
           <Text style={[styles.profileHandle, { color: colors.textSecondary }]}>
             @{profile?.handle || "handle"}
           </Text>
           {profile?.is_verified && (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: Colors.brand, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, marginTop: 2 }}>
+            <View style={styles.businessTag}>
               <Ionicons name="briefcase" size={10} color="#fff" />
-              <Text style={{ color: "#fff", fontSize: 10, fontFamily: "Inter_600SemiBold" }}>Business</Text>
+              <Text style={styles.businessTagText}>Business</Text>
             </View>
           )}
           {profile?.bio ? (
@@ -117,7 +129,6 @@ export default function MeScreen() {
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       </TouchableOpacity>
 
-      {/* XP & Acoin */}
       <View style={[styles.statsRow, { backgroundColor: colors.surface }]}>
         <View style={styles.statItem}>
           <Ionicons name="flash" size={20} color="#FFD60A" />
@@ -138,6 +149,23 @@ export default function MeScreen() {
         </View>
       </View>
 
+      {!isPremium && (
+        <TouchableOpacity
+          style={styles.premiumBanner}
+          onPress={() => router.push("/premium")}
+          activeOpacity={0.85}
+        >
+          <View style={styles.premiumBannerLeft}>
+            <Ionicons name="diamond" size={24} color="#FFD60A" />
+            <View>
+              <Text style={styles.premiumBannerTitle}>Upgrade to Premium</Text>
+              <Text style={styles.premiumBannerSub}>Linked accounts, badges, and more</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.6)" />
+        </TouchableOpacity>
+      )}
+
       <MenuGroup>
         <MenuItem icon="sparkles-outline" iconBg="#00C2CB" label="AfuAi" onPress={() => router.push("/ai")} />
         <Separator indent={54} />
@@ -156,6 +184,33 @@ export default function MeScreen() {
         <MenuItem icon="game-controller-outline" iconBg="#007AFF" label="Games" onPress={() => router.push("/games")} />
         <Separator indent={54} />
         <MenuItem icon="apps-outline" iconBg="#AF52DE" label="Mini Programs" onPress={() => router.push("/mini-programs")} />
+      </MenuGroup>
+
+      <MenuGroup>
+        <MenuItem
+          icon="diamond-outline"
+          iconBg="#FFD60A"
+          label="Premium"
+          onPress={() => router.push("/premium")}
+          value={isPremium ? "Active" : ""}
+        />
+        <Separator indent={54} />
+        <MenuItem
+          icon="people-outline"
+          iconBg="#AF52DE"
+          label="Linked Accounts"
+          onPress={() => {
+            if (!isPremium) {
+              Alert.alert("Premium Required", "Linked accounts is a premium feature. Upgrade to AfuChat Premium to link multiple accounts.", [
+                { text: "Cancel", style: "cancel" },
+                { text: "Upgrade", onPress: () => router.push("/premium") },
+              ]);
+            } else {
+              router.push("/linked-accounts");
+            }
+          }}
+          badge={isPremium ? undefined : "PRO"}
+        />
       </MenuGroup>
 
       <MenuGroup>
@@ -211,6 +266,27 @@ const styles = StyleSheet.create({
   profileName: { fontSize: 20, fontFamily: "Inter_700Bold", marginBottom: 2 },
   profileHandle: { fontSize: 13, fontFamily: "Inter_400Regular", marginBottom: 2 },
   profileBio: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  businessTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: Colors.gold,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginTop: 2,
+    alignSelf: "flex-start",
+  },
+  businessTagText: { color: "#fff", fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  premiumStarBadge: {
+    backgroundColor: "#FFD60A",
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 4,
+  },
   statsRow: {
     flexDirection: "row",
     borderRadius: 14,
@@ -221,6 +297,17 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 16, fontFamily: "Inter_700Bold" },
   statLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
   statDivider: { width: StyleSheet.hairlineWidth, marginVertical: 4 },
+  premiumBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#1a1a2e",
+    borderRadius: 14,
+    padding: 16,
+  },
+  premiumBannerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  premiumBannerTitle: { color: "#FFD60A", fontSize: 16, fontFamily: "Inter_700Bold" },
+  premiumBannerSub: { color: "rgba(255,255,255,0.6)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   menuGroup: { gap: 0 },
   menuItem: {
     flexDirection: "row",
@@ -239,5 +326,12 @@ const styles = StyleSheet.create({
   menuLabel: { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular" },
   menuRight: { flexDirection: "row", alignItems: "center", gap: 6 },
   menuValue: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  premiumBadge: {
+    backgroundColor: "#FFD60A",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  premiumBadgeText: { color: "#000", fontSize: 10, fontFamily: "Inter_700Bold" },
   version: { textAlign: "center", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 8 },
 });
