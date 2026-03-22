@@ -195,6 +195,8 @@ export default function MeScreen() {
         <MenuItem icon="game-controller-outline" iconBg="#007AFF" label="Games" onPress={() => router.push("/games")} />
         <Separator indent={54} />
         <MenuItem icon="apps-outline" iconBg="#AF52DE" label="Mini Programs" onPress={() => router.push("/mini-programs")} />
+        <Separator indent={54} />
+        <MenuItem icon="gift-outline" iconBg="#FF9500" label="Referral Program" onPress={() => router.push("/referral")} />
       </MenuGroup>
 
       <MenuGroup>
@@ -235,6 +237,13 @@ export default function MeScreen() {
           iconBg="#30D158"
           label="Privacy"
           onPress={() => router.push("/settings/privacy")}
+        />
+        <Separator indent={54} />
+        <MenuItem
+          icon="lock-closed-outline"
+          iconBg="#FF3B30"
+          label="Security & Data"
+          onPress={() => router.push("/settings/security")}
         />
         <Separator indent={54} />
         <MenuItem

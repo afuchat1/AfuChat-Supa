@@ -196,9 +196,13 @@ export default function WalletScreen() {
           </View>
         </View>
         <View style={styles.btnRow}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/wallet/topup")}>
+            <Ionicons name="add-circle" size={16} color={Colors.brand} />
+            <Text style={styles.actionBtnText}>Top Up</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.actionBtn} onPress={() => setShowTransfer(true)}>
             <Ionicons name="send" size={16} color={Colors.brand} />
-            <Text style={styles.actionBtnText}>Send Nexa</Text>
+            <Text style={styles.actionBtnText}>Send</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionBtn} onPress={() => setShowConvert(true)}>
             <Ionicons name="swap-horizontal" size={16} color={Colors.brand} />

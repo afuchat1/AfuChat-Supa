@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
@@ -23,6 +23,7 @@ import { showAlert } from "@/lib/alert";
 export default function RegisterScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ ref?: string }>();
   const [displayName, setDisplayName] = useState("");
   const [handle, setHandle] = useState("");
   const [email, setEmail] = useState("");
@@ -30,6 +31,7 @@ export default function RegisterScreen() {
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [referralCode, setReferralCode] = useState(params.ref || "");
 
   async function handleRegister() {
     if (!displayName || !handle || !email || !password) {
@@ -71,6 +73,61 @@ export default function RegisterScreen() {
         handle: cleanHandle,
         display_name: displayName,
       });
+
+      if (referralCode.trim()) {
+        const refHandle = referralCode.trim().toLowerCase();
+        if (refHandle === cleanHandle) {
+          // skip self-referral
+        } else {
+        const { data: referrer } = await supabase
+          .from("profiles")
+          .select("id, xp")
+          .eq("handle", refHandle)
+          .single();
+
+        if (referrer && referrer.id !== data.user.id) {
+          const { data: existingRef } = await supabase
+            .from("referrals")
+            .select("id")
+            .eq("referred_id", data.user.id)
+            .limit(1)
+            .maybeSingle();
+
+          if (!existingRef) {
+            await supabase.from("referrals").insert({
+              referrer_id: referrer.id,
+              referred_id: data.user.id,
+              reward_given: true,
+            });
+
+            await supabase.from("profiles").update({
+              xp: (referrer.xp || 0) + 500,
+            }).eq("id", referrer.id);
+
+            const { data: platinumPlan } = await supabase
+              .from("subscription_plans")
+              .select("id")
+              .ilike("name", "%platinum%")
+              .eq("is_active", true)
+              .limit(1)
+              .single();
+
+            if (platinumPlan) {
+              const expiresAt = new Date();
+              expiresAt.setDate(expiresAt.getDate() + 7);
+              await supabase.from("user_subscriptions").upsert({
+                user_id: data.user.id,
+                plan_id: platinumPlan.id,
+                started_at: new Date().toISOString(),
+                expires_at: expiresAt.toISOString(),
+                is_active: true,
+                acoin_paid: 0,
+              });
+            }
+          }
+        }
+        }
+      }
     }
 
     setLoading(false);
@@ -160,6 +217,27 @@ export default function RegisterScreen() {
               />
             </Pressable>
           </View>
+
+          <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
+            <Ionicons name="gift-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
+            <TextInput
+              style={[styles.input, { color: colors.text }]}
+              placeholder="Referral code (optional)"
+              placeholderTextColor={colors.textMuted}
+              value={referralCode}
+              onChangeText={setReferralCode}
+              autoCapitalize="none"
+            />
+          </View>
+
+          {referralCode.trim() ? (
+            <View style={styles.referralNote}>
+              <Ionicons name="checkmark-circle" size={16} color="#34C759" />
+              <Text style={[styles.referralNoteText, { color: "#34C759" }]}>
+                You'll get 1 week free Platinum premium!
+              </Text>
+            </View>
+          ) : null}
 
           <TouchableOpacity
             style={styles.termsRow}
@@ -289,4 +367,12 @@ const styles = StyleSheet.create({
   },
   loginLink: { alignItems: "center", marginTop: 4 },
   loginLinkText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  referralNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 4,
+    marginTop: -4,
+  },
+  referralNoteText: { fontSize: 13, fontFamily: "Inter_500Medium" },
 });

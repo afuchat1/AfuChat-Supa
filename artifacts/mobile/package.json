@@ -57,11 +57,16 @@
   },
   "dependencies": {
     "@nkzw/create-context-hook": "^1.1.0",
+    "@react-native-community/netinfo": "^12.0.1",
     "@supabase/supabase-js": "^2.99.3",
     "expo-auth-session": "^7.0.10",
     "expo-av": "^16.0.8",
+    "expo-clipboard": "^55.0.9",
     "expo-document-picker": "^55.0.9",
+    "expo-file-system": "^55.0.11",
     "expo-secure-store": "^55.0.9",
-    "react-native-url-polyfill": "^3.0.0"
+    "expo-sharing": "^55.0.14",
+    "react-native-url-polyfill": "^3.0.0",
+    "react-native-webview": "^13.16.1"
   }
 }

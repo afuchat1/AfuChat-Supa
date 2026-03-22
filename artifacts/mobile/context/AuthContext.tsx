@@ -2,6 +2,8 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { getStoredAccounts, storeAccount, removeStoredAccount, updateAccountTokens, type StoredAccount } from "@/lib/accountStore";
+import { cacheProfile, getCachedProfile } from "@/lib/offlineStore";
+import { startOfflineSync } from "@/lib/offlineSync";
 
 type Profile = {
   id: string;
@@ -97,6 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (profileData) {
       setProfile(profileData as Profile);
+      cacheProfile(profileData);
     }
 
     if (subData) {
@@ -227,7 +230,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchProfile(session.user.id).finally(() => setLoading(false));
+        startOfflineSync();
       } else {
+        getCachedProfile().then((cached) => {
+          if (cached) setProfile(cached as Profile);
+        });
         setLoading(false);
       }
     });
