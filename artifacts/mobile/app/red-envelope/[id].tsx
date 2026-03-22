@@ -140,7 +140,7 @@ export default function RedEnvelopeScreen() {
 
         {myClaim !== null ? (
           <View style={styles.claimedSection}>
-            <Text style={styles.claimedAmount}>{myClaim} XP</Text>
+            <Text style={styles.claimedAmount}>{myClaim} Nexa</Text>
             <Text style={styles.claimedLabel}>You received</Text>
           </View>
         ) : envelope.remaining_count > 0 ? (
@@ -152,7 +152,7 @@ export default function RedEnvelopeScreen() {
         )}
 
         <Text style={styles.statsText}>
-          {envelope.total_count - envelope.remaining_count}/{envelope.total_count} claimed · {envelope.remaining_amount} XP remaining
+          {envelope.total_count - envelope.remaining_count}/{envelope.total_count} claimed · {envelope.remaining_amount} Nexa remaining
         </Text>
       </View>
 
@@ -167,7 +167,7 @@ export default function RedEnvelopeScreen() {
               <Text style={[styles.claimName, { color: colors.text }]}>{item.claimer.display_name}</Text>
               <Text style={[styles.claimTime, { color: colors.textMuted }]}>{new Date(item.claimed_at).toLocaleTimeString()}</Text>
             </View>
-            <Text style={[styles.claimAmount, { color: "#FF3B30" }]}>{item.amount} XP</Text>
+            <Text style={[styles.claimAmount, { color: "#FF3B30" }]}>{item.amount} Nexa</Text>
           </View>
         )}
         contentContainerStyle={{ paddingBottom: 90 }}

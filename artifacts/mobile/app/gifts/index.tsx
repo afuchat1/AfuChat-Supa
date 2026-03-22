@@ -167,7 +167,7 @@ export default function GiftsScreen() {
               <Text style={[styles.modalTitle, { color: colors.text }]}>Send {sendGift?.emoji} {sendGift?.name}</Text>
               <TouchableOpacity onPress={() => setSendGift(null)}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
             </View>
-            <Text style={[styles.costText, { color: colors.textSecondary }]}>Cost: {sendGift?.base_xp_cost} XP</Text>
+            <Text style={[styles.costText, { color: colors.textSecondary }]}>Cost: {sendGift?.base_xp_cost} Nexa</Text>
             <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Recipient handle" placeholderTextColor={colors.textMuted} value={sendHandle} onChangeText={setSendHandle} autoCapitalize="none" />
             <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Add a message (optional)" placeholderTextColor={colors.textMuted} value={sendMsg} onChangeText={setSendMsg} />
             <TouchableOpacity style={[styles.sendBtn, sending && { opacity: 0.6 }]} onPress={handleSendGift} disabled={sending}>

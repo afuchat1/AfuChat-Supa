@@ -295,7 +295,7 @@ export default function ContactProfileScreen() {
           <View style={styles.infoRow}>
             <View style={styles.infoItem}>
               <Ionicons name="flash" size={16} color="#FFD60A" />
-              <Text style={[styles.infoValue, { color: colors.text }]}>{profile?.xp || 0} XP</Text>
+              <Text style={[styles.infoValue, { color: colors.text }]}>{profile?.xp || 0} Nexa</Text>
             </View>
             <Text style={[styles.infoDot, { color: colors.textMuted }]}>{profile?.current_grade}</Text>
           </View>

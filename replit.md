@@ -47,7 +47,13 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 
 ### Key Supabase Tables Used
 
-- **profiles** — `id`, `handle`, `display_name`, `avatar_url`, `bio`, `xp`, `acoin`, `current_grade`, `is_verified`, `is_premium`, `country`, `website_url`, `phone_number`, `banner_url`, `language`, `tipping_enabled`, etc.
+- **profiles** — `id`, `handle`, `display_name`, `avatar_url`, `bio`, `xp` (Nexa), `acoin`, `current_grade`, `is_verified`, `country`, `website_url`, `phone_number`, `banner_url`, `language`, `tipping_enabled`, etc. NOTE: No `is_premium` field — premium status comes from `user_subscriptions`.
+- **subscription_plans** — `id`, `name`, `description`, `acoin_price`, `duration_days`, `features` (jsonb), `grants_verification`, `is_active`, `tier` (silver/gold/platinum)
+- **user_subscriptions** — `id`, `user_id` (UNIQUE), `plan_id`, `started_at`, `expires_at`, `is_active`, `acoin_paid`. Premium = active + not expired.
+- **currency_settings** — `nexa_to_acoin_rate`, `conversion_fee_percent`, `p2p_fee_percent`. Used for Nexa→ACoin conversion.
+- **acoin_transactions** — `id`, `user_id`, `amount`, `transaction_type`, `nexa_spent`, `fee_charged`, `metadata`
+- **xp_transfers** — `id`, `sender_id`, `receiver_id`, `amount`, `message`, `status`. XP is displayed as "Nexa" throughout the app.
+- **linked_accounts** — `id`, `primary_user_id`, `linked_user_id`, `linked_at`. Premium-only feature.
 - **chats** — `id`, `name`, `is_group`, `is_channel`, `created_by`, `is_pinned`, `is_archived`, `avatar_url`, `description`, `user_id`, `is_verified`, `who_can_send`, `member_limit`
 - **chat_members** — `id`, `chat_id`, `user_id`, `joined_at`, `is_admin`
 - **messages** — `id`, `chat_id`, `sender_id`, `encrypted_content`, `sent_at`, `reply_to_message_id`, `attachment_url`, `attachment_type`, `audio_url`, `edited_at`
@@ -57,28 +63,29 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - **post_images** — `id`, `post_id`, `image_url`, `display_order`
 - **post_replies** — `id`, `post_id`, `author_id`, `content`, `parent_reply_id`
 - **stories** — `id`, `user_id`, `media_url`, `media_type`, `caption`, `expires_at`, `view_count`
-- **gifts/gift_transactions** — virtual gift system
+- **gifts/gift_transactions** — virtual gift system (costs shown in Nexa)
 - **message_reactions** — emoji reactions on messages
 - **blocked_users** — block/unblock users
 - **notifications** — system notifications
-- **acoin_transactions** / **xp_transfers** — currency system
 
 ### App Architecture
 
-- **Auth**: Supabase Auth (email/password, Google OAuth, GitHub OAuth), AuthContext provider
+- **Auth**: Supabase Auth (email/password, Google OAuth, GitHub OAuth), AuthContext provider with forgot password flow
 - **Navigation**: Expo Router with tabs (Chats, Contacts, Discover, Me)
 - **Design**: AfuChat teal `#00C2CB` brand color, gold business badge `#D4A853`, Inter font family, dark/light theme, custom logo
-- **Themes**: Dark theme uses pure `#000000` black. Light theme uses cream tones (`#FDF8F3` background).
+- **Themes**: Dark theme uses pure `#000000` black. Light theme uses cream tones (`#FDF8F3` background). User can toggle via Appearance setting on Me tab (System/Dark/Light). ThemeContext with AsyncStorage persistence.
 - **Real-time**: Supabase Realtime subscriptions for incoming messages
-- **State**: React Context (AuthContext) + local component state
-- **Premium**: `is_premium` field on profiles; premium users get linked accounts, badges, etc.
+- **State**: React Context (AuthContext, ThemeContext) + local component state
+- **Premium**: Uses `user_subscriptions` table (NOT `profiles.is_premium`). Plans loaded from `subscription_plans` table. Payment via ACoin. AuthContext exposes `isPremium`, `subscription` fields.
+- **Currency**: XP displayed as "Nexa" throughout. ACoin is premium currency. Nexa→ACoin conversion via `currency_settings` table rates/fees.
 
 ### Key Files
 
 - `lib/supabase.ts` — Supabase client config
-- `context/AuthContext.tsx` — Auth provider with profile loading (includes `is_premium`)
+- `context/AuthContext.tsx` — Auth provider with profile + subscription loading. Premium status from `user_subscriptions` table.
+- `context/ThemeContext.tsx` — Theme provider with explicit light/dark/system toggle, persisted to AsyncStorage
 - `constants/colors.ts` — Brand colors + light/dark theme + gold badge color
-- `hooks/useTheme.ts` — Theme hook
+- `hooks/useTheme.ts` — Theme hook (reads from ThemeContext, exposes `setThemeMode`)
 - `components/ui/Avatar.tsx` — Avatar with initials fallback
 - `components/ui/Separator.tsx` — List separator
 - `app/(tabs)/index.tsx` — Chats list with stories bar
@@ -94,16 +101,16 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `app/stories/view.tsx` — View stories with progress dots and view tracking
 - `app/post/[id].tsx` — Post detail with likes, replies, view count
 - `app/notifications.tsx` — Notifications list with mark read
-- `app/wallet/index.tsx` — XP/ACoin balance, transfer XP, transaction history
+- `app/wallet/index.tsx` — Nexa/ACoin balance, send Nexa, Nexa→ACoin conversion (using currency_settings), filtered transaction history
 - `app/gifts/index.tsx` — Gift shop, owned gifts, send gifts, pin favorites
 - `app/red-envelope/[id].tsx` — Red envelope claim and status
 - `app/games/index.tsx` — Game challenges and scores
 - `app/mini-programs/index.tsx` — Mini programs discovery
 - `app/ai/index.tsx` — AfuAi chat (powered by OpenAI via Replit AI Integrations)
 - `app/my-posts/index.tsx` — Dedicated My Posts screen (user's own posts with delete)
-- `app/premium.tsx` — Premium subscription screen with plan selection and feature list
-- `app/linked-accounts.tsx` — Linked accounts management (premium-only with guard)
-- `app/(auth)/login.tsx` — Login screen with email/password, Google/GitHub OAuth (popup mode)
+- `app/premium.tsx` — Premium subscription with plans from `subscription_plans` table, ACoin payment, free features list, active subscription display
+- `app/linked-accounts.tsx` — Linked accounts management (premium-only, uses `linked_accounts` table, link by @handle)
+- `app/(auth)/login.tsx` — Login screen with email/password, Google/GitHub OAuth (popup mode), forgot password with email reset
 - `app/(auth)/register.tsx` — Register screen with terms/privacy checkbox (must agree before account creation)
 - `app/settings/privacy.tsx` — Privacy settings (private account, online status, hide lists)
 - `app/settings/notifications.tsx` — Notification preferences

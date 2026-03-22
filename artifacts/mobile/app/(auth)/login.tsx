@@ -34,6 +34,9 @@ export default function LoginScreen() {
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(null);
+  const [resetEmail, setResetEmail] = useState("");
+  const [showForgot, setShowForgot] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   async function handleLogin() {
     if (!email || !password) {
@@ -47,6 +50,23 @@ export default function LoginScreen() {
       Alert.alert("Login failed", error.message);
     } else {
       router.replace("/(tabs)");
+    }
+  }
+
+  async function handleForgotPassword() {
+    if (!resetEmail.trim()) {
+      Alert.alert("Missing email", "Please enter your email address.");
+      return;
+    }
+    setResetLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail.trim());
+    setResetLoading(false);
+    if (error) {
+      Alert.alert("Error", error.message);
+    } else {
+      Alert.alert("Check your email", "We've sent a password reset link to your email address.");
+      setShowForgot(false);
+      setResetEmail("");
     }
   }
 
@@ -156,6 +176,37 @@ export default function LoginScreen() {
               />
             </Pressable>
           </View>
+
+          <TouchableOpacity onPress={() => { setShowForgot(!showForgot); setResetEmail(email); }} style={styles.forgotBtn}>
+            <Text style={[styles.forgotText, { color: Colors.brand }]}>Forgot password?</Text>
+          </TouchableOpacity>
+
+          {showForgot && (
+            <View style={[styles.forgotCard, { backgroundColor: colors.inputBg }]}>
+              <Text style={[styles.forgotCardTitle, { color: colors.text }]}>Reset Password</Text>
+              <Text style={[styles.forgotCardDesc, { color: colors.textMuted }]}>
+                Enter your email and we'll send you a reset link.
+              </Text>
+              <TextInput
+                style={[styles.forgotInput, { color: colors.text, backgroundColor: colors.surface }]}
+                placeholder="Email address"
+                placeholderTextColor={colors.textMuted}
+                value={resetEmail}
+                onChangeText={setResetEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+              <TouchableOpacity
+                style={[styles.resetBtn, resetLoading && { opacity: 0.6 }]}
+                onPress={handleForgotPassword}
+                disabled={resetLoading}
+              >
+                {resetLoading ? <ActivityIndicator color="#fff" size="small" /> : (
+                  <Text style={styles.resetBtnText}>Send Reset Link</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
 
           <TouchableOpacity
             style={[styles.loginBtn, loading && styles.btnDisabled]}
@@ -270,6 +321,14 @@ const styles = StyleSheet.create({
     height: 52,
   },
   eyeBtn: { padding: 4 },
+  forgotBtn: { alignSelf: "flex-end", marginTop: -6 },
+  forgotText: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  forgotCard: { borderRadius: 14, padding: 16, gap: 10 },
+  forgotCardTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  forgotCardDesc: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
+  forgotInput: { borderRadius: 12, padding: 14, fontSize: 15, fontFamily: "Inter_400Regular" },
+  resetBtn: { backgroundColor: Colors.brand, borderRadius: 12, paddingVertical: 12, alignItems: "center" },
+  resetBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
   loginBtn: {
     backgroundColor: Colors.brand,
     height: 52,

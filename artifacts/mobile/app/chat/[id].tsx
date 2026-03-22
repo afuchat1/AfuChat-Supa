@@ -733,7 +733,7 @@ export default function ChatScreen() {
 
       <BottomSheet visible={showRedEnvelope} onClose={() => setShowRedEnvelope(false)}>
         <Text style={[styles.sheetTitle, { color: colors.text }]}>🧧 Red Envelope</Text>
-        <TextInput style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Amount (XP)" placeholderTextColor={colors.textMuted} value={envelopeAmount} onChangeText={setEnvelopeAmount} keyboardType="numeric" />
+        <TextInput style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Amount (Nexa)" placeholderTextColor={colors.textMuted} value={envelopeAmount} onChangeText={setEnvelopeAmount} keyboardType="numeric" />
         <TextInput style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Number of envelopes" placeholderTextColor={colors.textMuted} value={envelopeCount} onChangeText={setEnvelopeCount} keyboardType="numeric" />
         <TextInput style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Best wishes!" placeholderTextColor={colors.textMuted} value={envelopeMsg} onChangeText={setEnvelopeMsg} />
         <TouchableOpacity style={styles.redEnvBtn} onPress={sendRedEnvelope}>
@@ -761,7 +761,7 @@ export default function ChatScreen() {
               >
                 <Text style={styles.giftEmoji}>{gift.emoji}</Text>
                 <Text style={[styles.giftName, { color: colors.text }]} numberOfLines={1}>{gift.name}</Text>
-                <Text style={[styles.giftCost, { color: Colors.brand }]}>{gift.base_xp_cost} XP</Text>
+                <Text style={[styles.giftCost, { color: Colors.brand }]}>{gift.base_xp_cost} Nexa</Text>
               </TouchableOpacity>
             ))}
           </View>

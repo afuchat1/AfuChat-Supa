@@ -61,8 +61,8 @@ function MenuGroup({ children }: { children: React.ReactNode }) {
 }
 
 export default function MeScreen() {
-  const { colors } = useTheme();
-  const { profile, signOut } = useAuth();
+  const { colors, isDark, themeMode, setThemeMode } = useTheme();
+  const { profile, isPremium, subscription, signOut } = useAuth();
   const insets = useSafeAreaInsets();
 
   function handleSignOut() {
@@ -79,8 +79,16 @@ export default function MeScreen() {
     ]);
   }
 
+  function cycleTheme() {
+    Haptics.selectionAsync();
+    if (themeMode === "system") setThemeMode("dark");
+    else if (themeMode === "dark") setThemeMode("light");
+    else setThemeMode("system");
+  }
+
+  const themeLabel = themeMode === "system" ? "System" : themeMode === "dark" ? "Dark" : "Light";
+  const themeIcon = themeMode === "dark" ? "moon" : themeMode === "light" ? "sunny" : "phone-portrait-outline";
   const gradeIcon = profile?.current_grade === "Newcomer" ? "leaf-outline" : "star-outline";
-  const isPremium = !!profile?.is_premium;
 
   return (
     <ScrollView
@@ -133,7 +141,7 @@ export default function MeScreen() {
         <View style={styles.statItem}>
           <Ionicons name="flash" size={20} color="#FFD60A" />
           <Text style={[styles.statValue, { color: colors.text }]}>{profile?.xp || 0}</Text>
-          <Text style={[styles.statLabel, { color: colors.textMuted }]}>XP</Text>
+          <Text style={[styles.statLabel, { color: colors.textMuted }]}>Nexa</Text>
         </View>
         <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
         <View style={styles.statItem}>
@@ -159,7 +167,7 @@ export default function MeScreen() {
             <Ionicons name="diamond" size={24} color="#FFD60A" />
             <View>
               <Text style={styles.premiumBannerTitle}>Upgrade to Premium</Text>
-              <Text style={styles.premiumBannerSub}>Linked accounts, badges, and more</Text>
+              <Text style={styles.premiumBannerSub}>Pay with ACoin for badges, linked accounts & more</Text>
             </View>
           </View>
           <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.6)" />
@@ -192,7 +200,7 @@ export default function MeScreen() {
           iconBg="#FFD60A"
           label="Premium"
           onPress={() => router.push("/premium")}
-          value={isPremium ? "Active" : ""}
+          value={isPremium ? `Active (${subscription?.plan_tier})` : ""}
         />
         <Separator indent={54} />
         <MenuItem
@@ -214,6 +222,14 @@ export default function MeScreen() {
       </MenuGroup>
 
       <MenuGroup>
+        <MenuItem
+          icon={themeIcon as any}
+          iconBg={isDark ? "#1C1C1E" : "#FFD60A"}
+          label="Appearance"
+          value={themeLabel}
+          onPress={cycleTheme}
+        />
+        <Separator indent={54} />
         <MenuItem
           icon="chatbubble-ellipses-outline"
           iconBg="#34C759"
