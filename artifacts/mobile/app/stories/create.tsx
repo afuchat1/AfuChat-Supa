@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
+import { Video, ResizeMode } from "expo-av";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -24,16 +25,18 @@ export default function CreateStoryScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const [mediaUri, setMediaUri] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<"image" | "video">("image");
   const [caption, setCaption] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function pickMedia() {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      mediaTypes: ["images", "videos"],
       quality: 0.8,
     });
     if (!result.canceled && result.assets[0]) {
       setMediaUri(result.assets[0].uri);
+      setMediaType(result.assets[0].type === "video" ? "video" : "image");
     }
   }
 
@@ -46,7 +49,7 @@ export default function CreateStoryScreen() {
     const { error } = await supabase.from("stories").insert({
       user_id: user.id,
       media_url: mediaUri,
-      media_type: "image",
+      media_type: mediaType,
       caption: caption.trim() || null,
       expires_at: expiresAt,
     });
@@ -76,7 +79,17 @@ export default function CreateStoryScreen() {
       <View style={styles.body}>
         {mediaUri ? (
           <View style={styles.previewWrap}>
-            <Image source={{ uri: mediaUri }} style={styles.preview} resizeMode="cover" />
+            {mediaType === "video" ? (
+              <Video
+                source={{ uri: mediaUri }}
+                style={styles.preview}
+                resizeMode={ResizeMode.COVER}
+                useNativeControls
+                isLooping
+              />
+            ) : (
+              <Image source={{ uri: mediaUri }} style={styles.preview} resizeMode="cover" />
+            )}
             <TouchableOpacity style={styles.changeBtn} onPress={pickMedia}>
               <Ionicons name="camera-outline" size={20} color="#fff" />
               <Text style={styles.changeBtnText}>Change</Text>

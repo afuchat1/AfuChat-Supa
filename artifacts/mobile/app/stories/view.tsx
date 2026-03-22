@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Animated,
   Dimensions,
   Image,
   StyleSheet,
@@ -10,11 +11,13 @@ import {
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { Video, ResizeMode } from "expo-av";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
 
 const { width, height } = Dimensions.get("window");
+const STORY_DURATION = 5000;
 
 type Story = {
   id: string;
@@ -33,6 +36,9 @@ export default function ViewStoryScreen() {
   const insets = useSafeAreaInsets();
   const [stories, setStories] = useState<Story[]>([]);
   const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const timerRef = useRef<any>(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -48,6 +54,37 @@ export default function ViewStoryScreen() {
         }
       });
   }, [userId]);
+
+  const goNext = useCallback(() => {
+    if (index < stories.length - 1) {
+      setIndex((i) => i + 1);
+    } else {
+      router.back();
+    }
+  }, [index, stories.length]);
+
+  const goPrev = useCallback(() => {
+    if (index > 0) setIndex((i) => i - 1);
+  }, [index]);
+
+  const isVideoStory = story?.media_type === "video";
+
+  useEffect(() => {
+    if (stories.length === 0 || paused || isVideoStory) return;
+
+    progressAnim.setValue(0);
+    const anim = Animated.timing(progressAnim, {
+      toValue: 1,
+      duration: STORY_DURATION,
+      useNativeDriver: false,
+    });
+
+    anim.start(({ finished }) => {
+      if (finished) goNext();
+    });
+
+    return () => anim.stop();
+  }, [index, stories.length, paused, isVideoStory, goNext, progressAnim]);
 
   useEffect(() => {
     const story = stories[index];
@@ -65,25 +102,50 @@ export default function ViewStoryScreen() {
   const story = stories[index];
   if (!story) return <View style={[styles.root, { backgroundColor: "#000" }]} />;
 
-  function next() {
-    if (index < stories.length - 1) setIndex(index + 1);
-    else router.back();
-  }
-
-  function prev() {
-    if (index > 0) setIndex(index - 1);
-  }
-
   const elapsed = Math.floor((Date.now() - new Date(story.created_at).getTime()) / 3600000);
   const timeLabel = elapsed < 1 ? "just now" : `${elapsed}h ago`;
 
   return (
     <View style={[styles.root, { backgroundColor: "#000" }]}>
-      <Image source={{ uri: story.media_url }} style={styles.media} resizeMode="cover" />
+      {story.media_type === "video" ? (
+        <Video
+          source={{ uri: story.media_url }}
+          style={styles.media}
+          resizeMode={ResizeMode.COVER}
+          shouldPlay={!paused}
+          isLooping={false}
+          isMuted={false}
+          onPlaybackStatusUpdate={(status: any) => {
+            if (status.isLoaded && status.durationMillis) {
+              progressAnim.setValue(status.positionMillis / status.durationMillis);
+            }
+            if (status.didJustFinish) goNext();
+          }}
+        />
+      ) : (
+        <Image source={{ uri: story.media_url }} style={styles.media} resizeMode="cover" />
+      )}
 
       <View style={[styles.progressBar, { top: insets.top + 8 }]}>
         {stories.map((_, i) => (
-          <View key={i} style={[styles.progressDot, { backgroundColor: i <= index ? "#fff" : "rgba(255,255,255,0.3)" }]} />
+          <View key={i} style={styles.progressSegment}>
+            <View style={[styles.progressBg]} />
+            <Animated.View
+              style={[
+                styles.progressFill,
+                i < index
+                  ? { width: "100%" }
+                  : i === index
+                    ? {
+                        width: progressAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: ["0%", "100%"],
+                        }),
+                      }
+                    : { width: "0%" },
+              ]}
+            />
+          </View>
         ))}
       </View>
 
@@ -99,8 +161,20 @@ export default function ViewStoryScreen() {
       </View>
 
       <View style={styles.tapZones}>
-        <TouchableOpacity style={styles.tapLeft} onPress={prev} activeOpacity={1} />
-        <TouchableOpacity style={styles.tapRight} onPress={next} activeOpacity={1} />
+        <TouchableOpacity
+          style={styles.tapLeft}
+          onPress={goPrev}
+          onLongPress={() => setPaused(true)}
+          onPressOut={() => setPaused(false)}
+          activeOpacity={1}
+        />
+        <TouchableOpacity
+          style={styles.tapRight}
+          onPress={goNext}
+          onLongPress={() => setPaused(true)}
+          onPressOut={() => setPaused(false)}
+          activeOpacity={1}
+        />
       </View>
 
       {story.caption ? (
@@ -121,7 +195,9 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   media: { width, height, position: "absolute" },
   progressBar: { flexDirection: "row", gap: 3, paddingHorizontal: 8, position: "absolute", left: 0, right: 0 },
-  progressDot: { flex: 1, height: 2, borderRadius: 1 },
+  progressSegment: { flex: 1, height: 3, borderRadius: 1.5, overflow: "hidden" },
+  progressBg: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(255,255,255,0.3)", borderRadius: 1.5 },
+  progressFill: { position: "absolute", top: 0, left: 0, bottom: 0, backgroundColor: "#fff", borderRadius: 1.5 },
   topBar: { position: "absolute", left: 16, right: 16, flexDirection: "row", alignItems: "center", gap: 10 },
   storyName: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
   storyTime: { color: "rgba(255,255,255,0.7)", fontSize: 11, fontFamily: "Inter_400Regular" },

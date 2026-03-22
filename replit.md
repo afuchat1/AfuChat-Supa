@@ -75,6 +75,9 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - **Design**: AfuChat teal `#00C2CB` brand color, gold business badge `#D4A853`, Inter font family, dark/light theme, custom logo
 - **Badge System**: `is_organization_verified=true` → gold badge (#D4A853) + "Verified Business" tag. `is_verified=true` (subscription) → teal badge (#00C2CB), no business tag. Applied across me.tsx, discover.tsx, contacts.tsx, contact/[id].tsx, post/[id].tsx, admin/index.tsx.
 - **Cross-platform Alerts**: `lib/alert.ts` exports `showAlert()` — wraps `Alert.alert` on native, uses `window.confirm`/`window.prompt` on web. All screens use this instead of `Alert.alert` directly.
+- **Account Switching**: `lib/accountStore.ts` stores multiple Supabase sessions using `expo-secure-store` (native) / AsyncStorage (web). AuthContext exposes `addAccount(email, password)`, `switchAccount(userId)`, `removeAccount(userId)`. Users add accounts with email+password and switch instantly without logging out.
+- **Chat Attachments**: Messages support image, video, audio, file, and gif attachment types. Video uses `expo-av` Video component with native controls. Audio messages use expo-av playback.
+- **Stories**: View screen has animated progress bars, auto-advance timer (5s for images, video duration for video stories), and hold-to-pause. Create screen supports both image and video preview.
 - **Themes**: Dark theme uses pure `#000000` black. Light theme uses cream tones (`#FDF8F3` background). User can toggle via Appearance setting on Me tab (System/Dark/Light). ThemeContext with AsyncStorage persistence.
 - **Real-time**: Supabase Realtime subscriptions for incoming messages
 - **State**: React Context (AuthContext, ThemeContext) + local component state
@@ -112,7 +115,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `app/admin/index.tsx` — Admin Dashboard (admin-only, accessible from Me tab). Features: platform overview stats, user management (verify toggle, balance adjust), content moderation (block/delete posts), subscription plans view, currency settings, moderation reports. Only visible to users with `is_admin=true` in profiles.
 - `app/my-posts/index.tsx` — Dedicated My Posts screen (user's own posts with delete)
 - `app/premium.tsx` — Premium subscription with plans from `subscription_plans` table, ACoin payment, free features list, active subscription display
-- `app/linked-accounts.tsx` — Linked accounts management (premium-only, uses `linked_accounts` table, link by @handle)
+- `app/linked-accounts.tsx` — Account switching (add accounts with email+password, switch instantly, sessions stored via accountStore)
 - `app/(auth)/login.tsx` — Login screen with email/password, Google/GitHub OAuth (popup mode), forgot password with email reset
 - `app/(auth)/register.tsx` — Register screen with terms/privacy checkbox (must agree before account creation)
 - `app/settings/privacy.tsx` — Privacy settings (private account, online status, hide lists)

@@ -207,20 +207,10 @@ export default function MeScreen() {
         />
         <Separator indent={54} />
         <MenuItem
-          icon="people-outline"
+          icon="swap-horizontal-outline"
           iconBg="#AF52DE"
-          label="Linked Accounts"
-          onPress={() => {
-            if (!isPremium) {
-              showAlert("Premium Required", "Linked accounts is a premium feature. Upgrade to AfuChat Premium to link multiple accounts.", [
-                { text: "Cancel", style: "cancel" },
-                { text: "Upgrade", onPress: () => router.push("/premium") },
-              ]);
-            } else {
-              router.push("/linked-accounts");
-            }
-          }}
-          badge={isPremium ? undefined : "PRO"}
+          label="Switch Accounts"
+          onPress={() => router.push("/linked-accounts")}
         />
       </MenuGroup>
 

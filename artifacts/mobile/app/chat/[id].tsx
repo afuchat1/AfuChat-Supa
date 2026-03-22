@@ -21,6 +21,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
+import { Video, ResizeMode } from "expo-av";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -249,6 +250,29 @@ function MessageBubble({ msg, isMe, showAvatar, showTime, onLongPress, onReply, 
                 </View>
               )}
             </TouchableOpacity>
+          ) : msg.attachment_url && msg.attachment_type === "video" ? (
+            <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.8}>
+              <View style={styles.attachmentVideo}>
+                <Video
+                  source={{ uri: msg.attachment_url }}
+                  style={{ width: "100%", height: "100%", borderRadius: 14 }}
+                  resizeMode={ResizeMode.COVER}
+                  useNativeControls
+                  isLooping={false}
+                />
+              </View>
+            </TouchableOpacity>
+          ) : msg.attachment_url && msg.attachment_type === "audio" ? (
+            <View style={[styles.bubble, styles.audioBubble, isMe ? { backgroundColor: Colors.brand } : { backgroundColor: colors.bubbleIncoming }]}>
+              <Ionicons name="musical-note" size={20} color={isMe ? "#fff" : colors.bubbleIncomingText} />
+              <View style={{ flex: 1 }}>
+                <Video
+                  source={{ uri: msg.attachment_url }}
+                  style={{ height: 36 }}
+                  useNativeControls
+                />
+              </View>
+            </View>
           ) : msg.attachment_url && msg.attachment_type === "file" ? (
             <TouchableOpacity
               onLongPress={() => onLongPress(msg)}
@@ -809,6 +833,17 @@ export default function ChatScreen() {
         <View style={[styles.attachPreviewBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
           {attachmentPreview.type === "image" || attachmentPreview.type === "gif" ? (
             <Image source={{ uri: attachmentPreview.uri }} style={styles.attachPreviewImg} resizeMode="cover" />
+          ) : attachmentPreview.type === "video" ? (
+            <View style={styles.attachPreviewImg}>
+              <Video
+                source={{ uri: attachmentPreview.uri }}
+                style={{ width: 64, height: 64, borderRadius: 10 }}
+                resizeMode={ResizeMode.COVER}
+              />
+              <View style={styles.videoPlayOverlay}>
+                <Ionicons name="play" size={20} color="#fff" />
+              </View>
+            </View>
           ) : (
             <View style={[styles.attachPreviewFile, { backgroundColor: colors.inputBg }]}>
               <Ionicons name="document-outline" size={28} color={Colors.brand} />
@@ -1069,6 +1104,9 @@ const styles = StyleSheet.create({
   giftRevealBtn: { backgroundColor: Colors.brand, borderRadius: 14, paddingHorizontal: 40, paddingVertical: 14, marginTop: 8 },
   giftRevealBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
   attachmentImage: { width: 200, height: 160, borderRadius: 14 },
+  attachmentVideo: { width: 220, height: 180, borderRadius: 14, overflow: "hidden", backgroundColor: "#000" },
+  audioBubble: { flexDirection: "row", alignItems: "center", gap: 8, minWidth: 180 },
+  videoPlayOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.3)", borderRadius: 10 },
   fileBubble: { flexDirection: "row", alignItems: "center", gap: 10, maxWidth: 240 },
   attachPreviewBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, gap: 10 },
   attachPreviewImg: { width: 64, height: 64, borderRadius: 10 },
