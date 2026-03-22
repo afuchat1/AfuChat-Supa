@@ -2,9 +2,11 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
-import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
-// ✅ Safe defaults for Vercel & local development
+// Only include Replit dev plugins in dev
+const isDev = process.env.NODE_ENV !== "production" && process.env.REPL_ID !== undefined;
+
+// Safe defaults
 const port = Number(process.env.PORT) || 3000;
 const basePath = process.env.BASE_PATH || "/";
 
@@ -25,12 +27,12 @@ export default defineConfig(async () => ({
     react(),
     tailwindcss(),
 
-    // ⚠️ Keep only if it doesn't break production (safe for now)
-    runtimeErrorOverlay(),
-
-    ...(process.env.NODE_ENV !== "production" &&
-    process.env.REPL_ID !== undefined
+    // Only dev plugins locally
+    ...(isDev
       ? [
+          await import("@replit/vite-plugin-runtime-error-modal").then(
+            (m) => m.runtimeErrorOverlay()
+          ),
           await import("@replit/vite-plugin-cartographer").then((m) =>
             m.cartographer({
               root: path.resolve(import.meta.dirname, ".."),
