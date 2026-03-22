@@ -3,19 +3,32 @@ import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Colors from "@/constants/colors";
+import { useTheme } from "@/hooks/useTheme";
 
-//IMPORTANT: iOS 26 Exists, feel free to use NativeTabs for native tabs with liquid glass support.
 function NativeTabLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: "house", selected: "house.fill" }} />
-        <Label>Home</Label>
+        <Icon sf={{ default: "message.fill", selected: "message.fill" }} />
+        <Label>Chats</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="contacts">
+        <Icon sf={{ default: "person.2", selected: "person.2.fill" }} />
+        <Label>Contacts</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="discover">
+        <Icon sf={{ default: "compass", selected: "compass.fill" }} />
+        <Label>Discover</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="me">
+        <Icon sf={{ default: "person.circle", selected: "person.circle.fill" }} />
+        <Label>Me</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -26,47 +39,85 @@ function ClassicTabLayout() {
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
+  const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors.light.tint,
-        tabBarInactiveTintColor: Colors.light.tabIconDefault,
-        headerShown: true,
+        tabBarActiveTintColor: Colors.brand,
+        tabBarInactiveTintColor: colors.tabIconDefault,
+        headerShown: false,
         tabBarStyle: {
           position: "absolute",
-          backgroundColor: isIOS ? "transparent" : isDark ? "#000" : "#fff",
-          borderTopWidth: isWeb ? 1 : 0,
-          borderTopColor: isDark ? "#333" : "#ccc",
+          backgroundColor: isIOS ? "transparent" : colors.surface,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: colors.border,
           elevation: 0,
-          ...(isWeb ? { height: 84 } : {}),
+          height: 52 + (insets.bottom > 0 ? insets.bottom : 8),
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontFamily: "Inter_500Medium",
         },
         tabBarBackground: () =>
           isIOS ? (
             <BlurView
-              intensity={100}
+              intensity={80}
               tint={isDark ? "dark" : "light"}
               style={StyleSheet.absoluteFill}
             />
           ) : isWeb ? (
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: isDark ? "#000" : "#fff" },
-              ]}
-            />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surface }]} />
           ) : null,
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: "Home",
-          tabBarIcon: ({ color }) =>
+          title: "Chats",
+          tabBarIcon: ({ color, focused }) =>
             isIOS ? (
-              <SymbolView name="house" tintColor={color} size={24} />
+              <SymbolView name={focused ? "message.fill" : "message"} tintColor={color} size={22} />
             ) : (
-              <Feather name="home" size={22} color={color} />
+              <Ionicons name={focused ? "chatbubbles" : "chatbubbles-outline"} size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="contacts"
+        options={{
+          title: "Contacts",
+          tabBarIcon: ({ color, focused }) =>
+            isIOS ? (
+              <SymbolView name={focused ? "person.2.fill" : "person.2"} tintColor={color} size={22} />
+            ) : (
+              <Ionicons name={focused ? "people" : "people-outline"} size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="discover"
+        options={{
+          title: "Discover",
+          tabBarIcon: ({ color, focused }) =>
+            isIOS ? (
+              <SymbolView name={focused ? "compass.fill" : "compass"} tintColor={color} size={22} />
+            ) : (
+              <Ionicons name={focused ? "compass" : "compass-outline"} size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="me"
+        options={{
+          title: "Me",
+          tabBarIcon: ({ color, focused }) =>
+            isIOS ? (
+              <SymbolView name={focused ? "person.circle.fill" : "person.circle"} tintColor={color} size={22} />
+            ) : (
+              <Ionicons name={focused ? "person" : "person-outline"} size={22} color={color} />
             ),
         }}
       />
