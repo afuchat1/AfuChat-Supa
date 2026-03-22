@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Dimensions,
   FlatList,
@@ -27,6 +26,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
 
 type Gift = {
   id: string;
@@ -512,7 +512,7 @@ export default function ChatScreen() {
 
     if (error) {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      Alert.alert("Send failed", "Could not send message. Try again.");
+      showAlert("Send failed", "Could not send message. Try again.");
     } else if (msg) {
       setMessages((prev) =>
         prev.map((m) => (m.id === tempId ? { ...m, id: msg.id, sent_at: msg.sent_at, status: "sent" } : m))
@@ -527,7 +527,7 @@ export default function ChatScreen() {
     if (!user || !envelopeAmount.trim()) return;
     const amount = parseInt(envelopeAmount);
     const count = parseInt(envelopeCount) || 1;
-    if (isNaN(amount) || amount <= 0) { Alert.alert("Invalid amount"); return; }
+    if (isNaN(amount) || amount <= 0) { showAlert("Invalid amount"); return; }
 
     const { data: envData, error } = await supabase.from("red_envelopes").insert({
       sender_id: user.id,
@@ -540,7 +540,7 @@ export default function ChatScreen() {
       split_type: count > 1 ? "random" : "equal",
     }).select("id").single();
 
-    if (error || !envData) { Alert.alert("Error", error?.message || "Failed to create envelope"); return; }
+    if (error || !envData) { showAlert("Error", error?.message || "Failed to create envelope"); return; }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setShowRedEnvelope(false);
@@ -605,7 +605,7 @@ export default function ChatScreen() {
   async function pickFromCamera() {
     setShowAttachMenu(false);
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== "granted") { Alert.alert("Permission needed", "Camera access is required to take photos."); return; }
+    if (status !== "granted") { showAlert("Permission needed", "Camera access is required to take photos."); return; }
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images", "videos"], quality: 0.8 });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
@@ -616,7 +616,7 @@ export default function ChatScreen() {
   async function pickFromGallery() {
     setShowAttachMenu(false);
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") { Alert.alert("Permission needed", "Gallery access is required."); return; }
+    if (status !== "granted") { showAlert("Permission needed", "Gallery access is required."); return; }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images", "videos"], quality: 0.8, allowsMultipleSelection: false });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
@@ -633,7 +633,7 @@ export default function ChatScreen() {
         setAttachmentPreview({ uri: doc.uri, type: "file", name: doc.name });
       }
     } catch {
-      Alert.alert("Error", "Could not pick document");
+      showAlert("Error", "Could not pick document");
     }
   }
 
@@ -716,7 +716,7 @@ export default function ChatScreen() {
     if (data) {
       router.push({ pathname: "/red-envelope/[id]", params: { id: data.id } });
     } else {
-      Alert.alert("Red Envelope", "Could not find this red envelope.");
+      showAlert("Red Envelope", "Could not find this red envelope.");
     }
   }
 

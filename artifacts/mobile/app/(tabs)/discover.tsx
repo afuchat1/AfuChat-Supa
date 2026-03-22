@@ -31,6 +31,7 @@ type PostItem = {
   created_at: string;
   view_count: number;
   is_verified: boolean;
+  is_organization_verified: boolean;
   profile: { display_name: string; handle: string; avatar_url: string | null };
   liked: boolean;
   likeCount: number;
@@ -80,8 +81,11 @@ function PostCard({ item, onToggleLike }: { item: PostItem; onToggleLike: (postI
         <View style={{ flex: 1 }}>
           <View style={styles.nameRow}>
             <Text style={[styles.cardName, { color: colors.text }]}>{item.profile.display_name}</Text>
-            {item.is_verified && (
+            {item.is_organization_verified && (
               <Ionicons name="checkmark-circle" size={13} color={Colors.gold} style={{ marginLeft: 4 }} />
+            )}
+            {!item.is_organization_verified && item.is_verified && (
+              <Ionicons name="checkmark-circle" size={13} color={Colors.brand} style={{ marginLeft: 4 }} />
             )}
           </View>
           <Text style={[styles.cardTime, { color: colors.textMuted }]}>
@@ -147,7 +151,7 @@ export default function DiscoverScreen() {
       .from("posts")
       .select(`
         id, author_id, content, image_url, created_at, view_count,
-        profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified),
+        profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified),
         post_images(image_url, display_order)
       `)
       .eq("is_blocked", false)
@@ -213,6 +217,7 @@ export default function DiscoverScreen() {
           created_at: p.created_at,
           view_count: p.view_count || 0,
           is_verified: p.profiles?.is_verified || false,
+          is_organization_verified: p.profiles?.is_organization_verified || false,
           profile: {
             display_name: p.profiles?.display_name || "User",
             handle: p.profiles?.handle || "user",

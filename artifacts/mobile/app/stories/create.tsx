@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   StyleSheet,
   Text,
@@ -18,6 +17,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
 
 export default function CreateStoryScreen() {
   const { colors } = useTheme();
@@ -53,7 +53,7 @@ export default function CreateStoryScreen() {
 
     setLoading(false);
     if (error) {
-      Alert.alert("Error", "Could not post story.");
+      showAlert("Error", "Could not post story.");
     } else {
       router.back();
     }

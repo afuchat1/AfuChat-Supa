@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -19,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
 
 export default function RegisterScreen() {
   const { colors } = useTheme();
@@ -33,20 +33,20 @@ export default function RegisterScreen() {
 
   async function handleRegister() {
     if (!displayName || !handle || !email || !password) {
-      Alert.alert("Missing fields", "Please fill all fields.");
+      showAlert("Missing fields", "Please fill all fields.");
       return;
     }
     if (!agreedToTerms) {
-      Alert.alert("Terms Required", "You must agree to the Terms of Service and Privacy Policy to create an account.");
+      showAlert("Terms Required", "You must agree to the Terms of Service and Privacy Policy to create an account.");
       return;
     }
     if (password.length < 6) {
-      Alert.alert("Weak password", "Password must be at least 6 characters.");
+      showAlert("Weak password", "Password must be at least 6 characters.");
       return;
     }
     const cleanHandle = handle.replace(/[^a-zA-Z0-9_]/g, "").toLowerCase();
     if (cleanHandle.length < 3) {
-      Alert.alert("Invalid handle", "Handle must be at least 3 characters (letters, numbers, underscores).");
+      showAlert("Invalid handle", "Handle must be at least 3 characters (letters, numbers, underscores).");
       return;
     }
     setLoading(true);
@@ -61,7 +61,7 @@ export default function RegisterScreen() {
 
     if (error) {
       setLoading(false);
-      Alert.alert("Registration failed", error.message);
+      showAlert("Registration failed", error.message);
       return;
     }
 

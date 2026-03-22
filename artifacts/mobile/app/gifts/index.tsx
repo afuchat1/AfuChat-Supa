@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Modal,
   RefreshControl,
@@ -19,6 +18,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
 
 type Gift = {
   id: string;
@@ -81,7 +81,7 @@ export default function GiftsScreen() {
     setSending(true);
 
     const { data: recipient } = await supabase.from("profiles").select("id, display_name").eq("handle", sendHandle.trim().toLowerCase()).single();
-    if (!recipient) { Alert.alert("Not found", "User not found."); setSending(false); return; }
+    if (!recipient) { showAlert("Not found", "User not found."); setSending(false); return; }
 
     const { error } = await supabase.from("gift_transactions").insert({
       gift_id: sendGift.id,
@@ -91,9 +91,9 @@ export default function GiftsScreen() {
       message: sendMsg.trim() || null,
     });
 
-    if (error) { Alert.alert("Error", error.message); } else {
+    if (error) { showAlert("Error", error.message); } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Gift Sent!", `${sendGift.emoji} ${sendGift.name} sent to ${recipient.display_name}`);
+      showAlert("Gift Sent!", `${sendGift.emoji} ${sendGift.name} sent to ${recipient.display_name}`);
       setSendGift(null);
       setSendHandle("");
       setSendMsg("");

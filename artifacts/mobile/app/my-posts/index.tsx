@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   FlatList,
   Image,
@@ -19,6 +18,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
 
 const { width } = Dimensions.get("window");
 
@@ -88,7 +88,7 @@ export default function MyPostsScreen() {
   useEffect(() => { load(); }, [load]);
 
   async function deletePost(postId: string) {
-    Alert.alert("Delete Post", "Are you sure you want to delete this post?", [
+    showAlert("Delete Post", "Are you sure you want to delete this post?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete", style: "destructive", onPress: async () => {

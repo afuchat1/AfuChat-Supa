@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   StyleSheet,
   Text,
@@ -18,6 +17,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
 
 type FollowedUser = {
   id: string;
@@ -66,11 +66,11 @@ export default function CreateGroupScreen() {
 
   async function createGroup() {
     if (!groupName.trim()) {
-      Alert.alert("Group name required", "Please enter a group name.");
+      showAlert("Group name required", "Please enter a group name.");
       return;
     }
     if (selected.size < 1) {
-      Alert.alert("Add members", "Select at least 1 contact.");
+      showAlert("Add members", "Select at least 1 contact.");
       return;
     }
     if (!user) return;

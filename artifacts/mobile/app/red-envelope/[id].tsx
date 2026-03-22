@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   StyleSheet,
   Text,
@@ -17,6 +16,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
 
 type Envelope = {
   id: string;
@@ -88,7 +88,7 @@ export default function RedEnvelopeScreen() {
     if (!user || !envelope || claiming) return;
     setClaiming(true);
 
-    if (envelope.remaining_count <= 0) { Alert.alert("Gone!", "All envelopes have been claimed."); setClaiming(false); return; }
+    if (envelope.remaining_count <= 0) { showAlert("Gone!", "All envelopes have been claimed."); setClaiming(false); return; }
 
     let amount: number;
     if (envelope.split_type === "equal") {
@@ -109,7 +109,7 @@ export default function RedEnvelopeScreen() {
     });
 
     if (error) {
-      Alert.alert("Error", error.message);
+      showAlert("Error", error.message);
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setMyClaim(amount);

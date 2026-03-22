@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -20,6 +19,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
 
 export default function EditProfileScreen() {
   const { colors } = useTheme();
@@ -35,11 +35,11 @@ export default function EditProfileScreen() {
 
   async function save() {
     if (!displayName.trim()) {
-      Alert.alert("Required", "Display name cannot be empty.");
+      showAlert("Required", "Display name cannot be empty.");
       return;
     }
     if ((bio || "").length > 150) {
-      Alert.alert("Too long", "Bio is limited to 150 characters.");
+      showAlert("Too long", "Bio is limited to 150 characters.");
       return;
     }
     setLoading(true);
@@ -57,7 +57,7 @@ export default function EditProfileScreen() {
       .eq("id", profile?.id);
 
     if (error) {
-      Alert.alert("Error", error.message);
+      showAlert("Error", error.message);
     } else {
       await refreshProfile();
       router.back();

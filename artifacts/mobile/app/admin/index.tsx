@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   View,
   TextInput,
-  Alert,
   ActivityIndicator,
   RefreshControl,
   Switch,
@@ -20,6 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
 import { supabase } from "@/lib/supabase";
 
 const BRAND = "#00C2CB";
@@ -44,6 +44,7 @@ type UserRow = {
   avatar_url: string | null;
   is_verified: boolean;
   is_admin: boolean;
+  is_organization_verified: boolean;
   xp: number;
   acoin: number;
   current_grade: string;
@@ -165,7 +166,7 @@ export default function AdminDashboard() {
 
   const loadUsers = useCallback(async () => {
     if (!isAdmin) return;
-    let query = supabase.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_admin, xp, acoin, current_grade, country, created_at").order("created_at", { ascending: false }).limit(100);
+    let query = supabase.from("profiles").select("id, handle, display_name, avatar_url, is_verified, is_admin, is_organization_verified, xp, acoin, current_grade, country, created_at").order("created_at", { ascending: false }).limit(100);
     if (userSearch) query = query.or(`handle.ilike.%${userSearch}%,display_name.ilike.%${userSearch}%`);
     const { data } = await query;
     if (data) setUsers(data);
@@ -260,7 +261,7 @@ export default function AdminDashboard() {
   }
 
   async function deletePost(postId: string) {
-    Alert.alert("Delete Post", "Are you sure?", [
+    showAlert("Delete Post", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
       { text: "Delete", style: "destructive", onPress: async () => {
         await supabase.from("posts").delete().eq("id", postId);
@@ -325,7 +326,8 @@ export default function AdminDashboard() {
             <View style={styles.userInfo}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                 <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1}>{u.display_name}</Text>
-                {u.is_verified && <Ionicons name="checkmark-circle" size={14} color={GOLD} />}
+                {u.is_organization_verified && <Ionicons name="checkmark-circle" size={14} color={GOLD} />}
+                {!u.is_organization_verified && u.is_verified && <Ionicons name="checkmark-circle" size={14} color={BRAND} />}
                 {u.is_admin && <Ionicons name="shield-checkmark" size={14} color={BRAND} />}
               </View>
               <Text style={[styles.userHandle, { color: colors.textSecondary }]}>@{u.handle}</Text>

@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -21,6 +20,7 @@ import { makeRedirectUri } from "expo-auth-session";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
 
 const logoImage = require("@/assets/images/logo.png");
 
@@ -40,14 +40,14 @@ export default function LoginScreen() {
 
   async function handleLogin() {
     if (!email || !password) {
-      Alert.alert("Missing fields", "Please enter email and password.");
+      showAlert("Missing fields", "Please enter email and password.");
       return;
     }
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
     if (error) {
-      Alert.alert("Login failed", error.message);
+      showAlert("Login failed", error.message);
     } else {
       router.replace("/(tabs)");
     }
@@ -55,16 +55,16 @@ export default function LoginScreen() {
 
   async function handleForgotPassword() {
     if (!resetEmail.trim()) {
-      Alert.alert("Missing email", "Please enter your email address.");
+      showAlert("Missing email", "Please enter your email address.");
       return;
     }
     setResetLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(resetEmail.trim());
     setResetLoading(false);
     if (error) {
-      Alert.alert("Error", error.message);
+      showAlert("Error", error.message);
     } else {
-      Alert.alert("Check your email", "We've sent a password reset link to your email address.");
+      showAlert("Check your email", "We've sent a password reset link to your email address.");
       setShowForgot(false);
       setResetEmail("");
     }
@@ -84,7 +84,7 @@ export default function LoginScreen() {
       });
 
       if (error) {
-        Alert.alert("Error", error.message);
+        showAlert("Error", error.message);
         setOauthLoading(null);
         return;
       }
@@ -108,7 +108,7 @@ export default function LoginScreen() {
             });
 
             if (sessionError) {
-              Alert.alert("Error", sessionError.message);
+              showAlert("Error", sessionError.message);
             } else {
               router.replace("/(tabs)");
             }
@@ -118,7 +118,7 @@ export default function LoginScreen() {
       setOauthLoading(null);
     } catch (err: any) {
       setOauthLoading(null);
-      Alert.alert("Error", "Could not complete sign in. Please try again.");
+      showAlert("Error", "Could not complete sign in. Please try again.");
     }
   }
 

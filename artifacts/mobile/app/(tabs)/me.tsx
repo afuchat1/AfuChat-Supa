@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,6 +15,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { Separator } from "@/components/ui/Separator";
 import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
 
 type MenuItemProps = {
   icon: React.ComponentProps<typeof Ionicons>["name"];
@@ -66,7 +66,7 @@ export default function MeScreen() {
   const insets = useSafeAreaInsets();
 
   function handleSignOut() {
-    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+    showAlert("Sign Out", "Are you sure you want to sign out?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Sign Out",
@@ -110,8 +110,11 @@ export default function MeScreen() {
             <Text style={[styles.profileName, { color: colors.text }]}>
               {profile?.display_name || "User"}
             </Text>
-            {profile?.is_verified && (
+            {profile?.is_organization_verified && (
               <Ionicons name="checkmark-circle" size={18} color={Colors.gold} style={{ marginLeft: 4 }} />
+            )}
+            {!profile?.is_organization_verified && profile?.is_verified && (
+              <Ionicons name="checkmark-circle" size={18} color={Colors.brand} style={{ marginLeft: 4 }} />
             )}
             {isPremium && (
               <View style={styles.premiumStarBadge}>
@@ -122,7 +125,7 @@ export default function MeScreen() {
           <Text style={[styles.profileHandle, { color: colors.textSecondary }]}>
             @{profile?.handle || "handle"}
           </Text>
-          {profile?.is_verified && (
+          {profile?.is_organization_verified && (
             <View style={styles.businessTag}>
               <Ionicons name="briefcase" size={10} color="#fff" />
               <Text style={styles.businessTagText}>Business</Text>
@@ -209,7 +212,7 @@ export default function MeScreen() {
           label="Linked Accounts"
           onPress={() => {
             if (!isPremium) {
-              Alert.alert("Premium Required", "Linked accounts is a premium feature. Upgrade to AfuChat Premium to link multiple accounts.", [
+              showAlert("Premium Required", "Linked accounts is a premium feature. Upgrade to AfuChat Premium to link multiple accounts.", [
                 { text: "Cancel", style: "cancel" },
                 { text: "Upgrade", onPress: () => router.push("/premium") },
               ]);

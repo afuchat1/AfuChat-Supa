@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   StyleSheet,
   Text,
@@ -16,6 +15,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
 
 type BlockedItem = {
   id: string;
@@ -44,7 +44,7 @@ export default function BlockedUsersScreen() {
   useEffect(() => { load(); }, [load]);
 
   async function unblock(item: BlockedItem) {
-    Alert.alert("Unblock", `Unblock ${item.profile.display_name}?`, [
+    showAlert("Unblock", `Unblock ${item.profile.display_name}?`, [
       { text: "Cancel", style: "cancel" },
       { text: "Unblock", onPress: async () => {
         await supabase.from("blocked_users").delete().eq("id", item.id);

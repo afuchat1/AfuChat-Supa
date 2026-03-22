@@ -47,7 +47,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 
 ### Key Supabase Tables Used
 
-- **profiles** — `id`, `handle`, `display_name`, `avatar_url`, `bio`, `xp` (Nexa), `acoin`, `current_grade`, `is_verified`, `is_admin`, `country`, `website_url`, `phone_number`, `banner_url`, `language`, `tipping_enabled`, etc. NOTE: No `is_premium` field — premium status comes from `user_subscriptions`.
+- **profiles** — `id`, `handle`, `display_name`, `avatar_url`, `bio`, `xp` (Nexa), `acoin`, `current_grade`, `is_verified`, `is_organization_verified`, `is_admin`, `country`, `website_url`, `phone_number`, `banner_url`, `language`, `tipping_enabled`, etc. NOTE: No `is_premium` field — premium status comes from `user_subscriptions`.
 - **subscription_plans** — `id`, `name`, `description`, `acoin_price`, `duration_days`, `features` (jsonb), `grants_verification`, `is_active`, `tier` (silver/gold/platinum)
 - **user_subscriptions** — `id`, `user_id` (UNIQUE), `plan_id`, `started_at`, `expires_at`, `is_active`, `acoin_paid`. Premium = active + not expired.
 - **currency_settings** — `nexa_to_acoin_rate`, `conversion_fee_percent`, `p2p_fee_percent`. Used for Nexa→ACoin conversion.
@@ -73,6 +73,8 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - **Auth**: Supabase Auth (email/password, Google OAuth, GitHub OAuth), AuthContext provider with forgot password flow
 - **Navigation**: Expo Router with tabs (Chats, Contacts, Discover, Me)
 - **Design**: AfuChat teal `#00C2CB` brand color, gold business badge `#D4A853`, Inter font family, dark/light theme, custom logo
+- **Badge System**: `is_organization_verified=true` → gold badge (#D4A853) + "Verified Business" tag. `is_verified=true` (subscription) → teal badge (#00C2CB), no business tag. Applied across me.tsx, discover.tsx, contacts.tsx, contact/[id].tsx, post/[id].tsx, admin/index.tsx.
+- **Cross-platform Alerts**: `lib/alert.ts` exports `showAlert()` — wraps `Alert.alert` on native, uses `window.confirm`/`window.prompt` on web. All screens use this instead of `Alert.alert` directly.
 - **Themes**: Dark theme uses pure `#000000` black. Light theme uses cream tones (`#FDF8F3` background). User can toggle via Appearance setting on Me tab (System/Dark/Light). ThemeContext with AsyncStorage persistence.
 - **Real-time**: Supabase Realtime subscriptions for incoming messages
 - **State**: React Context (AuthContext, ThemeContext) + local component state

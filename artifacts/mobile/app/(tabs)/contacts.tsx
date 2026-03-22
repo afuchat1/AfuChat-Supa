@@ -29,6 +29,7 @@ type Contact = {
   avatar_url: string | null;
   bio: string | null;
   is_verified: boolean;
+  is_organization_verified: boolean;
 };
 
 type Section = { title: string; data: Contact[] };
@@ -104,8 +105,11 @@ function ContactRow({ item }: { item: Contact }) {
       <View style={styles.rowContent}>
         <View style={styles.nameRow}>
           <Text style={[styles.name, { color: colors.text }]}>{item.display_name}</Text>
-          {item.is_verified && (
+          {item.is_organization_verified && (
             <Ionicons name="checkmark-circle" size={14} color={Colors.gold} style={{ marginLeft: 4 }} />
+          )}
+          {!item.is_organization_verified && item.is_verified && (
+            <Ionicons name="checkmark-circle" size={14} color={Colors.brand} style={{ marginLeft: 4 }} />
           )}
         </View>
         <Text style={[styles.handle, { color: colors.textSecondary }]} numberOfLines={1}>
@@ -135,7 +139,7 @@ export default function ContactsScreen() {
 
     const { data: followRows } = await supabase
       .from("follows")
-      .select("following_id, profiles!follows_following_id_fkey(id, display_name, handle, avatar_url, bio, is_verified)")
+      .select("following_id, profiles!follows_following_id_fkey(id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified)")
       .eq("follower_id", user.id);
 
     if (followRows) {
@@ -157,7 +161,7 @@ export default function ContactsScreen() {
     setAddResult(null);
     const { data } = await supabase
       .from("profiles")
-      .select("id, display_name, handle, avatar_url, bio, is_verified")
+      .select("id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified")
       .or(`handle.ilike.%${addQuery.trim()}%,display_name.ilike.%${addQuery.trim()}%`)
       .neq("id", user?.id)
       .limit(1)
@@ -253,8 +257,11 @@ export default function ContactsScreen() {
               <View style={{ flex: 1 }}>
                 <View style={styles.nameRow}>
                   <Text style={[styles.name, { color: colors.text }]}>{addResult.display_name}</Text>
-                  {addResult.is_verified && (
+                  {addResult.is_organization_verified && (
                     <Ionicons name="checkmark-circle" size={14} color={Colors.gold} style={{ marginLeft: 4 }} />
+                  )}
+                  {!addResult.is_organization_verified && addResult.is_verified && (
+                    <Ionicons name="checkmark-circle" size={14} color={Colors.brand} style={{ marginLeft: 4 }} />
                   )}
                 </View>
                 <Text style={[styles.handle, { color: colors.textSecondary }]}>@{addResult.handle}</Text>

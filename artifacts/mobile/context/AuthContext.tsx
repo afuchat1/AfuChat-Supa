@@ -21,6 +21,7 @@ type Profile = {
   language: string;
   tipping_enabled: boolean;
   is_admin: boolean;
+  is_organization_verified: boolean;
 };
 
 type Subscription = {
@@ -68,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [{ data: profileData }, { data: subData }] = await Promise.all([
       supabase
         .from("profiles")
-        .select("id, handle, display_name, avatar_url, banner_url, bio, phone_number, xp, acoin, current_grade, is_verified, is_private, show_online_status, country, website_url, language, tipping_enabled, is_admin")
+        .select("id, handle, display_name, avatar_url, banner_url, bio, phone_number, xp, acoin, current_grade, is_verified, is_private, show_online_status, country, website_url, language, tipping_enabled, is_admin, is_organization_verified")
         .eq("id", userId)
         .single(),
       supabase

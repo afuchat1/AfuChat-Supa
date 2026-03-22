@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -18,6 +17,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
 
 type Profile = {
   id: string;
@@ -26,6 +26,7 @@ type Profile = {
   avatar_url: string | null;
   bio: string | null;
   is_verified: boolean;
+  is_organization_verified: boolean;
   xp: number;
   current_grade: string;
   website_url: string | null;
@@ -76,7 +77,7 @@ export default function ContactProfileScreen() {
     if (!id || !user) return;
     supabase
       .from("profiles")
-      .select("id, display_name, handle, avatar_url, bio, is_verified, xp, current_grade, website_url, country, created_at")
+      .select("id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified, xp, current_grade, website_url, country, created_at")
       .eq("id", id)
       .single()
       .then(({ data }) => {
@@ -166,7 +167,7 @@ export default function ContactProfileScreen() {
       await supabase.from("blocked_users").delete().eq("blocker_id", user.id).eq("blocked_id", id);
       setIsBlocked(false);
     } else {
-      Alert.alert("Block User", `Block ${profile?.display_name}?`, [
+      showAlert("Block User", `Block ${profile?.display_name}?`, [
         { text: "Cancel", style: "cancel" },
         { text: "Block", style: "destructive", onPress: async () => {
           await supabase.from("blocked_users").insert({ blocker_id: user.id, blocked_id: id });
@@ -182,7 +183,7 @@ export default function ContactProfileScreen() {
 
   function reportUser() {
     if (!user || !id) return;
-    Alert.alert("Report User", "Why are you reporting this user?", [
+    showAlert("Report User", "Why are you reporting this user?", [
       { text: "Spam", onPress: () => submitReport("spam") },
       { text: "Harassment", onPress: () => submitReport("harassment") },
       { text: "Inappropriate Content", onPress: () => submitReport("inappropriate") },
@@ -193,8 +194,8 @@ export default function ContactProfileScreen() {
   async function submitReport(reason: string) {
     if (!user || !id) return;
     const { error } = await supabase.from("user_reports").insert({ reporter_id: user.id, reported_id: id, reason });
-    if (error) Alert.alert("Error", "Could not submit report.");
-    else Alert.alert("Reported", "Thank you for your report. We'll review it.");
+    if (error) showAlert("Error", "Could not submit report.");
+    else showAlert("Reported", "Thank you for your report. We'll review it.");
   }
 
   if (loading) {
@@ -221,25 +222,36 @@ export default function ContactProfileScreen() {
         <View style={[styles.profileHeader, { backgroundColor: colors.surface }]}>
           <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={90} />
 
-          <TouchableOpacity style={styles.nameRow} onPress={() => profile?.is_verified && setShowBadgeInfo(!showBadgeInfo)}>
+          <TouchableOpacity style={styles.nameRow} onPress={() => (profile?.is_verified || profile?.is_organization_verified) && setShowBadgeInfo(!showBadgeInfo)}>
             <Text style={[styles.displayName, { color: colors.text }]}>{profile?.display_name}</Text>
-            {profile?.is_verified && (
+            {profile?.is_organization_verified && (
               <View style={styles.goldBadge}>
                 <Ionicons name="checkmark-circle" size={20} color={Colors.gold} />
+              </View>
+            )}
+            {!profile?.is_organization_verified && profile?.is_verified && (
+              <View style={styles.goldBadge}>
+                <Ionicons name="checkmark-circle" size={20} color={Colors.brand} />
               </View>
             )}
           </TouchableOpacity>
 
           <Text style={[styles.handle, { color: colors.textSecondary }]}>@{profile?.handle}</Text>
 
-          {profile?.is_verified && (
+          {profile?.is_organization_verified && (
             <View style={styles.verifiedBadge}>
               <Ionicons name="shield-checkmark" size={14} color="#fff" />
               <Text style={styles.verifiedBadgeText}>Verified Business</Text>
             </View>
           )}
+          {!profile?.is_organization_verified && profile?.is_verified && (
+            <View style={[styles.verifiedBadge, { backgroundColor: Colors.brand }]}>
+              <Ionicons name="checkmark-circle" size={14} color="#fff" />
+              <Text style={styles.verifiedBadgeText}>Verified</Text>
+            </View>
+          )}
 
-          {showBadgeInfo && profile?.is_verified && (
+          {showBadgeInfo && profile?.is_organization_verified && (
             <View style={[styles.badgeInfoCard, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
               <Text style={[styles.badgeInfoTitle, { color: colors.text }]}>Verification Details</Text>
               <View style={styles.badgeInfoRow}>
@@ -253,6 +265,19 @@ export default function ContactProfileScreen() {
               <View style={styles.badgeInfoRow}>
                 <Ionicons name="checkmark-done" size={14} color={Colors.gold} />
                 <Text style={[styles.badgeInfoText, { color: colors.textSecondary }]}>Identity Confirmed by AfuChat</Text>
+              </View>
+            </View>
+          )}
+          {showBadgeInfo && !profile?.is_organization_verified && profile?.is_verified && (
+            <View style={[styles.badgeInfoCard, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+              <Text style={[styles.badgeInfoTitle, { color: colors.text }]}>Verification Details</Text>
+              <View style={styles.badgeInfoRow}>
+                <Ionicons name="checkmark-circle" size={14} color={Colors.brand} />
+                <Text style={[styles.badgeInfoText, { color: colors.textSecondary }]}>Verified Account</Text>
+              </View>
+              <View style={styles.badgeInfoRow}>
+                <Ionicons name="diamond" size={14} color={Colors.brand} />
+                <Text style={[styles.badgeInfoText, { color: colors.textSecondary }]}>Premium Subscription Verified</Text>
               </View>
             </View>
           )}

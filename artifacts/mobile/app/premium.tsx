@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,6 +15,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
 
 type Plan = {
   id: string;
@@ -76,14 +76,14 @@ export default function PremiumScreen() {
     if (!plan) return;
 
     if ((profile.acoin || 0) < plan.acoin_price) {
-      Alert.alert("Insufficient ACoin", `You need ${plan.acoin_price} ACoin but only have ${profile.acoin || 0}. Go to Wallet to convert Nexa to ACoin.`, [
+      showAlert("Insufficient ACoin", `You need ${plan.acoin_price} ACoin but only have ${profile.acoin || 0}. Go to Wallet to convert Nexa to ACoin.`, [
         { text: "Cancel", style: "cancel" },
         { text: "Go to Wallet", onPress: () => router.push("/wallet") },
       ]);
       return;
     }
 
-    Alert.alert(
+    showAlert(
       "Confirm Subscription",
       `Subscribe to ${plan.name} for ${plan.acoin_price} ACoin?\nDuration: ${plan.duration_days} days`,
       [
@@ -99,7 +99,7 @@ export default function PremiumScreen() {
             }).eq("id", profile.id).gte("acoin", plan.acoin_price);
 
             if (deductError) {
-              Alert.alert("Error", "Could not deduct ACoin. Please try again.");
+              showAlert("Error", "Could not deduct ACoin. Please try again.");
               setSubscribing(false);
               return;
             }
@@ -120,7 +120,7 @@ export default function PremiumScreen() {
               await supabase.from("profiles").update({
                 acoin: (profile.acoin || 0),
               }).eq("id", profile.id);
-              Alert.alert("Error", "Could not activate subscription. Your ACoin has been refunded.");
+              showAlert("Error", "Could not activate subscription. Your ACoin has been refunded.");
               setSubscribing(false);
               return;
             }
@@ -134,7 +134,7 @@ export default function PremiumScreen() {
 
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             await refreshProfile();
-            Alert.alert("Welcome to Premium!", `Your ${plan.name} subscription is now active for ${plan.duration_days} days.`, [
+            showAlert("Welcome to Premium!", `Your ${plan.name} subscription is now active for ${plan.duration_days} days.`, [
               { text: "Awesome!", onPress: () => router.back() },
             ]);
             setSubscribing(false);

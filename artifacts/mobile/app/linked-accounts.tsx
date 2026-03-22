@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,6 +17,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
 
 type LinkedAccount = {
   id: string;
@@ -82,7 +82,7 @@ export default function LinkedAccountsScreen() {
     }
 
     if (error) {
-      Alert.alert("Error", "Could not load linked accounts.");
+      showAlert("Error", "Could not load linked accounts.");
     }
 
     setAccounts(linked);
@@ -99,7 +99,7 @@ export default function LinkedAccountsScreen() {
 
   async function handleLinkAccount() {
     if (!linkHandle.trim() || !user) {
-      Alert.alert("Missing field", "Please enter the @handle of the account you want to link.");
+      showAlert("Missing field", "Please enter the @handle of the account you want to link.");
       return;
     }
     setLinking(true);
@@ -113,20 +113,20 @@ export default function LinkedAccountsScreen() {
       .single();
 
     if (lookupErr || !targetProfile) {
-      Alert.alert("Not Found", `No account found with handle @${handle}.`);
+      showAlert("Not Found", `No account found with handle @${handle}.`);
       setLinking(false);
       return;
     }
 
     if (targetProfile.id === user.id) {
-      Alert.alert("Same Account", "You can't link your own account.");
+      showAlert("Same Account", "You can't link your own account.");
       setLinking(false);
       return;
     }
 
     const existing = accounts.find((a) => a.linked_user_id === targetProfile.id);
     if (existing) {
-      Alert.alert("Already Linked", `@${handle} is already linked.`);
+      showAlert("Already Linked", `@${handle} is already linked.`);
       setLinking(false);
       return;
     }
@@ -138,13 +138,13 @@ export default function LinkedAccountsScreen() {
 
     if (linkErr) {
       if (linkErr.code === "23505") {
-        Alert.alert("Already Linked", "This account is already linked.");
+        showAlert("Already Linked", "This account is already linked.");
       } else {
-        Alert.alert("Error", linkErr.message);
+        showAlert("Error", linkErr.message);
       }
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Linked!", `@${targetProfile.handle} has been linked. Sign out and sign in with that account to switch.`);
+      showAlert("Linked!", `@${targetProfile.handle} has been linked. Sign out and sign in with that account to switch.`);
       loadLinkedAccounts();
     }
 
@@ -155,7 +155,7 @@ export default function LinkedAccountsScreen() {
 
   function handleSwitchAccount(account: LinkedAccount) {
     if (account.is_current) return;
-    Alert.alert(
+    showAlert(
       "Switch Account",
       `To switch to @${account.handle}, sign out and sign in with that account's credentials.`,
       [
@@ -173,10 +173,10 @@ export default function LinkedAccountsScreen() {
 
   async function handleRemoveAccount(account: LinkedAccount) {
     if (account.is_current) {
-      Alert.alert("Cannot Remove", "You cannot remove the currently active account.");
+      showAlert("Cannot Remove", "You cannot remove the currently active account.");
       return;
     }
-    Alert.alert("Remove Account", `Remove @${account.handle} from linked accounts?`, [
+    showAlert("Remove Account", `Remove @${account.handle} from linked accounts?`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Remove",
@@ -184,7 +184,7 @@ export default function LinkedAccountsScreen() {
         onPress: async () => {
           const { error } = await supabase.from("linked_accounts").delete().eq("id", account.id);
           if (error) {
-            Alert.alert("Error", error.message);
+            showAlert("Error", error.message);
           } else {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             loadLinkedAccounts();

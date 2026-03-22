@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -21,12 +20,13 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
 
 type Reply = {
   id: string;
   content: string;
   created_at: string;
-  author: { id: string; display_name: string; avatar_url: string | null; handle: string; is_verified: boolean };
+  author: { id: string; display_name: string; avatar_url: string | null; handle: string; is_verified: boolean; is_organization_verified: boolean };
 };
 
 type PostData = {
@@ -36,7 +36,7 @@ type PostData = {
   images: string[];
   created_at: string;
   view_count: number;
-  author: { id: string; display_name: string; avatar_url: string | null; handle: string; is_verified: boolean };
+  author: { id: string; display_name: string; avatar_url: string | null; handle: string; is_verified: boolean; is_organization_verified: boolean };
   liked: boolean;
   likeCount: number;
   replyCount: number;
@@ -66,7 +66,7 @@ export default function PostDetailScreen() {
     const { data } = await supabase
       .from("posts")
       .select(`id, content, image_url, created_at, view_count,
-        profiles!posts_author_id_fkey(id, display_name, avatar_url, handle, is_verified),
+        profiles!posts_author_id_fkey(id, display_name, avatar_url, handle, is_verified, is_organization_verified),
         post_images(image_url, display_order)`)
       .eq("id", id)
       .single();
@@ -115,7 +115,7 @@ export default function PostDetailScreen() {
     if (!id) return;
     const { data } = await supabase
       .from("post_replies")
-      .select("id, content, created_at, profiles!post_replies_author_id_fkey(id, display_name, avatar_url, handle, is_verified)")
+      .select("id, content, created_at, profiles!post_replies_author_id_fkey(id, display_name, avatar_url, handle, is_verified, is_organization_verified)")
       .eq("post_id", id)
       .order("created_at", { ascending: true })
       .limit(50);
@@ -142,7 +142,7 @@ export default function PostDetailScreen() {
   async function sendReply() {
     if (!replyText.trim() || !user || sending) return;
     if (replyText.trim().length > 280) {
-      Alert.alert("Too long", "Replies are limited to 280 characters.");
+      showAlert("Too long", "Replies are limited to 280 characters.");
       return;
     }
     setSending(true);
@@ -154,7 +154,7 @@ export default function PostDetailScreen() {
       content,
     });
     if (error) {
-      Alert.alert("Error", "Could not post reply.");
+      showAlert("Error", "Could not post reply.");
     } else {
       setReplyText("");
       setPost((p) => p ? { ...p, replyCount: p.replyCount + 1 } : p);
@@ -190,7 +190,8 @@ export default function PostDetailScreen() {
               <View style={{ flex: 1 }}>
                 <View style={styles.nameRow}>
                   <Text style={[styles.authorName, { color: colors.text }]}>{post.author.display_name}</Text>
-                  {post.author.is_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.gold} style={{ marginLeft: 4 }} />}
+                  {post.author.is_organization_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.gold} style={{ marginLeft: 4 }} />}
+                  {!post.author.is_organization_verified && post.author.is_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.brand} style={{ marginLeft: 4 }} />}
                 </View>
                 <Text style={[styles.authorHandle, { color: colors.textSecondary }]}>@{post.author.handle}</Text>
               </View>
@@ -235,7 +236,8 @@ export default function PostDetailScreen() {
             <View style={{ flex: 1 }}>
               <View style={styles.replyHeader}>
                 <Text style={[styles.replyName, { color: colors.text }]}>{item.author.display_name}</Text>
-                {item.author.is_verified && <Ionicons name="checkmark-circle" size={12} color={Colors.gold} style={{ marginLeft: 3 }} />}
+                {item.author.is_organization_verified && <Ionicons name="checkmark-circle" size={12} color={Colors.gold} style={{ marginLeft: 3 }} />}
+                {!item.author.is_organization_verified && item.author.is_verified && <Ionicons name="checkmark-circle" size={12} color={Colors.brand} style={{ marginLeft: 3 }} />}
                 <Text style={[styles.replyTime, { color: colors.textMuted }]}> {timeAgo(item.created_at)}</Text>
               </View>
               <Text style={[styles.replyContent, { color: colors.text }]}>{item.content}</Text>

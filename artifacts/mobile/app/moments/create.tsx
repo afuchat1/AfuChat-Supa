@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -20,6 +19,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
 
 export default function CreatePostScreen() {
   const { colors } = useTheme();
@@ -43,11 +43,11 @@ export default function CreatePostScreen() {
 
   async function handlePost() {
     if (!content.trim()) {
-      Alert.alert("Empty post", "Write something to share.");
+      showAlert("Empty post", "Write something to share.");
       return;
     }
     if (content.trim().length > 280) {
-      Alert.alert("Too long", "Posts are limited to 280 characters.");
+      showAlert("Too long", "Posts are limited to 280 characters.");
       return;
     }
     if (!user) return;
@@ -67,7 +67,7 @@ export default function CreatePostScreen() {
 
     if (error || !post) {
       setLoading(false);
-      Alert.alert("Error", "Could not create post. Please try again.");
+      showAlert("Error", "Could not create post. Please try again.");
       return;
     }
 

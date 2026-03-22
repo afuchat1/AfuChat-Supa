@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Modal,
   RefreshControl,
@@ -19,6 +18,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
 
 type Transaction = {
   id: string;
@@ -88,17 +88,17 @@ export default function WalletScreen() {
   async function sendNexa() {
     if (!transferHandle.trim() || !transferAmount.trim() || !user) return;
     const amt = parseInt(transferAmount);
-    if (isNaN(amt) || amt <= 0) { Alert.alert("Invalid", "Enter a valid amount."); return; }
-    if (amt > (profile?.xp || 0)) { Alert.alert("Insufficient Nexa", "You don't have enough Nexa."); return; }
+    if (isNaN(amt) || amt <= 0) { showAlert("Invalid", "Enter a valid amount."); return; }
+    if (amt > (profile?.xp || 0)) { showAlert("Insufficient Nexa", "You don't have enough Nexa."); return; }
     setSending(true);
 
     const { data: recipient } = await supabase.from("profiles").select("id, display_name").eq("handle", transferHandle.trim().toLowerCase()).single();
-    if (!recipient) { Alert.alert("Not found", "User not found."); setSending(false); return; }
+    if (!recipient) { showAlert("Not found", "User not found."); setSending(false); return; }
 
     const { error } = await supabase.from("xp_transfers").insert({ sender_id: user.id, receiver_id: recipient.id, amount: amt, message: transferMsg.trim() || null });
-    if (error) { Alert.alert("Error", error.message); } else {
+    if (error) { showAlert("Error", error.message); } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Sent!", `${amt} Nexa sent to ${recipient.display_name}`);
+      showAlert("Sent!", `${amt} Nexa sent to ${recipient.display_name}`);
       setShowTransfer(false);
       setTransferHandle("");
       setTransferAmount("");
@@ -112,16 +112,16 @@ export default function WalletScreen() {
   async function convertNexaToAcoin() {
     if (!convertAmount.trim() || !user || !currencySettings || !profile) return;
     const nexaAmt = parseInt(convertAmount);
-    if (isNaN(nexaAmt) || nexaAmt <= 0) { Alert.alert("Invalid", "Enter a valid Nexa amount."); return; }
-    if (nexaAmt > (profile.xp || 0)) { Alert.alert("Insufficient Nexa", `You only have ${profile.xp} Nexa.`); return; }
+    if (isNaN(nexaAmt) || nexaAmt <= 0) { showAlert("Invalid", "Enter a valid Nexa amount."); return; }
+    if (nexaAmt > (profile.xp || 0)) { showAlert("Insufficient Nexa", `You only have ${profile.xp} Nexa.`); return; }
 
     const rawAcoin = nexaAmt / currencySettings.nexa_to_acoin_rate;
     const fee = Math.ceil(rawAcoin * (currencySettings.conversion_fee_percent / 100));
     const netAcoin = Math.floor(rawAcoin - fee);
 
-    if (netAcoin <= 0) { Alert.alert("Too Low", "Amount too small after fee. Try a larger amount."); return; }
+    if (netAcoin <= 0) { showAlert("Too Low", "Amount too small after fee. Try a larger amount."); return; }
 
-    Alert.alert(
+    showAlert(
       "Confirm Conversion",
       `Convert ${nexaAmt} Nexa → ${netAcoin} ACoin?\n\nRate: ${currencySettings.nexa_to_acoin_rate} Nexa = 1 ACoin\nFee: ${currencySettings.conversion_fee_percent}% (${fee} ACoin)`,
       [
@@ -137,7 +137,7 @@ export default function WalletScreen() {
             }).eq("id", profile.id);
 
             if (deductErr) {
-              Alert.alert("Error", deductErr.message);
+              showAlert("Error", deductErr.message);
               setConverting(false);
               return;
             }
@@ -152,7 +152,7 @@ export default function WalletScreen() {
             });
 
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            Alert.alert("Converted!", `${nexaAmt} Nexa → ${netAcoin} ACoin`);
+            showAlert("Converted!", `${nexaAmt} Nexa → ${netAcoin} ACoin`);
             setShowConvert(false);
             setConvertAmount("");
             refreshProfile();
