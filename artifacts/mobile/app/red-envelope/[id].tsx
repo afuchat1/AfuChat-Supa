@@ -17,6 +17,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { notifyGiftReceived } from "@/lib/notifyUser";
 
 type Envelope = {
   id: string;
@@ -117,6 +118,13 @@ export default function RedEnvelopeScreen() {
         remaining_amount: envelope.remaining_amount - amount,
         remaining_count: envelope.remaining_count - 1,
       }).eq("id", envelope.id);
+      if (envelope.sender_id !== user.id) {
+        notifyGiftReceived({
+          recipientId: envelope.sender_id,
+          senderName: "Someone",
+          giftName: `opened your red envelope (${amount} Nexa)`,
+        });
+      }
       load();
     }
     setClaiming(false);

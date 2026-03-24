@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -379,6 +379,19 @@ export default function ChatsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [showContactPicker, setShowContactPicker] = useState(false);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("is_read", false)
+        .then(({ count }) => setUnreadNotifCount(count || 0));
+    }, [user])
+  );
 
   const loadChats = useCallback(async () => {
     if (!user) return;
@@ -474,6 +487,14 @@ export default function ChatsScreen() {
         ]}
       >
         <Text style={[styles.headerTitle, { color: colors.text, textAlign: "center", flex: 1 }]}>AfuChat</Text>
+        <TouchableOpacity onPress={() => router.push("/notifications")} style={styles.headerIcon}>
+          <Ionicons name="notifications-outline" size={22} color={colors.text} />
+          {unreadNotifCount > 0 && (
+            <View style={styles.notifBadge}>
+              <Text style={styles.notifBadgeText}>{unreadNotifCount > 99 ? "99+" : unreadNotifCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       <View style={[styles.searchWrap, { backgroundColor: colors.surface }]}>
@@ -557,6 +578,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
+  headerIcon: { padding: 4, position: "relative" },
+  notifBadge: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    backgroundColor: "#FF3B30",
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  notifBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
   searchWrap: { paddingHorizontal: 12, paddingVertical: 8 },
   searchBox: {
     flexDirection: "row",

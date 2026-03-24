@@ -15,6 +15,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { PushNotificationManager } from "@/components/PushNotificationManager";
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { setBaseUrl } from "@workspace/api-client-react";
@@ -89,6 +90,7 @@ export default function RootLayout() {
             <KeyboardProvider>
               <ThemeProvider>
                 <AuthProvider>
+                  <PushNotificationManager />
                   <RootLayoutNav />
                 </AuthProvider>
               </ThemeProvider>

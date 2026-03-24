@@ -21,6 +21,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { notifyPostLike, notifyPostReply } from "@/lib/notifyUser";
 
 type Reply = {
   id: string;
@@ -52,7 +53,7 @@ function timeAgo(iso: string): string {
 
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user, profile: myProfile } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [post, setPost] = useState<PostData | null>(null);
@@ -135,7 +136,16 @@ export default function PostDetailScreen() {
       if (!error) setPost({ ...post, liked: false, likeCount: Math.max(0, post.likeCount - 1) });
     } else {
       const { error } = await supabase.from("post_acknowledgments").insert({ post_id: post.id, user_id: user.id });
-      if (!error) setPost({ ...post, liked: true, likeCount: post.likeCount + 1 });
+      if (!error) {
+        setPost({ ...post, liked: true, likeCount: post.likeCount + 1 });
+        if (post.author.id !== user.id) {
+          notifyPostLike({
+            postAuthorId: post.author.id,
+            likerName: myProfile?.display_name || "Someone",
+            postId: post.id,
+          });
+        }
+      }
     }
   }
 
@@ -159,6 +169,14 @@ export default function PostDetailScreen() {
       setReplyText("");
       setPost((p) => p ? { ...p, replyCount: p.replyCount + 1 } : p);
       loadReplies();
+      if (post && post.author.id !== user.id) {
+        notifyPostReply({
+          postAuthorId: post.author.id,
+          replierName: myProfile?.display_name || "Someone",
+          postId: post.id,
+          replyPreview: content,
+        });
+      }
     }
     setSending(false);
   }

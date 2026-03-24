@@ -18,6 +18,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { notifyNewFollow } from "@/lib/notifyUser";
 
 type Profile = {
   id: string;
@@ -61,7 +62,7 @@ function formatJoinDate(iso: string | null): string {
 export default function ContactProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
-  const { user } = useAuth();
+  const { user, profile: myProfile } = useAuth();
   const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -158,6 +159,10 @@ export default function ContactProfileScreen() {
       await supabase.from("follows").insert({ follower_id: user.id, following_id: id });
       setIsFollowing(true);
       setFollowerCount((c) => c + 1);
+      notifyNewFollow({
+        targetUserId: id as string,
+        followerName: myProfile?.display_name || "Someone",
+      });
     }
   }
 

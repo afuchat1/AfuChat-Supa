@@ -12,106 +12,148 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
-    const { userId, title, body, url } = await req.json();
-    
-    // Input validation
-    if (!userId || typeof userId !== 'string') {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'User ID is required and must be a string' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    if (!title || typeof title !== 'string') {
-      return new Response(
-        JSON.stringify({ error: 'Title is required and must be a string' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    if (title.trim().length === 0 || title.length > 100) {
-      return new Response(
-        JSON.stringify({ error: 'Title must be between 1 and 100 characters' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    if (!body || typeof body !== 'string') {
-      return new Response(
-        JSON.stringify({ error: 'Body is required and must be a string' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    if (body.trim().length === 0 || body.length > 200) {
-      return new Response(
-        JSON.stringify({ error: 'Body must be between 1 and 200 characters' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    // URL validation - must be a relative path for security
-    if (url && typeof url !== 'string') {
-      return new Response(
-        JSON.stringify({ error: 'URL must be a string' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    if (url && (!url.startsWith('/') || url.includes('..') || url.includes('//') || url.includes('http'))) {
-      return new Response(
-        JSON.stringify({ error: 'URL must be a valid relative path starting with /' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'Authorization required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Get user's push subscriptions
-    const { data: subscriptions, error: subError } = await supabaseClient
-      .from('push_subscriptions')
-      .select('subscription')
-      .eq('user_id', userId);
-
-    if (subError) throw subError;
-
-    const vapidPublicKey = Deno.env.get('VITE_VAPID_PUBLIC_KEY');
-    const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY');
-
-    if (!vapidPublicKey || !vapidPrivateKey) {
-      throw new Error('VAPID keys not configured');
-    }
-
-    // Send push notification to each subscription
-    const promises = subscriptions?.map(async (sub) => {
-      try {
-        const subscription = sub.subscription as any;
-        const payload = JSON.stringify({ title, body, url });
-
-        // Use web-push library to send notification
-        const response = await fetch(subscription.endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'TTL': '86400',
-          },
-          body: payload,
-        });
-
-        return { success: response.ok };
-      } catch (error) {
-        console.error('Failed to send push:', error);
-        return { success: false, error };
-      }
+    const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY') ?? '', {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false },
     });
 
-    const results = await Promise.all(promises || []);
+    const { data: { user: caller }, error: authError } = await userClient.auth.getUser();
+    if (authError || !caller) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid or expired token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false },
+    });
+
+    const { userId, userIds, title, body, data } = await req.json();
+
+    if (!title || typeof title !== 'string' || title.trim().length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'Title is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!body || typeof body !== 'string' || body.trim().length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'Body is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const targetIds: string[] = userIds || (userId ? [userId] : []);
+    if (targetIds.length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'userId or userIds is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (targetIds.length > 100) {
+      return new Response(
+        JSON.stringify({ error: 'Maximum 100 recipients per request' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (targetIds.includes(caller.id)) {
+      const filtered = targetIds.filter(id => id !== caller.id);
+      if (filtered.length === 0) {
+        return new Response(
+          JSON.stringify({ sent: 0, total: 0 }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    const { data: profiles, error: profileError } = await adminClient
+      .from('profiles')
+      .select('id, expo_push_token')
+      .in('id', targetIds.filter(id => id !== caller.id))
+      .not('expo_push_token', 'is', null);
+
+    if (profileError) throw profileError;
+
+    if (!profiles || profiles.length === 0) {
+      return new Response(
+        JSON.stringify({ sent: 0, total: 0 }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { data: prefRows } = await adminClient
+      .from('notification_preferences')
+      .select('user_id, push_enabled')
+      .in('user_id', profiles.map(p => p.id));
+
+    const disabledUsers = new Set(
+      (prefRows || []).filter(p => p.push_enabled === false).map(p => p.user_id)
+    );
+
+    const tokens = profiles
+      .filter(p => !disabledUsers.has(p.id))
+      .map(p => p.expo_push_token)
+      .filter(Boolean);
+
+    if (tokens.length === 0) {
+      return new Response(
+        JSON.stringify({ sent: 0, total: 0 }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const messages = tokens.map(token => ({
+      to: token,
+      title: title.substring(0, 100),
+      body: body.substring(0, 200),
+      data: data || {},
+      sound: 'default' as const,
+      badge: 1,
+    }));
+
+    const chunks: typeof messages[] = [];
+    for (let i = 0; i < messages.length; i += 100) {
+      chunks.push(messages.slice(i, i + 100));
+    }
+
+    let sent = 0;
+    for (const chunk of chunks) {
+      const response = await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Accept-Encoding': 'gzip, deflate',
+        },
+        body: JSON.stringify(chunk),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const tickets = result.data || [];
+        sent += tickets.filter((t: any) => t.status === 'ok').length;
+      } else {
+        console.error('Expo push error:', response.status, await response.text());
+      }
+    }
 
     return new Response(
-      JSON.stringify({ sent: results.filter(r => r.success).length, total: results.length }),
+      JSON.stringify({ sent, total: tokens.length }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {

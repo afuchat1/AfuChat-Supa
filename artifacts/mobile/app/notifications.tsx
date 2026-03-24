@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Platform,
   RefreshControl,
   StyleSheet,
   Text,
@@ -16,6 +17,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
+import { clearBadge } from "@/lib/pushNotifications";
 
 type NotifItem = {
   id: string;
@@ -66,7 +68,10 @@ export default function NotificationsScreen() {
     setRefreshing(false);
   }, [user]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    if (Platform.OS !== "web") clearBadge();
+  }, [load]);
 
   async function markRead(id: string) {
     await supabase.from("notifications").update({ is_read: true }).eq("id", id);

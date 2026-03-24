@@ -79,6 +79,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - **Chat Attachments**: Messages support image, video, audio, file, and gif attachment types. Video uses `expo-av` Video component with native controls. Audio messages use expo-av playback.
 - **Stories**: View screen has animated progress bars, auto-advance timer (5s for images, video duration for video stories), and hold-to-pause. Create screen supports both image and video preview.
 - **Themes**: Dark theme uses pure `#000000` black. Light theme uses cream tones (`#FDF8F3` background). User can toggle via Appearance setting on Me tab (System/Dark/Light). ThemeContext with AsyncStorage persistence.
+- **Push Notifications**: Expo Push Notifications via `expo-notifications` + `expo-device`. Token stored in `profiles.expo_push_token`. Edge function `send-push-notification` uses Expo Push API with JWT auth verification (caller must be authenticated). Notifications triggered client-side for: new messages, follows, post likes, post replies, red envelope claims. Badge cleared on app active + opening Notifications screen. Token cleared on sign-out.
 - **Real-time**: Supabase Realtime subscriptions for incoming messages
 - **State**: React Context (AuthContext, ThemeContext) + local component state
 - **Premium**: Uses `user_subscriptions` table (NOT `profiles.is_premium`). Plans loaded from `subscription_plans` table. Payment via ACoin. AuthContext exposes `isPremium`, `subscription` fields.
@@ -122,6 +123,9 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `app/settings/notifications.tsx` — Notification preferences
 - `app/settings/chat.tsx` — Chat preferences (theme, bubble, font, read receipts)
 - `app/settings/blocked.tsx` — Blocked users management
+- `lib/pushNotifications.ts` — Push notification registration, permission, badge, tap navigation, token management
+- `lib/notifyUser.ts` — Notification trigger helpers (messages, follows, likes, replies, gifts) via authenticated Supabase Edge Function calls
+- `components/PushNotificationManager.tsx` — Null component wired into root layout for notification setup
 
 ## TypeScript & Composite Projects
 

@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { getStoredAccounts, storeAccount, removeStoredAccount, updateAccountTokens, type StoredAccount } from "@/lib/accountStore";
 import { cacheProfile, getCachedProfile } from "@/lib/offlineStore";
 import { startOfflineSync } from "@/lib/offlineSync";
+import { clearPushToken } from "@/lib/pushNotifications";
 
 type Profile = {
   id: string;
@@ -264,6 +265,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [session, profile]);
 
   const signOut = async () => {
+    if (user) {
+      await clearPushToken(user.id);
+    }
     await supabase.auth.signOut();
   };
 

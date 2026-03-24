@@ -28,6 +28,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { notifyNewMessage } from "@/lib/notifyUser";
 
 type Gift = {
   id: string;
@@ -341,7 +342,7 @@ export default function ChatScreen() {
     contactAvatar?: string;
   }>();
   const isDraft = id === "new";
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -595,6 +596,22 @@ export default function ChatScreen() {
         prev.map((m) => (m.id === tempId ? { ...m, id: msg.id, sent_at: msg.sent_at, status: "sent" } : m))
       );
       await supabase.from("chats").update({ updated_at: now }).eq("id", activeChatId);
+
+      const { data: members } = await supabase
+        .from("chat_members")
+        .select("user_id")
+        .eq("chat_id", activeChatId)
+        .neq("user_id", user.id);
+      if (members && members.length > 0) {
+        notifyNewMessage({
+          recipientIds: members.map((m: any) => m.user_id),
+          senderName: profile?.display_name || "Someone",
+          messageText: text,
+          chatId: activeChatId,
+          isGroup: chatInfo?.is_group,
+          groupName: chatInfo?.name || undefined,
+        });
+      }
     }
     setSending(false);
     if (!isDraft) {
