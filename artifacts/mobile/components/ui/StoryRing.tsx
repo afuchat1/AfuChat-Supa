@@ -12,7 +12,8 @@ type Props = {
 
 export function StoryRing({ size, storyCount, seenCount, children }: Props) {
   const strokeWidth = 2.5;
-  const gap = storyCount > 1 ? 6 : 0;
+  const maxSegments = Math.min(storyCount, 30);
+  const gap = maxSegments > 1 ? Math.min(6, (2 * Math.PI * ((size + strokeWidth * 2 + 4 - strokeWidth) / 2)) / (maxSegments * 3)) : 0;
   const outerSize = size + strokeWidth * 2 + 4;
   const radius = (outerSize - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -22,13 +23,13 @@ export function StoryRing({ size, storyCount, seenCount, children }: Props) {
     return <View style={{ padding: strokeWidth + 2 }}>{children}</View>;
   }
 
-  const totalGapLength = gap * storyCount;
+  const totalGapLength = gap * maxSegments;
   const availableLength = circumference - totalGapLength;
-  const segmentLength = availableLength / storyCount;
-  const gapLength = storyCount > 1 ? gap : 0;
+  const segmentLength = availableLength / maxSegments;
+  const gapLength = maxSegments > 1 ? gap : 0;
 
   const segments = [];
-  for (let i = 0; i < storyCount; i++) {
+  for (let i = 0; i < maxSegments; i++) {
     const isSeen = i < seenCount;
     const offset = i * (segmentLength + gapLength);
     segments.push(
