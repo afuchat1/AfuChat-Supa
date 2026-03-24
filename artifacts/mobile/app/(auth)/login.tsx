@@ -17,7 +17,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
-import * as Linking from "expo-linking";
+import { makeRedirectUri } from "expo-auth-session";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
@@ -124,7 +124,11 @@ export default function LoginScreen() {
   async function handleOAuth(provider: "google" | "github") {
     try {
       setOauthLoading(provider);
-      const redirectUrl = Linking.createURL("/(auth)/login");
+
+      const redirectUrl = makeRedirectUri({
+        scheme: "afuchat",
+        path: "(auth)/login",
+      });
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
@@ -143,11 +147,22 @@ export default function LoginScreen() {
       if (data?.url) {
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {
           showInRecents: false,
-          preferEphemeralSession: false,
         });
 
         if (result.type === "success" && result.url) {
           const url = new URL(result.url);
+
+          const code = url.searchParams.get("code");
+          if (code) {
+            const { error: codeError } = await supabase.auth.exchangeCodeForSession(code);
+            if (codeError) {
+              showAlert("Error", codeError.message);
+            } else {
+              router.replace("/(tabs)");
+              setOauthLoading(null);
+              return;
+            }
+          }
 
           let accessToken: string | null = null;
           let refreshToken: string | null = null;
@@ -159,9 +174,8 @@ export default function LoginScreen() {
           }
 
           if (!accessToken) {
-            const searchParams = url.searchParams;
-            accessToken = searchParams.get("access_token");
-            refreshToken = searchParams.get("refresh_token");
+            accessToken = url.searchParams.get("access_token");
+            refreshToken = url.searchParams.get("refresh_token");
           }
 
           if (accessToken && refreshToken) {
@@ -174,16 +188,6 @@ export default function LoginScreen() {
               showAlert("Error", sessionError.message);
             } else {
               router.replace("/(tabs)");
-            }
-          } else {
-            const code = url.searchParams.get("code");
-            if (code) {
-              const { error: codeError } = await supabase.auth.exchangeCodeForSession(code);
-              if (codeError) {
-                showAlert("Error", codeError.message);
-              } else {
-                router.replace("/(tabs)");
-              }
             }
           }
         }
