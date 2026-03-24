@@ -17,7 +17,6 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { Separator } from "@/components/ui/Separator";
 import Colors from "@/constants/colors";
-import { showAlert } from "@/lib/alert";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -67,22 +66,8 @@ function MenuGroup({ children }: { children: React.ReactNode }) {
 
 export default function MeScreen() {
   const { colors, isDark, themeMode, setThemeMode } = useTheme();
-  const { profile, isPremium, subscription, signOut } = useAuth();
+  const { profile, isPremium, subscription } = useAuth();
   const insets = useSafeAreaInsets();
-
-  function handleSignOut() {
-    showAlert("Sign Out", "Are you sure you want to sign out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign Out",
-        style: "destructive",
-        onPress: async () => {
-          await signOut();
-          router.replace("/(auth)/login");
-        },
-      },
-    ]);
-  }
 
   function cycleTheme() {
     Haptics.selectionAsync();
@@ -269,16 +254,6 @@ export default function MeScreen() {
           />
         </MenuGroup>
       )}
-
-      <MenuGroup>
-        <MenuItem
-          icon="log-out-outline"
-          iconBg="#FF3B30"
-          label="Sign Out"
-          onPress={handleSignOut}
-          danger
-        />
-      </MenuGroup>
 
       <View style={styles.versionRow}>
         <Image source={afuSymbol} style={{ width: 22, height: 22, tintColor: Colors.brand }} resizeMode="contain" />
