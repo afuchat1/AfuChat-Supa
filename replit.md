@@ -127,6 +127,14 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `lib/notifyUser.ts` — Notification trigger helpers (messages, follows, likes, replies, gifts) via authenticated Supabase Edge Function calls
 - `components/PushNotificationManager.tsx` — Null component wired into root layout for notification setup
 
+## Supabase Edge Functions
+
+- `send-push-notification` — Expo Push API for mobile push notifications (JWT auth, batch support, channel routing)
+- `send-password-reset` — Custom email hook for ALL Supabase auth emails (recovery, signup, magic link, email change, reauthentication, invite). Sends via Resend from `noreply@afuchat.com` with branded templates + AfuChat Technologies Ltd footer. Deployed with `--no-verify-jwt` (uses webhook signature instead).
+- `send-marketing-email` — Admin-only marketing/notification email system. Templates: welcome, inactive_reminder, new_feature, weekly_digest, special_offer, custom. Supports `toAll` or targeted `userIds`. Batched 50/batch with 1s delays. Paginated user fetching.
+- `ai-chat` — AI assistant powered by Lovable gateway (Gemini 2.5 Flash)
+- `generate-ai-image` — AI image generation
+
 ## TypeScript & Composite Projects
 
 Every package extends `tsconfig.base.json` which sets `composite: true`. The root `tsconfig.json` lists all packages as project references. This means:
