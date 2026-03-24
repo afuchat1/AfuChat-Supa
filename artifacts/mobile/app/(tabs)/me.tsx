@@ -1,12 +1,12 @@
 import React from "react";
 import {
+  Image,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import AfuChatIcon from "@/components/icons/AfuChatIcon";
 
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -18,6 +18,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Separator } from "@/components/ui/Separator";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+
+const afuSymbol = require("@/assets/images/afu-symbol.png");
 
 
 type MenuItemProps = {
@@ -279,7 +281,7 @@ export default function MeScreen() {
       </MenuGroup>
 
       <View style={styles.versionRow}>
-        <AfuChatIcon size={22} color={colors.textMuted} />
+        <Image source={afuSymbol} style={{ width: 22, height: 22 }} resizeMode="contain" />
         <Text style={[styles.version, { color: colors.textMuted }]}>AfuChat v1.0.0</Text>
       </View>
     </ScrollView>

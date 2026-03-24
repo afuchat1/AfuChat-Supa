@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -11,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import AfuChatIcon from "@/components/icons/AfuChatIcon";
+
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,6 +22,8 @@ import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+
+const afuSymbol = require("@/assets/images/afu-symbol.png");
 
 
 WebBrowser.maybeCompleteAuthSession();
@@ -134,7 +137,7 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.logoWrap}>
-          <View style={{ marginBottom: 16 }}><AfuChatIcon size={88} color={Colors.brand} /></View>
+          <Image source={afuSymbol} style={{ width: 88, height: 88, marginBottom: 16 }} resizeMode="contain" />
           <Text style={[styles.appName, { color: colors.text }]}>AfuChat</Text>
           <Text style={[styles.tagline, { color: colors.textSecondary }]}>
             Connect with everyone

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -12,15 +13,16 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import AfuChatIcon from "@/components/icons/AfuChatIcon";
-import { router, useLocalSearchParams } from "expo-router";
 
+import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+
+const afuSymbol = require("@/assets/images/afu-symbol.png");
 
 
 export default function RegisterScreen() {
@@ -158,7 +160,7 @@ export default function RegisterScreen() {
         </TouchableOpacity>
 
         <View style={styles.headerWrap}>
-          <View style={{ marginBottom: 20 }}><AfuChatIcon size={72} color={Colors.brand} /></View>
+          <Image source={afuSymbol} style={{ width: 72, height: 72, marginBottom: 20 }} resizeMode="contain" />
           <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             Join AfuChat and start connecting

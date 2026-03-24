@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import AfuChatIcon from "@/components/icons/AfuChatIcon";
 
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -18,6 +18,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+
+const afuSymbol = require("@/assets/images/afu-symbol.png");
 
 
 type Plan = {
@@ -165,7 +167,7 @@ export default function PremiumScreen() {
       ) : (
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
           <View style={styles.heroSection}>
-            <View style={{ marginBottom: 16 }}><AfuChatIcon size={72} color={Colors.brand} /></View>
+            <Image source={afuSymbol} style={{ width: 72, height: 72, marginBottom: 16 }} resizeMode="contain" />
             <Text style={[styles.heroTitle, { color: colors.text }]}>AfuChat Premium</Text>
             <Text style={[styles.heroSub, { color: colors.textSecondary }]}>
               Pay with ACoin to unlock premium features

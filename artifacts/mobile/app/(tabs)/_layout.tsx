@@ -5,12 +5,13 @@ import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { Platform, StyleSheet, View, useColorScheme } from "react-native";
+import { Image, Platform, StyleSheet, View, useColorScheme } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Colors from "@/constants/colors";
 import { useTheme } from "@/hooks/useTheme";
-import AfuChatIcon from "@/components/icons/AfuChatIcon";
+
+const afuSymbol = require("@/assets/images/afu-symbol.png");
 
 function NativeTabLayout() {
   return (
@@ -74,7 +75,9 @@ function ClassicTabLayout() {
         name="index"
         options={{
           title: "AfuChat",
-          tabBarIcon: ({ color }) => <AfuChatIcon size={26} color={color} />,
+          tabBarIcon: ({ color }) => (
+            <Image source={afuSymbol} style={{ width: 26, height: 26, tintColor: color }} resizeMode="contain" />
+          ),
         }}
       />
       <Tabs.Screen
