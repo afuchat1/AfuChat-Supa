@@ -17,14 +17,13 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
-import { makeRedirectUri } from "expo-auth-session";
+import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
-
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -36,9 +35,14 @@ export default function LoginScreen() {
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(null);
+
+  const [resetStep, setResetStep] = useState<"idle" | "email" | "code">("idle");
   const [resetEmail, setResetEmail] = useState("");
-  const [showForgot, setShowForgot] = useState(false);
+  const [resetCode, setResetCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
+  const [showNewPwd, setShowNewPwd] = useState(false);
 
   async function handleLogin() {
     if (!email || !password) {
@@ -55,27 +59,72 @@ export default function LoginScreen() {
     }
   }
 
-  async function handleForgotPassword() {
+  async function handleSendResetCode() {
     if (!resetEmail.trim()) {
       showAlert("Missing email", "Please enter your email address.");
       return;
     }
     setResetLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail.trim());
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail.trim(), {
+      redirectTo: "https://afuchat.com/reset-callback",
+    });
     setResetLoading(false);
     if (error) {
       showAlert("Error", error.message);
     } else {
-      showAlert("Check your email", "We've sent a password reset link to your email address.");
-      setShowForgot(false);
+      showAlert("Code sent", "We've sent a 6-digit code to your email. Check your inbox (and spam folder).");
+      setResetStep("code");
+    }
+  }
+
+  async function handleVerifyAndReset() {
+    if (!resetCode.trim()) {
+      showAlert("Missing code", "Please enter the code from your email.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      showAlert("Password too short", "Password must be at least 6 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showAlert("Passwords don't match", "Please make sure both passwords match.");
+      return;
+    }
+
+    setResetLoading(true);
+
+    const { error: verifyError } = await supabase.auth.verifyOtp({
+      email: resetEmail.trim(),
+      token: resetCode.trim(),
+      type: "recovery",
+    });
+
+    if (verifyError) {
+      setResetLoading(false);
+      showAlert("Invalid code", "The code you entered is invalid or expired. Please try again.");
+      return;
+    }
+
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+    setResetLoading(false);
+
+    if (updateError) {
+      showAlert("Error", updateError.message);
+    } else {
+      showAlert("Password updated", "Your password has been changed. You can now log in with your new password.");
+      setResetStep("idle");
       setResetEmail("");
+      setResetCode("");
+      setNewPassword("");
+      setConfirmPassword("");
+      await supabase.auth.signOut();
     }
   }
 
   async function handleOAuth(provider: "google" | "github") {
     try {
       setOauthLoading(provider);
-      const redirectUrl = makeRedirectUri({ path: "/(auth)/login" });
+      const redirectUrl = Linking.createURL("/(auth)/login");
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
@@ -94,14 +143,26 @@ export default function LoginScreen() {
       if (data?.url) {
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {
           showInRecents: false,
-          preferEphemeralSession: true,
+          preferEphemeralSession: false,
         });
 
         if (result.type === "success" && result.url) {
           const url = new URL(result.url);
-          const params = new URLSearchParams(url.hash.substring(1));
-          const accessToken = params.get("access_token");
-          const refreshToken = params.get("refresh_token");
+
+          let accessToken: string | null = null;
+          let refreshToken: string | null = null;
+
+          if (url.hash) {
+            const hashParams = new URLSearchParams(url.hash.substring(1));
+            accessToken = hashParams.get("access_token");
+            refreshToken = hashParams.get("refresh_token");
+          }
+
+          if (!accessToken) {
+            const searchParams = url.searchParams;
+            accessToken = searchParams.get("access_token");
+            refreshToken = searchParams.get("refresh_token");
+          }
 
           if (accessToken && refreshToken) {
             const { error: sessionError } = await supabase.auth.setSession({
@@ -114,6 +175,16 @@ export default function LoginScreen() {
             } else {
               router.replace("/(tabs)");
             }
+          } else {
+            const code = url.searchParams.get("code");
+            if (code) {
+              const { error: codeError } = await supabase.auth.exchangeCodeForSession(code);
+              if (codeError) {
+                showAlert("Error", codeError.message);
+              } else {
+                router.replace("/(tabs)");
+              }
+            }
           }
         }
       }
@@ -122,6 +193,132 @@ export default function LoginScreen() {
       setOauthLoading(null);
       showAlert("Error", "Could not complete sign in. Please try again.");
     }
+  }
+
+  if (resetStep !== "idle") {
+    return (
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={[styles.root, { backgroundColor: colors.background }]}
+      >
+        <ScrollView
+          contentContainerStyle={[
+            styles.scroll,
+            { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 },
+          ]}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.logoWrap}>
+            <Image source={afuSymbol} style={{ width: 64, height: 64, marginBottom: 12, tintColor: Colors.brand }} resizeMode="contain" />
+            <Text style={[styles.appName, { color: colors.text, fontSize: 24 }]}>Reset Password</Text>
+          </View>
+
+          {resetStep === "email" && (
+            <View style={styles.form}>
+              <Text style={[styles.resetDesc, { color: colors.textSecondary }]}>
+                Enter your email address and we'll send you a verification code to reset your password.
+              </Text>
+              <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
+                <Ionicons name="mail-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
+                <TextInput
+                  style={[styles.input, { color: colors.text }]}
+                  placeholder="Email address"
+                  placeholderTextColor={colors.textMuted}
+                  value={resetEmail}
+                  onChangeText={setResetEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoFocus
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.loginBtn, resetLoading && styles.btnDisabled]}
+                onPress={handleSendResetCode}
+                disabled={resetLoading}
+              >
+                {resetLoading ? <ActivityIndicator color="#fff" /> : (
+                  <Text style={styles.loginBtnText}>Send Code</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => { setResetStep("idle"); setResetEmail(""); }} style={styles.backBtn}>
+                <Ionicons name="arrow-back" size={18} color={Colors.brand} />
+                <Text style={[styles.backBtnText, { color: Colors.brand }]}>Back to login</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {resetStep === "code" && (
+            <View style={styles.form}>
+              <Text style={[styles.resetDesc, { color: colors.textSecondary }]}>
+                Enter the 6-digit code sent to {resetEmail} and set your new password.
+              </Text>
+
+              <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
+                <Ionicons name="keypad-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
+                <TextInput
+                  style={[styles.input, { color: colors.text, letterSpacing: 4, fontSize: 20 }]}
+                  placeholder="000000"
+                  placeholderTextColor={colors.textMuted}
+                  value={resetCode}
+                  onChangeText={setResetCode}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  autoFocus
+                />
+              </View>
+
+              <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
+                <Ionicons name="lock-closed-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
+                <TextInput
+                  style={[styles.input, { color: colors.text, flex: 1 }]}
+                  placeholder="New password"
+                  placeholderTextColor={colors.textMuted}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  secureTextEntry={!showNewPwd}
+                />
+                <Pressable onPress={() => setShowNewPwd((v) => !v)} style={styles.eyeBtn}>
+                  <Ionicons name={showNewPwd ? "eye-off-outline" : "eye-outline"} size={18} color={colors.textMuted} />
+                </Pressable>
+              </View>
+
+              <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
+                <Ionicons name="lock-closed-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
+                <TextInput
+                  style={[styles.input, { color: colors.text }]}
+                  placeholder="Confirm new password"
+                  placeholderTextColor={colors.textMuted}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry={!showNewPwd}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.loginBtn, resetLoading && styles.btnDisabled]}
+                onPress={handleVerifyAndReset}
+                disabled={resetLoading}
+              >
+                {resetLoading ? <ActivityIndicator color="#fff" /> : (
+                  <Text style={styles.loginBtnText}>Reset Password</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={handleSendResetCode} style={styles.resendBtn} disabled={resetLoading}>
+                <Text style={[styles.resendText, { color: Colors.brand }]}>Didn't get the code? Resend</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => { setResetStep("idle"); setResetCode(""); setNewPassword(""); setConfirmPassword(""); }} style={styles.backBtn}>
+                <Ionicons name="arrow-back" size={18} color={Colors.brand} />
+                <Text style={[styles.backBtnText, { color: Colors.brand }]}>Back to login</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
   }
 
   return (
@@ -179,36 +376,9 @@ export default function LoginScreen() {
             </Pressable>
           </View>
 
-          <TouchableOpacity onPress={() => { setShowForgot(!showForgot); setResetEmail(email); }} style={styles.forgotBtn}>
+          <TouchableOpacity onPress={() => { setResetStep("email"); setResetEmail(email); }} style={styles.forgotBtn}>
             <Text style={[styles.forgotText, { color: Colors.brand }]}>Forgot password?</Text>
           </TouchableOpacity>
-
-          {showForgot && (
-            <View style={[styles.forgotCard, { backgroundColor: colors.inputBg }]}>
-              <Text style={[styles.forgotCardTitle, { color: colors.text }]}>Reset Password</Text>
-              <Text style={[styles.forgotCardDesc, { color: colors.textMuted }]}>
-                Enter your email and we'll send you a reset link.
-              </Text>
-              <TextInput
-                style={[styles.forgotInput, { color: colors.text, backgroundColor: colors.surface }]}
-                placeholder="Email address"
-                placeholderTextColor={colors.textMuted}
-                value={resetEmail}
-                onChangeText={setResetEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
-              <TouchableOpacity
-                style={[styles.resetBtn, resetLoading && { opacity: 0.6 }]}
-                onPress={handleForgotPassword}
-                disabled={resetLoading}
-              >
-                {resetLoading ? <ActivityIndicator color="#fff" size="small" /> : (
-                  <Text style={styles.resetBtnText}>Send Reset Link</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
 
           <TouchableOpacity
             style={[styles.loginBtn, loading && styles.btnDisabled]}
@@ -319,12 +489,7 @@ const styles = StyleSheet.create({
   eyeBtn: { padding: 4 },
   forgotBtn: { alignSelf: "flex-end", marginTop: -6 },
   forgotText: { fontSize: 14, fontFamily: "Inter_500Medium" },
-  forgotCard: { borderRadius: 14, padding: 16, gap: 10 },
-  forgotCardTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  forgotCardDesc: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
-  forgotInput: { borderRadius: 12, padding: 14, fontSize: 15, fontFamily: "Inter_400Regular" },
-  resetBtn: { backgroundColor: Colors.brand, borderRadius: 12, paddingVertical: 12, alignItems: "center" },
-  resetBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  resetDesc: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20, marginBottom: 4 },
   loginBtn: {
     backgroundColor: Colors.brand,
     height: 52,
@@ -339,6 +504,10 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontFamily: "Inter_600SemiBold",
   },
+  backBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 8 },
+  backBtnText: { fontSize: 15, fontFamily: "Inter_500Medium" },
+  resendBtn: { alignSelf: "center", marginTop: 4 },
+  resendText: { fontSize: 14, fontFamily: "Inter_500Medium" },
   divider: {
     flexDirection: "row",
     alignItems: "center",

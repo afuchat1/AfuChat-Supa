@@ -70,7 +70,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 
 ### App Architecture
 
-- **Auth**: Supabase Auth (email/password, Google OAuth, GitHub OAuth), AuthContext provider with forgot password flow
+- **Auth**: Supabase Auth (email/password, Google OAuth, GitHub OAuth via WebBrowser + PKCE), AuthContext provider. App scheme `afuchat://` for OAuth deep links. OTP-based password reset (6-digit code, not link).
 - **Navigation**: Expo Router with tabs (Chats, Contacts, Discover, Me)
 - **Design**: AfuChat teal `#00C2CB` brand color, gold business badge `#D4A853`, Inter font family, dark/light theme, custom logo
 - **Badge System**: `is_organization_verified=true` → gold badge (#D4A853) + "Verified Business" tag. `is_verified=true` (subscription) → teal badge (#00C2CB), no business tag. Applied across me.tsx, discover.tsx, contacts.tsx, contact/[id].tsx, post/[id].tsx, admin/index.tsx.
@@ -117,7 +117,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `app/my-posts/index.tsx` — Dedicated My Posts screen (user's own posts with delete)
 - `app/premium.tsx` — Premium subscription with plans from `subscription_plans` table, ACoin payment, free features list, active subscription display
 - `app/linked-accounts.tsx` — Account switching (add accounts with email+password, switch instantly, sessions stored via accountStore)
-- `app/(auth)/login.tsx` — Login screen with email/password, Google/GitHub OAuth (popup mode), forgot password with email reset
+- `app/(auth)/login.tsx` — Login screen with email/password, Google/GitHub OAuth (WebBrowser auth session with PKCE), OTP-based forgot password (email → 6-digit code → new password in-app)
 - `app/(auth)/register.tsx` — Register screen with terms/privacy checkbox (must agree before account creation)
 - `app/settings/privacy.tsx` — Privacy settings (private account, online status, hide lists)
 - `app/settings/notifications.tsx` — Notification preferences
