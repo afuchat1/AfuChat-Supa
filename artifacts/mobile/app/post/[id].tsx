@@ -18,6 +18,7 @@ import * as Haptics from "expo-haptics";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { RichText } from "@/components/ui/RichText";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
@@ -244,7 +245,7 @@ export default function PostDetailScreen() {
               </View>
             </View>
 
-            <Text style={[styles.postContent, { color: colors.text }]}>{post.content}</Text>
+            <RichText style={[styles.postContent, { color: colors.text }]}>{post.content}</RichText>
 
             {allImages.length > 0 && (
               <View style={styles.imgWrap}>
@@ -287,7 +288,7 @@ export default function PostDetailScreen() {
                 {!item.author.is_organization_verified && item.author.is_verified && <Ionicons name="checkmark-circle" size={12} color={Colors.brand} style={{ marginLeft: 3 }} />}
                 <Text style={[styles.replyTime, { color: colors.textMuted }]}> {timeAgo(item.created_at)}</Text>
               </View>
-              <Text style={[styles.replyContent, { color: colors.text }]}>{item.content}</Text>
+              <RichText style={[styles.replyContent, { color: colors.text }]}>{item.content}</RichText>
             </View>
           </View>
         )}

@@ -18,6 +18,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
+import { RichText } from "@/components/ui/RichText";
 import Colors from "@/constants/colors";
 import { matchInterests, computeFeedScore, diversifyFeed, type FeedSignals } from "@/lib/feedAlgorithm";
 
@@ -80,7 +81,7 @@ function PostCard({ item, onToggleLike }: { item: PostItem; onToggleLike: (postI
         <Ionicons name="ellipsis-horizontal" size={18} color={colors.textMuted} />
       </View>
 
-      <Text style={[styles.cardContent, { color: colors.text }]}>{item.content}</Text>
+      <RichText style={[styles.cardContent, { color: colors.text }]}>{item.content}</RichText>
 
       {allImages.length > 0 && (
         <View style={styles.images}>

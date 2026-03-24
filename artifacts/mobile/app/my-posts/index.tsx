@@ -17,6 +17,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
+import { RichText } from "@/components/ui/RichText";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
@@ -136,7 +137,7 @@ export default function MyPostsScreen() {
                   </TouchableOpacity>
                 </View>
 
-                <Text style={[styles.cardContent, { color: colors.text }]} numberOfLines={4}>{item.content}</Text>
+                <RichText style={[styles.cardContent, { color: colors.text }]} numberOfLines={4}>{item.content}</RichText>
 
                 {allImages.length > 0 && (
                   <View style={styles.images}>

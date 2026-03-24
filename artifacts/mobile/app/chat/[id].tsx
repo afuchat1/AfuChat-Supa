@@ -28,6 +28,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
+import { RichText } from "@/components/ui/RichText";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { notifyNewMessage } from "@/lib/notifyUser";
@@ -252,7 +253,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
             <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
               <Image source={{ uri: msg.attachment_url! }} style={st.attachImage} resizeMode="cover" />
               {hasTextContent && (
-                <Text style={[st.bubbleText, { color: textColor, marginTop: 6 }]}>{msg.encrypted_content}</Text>
+                <RichText style={[st.bubbleText, { color: textColor, marginTop: 6 }]} linkColor={isMe ? "#FFFFFF" : "#00C2CB"}>{msg.encrypted_content}</RichText>
               )}
             </TouchableOpacity>
           ) : hasVideo ? (
@@ -286,7 +287,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
             </TouchableOpacity>
           ) : (
             <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
-              <Text style={[st.bubbleText, { color: textColor }]}>{msg.encrypted_content}</Text>
+              <RichText style={[st.bubbleText, { color: textColor }]} linkColor={isMe ? "#FFFFFF" : "#00C2CB"}>{msg.encrypted_content}</RichText>
             </TouchableOpacity>
           )}
 
