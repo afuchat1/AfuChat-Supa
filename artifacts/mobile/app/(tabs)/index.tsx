@@ -287,7 +287,7 @@ function ContactPickerModal({ visible, onClose, userId, colors }: { visible: boo
                 <Separator indent={58} />
                 <TouchableOpacity
                   style={pickerStyles.actionRow}
-                  onPress={() => { onClose(); router.push("/group/create" as any); }}
+                  onPress={() => { onClose(); router.push("/channel/intro" as any); }}
                   activeOpacity={0.7}
                 >
                   <View style={[pickerStyles.actionIcon, { backgroundColor: "#34C759" }]}>
