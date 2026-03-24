@@ -145,27 +145,23 @@ export default function SecuritySettingsScreen() {
 
     try {
       if (user) {
-        await supabase.from("moments").delete().eq("user_id", user.id);
-        await supabase.from("moment_likes").delete().eq("user_id", user.id);
-        await supabase.from("stories").delete().eq("user_id", user.id);
-        await supabase.from("contacts").delete().or(`user_id.eq.${user.id},contact_id.eq.${user.id}`);
-        await supabase.from("conversation_members").delete().eq("user_id", user.id);
-        await supabase.from("messages").delete().eq("sender_id", user.id);
+        const deletionDate = new Date();
+        deletionDate.setDate(deletionDate.getDate() + 30);
 
         await supabase.from("profiles").update({
-          display_name: "Deleted User",
-          bio: null,
-          avatar_url: null,
-          handle: `deleted_${user.id.substring(0, 8)}`,
-          xp: 0,
-          acoin: 0,
+          scheduled_deletion_at: deletionDate.toISOString(),
+          expo_push_token: null,
         }).eq("id", user.id);
       }
 
       await signOut();
+      showAlert(
+        "Account Scheduled for Deletion",
+        "Your account will be permanently deleted after 30 days. If you change your mind, simply log back in to restore it."
+      );
       router.replace("/(auth)/login");
     } catch (err: any) {
-      showAlert("Error", "Failed to delete account. Please try again.");
+      showAlert("Error", "Failed to schedule account deletion. Please try again.");
     }
     setDeleting(false);
   }
@@ -273,7 +269,7 @@ export default function SecuritySettingsScreen() {
         </View>
 
         <Text style={[styles.dangerNote, { color: colors.textMuted }]}>
-          Deleting your account will remove all your posts, contacts, and conversation history. This action cannot be undone.
+          Your data will be stored for 30 days after deletion. Log back in within that period to restore your account. After 30 days, all data is permanently removed.
         </Text>
       </ScrollView>
 
@@ -331,7 +327,7 @@ export default function SecuritySettingsScreen() {
             <View style={[styles.warningBox]}>
               <Ionicons name="warning" size={24} color="#FF3B30" />
               <Text style={[styles.warningText, { color: colors.text }]}>
-                This will permanently delete your account, posts, contacts, and all data. This cannot be undone.
+                Your account will be deactivated immediately and permanently deleted after 30 days. All your posts, contacts, messages, and data will be removed. You can restore your account by logging back in within the 30-day period.
               </Text>
             </View>
             <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>
@@ -353,7 +349,7 @@ export default function SecuritySettingsScreen() {
               {deleting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.actionBtnText}>Permanently Delete Account</Text>
+                <Text style={styles.actionBtnText}>Delete Account</Text>
               )}
             </TouchableOpacity>
           </View>

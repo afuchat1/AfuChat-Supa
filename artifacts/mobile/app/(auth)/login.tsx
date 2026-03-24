@@ -50,13 +50,54 @@ export default function LoginScreen() {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    setLoading(false);
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     if (error) {
+      setLoading(false);
       showAlert("Login failed", error.message);
-    } else {
-      router.replace("/(tabs)");
+      return;
     }
+
+    if (data.user) {
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("scheduled_deletion_at")
+        .eq("id", data.user.id)
+        .single();
+
+      if (prof?.scheduled_deletion_at) {
+        const deletionDate = new Date(prof.scheduled_deletion_at);
+        const daysLeft = Math.max(0, Math.ceil((deletionDate.getTime() - Date.now()) / 86400000));
+        setLoading(false);
+        showAlert(
+          "Account Scheduled for Deletion",
+          `Your account is set to be permanently deleted in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}. Would you like to cancel the deletion and restore your account?`,
+          [
+            {
+              text: "Delete Anyway",
+              style: "destructive",
+              onPress: async () => {
+                await supabase.auth.signOut();
+              },
+            },
+            {
+              text: "Restore Account",
+              style: "default",
+              onPress: async () => {
+                await supabase
+                  .from("profiles")
+                  .update({ scheduled_deletion_at: null })
+                  .eq("id", data.user.id);
+                router.replace("/(tabs)");
+              },
+            },
+          ]
+        );
+        return;
+      }
+    }
+
+    setLoading(false);
+    router.replace("/(tabs)");
   }
 
   async function handleSendResetCode() {
