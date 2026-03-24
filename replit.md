@@ -134,11 +134,11 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
   - Step 1: Display name + username (handle) — required
   - Step 2: Region, date of birth (DD/MM/YYYY), gender (male/female) — all required, must be 13+
   - Step 3: Interests selection — pick at least 3 from 18 options
-  - Step 4: Referral code (optional) + profile summary
+  - Step 4: Profile summary review
 - **Onboarding completion**: Profile is created with `onboarding_completed = true` on the `profiles` table. Existing users already have this set to `true`.
 - **Routing logic** (`index.tsx`): If session exists but `profile.onboarding_completed` is false, redirects to onboarding. Otherwise goes to `(tabs)`.
 - **New profile columns**: `gender` (text), `date_of_birth` (date), `region` (text), `interests` (text[]), `onboarding_completed` (boolean, default false).
-- **Referral system**: Referral code entry moved to onboarding step 4. Referrer gets +500 XP, referred user gets 1 week free Platinum premium. Referral link format: `https://afuchat.com/{handle}`.
+- **Referral system**: No manual codes — referrals work via deep links only. `afuchat.com/username` (no @) = referral link. `afuchat.com/@username` (with @) = public profile. When someone opens a referral link and signs up, the referrer handle is stored via `AsyncStorage` and auto-applied during onboarding. Referrer gets +500 XP, referred user gets 1 week free Platinum premium.
 
 ## UI Conventions
 

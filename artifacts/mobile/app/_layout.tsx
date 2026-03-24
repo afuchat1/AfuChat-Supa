@@ -10,7 +10,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
+import { Linking } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -80,6 +82,25 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError]);
+
+  useEffect(() => {
+    function extractReferrer(url: string | null) {
+      if (!url) return;
+      try {
+        const parsed = new URL(url);
+        if (parsed.hostname === "afuchat.com" || parsed.hostname === "www.afuchat.com") {
+          const path = parsed.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
+          if (path && !path.startsWith("@") && !path.includes("/") && /^[a-zA-Z0-9_]+$/.test(path)) {
+            AsyncStorage.setItem("referrer_handle", path.toLowerCase());
+          }
+        }
+      } catch (_) {}
+    }
+
+    Linking.getInitialURL().then(extractReferrer);
+    const sub = Linking.addEventListener("url", ({ url }) => extractReferrer(url));
+    return () => sub.remove();
+  }, []);
 
   if (!fontsLoaded && !fontError) return null;
 

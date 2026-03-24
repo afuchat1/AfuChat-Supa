@@ -20,6 +20,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { showAlert } from "@/lib/alert";
 
 const TOTAL_STEPS = 4;
@@ -79,8 +80,6 @@ export default function OnboardingScreen() {
   const [gender, setGender] = useState<"male" | "female" | "">("");
 
   const [selectedInterests, setSelectedInterests] = useState<Set<string>>(new Set());
-
-  const [referralCode, setReferralCode] = useState("");
 
   const progressAnim = useRef(new Animated.Value(1)).current;
 
@@ -192,59 +191,63 @@ export default function OnboardingScreen() {
       return;
     }
 
-    if (referralCode.trim()) {
-      const refHandle = referralCode.trim().toLowerCase();
-      if (refHandle !== cleanHandle) {
-        const { data: referrer } = await supabase
-          .from("profiles")
-          .select("id, xp")
-          .eq("handle", refHandle)
-          .single();
+    try {
+      const stored = await AsyncStorage.getItem("referrer_handle");
+      if (stored) {
+        await AsyncStorage.removeItem("referrer_handle");
+        const refHandle = stored.trim().toLowerCase();
+        if (refHandle !== cleanHandle) {
+          const { data: referrer } = await supabase
+            .from("profiles")
+            .select("id, xp")
+            .eq("handle", refHandle)
+            .single();
 
-        if (referrer && referrer.id !== userId) {
-          const { data: existingRef } = await supabase
-            .from("referrals")
-            .select("id")
-            .eq("referred_id", userId)
-            .limit(1)
-            .maybeSingle();
-
-          if (!existingRef) {
-            await supabase.from("referrals").insert({
-              referrer_id: referrer.id,
-              referred_id: userId,
-              reward_given: true,
-            });
-
-            await supabase
-              .from("profiles")
-              .update({ xp: (referrer.xp || 0) + 500 })
-              .eq("id", referrer.id);
-
-            const { data: platinumPlan } = await supabase
-              .from("subscription_plans")
+          if (referrer && referrer.id !== userId) {
+            const { data: existingRef } = await supabase
+              .from("referrals")
               .select("id")
-              .ilike("name", "%platinum%")
-              .eq("is_active", true)
+              .eq("referred_id", userId)
               .limit(1)
-              .single();
+              .maybeSingle();
 
-            if (platinumPlan) {
-              const expiresAt = new Date();
-              expiresAt.setDate(expiresAt.getDate() + 7);
-              await supabase.from("user_subscriptions").upsert({
-                user_id: userId,
-                plan_id: platinumPlan.id,
-                started_at: new Date().toISOString(),
-                expires_at: expiresAt.toISOString(),
-                is_active: true,
-                acoin_paid: 0,
+            if (!existingRef) {
+              await supabase.from("referrals").insert({
+                referrer_id: referrer.id,
+                referred_id: userId,
+                reward_given: true,
               });
+
+              await supabase
+                .from("profiles")
+                .update({ xp: (referrer.xp || 0) + 500 })
+                .eq("id", referrer.id);
+
+              const { data: platinumPlan } = await supabase
+                .from("subscription_plans")
+                .select("id")
+                .ilike("name", "%platinum%")
+                .eq("is_active", true)
+                .limit(1)
+                .single();
+
+              if (platinumPlan) {
+                const expiresAt = new Date();
+                expiresAt.setDate(expiresAt.getDate() + 7);
+                await supabase.from("user_subscriptions").upsert({
+                  user_id: userId,
+                  plan_id: platinumPlan.id,
+                  started_at: new Date().toISOString(),
+                  expires_at: expiresAt.toISOString(),
+                  is_active: true,
+                  acoin_paid: 0,
+                });
+              }
             }
           }
         }
       }
-    }
+    } catch (_) {}
 
     await refreshProfile();
     setLoading(false);
@@ -476,36 +479,10 @@ export default function OnboardingScreen() {
       <View style={styles.stepContent}>
         <View style={styles.stepHeader}>
           <Text style={[styles.stepEmoji]}>🎉</Text>
-          <Text style={[styles.stepTitle, { color: colors.text }]}>Almost there!</Text>
+          <Text style={[styles.stepTitle, { color: colors.text }]}>You're all set!</Text>
           <Text style={[styles.stepDesc, { color: colors.textSecondary }]}>
-            Got a referral code? Enter it below to get 1 week of free Platinum premium.
+            Review your profile below and tap "Get Started" to join AfuChat.
           </Text>
-        </View>
-
-        <View style={styles.fieldsGroup}>
-          <View style={styles.fieldWrap}>
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Referral Code (Optional)</Text>
-            <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
-              <Ionicons name="gift-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
-              <TextInput
-                style={[styles.input, { color: colors.text }]}
-                placeholder="Enter a friend's handle"
-                placeholderTextColor={colors.textMuted}
-                value={referralCode}
-                onChangeText={setReferralCode}
-                autoCapitalize="none"
-              />
-            </View>
-          </View>
-
-          {referralCode.trim() ? (
-            <View style={styles.referralNote}>
-              <Ionicons name="checkmark-circle" size={16} color="#34C759" />
-              <Text style={styles.referralNoteText}>
-                You'll get 1 week free Platinum premium!
-              </Text>
-            </View>
-          ) : null}
         </View>
 
         <View style={[styles.summaryCard, { backgroundColor: colors.inputBg }]}>
@@ -592,15 +569,6 @@ export default function OnboardingScreen() {
           )}
         </Pressable>
 
-        {step === TOTAL_STEPS && !referralCode.trim() && (
-          <TouchableOpacity
-            style={styles.skipReferral}
-            onPress={handleComplete}
-            disabled={loading}
-          >
-            <Text style={[styles.skipText, { color: colors.textSecondary }]}>Skip referral</Text>
-          </TouchableOpacity>
-        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -704,13 +672,6 @@ const styles = StyleSheet.create({
   },
   interestText: { fontSize: 14, fontFamily: "Inter_500Medium" },
   interestCount: { textAlign: "center", fontSize: 14, fontFamily: "Inter_500Medium", marginTop: 4 },
-  referralNote: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 4,
-  },
-  referralNoteText: { fontSize: 13, fontFamily: "Inter_500Medium", color: "#34C759" },
   summaryCard: {
     borderRadius: 14,
     padding: 16,
@@ -741,6 +702,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   nextBtnText: { color: "#fff", fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  skipReferral: { alignItems: "center", paddingVertical: 10 },
-  skipText: { fontSize: 14, fontFamily: "Inter_500Medium" },
 });

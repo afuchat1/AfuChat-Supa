@@ -147,9 +147,9 @@ export default function ReferralScreen() {
         <View style={[styles.howItWorks, { backgroundColor: colors.surface }]}>
           <Text style={[styles.howTitle, { color: colors.text }]}>How It Works</Text>
           {[
-            { icon: "link-outline", text: "Share your unique referral link with friends" },
-            { icon: "person-add-outline", text: "They sign up using your link" },
-            { icon: "diamond-outline", text: "They get 1 week free Platinum premium" },
+            { icon: "link-outline", text: `Share your link: afuchat.com/${profile?.handle || "username"}` },
+            { icon: "person-add-outline", text: "Friends open your link and sign up" },
+            { icon: "diamond-outline", text: "They automatically get 1 week free Platinum" },
             { icon: "flash-outline", text: "You receive 500 Nexa bonus" },
           ].map((step, i) => (
             <View key={i} style={styles.stepRow}>
