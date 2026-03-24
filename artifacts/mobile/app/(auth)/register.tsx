@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 
-import { router, useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
@@ -27,25 +27,20 @@ const afuSymbol = require("@/assets/images/afu-symbol.png");
 export default function RegisterScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ ref?: string }>();
-  const [displayName, setDisplayName] = useState("");
-  const [handle, setHandle] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const [referralCode, setReferralCode] = useState(params.ref || "");
 
   const [verifyStep, setVerifyStep] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [signupUserId, setSignupUserId] = useState<string | null>(null);
-  const [cleanedHandle, setCleanedHandle] = useState("");
 
   async function handleRegister() {
-    if (!displayName || !handle || !email || !password) {
-      showAlert("Missing fields", "Please fill all fields.");
+    if (!email || !password) {
+      showAlert("Missing fields", "Please enter your email and password.");
       return;
     }
     if (!agreedToTerms) {
@@ -56,20 +51,11 @@ export default function RegisterScreen() {
       showAlert("Weak password", "Password must be at least 6 characters.");
       return;
     }
-    const cleanHandle = handle.replace(/[^a-zA-Z0-9_]/g, "").toLowerCase();
-    if (cleanHandle.length < 3) {
-      showAlert("Invalid handle", "Handle must be at least 3 characters (letters, numbers, underscores).");
-      return;
-    }
     setLoading(true);
-    setCleanedHandle(cleanHandle);
 
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: {
-        data: { display_name: displayName, handle: cleanHandle },
-      },
     });
 
     if (error) {
@@ -92,69 +78,7 @@ export default function RegisterScreen() {
         setVerifyStep(true);
         showAlert("Verification code sent", "We've sent a 6-digit code to your email. Please check your inbox (and spam folder).");
       } else {
-        await completeRegistration(data.user.id, cleanHandle);
-        router.replace("/(tabs)");
-      }
-    }
-  }
-
-  async function completeRegistration(userId: string, finalHandle: string) {
-    await supabase.from("profiles").upsert({
-      id: userId,
-      handle: finalHandle,
-      display_name: displayName,
-    });
-
-    if (referralCode.trim()) {
-      const refHandle = referralCode.trim().toLowerCase();
-      if (refHandle !== finalHandle) {
-        const { data: referrer } = await supabase
-          .from("profiles")
-          .select("id, xp")
-          .eq("handle", refHandle)
-          .single();
-
-        if (referrer && referrer.id !== userId) {
-          const { data: existingRef } = await supabase
-            .from("referrals")
-            .select("id")
-            .eq("referred_id", userId)
-            .limit(1)
-            .maybeSingle();
-
-          if (!existingRef) {
-            await supabase.from("referrals").insert({
-              referrer_id: referrer.id,
-              referred_id: userId,
-              reward_given: true,
-            });
-
-            await supabase.from("profiles").update({
-              xp: (referrer.xp || 0) + 500,
-            }).eq("id", referrer.id);
-
-            const { data: platinumPlan } = await supabase
-              .from("subscription_plans")
-              .select("id")
-              .ilike("name", "%platinum%")
-              .eq("is_active", true)
-              .limit(1)
-              .single();
-
-            if (platinumPlan) {
-              const expiresAt = new Date();
-              expiresAt.setDate(expiresAt.getDate() + 7);
-              await supabase.from("user_subscriptions").upsert({
-                user_id: userId,
-                plan_id: platinumPlan.id,
-                started_at: new Date().toISOString(),
-                expires_at: expiresAt.toISOString(),
-                is_active: true,
-                acoin_paid: 0,
-              });
-            }
-          }
-        }
+        router.replace({ pathname: "/onboarding", params: { userId: data.user.id } });
       }
     }
   }
@@ -179,12 +103,9 @@ export default function RegisterScreen() {
       return;
     }
 
-    if (signupUserId) {
-      await completeRegistration(signupUserId, cleanedHandle);
-    }
-
     setVerifyLoading(false);
-    router.replace("/(tabs)");
+    const uid = signupUserId || data.user?.id;
+    router.replace({ pathname: "/onboarding", params: { userId: uid || "" } });
   }
 
   async function handleResendCode() {
@@ -224,7 +145,7 @@ export default function RegisterScreen() {
             <Text style={[styles.verifyDesc, { color: colors.textSecondary }]}>
               We've sent a 6-digit verification code to{"\n"}
               <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold" }}>{email}</Text>
-              {"\n"}Enter it below to complete your registration.
+              {"\n"}Enter it below to continue.
             </Text>
 
             <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
@@ -242,12 +163,12 @@ export default function RegisterScreen() {
             </View>
 
             <TouchableOpacity
-              style={[styles.registerBtn, verifyLoading && { opacity: 0.6 }]}
+              style={[styles.primaryBtn, verifyLoading && { opacity: 0.6 }]}
               onPress={handleVerifyOtp}
               disabled={verifyLoading}
             >
               {verifyLoading ? <ActivityIndicator color="#fff" /> : (
-                <Text style={styles.registerBtnText}>Verify & Continue</Text>
+                <Text style={styles.primaryBtnText}>Verify & Continue</Text>
               )}
             </TouchableOpacity>
 
@@ -295,30 +216,6 @@ export default function RegisterScreen() {
 
         <View style={styles.form}>
           <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
-            <Ionicons name="person-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
-            <TextInput
-              style={[styles.input, { color: colors.text }]}
-              placeholder="Display name"
-              placeholderTextColor={colors.textMuted}
-              value={displayName}
-              onChangeText={setDisplayName}
-              autoCapitalize="words"
-            />
-          </View>
-
-          <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
-            <Ionicons name="at-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
-            <TextInput
-              style={[styles.input, { color: colors.text }]}
-              placeholder="Handle (e.g. john_doe)"
-              placeholderTextColor={colors.textMuted}
-              value={handle}
-              onChangeText={setHandle}
-              autoCapitalize="none"
-            />
-          </View>
-
-          <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
             <Ionicons name="mail-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
             <TextInput
               style={[styles.input, { color: colors.text }]}
@@ -328,6 +225,7 @@ export default function RegisterScreen() {
               onChangeText={setEmail}
               autoCapitalize="none"
               keyboardType="email-address"
+              autoFocus
             />
           </View>
 
@@ -349,27 +247,6 @@ export default function RegisterScreen() {
               />
             </Pressable>
           </View>
-
-          <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
-            <Ionicons name="gift-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
-            <TextInput
-              style={[styles.input, { color: colors.text }]}
-              placeholder="Referral code (optional)"
-              placeholderTextColor={colors.textMuted}
-              value={referralCode}
-              onChangeText={setReferralCode}
-              autoCapitalize="none"
-            />
-          </View>
-
-          {referralCode.trim() ? (
-            <View style={styles.referralNote}>
-              <Ionicons name="checkmark-circle" size={16} color="#34C759" />
-              <Text style={[styles.referralNoteText, { color: "#34C759" }]}>
-                You'll get 1 week free Platinum premium!
-              </Text>
-            </View>
-          ) : null}
 
           <TouchableOpacity
             style={styles.termsRow}
@@ -400,7 +277,7 @@ export default function RegisterScreen() {
           </TouchableOpacity>
 
           <Pressable
-            style={[styles.registerBtn, { opacity: (loading || !agreedToTerms) ? 0.5 : 1 }]}
+            style={[styles.primaryBtn, { opacity: (loading || !agreedToTerms) ? 0.5 : 1 }]}
             onPress={handleRegister}
             disabled={loading || !agreedToTerms}
             accessibilityRole="button"
@@ -409,7 +286,7 @@ export default function RegisterScreen() {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.registerBtnText}>Create Account</Text>
+              <Text style={styles.primaryBtnText}>Create Account</Text>
             )}
           </Pressable>
 
@@ -494,7 +371,7 @@ const styles = StyleSheet.create({
     color: Colors.brand,
     fontFamily: "Inter_600SemiBold",
   },
-  registerBtn: {
+  primaryBtn: {
     backgroundColor: Colors.brand,
     height: 52,
     borderRadius: 14,
@@ -502,19 +379,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 4,
   },
-  registerBtnText: {
+  primaryBtnText: {
     color: "#fff",
     fontSize: 17,
     fontFamily: "Inter_600SemiBold",
   },
   loginLink: { alignItems: "center", marginTop: 4 },
   loginLinkText: { fontSize: 14, fontFamily: "Inter_400Regular" },
-  referralNote: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 4,
-    marginTop: -4,
-  },
-  referralNoteText: { fontSize: 13, fontFamily: "Inter_500Medium" },
 });

@@ -62,6 +62,7 @@ function RootLayoutNav() {
       <Stack.Screen name="settings/chat" />
       <Stack.Screen name="settings/blocked" />
       <Stack.Screen name="admin/index" />
+      <Stack.Screen name="onboarding/index" options={{ animation: "fade", gestureEnabled: false }} />
     </Stack>
   );
 }

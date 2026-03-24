@@ -127,6 +127,19 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `lib/notifyUser.ts` — Notification trigger helpers (messages, follows, likes, replies, gifts) via authenticated Supabase Edge Function calls
 - `components/PushNotificationManager.tsx` — Null component wired into root layout for notification setup
 
+## Auth & Onboarding Flow
+
+- **Registration**: Sign up page collects only email + password. After signup, user verifies email via 6-digit OTP code.
+- **Onboarding**: After OTP verification, new users are routed to a 4-step onboarding flow (`/onboarding`):
+  - Step 1: Display name + username (handle) — required
+  - Step 2: Region, date of birth (DD/MM/YYYY), gender (male/female) — all required, must be 13+
+  - Step 3: Interests selection — pick at least 3 from 18 options
+  - Step 4: Referral code (optional) + profile summary
+- **Onboarding completion**: Profile is created with `onboarding_completed = true` on the `profiles` table. Existing users already have this set to `true`.
+- **Routing logic** (`index.tsx`): If session exists but `profile.onboarding_completed` is false, redirects to onboarding. Otherwise goes to `(tabs)`.
+- **New profile columns**: `gender` (text), `date_of_birth` (date), `region` (text), `interests` (text[]), `onboarding_completed` (boolean, default false).
+- **Referral system**: Referral code entry moved to onboarding step 4. Referrer gets +500 XP, referred user gets 1 week free Platinum premium. Referral link format: `https://afuchat.com/{handle}`.
+
 ## UI Conventions
 
 - **Input styling**: All TextInput fields use `borderRadius: 0` (flat, no rounded box borders). Input containers have no `borderWidth` or `borderBottomWidth`. Search boxes, chat inputs, reply bars, form fields, modal inputs all follow this pattern.
