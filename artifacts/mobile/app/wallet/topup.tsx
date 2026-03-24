@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
   customRow: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 14,
+    borderRadius: 0,
     paddingHorizontal: 14,
     paddingVertical: 4,
   },

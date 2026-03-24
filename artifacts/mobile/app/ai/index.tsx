@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
   typingBubble: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
   typingText: { fontSize: 13, fontFamily: "Inter_400Regular" },
   inputBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, gap: 10 },
-  inputField: { flex: 1, borderRadius: 22, paddingHorizontal: 14, minHeight: 40, maxHeight: 100, justifyContent: "center" },
+  inputField: { flex: 1, borderRadius: 0, paddingHorizontal: 14, minHeight: 40, maxHeight: 100, justifyContent: "center" },
   input: { fontSize: 15, fontFamily: "Inter_400Regular", paddingVertical: 8 },
   sendBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
 });

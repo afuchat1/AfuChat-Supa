@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 10,
+    borderRadius: 0,
     paddingHorizontal: 10,
     height: 36,
     gap: 6,
@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
   addField: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 10,
+    borderRadius: 0,
     paddingHorizontal: 12,
     height: 44,
     gap: 8,

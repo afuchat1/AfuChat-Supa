@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -101,7 +103,7 @@ export default function CreateGroupScreen() {
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
+    <KeyboardAvoidingView style={[styles.root, { backgroundColor: colors.background }]} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
       <View
         style={[
           styles.header,
@@ -184,7 +186,7 @@ export default function CreateGroupScreen() {
           }
         />
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -206,7 +208,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 16,
     gap: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   groupIconWrap: {
     width: 52,

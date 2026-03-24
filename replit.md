@@ -127,6 +127,12 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `lib/notifyUser.ts` — Notification trigger helpers (messages, follows, likes, replies, gifts) via authenticated Supabase Edge Function calls
 - `components/PushNotificationManager.tsx` — Null component wired into root layout for notification setup
 
+## UI Conventions
+
+- **Input styling**: All TextInput fields use `borderRadius: 0` (flat, no rounded box borders). Input containers have no `borderWidth` or `borderBottomWidth`. Search boxes, chat inputs, reply bars, form fields, modal inputs all follow this pattern.
+- **Keyboard handling**: All screens with TextInputs are wrapped in `KeyboardAvoidingView` with `behavior="padding"` on iOS and `"height"` on Android.
+- **Brand colors**: `#00C2CB` teal, `#D4A853` gold. Use `#0D0D0D` instead of `#000000` for visible UI.
+
 ## Supabase Edge Functions
 
 - `send-push-notification` — Expo Push API for mobile push notifications (JWT auth, batch support, channel routing)

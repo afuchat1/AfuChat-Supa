@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
   dragHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "#ccc", alignSelf: "center", marginBottom: 4 },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   modalTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
-  modalInput: { borderRadius: 12, padding: 14, fontSize: 15, fontFamily: "Inter_400Regular" },
+  modalInput: { borderRadius: 0, padding: 14, fontSize: 15, fontFamily: "Inter_400Regular" },
   actionBtn: { backgroundColor: Colors.brand, borderRadius: 14, paddingVertical: 14, alignItems: "center" },
   deleteBtn: { backgroundColor: "#FF3B30", borderRadius: 14, paddingVertical: 14, alignItems: "center" },
   actionBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },

@@ -232,7 +232,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 20,
     gap: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   avatarBtn: {
     width: 64,
@@ -261,8 +260,6 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    borderBottomWidth: 1.5,
-    borderBottomColor: Colors.brand,
     paddingBottom: 6,
   },
   nameInput: {
@@ -282,7 +279,6 @@ const styles = StyleSheet.create({
   descInput: {
     fontSize: 16,
     fontFamily: "Inter_400Regular",
-    borderBottomWidth: StyleSheet.hairlineWidth,
     paddingBottom: 8,
     minHeight: 36,
     color: "inherit",

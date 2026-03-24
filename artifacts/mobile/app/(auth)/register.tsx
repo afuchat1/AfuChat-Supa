@@ -441,7 +441,7 @@ const styles = StyleSheet.create({
   field: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 14,
+    borderRadius: 0,
     paddingHorizontal: 14,
     height: 52,
   },
