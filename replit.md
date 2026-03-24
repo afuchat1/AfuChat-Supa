@@ -70,7 +70,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 
 ### App Architecture
 
-- **Auth**: Supabase Auth (email/password, Google OAuth, GitHub OAuth via WebBrowser + PKCE), AuthContext provider. App scheme `afuchat://` for OAuth deep links. OTP-based password reset (6-digit code, not link).
+- **Auth**: Supabase Auth (email/password, Google OAuth, GitHub OAuth via WebBrowser + PKCE), AuthContext provider. App scheme `afuchat://` for OAuth deep links. OTP-based password reset (6-digit code, not link). Email confirmation required on registration (OTP verify). All auth emails sent from `noreply@afuchat.com` via Resend (edge function `send-password-reset` handles all email types with branded templates + AfuChat Technologies Ltd footer).
 - **Navigation**: Expo Router with tabs (Chats, Contacts, Discover, Me)
 - **Design**: AfuChat teal `#00C2CB` brand color, gold business badge `#D4A853`, Inter font family, dark/light theme, custom logo
 - **Badge System**: `is_organization_verified=true` → gold badge (#D4A853) + "Verified Business" tag. `is_verified=true` (subscription) → teal badge (#00C2CB), no business tag. Applied across me.tsx, discover.tsx, contacts.tsx, contact/[id].tsx, post/[id].tsx, admin/index.tsx.

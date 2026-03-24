@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -24,7 +24,6 @@ import { showAlert } from "@/lib/alert";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
-
 export default function RegisterScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -37,6 +36,12 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [referralCode, setReferralCode] = useState(params.ref || "");
+
+  const [verifyStep, setVerifyStep] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [signupUserId, setSignupUserId] = useState<string | null>(null);
+  const [cleanedHandle, setCleanedHandle] = useState("");
 
   async function handleRegister() {
     if (!displayName || !handle || !email || !password) {
@@ -57,6 +62,7 @@ export default function RegisterScreen() {
       return;
     }
     setLoading(true);
+    setCleanedHandle(cleanHandle);
 
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
@@ -72,36 +78,54 @@ export default function RegisterScreen() {
       return;
     }
 
-    if (data.user) {
-      await supabase.from("profiles").upsert({
-        id: data.user.id,
-        handle: cleanHandle,
-        display_name: displayName,
-      });
+    setLoading(false);
 
-      if (referralCode.trim()) {
-        const refHandle = referralCode.trim().toLowerCase();
-        if (refHandle === cleanHandle) {
-          // skip self-referral
-        } else {
+    if (data.user) {
+      setSignupUserId(data.user.id);
+
+      if (data.user.identities && data.user.identities.length === 0) {
+        showAlert("Account exists", "An account with this email already exists. Please log in instead.");
+        return;
+      }
+
+      if (!data.session) {
+        setVerifyStep(true);
+        showAlert("Verification code sent", "We've sent a 6-digit code to your email. Please check your inbox (and spam folder).");
+      } else {
+        await completeRegistration(data.user.id, cleanHandle);
+        router.replace("/(tabs)");
+      }
+    }
+  }
+
+  async function completeRegistration(userId: string, finalHandle: string) {
+    await supabase.from("profiles").upsert({
+      id: userId,
+      handle: finalHandle,
+      display_name: displayName,
+    });
+
+    if (referralCode.trim()) {
+      const refHandle = referralCode.trim().toLowerCase();
+      if (refHandle !== finalHandle) {
         const { data: referrer } = await supabase
           .from("profiles")
           .select("id, xp")
           .eq("handle", refHandle)
           .single();
 
-        if (referrer && referrer.id !== data.user.id) {
+        if (referrer && referrer.id !== userId) {
           const { data: existingRef } = await supabase
             .from("referrals")
             .select("id")
-            .eq("referred_id", data.user.id)
+            .eq("referred_id", userId)
             .limit(1)
             .maybeSingle();
 
           if (!existingRef) {
             await supabase.from("referrals").insert({
               referrer_id: referrer.id,
-              referred_id: data.user.id,
+              referred_id: userId,
               reward_given: true,
             });
 
@@ -121,7 +145,7 @@ export default function RegisterScreen() {
               const expiresAt = new Date();
               expiresAt.setDate(expiresAt.getDate() + 7);
               await supabase.from("user_subscriptions").upsert({
-                user_id: data.user.id,
+                user_id: userId,
                 plan_id: platinumPlan.id,
                 started_at: new Date().toISOString(),
                 expires_at: expiresAt.toISOString(),
@@ -131,12 +155,114 @@ export default function RegisterScreen() {
             }
           }
         }
-        }
       }
     }
+  }
 
-    setLoading(false);
+  async function handleVerifyOtp() {
+    if (otpCode.trim().length !== 6) {
+      showAlert("Invalid code", "Please enter the 6-digit code from your email.");
+      return;
+    }
+
+    setVerifyLoading(true);
+
+    const { data, error } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token: otpCode.trim(),
+      type: "signup",
+    });
+
+    if (error) {
+      setVerifyLoading(false);
+      showAlert("Verification failed", "The code you entered is invalid or expired. Please try again.");
+      return;
+    }
+
+    if (signupUserId) {
+      await completeRegistration(signupUserId, cleanedHandle);
+    }
+
+    setVerifyLoading(false);
     router.replace("/(tabs)");
+  }
+
+  async function handleResendCode() {
+    setVerifyLoading(true);
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: email.trim(),
+    });
+    setVerifyLoading(false);
+
+    if (error) {
+      showAlert("Error", error.message);
+    } else {
+      showAlert("Code resent", "A new verification code has been sent to your email.");
+    }
+  }
+
+  if (verifyStep) {
+    return (
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={[styles.root, { backgroundColor: colors.background }]}
+      >
+        <ScrollView
+          contentContainerStyle={[
+            styles.scroll,
+            { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 },
+          ]}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.headerWrap}>
+            <Image source={afuSymbol} style={{ width: 64, height: 64, marginBottom: 12, tintColor: Colors.brand }} resizeMode="contain" />
+            <Text style={[styles.title, { color: colors.text, fontSize: 24 }]}>Verify Your Email</Text>
+          </View>
+
+          <View style={styles.form}>
+            <Text style={[styles.verifyDesc, { color: colors.textSecondary }]}>
+              We've sent a 6-digit verification code to{"\n"}
+              <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold" }}>{email}</Text>
+              {"\n"}Enter it below to complete your registration.
+            </Text>
+
+            <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
+              <Ionicons name="keypad-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
+              <TextInput
+                style={[styles.input, { color: colors.text, letterSpacing: 4, fontSize: 20, textAlign: "center" }]}
+                placeholder="000000"
+                placeholderTextColor={colors.textMuted}
+                value={otpCode}
+                onChangeText={setOtpCode}
+                keyboardType="number-pad"
+                maxLength={6}
+                autoFocus
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.registerBtn, verifyLoading && { opacity: 0.6 }]}
+              onPress={handleVerifyOtp}
+              disabled={verifyLoading}
+            >
+              {verifyLoading ? <ActivityIndicator color="#fff" /> : (
+                <Text style={styles.registerBtnText}>Verify & Continue</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={handleResendCode} style={styles.resendBtn} disabled={verifyLoading}>
+              <Text style={[styles.resendText, { color: Colors.brand }]}>Didn't get the code? Resend</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => { setVerifyStep(false); setOtpCode(""); }} style={styles.backToFormBtn}>
+              <Ionicons name="arrow-back" size={18} color={Colors.brand} />
+              <Text style={[styles.backToFormText, { color: Colors.brand }]}>Back</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
   }
 
   return (
@@ -327,6 +453,17 @@ const styles = StyleSheet.create({
     height: 52,
   },
   eyeBtn: { padding: 4 },
+  verifyDesc: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 22,
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  resendBtn: { alignSelf: "center", marginTop: 4 },
+  resendText: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  backToFormBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 8 },
+  backToFormText: { fontSize: 15, fontFamily: "Inter_500Medium" },
   termsRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -365,7 +502,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 4,
   },
-  btnDisabled: { opacity: 0.5 }, // kept for reference
   registerBtnText: {
     color: "#fff",
     fontSize: 17,
