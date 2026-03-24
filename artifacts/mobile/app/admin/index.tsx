@@ -35,6 +35,10 @@ type Stats = {
   verifiedUsers: number;
   totalNexa: number;
   totalAcoin: number;
+  totalStories: number;
+  totalReferrals: number;
+  totalChannels: number;
+  pendingDeletions: number;
 };
 
 type UserRow = {
@@ -84,6 +88,7 @@ const TABS = [
   { id: "overview", label: "Overview", icon: "stats-chart" as const },
   { id: "users", label: "Users", icon: "people" as const },
   { id: "content", label: "Content", icon: "document-text" as const },
+  { id: "referrals", label: "Referrals", icon: "git-network" as const },
   { id: "subs", label: "Plans", icon: "diamond" as const },
   { id: "currency", label: "Currency", icon: "cash" as const },
   { id: "reports", label: "Reports", icon: "shield" as const },
@@ -119,7 +124,8 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [stats, setStats] = useState<Stats>({ totalUsers: 0, totalPosts: 0, totalChats: 0, totalMessages: 0, premiumUsers: 0, verifiedUsers: 0, totalNexa: 0, totalAcoin: 0 });
+  const [stats, setStats] = useState<Stats>({ totalUsers: 0, totalPosts: 0, totalChats: 0, totalMessages: 0, premiumUsers: 0, verifiedUsers: 0, totalNexa: 0, totalAcoin: 0, totalStories: 0, totalReferrals: 0, totalChannels: 0, pendingDeletions: 0 });
+  const [referrals, setReferrals] = useState<any[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [posts, setPosts] = useState<PostRow[]>([]);
   const [plans, setPlans] = useState<SubPlan[]>([]);
@@ -139,6 +145,10 @@ export default function AdminDashboard() {
       { count: totalMessages },
       { count: premiumUsers },
       { count: verifiedUsers },
+      { count: totalStories },
+      { count: totalReferrals },
+      { count: totalChannels },
+      { count: pendingDeletions },
     ] = await Promise.all([
       supabase.from("profiles").select("*", { count: "exact", head: true }),
       supabase.from("posts").select("*", { count: "exact", head: true }),
@@ -146,6 +156,10 @@ export default function AdminDashboard() {
       supabase.from("messages").select("*", { count: "exact", head: true }),
       supabase.from("user_subscriptions").select("*", { count: "exact", head: true }).eq("is_active", true),
       supabase.from("profiles").select("*", { count: "exact", head: true }).eq("is_verified", true),
+      supabase.from("stories").select("*", { count: "exact", head: true }),
+      supabase.from("referrals").select("*", { count: "exact", head: true }),
+      supabase.from("channels").select("*", { count: "exact", head: true }),
+      supabase.from("profiles").select("*", { count: "exact", head: true }).not("scheduled_deletion_at", "is", null),
     ]);
 
     const { data: nexaData } = await supabase.from("profiles").select("xp, acoin");
@@ -161,6 +175,10 @@ export default function AdminDashboard() {
       verifiedUsers: verifiedUsers || 0,
       totalNexa,
       totalAcoin,
+      totalStories: totalStories || 0,
+      totalReferrals: totalReferrals || 0,
+      totalChannels: totalChannels || 0,
+      pendingDeletions: pendingDeletions || 0,
     });
   }, []);
 
@@ -221,9 +239,19 @@ export default function AdminDashboard() {
     }
   }, []);
 
+  const loadReferrals = useCallback(async () => {
+    if (!isAdmin) return;
+    const { data } = await supabase
+      .from("referrals")
+      .select("id, created_at, reward_given, referrer:profiles!referrals_referrer_id_fkey(id, display_name, handle), referred:profiles!referrals_referred_id_fkey(id, display_name, handle)")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (data) setReferrals(data);
+  }, []);
+
   const loadAll = useCallback(async () => {
     setLoading(true);
-    await Promise.all([loadStats(), loadUsers(), loadPosts(), loadPlans(), loadCurrency(), loadReports()]);
+    await Promise.all([loadStats(), loadUsers(), loadPosts(), loadPlans(), loadCurrency(), loadReports(), loadReferrals()]);
     setLoading(false);
   }, []);
 
@@ -300,8 +328,14 @@ export default function AdminDashboard() {
         <View style={styles.statsGrid}>
           <StatCard title="Premium" value={stats.premiumUsers} icon="diamond" color={GOLD} colors={colors} />
           <StatCard title="Verified" value={stats.verifiedUsers} icon="checkmark-circle" color={GOLD} colors={colors} />
+          <StatCard title="Stories" value={stats.totalStories} icon="aperture" color="#EC4899" colors={colors} />
+          <StatCard title="Channels" value={stats.totalChannels} icon="megaphone" color="#6366F1" colors={colors} />
+        </View>
+        <View style={styles.statsGrid}>
           <StatCard title="Nexa" value={stats.totalNexa} icon="flash" color="#EF4444" colors={colors} />
           <StatCard title="ACoin" value={stats.totalAcoin} icon="diamond" color="#F59E0B" colors={colors} />
+          <StatCard title="Referrals" value={stats.totalReferrals} icon="git-network" color="#14B8A6" colors={colors} />
+          <StatCard title="Pending Del." value={stats.pendingDeletions} icon="trash" color="#FF3B30" colors={colors} />
         </View>
       </View>
     );
@@ -406,6 +440,49 @@ export default function AdminDashboard() {
         ))}
         {posts.length === 0 && (
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>No posts found</Text>
+        )}
+      </View>
+    );
+  }
+
+  function renderReferrals() {
+    return (
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Referral Tracking</Text>
+        <View style={[styles.referralSummary, { backgroundColor: colors.surface }]}>
+          <View style={styles.referralSummaryRow}>
+            <View style={styles.referralSummaryItem}>
+              <Text style={[styles.referralSummaryValue, { color: BRAND }]}>{stats.totalReferrals}</Text>
+              <Text style={[styles.referralSummaryLabel, { color: colors.textMuted }]}>Total Referrals</Text>
+            </View>
+            <View style={styles.referralSummaryItem}>
+              <Text style={[styles.referralSummaryValue, { color: GOLD }]}>{(stats.totalReferrals * 500).toLocaleString()}</Text>
+              <Text style={[styles.referralSummaryLabel, { color: colors.textMuted }]}>Nexa Rewarded</Text>
+            </View>
+          </View>
+        </View>
+        {referrals.map((r: any) => (
+          <View key={r.id} style={[styles.referralRow, { backgroundColor: colors.surface }]}>
+            <Ionicons name="git-network" size={18} color="#14B8A6" />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.referralText, { color: colors.text }]}>
+                <Text style={{ fontFamily: "Inter_600SemiBold" }}>{r.referrer?.display_name || "Unknown"}</Text>
+                {" → "}
+                <Text style={{ fontFamily: "Inter_600SemiBold" }}>{r.referred?.display_name || "Unknown"}</Text>
+              </Text>
+              <Text style={[styles.referralMeta, { color: colors.textMuted }]}>
+                @{r.referrer?.handle || "?"} referred @{r.referred?.handle || "?"} · {timeAgo(r.created_at)}
+              </Text>
+            </View>
+            <View style={[styles.statusBadge, { backgroundColor: r.reward_given ? "#10B98120" : "#FF950020" }]}>
+              <Text style={{ color: r.reward_given ? "#10B981" : "#FF9500", fontSize: 11, fontFamily: "Inter_600SemiBold" }}>
+                {r.reward_given ? "Rewarded" : "Pending"}
+              </Text>
+            </View>
+          </View>
+        ))}
+        {referrals.length === 0 && (
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>No referrals yet</Text>
         )}
       </View>
     );
@@ -527,6 +604,7 @@ export default function AdminDashboard() {
     overview: renderOverview,
     users: renderUsers,
     content: renderContent,
+    referrals: renderReferrals,
     subs: renderSubscriptions,
     currency: renderCurrency,
     reports: renderReports,
@@ -690,6 +768,14 @@ const styles = StyleSheet.create({
   reportReason: { fontSize: 15, fontFamily: "Inter_600SemiBold", flex: 1 },
   reportMeta: { fontSize: 12, fontFamily: "Inter_400Regular" },
   reportFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  referralSummary: { borderRadius: 14, padding: 16 },
+  referralSummaryRow: { flexDirection: "row", gap: 16 },
+  referralSummaryItem: { flex: 1, alignItems: "center", gap: 4 },
+  referralSummaryValue: { fontSize: 24, fontFamily: "Inter_700Bold" },
+  referralSummaryLabel: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  referralRow: { flexDirection: "row", alignItems: "center", padding: 12, borderRadius: 14, gap: 10 },
+  referralText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  referralMeta: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
   emptyText: { textAlign: "center", fontSize: 14, fontFamily: "Inter_400Regular", paddingVertical: 32 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", padding: 24 },
   modalContent: { width: "100%", borderRadius: 20, padding: 24, gap: 16 },
