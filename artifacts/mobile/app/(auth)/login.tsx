@@ -60,9 +60,16 @@ export default function LoginScreen() {
     if (data.user) {
       const { data: prof } = await supabase
         .from("profiles")
-        .select("scheduled_deletion_at")
+        .select("scheduled_deletion_at, account_deleted")
         .eq("id", data.user.id)
         .single();
+
+      if (prof?.account_deleted) {
+        setLoading(false);
+        await supabase.auth.signOut();
+        showAlert("Account Deleted", "This account has been permanently deleted and can no longer be accessed.");
+        return;
+      }
 
       if (prof?.scheduled_deletion_at) {
         const deletionDate = new Date(prof.scheduled_deletion_at);

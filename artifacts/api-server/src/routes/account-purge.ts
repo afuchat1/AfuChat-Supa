@@ -7,12 +7,15 @@ const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const PURGE_SECRET = process.env.ACCOUNT_PURGE_SECRET || "afuchat-purge-2024";
+const PURGE_SECRET = process.env.ACCOUNT_PURGE_SECRET;
 
 router.post("/account-purge", async (req, res) => {
   try {
+    if (!PURGE_SECRET) {
+      return res.status(503).json({ error: "Purge endpoint not configured" });
+    }
     const { secret } = req.body;
-    if (secret !== PURGE_SECRET) {
+    if (!secret || secret !== PURGE_SECRET) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
@@ -37,23 +40,43 @@ router.post("/account-purge", async (req, res) => {
     for (const profile of expiredProfiles) {
       const uid = profile.id;
 
-      await Promise.all([
-        supabase.from("moments").delete().eq("user_id", uid),
-        supabase.from("moment_likes").delete().eq("user_id", uid),
-        supabase.from("moment_comments").delete().eq("user_id", uid),
-        supabase.from("stories").delete().eq("user_id", uid),
-        supabase.from("story_views").delete().eq("viewer_id", uid),
-        supabase.from("follows").delete().or(`follower_id.eq.${uid},following_id.eq.${uid}`),
-        supabase.from("contacts").delete().or(`user_id.eq.${uid},contact_id.eq.${uid}`),
-        supabase.from("chat_members").delete().eq("user_id", uid),
-        supabase.from("messages").delete().eq("sender_id", uid),
-        supabase.from("channel_members").delete().eq("user_id", uid),
-        supabase.from("xp_transfers").delete().or(`sender_id.eq.${uid},receiver_id.eq.${uid}`),
-        supabase.from("acoin_transactions").delete().eq("user_id", uid),
-        supabase.from("user_subscriptions").delete().eq("user_id", uid),
-        supabase.from("notifications").delete().eq("user_id", uid),
-        supabase.from("red_envelopes").delete().eq("sender_id", uid),
-      ]);
+      const deletions = [
+        { table: "moments", filter: { user_id: uid } },
+        { table: "moment_likes", filter: { user_id: uid } },
+        { table: "moment_comments", filter: { user_id: uid } },
+        { table: "stories", filter: { user_id: uid } },
+        { table: "story_views", filter: { viewer_id: uid } },
+        { table: "chat_members", filter: { user_id: uid } },
+        { table: "messages", filter: { sender_id: uid } },
+        { table: "channel_members", filter: { user_id: uid } },
+        { table: "user_subscriptions", filter: { user_id: uid } },
+        { table: "notifications", filter: { user_id: uid } },
+      ];
+
+      const errors: string[] = [];
+      for (const del of deletions) {
+        const { error: delErr } = await supabase.from(del.table).delete().match(del.filter);
+        if (delErr) errors.push(`${del.table}: ${delErr.message}`);
+      }
+
+      const orDeletions = [
+        { table: "follows", filter: `follower_id.eq.${uid},following_id.eq.${uid}` },
+        { table: "contacts", filter: `user_id.eq.${uid},contact_id.eq.${uid}` },
+        { table: "xp_transfers", filter: `sender_id.eq.${uid},receiver_id.eq.${uid}` },
+        { table: "acoin_transactions", filter: `user_id.eq.${uid}` },
+        { table: "red_envelopes", filter: `sender_id.eq.${uid}` },
+      ];
+
+      for (const del of orDeletions) {
+        const { error: delErr } = del.filter.includes(",")
+          ? await supabase.from(del.table).delete().or(del.filter)
+          : await supabase.from(del.table).delete().match({ user_id: uid });
+        if (delErr) errors.push(`${del.table}: ${delErr.message}`);
+      }
+
+      if (errors.length > 0) {
+        console.error(`Partial deletion failures for ${uid}:`, errors);
+      }
 
       await supabase.from("profiles").update({
         display_name: "Deleted User",
