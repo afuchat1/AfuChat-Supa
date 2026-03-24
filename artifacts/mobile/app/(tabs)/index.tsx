@@ -500,13 +500,13 @@ export default function ChatsScreen() {
               tintColor={Colors.brand}
             />
           }
-          contentContainerStyle={{ paddingBottom: 90 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 52 + 80 }}
           showsVerticalScrollIndicator={false}
         />
       )}
 
       <TouchableOpacity
-        style={[styles.fab, { backgroundColor: Colors.brand, bottom: insets.bottom + 24 }]}
+        style={[styles.fab, { backgroundColor: Colors.brand, bottom: insets.bottom + 52 + 16 }]}
         onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowContactPicker(true); }}
         activeOpacity={0.85}
       >
