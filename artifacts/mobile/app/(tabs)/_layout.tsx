@@ -4,11 +4,13 @@ import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
+import React, { useEffect } from "react";
 import { Image, Platform, StyleSheet, useColorScheme } from "react-native";
+import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Colors from "@/constants/colors";
+import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
@@ -110,6 +112,15 @@ function ClassicTabLayout() {
 }
 
 export default function TabLayout() {
+  const { session, profile, loading } = useAuth();
+
+  useEffect(() => {
+    if (loading) return;
+    if (session && profile && !profile.onboarding_completed) {
+      router.replace({ pathname: "/onboarding", params: { userId: session.user.id } });
+    }
+  }, [session, profile, loading]);
+
   if (isLiquidGlassAvailable()) {
     return <NativeTabLayout />;
   }

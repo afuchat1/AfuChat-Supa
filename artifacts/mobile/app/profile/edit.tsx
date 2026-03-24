@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -14,6 +15,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -32,6 +34,48 @@ export default function EditProfileScreen() {
   const [website, setWebsite] = useState(profile?.website_url || "");
   const [country, setCountry] = useState(profile?.country || "");
   const [loading, setLoading] = useState(false);
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  async function pickAvatar() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      showAlert("Permission needed", "Please allow access to your photo library to change your profile picture.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setAvatarUri(result.assets[0].uri);
+    }
+  }
+
+  async function uploadAvatar(): Promise<string | null> {
+    if (!avatarUri || !profile?.id) return null;
+    try {
+      const ext = avatarUri.split(".").pop()?.toLowerCase() || "jpg";
+      const fileName = `${profile.id}/avatar_${Date.now()}.${ext}`;
+      const response = await fetch(avatarUri);
+      const blob = await response.blob();
+      const arrayBuffer = await new Response(blob).arrayBuffer();
+      const { error } = await supabase.storage
+        .from("avatars")
+        .upload(fileName, arrayBuffer, {
+          contentType: `image/${ext === "png" ? "png" : "jpeg"}`,
+          upsert: true,
+        });
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(fileName);
+      return urlData.publicUrl;
+    } catch (e: any) {
+      showAlert("Upload failed", e.message || "Could not upload avatar. Please try again.");
+      return null;
+    }
+  }
 
   async function save() {
     if (!displayName.trim()) {
@@ -45,15 +89,32 @@ export default function EditProfileScreen() {
     setLoading(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+    let newAvatarUrl: string | null = null;
+    if (avatarUri) {
+      setUploadingAvatar(true);
+      newAvatarUrl = await uploadAvatar();
+      setUploadingAvatar(false);
+      if (!newAvatarUrl) {
+        setLoading(false);
+        return;
+      }
+    }
+
+    const updateData: any = {
+      display_name: displayName.trim(),
+      handle: handle.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_"),
+      bio: bio.trim() || null,
+      website_url: website.trim() || null,
+      country: country.trim() || null,
+    };
+
+    if (newAvatarUrl) {
+      updateData.avatar_url = newAvatarUrl;
+    }
+
     const { error } = await supabase
       .from("profiles")
-      .update({
-        display_name: displayName.trim(),
-        handle: handle.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_"),
-        bio: bio.trim() || null,
-        website_url: website.trim() || null,
-        country: country.trim() || null,
-      })
+      .update(updateData)
       .eq("id", profile?.id);
 
     if (error) {
@@ -64,6 +125,8 @@ export default function EditProfileScreen() {
     }
     setLoading(false);
   }
+
+  const currentAvatarDisplay = avatarUri || profile?.avatar_url;
 
   return (
     <KeyboardAvoidingView
@@ -91,8 +154,21 @@ export default function EditProfileScreen() {
 
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         <View style={styles.avatarSection}>
-          <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={84} />
-          <TouchableOpacity style={styles.changePhotoBtn}>
+          <TouchableOpacity onPress={pickAvatar} activeOpacity={0.8}>
+            <View style={styles.avatarWrap}>
+              {currentAvatarDisplay ? (
+                <Image source={{ uri: currentAvatarDisplay }} style={styles.avatarImg} />
+              ) : (
+                <Avatar uri={null} name={profile?.display_name} size={84} />
+              )}
+              {uploadingAvatar && (
+                <View style={styles.avatarOverlay}>
+                  <ActivityIndicator color="#fff" />
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={pickAvatar}>
             <Text style={[styles.changePhotoText, { color: Colors.brand }]}>Change Photo</Text>
           </TouchableOpacity>
         </View>
@@ -192,7 +268,15 @@ const styles = StyleSheet.create({
   saveText: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
   body: { paddingBottom: 40 },
   avatarSection: { alignItems: "center", paddingVertical: 24, gap: 10 },
-  changePhotoBtn: {},
+  avatarWrap: { position: "relative" },
+  avatarImg: { width: 84, height: 84, borderRadius: 42 },
+  avatarOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    borderRadius: 42,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   changePhotoText: { fontSize: 15, fontFamily: "Inter_500Medium" },
   fields: {},
   field: {

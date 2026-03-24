@@ -74,7 +74,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - **Navigation**: Expo Router with tabs (Chats, Contacts, Discover, Me)
 - **Design**: AfuChat teal `#00C2CB` brand color, gold business badge `#D4A853`, Inter font family, dark/light theme, custom logo
 - **Badge System**: `is_organization_verified=true` → gold badge (#D4A853) + "Verified Business" tag. `is_verified=true` (subscription) → teal badge (#00C2CB), no business tag. Applied across me.tsx, discover.tsx, contacts.tsx, contact/[id].tsx, post/[id].tsx, admin/index.tsx.
-- **Cross-platform Alerts**: `lib/alert.ts` exports `showAlert()` — wraps `Alert.alert` on native, uses `window.confirm`/`window.prompt` on web. All screens use this instead of `Alert.alert` directly.
+- **Cross-platform Alerts**: `lib/alert.ts` exports `showAlert()` — renders iOS-style modal dialogs on both Android and iOS via `IOSAlert` component registered in `_layout.tsx`. Uses event listener pattern (`registerAlertListener`/`unregisterAlertListener`). Web fallback uses `window.confirm`/`window.prompt`. All screens use `showAlert()` instead of `Alert.alert` directly.
 - **Account Switching**: `lib/accountStore.ts` stores multiple Supabase sessions using `expo-secure-store` (native) / AsyncStorage (web). AuthContext exposes `addAccount(email, password)`, `switchAccount(userId)`, `removeAccount(userId)`. Users add accounts with email+password and switch instantly without logging out.
 - **Chat Attachments**: Messages support image, video, audio, file, and gif attachment types. Video uses `expo-av` Video component with native controls. Audio messages use expo-av playback.
 - **Stories**: View screen has animated progress bars, auto-advance timer (5s for images, video duration for video stories), and hold-to-pause. Create screen supports both image and video preview.
@@ -130,14 +130,18 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 ## Auth & Onboarding Flow
 
 - **Registration**: Sign up page collects only email + password. After signup, user verifies email via 6-digit OTP code.
-- **Onboarding**: After OTP verification, new users are routed to a 4-step onboarding flow (`/onboarding`):
+- **Onboarding**: After OTP verification, new users are routed to a 5-step onboarding flow (`/onboarding`):
   - Step 1: Display name + username (handle) — required
-  - Step 2: Region, date of birth (DD/MM/YYYY), gender (male/female) — all required, must be 13+
-  - Step 3: Interests selection — pick at least 3 from 18 options
-  - Step 4: Profile summary review
+  - Step 2: Country (full searchable picker with 130+ countries, flags, dial codes) + phone number (validated against country-specific digit length) — required
+  - Step 3: Date of birth (scrollable day/month/year dropdown selectors) + gender (male/female) — all required, must be 13+
+  - Step 4: Interests selection — pick at least 3 from 18 options
+  - Step 5: Profile photo upload (via expo-image-picker, uploaded to Supabase Storage `avatars` bucket) + profile summary review
 - **Onboarding completion**: Profile is created with `onboarding_completed = true` on the `profiles` table. Existing users already have this set to `true`.
+- **Onboarding enforcement**: Both `index.tsx` and `(tabs)/_layout.tsx` check `profile.onboarding_completed` — redirects to `/onboarding` if false. Users cannot access the app without completing onboarding.
 - **Routing logic** (`index.tsx`): If session exists but `profile.onboarding_completed` is false, redirects to onboarding. Otherwise goes to `(tabs)`.
-- **New profile columns**: `gender` (text), `date_of_birth` (date), `region` (text), `interests` (text[]), `onboarding_completed` (boolean, default false).
+- **Profile columns**: `gender` (text), `date_of_birth` (date), `country` (text), `phone_number` (text), `interests` (text[]), `onboarding_completed` (boolean, default false).
+- **Country data**: `constants/countries.ts` exports `COUNTRIES` array with name, code, dial code, flag emoji, and valid phone digit lengths for each country.
+- **Edit Profile**: `profile/edit.tsx` supports real avatar upload via expo-image-picker + Supabase Storage. Change Photo button opens gallery, selected image uploaded on save.
 - **Referral system**: No manual codes — referrals work via deep links only. `afuchat.com/username` (no @) = referral link. `afuchat.com/@username` (with @) = public profile. When someone opens a referral link and signs up, the referrer handle is stored via `AsyncStorage` and auto-applied during onboarding. Referrer gets +500 XP, referred user gets 1 week free Platinum premium.
 
 ## UI Conventions

@@ -9,7 +9,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Linking } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -18,8 +18,10 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PushNotificationManager } from "@/components/PushNotificationManager";
+import { IOSAlert, type IOSAlertButton } from "@/components/ui/IOSAlert";
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
+import { registerAlertListener, unregisterAlertListener } from "@/lib/alert";
 import { setBaseUrl } from "@workspace/api-client-react";
 
 setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
@@ -77,6 +79,22 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
+  const [alertState, setAlertState] = useState<{
+    visible: boolean;
+    title: string;
+    message?: string;
+    buttons?: IOSAlertButton[];
+  }>({ visible: false, title: "" });
+
+  const dismissAlert = useCallback(() => {
+    setAlertState((prev) => ({ ...prev, visible: false }));
+  }, []);
+
+  useEffect(() => {
+    registerAlertListener(setAlertState);
+    return () => unregisterAlertListener();
+  }, []);
+
   useEffect(() => {
     if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
@@ -114,6 +132,13 @@ export default function RootLayout() {
                 <AuthProvider>
                   <PushNotificationManager />
                   <RootLayoutNav />
+                  <IOSAlert
+                    visible={alertState.visible}
+                    title={alertState.title}
+                    message={alertState.message}
+                    buttons={alertState.buttons}
+                    onDismiss={dismissAlert}
+                  />
                 </AuthProvider>
               </ThemeProvider>
             </KeyboardProvider>
