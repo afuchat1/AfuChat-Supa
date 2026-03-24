@@ -79,8 +79,6 @@ export default function OnboardingScreen() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
-  const [detectingLocation, setDetectingLocation] = useState(false);
-  const [locationDetected, setLocationDetected] = useState(false);
 
   const [dobDay, setDobDay] = useState(0);
   const [dobMonth, setDobMonth] = useState(0);
@@ -102,13 +100,9 @@ export default function OnboardingScreen() {
 
   async function detectCountry() {
     if (selectedCountry) return;
-    setDetectingLocation(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        setDetectingLocation(false);
-        return;
-      }
+      if (status !== "granted") return;
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Low,
       });
@@ -122,12 +116,9 @@ export default function OnboardingScreen() {
         );
         if (match) {
           setSelectedCountry(match);
-          setLocationDetected(true);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
       }
     } catch (_) {}
-    setDetectingLocation(false);
   }
 
   function animateProgress(nextStep: number) {
@@ -430,9 +421,7 @@ export default function OnboardingScreen() {
           <Text style={[styles.stepEmoji]}>🌍</Text>
           <Text style={[styles.stepTitle, { color: colors.text }]}>Where are you from?</Text>
           <Text style={[styles.stepDesc, { color: colors.textSecondary }]}>
-            {locationDetected
-              ? "We detected your country automatically. You can change it if needed."
-              : "Confirm your country and provide your phone number for account security."}
+            Provide your country and phone number for account security.
           </Text>
         </View>
 
@@ -444,21 +433,10 @@ export default function OnboardingScreen() {
               onPress={() => setShowCountryPicker(true)}
               activeOpacity={0.7}
             >
-              {detectingLocation ? (
-                <>
-                  <ActivityIndicator size="small" color={Colors.brand} style={{ marginRight: 10 }} />
-                  <Text style={[styles.placeholderText, { color: colors.textMuted }]}>Detecting your location...</Text>
-                </>
-              ) : selectedCountry ? (
+              {selectedCountry ? (
                 <>
                   <Text style={styles.countryFlag}>{selectedCountry.flag}</Text>
                   <Text style={[styles.countryName, { color: colors.text }]}>{selectedCountry.name}</Text>
-                  {locationDetected && (
-                    <View style={styles.autoDetectedBadge}>
-                      <Ionicons name="location" size={12} color="#34C759" />
-                      <Text style={styles.autoDetectedText}>Auto</Text>
-                    </View>
-                  )}
                 </>
               ) : (
                 <>
@@ -468,12 +446,6 @@ export default function OnboardingScreen() {
               )}
               <Ionicons name="chevron-down" size={18} color={colors.textMuted} style={{ marginLeft: "auto" }} />
             </TouchableOpacity>
-            {!detectingLocation && !selectedCountry && (
-              <TouchableOpacity onPress={detectCountry} style={styles.retryDetect}>
-                <Ionicons name="locate" size={14} color={Colors.brand} />
-                <Text style={[styles.retryDetectText, { color: Colors.brand }]}>Detect my location</Text>
-              </TouchableOpacity>
-            )}
           </View>
 
           <View style={styles.fieldWrap}>
@@ -928,25 +900,6 @@ const styles = StyleSheet.create({
   successHint: { fontSize: 12, fontFamily: "Inter_500Medium", paddingLeft: 2, color: "#34C759" },
   countryFlag: { fontSize: 22, marginRight: 10 },
   countryName: { fontSize: 16, fontFamily: "Inter_400Regular", flex: 1 },
-  autoDetectedBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    backgroundColor: "rgba(52,199,89,0.12)",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    marginLeft: 4,
-  },
-  autoDetectedText: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#34C759" },
-  retryDetect: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingLeft: 2,
-    paddingTop: 4,
-  },
-  retryDetectText: { fontSize: 13, fontFamily: "Inter_500Medium" },
   placeholderText: { fontSize: 16, fontFamily: "Inter_400Regular", flex: 1 },
   phoneRow: { flexDirection: "row", gap: 8 },
   dialCodeBox: {

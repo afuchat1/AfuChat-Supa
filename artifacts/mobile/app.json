@@ -52,7 +52,7 @@
           "icon": "./assets/images/afu-symbol.png",
           "color": "#00C2CB",
           "defaultChannel": "default",
-          "sounds": []
+          "sounds": ["./assets/sounds/notification.wav"]
         }
       ]
     ],
