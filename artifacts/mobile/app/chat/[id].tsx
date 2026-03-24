@@ -21,7 +21,9 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system";
 import { Video, ResizeMode } from "expo-av";
+import Svg, { Path } from "react-native-svg";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -29,6 +31,14 @@ import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { notifyNewMessage } from "@/lib/notifyUser";
+import {
+  cacheMessages,
+  getCachedMessages,
+  queueMessage,
+  isOnline,
+  onConnectivityChange,
+} from "@/lib/offlineStore";
+import { syncPendingMessages } from "@/lib/offlineSync";
 
 type Gift = {
   id: string;
@@ -50,6 +60,7 @@ type Message = {
   status?: string;
   attachment_url?: string | null;
   attachment_type?: string | null;
+  _pending?: boolean;
 };
 
 type ChatInfo = {
@@ -64,38 +75,39 @@ type ChatInfo = {
 
 const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 const SCREEN_HEIGHT = Dimensions.get("window").height;
+const BRAND = Colors.brand;
 
 function formatMsgTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function SwipeableMessage({ children, onSwipeRight }: { children: React.ReactNode; onSwipeRight: () => void }) {
-  const translateX = useRef(new Animated.Value(0)).current;
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 10 && g.dx > 0 && Math.abs(g.dy) < 20,
-      onPanResponderMove: (_, g) => {
-        if (g.dx > 0 && g.dx < 80) translateX.setValue(g.dx);
-      },
-      onPanResponderRelease: (_, g) => {
-        if (g.dx > 50) {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          onSwipeRight();
-        }
-        Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
-      },
-    })
-  ).current;
+function formatDateHeader(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const diff = now.getTime() - d.getTime();
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return d.toLocaleDateString([], { weekday: "long" });
+  return d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+}
 
-  return (
-    <View>
-      <View style={styles.swipeReplyHint}>
-        <Ionicons name="arrow-undo" size={18} color={Colors.brand} />
+function BubbleTail({ isMe, color }: { isMe: boolean; color: string }) {
+  if (isMe) {
+    return (
+      <View style={st.tailMe}>
+        <Svg width={12} height={16} viewBox="0 0 12 16">
+          <Path d="M0 0 C0 0 0 8 6 12 C9 14 12 16 12 16 L12 0 Z" fill={color} />
+        </Svg>
       </View>
-      <Animated.View {...panResponder.panHandlers} style={{ transform: [{ translateX }] }}>
-        {children}
-      </Animated.View>
+    );
+  }
+  return (
+    <View style={st.tailOther}>
+      <Svg width={12} height={16} viewBox="0 0 12 16">
+        <Path d="M12 0 C12 0 12 8 6 12 C3 14 0 16 0 16 L0 0 Z" fill={color} />
+      </Svg>
     </View>
   );
 }
@@ -115,9 +127,7 @@ function BottomSheet({ visible, onClose, children }: { visible: boolean; onClose
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, g) => g.dy > 10,
-      onPanResponderMove: (_, g) => {
-        if (g.dy > 0) translateY.setValue(g.dy);
-      },
+      onPanResponderMove: (_, g) => { if (g.dy > 0) translateY.setValue(g.dy); },
       onPanResponderRelease: (_, g) => {
         if (g.dy > 100 || g.vy > 0.5) {
           Animated.timing(translateY, { toValue: SCREEN_HEIGHT, duration: 200, useNativeDriver: true }).start(() => onClose());
@@ -132,23 +142,23 @@ function BottomSheet({ visible, onClose, children }: { visible: boolean; onClose
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      <TouchableOpacity style={styles.sheetOverlay} activeOpacity={1} onPress={onClose} />
+      <TouchableOpacity style={st.sheetOverlay} activeOpacity={1} onPress={onClose} />
       <Animated.View
-        style={[styles.sheetContent, { backgroundColor: colors.surface, transform: [{ translateY }] }]}
+        style={[st.sheetContent, { backgroundColor: colors.surface, transform: [{ translateY }] }]}
         {...panResponder.panHandlers}
       >
-        <View style={styles.sheetHandle} />
+        <View style={st.sheetHandle} />
         {children}
       </Animated.View>
     </View>
   );
 }
 
-function MessageBubble({ msg, isMe, showAvatar, showTime, onLongPress, onReply, replyPreview, onTapEnvelope, onTapGift }: {
+function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, replyPreview, onTapEnvelope, onTapGift }: {
   msg: Message;
   isMe: boolean;
-  showAvatar: boolean;
-  showTime: boolean;
+  showTail: boolean;
+  showName: boolean;
   onLongPress: (msg: Message) => void;
   onReply: (msg: Message) => void;
   replyPreview?: string | null;
@@ -158,179 +168,159 @@ function MessageBubble({ msg, isMe, showAvatar, showTime, onLongPress, onReply, 
   const { colors } = useTheme();
   const isRedEnvelope = msg.encrypted_content.startsWith("🧧");
   const isGiftMsg = msg.encrypted_content.startsWith("🎁");
+  const meBubbleColor = BRAND;
+  const otherBubbleColor = colors.bubbleIncoming;
+  const bubbleColor = isMe ? meBubbleColor : otherBubbleColor;
+  const textColor = isMe ? "#FFFFFF" : colors.bubbleIncomingText;
+  const isPending = msg._pending || msg.status === "sending";
 
   if (isRedEnvelope) {
     const displayMsg = msg.encrypted_content.replace(/🧧 Red Envelope \[[a-f0-9-]+\] - /, "").replace("🧧 Red Envelope - ", "");
     return (
-      <SwipeableMessage onSwipeRight={() => onReply(msg)}>
-        <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
-          {!isMe && (
-            <View style={styles.avatarSlot}>
-              {showAvatar ? <Avatar uri={msg.sender?.avatar_url} name={msg.sender?.display_name} size={32} /> : null}
+      <View style={[st.msgRow, isMe ? st.msgRowMe : st.msgRowOther]}>
+        <TouchableOpacity style={st.redEnvBubble} onPress={() => onTapEnvelope?.(msg)} activeOpacity={0.8}>
+          <View style={st.redEnvTop}>
+            <Text style={st.redEnvEmoji}>🧧</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={st.redEnvTitle}>{displayMsg}</Text>
+              <Text style={st.redEnvSub}>Tap to open</Text>
             </View>
-          )}
-          <TouchableOpacity style={styles.redEnvBubble} onPress={() => onTapEnvelope?.(msg)} activeOpacity={0.8}>
-            <View style={styles.redEnvTop}>
-              <Text style={styles.redEnvEmoji}>🧧</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.redEnvTitle}>{displayMsg}</Text>
-                <Text style={styles.redEnvSub}>Tap to open</Text>
-              </View>
-            </View>
-            <View style={styles.redEnvBottom}>
-              <Text style={styles.redEnvLabel}>AfuChat Red Envelope</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-      </SwipeableMessage>
+          </View>
+          <View style={st.redEnvBottom}>
+            <Text style={st.redEnvLabel}>AfuChat Red Envelope</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
     );
   }
 
   if (isGiftMsg) {
     return (
-      <SwipeableMessage onSwipeRight={() => onReply(msg)}>
-        <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
-          {!isMe && (
-            <View style={styles.avatarSlot}>
-              {showAvatar ? <Avatar uri={msg.sender?.avatar_url} name={msg.sender?.display_name} size={32} /> : null}
+      <View style={[st.msgRow, isMe ? st.msgRowMe : st.msgRowOther]}>
+        <TouchableOpacity style={st.giftBoxBubble} onPress={() => onTapGift?.(msg)} activeOpacity={0.8}>
+          <View style={st.giftBoxTop}>
+            <Text style={st.giftBoxEmoji}>🎁</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={st.giftBoxTitle}>
+                {isMe ? "You sent a gift" : `${msg.sender?.display_name || "Someone"} sent you a gift`}
+              </Text>
+              <Text style={st.giftBoxSub}>Tap to open</Text>
             </View>
-          )}
-          <TouchableOpacity
-            style={styles.giftBoxBubble}
-            onPress={() => onTapGift?.(msg)}
-            activeOpacity={0.8}
-          >
-            <View style={styles.giftBoxTop}>
-              <Text style={styles.giftBoxEmoji}>🎁</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.giftBoxTitle}>
-                  {isMe ? "You sent a gift" : `${msg.sender?.display_name || "Someone"} sent you a gift`}
-                </Text>
-                <Text style={styles.giftBoxSub}>Tap to open</Text>
-              </View>
-            </View>
-            <View style={styles.giftBoxBottom}>
-              <Text style={styles.giftBoxOpen}>Open Gift</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-      </SwipeableMessage>
+          </View>
+          <View style={st.giftBoxBottom}>
+            <Text style={st.giftBoxOpen}>Open Gift</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
     );
   }
 
+  const hasImage = msg.attachment_url && (msg.attachment_type === "image" || msg.attachment_type === "gif");
+  const hasVideo = msg.attachment_url && msg.attachment_type === "video";
+  const hasAudio = msg.attachment_url && msg.attachment_type === "audio";
+  const hasFile = msg.attachment_url && msg.attachment_type === "file";
+  const hasTextContent = msg.encrypted_content && !["📷 Photo", "🎥 Video", "GIF"].includes(msg.encrypted_content);
+
   return (
-    <SwipeableMessage onSwipeRight={() => onReply(msg)}>
-      <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
-        {!isMe && (
-          <View style={styles.avatarSlot}>
-            {showAvatar ? (
-              <Avatar uri={msg.sender?.avatar_url} name={msg.sender?.display_name} size={32} />
-            ) : null}
-          </View>
-        )}
-        <View style={[styles.bubbleWrap, isMe ? styles.bubbleWrapMe : styles.bubbleWrapOther]}>
-          {!isMe && showAvatar && (
-            <Text style={[styles.senderName, { color: colors.textSecondary }]}>
+    <View style={[st.msgRow, isMe ? st.msgRowMe : st.msgRowOther]}>
+      <View style={[st.bubbleContainer, isMe ? st.bubbleContainerMe : st.bubbleContainerOther]}>
+        {showTail && <BubbleTail isMe={isMe} color={bubbleColor} />}
+
+        <View style={[
+          st.bubble,
+          { backgroundColor: bubbleColor },
+          isMe ? st.bubbleMe : st.bubbleOther,
+          showTail ? (isMe ? st.bubbleTailMe : st.bubbleTailOther) : null,
+          isPending && { opacity: 0.6 },
+        ]}>
+          {!isMe && showName && (
+            <Text style={[st.senderName, { color: BRAND }]}>
               {msg.sender?.display_name}
             </Text>
           )}
+
           {replyPreview && (
-            <View style={[styles.replyPreview, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : colors.inputBg }]}>
-              <View style={[styles.replyBarLine, { backgroundColor: Colors.brand }]} />
-              <Text style={[styles.replyPreviewText, { color: isMe ? "rgba(255,255,255,0.8)" : colors.textSecondary }]} numberOfLines={1}>
+            <View style={[st.replyPreview, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.06)" }]}>
+              <View style={[st.replyBarLine, { backgroundColor: isMe ? "#fff" : BRAND }]} />
+              <Text style={[st.replyPreviewText, { color: isMe ? "rgba(255,255,255,0.8)" : colors.textSecondary }]} numberOfLines={1}>
                 {replyPreview}
               </Text>
             </View>
           )}
-          {msg.attachment_url && (msg.attachment_type === "image" || msg.attachment_type === "gif") ? (
-            <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.8}>
-              <Image source={{ uri: msg.attachment_url }} style={styles.attachmentImage} resizeMode="cover" />
-              {msg.encrypted_content && msg.encrypted_content !== "📷 Photo" && msg.encrypted_content !== "GIF" && (
-                <View style={[styles.bubble, isMe ? { backgroundColor: Colors.brand } : { backgroundColor: colors.bubbleIncoming }, { borderTopLeftRadius: 4, borderTopRightRadius: 4, marginTop: -4 }]}>
-                  <Text style={[styles.bubbleText, { color: isMe ? "#fff" : colors.bubbleIncomingText }]}>{msg.encrypted_content}</Text>
-                </View>
+
+          {hasImage ? (
+            <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
+              <Image source={{ uri: msg.attachment_url! }} style={st.attachImage} resizeMode="cover" />
+              {hasTextContent && (
+                <Text style={[st.bubbleText, { color: textColor, marginTop: 6 }]}>{msg.encrypted_content}</Text>
               )}
             </TouchableOpacity>
-          ) : msg.attachment_url && msg.attachment_type === "video" ? (
-            <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.8}>
-              <View style={styles.attachmentVideo}>
+          ) : hasVideo ? (
+            <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
+              <View style={st.attachVideo}>
                 <Video
-                  source={{ uri: msg.attachment_url }}
-                  style={{ width: "100%", height: "100%", borderRadius: 14 }}
+                  source={{ uri: msg.attachment_url! }}
+                  style={{ width: "100%", height: "100%", borderRadius: 8 }}
                   resizeMode={ResizeMode.COVER}
                   useNativeControls
                   isLooping={false}
                 />
               </View>
             </TouchableOpacity>
-          ) : msg.attachment_url && msg.attachment_type === "audio" ? (
-            <View style={[styles.bubble, styles.audioBubble, isMe ? { backgroundColor: Colors.brand } : { backgroundColor: colors.bubbleIncoming }]}>
-              <Ionicons name="musical-note" size={20} color={isMe ? "#fff" : colors.bubbleIncomingText} />
+          ) : hasAudio ? (
+            <View style={st.audioRow}>
+              <Ionicons name="musical-note" size={20} color={textColor} />
               <View style={{ flex: 1 }}>
-                <Video
-                  source={{ uri: msg.attachment_url }}
-                  style={{ height: 36 }}
-                  useNativeControls
-                />
+                <Video source={{ uri: msg.attachment_url! }} style={{ height: 36 }} useNativeControls />
               </View>
             </View>
-          ) : msg.attachment_url && msg.attachment_type === "file" ? (
-            <TouchableOpacity
-              onLongPress={() => onLongPress(msg)}
-              delayLongPress={300}
-              activeOpacity={0.8}
-              style={[styles.bubble, styles.fileBubble, isMe ? { backgroundColor: Colors.brand } : { backgroundColor: colors.bubbleIncoming }]}
-            >
-              <Ionicons name="document-outline" size={24} color={isMe ? "#fff" : colors.bubbleIncomingText} />
+          ) : hasFile ? (
+            <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9} style={st.fileRow}>
+              <View style={[st.fileIconBg, { backgroundColor: isMe ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.06)" }]}>
+                <Ionicons name="document-text" size={22} color={textColor} />
+              </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.bubbleText, { color: isMe ? "#fff" : colors.bubbleIncomingText }]} numberOfLines={2}>{msg.encrypted_content}</Text>
+                <Text style={[st.fileName, { color: textColor }]} numberOfLines={2}>{msg.encrypted_content}</Text>
+                <Text style={[st.fileMeta, { color: isMe ? "rgba(255,255,255,0.6)" : colors.textMuted }]}>Document</Text>
               </View>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity
-              onLongPress={() => onLongPress(msg)}
-              delayLongPress={300}
-              activeOpacity={0.8}
-              style={[
-                styles.bubble,
-                isMe ? { backgroundColor: Colors.brand } : { backgroundColor: colors.bubbleIncoming },
-              ]}
-            >
-              <Text style={[styles.bubbleText, { color: isMe ? "#fff" : colors.bubbleIncomingText }]}>
-                {msg.encrypted_content}
-              </Text>
+            <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
+              <Text style={[st.bubbleText, { color: textColor }]}>{msg.encrypted_content}</Text>
             </TouchableOpacity>
           )}
 
-          {msg.reactions && msg.reactions.length > 0 && (
-            <View style={styles.reactionsRow}>
-              {msg.reactions.map((r, i) => (
-                <View key={i} style={[styles.reactionBadge, r.myReaction && { borderColor: Colors.brand }]}>
-                  <Text style={styles.reactionEmoji}>{r.emoji}</Text>
-                  {r.count > 1 && <Text style={[styles.reactionCount, { color: colors.textSecondary }]}>{r.count}</Text>}
-                </View>
-              ))}
-            </View>
-          )}
-
-          <View style={styles.timeStatusRow}>
-            {showTime && (
-              <Text style={[styles.msgTime, { color: colors.textMuted }, isMe && styles.msgTimeMe]}>
-                {formatMsgTime(msg.sent_at)}
-              </Text>
-            )}
-            {isMe && msg.status && (
+          <View style={st.metaRow}>
+            <Text style={[st.msgTime, { color: isMe ? "rgba(255,255,255,0.55)" : colors.textMuted }]}>
+              {formatMsgTime(msg.sent_at)}
+            </Text>
+            {isMe && (
               <Ionicons
-                name={msg.status === "read" ? "checkmark-done" : msg.status === "delivered" ? "checkmark-done-outline" : "checkmark"}
+                name={
+                  isPending ? "time-outline" :
+                  msg.status === "read" ? "checkmark-done" :
+                  msg.status === "delivered" ? "checkmark-done" : "checkmark"
+                }
                 size={14}
-                color={msg.status === "read" ? Colors.brand : colors.textMuted}
-                style={{ marginLeft: 4 }}
+                color={msg.status === "read" ? "#53BDEB" : isMe ? "rgba(255,255,255,0.55)" : colors.textMuted}
+                style={{ marginLeft: 3 }}
               />
             )}
           </View>
         </View>
+
+        {msg.reactions && msg.reactions.length > 0 && (
+          <View style={[st.reactionsRow, isMe ? st.reactionsMe : st.reactionsOther]}>
+            {msg.reactions.map((r, i) => (
+              <View key={i} style={[st.reactionPill, r.myReaction && { borderColor: BRAND, borderWidth: 1.5 }]}>
+                <Text style={st.reactionEmoji}>{r.emoji}</Text>
+                {r.count > 1 && <Text style={[st.reactionCount, { color: colors.text }]}>{r.count}</Text>}
+              </View>
+            ))}
+          </View>
+        )}
       </View>
-    </SwipeableMessage>
+    </View>
   );
 }
 
@@ -379,8 +369,19 @@ export default function ChatScreen() {
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [gifSearch, setGifSearch] = useState("");
   const [attachmentPreview, setAttachmentPreview] = useState<{ uri: string; type: string; name?: string } | null>(null);
+  const [networkOnline, setNetworkOnline] = useState(isOnline());
   const flatListRef = useRef<FlatList>(null);
   const typingTimeout = useRef<any>(null);
+
+  useEffect(() => {
+    const unsub = onConnectivityChange((online) => {
+      setNetworkOnline(online);
+      if (online) syncPendingMessages();
+    });
+    return unsub;
+  }, []);
+
+  const effectiveChatId = isDraft ? realChatId : id;
 
   const loadChatInfo = useCallback(async () => {
     if (!id || !user || isDraft) return;
@@ -406,12 +407,20 @@ export default function ChatScreen() {
   }, [id, user, isDraft]);
 
   const loadMessages = useCallback(async () => {
-    const effectiveChatId = isDraft ? realChatId : id;
-    if (!effectiveChatId || !user) return;
+    const chatId = isDraft ? realChatId : id;
+    if (!chatId || !user) return;
+
+    if (!isOnline()) {
+      const cached = await getCachedMessages(chatId);
+      if (cached.length > 0) setMessages(cached);
+      setLoading(false);
+      return;
+    }
+
     const { data } = await supabase
       .from("messages")
       .select(`id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`)
-      .eq("chat_id", effectiveChatId)
+      .eq("chat_id", chatId)
       .order("sent_at", { ascending: false })
       .limit(50);
 
@@ -440,27 +449,37 @@ export default function ChatScreen() {
         if (!statusMap[s.message_id] || s.status === "read") statusMap[s.message_id] = s.status;
       }
 
-      setMessages(
-        data.map((m: any) => ({
-          id: m.id,
-          chat_id: m.chat_id,
-          sender_id: m.sender_id,
-          encrypted_content: m.encrypted_content,
-          sent_at: m.sent_at,
-          reply_to_message_id: m.reply_to_message_id,
-          attachment_url: m.attachment_url,
-          attachment_type: m.attachment_type,
-          sender: m.profiles,
-          reactions: reactionMap[m.id] || [],
-          status: statusMap[m.id] || (m.sender_id === user.id ? "sent" : undefined),
-        }))
-      );
+      const mapped = data.map((m: any) => ({
+        id: m.id,
+        chat_id: m.chat_id,
+        sender_id: m.sender_id,
+        encrypted_content: m.encrypted_content,
+        sent_at: m.sent_at,
+        reply_to_message_id: m.reply_to_message_id,
+        attachment_url: m.attachment_url,
+        attachment_type: m.attachment_type,
+        sender: m.profiles,
+        reactions: reactionMap[m.id] || [],
+        status: statusMap[m.id] || (m.sender_id === user.id ? "sent" : undefined),
+      }));
+
+      setMessages(mapped);
+      cacheMessages(chatId, mapped);
     }
     setLoading(false);
   }, [id, user, isDraft, realChatId]);
 
   useEffect(() => {
     if (isDraft) return;
+
+    const loadCached = async () => {
+      if (id) {
+        const cached = await getCachedMessages(id);
+        if (cached.length > 0) setMessages(cached);
+      }
+    };
+    loadCached();
+
     loadChatInfo();
     loadMessages();
 
@@ -470,8 +489,8 @@ export default function ChatScreen() {
         async (payload) => {
           const newMsg = payload.new as any;
           if (newMsg.sender_id === user?.id) return;
-          const { data: profile } = await supabase.from("profiles").select("display_name, avatar_url, handle").eq("id", newMsg.sender_id).single();
-          setMessages((prev) => [{ ...newMsg, sender: profile as any, reactions: [], status: undefined }, ...prev]);
+          const { data: senderProfile } = await supabase.from("profiles").select("display_name, avatar_url, handle").eq("id", newMsg.sender_id).single();
+          setMessages((prev) => [{ ...newMsg, sender: senderProfile as any, reactions: [], status: undefined }, ...prev]);
 
           if (user) {
             await supabase.from("message_status").upsert({ message_id: newMsg.id, user_id: user.id, status: "read" }, { onConflict: "message_id,user_id" });
@@ -490,9 +509,7 @@ export default function ChatScreen() {
           const name = typer?.display_name || "Someone";
           if (data.is_typing) {
             setTypingUsers((prev) => prev.includes(name) ? prev : [...prev, name]);
-            setTimeout(() => {
-              setTypingUsers((prev) => prev.filter((n) => n !== name));
-            }, 5000);
+            setTimeout(() => { setTypingUsers((prev) => prev.filter((n) => n !== name)); }, 5000);
           } else {
             setTypingUsers((prev) => prev.filter((n) => n !== name));
           }
@@ -550,8 +567,8 @@ export default function ChatScreen() {
         async (payload) => {
           const newMsg = payload.new as any;
           if (newMsg.sender_id === user.id) return;
-          const { data: profile } = await supabase.from("profiles").select("display_name, avatar_url, handle").eq("id", newMsg.sender_id).single();
-          setMessages((prev) => [{ ...newMsg, sender: profile as any, reactions: [], status: undefined }, ...prev]);
+          const { data: senderProfile } = await supabase.from("profiles").select("display_name, avatar_url, handle").eq("id", newMsg.sender_id).single();
+          setMessages((prev) => [{ ...newMsg, sender: senderProfile as any, reactions: [], status: undefined }, ...prev]);
         }
       )
       .subscribe();
@@ -576,126 +593,97 @@ export default function ChatScreen() {
       sender_id: user.id,
       encrypted_content: text,
       sent_at: now,
-      sender: { display_name: "You", avatar_url: null, handle: "" },
+      sender: { display_name: "You", avatar_url: profile?.avatar_url || null, handle: profile?.handle || "" },
       reply_to_message_id: replyTo?.id || null,
       status: "sending",
+      _pending: !isOnline(),
     };
     setMessages((prev) => [optimistic, ...prev]);
     setReplyTo(null);
 
-    const insertData: any = { chat_id: activeChatId, sender_id: user.id, encrypted_content: text };
-    if (replyTo) insertData.reply_to_message_id = replyTo.id;
+    if (!isOnline()) {
+      await queueMessage({ id: tempId, chat_id: activeChatId, sender_id: user.id, encrypted_content: text, created_at: now });
+      setSending(false);
+      return;
+    }
 
-    const { data: msg, error } = await supabase.from("messages").insert(insertData).select().single();
+    const insertPayload: any = {
+      chat_id: activeChatId,
+      sender_id: user.id,
+      encrypted_content: text,
+    };
+    if (replyTo) insertPayload.reply_to_message_id = replyTo.id;
 
-    if (error) {
-      setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      showAlert("Send failed", "Could not send message. Try again.");
-    } else if (msg) {
+    const { data: inserted, error } = await supabase.from("messages").insert(insertPayload).select("id").single();
+    if (inserted) {
       setMessages((prev) =>
-        prev.map((m) => (m.id === tempId ? { ...m, id: msg.id, sent_at: msg.sent_at, status: "sent" } : m))
+        prev.map((m) => m.id === tempId ? { ...m, id: inserted.id, status: "sent", _pending: false } : m)
       );
-      await supabase.from("chats").update({ updated_at: now }).eq("id", activeChatId);
+    }
 
-      const { data: members } = await supabase
-        .from("chat_members")
-        .select("user_id")
-        .eq("chat_id", activeChatId)
-        .neq("user_id", user.id);
-      if (members && members.length > 0) {
-        notifyNewMessage({
-          recipientIds: members.map((m: any) => m.user_id),
-          senderName: profile?.display_name || "Someone",
-          messageText: text,
-          chatId: activeChatId,
-          isGroup: chatInfo?.is_group,
-          groupName: chatInfo?.name || undefined,
-        });
-      }
+    if (!error && chatInfo) {
+      notifyNewMessage(chatInfo.other_id, user.id, text, profile?.display_name || "Someone");
     }
+
     setSending(false);
-    if (!isDraft) {
-      supabase.from("typing_indicators").upsert({ chat_id: activeChatId, user_id: user.id, is_typing: false }, { onConflict: "chat_id,user_id" });
-    }
   }
 
   async function sendRedEnvelope() {
-    if (!user || !envelopeAmount.trim()) return;
-    const amount = parseInt(envelopeAmount);
-    const count = parseInt(envelopeCount) || 1;
-    if (isNaN(amount) || amount <= 0) { showAlert("Invalid amount"); return; }
+    const amount = parseInt(envelopeAmount, 10);
+    const count = parseInt(envelopeCount, 10) || 1;
+    if (!amount || amount < 1 || !user) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    const { data: envData, error } = await supabase.from("red_envelopes").insert({
+    const activeChatId = await getOrCreateChatId();
+    if (!activeChatId) return;
+
+    const { data: env } = await supabase.from("red_envelopes").insert({
+      chat_id: activeChatId,
       sender_id: user.id,
-      chat_id: id,
       total_amount: amount,
       remaining_amount: amount,
       total_count: count,
       remaining_count: count,
-      message: envelopeMsg.trim() || "Best wishes!",
-      split_type: count > 1 ? "random" : "equal",
+      message: envelopeMsg || "Good luck!",
     }).select("id").single();
 
-    if (error || !envData) { showAlert("Error", error?.message || "Failed to create envelope"); return; }
+    const envId = env?.id || "";
+    await supabase.from("messages").insert({
+      chat_id: activeChatId,
+      sender_id: user.id,
+      encrypted_content: `🧧 Red Envelope [${envId}] - ${envelopeMsg || "Good luck!"}`,
+    });
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setShowRedEnvelope(false);
     setEnvelopeAmount("");
     setEnvelopeMsg("");
     setEnvelopeCount("1");
-
-    await supabase.from("messages").insert({
-      chat_id: id,
-      sender_id: user.id,
-      encrypted_content: `🧧 Red Envelope [${envData.id}] - ${envelopeMsg.trim() || "Best wishes!"}`,
-    });
     loadMessages();
   }
 
   async function loadGifts() {
-    const { data } = await supabase.from("gifts").select("id, name, emoji, base_xp_cost, rarity").order("base_xp_cost", { ascending: true });
+    const { data } = await supabase.from("gifts").select("*").order("base_xp_cost", { ascending: true });
     if (data) setGifts(data);
   }
 
   async function sendGift(gift: Gift) {
-    if (!user || !chatInfo || giftSending) return;
-    const recipientId = chatInfo.is_group ? null : chatInfo.other_id;
-
+    if (!user || giftSending) return;
     setGiftSending(true);
-    if (chatInfo.is_group) {
-      const { data: members } = await supabase.from("chat_members").select("user_id").eq("chat_id", id).neq("user_id", user.id);
-      if (members && members.length > 0) {
-        const inserts = members.map((m: any) => ({
-          gift_id: gift.id,
-          sender_id: user.id,
-          receiver_id: m.user_id,
-          xp_cost: gift.base_xp_cost,
-          message: giftMsg.trim() || null,
-        }));
-        await supabase.from("gift_transactions").insert(inserts);
-      }
-    } else {
-      if (!recipientId) { setGiftSending(false); return; }
-      await supabase.from("gift_transactions").insert({
-        gift_id: gift.id,
-        sender_id: user.id,
-        receiver_id: recipientId,
-        xp_cost: gift.base_xp_cost,
-        message: giftMsg.trim() || null,
-      });
-    }
-
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setShowGiftPicker(false);
-    setGiftMsg("");
+
+    const activeChatId = await getOrCreateChatId();
+    if (!activeChatId) { setGiftSending(false); return; }
 
     await supabase.from("messages").insert({
-      chat_id: id,
+      chat_id: activeChatId,
       sender_id: user.id,
-      encrypted_content: `🎁 ${gift.emoji} ${gift.name}${giftMsg.trim() ? ` - "${giftMsg.trim()}"` : ""}`,
+      encrypted_content: `🎁 ${gift.emoji} ${gift.name}${giftMsg ? ` - ${giftMsg}` : ""}`,
     });
-    loadMessages();
+
+    setShowGiftPicker(false);
+    setGiftMsg("");
     setGiftSending(false);
+    loadMessages();
   }
 
   async function pickFromCamera() {
@@ -741,36 +729,57 @@ export default function ChatScreen() {
     const activeChatId = await getOrCreateChatId();
     if (!activeChatId) { setSending(false); return; }
 
-    const ext = attachmentPreview.uri.split(".").pop() || "file";
-    const fileName = attachmentPreview.name || `${Date.now()}.${ext}`;
-    const filePath = `chat-attachments/${activeChatId}/${user.id}/${fileName}`;
+    try {
+      const ext = attachmentPreview.uri.split(".").pop()?.split("?")[0] || "file";
+      const fileName = attachmentPreview.name || `${Date.now()}.${ext}`;
+      const filePath = `chat-attachments/${activeChatId}/${user.id}/${fileName}`;
 
-    const response = await fetch(attachmentPreview.uri);
-    const blob = await response.blob();
-    const { error: uploadError } = await supabase.storage.from("chat-media").upload(filePath, blob, { upsert: true });
+      let uploadError: any = null;
 
-    if (uploadError) {
+      if (Platform.OS === "web") {
+        const response = await fetch(attachmentPreview.uri);
+        const blob = await response.blob();
+        const result = await supabase.storage.from("chat-media").upload(filePath, blob, { upsert: true });
+        uploadError = result.error;
+      } else {
+        const base64 = await FileSystem.readAsStringAsync(attachmentPreview.uri, { encoding: FileSystem.EncodingType.Base64 });
+        const mimeTypes: Record<string, string> = {
+          jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif",
+          mp4: "video/mp4", mov: "video/quicktime", pdf: "application/pdf",
+          doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        };
+        const mime = mimeTypes[ext.toLowerCase()] || "application/octet-stream";
+        const binaryStr = atob(base64);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+        const result = await supabase.storage.from("chat-media").upload(filePath, bytes.buffer, {
+          upsert: true,
+          contentType: mime,
+        });
+        uploadError = result.error;
+      }
+
       const label = attachmentPreview.type === "image" ? "📷 Photo" : attachmentPreview.type === "video" ? "🎥 Video" : `📎 ${attachmentPreview.name || "File"}`;
-      await supabase.from("messages").insert({ chat_id: activeChatId, sender_id: user.id, encrypted_content: label });
+
+      if (uploadError) {
+        await supabase.from("messages").insert({ chat_id: activeChatId, sender_id: user.id, encrypted_content: label });
+      } else {
+        const { data: urlData } = supabase.storage.from("chat-media").getPublicUrl(filePath);
+        const publicUrl = urlData?.publicUrl || "";
+        await supabase.from("messages").insert({
+          chat_id: activeChatId,
+          sender_id: user.id,
+          encrypted_content: label,
+          attachment_url: publicUrl,
+          attachment_type: attachmentPreview.type,
+        });
+      }
+
       loadMessages();
-      setAttachmentPreview(null);
-      setSending(false);
-      return;
+    } catch (e: any) {
+      showAlert("Upload failed", e?.message || "Could not upload file");
     }
 
-    const { data: urlData } = supabase.storage.from("chat-media").getPublicUrl(filePath);
-    const publicUrl = urlData?.publicUrl || "";
-
-    const insertData: any = {
-      chat_id: activeChatId,
-      sender_id: user.id,
-      encrypted_content: attachmentPreview.type === "image" ? "📷 Photo" : attachmentPreview.type === "video" ? "🎥 Video" : `📎 ${attachmentPreview.name || "File"}`,
-      attachment_url: publicUrl,
-      attachment_type: attachmentPreview.type,
-    };
-
-    await supabase.from("messages").insert(insertData);
-    loadMessages();
     setAttachmentPreview(null);
     setSending(false);
   }
@@ -817,255 +826,302 @@ export default function ChatScreen() {
 
     if (data) {
       router.push({ pathname: "/red-envelope/[id]", params: { id: data.id } });
-    } else {
-      showAlert("Red Envelope", "Could not find this red envelope.");
     }
   }
 
-  const replyMap: Record<string, string> = {};
-  for (const m of messages) {
-    replyMap[m.id] = m.encrypted_content;
+  function getReplyPreview(msgId: string | null | undefined): string | null {
+    if (!msgId) return null;
+    const found = messages.find((m) => m.id === msgId);
+    return found?.encrypted_content || null;
   }
 
-  const title = chatInfo?.is_group || chatInfo?.is_channel ? chatInfo.name : chatInfo?.other_name;
-  const avatar = chatInfo?.is_group || chatInfo?.is_channel ? chatInfo.avatar_url : chatInfo?.other_avatar;
-  const isGroup = chatInfo?.is_group || chatInfo?.is_channel;
+  function shouldShowTail(index: number): boolean {
+    if (index === 0) return true;
+    const current = messages[index];
+    const prev = messages[index - 1];
+    return current.sender_id !== prev.sender_id;
+  }
+
+  function shouldShowName(index: number): boolean {
+    if (!chatInfo?.is_group) return false;
+    return shouldShowTail(index);
+  }
+
+  function shouldShowDate(index: number): boolean {
+    if (index === messages.length - 1) return true;
+    const current = new Date(messages[index].sent_at);
+    const next = new Date(messages[index + 1].sent_at);
+    return current.toDateString() !== next.toDateString();
+  }
+
+  const headerTitle = chatInfo?.is_group || chatInfo?.is_channel ? chatInfo.name || "Group" : chatInfo?.other_name || "Chat";
+  const headerAvatar = chatInfo?.is_group || chatInfo?.is_channel ? chatInfo?.avatar_url : chatInfo?.other_avatar;
+
+  const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
+    const isMe = item.sender_id === user?.id;
+    const showDate = shouldShowDate(index);
+
+    return (
+      <View>
+        {showDate && (
+          <View style={st.dateBadge}>
+            <Text style={[st.dateBadgeText, { color: colors.textMuted }]}>{formatDateHeader(item.sent_at)}</Text>
+          </View>
+        )}
+        <MessageBubble
+          msg={item}
+          isMe={isMe}
+          showTail={shouldShowTail(index)}
+          showName={shouldShowName(index)}
+          onLongPress={(m) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowReactions(m); }}
+          onReply={(m) => setReplyTo(m)}
+          replyPreview={getReplyPreview(item.reply_to_message_id)}
+          onTapEnvelope={handleTapEnvelope}
+          onTapGift={handleTapGift}
+        />
+      </View>
+    );
+  }, [messages, user, colors]);
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+    <View style={[st.root, { backgroundColor: colors.background }]}>
+      <View style={[st.header, { backgroundColor: colors.surface, paddingTop: insets.top + 4, borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => router.back()} style={st.backBtn} hitSlop={12}>
+          <Ionicons name="chevron-back" size={26} color={colors.text} />
         </TouchableOpacity>
-        <Avatar uri={avatar} name={title || undefined} size={36} />
-        <View style={styles.headerInfo}>
-          <Text style={[styles.headerName, { color: colors.text }]} numberOfLines={1}>{title || "Chat"}</Text>
-          {typingUsers.length > 0 ? (
-            <Text style={[styles.headerSub, { color: Colors.brand }]}>
-              {typingUsers.join(", ")} typing...
-            </Text>
-          ) : chatInfo?.is_channel ? (
-            <Text style={[styles.headerSub, { color: colors.textMuted }]}>Channel</Text>
-          ) : null}
-        </View>
-        <TouchableOpacity style={styles.headerAction}>
-          <Ionicons name="call-outline" size={22} color={colors.text} />
+        <TouchableOpacity
+          style={st.headerProfile}
+          activeOpacity={0.7}
+          onPress={() => {
+            if (chatInfo && !chatInfo.is_group && !chatInfo.is_channel && chatInfo.other_id) {
+              router.push({ pathname: "/profile/[id]", params: { id: chatInfo.other_id } });
+            }
+          }}
+        >
+          <Avatar uri={headerAvatar} name={headerTitle} size={38} />
+          <View style={st.headerInfo}>
+            <Text style={[st.headerName, { color: colors.text }]} numberOfLines={1}>{headerTitle}</Text>
+            {typingUsers.length > 0 ? (
+              <Text style={[st.headerSub, { color: BRAND }]}>
+                {typingUsers.join(", ")} typing...
+              </Text>
+            ) : !networkOnline ? (
+              <Text style={[st.headerSub, { color: "#FF9500" }]}>Waiting for network...</Text>
+            ) : (
+              <Text style={[st.headerSub, { color: colors.textMuted }]}>
+                {chatInfo?.is_group ? "Group chat" : "Online"}
+              </Text>
+            )}
+          </View>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.headerAction}>
-          <Ionicons name="videocam-outline" size={22} color={colors.text} />
+        <TouchableOpacity onPress={() => { loadGifts(); setShowGiftPicker(true); }} style={st.headerAction} hitSlop={8}>
+          <Ionicons name="gift-outline" size={22} color={colors.textSecondary} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.headerAction}>
-          <Ionicons name="ellipsis-horizontal" size={22} color={colors.text} />
+        <TouchableOpacity onPress={() => setShowRedEnvelope(true)} style={st.headerAction} hitSlop={8}>
+          <Text style={{ fontSize: 20 }}>🧧</Text>
         </TouchableOpacity>
       </View>
 
-      {loading ? (
-        <View style={styles.loadingCenter}><ActivityIndicator color={Colors.brand} /></View>
-      ) : (
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item) => item.id}
-          inverted
-          renderItem={({ item, index }) => {
-            const isMe = item.sender_id === user?.id;
-            const next = messages[index - 1];
-            const prev = messages[index + 1];
-            const showAvatar = !isMe && (!next || next.sender_id !== item.sender_id);
-            const showTime = !prev || prev.sender_id !== item.sender_id ||
-              new Date(item.sent_at).getTime() - new Date(prev.sent_at).getTime() > 120000;
-            const replyPreview = item.reply_to_message_id ? replyMap[item.reply_to_message_id] || null : null;
-            return (
-              <MessageBubble
-                msg={item}
-                isMe={isMe}
-                showAvatar={showAvatar}
-                showTime={showTime}
-                onLongPress={setShowReactions}
-                onReply={setReplyTo}
-                replyPreview={replyPreview}
-                onTapEnvelope={handleTapEnvelope}
-                onTapGift={handleTapGift}
-              />
-            );
-          }}
-          contentContainerStyle={{ paddingVertical: 12 }}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
-
-      {replyTo && (
-        <View style={[styles.replyBanner, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-          <View style={[styles.replyBarAccent, { backgroundColor: Colors.brand }]} />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.replyBannerName, { color: Colors.brand }]}>{replyTo.sender?.display_name}</Text>
-            <Text style={[styles.replyBannerText, { color: colors.textSecondary }]} numberOfLines={1}>{replyTo.encrypted_content}</Text>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={0}>
+        {loading ? (
+          <View style={st.loadingCenter}>
+            <ActivityIndicator color={BRAND} size="large" />
           </View>
-          <TouchableOpacity onPress={() => setReplyTo(null)}>
-            <Ionicons name="close" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
-        </View>
-      )}
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={(m) => m.id}
+            renderItem={renderMessage}
+            inverted
+            contentContainerStyle={st.listContent}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
 
-      {attachmentPreview && (
-        <View style={[styles.attachPreviewBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-          {attachmentPreview.type === "image" || attachmentPreview.type === "gif" ? (
-            <Image source={{ uri: attachmentPreview.uri }} style={styles.attachPreviewImg} resizeMode="cover" />
-          ) : attachmentPreview.type === "video" ? (
-            <View style={styles.attachPreviewImg}>
-              <Video
-                source={{ uri: attachmentPreview.uri }}
-                style={{ width: 64, height: 64, borderRadius: 10 }}
-                resizeMode={ResizeMode.COVER}
-              />
-              <View style={styles.videoPlayOverlay}>
-                <Ionicons name="play" size={20} color="#fff" />
-              </View>
+        {replyTo && (
+          <View style={[st.replyBanner, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+            <View style={[st.replyBarAccent, { backgroundColor: BRAND }]} />
+            <View style={{ flex: 1 }}>
+              <Text style={[st.replyBannerName, { color: BRAND }]}>{replyTo.sender?.display_name || "Message"}</Text>
+              <Text style={[st.replyBannerText, { color: colors.textSecondary }]} numberOfLines={1}>{replyTo.encrypted_content}</Text>
             </View>
-          ) : (
-            <View style={[styles.attachPreviewFile, { backgroundColor: colors.inputBg }]}>
-              <Ionicons name="document-outline" size={28} color={Colors.brand} />
-              <Text style={[styles.attachPreviewName, { color: colors.text }]} numberOfLines={1}>{attachmentPreview.name || "File"}</Text>
-            </View>
-          )}
-          <TouchableOpacity onPress={() => setAttachmentPreview(null)} style={styles.attachPreviewClose}>
-            <Ionicons name="close-circle" size={24} color={colors.textMuted} />
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.sendBtn, { backgroundColor: Colors.brand }]} onPress={sendAttachment} disabled={sending}>
-            {sending ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="arrow-up" size={18} color="#fff" />}
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
-        <View style={[styles.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
-          {isGroup && (
-            <TouchableOpacity style={styles.inputAction} onPress={() => setShowRedEnvelope(true)}>
-              <Text style={{ fontSize: 22 }}>🧧</Text>
+            <TouchableOpacity onPress={() => setReplyTo(null)} hitSlop={8}>
+              <Ionicons name="close" size={20} color={colors.textMuted} />
             </TouchableOpacity>
-          )}
-          <TouchableOpacity style={styles.inputAction} onPress={() => { setShowGiftPicker(true); loadGifts(); }}>
-            <Ionicons name="gift-outline" size={24} color={Colors.brand} />
+          </View>
+        )}
+
+        {attachmentPreview && (
+          <View style={[st.attachPreviewBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+            {(attachmentPreview.type === "image" || attachmentPreview.type === "video") ? (
+              <Image source={{ uri: attachmentPreview.uri }} style={st.attachPreviewImg} />
+            ) : (
+              <View style={[st.attachPreviewFile, { backgroundColor: colors.inputBg }]}>
+                <Ionicons name="document" size={20} color={BRAND} />
+                <Text style={[st.attachPreviewName, { color: colors.text }]} numberOfLines={1}>{attachmentPreview.name || "File"}</Text>
+              </View>
+            )}
+            <TouchableOpacity onPress={() => setAttachmentPreview(null)} style={st.attachPreviewClose} hitSlop={8}>
+              <Ionicons name="close-circle" size={22} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <View style={[st.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 8) }]}>
+          <TouchableOpacity onPress={() => setShowAttachMenu(true)} style={st.inputAction} hitSlop={6}>
+            <Ionicons name="add-circle" size={28} color={colors.textMuted} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.inputAction} onPress={() => setShowAttachMenu(true)}>
-            <Ionicons name="add-circle-outline" size={24} color={colors.textSecondary} />
-          </TouchableOpacity>
-          <View style={[styles.inputField, { backgroundColor: colors.inputBg }]}>
+          <View style={[st.inputField, { backgroundColor: colors.inputBg }]}>
             <TextInput
-              style={[styles.input, { color: colors.text }]}
+              style={[st.input, { color: colors.text }]}
               placeholder="Message"
               placeholderTextColor={colors.textMuted}
               value={input}
               onChangeText={(t) => { setInput(t); handleTyping(); }}
               multiline
-              maxLength={2000}
-              returnKeyType="default"
+              maxLength={4000}
             />
           </View>
-          {input.trim().length > 0 ? (
-            <TouchableOpacity style={[styles.sendBtn, { backgroundColor: Colors.brand }]} onPress={sendMessage} disabled={sending}>
-              {sending ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="arrow-up" size={18} color="#fff" />}
+          {(input.trim() || attachmentPreview) ? (
+            <TouchableOpacity
+              onPress={attachmentPreview ? sendAttachment : sendMessage}
+              disabled={sending}
+              style={[st.sendBtn, { backgroundColor: BRAND }]}
+            >
+              {sending ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Ionicons name="send" size={18} color="#fff" />
+              )}
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity style={styles.inputAction}>
-              <Ionicons name="mic-outline" size={24} color={colors.textSecondary} />
+            <TouchableOpacity onPress={() => {}} style={st.inputAction} hitSlop={6}>
+              <Ionicons name="mic" size={26} color={colors.textMuted} />
             </TouchableOpacity>
           )}
         </View>
       </KeyboardAvoidingView>
 
       <BottomSheet visible={!!showReactions} onClose={() => setShowReactions(null)}>
-        <View style={styles.reactionPicker}>
+        <View style={st.reactionPicker}>
           {REACTION_EMOJIS.map((emoji) => (
-            <TouchableOpacity key={emoji} style={styles.reactionOption} onPress={() => showReactions && addReaction(showReactions, emoji)}>
-              <Text style={styles.reactionOptionEmoji}>{emoji}</Text>
+            <TouchableOpacity
+              key={emoji}
+              style={[st.reactionOption, { backgroundColor: colors.inputBg }]}
+              onPress={() => showReactions && addReaction(showReactions, emoji)}
+            >
+              <Text style={st.reactionOptionEmoji}>{emoji}</Text>
             </TouchableOpacity>
           ))}
-          <TouchableOpacity style={styles.reactionOption} onPress={() => { if (showReactions) { setReplyTo(showReactions); setShowReactions(null); } }}>
-            <Ionicons name="arrow-undo" size={22} color={colors.text} />
-          </TouchableOpacity>
         </View>
+        <TouchableOpacity style={st.sheetActionRow} onPress={() => { if (showReactions) { setReplyTo(showReactions); setShowReactions(null); } }}>
+          <Ionicons name="arrow-undo" size={20} color={colors.text} />
+          <Text style={[st.sheetActionText, { color: colors.text }]}>Reply</Text>
+        </TouchableOpacity>
       </BottomSheet>
 
       <BottomSheet visible={showRedEnvelope} onClose={() => setShowRedEnvelope(false)}>
-        <Text style={[styles.sheetTitle, { color: colors.text }]}>🧧 Red Envelope</Text>
-        <TextInput style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Amount (Nexa)" placeholderTextColor={colors.textMuted} value={envelopeAmount} onChangeText={setEnvelopeAmount} keyboardType="numeric" />
-        <TextInput style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Number of envelopes" placeholderTextColor={colors.textMuted} value={envelopeCount} onChangeText={setEnvelopeCount} keyboardType="numeric" />
-        <TextInput style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Best wishes!" placeholderTextColor={colors.textMuted} value={envelopeMsg} onChangeText={setEnvelopeMsg} />
-        <TouchableOpacity style={styles.redEnvBtn} onPress={sendRedEnvelope}>
-          <Text style={styles.redEnvBtnText}>Send Red Envelope</Text>
+        <Text style={[st.sheetTitle, { color: colors.text }]}>🧧 Red Envelope</Text>
+        <TextInput
+          style={[st.sheetInput, { color: colors.text, backgroundColor: colors.inputBg }]}
+          placeholder="Amount (ACoin)"
+          placeholderTextColor={colors.textMuted}
+          value={envelopeAmount}
+          onChangeText={setEnvelopeAmount}
+          keyboardType="number-pad"
+        />
+        <TextInput
+          style={[st.sheetInput, { color: colors.text, backgroundColor: colors.inputBg }]}
+          placeholder="Message (optional)"
+          placeholderTextColor={colors.textMuted}
+          value={envelopeMsg}
+          onChangeText={setEnvelopeMsg}
+        />
+        {chatInfo?.is_group && (
+          <TextInput
+            style={[st.sheetInput, { color: colors.text, backgroundColor: colors.inputBg }]}
+            placeholder="How many can claim?"
+            placeholderTextColor={colors.textMuted}
+            value={envelopeCount}
+            onChangeText={setEnvelopeCount}
+            keyboardType="number-pad"
+          />
+        )}
+        <TouchableOpacity style={st.redEnvBtn} onPress={sendRedEnvelope}>
+          <Text style={st.redEnvBtnText}>Send Red Envelope</Text>
         </TouchableOpacity>
       </BottomSheet>
 
       <BottomSheet visible={showGiftPicker} onClose={() => setShowGiftPicker(false)}>
-        <Text style={[styles.sheetTitle, { color: colors.text }]}>🎁 Send a Gift</Text>
+        <Text style={[st.sheetTitle, { color: colors.text }]}>🎁 Send a Gift</Text>
         <TextInput
-          style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.inputBg }]}
+          style={[st.sheetInput, { color: colors.text, backgroundColor: colors.inputBg }]}
           placeholder="Add a message (optional)"
           placeholderTextColor={colors.textMuted}
           value={giftMsg}
           onChangeText={setGiftMsg}
         />
         <ScrollView horizontal={false} style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
-          <View style={styles.giftGrid}>
+          <View style={st.giftGrid}>
             {gifts.map((gift) => (
               <TouchableOpacity
                 key={gift.id}
-                style={[styles.giftItem, { backgroundColor: colors.inputBg }]}
+                style={[st.giftItem, { backgroundColor: colors.inputBg }]}
                 onPress={() => sendGift(gift)}
                 disabled={giftSending}
               >
-                <Text style={styles.giftEmoji}>{gift.emoji}</Text>
-                <Text style={[styles.giftName, { color: colors.text }]} numberOfLines={1}>{gift.name}</Text>
-                <Text style={[styles.giftCost, { color: Colors.brand }]}>{gift.base_xp_cost} Nexa</Text>
+                <Text style={st.giftEmoji}>{gift.emoji}</Text>
+                <Text style={[st.giftName, { color: colors.text }]} numberOfLines={1}>{gift.name}</Text>
+                <Text style={[st.giftCost, { color: BRAND }]}>{gift.base_xp_cost} Nexa</Text>
               </TouchableOpacity>
             ))}
           </View>
         </ScrollView>
-        {giftSending && <ActivityIndicator color={Colors.brand} style={{ marginTop: 8 }} />}
+        {giftSending && <ActivityIndicator color={BRAND} style={{ marginTop: 8 }} />}
       </BottomSheet>
 
       <BottomSheet visible={showAttachMenu} onClose={() => setShowAttachMenu(false)}>
-        <Text style={[styles.sheetTitle, { color: colors.text }]}>Share</Text>
-        <View style={styles.attachGrid}>
-          <TouchableOpacity style={[styles.attachOption, { backgroundColor: colors.inputBg }]} onPress={pickFromCamera}>
-            <View style={[styles.attachIconBg, { backgroundColor: "#FF6B35" }]}>
+        <Text style={[st.sheetTitle, { color: colors.text }]}>Share</Text>
+        <View style={st.attachGrid}>
+          <TouchableOpacity style={[st.attachOption, { backgroundColor: colors.inputBg }]} onPress={pickFromCamera}>
+            <View style={[st.attachIconBg, { backgroundColor: "#FF6B35" }]}>
               <Ionicons name="camera" size={24} color="#fff" />
             </View>
-            <Text style={[styles.attachLabel, { color: colors.text }]}>Camera</Text>
+            <Text style={[st.attachLabel, { color: colors.text }]}>Camera</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.attachOption, { backgroundColor: colors.inputBg }]} onPress={pickFromGallery}>
-            <View style={[styles.attachIconBg, { backgroundColor: "#8B5CF6" }]}>
+          <TouchableOpacity style={[st.attachOption, { backgroundColor: colors.inputBg }]} onPress={pickFromGallery}>
+            <View style={[st.attachIconBg, { backgroundColor: "#8B5CF6" }]}>
               <Ionicons name="images" size={24} color="#fff" />
             </View>
-            <Text style={[styles.attachLabel, { color: colors.text }]}>Gallery</Text>
+            <Text style={[st.attachLabel, { color: colors.text }]}>Gallery</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.attachOption, { backgroundColor: colors.inputBg }]} onPress={pickDocument}>
-            <View style={[styles.attachIconBg, { backgroundColor: "#3B82F6" }]}>
+          <TouchableOpacity style={[st.attachOption, { backgroundColor: colors.inputBg }]} onPress={pickDocument}>
+            <View style={[st.attachIconBg, { backgroundColor: "#3B82F6" }]}>
               <Ionicons name="document" size={24} color="#fff" />
             </View>
-            <Text style={[styles.attachLabel, { color: colors.text }]}>File</Text>
+            <Text style={[st.attachLabel, { color: colors.text }]}>File</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.attachOption, { backgroundColor: colors.inputBg }]} onPress={() => { setShowAttachMenu(false); setShowGifPicker(true); }}>
-            <View style={[styles.attachIconBg, { backgroundColor: Colors.brand }]}>
+          <TouchableOpacity style={[st.attachOption, { backgroundColor: colors.inputBg }]} onPress={() => { setShowAttachMenu(false); setShowGifPicker(true); }}>
+            <View style={[st.attachIconBg, { backgroundColor: BRAND }]}>
               <Text style={{ fontSize: 18, fontFamily: "Inter_700Bold", color: "#fff" }}>GIF</Text>
             </View>
-            <Text style={[styles.attachLabel, { color: colors.text }]}>GIF</Text>
+            <Text style={[st.attachLabel, { color: colors.text }]}>GIF</Text>
           </TouchableOpacity>
         </View>
       </BottomSheet>
 
       <BottomSheet visible={showGifPicker} onClose={() => { setShowGifPicker(false); setGifSearch(""); }}>
-        <Text style={[styles.sheetTitle, { color: colors.text }]}>Send GIF</Text>
+        <Text style={[st.sheetTitle, { color: colors.text }]}>Send GIF</Text>
         <TextInput
-          style={[styles.sheetInput, { color: colors.text, backgroundColor: colors.inputBg }]}
+          style={[st.sheetInput, { color: colors.text, backgroundColor: colors.inputBg }]}
           placeholder="Search GIFs..."
           placeholderTextColor={colors.textMuted}
           value={gifSearch}
           onChangeText={setGifSearch}
         />
         <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
-          <View style={styles.gifGrid}>
+          <View style={st.gifGrid}>
             {[
               { label: "Thumbs Up", url: "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif" },
               { label: "Laughing", url: "https://media.giphy.com/media/ZqlvCTNHpqrio/giphy.gif" },
@@ -1082,9 +1138,9 @@ export default function ChatScreen() {
             ]
               .filter((g) => !gifSearch || g.label.toLowerCase().includes(gifSearch.toLowerCase()))
               .map((gif) => (
-                <TouchableOpacity key={gif.label} style={styles.gifItem} onPress={() => sendGifMessage(gif.url)} activeOpacity={0.7}>
-                  <Image source={{ uri: gif.url }} style={styles.gifThumb} resizeMode="cover" />
-                  <Text style={[styles.gifLabel, { color: colors.textSecondary }]}>{gif.label}</Text>
+                <TouchableOpacity key={gif.label} style={st.gifItem} onPress={() => sendGifMessage(gif.url)} activeOpacity={0.7}>
+                  <Image source={{ uri: gif.url }} style={st.gifThumb} resizeMode="cover" />
+                  <Text style={[st.gifLabel, { color: colors.textSecondary }]}>{gif.label}</Text>
                 </TouchableOpacity>
               ))}
           </View>
@@ -1092,13 +1148,13 @@ export default function ChatScreen() {
       </BottomSheet>
 
       <BottomSheet visible={!!giftReveal} onClose={() => setGiftReveal(null)}>
-        <View style={styles.giftRevealContent}>
-          <Text style={styles.giftRevealEmoji}>🎁</Text>
-          <Text style={[styles.giftRevealTitle, { color: colors.text }]}>Gift Received!</Text>
-          <Text style={[styles.giftRevealDetail, { color: colors.textSecondary }]}>{giftReveal?.content}</Text>
-          <Text style={[styles.giftRevealNote, { color: colors.textMuted }]}>This gift has been added to your Gift Gallery</Text>
-          <TouchableOpacity style={styles.giftRevealBtn} onPress={() => setGiftReveal(null)}>
-            <Text style={styles.giftRevealBtnText}>Awesome!</Text>
+        <View style={st.giftRevealContent}>
+          <Text style={st.giftRevealEmoji}>🎁</Text>
+          <Text style={[st.giftRevealTitle, { color: colors.text }]}>Gift Received!</Text>
+          <Text style={[st.giftRevealDetail, { color: colors.textSecondary }]}>{giftReveal?.content}</Text>
+          <Text style={[st.giftRevealNote, { color: colors.textMuted }]}>This gift has been added to your Gift Gallery</Text>
+          <TouchableOpacity style={st.giftRevealBtn} onPress={() => setGiftReveal(null)}>
+            <Text style={st.giftRevealBtnText}>Awesome!</Text>
           </TouchableOpacity>
         </View>
       </BottomSheet>
@@ -1106,36 +1162,144 @@ export default function ChatScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const st = StyleSheet.create({
   root: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 8, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth, gap: 8 },
-  backBtn: { padding: 4 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 6,
+    paddingBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 2,
+  },
+  backBtn: { padding: 6 },
+  headerProfile: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
   headerInfo: { flex: 1 },
   headerName: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  headerSub: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  headerAction: { padding: 4 },
+  headerSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
+  headerAction: { padding: 6 },
   loadingCenter: { flex: 1, alignItems: "center", justifyContent: "center" },
-  swipeReplyHint: { position: "absolute", left: 4, top: 0, bottom: 0, justifyContent: "center", opacity: 0.4 },
-  msgRow: { flexDirection: "row", paddingHorizontal: 12, marginVertical: 2 },
+  listContent: { paddingVertical: 8 },
+
+  dateBadge: {
+    alignSelf: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 10,
+    marginVertical: 8,
+  },
+  dateBadgeText: { fontSize: 12, fontFamily: "Inter_500Medium" },
+
+  msgRow: { flexDirection: "row", paddingHorizontal: 6, marginVertical: 1 },
   msgRowMe: { justifyContent: "flex-end" },
   msgRowOther: { justifyContent: "flex-start" },
-  avatarSlot: { width: 36, marginRight: 6, justifyContent: "flex-end" },
-  bubbleWrap: { maxWidth: "72%" },
-  bubbleWrapMe: { alignItems: "flex-end" },
-  bubbleWrapOther: { alignItems: "flex-start" },
-  senderName: { fontSize: 11, fontFamily: "Inter_500Medium", marginBottom: 2, marginLeft: 4 },
-  replyPreview: { flexDirection: "row", alignItems: "center", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginBottom: 2, gap: 6 },
+
+  bubbleContainer: { maxWidth: "78%", position: "relative" },
+  bubbleContainerMe: { alignItems: "flex-end" },
+  bubbleContainerOther: { alignItems: "flex-start" },
+
+  tailMe: { position: "absolute", right: -6, bottom: 0, zIndex: 1 },
+  tailOther: { position: "absolute", left: -6, bottom: 0, zIndex: 1 },
+
+  bubble: {
+    paddingHorizontal: 10,
+    paddingTop: 6,
+    paddingBottom: 4,
+    borderRadius: 16,
+    minWidth: 64,
+  },
+  bubbleMe: {
+    borderBottomRightRadius: 16,
+  },
+  bubbleOther: {
+    borderBottomLeftRadius: 16,
+  },
+  bubbleTailMe: {
+    borderBottomRightRadius: 4,
+  },
+  bubbleTailOther: {
+    borderBottomLeftRadius: 4,
+  },
+
+  senderName: { fontSize: 12, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
+
+  replyPreview: { flexDirection: "row", alignItems: "center", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginBottom: 4, gap: 6 },
   replyBarLine: { width: 3, height: "100%", borderRadius: 2, minHeight: 16 },
   replyPreviewText: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1 },
-  bubble: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 9 },
-  bubbleText: { fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 22 },
-  reactionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4, marginLeft: 4 },
-  reactionBadge: { flexDirection: "row", alignItems: "center", gap: 2, backgroundColor: "rgba(0,0,0,0.06)", borderRadius: 12, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: "transparent" },
+
+  bubbleText: { fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 21 },
+
+  metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", marginTop: 2, gap: 2 },
+  msgTime: { fontSize: 11, fontFamily: "Inter_400Regular" },
+
+  reactionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    marginTop: -4,
+    zIndex: 2,
+  },
+  reactionsMe: { justifyContent: "flex-end", paddingRight: 8 },
+  reactionsOther: { justifyContent: "flex-start", paddingLeft: 8 },
+  reactionPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    backgroundColor: "rgba(128,128,128,0.12)",
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
   reactionEmoji: { fontSize: 14 },
-  reactionCount: { fontSize: 11, fontFamily: "Inter_500Medium" },
-  timeStatusRow: { flexDirection: "row", alignItems: "center", marginTop: 2 },
-  msgTime: { fontSize: 11, fontFamily: "Inter_400Regular", marginLeft: 4 },
-  msgTimeMe: { marginLeft: 0, marginRight: 4 },
+  reactionCount: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+
+  attachImage: { width: 220, height: 180, borderRadius: 10 },
+  attachVideo: { width: 220, height: 180, borderRadius: 10, overflow: "hidden", backgroundColor: "#0D0D0D" },
+  audioRow: { flexDirection: "row", alignItems: "center", gap: 8, minWidth: 180 },
+  fileRow: { flexDirection: "row", alignItems: "center", gap: 10, maxWidth: 260 },
+  fileIconBg: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  fileName: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  fileMeta: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
+
+  replyBanner: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, gap: 8 },
+  replyBarAccent: { width: 3, height: 32, borderRadius: 2 },
+  replyBannerName: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  replyBannerText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+
+  attachPreviewBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, gap: 10 },
+  attachPreviewImg: { width: 56, height: 56, borderRadius: 10 },
+  attachPreviewFile: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  attachPreviewName: { fontSize: 13, fontFamily: "Inter_500Medium", maxWidth: 160 },
+  attachPreviewClose: { marginLeft: "auto" },
+
+  inputBar: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    paddingHorizontal: 6,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 4,
+  },
+  inputAction: { paddingBottom: 6, paddingHorizontal: 4 },
+  inputField: { flex: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, maxHeight: 120 },
+  input: { fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 22 },
+  sendBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+
+  sheetOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
+  sheetContent: { position: "absolute", bottom: 0, left: 0, right: 0, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 14, maxHeight: SCREEN_HEIGHT * 0.7 },
+  sheetHandle: { width: 40, height: 5, borderRadius: 3, backgroundColor: "#CCC", alignSelf: "center", marginBottom: 8 },
+  sheetTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
+  sheetInput: { borderRadius: 12, padding: 14, fontSize: 15, fontFamily: "Inter_400Regular" },
+
+  reactionPicker: { flexDirection: "row", justifyContent: "center", paddingVertical: 8, gap: 6 },
+  reactionOption: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  reactionOptionEmoji: { fontSize: 24 },
+
+  sheetActionRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, paddingHorizontal: 4 },
+  sheetActionText: { fontSize: 16, fontFamily: "Inter_500Medium" },
+
   redEnvBubble: { width: 240, borderRadius: 12, overflow: "hidden" },
   redEnvTop: { backgroundColor: "#FF3B30", flexDirection: "row", padding: 14, gap: 10, alignItems: "center" },
   redEnvEmoji: { fontSize: 32 },
@@ -1143,32 +1307,17 @@ const styles = StyleSheet.create({
   redEnvSub: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   redEnvBottom: { backgroundColor: "#E63329", paddingHorizontal: 14, paddingVertical: 6 },
   redEnvLabel: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontFamily: "Inter_400Regular" },
+  redEnvBtn: { backgroundColor: "#FF3B30", borderRadius: 14, paddingVertical: 14, alignItems: "center" },
+  redEnvBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+
   giftBoxBubble: { width: 240, borderRadius: 12, overflow: "hidden" },
-  giftBoxTop: { backgroundColor: Colors.brand, flexDirection: "row", padding: 14, gap: 10, alignItems: "center" },
+  giftBoxTop: { backgroundColor: BRAND, flexDirection: "row", padding: 14, gap: 10, alignItems: "center" },
   giftBoxEmoji: { fontSize: 32 },
   giftBoxTitle: { color: "#fff", fontSize: 14, fontFamily: "Inter_500Medium" },
   giftBoxSub: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   giftBoxBottom: { backgroundColor: Colors.brandDark, paddingHorizontal: 14, paddingVertical: 8, alignItems: "center" },
   giftBoxOpen: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
-  replyBanner: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, gap: 8 },
-  replyBarAccent: { width: 3, height: 32, borderRadius: 2 },
-  replyBannerName: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  replyBannerText: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  inputBar: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 8, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, gap: 4 },
-  inputAction: { paddingBottom: 6, paddingHorizontal: 2 },
-  inputField: { flex: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 9, maxHeight: 120 },
-  input: { fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 22 },
-  sendBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", marginBottom: 2 },
-  sheetOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
-  sheetContent: { position: "absolute", bottom: 0, left: 0, right: 0, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 14, maxHeight: SCREEN_HEIGHT * 0.7 },
-  sheetHandle: { width: 40, height: 5, borderRadius: 3, backgroundColor: "#CCC", alignSelf: "center", marginBottom: 8 },
-  sheetTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
-  sheetInput: { borderRadius: 12, padding: 14, fontSize: 15, fontFamily: "Inter_400Regular" },
-  reactionPicker: { flexDirection: "row", justifyContent: "center", paddingVertical: 8, gap: 4 },
-  reactionOption: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
-  reactionOptionEmoji: { fontSize: 24 },
-  redEnvBtn: { backgroundColor: "#FF3B30", borderRadius: 14, paddingVertical: 14, alignItems: "center" },
-  redEnvBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+
   giftGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   giftItem: { width: "30%", borderRadius: 12, padding: 10, alignItems: "center", gap: 4 },
   giftEmoji: { fontSize: 32 },
@@ -1179,22 +1328,14 @@ const styles = StyleSheet.create({
   giftRevealTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
   giftRevealDetail: { fontSize: 16, fontFamily: "Inter_500Medium", textAlign: "center" },
   giftRevealNote: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
-  giftRevealBtn: { backgroundColor: Colors.brand, borderRadius: 14, paddingHorizontal: 40, paddingVertical: 14, marginTop: 8 },
+  giftRevealBtn: { backgroundColor: BRAND, borderRadius: 14, paddingHorizontal: 40, paddingVertical: 14, marginTop: 8 },
   giftRevealBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  attachmentImage: { width: 200, height: 160, borderRadius: 14 },
-  attachmentVideo: { width: 220, height: 180, borderRadius: 14, overflow: "hidden", backgroundColor: "#0D0D0D" },
-  audioBubble: { flexDirection: "row", alignItems: "center", gap: 8, minWidth: 180 },
-  videoPlayOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.3)", borderRadius: 10 },
-  fileBubble: { flexDirection: "row", alignItems: "center", gap: 10, maxWidth: 240 },
-  attachPreviewBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, gap: 10 },
-  attachPreviewImg: { width: 64, height: 64, borderRadius: 10 },
-  attachPreviewFile: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
-  attachPreviewName: { fontSize: 13, fontFamily: "Inter_500Medium", maxWidth: 160 },
-  attachPreviewClose: { marginLeft: "auto" },
+
   attachGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "center", paddingVertical: 8 },
   attachOption: { width: 72, alignItems: "center", gap: 6, paddingVertical: 12, borderRadius: 14 },
   attachIconBg: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   attachLabel: { fontSize: 12, fontFamily: "Inter_500Medium" },
+
   gifGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   gifItem: { width: "31%", alignItems: "center", gap: 4 },
   gifThumb: { width: "100%", height: 80, borderRadius: 10 },
