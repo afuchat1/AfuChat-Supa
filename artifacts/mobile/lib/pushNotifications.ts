@@ -11,6 +11,7 @@ Notifications.setNotificationHandler({
     shouldSetBadge: true,
     shouldShowBanner: true,
     shouldShowList: true,
+    priority: Notifications.AndroidNotificationPriority.MAX,
   }),
 });
 
@@ -25,7 +26,18 @@ export async function registerForPushNotifications(userId: string): Promise<stri
   let finalStatus = existing;
 
   if (existing !== "granted") {
-    const { status } = await Notifications.requestPermissionsAsync();
+    const { status } = await Notifications.requestPermissionsAsync({
+      ios: {
+        allowAlert: true,
+        allowBadge: true,
+        allowSound: true,
+        allowDisplayInCarPlay: false,
+        allowCriticalAlerts: false,
+        provideAppNotificationSettings: false,
+        allowProvisional: false,
+        allowAnnouncements: false,
+      },
+    });
     finalStatus = status;
   }
 
@@ -41,13 +53,33 @@ export async function registerForPushNotifications(userId: string): Promise<stri
       vibrationPattern: [0, 250, 250, 250],
       lightColor: "#00C2CB",
       sound: "default",
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      showBadge: true,
+      enableVibrate: true,
+      enableLights: true,
     });
 
     await Notifications.setNotificationChannelAsync("messages", {
       name: "Messages",
-      importance: Notifications.AndroidImportance.HIGH,
+      description: "Chat messages from your contacts",
+      importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250],
       sound: "default",
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      showBadge: true,
+      enableVibrate: true,
+      enableLights: true,
+      lightColor: "#00C2CB",
+    });
+
+    await Notifications.setNotificationChannelAsync("social", {
+      name: "Social",
+      description: "Likes, follows, and replies",
+      importance: Notifications.AndroidImportance.HIGH,
+      sound: "default",
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      showBadge: true,
+      enableVibrate: true,
     });
   }
 
@@ -123,6 +155,8 @@ export async function sendPushNotification(params: {
         data: params.data || {},
         sound: "default",
         badge: 1,
+        priority: "high",
+        channelId: params.data?.type === "message" ? "messages" : "default",
       }),
     });
   } catch (error) {

@@ -117,6 +117,10 @@ serve(async (req) => {
       );
     }
 
+    const notifType = data?.type || 'default';
+    const channelId = notifType === 'message' ? 'messages' : 
+                      ['like', 'follow', 'reply'].includes(notifType) ? 'social' : 'default';
+
     const messages = tokens.map(token => ({
       to: token,
       title: title.substring(0, 100),
@@ -124,6 +128,8 @@ serve(async (req) => {
       data: data || {},
       sound: 'default' as const,
       badge: 1,
+      priority: 'high' as const,
+      channelId,
     }));
 
     const chunks: typeof messages[] = [];
