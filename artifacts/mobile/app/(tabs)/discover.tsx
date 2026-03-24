@@ -19,6 +19,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
+import { matchInterests, computeFeedScore, diversifyFeed, type FeedSignals } from "@/lib/feedAlgorithm";
 
 const { width } = Dimensions.get("window");
 
@@ -45,22 +46,6 @@ function formatRelative(iso: string): string {
   if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
   return `${Math.floor(diff / 86400000)}d ago`;
-}
-
-function computeScore(post: {
-  likeCount: number;
-  replyCount: number;
-  view_count: number;
-  created_at: string;
-  hasLikedAuthorBefore: boolean;
-  hasImages: boolean;
-}): number {
-  const ageHours = (Date.now() - new Date(post.created_at).getTime()) / 3600000;
-  const recencyDecay = Math.max(0, 1 - ageHours / 168);
-  const engagementScore = post.likeCount * 2 + post.replyCount * 3 + Math.min(post.view_count, 50) * 0.1;
-  const affinityBonus = post.hasLikedAuthorBefore ? 15 : 0;
-  const mediaBonus = post.hasImages ? 3 : 0;
-  return recencyDecay * 30 + engagementScore + affinityBonus + mediaBonus;
 }
 
 function PostCard({ item, onToggleLike }: { item: PostItem; onToggleLike: (postId: string) => void }) {
@@ -136,22 +121,26 @@ function PostCard({ item, onToggleLike }: { item: PostItem; onToggleLike: (postI
 
 export default function DiscoverScreen() {
   const { colors } = useTheme();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const PAGE_SIZE = 20;
+  const PAGE_SIZE = 30;
 
   const fetchPosts = useCallback(async (offset: number, isRefresh: boolean) => {
     if (!user) { setLoading(false); setRefreshing(false); return; }
+
+    const userInterests: string[] = profile?.interests || [];
+    const userCountry: string = profile?.country || "";
+
     const { data } = await supabase
       .from("posts")
       .select(`
-        id, author_id, content, image_url, created_at, view_count,
-        profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified),
+        id, author_id, content, image_url, created_at, view_count, language_code,
+        profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified, country, interests),
         post_images(image_url, display_order)
       `)
       .eq("is_blocked", false)
@@ -165,7 +154,14 @@ export default function DiscoverScreen() {
       const postIds = data.map((p: any) => p.id);
       const authorIds = [...new Set(data.map((p: any) => p.author_id))];
 
-      const [{ data: likeCounts }, { data: myLikes }, { data: replyCounts }, { data: myAuthorLikes }] = await Promise.all([
+      const [
+        { data: likeCounts },
+        { data: myLikes },
+        { data: replyCounts },
+        { data: myAuthorLikes },
+        { data: followingData },
+        { data: myReplies },
+      ] = await Promise.all([
         postIds.length > 0
           ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds)
           : { data: [] },
@@ -180,7 +176,17 @@ export default function DiscoverScreen() {
               .select("post_id, posts!inner(author_id)")
               .eq("user_id", user.id)
               .in("posts.author_id", authorIds)
-              .limit(200)
+              .limit(500)
+          : { data: [] },
+        authorIds.length > 0
+          ? supabase.from("follows").select("following_id").eq("follower_id", user.id).in("following_id", authorIds)
+          : { data: [] },
+        authorIds.length > 0
+          ? supabase.from("post_replies")
+              .select("post_id, posts!inner(author_id)")
+              .eq("author_id", user.id)
+              .in("posts.author_id", authorIds)
+              .limit(500)
           : { data: [] },
       ]);
 
@@ -192,24 +198,55 @@ export default function DiscoverScreen() {
       const replyMap: Record<string, number> = {};
       for (const r of (replyCounts || [])) { replyMap[r.post_id] = (replyMap[r.post_id] || 0) + 1; }
 
-      const likedAuthorSet = new Set<string>();
+      const followingSet = new Set((followingData || []).map((f: any) => f.following_id));
+
+      const authorInteractionMap: Record<string, number> = {};
       for (const al of (myAuthorLikes || [])) {
         const authorId = (al as any).posts?.author_id;
-        if (authorId) likedAuthorSet.add(authorId);
+        if (authorId) authorInteractionMap[authorId] = (authorInteractionMap[authorId] || 0) + 1;
+      }
+      for (const ar of (myReplies || [])) {
+        const authorId = (ar as any).posts?.author_id;
+        if (authorId) authorInteractionMap[authorId] = (authorInteractionMap[authorId] || 0) + 2;
       }
 
-      const randomSeed = isRefresh ? Math.random() * 10 : 0;
+      const authorPostCount: Record<string, number> = {};
+      for (const p of data) {
+        const aid = (p as any).author_id;
+        authorPostCount[aid] = (authorPostCount[aid] || 0) + 1;
+      }
 
-      const items: PostItem[] = data.map((p: any) => {
+      const scored = data.map((p: any) => {
         const likeCount = likeMap[p.id] || 0;
         const replyCount = replyMap[p.id] || 0;
         const hasImages = (p.post_images?.length > 0) || !!p.image_url;
-        const hasLikedAuthorBefore = likedAuthorSet.has(p.author_id);
+        const content = p.content || "";
+        const authorCountry = p.profiles?.country || "";
+
+        const interestMatches = matchInterests(content, userInterests);
+
+        const signals: FeedSignals = {
+          likeCount,
+          replyCount,
+          viewCount: p.view_count || 0,
+          createdAt: p.created_at,
+          interestMatches,
+          isFollowing: followingSet.has(p.author_id),
+          authorInteractionCount: authorInteractionMap[p.author_id] || 0,
+          isVerified: p.profiles?.is_verified || false,
+          isOrgVerified: p.profiles?.is_organization_verified || false,
+          hasImages,
+          sameCountry: !!userCountry && !!authorCountry && userCountry === authorCountry,
+          authorPostCountInFeed: authorPostCount[p.author_id] || 1,
+          contentLength: content.length,
+        };
+
+        const score = computeFeedScore(signals);
 
         return {
           id: p.id,
           author_id: p.author_id,
-          content: p.content || "",
+          content,
           image_url: p.image_url,
           images: (p.post_images || [])
             .sort((a: any, b: any) => a.display_order - b.display_order)
@@ -226,18 +263,18 @@ export default function DiscoverScreen() {
           liked: myLikeSet.has(p.id),
           likeCount,
           replyCount,
-          score: computeScore({ likeCount, replyCount, view_count: p.view_count || 0, created_at: p.created_at, hasLikedAuthorBefore, hasImages }) + (Math.random() * randomSeed),
+          score,
         };
       });
 
-      items.sort((a, b) => b.score - a.score);
+      const diversified = diversifyFeed(scored);
 
       if (isRefresh) {
-        setPosts(items);
+        setPosts(diversified as PostItem[]);
       } else {
         setPosts((prev) => {
           const existingIds = new Set(prev.map((p) => p.id));
-          const newItems = items.filter((i) => !existingIds.has(i.id));
+          const newItems = (diversified as PostItem[]).filter((i) => !existingIds.has(i.id));
           return [...prev, ...newItems];
         });
       }
@@ -245,7 +282,7 @@ export default function DiscoverScreen() {
     setLoading(false);
     setRefreshing(false);
     setLoadingMore(false);
-  }, [user]);
+  }, [user, profile]);
 
   const loadPosts = useCallback(() => fetchPosts(0, true), [fetchPosts]);
 
