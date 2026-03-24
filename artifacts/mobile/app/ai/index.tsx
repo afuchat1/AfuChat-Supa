@@ -23,7 +23,8 @@ type AiMessage = {
   content: string;
 };
 
-const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 const QUICK_PROMPTS = [
   { label: "Translate", icon: "language-outline" as const, prompt: "Translate the following to " },
@@ -53,9 +54,13 @@ export default function AiChatScreen() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}/api/ai/chat`, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+          "apikey": SUPABASE_ANON_KEY || "",
+        },
         body: JSON.stringify({
           messages: newMessages.slice(-10).map((m) => ({ role: m.role, content: m.content })),
         }),

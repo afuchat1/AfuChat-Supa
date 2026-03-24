@@ -51,6 +51,7 @@ timeoutMs = 20000
 [userenv.shared]
 EXPO_PUBLIC_SUPABASE_URL = "https://rhnsjqqtdzlkvqazfcbg.supabase.co"
 EXPO_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJobnNqcXF0ZHpsa3ZxYXpmY2JnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2NzA4NjksImV4cCI6MjA3NzI0Njg2OX0.j8zuszO1K6Apjn-jRiVUyZeqe3Re424xyOho9qDl_oY"
+SUPABASE_ACCESS_TOKEN = "sbp_bea5e3cfe380883ad2b5a941c9f53017fb8613bf"
 
 [nix]
 channel = "stable-25_05"
