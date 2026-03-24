@@ -3,10 +3,21 @@ import OpenAI from "openai";
 
 const router = Router();
 
-const openai = new OpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-});
+// Lazily initialized so a missing key doesn't crash the server at startup.
+let _openai: OpenAI | null = null;
+
+function getOpenAI(): OpenAI | null {
+  const apiKey =
+    process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+  const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+
+  if (!apiKey) return null;
+
+  if (!_openai) {
+    _openai = new OpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) });
+  }
+  return _openai;
+}
 
 const requestCounts = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 20;
@@ -35,6 +46,14 @@ Keep your responses concise and conversational. Use a warm, friendly tone. You c
 
 router.post("/ai/chat", async (req: Request, res: Response) => {
   try {
+    const openai = getOpenAI();
+    if (!openai) {
+      res.status(503).json({
+        error: "AI service is not configured. Please add the OPENAI_API_KEY environment variable.",
+      });
+      return;
+    }
+
     const clientIp = req.ip || req.socket.remoteAddress || "unknown";
     if (!checkRateLimit(clientIp)) {
       res.status(429).json({ error: "Too many requests. Please wait a moment." });
@@ -60,7 +79,9 @@ router.post("/ai/chat", async (req: Request, res: Response) => {
       temperature: 0.7,
     });
 
-    const reply = completion.choices[0]?.message?.content || "Sorry, I couldn't generate a response.";
+    const reply =
+      completion.choices[0]?.message?.content ||
+      "Sorry, I couldn't generate a response.";
     res.json({ reply });
   } catch (error: any) {
     console.error("AI chat error:", error?.message || error);
