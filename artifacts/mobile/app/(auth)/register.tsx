@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -13,12 +14,15 @@ import {
   View,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+
+const logoImage = require("@/assets/images/logo.png");
 
 export default function RegisterScreen() {
   const { colors } = useTheme();
@@ -155,6 +159,7 @@ export default function RegisterScreen() {
         </TouchableOpacity>
 
         <View style={styles.headerWrap}>
+          <Image source={logoImage} style={styles.logoImage} resizeMode="contain" />
           <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             Join AfuChat and start connecting
@@ -302,7 +307,8 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   scroll: { flexGrow: 1, paddingHorizontal: 28 },
   backBtn: { marginBottom: 24 },
-  headerWrap: { marginBottom: 32 },
+  logoImage: { width: 72, height: 72, borderRadius: 20, marginBottom: 20 },
+  headerWrap: { marginBottom: 32, alignItems: "center" },
   title: { fontSize: 28, fontFamily: "Inter_700Bold", marginBottom: 8 },
   subtitle: { fontSize: 15, fontFamily: "Inter_400Regular" },
   form: { gap: 14 },

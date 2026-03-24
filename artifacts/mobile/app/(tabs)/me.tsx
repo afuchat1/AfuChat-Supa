@@ -1,11 +1,13 @@
 import React from "react";
 import {
+  Image,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,6 +18,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Separator } from "@/components/ui/Separator";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+
+const logoImage = require("@/assets/images/logo.png");
 
 type MenuItemProps = {
   icon: React.ComponentProps<typeof Ionicons>["name"];
@@ -275,7 +279,10 @@ export default function MeScreen() {
         />
       </MenuGroup>
 
-      <Text style={[styles.version, { color: colors.textMuted }]}>AfuChat v1.0.0</Text>
+      <View style={styles.versionRow}>
+        <Image source={logoImage} style={styles.versionLogo} resizeMode="contain" />
+        <Text style={[styles.version, { color: colors.textMuted }]}>AfuChat v1.0.0</Text>
+      </View>
     </ScrollView>
   );
 }
@@ -362,5 +369,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   premiumBadgeText: { color: "#000", fontSize: 10, fontFamily: "Inter_700Bold" },
-  version: { textAlign: "center", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 8 },
+  versionRow: { alignItems: "center", marginTop: 8, gap: 6 },
+  versionLogo: { width: 32, height: 32, borderRadius: 8 },
+  version: { textAlign: "center", fontSize: 12, fontFamily: "Inter_400Regular" },
 });

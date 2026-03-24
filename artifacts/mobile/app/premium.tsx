@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,6 +18,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+
+const logoImage = require("@/assets/images/logo.png");
 
 type Plan = {
   id: string;
@@ -162,9 +166,7 @@ export default function PremiumScreen() {
       ) : (
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
           <View style={styles.heroSection}>
-            <View style={styles.heroIcon}>
-              <Ionicons name="diamond" size={48} color="#FFD60A" />
-            </View>
+            <Image source={logoImage} style={styles.heroLogo} resizeMode="contain" />
             <Text style={[styles.heroTitle, { color: colors.text }]}>AfuChat Premium</Text>
             <Text style={[styles.heroSub, { color: colors.textSecondary }]}>
               Pay with ACoin to unlock premium features
@@ -323,7 +325,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
   body: { padding: 20, gap: 24, paddingBottom: 60 },
   heroSection: { alignItems: "center", paddingVertical: 20 },
-  heroIcon: { width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(255,214,10,0.1)", alignItems: "center", justifyContent: "center", marginBottom: 16 },
+  heroLogo: { width: 88, height: 88, borderRadius: 24, marginBottom: 16 },
   heroTitle: { fontSize: 28, fontFamily: "Inter_700Bold", marginBottom: 8 },
   heroSub: { fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "center" },
   activeCard: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, borderRadius: 14 },
