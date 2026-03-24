@@ -5,11 +5,23 @@ import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { Platform, StyleSheet, View, useColorScheme } from "react-native";
+import { Image, Platform, StyleSheet, View, useColorScheme } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Colors from "@/constants/colors";
 import { useTheme } from "@/hooks/useTheme";
+
+const logoImage = require("@/assets/images/logo.png");
+
+function LogoTabIcon({ focused }: { focused: boolean }) {
+  return (
+    <Image
+      source={logoImage}
+      style={{ width: 26, height: 26, borderRadius: 6, opacity: focused ? 1 : 0.55 }}
+      resizeMode="contain"
+    />
+  );
+}
 
 function NativeTabLayout() {
   return (
@@ -17,10 +29,6 @@ function NativeTabLayout() {
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: "message.fill", selected: "message.fill" }} />
         <Label>AfuChat</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="contacts">
-        <Icon sf={{ default: "person.2", selected: "person.2.fill" }} />
-        <Label>Contacts</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="discover">
         <Icon sf={{ default: "compass", selected: "compass.fill" }} />
@@ -77,25 +85,12 @@ function ClassicTabLayout() {
         name="index"
         options={{
           title: "AfuChat",
-          tabBarIcon: ({ color, focused }) =>
-            isIOS ? (
-              <SymbolView name={focused ? "message.fill" : "message"} tintColor={color} size={22} />
-            ) : (
-              <Ionicons name={focused ? "chatbubbles" : "chatbubbles-outline"} size={22} color={color} />
-            ),
+          tabBarIcon: ({ focused }) => <LogoTabIcon focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="contacts"
-        options={{
-          title: "Contacts",
-          tabBarIcon: ({ color, focused }) =>
-            isIOS ? (
-              <SymbolView name={focused ? "person.2.fill" : "person.2"} tintColor={color} size={22} />
-            ) : (
-              <Ionicons name={focused ? "people" : "people-outline"} size={22} color={color} />
-            ),
-        }}
+        options={{ href: null }}
       />
       <Tabs.Screen
         name="discover"
