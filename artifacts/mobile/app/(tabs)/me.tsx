@@ -281,7 +281,7 @@ export default function MeScreen() {
       </MenuGroup>
 
       <View style={styles.versionRow}>
-        <Image source={afuSymbol} style={{ width: 22, height: 22 }} resizeMode="contain" />
+        <Image source={afuSymbol} style={{ width: 22, height: 22, tintColor: Colors.brand }} resizeMode="contain" />
         <Text style={[styles.version, { color: colors.textMuted }]}>AfuChat v1.0.0</Text>
       </View>
     </ScrollView>

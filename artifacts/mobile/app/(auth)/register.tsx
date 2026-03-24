@@ -160,7 +160,7 @@ export default function RegisterScreen() {
         </TouchableOpacity>
 
         <View style={styles.headerWrap}>
-          <Image source={afuSymbol} style={{ width: 72, height: 72, marginBottom: 20 }} resizeMode="contain" />
+          <Image source={afuSymbol} style={{ width: 72, height: 72, marginBottom: 20, tintColor: Colors.brand }} resizeMode="contain" />
           <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             Join AfuChat and start connecting

@@ -137,7 +137,7 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.logoWrap}>
-          <Image source={afuSymbol} style={{ width: 88, height: 88, marginBottom: 16 }} resizeMode="contain" />
+          <Image source={afuSymbol} style={{ width: 88, height: 88, marginBottom: 16, tintColor: Colors.brand }} resizeMode="contain" />
           <Text style={[styles.appName, { color: colors.text }]}>AfuChat</Text>
           <Text style={[styles.tagline, { color: colors.textSecondary }]}>
             Connect with everyone

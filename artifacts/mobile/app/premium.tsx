@@ -167,7 +167,7 @@ export default function PremiumScreen() {
       ) : (
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
           <View style={styles.heroSection}>
-            <Image source={afuSymbol} style={{ width: 72, height: 72, marginBottom: 16 }} resizeMode="contain" />
+            <Image source={afuSymbol} style={{ width: 72, height: 72, marginBottom: 16, tintColor: Colors.brand }} resizeMode="contain" />
             <Text style={[styles.heroTitle, { color: colors.text }]}>AfuChat Premium</Text>
             <Text style={[styles.heroSub, { color: colors.textSecondary }]}>
               Pay with ACoin to unlock premium features
