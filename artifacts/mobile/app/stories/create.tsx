@@ -129,5 +129,5 @@ const styles = StyleSheet.create({
   preview: { width: "100%", height: "100%" },
   changeBtn: { position: "absolute", bottom: 12, right: 12, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   changeBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_500Medium" },
-  captionInput: { borderRadius: 0, padding: 14, fontSize: 15, fontFamily: "Inter_400Regular", minHeight: 60 },
+  captionInput: { borderRadius: 12, padding: 14, fontSize: 15, fontFamily: "Inter_400Regular", minHeight: 60 },
 });

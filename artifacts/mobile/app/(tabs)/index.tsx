@@ -355,7 +355,7 @@ const pickerStyles = StyleSheet.create({
   pickerHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   pickerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
   searchWrap: { paddingHorizontal: 12, paddingVertical: 8 },
-  searchBox: { flexDirection: "row", alignItems: "center", borderRadius: 0, paddingHorizontal: 10, height: 40, gap: 6 },
+  searchBox: { flexDirection: "row", alignItems: "center", borderRadius: 12, paddingHorizontal: 10, height: 40, gap: 6 },
   searchInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 40 },
   actionGroup: { marginTop: 8, marginBottom: 8 },
   actionRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, gap: 14 },
@@ -632,7 +632,7 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 0,
+    borderRadius: 12,
     paddingHorizontal: 10,
     height: 36,
     gap: 6,

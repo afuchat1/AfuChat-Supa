@@ -142,7 +142,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 
 ## UI Conventions
 
-- **Input styling**: All TextInput fields use `borderRadius: 0` (flat, no rounded box borders). Input containers have no `borderWidth` or `borderBottomWidth`. Search boxes, chat inputs, reply bars, form fields, modal inputs all follow this pattern.
+- **Input styling**: All TextInput fields/containers use `borderRadius: 12` (rounded corners). No `borderWidth` or `borderBottomWidth` on input containers. Search boxes, chat inputs, reply bars, form fields, modal inputs all follow this pattern.
 - **Keyboard handling**: All screens with TextInputs are wrapped in `KeyboardAvoidingView` with `behavior="padding"` on iOS and `"height"` on Android.
 - **Brand colors**: `#00C2CB` teal, `#D4A853` gold. Use `#0D0D0D` instead of `#000000` for visible UI.
 

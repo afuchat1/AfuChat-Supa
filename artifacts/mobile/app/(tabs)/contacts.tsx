@@ -76,23 +76,15 @@ function ContactRow({ item }: { item: Contact }) {
       }
     }
 
-    const { data: chat } = await supabase
-      .from("chats")
-      .insert({
-        is_group: false,
-        created_by: user.id,
-        user_id: user.id,
-      })
-      .select()
-      .single();
-
-    if (chat) {
-      await supabase.from("chat_members").insert([
-        { chat_id: chat.id, user_id: user.id },
-        { chat_id: chat.id, user_id: item.id },
-      ]);
-      router.push({ pathname: "/chat/[id]", params: { id: chat.id } });
-    }
+    router.push({
+      pathname: "/chat/[id]",
+      params: {
+        id: "new",
+        contactId: item.id,
+        contactName: item.display_name,
+        contactAvatar: item.avatar_url || "",
+      },
+    });
   }
 
   return (
@@ -345,7 +337,7 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 0,
+    borderRadius: 12,
     paddingHorizontal: 10,
     height: 36,
     gap: 6,
@@ -379,7 +371,7 @@ const styles = StyleSheet.create({
   addField: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 0,
+    borderRadius: 12,
     paddingHorizontal: 12,
     height: 44,
     gap: 8,

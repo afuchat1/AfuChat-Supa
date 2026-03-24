@@ -138,14 +138,15 @@ export default function ContactProfileScreen() {
         return;
       }
     }
-    const { data: chat } = await supabase.from("chats").insert({ is_group: false, created_by: user.id, user_id: user.id }).select().single();
-    if (chat) {
-      await supabase.from("chat_members").insert([
-        { chat_id: chat.id, user_id: user.id },
-        { chat_id: chat.id, user_id: id },
-      ]);
-      router.push({ pathname: "/chat/[id]", params: { id: chat.id } });
-    }
+    router.push({
+      pathname: "/chat/[id]",
+      params: {
+        id: "new",
+        contactId: id as string,
+        contactName: profile?.display_name || "",
+        contactAvatar: profile?.avatar_url || "",
+      },
+    });
   }
 
   async function toggleFollow() {

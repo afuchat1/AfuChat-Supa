@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
   field: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 0,
+    borderRadius: 12,
     paddingHorizontal: 14,
     height: 52,
   },

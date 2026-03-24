@@ -607,7 +607,7 @@ const styles = StyleSheet.create({
   field: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 0,
+    borderRadius: 12,
     paddingHorizontal: 14,
     height: 52,
   },
@@ -628,14 +628,14 @@ const styles = StyleSheet.create({
     height: 52,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 0,
+    borderRadius: 12,
   },
   dobFieldWide: {
     flex: 1.5,
     height: 52,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 0,
+    borderRadius: 12,
   },
   dobInput: {
     fontSize: 18,
