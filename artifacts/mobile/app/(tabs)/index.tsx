@@ -20,6 +20,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
+import { StoryRing } from "@/components/ui/StoryRing";
 import { Separator } from "@/components/ui/Separator";
 import Colors from "@/constants/colors";
 
@@ -37,6 +38,9 @@ type StoryUser = {
   displayName: string;
   avatarUrl: string | null;
   hasUnseen: boolean;
+  storyCount: number;
+  seenCount: number;
+  latestAt: string;
 };
 
 type ChatItem = {
@@ -109,31 +113,62 @@ function ChatRow({ item }: { item: ChatItem }) {
 function StoriesBar({ userId, colors }: { userId: string; colors: any }) {
   const [storyUsers, setStoryUsers] = useState<StoryUser[]>([]);
 
-  useEffect(() => {
+  const loadStories = useCallback(async () => {
     const now = new Date().toISOString();
-    supabase
+    const { data: storiesData } = await supabase
       .from("stories")
-      .select("user_id, profiles!stories_user_id_fkey(display_name, avatar_url)")
+      .select("id, user_id, created_at, profiles!stories_user_id_fkey(display_name, avatar_url)")
       .gt("expires_at", now)
-      .order("created_at", { ascending: false })
-      .limit(30)
-      .then(({ data }) => {
-        if (!data) return;
-        const seen = new Set<string>();
-        const users: StoryUser[] = [];
-        for (const s of data as any[]) {
-          if (seen.has(s.user_id)) continue;
-          seen.add(s.user_id);
-          users.push({
-            userId: s.user_id,
-            displayName: s.profiles?.display_name || "User",
-            avatarUrl: s.profiles?.avatar_url || null,
-            hasUnseen: s.user_id !== userId,
-          });
-        }
-        setStoryUsers(users);
-      });
+      .order("created_at", { ascending: true })
+      .limit(100);
+
+    if (!storiesData || storiesData.length === 0) {
+      setStoryUsers([]);
+      return;
+    }
+
+    const storyIds = storiesData.map((s: any) => s.id);
+    const { data: viewsData } = await supabase
+      .from("story_views")
+      .select("story_id")
+      .eq("viewer_id", userId)
+      .in("story_id", storyIds);
+
+    const viewedSet = new Set((viewsData || []).map((v: any) => v.story_id));
+
+    const userMap = new Map<string, StoryUser>();
+    for (const s of storiesData as any[]) {
+      const existing = userMap.get(s.user_id);
+      const isSeen = viewedSet.has(s.id);
+      if (existing) {
+        existing.storyCount += 1;
+        if (isSeen) existing.seenCount += 1;
+        if (!isSeen) existing.hasUnseen = true;
+        if (s.created_at > existing.latestAt) existing.latestAt = s.created_at;
+      } else {
+        userMap.set(s.user_id, {
+          userId: s.user_id,
+          displayName: s.profiles?.display_name || "User",
+          avatarUrl: s.profiles?.avatar_url || null,
+          hasUnseen: !isSeen,
+          storyCount: 1,
+          seenCount: isSeen ? 1 : 0,
+          latestAt: s.created_at,
+        });
+      }
+    }
+
+    const users = Array.from(userMap.values());
+    users.sort((a, b) => {
+      if (a.hasUnseen && !b.hasUnseen) return -1;
+      if (!a.hasUnseen && b.hasUnseen) return 1;
+      return new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime();
+    });
+
+    setStoryUsers(users);
   }, [userId]);
+
+  useFocusEffect(useCallback(() => { loadStories(); }, [loadStories]));
 
   if (storyUsers.length === 0) return null;
 
@@ -151,9 +186,9 @@ function StoriesBar({ userId, colors }: { userId: string; colors: any }) {
           style={storyBarStyles.item}
           onPress={() => router.push({ pathname: "/stories/view", params: { userId: u.userId } })}
         >
-          <View style={[storyBarStyles.ring, u.hasUnseen && storyBarStyles.ringActive]}>
+          <StoryRing size={52} storyCount={u.storyCount} seenCount={u.seenCount}>
             <Avatar uri={u.avatarUrl} name={u.displayName} size={52} />
-          </View>
+          </StoryRing>
           <Text style={[storyBarStyles.name, { color: colors.textSecondary }]} numberOfLines={1}>{u.displayName}</Text>
         </TouchableOpacity>
       ))}
@@ -165,8 +200,6 @@ const storyBarStyles = StyleSheet.create({
   list: { paddingHorizontal: 12, paddingVertical: 10, gap: 14 },
   item: { alignItems: "center", width: 68 },
   addCircle: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: Colors.brand, borderStyle: "dashed" },
-  ring: { borderRadius: 30, padding: 2, borderWidth: 2, borderColor: "transparent" },
-  ringActive: { borderColor: Colors.brand },
   name: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 4, textAlign: "center" },
 });
 
