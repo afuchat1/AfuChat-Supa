@@ -473,7 +473,7 @@ export default function ChatsScreen() {
           { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border },
         ]}
       >
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Chats</Text>
+        <Text style={[styles.headerTitle, { color: colors.text, textAlign: "center", flex: 1 }]}>AfuChat</Text>
       </View>
 
       <View style={[styles.searchWrap, { backgroundColor: colors.surface }]}>
