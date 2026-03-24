@@ -241,69 +241,110 @@ function ContactPickerModal({ visible, onClose, userId, colors }: { visible: boo
 
   return (
     <Modal animationType="slide" visible={visible} onRequestClose={onClose} presentationStyle="fullScreen">
-      <View style={[pickerStyles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-        <View style={[pickerStyles.pickerHeader, { borderBottomColor: colors.border }]}>
+      <View style={[pickerStyles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
+        <View style={[pickerStyles.pickerHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[pickerStyles.pickerTitle, { color: colors.text }]}>New Message</Text>
           <View style={{ width: 24 }} />
         </View>
-        <View style={[pickerStyles.searchBox, { backgroundColor: colors.inputBg }]}>
-          <Ionicons name="search-outline" size={16} color={colors.textMuted} />
-          <TextInput
-            style={[pickerStyles.searchInput, { color: colors.text }]}
-            placeholder="Search contacts"
-            placeholderTextColor={colors.textMuted}
-            value={search}
-            onChangeText={setSearch}
-          />
-          {search.length > 0 && (
-            <Pressable onPress={() => setSearch("")}>
-              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
-            </Pressable>
-          )}
-        </View>
-        {loading ? (
-          <View style={pickerStyles.center}>
-            <ActivityIndicator color={Colors.brand} />
-          </View>
-        ) : filtered.length === 0 ? (
-          <View style={pickerStyles.center}>
-            <Text style={[pickerStyles.emptyText, { color: colors.textMuted }]}>
-              {search ? "No contacts found" : "No contacts yet"}
-            </Text>
-          </View>
-        ) : (
-          <FlatList
-            data={filtered}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[pickerStyles.contactRow, { backgroundColor: colors.surface }]}
-                onPress={() => selectContact(item)}
-                activeOpacity={0.7}
-              >
-                <Avatar uri={item.avatar_url} name={item.display_name} size={46} />
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <Text style={[pickerStyles.contactName, { color: colors.text }]}>{item.display_name}</Text>
-                    {item.is_organization_verified && (
-                      <Ionicons name="checkmark-circle" size={14} color={Colors.gold} />
-                    )}
-                    {!item.is_organization_verified && item.is_verified && (
-                      <Ionicons name="checkmark-circle" size={14} color={Colors.brand} />
-                    )}
-                  </View>
-                  <Text style={[pickerStyles.contactHandle, { color: colors.textSecondary }]}>@{item.handle}</Text>
-                </View>
-              </TouchableOpacity>
+
+        <View style={[pickerStyles.searchWrap, { backgroundColor: colors.surface }]}>
+          <View style={[pickerStyles.searchBox, { backgroundColor: colors.inputBg }]}>
+            <Ionicons name="search-outline" size={16} color={colors.textMuted} />
+            <TextInput
+              style={[pickerStyles.searchInput, { color: colors.text }]}
+              placeholder="Search Contacts"
+              placeholderTextColor={colors.textMuted}
+              value={search}
+              onChangeText={setSearch}
+            />
+            {search.length > 0 && (
+              <Pressable onPress={() => setSearch("")}>
+                <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+              </Pressable>
             )}
-            ItemSeparatorComponent={() => <Separator indent={70} />}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
-          />
-        )}
+          </View>
+        </View>
+
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => item.id}
+          ListHeaderComponent={
+            <>
+              <View style={[pickerStyles.actionGroup, { backgroundColor: colors.surface }]}>
+                <TouchableOpacity
+                  style={pickerStyles.actionRow}
+                  onPress={() => { onClose(); router.push("/group/create"); }}
+                  activeOpacity={0.7}
+                >
+                  <View style={[pickerStyles.actionIcon, { backgroundColor: "#007AFF" }]}>
+                    <Ionicons name="people" size={20} color="#fff" />
+                  </View>
+                  <Text style={[pickerStyles.actionLabel, { color: colors.text }]}>New Group</Text>
+                </TouchableOpacity>
+                <Separator indent={58} />
+                <TouchableOpacity
+                  style={pickerStyles.actionRow}
+                  onPress={() => { onClose(); router.push("/group/create" as any); }}
+                  activeOpacity={0.7}
+                >
+                  <View style={[pickerStyles.actionIcon, { backgroundColor: "#34C759" }]}>
+                    <Ionicons name="megaphone" size={20} color="#fff" />
+                  </View>
+                  <Text style={[pickerStyles.actionLabel, { color: colors.text }]}>New Channel</Text>
+                </TouchableOpacity>
+              </View>
+
+              {!loading && filtered.length > 0 && (
+                <View style={pickerStyles.sectionLabel}>
+                  <Text style={[pickerStyles.sectionLabelText, { color: Colors.brand }]}>
+                    Sorted by name
+                  </Text>
+                </View>
+              )}
+
+              {loading && (
+                <View style={pickerStyles.center}>
+                  <ActivityIndicator color={Colors.brand} />
+                </View>
+              )}
+
+              {!loading && filtered.length === 0 && (
+                <View style={pickerStyles.center}>
+                  <Text style={[pickerStyles.emptyText, { color: colors.textMuted }]}>
+                    {search ? "No contacts found" : "No contacts yet"}
+                  </Text>
+                </View>
+              )}
+            </>
+          }
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[pickerStyles.contactRow, { backgroundColor: colors.surface }]}
+              onPress={() => selectContact(item)}
+              activeOpacity={0.7}
+            >
+              <Avatar uri={item.avatar_url} name={item.display_name} size={46} />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Text style={[pickerStyles.contactName, { color: colors.text }]}>{item.display_name}</Text>
+                  {item.is_organization_verified && (
+                    <Ionicons name="checkmark-circle" size={14} color={Colors.gold} />
+                  )}
+                  {!item.is_organization_verified && item.is_verified && (
+                    <Ionicons name="checkmark-circle" size={14} color={Colors.brand} />
+                  )}
+                </View>
+                <Text style={[pickerStyles.contactHandle, { color: colors.textSecondary }]}>@{item.handle}</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+          ItemSeparatorComponent={() => <Separator indent={70} />}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+        />
       </View>
     </Modal>
   );
@@ -313,12 +354,19 @@ const pickerStyles = StyleSheet.create({
   root: { flex: 1 },
   pickerHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   pickerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  searchBox: { flexDirection: "row", alignItems: "center", borderRadius: 10, paddingHorizontal: 10, height: 40, gap: 6, marginHorizontal: 16, marginTop: 12, marginBottom: 8 },
+  searchWrap: { paddingHorizontal: 12, paddingVertical: 8 },
+  searchBox: { flexDirection: "row", alignItems: "center", borderRadius: 10, paddingHorizontal: 10, height: 40, gap: 6 },
   searchInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 40 },
+  actionGroup: { marginTop: 8, marginBottom: 8 },
+  actionRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, gap: 14 },
+  actionIcon: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  actionLabel: { fontSize: 16, fontFamily: "Inter_500Medium" },
+  sectionLabel: { paddingHorizontal: 16, paddingVertical: 8 },
+  sectionLabelText: { fontSize: 13, fontFamily: "Inter_500Medium" },
   contactRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12 },
   contactName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   contactHandle: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
+  center: { paddingVertical: 40, alignItems: "center", gap: 8 },
   emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
 });
 
@@ -426,15 +474,6 @@ export default function ChatsScreen() {
         ]}
       >
         <Text style={[styles.headerTitle, { color: colors.text }]}>Chats</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            onPress={() => router.push("/group/create")}
-            style={styles.headerBtn}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="people-outline" size={22} color={colors.text} />
-          </TouchableOpacity>
-        </View>
       </View>
 
       <View style={[styles.searchWrap, { backgroundColor: colors.surface }]}>
@@ -518,8 +557,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
-  headerActions: { flexDirection: "row", gap: 16 },
-  headerBtn: {},
   searchWrap: { paddingHorizontal: 12, paddingVertical: 8 },
   searchBox: {
     flexDirection: "row",
