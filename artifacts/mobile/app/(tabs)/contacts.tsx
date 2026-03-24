@@ -155,6 +155,21 @@ export default function ContactsScreen() {
 
   useEffect(() => { loadContacts(); }, [loadContacts]);
 
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`contacts-realtime:${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "follows", filter: `follower_id=eq.${user.id}` },
+        () => loadContacts()
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user, loadContacts]);
+
   async function searchUser() {
     if (!addQuery.trim()) return;
     setAddLoading(true);

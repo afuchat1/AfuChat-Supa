@@ -381,17 +381,32 @@ export default function ChatsScreen() {
   const [showContactPicker, setShowContactPicker] = useState(false);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!user) return;
-      supabase
-        .from("notifications")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .eq("is_read", false)
-        .then(({ count }) => setUnreadNotifCount(count || 0));
-    }, [user])
-  );
+  const fetchUnreadCount = useCallback(() => {
+    if (!user) return;
+    supabase
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("is_read", false)
+      .then(({ count }) => setUnreadNotifCount(count || 0));
+  }, [user]);
+
+  useFocusEffect(useCallback(() => { fetchUnreadCount(); }, [fetchUnreadCount]));
+
+  useEffect(() => {
+    if (!user) return;
+
+    const notifChannel = supabase
+      .channel(`notif-badge:${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
+        () => fetchUnreadCount()
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(notifChannel); };
+  }, [user, fetchUnreadCount]);
 
   const loadChats = useCallback(async () => {
     if (!user) return;
@@ -470,6 +485,27 @@ export default function ChatsScreen() {
   }, [user]);
 
   useEffect(() => { loadChats(); }, [loadChats]);
+
+  const chatIdsKey = chats.map((c) => c.id).sort().join(",");
+
+  useEffect(() => {
+    if (!user || !chatIdsKey) return;
+
+    const chatIds = chatIdsKey.split(",");
+    const channel = supabase.channel(`chatlist-messages:${user.id}`);
+
+    chatIds.forEach((chatId) => {
+      channel.on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages", filter: `chat_id=eq.${chatId}` },
+        () => loadChats()
+      );
+    });
+
+    channel.subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user, chatIdsKey, loadChats]);
 
   const filtered = search
     ? chats.filter((c) => {

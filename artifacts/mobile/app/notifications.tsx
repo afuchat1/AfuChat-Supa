@@ -73,6 +73,21 @@ export default function NotificationsScreen() {
     if (Platform.OS !== "web") clearBadge();
   }, [load]);
 
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`notif-realtime:${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
+        () => load()
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user, load]);
+
   async function markRead(id: string) {
     await supabase.from("notifications").update({ is_read: true }).eq("id", id);
     setItems((prev) => prev.map((n) => n.id === id ? { ...n, is_read: true } : n));

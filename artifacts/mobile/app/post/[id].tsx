@@ -128,6 +128,35 @@ export default function PostDetailScreen() {
 
   useEffect(() => { loadPost(); loadReplies(); }, [loadPost, loadReplies]);
 
+  useEffect(() => {
+    if (!id) return;
+
+    const channel = supabase
+      .channel(`post-detail:${id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "post_replies", filter: `post_id=eq.${id}` },
+        () => loadReplies()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "post_acknowledgments", filter: `post_id=eq.${id}` },
+        () => {
+          if (!user) return;
+          supabase
+            .from("post_acknowledgments")
+            .select("id", { count: "exact", head: true })
+            .eq("post_id", id)
+            .then(({ count }) => {
+              setPost((p) => p ? { ...p, likeCount: count || 0 } : p);
+            });
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [id, user, loadReplies]);
+
   async function toggleLike() {
     if (!user || !post) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

@@ -257,6 +257,24 @@ export default function DiscoverScreen() {
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
 
+  useEffect(() => {
+    const channel = supabase
+      .channel("discover-posts-realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "posts" },
+        () => loadPosts()
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "posts" },
+        () => loadPosts()
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [loadPosts]);
+
   async function toggleLike(postId: string) {
     if (!user) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
