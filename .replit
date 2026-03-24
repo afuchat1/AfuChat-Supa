@@ -17,6 +17,27 @@ env = { "CI" = "true" }
 [workflows]
 runButton = "Project"
 
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "AfuChat Mobile"
+
+[[workflows.workflow]]
+name = "AfuChat Mobile"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=18115 pnpm --filter @workspace/mobile run dev"
+waitForPort = 18115
+
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true
