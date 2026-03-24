@@ -5,23 +5,12 @@ import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { Image, Platform, StyleSheet, View, useColorScheme } from "react-native";
+import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Colors from "@/constants/colors";
 import { useTheme } from "@/hooks/useTheme";
-
-const logoImage = require("@/assets/images/logo.png");
-
-function LogoTabIcon({ focused }: { focused: boolean }) {
-  return (
-    <Image
-      source={logoImage}
-      style={{ width: 26, height: 26, borderRadius: 6, opacity: focused ? 1 : 0.55 }}
-      resizeMode="contain"
-    />
-  );
-}
+import AfuChatIcon from "@/components/icons/AfuChatIcon";
 
 function NativeTabLayout() {
   return (
@@ -85,7 +74,7 @@ function ClassicTabLayout() {
         name="index"
         options={{
           title: "AfuChat",
-          tabBarIcon: ({ focused }) => <LogoTabIcon focused={focused} />,
+          tabBarIcon: ({ color }) => <AfuChatIcon size={26} color={color} />,
         }}
       />
       <Tabs.Screen
