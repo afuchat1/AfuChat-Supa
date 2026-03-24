@@ -99,7 +99,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `app/(tabs)/contacts.tsx` — Contacts (follows) list
 - `app/(tabs)/discover.tsx` — Posts feed (tap to post detail)
 - `app/(tabs)/me.tsx` — Profile & settings hub (nav to all feature screens, premium banner, golden badge)
-- `app/chat/[id].tsx` — Chat with swipe-to-reply, reactions, typing indicators, read receipts, gift box UI, red envelopes, swipe-to-close bottom sheets
+- `app/chat/[id].tsx` — Chat with WhatsApp-style SVG bubble tails, long-press reaction picker, typing indicators, read receipts (blue double-check), gift box UI, red envelopes, offline message queue, cached messages, file uploads via FileSystem.uploadAsync (native) / fetch→blob (web), date headers, network status indicator
 - `app/moments/create.tsx` — Create new post
 - `app/profile/edit.tsx` — Edit profile
 - `app/group/create.tsx` — Create group chat

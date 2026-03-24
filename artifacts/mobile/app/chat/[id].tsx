@@ -374,12 +374,16 @@ export default function ChatScreen() {
   const typingTimeout = useRef<any>(null);
 
   useEffect(() => {
-    const unsub = onConnectivityChange((online) => {
+    const unsub = onConnectivityChange(async (online) => {
       setNetworkOnline(online);
-      if (online) syncPendingMessages();
+      if (online) {
+        await syncPendingMessages();
+        setMessages((prev) => prev.filter((m) => !m._pending));
+        loadMessages();
+      }
     });
     return unsub;
-  }, []);
+  }, [loadMessages]);
 
   const effectiveChatId = isDraft ? realChatId : id;
 
@@ -742,21 +746,30 @@ export default function ChatScreen() {
         const result = await supabase.storage.from("chat-media").upload(filePath, blob, { upsert: true });
         uploadError = result.error;
       } else {
-        const base64 = await FileSystem.readAsStringAsync(attachmentPreview.uri, { encoding: FileSystem.EncodingType.Base64 });
         const mimeTypes: Record<string, string> = {
           jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif",
           mp4: "video/mp4", mov: "video/quicktime", pdf: "application/pdf",
           doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         };
         const mime = mimeTypes[ext.toLowerCase()] || "application/octet-stream";
-        const binaryStr = atob(base64);
-        const bytes = new Uint8Array(binaryStr.length);
-        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-        const result = await supabase.storage.from("chat-media").upload(filePath, bytes.buffer, {
-          upsert: true,
-          contentType: mime,
-        });
-        uploadError = result.error;
+        const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+        const session = (await supabase.auth.getSession()).data.session;
+        const storageUrl = `${supabaseUrl}/storage/v1/object/chat-media/${filePath}`;
+        const uploadResult = await FileSystem.uploadAsync(
+          storageUrl,
+          attachmentPreview.uri,
+          {
+            httpMethod: "POST",
+            uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+            headers: {
+              "Content-Type": mime,
+              "Authorization": `Bearer ${session?.access_token || ""}`,
+              "apikey": process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "",
+              "x-upsert": "true",
+            },
+          }
+        );
+        uploadError = uploadResult.status >= 400 ? { message: `Upload failed: ${uploadResult.status}` } : null;
       }
 
       const label = attachmentPreview.type === "image" ? "📷 Photo" : attachmentPreview.type === "video" ? "🎥 Video" : `📎 ${attachmentPreview.name || "File"}`;
