@@ -4,7 +4,7 @@
     "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/afu-symbol.png",
     "scheme": "afuchat",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -14,9 +14,9 @@
       "iosDisplayInForeground": true
     },
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/afu-symbol.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#00C2CB"
     },
     "ios": {
       "supportsTablet": false,
@@ -25,10 +25,10 @@
       }
     },
     "android": {
-      "permissions": ["RECEIVE_BOOT_COMPLETED", "VIBRATE", "POST_NOTIFICATIONS"]
+      "permissions": ["RECEIVE_BOOT_COMPLETED", "VIBRATE", "POST_NOTIFICATIONS", "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
     },
     "web": {
-      "favicon": "./assets/images/icon.png"
+      "favicon": "./assets/images/afu-symbol.png"
     },
     "plugins": [
       [
@@ -39,6 +39,13 @@
       ],
       "expo-font",
       "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "AfuChat uses your location to detect your country automatically.",
+          "locationWhenInUsePermission": "AfuChat uses your location to detect your country automatically."
+        }
+      ],
       [
         "expo-notifications",
         {

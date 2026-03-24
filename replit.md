@@ -72,7 +72,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 
 - **Auth**: Supabase Auth (email/password, Google OAuth, GitHub OAuth via WebBrowser + PKCE), AuthContext provider. App scheme `afuchat://` for OAuth deep links. OTP-based password reset (6-digit code, not link). Email confirmation required on registration (OTP verify). All auth emails sent from `noreply@afuchat.com` via Resend (edge function `send-password-reset` handles all email types with branded templates + AfuChat Technologies Ltd footer).
 - **Navigation**: Expo Router with tabs (Chats, Contacts, Discover, Me)
-- **Design**: AfuChat teal `#00C2CB` brand color, gold business badge `#D4A853`, Inter font family, dark/light theme, custom logo
+- **Design**: AfuChat teal `#00C2CB` brand color, gold business badge `#D4A853`, Inter font family, dark/light theme, branded afu-symbol logo used for app icon, splash screen (teal background), favicon, and notification icon
 - **Badge System**: `is_organization_verified=true` → gold badge (#D4A853) + "Verified Business" tag. `is_verified=true` (subscription) → teal badge (#00C2CB), no business tag. Applied across me.tsx, discover.tsx, contacts.tsx, contact/[id].tsx, post/[id].tsx, admin/index.tsx.
 - **Cross-platform Alerts**: `lib/alert.ts` exports `showAlert()` — renders iOS-style modal dialogs on both Android and iOS via `IOSAlert` component registered in `_layout.tsx`. Uses event listener pattern (`registerAlertListener`/`unregisterAlertListener`). Web fallback uses `window.confirm`/`window.prompt`. All screens use `showAlert()` instead of `Alert.alert` directly.
 - **Account Switching**: `lib/accountStore.ts` stores multiple Supabase sessions using `expo-secure-store` (native) / AsyncStorage (web). AuthContext exposes `addAccount(email, password)`, `switchAccount(userId)`, `removeAccount(userId)`. Users add accounts with email+password and switch instantly without logging out.
@@ -132,7 +132,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - **Registration**: Sign up page collects only email + password. After signup, user verifies email via 6-digit OTP code.
 - **Onboarding**: After OTP verification, new users are routed to a 5-step onboarding flow (`/onboarding`):
   - Step 1: Display name + username (handle) — required
-  - Step 2: Country (full searchable picker with 130+ countries, flags, dial codes) + phone number (validated against country-specific digit length) — required
+  - Step 2: Country (auto-detected via GPS/reverse geocoding using expo-location, with full searchable picker fallback for 130+ countries with flags and dial codes) + phone number (validated against country-specific digit length) — required
   - Step 3: Date of birth (scrollable day/month/year dropdown selectors) + gender (male/female) — all required, must be 13+
   - Step 4: Interests selection — pick at least 3 from 18 options
   - Step 5: Profile photo upload (via expo-image-picker, uploaded to Supabase Storage `avatars` bucket) + profile summary review

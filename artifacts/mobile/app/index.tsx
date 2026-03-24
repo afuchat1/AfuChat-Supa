@@ -1,8 +1,10 @@
 import { useEffect } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Image, StyleSheet, View, Text } from "react-native";
 import { router } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import Colors from "@/constants/colors";
+
+const afuLogo = require("@/assets/images/afu-symbol.png");
 
 export default function IndexScreen() {
   const { session, profile, loading } = useAuth();
@@ -22,7 +24,9 @@ export default function IndexScreen() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color={Colors.brand} />
+      <Image source={afuLogo} style={styles.logo} resizeMode="contain" />
+      <Text style={styles.brandText}>AfuChat</Text>
+      <ActivityIndicator size="small" color="#fff" style={styles.loader} />
     </View>
   );
 }
@@ -32,6 +36,22 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Colors.brand,
+  },
+  logo: {
+    width: 100,
+    height: 100,
+    borderRadius: 24,
+  },
+  brandText: {
+    color: "#fff",
+    fontSize: 28,
+    fontWeight: "700",
+    marginTop: 16,
+    letterSpacing: 0.5,
+  },
+  loader: {
+    position: "absolute",
+    bottom: 80,
   },
 });
