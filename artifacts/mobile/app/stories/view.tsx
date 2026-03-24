@@ -100,13 +100,13 @@ export default function ViewStoryScreen() {
   }, [index, stories]);
 
   const story = stories[index];
-  if (!story) return <View style={[styles.root, { backgroundColor: "#000" }]} />;
+  if (!story) return <View style={[styles.root, { backgroundColor: "#0D0D0D" }]} />;
 
   const elapsed = Math.floor((Date.now() - new Date(story.created_at).getTime()) / 3600000);
   const timeLabel = elapsed < 1 ? "just now" : `${elapsed}h ago`;
 
   return (
-    <View style={[styles.root, { backgroundColor: "#000" }]}>
+    <View style={[styles.root, { backgroundColor: "#0D0D0D" }]}>
       {story.media_type === "video" ? (
         <Video
           source={{ uri: story.media_url }}

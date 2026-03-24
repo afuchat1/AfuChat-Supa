@@ -24,10 +24,10 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
   const insets = useSafeAreaInsets();
 
   const theme = {
-    background: isDark ? "#000000" : "#FFFFFF",
-    backgroundSecondary: isDark ? "#1C1C1E" : "#F2F2F7",
-    text: isDark ? "#FFFFFF" : "#000000",
-    textSecondary: isDark ? "rgba(255, 255, 255, 0.7)" : "rgba(0, 0, 0, 0.7)",
+    background: isDark ? "#0D0D0D" : "#F2F2F7",
+    backgroundSecondary: isDark ? "#1C1C1E" : "#E5E5EA",
+    text: isDark ? "#FFFFFF" : "#1C1C1E",
+    textSecondary: isDark ? "rgba(255,255,255,0.7)" : "rgba(28,28,30,0.7)",
     link: "#007AFF",
     buttonText: "#FFFFFF",
   };
@@ -193,7 +193,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 16,
     width: "100%",
-    maxWidth: 600,
   },
   title: {
     fontSize: 28,

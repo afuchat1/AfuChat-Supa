@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 8,
   },
-  premiumBadgeText: { color: "#000", fontSize: 10, fontFamily: "Inter_700Bold" },
+  premiumBadgeText: { color: "#1C1C1E", fontSize: 10, fontFamily: "Inter_700Bold" },
   versionRow: { alignItems: "center", marginTop: 8, gap: 6 },
   version: { textAlign: "center", fontSize: 12, fontFamily: "Inter_400Regular" },
 });

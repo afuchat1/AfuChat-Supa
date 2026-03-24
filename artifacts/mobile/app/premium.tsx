@@ -297,7 +297,7 @@ export default function PremiumScreen() {
                 disabled={subscribing}
                 activeOpacity={0.85}
               >
-                <Ionicons name="diamond" size={20} color="#000" />
+                <Ionicons name="diamond" size={20} color="#1C1C1E" />
                 <Text style={styles.subscribeBtnText}>
                   {subscribing ? "Processing..." : `Subscribe for ${selectedPlan.acoin_price} ACoin`}
                 </Text>
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
   planFeatureRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   planFeatureText: { fontSize: 12, fontFamily: "Inter_400Regular" },
   popularTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
-  popularTagText: { color: "#000", fontSize: 10, fontFamily: "Inter_700Bold" },
+  popularTagText: { color: "#1C1C1E", fontSize: 10, fontFamily: "Inter_700Bold" },
   currentTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   currentTagText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
   costSummary: { padding: 16, borderRadius: 14, gap: 8 },
@@ -358,6 +358,6 @@ const styles = StyleSheet.create({
   costValue: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
   costDivider: { height: StyleSheet.hairlineWidth },
   subscribeBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#FFD60A", height: 56, borderRadius: 16 },
-  subscribeBtnText: { color: "#000", fontSize: 18, fontFamily: "Inter_700Bold" },
+  subscribeBtnText: { color: "#1C1C1E", fontSize: 18, fontFamily: "Inter_700Bold" },
   legalText: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 18 },
 });

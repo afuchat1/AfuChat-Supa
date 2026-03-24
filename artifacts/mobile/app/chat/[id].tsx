@@ -1165,7 +1165,7 @@ const styles = StyleSheet.create({
   giftRevealBtn: { backgroundColor: Colors.brand, borderRadius: 14, paddingHorizontal: 40, paddingVertical: 14, marginTop: 8 },
   giftRevealBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
   attachmentImage: { width: 200, height: 160, borderRadius: 14 },
-  attachmentVideo: { width: 220, height: 180, borderRadius: 14, overflow: "hidden", backgroundColor: "#000" },
+  attachmentVideo: { width: 220, height: 180, borderRadius: 14, overflow: "hidden", backgroundColor: "#0D0D0D" },
   audioBubble: { flexDirection: "row", alignItems: "center", gap: 8, minWidth: 180 },
   videoPlayOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.3)", borderRadius: 10 },
   fileBubble: { flexDirection: "row", alignItems: "center", gap: 10, maxWidth: 240 },
