@@ -334,15 +334,34 @@ function MessageBubble({ msg, isMe, showAvatar, showTime, onLongPress, onReply, 
 }
 
 export default function ChatScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, contactId, contactName, contactAvatar } = useLocalSearchParams<{
+    id: string;
+    contactId?: string;
+    contactName?: string;
+    contactAvatar?: string;
+  }>();
+  const isDraft = id === "new";
   const { user } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!isDraft);
   const [sending, setSending] = useState(false);
-  const [chatInfo, setChatInfo] = useState<ChatInfo | null>(null);
+  const [realChatId, setRealChatId] = useState<string | null>(null);
+  const [chatInfo, setChatInfo] = useState<ChatInfo | null>(
+    isDraft && contactName
+      ? {
+          is_group: false,
+          is_channel: false,
+          name: null,
+          other_name: contactName as string,
+          other_avatar: contactAvatar as string | null || null,
+          other_id: contactId as string,
+          avatar_url: null,
+        }
+      : null
+  );
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [showReactions, setShowReactions] = useState<Message | null>(null);
@@ -363,7 +382,7 @@ export default function ChatScreen() {
   const typingTimeout = useRef<any>(null);
 
   const loadChatInfo = useCallback(async () => {
-    if (!id || !user) return;
+    if (!id || !user || isDraft) return;
     const { data: chat } = await supabase
       .from("chats")
       .select(`is_group, is_channel, name, avatar_url, chat_members(user_id, profiles(id, display_name, avatar_url, handle))`)
@@ -383,14 +402,15 @@ export default function ChatScreen() {
         avatar_url: chat.avatar_url,
       });
     }
-  }, [id, user]);
+  }, [id, user, isDraft]);
 
   const loadMessages = useCallback(async () => {
-    if (!id || !user) return;
+    const effectiveChatId = isDraft ? realChatId : id;
+    if (!effectiveChatId || !user) return;
     const { data } = await supabase
       .from("messages")
       .select(`id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`)
-      .eq("chat_id", id)
+      .eq("chat_id", effectiveChatId)
       .order("sent_at", { ascending: false })
       .limit(50);
 
@@ -436,9 +456,10 @@ export default function ChatScreen() {
       );
     }
     setLoading(false);
-  }, [id, user]);
+  }, [id, user, isDraft, realChatId]);
 
   useEffect(() => {
+    if (isDraft) return;
     loadChatInfo();
     loadMessages();
 
@@ -485,7 +506,7 @@ export default function ChatScreen() {
   }, [id, loadChatInfo, loadMessages]);
 
   function handleTyping() {
-    if (!user || !id) return;
+    if (!user || !id || isDraft) return;
     if (typingTimeout.current) clearTimeout(typingTimeout.current);
     supabase.from("typing_indicators").upsert({ chat_id: id, user_id: user.id, is_typing: true }, { onConflict: "chat_id,user_id" });
     typingTimeout.current = setTimeout(() => {
@@ -507,6 +528,35 @@ export default function ChatScreen() {
     loadMessages();
   }
 
+  async function getOrCreateChatId(): Promise<string | null> {
+    if (!isDraft) return id;
+    if (realChatId) return realChatId;
+    if (!user || !contactId) return null;
+    const { data: chat, error } = await supabase
+      .from("chats")
+      .insert({ is_group: false, created_by: user.id, user_id: user.id })
+      .select()
+      .single();
+    if (error || !chat) return null;
+    await supabase.from("chat_members").insert([
+      { chat_id: chat.id, user_id: user.id },
+      { chat_id: chat.id, user_id: contactId },
+    ]);
+    setRealChatId(chat.id);
+    supabase
+      .channel(`chat:${chat.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `chat_id=eq.${chat.id}` },
+        async (payload) => {
+          const newMsg = payload.new as any;
+          if (newMsg.sender_id === user.id) return;
+          const { data: profile } = await supabase.from("profiles").select("display_name, avatar_url, handle").eq("id", newMsg.sender_id).single();
+          setMessages((prev) => [{ ...newMsg, sender: profile as any, reactions: [], status: undefined }, ...prev]);
+        }
+      )
+      .subscribe();
+    return chat.id;
+  }
+
   async function sendMessage() {
     const text = input.trim();
     if (!text || !user || sending) return;
@@ -514,11 +564,14 @@ export default function ChatScreen() {
     setInput("");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+    const activeChatId = await getOrCreateChatId();
+    if (!activeChatId) { setSending(false); return; }
+
     const now = new Date().toISOString();
     const tempId = `temp_${Date.now()}`;
     const optimistic: Message = {
       id: tempId,
-      chat_id: id,
+      chat_id: activeChatId,
       sender_id: user.id,
       encrypted_content: text,
       sent_at: now,
@@ -529,7 +582,7 @@ export default function ChatScreen() {
     setMessages((prev) => [optimistic, ...prev]);
     setReplyTo(null);
 
-    const insertData: any = { chat_id: id, sender_id: user.id, encrypted_content: text };
+    const insertData: any = { chat_id: activeChatId, sender_id: user.id, encrypted_content: text };
     if (replyTo) insertData.reply_to_message_id = replyTo.id;
 
     const { data: msg, error } = await supabase.from("messages").insert(insertData).select().single();
@@ -541,10 +594,12 @@ export default function ChatScreen() {
       setMessages((prev) =>
         prev.map((m) => (m.id === tempId ? { ...m, id: msg.id, sent_at: msg.sent_at, status: "sent" } : m))
       );
-      await supabase.from("chats").update({ updated_at: now }).eq("id", id);
+      await supabase.from("chats").update({ updated_at: now }).eq("id", activeChatId);
     }
     setSending(false);
-    supabase.from("typing_indicators").upsert({ chat_id: id, user_id: user.id, is_typing: false }, { onConflict: "chat_id,user_id" });
+    if (!isDraft) {
+      supabase.from("typing_indicators").upsert({ chat_id: activeChatId, user_id: user.id, is_typing: false }, { onConflict: "chat_id,user_id" });
+    }
   }
 
   async function sendRedEnvelope() {
@@ -666,9 +721,12 @@ export default function ChatScreen() {
     setSending(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+    const activeChatId = await getOrCreateChatId();
+    if (!activeChatId) { setSending(false); return; }
+
     const ext = attachmentPreview.uri.split(".").pop() || "file";
     const fileName = attachmentPreview.name || `${Date.now()}.${ext}`;
-    const filePath = `chat-attachments/${id}/${user.id}/${fileName}`;
+    const filePath = `chat-attachments/${activeChatId}/${user.id}/${fileName}`;
 
     const response = await fetch(attachmentPreview.uri);
     const blob = await response.blob();
@@ -676,7 +734,7 @@ export default function ChatScreen() {
 
     if (uploadError) {
       const label = attachmentPreview.type === "image" ? "📷 Photo" : attachmentPreview.type === "video" ? "🎥 Video" : `📎 ${attachmentPreview.name || "File"}`;
-      await supabase.from("messages").insert({ chat_id: id, sender_id: user.id, encrypted_content: label });
+      await supabase.from("messages").insert({ chat_id: activeChatId, sender_id: user.id, encrypted_content: label });
       loadMessages();
       setAttachmentPreview(null);
       setSending(false);
@@ -687,7 +745,7 @@ export default function ChatScreen() {
     const publicUrl = urlData?.publicUrl || "";
 
     const insertData: any = {
-      chat_id: id,
+      chat_id: activeChatId,
       sender_id: user.id,
       encrypted_content: attachmentPreview.type === "image" ? "📷 Photo" : attachmentPreview.type === "video" ? "🎥 Video" : `📎 ${attachmentPreview.name || "File"}`,
       attachment_url: publicUrl,
@@ -706,8 +764,11 @@ export default function ChatScreen() {
     setGifSearch("");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+    const activeChatId = await getOrCreateChatId();
+    if (!activeChatId) return;
+
     await supabase.from("messages").insert({
-      chat_id: id,
+      chat_id: activeChatId,
       sender_id: user.id,
       encrypted_content: "GIF",
       attachment_url: gifUrl,

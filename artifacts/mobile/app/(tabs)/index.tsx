@@ -1,7 +1,9 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -21,6 +23,15 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { Separator } from "@/components/ui/Separator";
 import Colors from "@/constants/colors";
+
+type Contact = {
+  id: string;
+  display_name: string;
+  handle: string;
+  avatar_url: string | null;
+  is_verified: boolean;
+  is_organization_verified: boolean;
+};
 
 type StoryUser = {
   userId: string;
@@ -160,6 +171,175 @@ const storyBarStyles = StyleSheet.create({
   name: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 4, textAlign: "center" },
 });
 
+function ContactPickerModal({ visible, onClose, userId, colors }: { visible: boolean; onClose: () => void; userId: string; colors: any }) {
+  const insets = useSafeAreaInsets();
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const slideAnim = useRef(new Animated.Value(600)).current;
+
+  useEffect(() => {
+    if (visible) {
+      setSearch("");
+      Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, damping: 20, stiffness: 200 }).start();
+      loadContacts();
+    } else {
+      Animated.timing(slideAnim, { toValue: 600, duration: 220, useNativeDriver: true }).start();
+    }
+  }, [visible]);
+
+  async function loadContacts() {
+    setLoading(true);
+    const { data } = await supabase
+      .from("follows")
+      .select("following_id, profiles!follows_following_id_fkey(id, display_name, handle, avatar_url, is_verified, is_organization_verified)")
+      .eq("follower_id", userId);
+    if (data) {
+      const list = data
+        .map((f: any) => f.profiles)
+        .filter(Boolean)
+        .sort((a: Contact, b: Contact) => a.display_name.localeCompare(b.display_name));
+      setContacts(list);
+    }
+    setLoading(false);
+  }
+
+  async function selectContact(contact: Contact) {
+    Haptics.selectionAsync();
+    const { data: myChats } = await supabase
+      .from("chat_members")
+      .select("chat_id")
+      .eq("user_id", userId);
+    const myIds = (myChats || []).map((m: any) => m.chat_id);
+    if (myIds.length > 0) {
+      const { data: shared } = await supabase
+        .from("chat_members")
+        .select("chat_id, chats!inner(id, is_group, is_channel)")
+        .eq("user_id", contact.id)
+        .in("chat_id", myIds)
+        .eq("chats.is_group", false)
+        .eq("chats.is_channel", false);
+      if (shared && shared.length > 0) {
+        onClose();
+        router.push({ pathname: "/chat/[id]", params: { id: shared[0].chat_id } });
+        return;
+      }
+    }
+    onClose();
+    router.push({
+      pathname: "/chat/[id]",
+      params: {
+        id: "new",
+        contactId: contact.id,
+        contactName: contact.display_name,
+        contactAvatar: contact.avatar_url || "",
+      },
+    });
+  }
+
+  const filtered = search
+    ? contacts.filter(
+        (c) =>
+          c.display_name.toLowerCase().includes(search.toLowerCase()) ||
+          c.handle.toLowerCase().includes(search.toLowerCase())
+      )
+    : contacts;
+
+  if (!visible) return null;
+
+  return (
+    <Modal transparent animationType="none" visible={visible} onRequestClose={onClose}>
+      <View style={pickerStyles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Animated.View
+          style={[
+            pickerStyles.sheet,
+            { backgroundColor: colors.surface, paddingBottom: insets.bottom + 12, transform: [{ translateY: slideAnim }] },
+          ]}
+        >
+          <View style={pickerStyles.handle} />
+          <View style={pickerStyles.pickerHeader}>
+            <Text style={[pickerStyles.pickerTitle, { color: colors.text }]}>New Message</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close" size={22} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+          <View style={[pickerStyles.searchBox, { backgroundColor: colors.inputBg }]}>
+            <Ionicons name="search-outline" size={16} color={colors.textMuted} />
+            <TextInput
+              style={[pickerStyles.searchInput, { color: colors.text }]}
+              placeholder="Search contacts"
+              placeholderTextColor={colors.textMuted}
+              value={search}
+              onChangeText={setSearch}
+              autoFocus
+            />
+            {search.length > 0 && (
+              <Pressable onPress={() => setSearch("")}>
+                <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+              </Pressable>
+            )}
+          </View>
+          {loading ? (
+            <View style={pickerStyles.center}>
+              <ActivityIndicator color={Colors.brand} />
+            </View>
+          ) : filtered.length === 0 ? (
+            <View style={pickerStyles.center}>
+              <Text style={[pickerStyles.emptyText, { color: colors.textMuted }]}>
+                {search ? "No contacts found" : "No contacts yet"}
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={filtered}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[pickerStyles.contactRow, { backgroundColor: colors.surface }]}
+                  onPress={() => selectContact(item)}
+                  activeOpacity={0.7}
+                >
+                  <Avatar uri={item.avatar_url} name={item.display_name} size={46} />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <Text style={[pickerStyles.contactName, { color: colors.text }]}>{item.display_name}</Text>
+                      {item.is_organization_verified && (
+                        <Ionicons name="checkmark-circle" size={14} color={Colors.gold} />
+                      )}
+                      {!item.is_organization_verified && item.is_verified && (
+                        <Ionicons name="checkmark-circle" size={14} color={Colors.brand} />
+                      )}
+                    </View>
+                    <Text style={[pickerStyles.contactHandle, { color: colors.textSecondary }]}>@{item.handle}</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+              ItemSeparatorComponent={() => <Separator indent={70} />}
+              showsVerticalScrollIndicator={false}
+            />
+          )}
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+const pickerStyles = StyleSheet.create({
+  overlay: { flex: 1, justifyContent: "flex-end" },
+  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "85%", paddingTop: 8 },
+  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "#ccc", alignSelf: "center", marginBottom: 12 },
+  pickerHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, marginBottom: 12 },
+  pickerTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  searchBox: { flexDirection: "row", alignItems: "center", borderRadius: 10, paddingHorizontal: 10, height: 38, gap: 6, marginHorizontal: 16, marginBottom: 8 },
+  searchInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 38 },
+  contactRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12 },
+  contactName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  contactHandle: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  center: { paddingVertical: 40, alignItems: "center" },
+  emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+});
+
 export default function ChatsScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
@@ -168,6 +348,7 @@ export default function ChatsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
+  const [showContactPicker, setShowContactPicker] = useState(false);
 
   const loadChats = useCallback(async () => {
     if (!user) return;
@@ -271,13 +452,6 @@ export default function ChatsScreen() {
           >
             <Ionicons name="people-outline" size={22} color={colors.text} />
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => router.push("/(tabs)/contacts")}
-            style={styles.headerBtn}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="create-outline" size={22} color={colors.text} />
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -330,6 +504,23 @@ export default function ChatsScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
+
+      <TouchableOpacity
+        style={[styles.fab, { backgroundColor: Colors.brand, bottom: insets.bottom + 24 }]}
+        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowContactPicker(true); }}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="create-outline" size={24} color="#fff" />
+      </TouchableOpacity>
+
+      {user && (
+        <ContactPickerModal
+          visible={showContactPicker}
+          onClose={() => setShowContactPicker(false)}
+          userId={user.id}
+          colors={colors}
+        />
+      )}
     </View>
   );
 }
@@ -377,4 +568,18 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   emptySubtitle: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  fab: {
+    position: "absolute",
+    right: 20,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
+  },
 });
