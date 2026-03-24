@@ -179,23 +179,22 @@ function ContactPickerModal({ visible, onClose, userId, colors }: { visible: boo
   useEffect(() => {
     if (visible) {
       setSearch("");
+      setContacts([]);
+      setLoading(true);
       loadContacts();
     }
   }, [visible]);
 
   async function loadContacts() {
-    setLoading(true);
     const { data } = await supabase
       .from("follows")
       .select("following_id, profiles!follows_following_id_fkey(id, display_name, handle, avatar_url, is_verified, is_organization_verified)")
       .eq("follower_id", userId);
-    if (data) {
-      const list = data
-        .map((f: any) => f.profiles)
-        .filter(Boolean)
-        .sort((a: Contact, b: Contact) => a.display_name.localeCompare(b.display_name));
-      setContacts(list);
-    }
+    const list = (data || [])
+      .map((f: any) => f.profiles)
+      .filter(Boolean)
+      .sort((a: Contact, b: Contact) => a.display_name.localeCompare(b.display_name));
+    setContacts(list);
     setLoading(false);
   }
 
@@ -258,7 +257,6 @@ function ContactPickerModal({ visible, onClose, userId, colors }: { visible: boo
             placeholderTextColor={colors.textMuted}
             value={search}
             onChangeText={setSearch}
-            autoFocus
           />
           {search.length > 0 && (
             <Pressable onPress={() => setSearch("")}>
