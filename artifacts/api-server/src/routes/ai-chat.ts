@@ -8,7 +8,7 @@ let _openai: OpenAI | null = null;
 
 function getOpenAI(): OpenAI | null {
   const apiKey =
-    process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+    process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.LOVABLE_API_KEY;
   const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
 
   if (!apiKey) return null;
@@ -49,7 +49,7 @@ router.post("/ai/chat", async (req: Request, res: Response) => {
     const openai = getOpenAI();
     if (!openai) {
       res.status(503).json({
-        error: "AI service is not configured. Please add the OPENAI_API_KEY environment variable.",
+        error: "AI service is not configured. Please add the LOVABLE_API_KEY environment variable.",
       });
       return;
     }
