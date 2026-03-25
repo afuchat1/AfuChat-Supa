@@ -3,7 +3,7 @@ import { AppState } from "react-native";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { getStoredAccounts, storeAccount, removeStoredAccount, updateAccountTokens, type StoredAccount } from "@/lib/accountStore";
-import { cacheProfile, getCachedProfile, isOnline } from "@/lib/offlineStore";
+import { cacheProfile, getCachedProfile, isOnline, onConnectivityChange } from "@/lib/offlineStore";
 import { startOfflineSync } from "@/lib/offlineSync";
 import { clearPushToken } from "@/lib/pushNotifications";
 
