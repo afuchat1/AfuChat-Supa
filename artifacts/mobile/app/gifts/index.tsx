@@ -474,6 +474,12 @@ export default function GiftsScreen() {
               </View>
             </View>
 
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
+              <Ionicons name="diamond" size={14} color={Colors.gold} />
+              <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: Colors.gold }}>{selectedGift?.gift.acoin_price ?? selectedGift?.gift.base_xp_cost}</Text>
+              <Text style={{ fontSize: 12, fontFamily: "Inter_500Medium", color: colors.textMuted, marginLeft: 2 }}>ACoin value</Text>
+            </View>
+
             {selectedGift?.gift.description && (
               <Text style={[styles.giftDesc, { color: colors.textSecondary }]}>{selectedGift.gift.description}</Text>
             )}
@@ -614,7 +620,13 @@ export default function GiftsScreen() {
               <GiftImage uri={sendGift?.gift.image_url || null} emoji={sendGift?.gift.emoji || "🎁"} size={48} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.sendPreviewName, { color: colors.text }]}>{sendGift?.gift.name}</Text>
-                <Text style={[styles.sendPreviewRarity, { color: rarityColors[sendGift?.gift.rarity || "common"] }]}>{sendGift?.gift.rarity}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 }}>
+                  <Text style={[styles.sendPreviewRarity, { color: rarityColors[sendGift?.gift.rarity || "common"] }]}>{sendGift?.gift.rarity}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                    <Ionicons name="diamond" size={11} color={Colors.gold} />
+                    <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: Colors.gold }}>{sendGift?.gift.acoin_price ?? sendGift?.gift.base_xp_cost}</Text>
+                  </View>
+                </View>
               </View>
             </View>
 

@@ -788,8 +788,21 @@ export default function ChatScreen() {
   }
 
   async function loadGifts() {
-    const { data } = await supabase.from("gifts").select("*").order("base_xp_cost", { ascending: true });
-    if (data) setGifts(data.map((g: any) => ({ ...g, acoin_price: g.acoin_price ?? g.base_xp_cost })));
+    const [{ data }, { data: statsData }] = await Promise.all([
+      supabase.from("gifts").select("*").order("base_xp_cost", { ascending: true }),
+      supabase.from("gift_statistics").select("gift_id, price_multiplier"),
+    ]);
+    if (data) {
+      const statsMap: Record<string, number> = {};
+      (statsData || []).forEach((s: any) => {
+        statsMap[s.gift_id] = parseFloat(s.price_multiplier) || 1;
+      });
+      setGifts(data.map((g: any) => {
+        const multiplier = statsMap[g.id] || 1;
+        const dynamicPrice = Math.ceil(g.base_xp_cost * multiplier);
+        return { ...g, acoin_price: dynamicPrice };
+      }));
+    }
   }
 
   async function sendGift(gift: Gift) {
@@ -853,22 +866,25 @@ export default function ChatScreen() {
       metadata: { gift_id: gift.id, gift_name: gift.name, receiver_id: receiverId },
     });
 
-    const rarityMultipliers: Record<string, number> = {
-      common: 0,
-      uncommon: 0.02,
-      rare: 0.05,
-      epic: 0.08,
-      legendary: 0.12,
-    };
-    const multiplier = rarityMultipliers[gift.rarity] || 0;
-    if (multiplier > 0) {
-      await supabase.rpc("escalate_gift_price", { p_gift_id: gift.id, p_multiplier: multiplier }).maybeSingle().then(({ error: rpcErr }) => {
-        if (rpcErr) {
-          const newPrice = Math.ceil(price * (1 + multiplier));
-          supabase.from("gifts").update({ acoin_price: newPrice }).eq("id", gift.id);
-        }
-      });
-    }
+    const { data: currentStats } = await supabase
+      .from("gift_statistics")
+      .select("price_multiplier, total_sent")
+      .eq("gift_id", gift.id)
+      .maybeSingle();
+
+    const currentMultiplier = currentStats ? parseFloat(String(currentStats.price_multiplier)) : 1;
+    const currentSent = currentStats?.total_sent || 0;
+    const newMultiplier = Math.min(currentMultiplier + 0.01, 3.0);
+
+    await supabase
+      .from("gift_statistics")
+      .upsert({
+        gift_id: gift.id,
+        price_multiplier: newMultiplier,
+        total_sent: currentSent + 1,
+        last_sale_price: price,
+        last_updated: new Date().toISOString(),
+      }, { onConflict: "gift_id" });
 
     await supabase.from("messages").insert({
       chat_id: activeChatId,
