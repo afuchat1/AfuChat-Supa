@@ -38,13 +38,13 @@ export function showAlert(
   message?: string,
   buttons?: AlertButton[],
 ) {
-  if (Platform.OS === "web") {
-    _webFallback(title, message, buttons);
+  if (_listener) {
+    _listener({ visible: true, title, message, buttons });
     return;
   }
 
-  if (_listener) {
-    _listener({ visible: true, title, message, buttons });
+  if (Platform.OS === "web") {
+    _webFallback(title, message, buttons);
     return;
   }
 
