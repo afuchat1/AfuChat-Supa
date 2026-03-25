@@ -1,4 +1,3 @@
-import "react-native-url-polyfill/auto";
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -25,7 +24,7 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import { registerAlertListener, unregisterAlertListener } from "@/lib/alert";
 import { setBaseUrl } from "@workspace/api-client-react";
 
-setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
+try { setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`); } catch (_) {}
 
 SplashScreen.preventAutoHideAsync();
 
@@ -68,8 +67,10 @@ function RootLayoutNav() {
       <Stack.Screen name="settings/blocked" />
       <Stack.Screen name="admin/index" />
       <Stack.Screen name="onboarding/index" options={{ animation: "fade", gestureEnabled: false }} />
-      <Stack.Screen name="terms" options={{ presentation: "modal" }} />
-      <Stack.Screen name="privacy" options={{ presentation: "modal" }} />
+      <Stack.Screen name="referral" />
+      <Stack.Screen name="linked-accounts" />
+      <Stack.Screen name="terms" options={{ animation: "slide_from_bottom", gestureDirection: "vertical" }} />
+      <Stack.Screen name="privacy" options={{ animation: "slide_from_bottom", gestureDirection: "vertical" }} />
       <Stack.Screen name="[handle]" options={{ animation: "fade" }} />
     </Stack>
   );
