@@ -21,125 +21,66 @@ import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
 const ACOIN_PACKAGES = [
-  { label: "100 ACoin", amount: 100, priceUsd: 2 },
-  { label: "500 ACoin", amount: 500, priceUsd: 8 },
-  { label: "2,000 ACoin", amount: 2000, priceUsd: 28 },
-  { label: "5,000 ACoin", amount: 5000, priceUsd: 60 },
+  { label: "100 ACoin", amount: 100, priceUsd: 1 },
+  { label: "500 ACoin", amount: 500, priceUsd: 5 },
+  { label: "2,000 ACoin", amount: 2000, priceUsd: 20 },
+  { label: "5,000 ACoin", amount: 5000, priceUsd: 50 },
   { label: "20,000 ACoin", amount: 20000, priceUsd: 200 },
 ];
 
-const CUSTOM_RATE_USD = 0.014;
-
 const COUNTRY_CURRENCY: Record<string, { code: string; symbol: string }> = {
-  "Kenya": { code: "KES", symbol: "KSh" },
   "Uganda": { code: "UGX", symbol: "USh" },
+  "Kenya": { code: "KES", symbol: "KSh" },
   "Tanzania": { code: "TZS", symbol: "TSh" },
   "Nigeria": { code: "NGN", symbol: "₦" },
   "South Africa": { code: "ZAR", symbol: "R" },
   "Ghana": { code: "GHS", symbol: "GH₵" },
-  "Ethiopia": { code: "ETB", symbol: "Br" },
   "Rwanda": { code: "RWF", symbol: "FRw" },
+  "Ethiopia": { code: "ETB", symbol: "Br" },
   "Cameroon": { code: "XAF", symbol: "FCFA" },
   "Senegal": { code: "XOF", symbol: "CFA" },
   "Egypt": { code: "EGP", symbol: "E£" },
   "Morocco": { code: "MAD", symbol: "MAD" },
   "Zambia": { code: "ZMW", symbol: "ZK" },
   "Malawi": { code: "MWK", symbol: "MK" },
-  "Mozambique": { code: "MZN", symbol: "MT" },
-  "Zimbabwe": { code: "ZWL", symbol: "Z$" },
-  "Botswana": { code: "BWP", symbol: "P" },
-  "Namibia": { code: "NAD", symbol: "N$" },
-  "Democratic Republic of the Congo": { code: "CDF", symbol: "FC" },
-  "Angola": { code: "AOA", symbol: "Kz" },
   "United States": { code: "USD", symbol: "$" },
   "United Kingdom": { code: "GBP", symbol: "£" },
-  "Canada": { code: "CAD", symbol: "C$" },
-  "Australia": { code: "AUD", symbol: "A$" },
   "India": { code: "INR", symbol: "₹" },
   "Pakistan": { code: "PKR", symbol: "Rs" },
-  "Bangladesh": { code: "BDT", symbol: "৳" },
+  "Germany": { code: "EUR", symbol: "€" },
+  "France": { code: "EUR", symbol: "€" },
+  "Japan": { code: "JPY", symbol: "¥" },
+  "China": { code: "CNY", symbol: "¥" },
   "Brazil": { code: "BRL", symbol: "R$" },
   "Mexico": { code: "MXN", symbol: "MX$" },
   "Philippines": { code: "PHP", symbol: "₱" },
   "Indonesia": { code: "IDR", symbol: "Rp" },
-  "Malaysia": { code: "MYR", symbol: "RM" },
-  "Thailand": { code: "THB", symbol: "฿" },
-  "Vietnam": { code: "VND", symbol: "₫" },
-  "South Korea": { code: "KRW", symbol: "₩" },
-  "Japan": { code: "JPY", symbol: "¥" },
-  "China": { code: "CNY", symbol: "¥" },
-  "Germany": { code: "EUR", symbol: "€" },
-  "France": { code: "EUR", symbol: "€" },
-  "Italy": { code: "EUR", symbol: "€" },
-  "Spain": { code: "EUR", symbol: "€" },
-  "Netherlands": { code: "EUR", symbol: "€" },
-  "Belgium": { code: "EUR", symbol: "€" },
-  "Portugal": { code: "EUR", symbol: "€" },
-  "Ireland": { code: "EUR", symbol: "€" },
-  "Austria": { code: "EUR", symbol: "€" },
-  "Finland": { code: "EUR", symbol: "€" },
-  "Greece": { code: "EUR", symbol: "€" },
-  "Turkey": { code: "TRY", symbol: "₺" },
   "Saudi Arabia": { code: "SAR", symbol: "SAR" },
   "United Arab Emirates": { code: "AED", symbol: "AED" },
-  "Qatar": { code: "QAR", symbol: "QAR" },
-  "Kuwait": { code: "KWD", symbol: "KD" },
-  "Oman": { code: "OMR", symbol: "OMR" },
-  "Bahrain": { code: "BHD", symbol: "BD" },
-  "Jordan": { code: "JOD", symbol: "JD" },
-  "Lebanon": { code: "LBP", symbol: "L£" },
-  "Israel": { code: "ILS", symbol: "₪" },
+  "Turkey": { code: "TRY", symbol: "₺" },
+  "Australia": { code: "AUD", symbol: "A$" },
+  "Canada": { code: "CAD", symbol: "C$" },
+  "Malaysia": { code: "MYR", symbol: "RM" },
+  "Thailand": { code: "THB", symbol: "฿" },
+  "South Korea": { code: "KRW", symbol: "₩" },
+  "Singapore": { code: "SGD", symbol: "S$" },
   "Sweden": { code: "SEK", symbol: "kr" },
-  "Norway": { code: "NOK", symbol: "kr" },
-  "Denmark": { code: "DKK", symbol: "kr" },
   "Switzerland": { code: "CHF", symbol: "CHF" },
   "Poland": { code: "PLN", symbol: "zł" },
-  "Czech Republic": { code: "CZK", symbol: "Kč" },
-  "Hungary": { code: "HUF", symbol: "Ft" },
-  "Romania": { code: "RON", symbol: "lei" },
   "Colombia": { code: "COP", symbol: "COL$" },
   "Argentina": { code: "ARS", symbol: "AR$" },
-  "Chile": { code: "CLP", symbol: "CL$" },
-  "Peru": { code: "PEN", symbol: "S/" },
-  "Singapore": { code: "SGD", symbol: "S$" },
-  "New Zealand": { code: "NZD", symbol: "NZ$" },
-  "Sri Lanka": { code: "LKR", symbol: "Rs" },
-  "Nepal": { code: "NPR", symbol: "Rs" },
-  "Myanmar": { code: "MMK", symbol: "K" },
   "Somalia": { code: "SOS", symbol: "Sh" },
   "Sudan": { code: "SDG", symbol: "SDG" },
-  "South Sudan": { code: "SSP", symbol: "SSP" },
-  "Ivory Coast": { code: "XOF", symbol: "CFA" },
-  "Burkina Faso": { code: "XOF", symbol: "CFA" },
-  "Mali": { code: "XOF", symbol: "CFA" },
-  "Niger": { code: "XOF", symbol: "CFA" },
-  "Togo": { code: "XOF", symbol: "CFA" },
-  "Benin": { code: "XOF", symbol: "CFA" },
-  "Congo": { code: "XAF", symbol: "FCFA" },
-  "Gabon": { code: "XAF", symbol: "FCFA" },
-  "Chad": { code: "XAF", symbol: "FCFA" },
-  "Madagascar": { code: "MGA", symbol: "Ar" },
-  "Mauritius": { code: "MUR", symbol: "Rs" },
+  "Democratic Republic of the Congo": { code: "CDF", symbol: "FC" },
+  "Mozambique": { code: "MZN", symbol: "MT" },
+  "Zimbabwe": { code: "ZWL", symbol: "Z$" },
+  "Botswana": { code: "BWP", symbol: "P" },
+  "Namibia": { code: "NAD", symbol: "N$" },
+  "Angola": { code: "AOA", symbol: "Kz" },
   "Burundi": { code: "BIF", symbol: "FBu" },
+  "Madagascar": { code: "MGA", symbol: "Ar" },
   "Sierra Leone": { code: "SLL", symbol: "Le" },
-  "Liberia": { code: "LRD", symbol: "L$" },
-  "Gambia": { code: "GMD", symbol: "D" },
-  "Guinea": { code: "GNF", symbol: "FG" },
-  "Eritrea": { code: "ERN", symbol: "Nfk" },
-  "Djibouti": { code: "DJF", symbol: "Fdj" },
-  "Comoros": { code: "KMF", symbol: "CF" },
-  "Cape Verde": { code: "CVE", symbol: "Esc" },
-  "Eswatini": { code: "SZL", symbol: "E" },
-  "Lesotho": { code: "LSL", symbol: "L" },
-  "Seychelles": { code: "SCR", symbol: "Rs" },
-  "São Tomé and Príncipe": { code: "STN", symbol: "Db" },
-  "Equatorial Guinea": { code: "XAF", symbol: "FCFA" },
-  "Central African Republic": { code: "XAF", symbol: "FCFA" },
-  "Haiti": { code: "HTG", symbol: "G" },
-  "Jamaica": { code: "JMD", symbol: "J$" },
-  "Trinidad and Tobago": { code: "TTD", symbol: "TT$" },
-  "Dominican Republic": { code: "DOP", symbol: "RD$" },
-  "Cuba": { code: "CUP", symbol: "₱" },
+  "Ivory Coast": { code: "XOF", symbol: "CFA" },
 };
 
 type TopUpStage = "select" | "processing" | "payment" | "success";
@@ -152,10 +93,7 @@ function getUserCurrency(country: string | null | undefined): { code: string; sy
 function formatLocalPrice(usdPrice: number, rate: number, symbol: string, code: string): string {
   if (code === "USD") return `$${usdPrice.toFixed(2)}`;
   const local = Math.ceil(usdPrice * rate);
-  if (local >= 1000) {
-    return `${symbol}${local.toLocaleString()}`;
-  }
-  return `${symbol}${local}`;
+  return `${symbol}${local.toLocaleString()}`;
 }
 
 export default function TopUpScreen() {
@@ -181,17 +119,10 @@ export default function TopUpScreen() {
         return;
       }
       try {
-        const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData?.session?.access_token || "";
-        const res = await fetch(`${supabaseUrl}/functions/v1/fetch-currency-rates`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-          body: JSON.stringify({ base: "USD", target: userCurrency.code }),
-        });
+        const res = await fetch("https://open.er-api.com/v6/latest/USD");
         const data = await res.json();
-        if (data.rate) {
-          setExchangeRate(data.rate);
+        if (data.result === "success" && data.rates?.[userCurrency.code]) {
+          setExchangeRate(data.rates[userCurrency.code]);
         }
       } catch {}
       setRateLoading(false);
@@ -212,8 +143,7 @@ export default function TopUpScreen() {
       return;
     }
 
-    const amount = pack ? pack.amount : customVal;
-    const priceUsd = pack ? pack.priceUsd : Math.ceil(customVal * CUSTOM_RATE_USD * 100) / 100;
+    const acoinAmount = pack ? pack.amount : customVal;
 
     setProcessing(true);
     Haptics.selectionAsync();
@@ -229,21 +159,16 @@ export default function TopUpScreen() {
           "Authorization": `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          action: "initiate",
-          acoin_amount: amount,
-          price_usd: priceUsd,
-          currency: userCurrency.code,
-          local_amount: isLocalCurrency ? Math.ceil(priceUsd * exchangeRate) : priceUsd,
-          email: user?.email,
-          first_name: profile?.display_name?.split(" ")[0] || "User",
-          last_name: profile?.display_name?.split(" ").slice(1).join(" ") || "",
+          action: "create-order",
+          userId: user?.id,
+          acoinAmount: acoinAmount,
         }),
       });
 
       const data = await response.json();
 
-      if (data.redirect_url) {
-        setPaymentUrl(data.redirect_url);
+      if (data.redirectUrl) {
+        setPaymentUrl(data.redirectUrl);
         setStage("payment");
       } else {
         showAlert("Error", data.error || "Failed to initiate payment. Please try again.");
@@ -256,11 +181,11 @@ export default function TopUpScreen() {
   }
 
   function handleWebViewNavigation(url: string) {
-    if (url.includes("/payments/pesapal/success") || url.includes("status=completed")) {
+    if (url.includes("payment=success") || url.includes("status=completed")) {
       setStage("success");
       refreshProfile();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } else if (url.includes("/payments/pesapal/cancel") || url.includes("status=cancelled")) {
+    } else if (url.includes("payment=cancelled") || url.includes("status=cancelled")) {
       setStage("select");
       showAlert("Cancelled", "Payment was cancelled.");
     }
@@ -384,12 +309,12 @@ export default function TopUpScreen() {
             placeholder="Enter ACoin amount (min. 50)"
             placeholderTextColor={colors.textMuted}
             value={customAmount}
-            onChangeText={(v) => { setCustomAmount(v); setSelectedPack(null); }}
+            onChangeText={(v) => { setCustomAmount(v.replace(/[^0-9]/g, "")); setSelectedPack(null); }}
             keyboardType="numeric"
           />
           {customAmount && !rateLoading ? (
             <Text style={[styles.customPrice, { color: Colors.gold }]}>
-              {displayPrice(Math.ceil(parseInt(customAmount || "0") * CUSTOM_RATE_USD * 100) / 100)}
+              {displayPrice((parseInt(customAmount || "0") || 0) * 0.01)}
             </Text>
           ) : null}
         </View>
@@ -398,7 +323,7 @@ export default function TopUpScreen() {
           <View style={[styles.rateNote, { backgroundColor: colors.surface }]}>
             <Ionicons name="swap-horizontal" size={14} color={colors.textMuted} />
             <Text style={[styles.rateNoteText, { color: colors.textMuted }]}>
-              1 USD ≈ {exchangeRate.toLocaleString()} {userCurrency.code}
+              1 USD ≈ {exchangeRate.toLocaleString(undefined, { maximumFractionDigits: 0 })} {userCurrency.code}
             </Text>
           </View>
         )}
