@@ -1,0 +1,22 @@
+User-agent: *
+Allow: /
+Allow: /discover
+Allow: /terms
+Allow: /privacy
+
+Disallow: /login
+Disallow: /register
+Disallow: /reset-password
+Disallow: /chat/
+Disallow: /settings/
+Disallow: /admin/
+Disallow: /onboarding/
+Disallow: /linked-accounts
+Disallow: /wallet/
+Disallow: /profile/edit
+Disallow: /notifications
+Disallow: /premium
+Disallow: /referral
+Disallow: /me
+
+Sitemap: https://afuchat.com/sitemap.xml

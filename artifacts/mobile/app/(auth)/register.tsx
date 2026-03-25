@@ -262,14 +262,14 @@ export default function RegisterScreen() {
               I have read and agree to the{" "}
               <Text
                 style={styles.termsLink}
-                onPress={() => Linking.openURL("https://afuchat.com/terms")}
+                onPress={() => router.push("/terms")}
               >
                 Terms of Service
               </Text>
               {" "}and{" "}
               <Text
                 style={styles.termsLink}
-                onPress={() => Linking.openURL("https://afuchat.com/privacy")}
+                onPress={() => router.push("/privacy")}
               >
                 Privacy Policy
               </Text>

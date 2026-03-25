@@ -68,6 +68,8 @@ function RootLayoutNav() {
       <Stack.Screen name="settings/blocked" />
       <Stack.Screen name="admin/index" />
       <Stack.Screen name="onboarding/index" options={{ animation: "fade", gestureEnabled: false }} />
+      <Stack.Screen name="terms" options={{ presentation: "modal" }} />
+      <Stack.Screen name="privacy" options={{ presentation: "modal" }} />
       <Stack.Screen name="[handle]" options={{ animation: "fade" }} />
     </Stack>
   );
