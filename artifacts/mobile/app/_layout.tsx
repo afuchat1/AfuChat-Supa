@@ -10,7 +10,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useCallback, useEffect, useState } from "react";
-import { Linking } from "react-native";
+import { Linking, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { KeyboardProvider } from "react-native-keyboard-controller";
@@ -106,6 +106,8 @@ export default function RootLayout() {
   }, [fontsLoaded, fontError]);
 
   useEffect(() => {
+    if (Platform.OS === "web") return;
+
     function handleDeepLink(url: string | null) {
       if (!url) return;
       try {
@@ -117,11 +119,10 @@ export default function RootLayout() {
         if (path.startsWith("@")) {
           const handle = path.slice(1);
           if (/^[a-zA-Z0-9_]+$/.test(handle)) {
-            router.push({ pathname: "/[handle]", params: { handle: path } });
+            router.push(`/${path}` as any);
           }
         } else if (/^[a-zA-Z0-9_]+$/.test(path)) {
-          AsyncStorage.setItem("referrer_handle", path.toLowerCase());
-          router.push({ pathname: "/[handle]", params: { handle: path } });
+          router.push(`/${path}` as any);
         }
       } catch (_) {}
     }
