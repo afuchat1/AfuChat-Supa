@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   RefreshControl,
   StyleSheet,
   Text,
@@ -298,53 +300,57 @@ export default function WalletScreen() {
       )}
 
       <Modal visible={showTransfer} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <View style={styles.dragHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Send Nexa</Text>
-              <TouchableOpacity onPress={() => setShowTransfer(false)}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+              <View style={styles.dragHandle} />
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Send Nexa</Text>
+                <TouchableOpacity onPress={() => setShowTransfer(false)}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
+              </View>
+              <Text style={[styles.modalSub, { color: colors.textMuted }]}>Balance: {profile?.xp || 0} Nexa</Text>
+              <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Recipient @handle" placeholderTextColor={colors.textMuted} value={transferHandle} onChangeText={setTransferHandle} autoCapitalize="none" />
+              <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Amount" placeholderTextColor={colors.textMuted} value={transferAmount} onChangeText={setTransferAmount} keyboardType="numeric" />
+              <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Message (optional)" placeholderTextColor={colors.textMuted} value={transferMsg} onChangeText={setTransferMsg} />
+              <TouchableOpacity style={[styles.sendBtn, sending && { opacity: 0.6 }]} onPress={sendNexa} disabled={sending}>
+                {sending ? <ActivityIndicator color="#fff" /> : <Text style={styles.sendBtnText}>Send Nexa</Text>}
+              </TouchableOpacity>
             </View>
-            <Text style={[styles.modalSub, { color: colors.textMuted }]}>Balance: {profile?.xp || 0} Nexa</Text>
-            <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Recipient @handle" placeholderTextColor={colors.textMuted} value={transferHandle} onChangeText={setTransferHandle} autoCapitalize="none" />
-            <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Amount" placeholderTextColor={colors.textMuted} value={transferAmount} onChangeText={setTransferAmount} keyboardType="numeric" />
-            <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Message (optional)" placeholderTextColor={colors.textMuted} value={transferMsg} onChangeText={setTransferMsg} />
-            <TouchableOpacity style={[styles.sendBtn, sending && { opacity: 0.6 }]} onPress={sendNexa} disabled={sending}>
-              {sending ? <ActivityIndicator color="#fff" /> : <Text style={styles.sendBtnText}>Send Nexa</Text>}
-            </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={showConvert} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <View style={styles.dragHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Convert Nexa → ACoin</Text>
-              <TouchableOpacity onPress={() => setShowConvert(false)}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
-            </View>
-            <Text style={[styles.modalSub, { color: colors.textMuted }]}>
-              Balance: {profile?.xp || 0} Nexa · Rate: {currencySettings?.nexa_to_acoin_rate || 100} Nexa = 1 ACoin
-            </Text>
-            <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Nexa amount to convert" placeholderTextColor={colors.textMuted} value={convertAmount} onChangeText={setConvertAmount} keyboardType="numeric" />
-            {previewAcoin && (
-              <View style={[styles.previewBox, { backgroundColor: colors.inputBg }]}>
-                <View style={styles.previewRow}>
-                  <Text style={[styles.previewLabel, { color: colors.textSecondary }]}>You'll receive</Text>
-                  <Text style={[styles.previewValue, { color: Colors.brand }]}>{previewAcoin.acoin} ACoin</Text>
-                </View>
-                <View style={styles.previewRow}>
-                  <Text style={[styles.previewLabel, { color: colors.textMuted }]}>Fee ({currencySettings?.conversion_fee_percent}%)</Text>
-                  <Text style={[styles.previewLabel, { color: colors.textMuted }]}>{previewAcoin.fee} ACoin</Text>
-                </View>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+              <View style={styles.dragHandle} />
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Convert Nexa → ACoin</Text>
+                <TouchableOpacity onPress={() => setShowConvert(false)}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
               </View>
-            )}
-            <TouchableOpacity style={[styles.sendBtn, { backgroundColor: "#FF9500" }, converting && { opacity: 0.6 }]} onPress={convertNexaToAcoin} disabled={converting}>
-              {converting ? <ActivityIndicator color="#fff" /> : <Text style={styles.sendBtnText}>Convert to ACoin</Text>}
-            </TouchableOpacity>
+              <Text style={[styles.modalSub, { color: colors.textMuted }]}>
+                Balance: {profile?.xp || 0} Nexa · Rate: {currencySettings?.nexa_to_acoin_rate || 100} Nexa = 1 ACoin
+              </Text>
+              <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Nexa amount to convert" placeholderTextColor={colors.textMuted} value={convertAmount} onChangeText={setConvertAmount} keyboardType="numeric" />
+              {previewAcoin && (
+                <View style={[styles.previewBox, { backgroundColor: colors.inputBg }]}>
+                  <View style={styles.previewRow}>
+                    <Text style={[styles.previewLabel, { color: colors.textSecondary }]}>You'll receive</Text>
+                    <Text style={[styles.previewValue, { color: Colors.brand }]}>{previewAcoin.acoin} ACoin</Text>
+                  </View>
+                  <View style={styles.previewRow}>
+                    <Text style={[styles.previewLabel, { color: colors.textMuted }]}>Fee ({currencySettings?.conversion_fee_percent}%)</Text>
+                    <Text style={[styles.previewLabel, { color: colors.textMuted }]}>{previewAcoin.fee} ACoin</Text>
+                  </View>
+                </View>
+              )}
+              <TouchableOpacity style={[styles.sendBtn, { backgroundColor: "#FF9500" }, converting && { opacity: 0.6 }]} onPress={convertNexaToAcoin} disabled={converting}>
+                {converting ? <ActivityIndicator color="#fff" /> : <Text style={styles.sendBtnText}>Convert to ACoin</Text>}
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

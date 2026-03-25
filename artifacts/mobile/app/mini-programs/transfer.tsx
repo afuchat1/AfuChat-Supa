@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import Colors from "@/constants/colors";
@@ -56,7 +57,7 @@ export default function TransferScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
+      <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
         <View style={styles.iconWrap}>
           <View style={[styles.iconCircle, { backgroundColor: Colors.brand + "15" }]}>
             <Text style={styles.iconEmoji}>💸</Text>
@@ -143,7 +144,7 @@ export default function TransferScreen() {
             All transfers are secured and recorded. A {fee?.feePercent || 1.5}% fee is charged per transaction.
           </Text>
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollViewCompat>
     </View>
   );
 }

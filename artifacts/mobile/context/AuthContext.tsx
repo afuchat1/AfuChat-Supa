@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
@@ -306,19 +306,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return unsub;
   }, [user]);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     if (user) {
       await clearPushToken(user.id);
     }
     await supabase.auth.signOut();
-  };
+  }, [user]);
 
   const isPremium = !!subscription && subscription.is_active && new Date(subscription.expires_at) > new Date();
 
+  const contextValue = useMemo(() => ({
+    session, user, profile, subscription, isPremium, loading, linkedAccounts,
+    signOut, refreshProfile, addAccount, switchAccount, removeAccount: handleRemoveAccount, refreshLinkedAccounts,
+  }), [session, user, profile, subscription, isPremium, loading, linkedAccounts, signOut]);
+
   return (
-    <AuthContext.Provider
-      value={{ session, user, profile, subscription, isPremium, loading, linkedAccounts, signOut, refreshProfile, addAccount, switchAccount, removeAccount: handleRemoveAccount, refreshLinkedAccounts }}
-    >
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

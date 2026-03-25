@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import Colors from "@/constants/colors";
@@ -78,7 +79,7 @@ export default function HotelsScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
+      <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
         <Text style={[styles.label, { color: colors.text }]}>Available Hotels</Text>
         {HOTELS.map((h) => (
           <TouchableOpacity
@@ -190,7 +191,7 @@ export default function HotelsScreen() {
             <Text style={styles.bookBtnText}>{loading ? "Booking..." : "Book Now"}</Text>
           </TouchableOpacity>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollViewCompat>
     </View>
   );
 }

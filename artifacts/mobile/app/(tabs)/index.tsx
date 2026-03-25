@@ -468,12 +468,18 @@ export default function ChatsScreen() {
     return () => { supabase.removeChannel(notifChannel); };
   }, [user, fetchUnreadCount]);
 
-  const loadChats = useCallback(async () => {
+  const loadChats = useCallback(async (background = false) => {
     if (!user) return;
 
-    if (!isOnline()) {
+    if (!background) {
       const cached = await getCachedConversations();
-      if (cached.length > 0) setChats(cached);
+      if (cached.length > 0) {
+        setChats(cached);
+        setLoading(false);
+      }
+    }
+
+    if (!isOnline()) {
       setLoading(false);
       setRefreshing(false);
       return;
@@ -493,103 +499,109 @@ export default function ChatsScreen() {
 
     const chatIds = memberRows.map((m: any) => m.chat_id);
 
-    const { data: chatRows } = await supabase
-      .from("chats")
-      .select(`
-        id, name, is_group, is_channel, is_pinned, is_archived, avatar_url, updated_at,
-        chat_members(user_id, profiles(id, display_name, avatar_url, is_verified, is_organization_verified))
-      `)
-      .in("id", chatIds)
-      .eq("is_archived", false)
-      .order("updated_at", { ascending: false });
-
-    if (chatRows) {
-      const lastMsgPromises = chatRows.map(async (c: any) => {
-        const { data: msgs } = await supabase
-          .from("messages")
-          .select("encrypted_content, sent_at")
-          .eq("chat_id", c.id)
-          .order("sent_at", { ascending: false })
-          .limit(1);
-        return {
-          chatId: c.id,
-          lastMessage: msgs?.[0]?.encrypted_content || "",
-          lastMessageAt: msgs?.[0]?.sent_at || c.updated_at,
-        };
-      });
-
-      const unreadMsgsPromise = supabase
+    const [chatResult, lastMsgsResult, unreadMsgsResult] = await Promise.all([
+      supabase
+        .from("chats")
+        .select(`
+          id, name, is_group, is_channel, is_pinned, is_archived, avatar_url, updated_at,
+          chat_members(user_id, profiles(id, display_name, avatar_url, is_verified, is_organization_verified))
+        `)
+        .in("id", chatIds)
+        .eq("is_archived", false)
+        .order("updated_at", { ascending: false }),
+      supabase
+        .from("messages")
+        .select("chat_id, encrypted_content, sent_at")
+        .in("chat_id", chatIds)
+        .order("sent_at", { ascending: false })
+        .limit(chatIds.length * 3),
+      supabase
         .from("messages")
         .select("id, chat_id")
         .in("chat_id", chatIds)
         .neq("sender_id", user.id)
         .order("sent_at", { ascending: false })
-        .limit(500);
+        .limit(500),
+    ]);
 
-      const [lastMsgs, { data: unreadMsgRows }] = await Promise.all([
-        Promise.all(lastMsgPromises),
-        unreadMsgsPromise,
-      ]);
+    const chatRows = chatResult.data;
+    if (!chatRows) { setLoading(false); setRefreshing(false); return; }
 
-      const lastMsgMap = Object.fromEntries(lastMsgs.map((m) => [m.chatId, m]));
-
-      const unreadMsgIds = (unreadMsgRows || []).map((m: any) => m.id);
-      let readSet = new Set<string>();
-      if (unreadMsgIds.length > 0) {
-        const { data: readRows } = await supabase
-          .from("message_status")
-          .select("message_id")
-          .eq("user_id", user.id)
-          .not("read_at", "is", null)
-          .in("message_id", unreadMsgIds);
-        readSet = new Set((readRows || []).map((r: any) => r.message_id));
+    const lastMsgMap: Record<string, { lastMessage: string; lastMessageAt: string }> = {};
+    for (const m of (lastMsgsResult.data || [])) {
+      if (!lastMsgMap[m.chat_id]) {
+        lastMsgMap[m.chat_id] = { lastMessage: m.encrypted_content || "", lastMessageAt: m.sent_at };
       }
+    }
 
-      const unreadMap: Record<string, number> = {};
-      for (const msg of (unreadMsgRows || [])) {
-        if (!readSet.has(msg.id)) {
-          unreadMap[msg.chat_id] = (unreadMap[msg.chat_id] || 0) + 1;
+    const unreadMsgRows = unreadMsgsResult.data || [];
+    const unreadMsgIds = unreadMsgRows.map((m: any) => m.id);
+    let readSet = new Set<string>();
+    if (unreadMsgIds.length > 0) {
+      const batchSize = 200;
+      const readPromises = [];
+      for (let i = 0; i < unreadMsgIds.length; i += batchSize) {
+        readPromises.push(
+          supabase
+            .from("message_status")
+            .select("message_id")
+            .eq("user_id", user.id)
+            .not("read_at", "is", null)
+            .in("message_id", unreadMsgIds.slice(i, i + batchSize))
+        );
+      }
+      const readResults = await Promise.all(readPromises);
+      for (const { data: readRows } of readResults) {
+        for (const r of (readRows || [])) {
+          readSet.add(r.message_id);
         }
       }
-
-      const items: ChatItem[] = chatRows.map((c: any) => {
-        const others = (c.chat_members || []).filter((m: any) => m.user_id !== user.id);
-        const other = others[0]?.profiles;
-        const lm = lastMsgMap[c.id];
-        return {
-          id: c.id,
-          name: c.name,
-          is_group: !!c.is_group,
-          is_channel: !!c.is_channel,
-          other_display_name: other?.display_name || "Unknown",
-          other_avatar: other?.avatar_url || null,
-          other_id: other?.id || "",
-          last_message: lm?.lastMessage || "",
-          last_message_at: lm?.lastMessageAt || "",
-          is_pinned: !!c.is_pinned,
-          is_archived: !!c.is_archived,
-          avatar_url: c.avatar_url,
-          unread_count: unreadMap[c.id] || 0,
-          is_verified: !!other?.is_verified,
-          is_organization_verified: !!other?.is_organization_verified,
-        };
-      });
-
-      items.sort((a, b) => {
-        if (a.is_pinned && !b.is_pinned) return -1;
-        if (!a.is_pinned && b.is_pinned) return 1;
-        return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
-      });
-
-      setChats(items);
-      cacheConversations(items);
     }
+
+    const unreadMap: Record<string, number> = {};
+    for (const msg of unreadMsgRows) {
+      if (!readSet.has(msg.id)) {
+        unreadMap[msg.chat_id] = (unreadMap[msg.chat_id] || 0) + 1;
+      }
+    }
+
+    const items: ChatItem[] = chatRows.map((c: any) => {
+      const others = (c.chat_members || []).filter((m: any) => m.user_id !== user.id);
+      const other = others[0]?.profiles;
+      const lm = lastMsgMap[c.id];
+      return {
+        id: c.id,
+        name: c.name,
+        is_group: !!c.is_group,
+        is_channel: !!c.is_channel,
+        other_display_name: other?.display_name || "Unknown",
+        other_avatar: other?.avatar_url || null,
+        other_id: other?.id || "",
+        last_message: lm?.lastMessage || "",
+        last_message_at: lm?.lastMessageAt || c.updated_at || "",
+        is_pinned: !!c.is_pinned,
+        is_archived: !!c.is_archived,
+        avatar_url: c.avatar_url,
+        unread_count: unreadMap[c.id] || 0,
+        is_verified: !!other?.is_verified,
+        is_organization_verified: !!other?.is_organization_verified,
+      };
+    });
+
+    items.sort((a, b) => {
+      if (a.is_pinned && !b.is_pinned) return -1;
+      if (!a.is_pinned && b.is_pinned) return 1;
+      return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
+    });
+
+    setChats(items);
+    cacheConversations(items);
     setLoading(false);
     setRefreshing(false);
   }, [user]);
 
   useEffect(() => { loadChats(); }, [loadChats]);
-  useFocusEffect(useCallback(() => { loadChats(); }, [loadChats]));
+  useFocusEffect(useCallback(() => { loadChats(true); }, [loadChats]));
 
   useEffect(() => {
     if (!user) return;
@@ -603,7 +615,7 @@ export default function ChatsScreen() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "chat_members", filter: `user_id=eq.${user.id}` },
-        () => loadChats()
+        () => loadChats(true)
       )
       .subscribe();
     return () => { supabase.removeChannel(memberChannel); };
@@ -626,7 +638,7 @@ export default function ChatsScreen() {
       channel.on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages", filter: `chat_id=eq.${chatId}` },
-        () => loadChats()
+        () => loadChats(true)
       );
     });
 
