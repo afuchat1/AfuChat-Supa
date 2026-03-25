@@ -388,10 +388,6 @@ export default function GiftsScreen() {
           <View style={[styles.rarityDot, { backgroundColor: rColor }]} />
           <Text style={[styles.rarityText, { color: rColor }]}>{item.gift.rarity}</Text>
         </View>
-        <View style={styles.giftValueRow}>
-          <Ionicons name="diamond" size={12} color={Colors.gold} />
-          <Text style={styles.giftValue}>{item.gift.acoin_price ?? item.gift.base_xp_cost}</Text>
-        </View>
       </TouchableOpacity>
     );
   }
@@ -422,8 +418,8 @@ export default function GiftsScreen() {
         </View>
         <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
         <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: Colors.gold }]}>{owned.reduce((sum, g) => sum + (g.gift.acoin_price ?? g.gift.base_xp_cost), 0)}</Text>
-          <Text style={[styles.statLabel, { color: colors.textMuted }]}>Total Value</Text>
+          <Text style={[styles.statValue, { color: Colors.gold }]}>{owned.filter(g => ["rare", "epic", "legendary"].includes(g.gift.rarity)).length}</Text>
+          <Text style={[styles.statLabel, { color: colors.textMuted }]}>Rare+</Text>
         </View>
         <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
         <View style={styles.statItem}>
@@ -489,15 +485,6 @@ export default function GiftsScreen() {
                 <Text style={[styles.dateText, { color: colors.textMuted }]}>{selectedGift ? formatDate(selectedGift.acquired_at) : ""}</Text>
               </View>
             )}
-
-            <View style={[styles.convertCard, { backgroundColor: colors.inputBg }]}>
-              <Text style={[styles.convertLabel, { color: colors.textSecondary }]}>Convert Value</Text>
-              <View style={styles.convertValueRow}>
-                <Ionicons name="diamond" size={20} color={Colors.gold} />
-                <Text style={[styles.convertValueText, { color: colors.text }]}>{selectedGift ? getConvertValue(selectedGift.gift) : 0}</Text>
-                <Text style={[styles.convertCurrency, { color: colors.textMuted }]}>ACoin</Text>
-              </View>
-            </View>
 
             <View style={styles.actionRow}>
               <TouchableOpacity
