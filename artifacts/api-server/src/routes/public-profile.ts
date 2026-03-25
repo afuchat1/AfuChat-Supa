@@ -286,7 +286,7 @@ router.get("/@:handle", async (req, res) => {
     .order("created_at", { ascending: false })
     .limit(20);
 
-  res.send(renderProfilePage(profile, posts || []));
+  return res.send(renderProfilePage(profile, posts || []));
 });
 
 router.get("/:handle", async (req, res, next) => {
@@ -308,7 +308,7 @@ router.get("/:handle", async (req, res, next) => {
     return res.redirect(301, `/@${handle}`);
   }
 
-  next();
+  return next();
 });
 
 export default router;
