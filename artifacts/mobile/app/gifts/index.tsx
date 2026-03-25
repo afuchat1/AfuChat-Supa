@@ -46,6 +46,21 @@ type OwnedGift = {
 const HIDDEN_FEE_PERCENT = 5.99;
 const MARKETPLACE_FEE_PERCENT = 5;
 
+function GiftImage({ uri, emoji, size }: { uri: string | null; emoji: string; size: number }) {
+  const [failed, setFailed] = useState(false);
+  if (!uri || failed) {
+    return <Text style={{ fontSize: size * 0.6 }}>{emoji}</Text>;
+  }
+  return (
+    <Image
+      source={{ uri }}
+      style={{ width: size, height: size }}
+      resizeMode="contain"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 const rarityColors: Record<string, string> = {
   common: "#8E8E93",
   uncommon: Colors.brand,
@@ -306,11 +321,7 @@ export default function GiftsScreen() {
           </View>
         )}
         <View style={[styles.giftImageWrap, { backgroundColor: rBg }]}>
-          {item.gift.image_url ? (
-            <Image source={{ uri: item.gift.image_url }} style={styles.giftImage} resizeMode="contain" />
-          ) : (
-            <Text style={styles.giftEmojiFallback}>{item.gift.emoji}</Text>
-          )}
+          <GiftImage uri={item.gift.image_url} emoji={item.gift.emoji} size={64} />
         </View>
         <Text style={[styles.giftName, { color: colors.text }]} numberOfLines={1}>{item.gift.name}</Text>
         <View style={[styles.rarityBadge, { backgroundColor: rBg }]}>
@@ -398,11 +409,7 @@ export default function GiftsScreen() {
 
             <View style={styles.modalGiftDisplay}>
               <View style={[styles.modalImageWrap, { backgroundColor: rarityBgColors[selectedGift?.gift.rarity || "common"] }]}>
-                {selectedGift?.gift.image_url ? (
-                  <Image source={{ uri: selectedGift.gift.image_url }} style={styles.modalGiftImage} resizeMode="contain" />
-                ) : (
-                  <Text style={styles.modalEmoji}>{selectedGift?.gift.emoji}</Text>
-                )}
+                <GiftImage uri={selectedGift?.gift.image_url || null} emoji={selectedGift?.gift.emoji || "🎁"} size={80} />
               </View>
               <Text style={[styles.modalGiftName, { color: colors.text }]}>{selectedGift?.gift.name}</Text>
               <View style={[styles.rarityBadgeLg, { backgroundColor: rarityBgColors[selectedGift?.gift.rarity || "common"] }]}>
@@ -557,11 +564,7 @@ export default function GiftsScreen() {
             </View>
 
             <View style={[styles.sendGiftPreview, { backgroundColor: colors.inputBg }]}>
-              {sendGift?.gift.image_url ? (
-                <Image source={{ uri: sendGift.gift.image_url }} style={styles.sendPreviewImage} resizeMode="contain" />
-              ) : (
-                <Text style={{ fontSize: 32 }}>{sendGift?.gift.emoji}</Text>
-              )}
+              <GiftImage uri={sendGift?.gift.image_url || null} emoji={sendGift?.gift.emoji || "🎁"} size={48} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.sendPreviewName, { color: colors.text }]}>{sendGift?.gift.name}</Text>
                 <Text style={[styles.sendPreviewRarity, { color: rarityColors[sendGift?.gift.rarity || "common"] }]}>{sendGift?.gift.rarity}</Text>

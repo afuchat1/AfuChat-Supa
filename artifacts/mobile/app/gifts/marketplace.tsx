@@ -56,6 +56,21 @@ const rarityBgColors: Record<string, string> = {
 
 const MARKETPLACE_FEE_PERCENT = 5;
 
+function GiftImage({ uri, emoji, size }: { uri: string | null; emoji: string; size: number }) {
+  const [failed, setFailed] = useState(false);
+  if (!uri || failed) {
+    return <Text style={{ fontSize: size * 0.6 }}>{emoji}</Text>;
+  }
+  return (
+    <Image
+      source={{ uri }}
+      style={{ width: size, height: size }}
+      resizeMode="contain"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 export default function GiftMarketplaceScreen() {
   const { colors } = useTheme();
   const { user, profile, refreshProfile } = useAuth();
@@ -229,11 +244,7 @@ export default function GiftMarketplaceScreen() {
           </View>
         )}
         <View style={[styles.listingImageWrap, { backgroundColor: rBg }]}>
-          {item.gift.image_url ? (
-            <Image source={{ uri: item.gift.image_url }} style={styles.listingImage} resizeMode="contain" />
-          ) : (
-            <Text style={styles.listingEmoji}>{item.gift.emoji}</Text>
-          )}
+          <GiftImage uri={item.gift.image_url} emoji={item.gift.emoji} size={64} />
         </View>
         <Text style={[styles.listingName, { color: colors.text }]} numberOfLines={1}>{item.gift.name}</Text>
         <View style={[styles.rarityBadge, { backgroundColor: rBg }]}>
@@ -322,11 +333,7 @@ export default function GiftMarketplaceScreen() {
 
             <View style={styles.modalGiftDisplay}>
               <View style={[styles.modalImageWrap, { backgroundColor: rarityBgColors[selectedListing?.gift.rarity || "rare"] }]}>
-                {selectedListing?.gift.image_url ? (
-                  <Image source={{ uri: selectedListing.gift.image_url }} style={styles.modalGiftImage} resizeMode="contain" />
-                ) : (
-                  <Text style={styles.modalEmoji}>{selectedListing?.gift.emoji}</Text>
-                )}
+                <GiftImage uri={selectedListing?.gift.image_url || null} emoji={selectedListing?.gift.emoji || "🎁"} size={80} />
               </View>
               <Text style={[styles.modalGiftName, { color: colors.text }]}>{selectedListing?.gift.name}</Text>
               <View style={[styles.rarityBadgeLg, { backgroundColor: rarityBgColors[selectedListing?.gift.rarity || "rare"] }]}>
