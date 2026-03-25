@@ -624,29 +624,49 @@ export default function ChatScreen() {
     if (!isDraft) return id;
     if (realChatId) return realChatId;
     if (!user || !contactId) return null;
-    const { data: chat, error } = await supabase
-      .from("chats")
-      .insert({ is_group: false, created_by: user.id, user_id: user.id })
-      .select()
-      .single();
-    if (error || !chat) return null;
-    await supabase.from("chat_members").insert([
-      { chat_id: chat.id, user_id: user.id },
-      { chat_id: chat.id, user_id: contactId },
-    ]);
-    setRealChatId(chat.id);
-    supabase
-      .channel(`chat:${chat.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `chat_id=eq.${chat.id}` },
-        async (payload) => {
-          const newMsg = payload.new as any;
-          if (newMsg.sender_id === user.id) return;
-          const { data: senderProfile } = await supabase.from("profiles").select("display_name, avatar_url, handle").eq("id", newMsg.sender_id).single();
-          setMessages((prev) => [{ ...newMsg, sender: senderProfile as any, reactions: [], status: undefined }, ...prev]);
-        }
-      )
-      .subscribe();
-    return chat.id;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return null;
+
+    const domain = process.env.EXPO_PUBLIC_DOMAIN;
+    const apiBase = domain ? `https://${domain}` : "";
+
+    try {
+      const response = await fetch(`${apiBase}/api/chats/create`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ contactId }),
+      });
+
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        console.error("[getOrCreateChatId] API error:", response.status, errBody);
+        return null;
+      }
+
+      const { chatId } = await response.json();
+      setRealChatId(chatId);
+
+      supabase
+        .channel(`chat:${chatId}`)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `chat_id=eq.${chatId}` },
+          async (payload) => {
+            const newMsg = payload.new as any;
+            if (newMsg.sender_id === user.id) return;
+            const { data: senderProfile } = await supabase.from("profiles").select("display_name, avatar_url, handle").eq("id", newMsg.sender_id).single();
+            setMessages((prev) => [{ ...newMsg, sender: senderProfile as any, reactions: [], status: undefined }, ...prev]);
+          }
+        )
+        .subscribe();
+
+      return chatId;
+    } catch (err) {
+      console.error("[getOrCreateChatId] Network error:", err);
+      return null;
+    }
   }
 
   async function sendMessage() {
@@ -661,7 +681,11 @@ export default function ChatScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const activeChatId = await getOrCreateChatId();
-    if (!activeChatId) { setSending(false); return; }
+    if (!activeChatId) {
+      setSending(false);
+      showAlert("Failed to start chat", "Could not create the conversation. Please check your connection and try again.");
+      return;
+    }
 
     const now = new Date().toISOString();
     const tempId = `temp_${Date.now()}`;
