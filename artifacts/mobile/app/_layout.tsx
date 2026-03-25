@@ -16,6 +16,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { DesktopWrapper } from "@/components/DesktopWrapper";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PushNotificationManager } from "@/components/PushNotificationManager";
 import { IOSAlert, type IOSAlertButton } from "@/components/ui/IOSAlert";
@@ -128,19 +129,21 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
-              <ThemeProvider>
-                <AuthProvider>
-                  <PushNotificationManager />
-                  <RootLayoutNav />
-                  <IOSAlert
-                    visible={alertState.visible}
-                    title={alertState.title}
-                    message={alertState.message}
-                    buttons={alertState.buttons}
-                    onDismiss={dismissAlert}
-                  />
-                </AuthProvider>
-              </ThemeProvider>
+              <DesktopWrapper>
+                <ThemeProvider>
+                  <AuthProvider>
+                    <PushNotificationManager />
+                    <RootLayoutNav />
+                    <IOSAlert
+                      visible={alertState.visible}
+                      title={alertState.title}
+                      message={alertState.message}
+                      buttons={alertState.buttons}
+                      onDismiss={dismissAlert}
+                    />
+                  </AuthProvider>
+                </ThemeProvider>
+              </DesktopWrapper>
             </KeyboardProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>
