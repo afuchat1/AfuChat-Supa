@@ -1,9 +1,9 @@
-import React, { useState } from "react";
-import { Platform, View, StyleSheet, Text, useWindowDimensions } from "react-native";
-import { usePathname, useSegments, router } from "expo-router";
+import React, { useEffect, useState } from "react";
+import { Platform, View, StyleSheet, useWindowDimensions } from "react-native";
+import { useSegments, router } from "expo-router";
 import { DesktopSidebar } from "./DesktopSidebar";
 import { DesktopDetailProvider } from "@/context/DesktopDetailContext";
-import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabase";
 
 const DESKTOP_BREAKPOINT = 768;
 const BRAND_BG = "#00897B";
@@ -17,9 +17,18 @@ type Props = {
 export function DesktopWrapper({ children }: Props) {
   const { width, height } = useWindowDimensions();
   const segments = useSegments();
-  const { session, loading } = useAuth();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  const isLoggedIn = !!session;
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    supabase.auth.getSession().then(({ data }) => {
+      setIsLoggedIn(!!data.session);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   if (Platform.OS !== "web" || width < DESKTOP_BREAKPOINT) {
     return (
