@@ -101,7 +101,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `components/ui/Avatar.tsx` — Avatar with initials fallback
 - `components/ui/Separator.tsx` — List separator
 - `components/ui/VerifiedBadge.tsx` — Shared verified badge (gold for business, teal for personal)
-- `components/ui/Skeleton.tsx` — Animated skeleton loading placeholders (ChatRowSkeleton, ContactRowSkeleton, PostSkeleton, ProfileSkeleton, NotificationSkeleton, GiftCardSkeleton, WalletSkeleton, PostDetailSkeleton, ListRowSkeleton, GameCardSkeleton, PremiumSkeleton, AdminSkeleton, ReferralSkeleton)
+- `components/ui/Skeleton.tsx` — Animated skeleton loading placeholders (ChatRowSkeleton, ContactRowSkeleton, PostSkeleton, ProfileSkeleton, NotificationSkeleton, GiftCardSkeleton, WalletSkeleton, PostDetailSkeleton, ListRowSkeleton, GameCardSkeleton, PremiumSkeleton, AdminSkeleton, ReferralSkeleton, MarketplaceCardSkeleton, ChatLoadingSkeleton, ChatBubbleSkeleton)
 - `components/ui/OfflineBanner.tsx` — Network status banner (red offline / green reconnected) with animated fade
 - `lib/offlineStore.ts` — AsyncStorage-based caching for profile, conversations, contacts, moments, notifications, messages; pending message queue; NetInfo connectivity tracking
 - `lib/offlineSync.ts` — Auto-sync pending messages on reconnect
@@ -120,7 +120,8 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `app/notifications.tsx` — Notifications list with mark read
 - `app/wallet/index.tsx` — Nexa/ACoin balance, send Nexa, Nexa→ACoin conversion (using currency_settings), filtered transaction history, Buy Nexa / Buy ACoin buttons
 - `app/wallet/topup.tsx` — Top up Nexa or ACoin via Pesapal (M-Pesa, Visa, Mastercard). Supports both currency types with dedicated packages and custom amounts.
-- `app/gifts/index.tsx` — User's owned gifts gallery (no shop tab). Convert gifts to ACoin (5.99% hidden fee), send gifts to friends, pin/unpin via long press.
+- `app/gifts/index.tsx` — User's owned gifts gallery (no shop tab). Convert gifts to ACoin (5.99% hidden fee), send gifts to friends, pin/unpin via long press. Listed marketplace gifts hidden from gallery. Double-listing prevented. Marketplace listing check before send/convert.
+- `app/gifts/marketplace.tsx` — Gift marketplace for rare/epic/legendary gifts. Atomic buy flow with full rollback on failure. 5% marketplace fee. Seller ownership verified on transfer. Skeleton loading.
 - `app/red-envelope/[id].tsx` — Red envelope claim and status
 - `app/games/index.tsx` — Game challenges and scores
 - `app/mini-programs/index.tsx` — Mini programs discovery

@@ -97,13 +97,14 @@ export default function GiftsScreen() {
 
   const loadOwned = useCallback(async () => {
     if (!user) return;
-    const [{ data }, { data: statsData }] = await Promise.all([
+    const [{ data }, { data: statsData }, { data: listedData }] = await Promise.all([
       supabase
         .from("user_gifts")
         .select("id, gift_id, is_pinned, acquired_at, transaction_id, gifts(id, name, emoji, base_xp_cost, rarity, description, image_url)")
         .eq("user_id", user.id)
         .order("acquired_at", { ascending: false }),
       supabase.from("gift_statistics").select("gift_id, price_multiplier, total_sent"),
+      supabase.from("gift_marketplace").select("user_gift_id").eq("seller_id", user.id).eq("status", "listed"),
     ]);
 
     const statsMap: Record<string, { multiplier: number; totalSent: number }> = {};
@@ -111,8 +112,12 @@ export default function GiftsScreen() {
       statsMap[s.gift_id] = { multiplier: parseFloat(s.price_multiplier) || 1, totalSent: s.total_sent || 0 };
     });
 
+    const listedGiftIds = new Set((listedData || []).map((l: any) => l.user_gift_id));
+
     if (data) {
-      const txIds = data.map((g: any) => g.transaction_id).filter(Boolean);
+      const available = data.filter((g: any) => !listedGiftIds.has(g.id));
+
+      const txIds = available.map((g: any) => g.transaction_id).filter(Boolean);
       let senderMap: Record<string, string> = {};
 
       if (txIds.length > 0) {
@@ -128,7 +133,7 @@ export default function GiftsScreen() {
         }
       }
 
-      setOwned(data.map((g: any) => {
+      setOwned(available.map((g: any) => {
         const stats = statsMap[g.gifts.id];
         const dynamicPrice = stats ? Math.ceil(g.gifts.base_xp_cost * stats.multiplier) : g.gifts.base_xp_cost;
         return {
@@ -319,6 +324,19 @@ export default function GiftsScreen() {
     }
     setListing(true);
     try {
+      const { data: existing } = await supabase
+        .from("gift_marketplace")
+        .select("id")
+        .eq("user_gift_id", selectedGift.id)
+        .eq("status", "listed")
+        .maybeSingle();
+
+      if (existing) {
+        showAlert("Already Listed", "This gift is already on the marketplace.");
+        setListing(false);
+        return;
+      }
+
       const { error } = await supabase.from("gift_marketplace").insert({
         seller_id: user.id,
         user_gift_id: selectedGift.id,
@@ -333,6 +351,7 @@ export default function GiftsScreen() {
         setSelectedGift(null);
         setShowListModal(false);
         setListPrice("");
+        loadOwned();
       }
     } catch {
       showAlert("Error", "Something went wrong.");

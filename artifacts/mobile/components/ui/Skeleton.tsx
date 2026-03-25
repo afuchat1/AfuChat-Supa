@@ -251,6 +251,43 @@ export function ReferralSkeleton() {
   );
 }
 
+export function MarketplaceCardSkeleton() {
+  const { colors } = useTheme();
+  return (
+    <View style={[sk.marketCard, { backgroundColor: colors.surface }]}>
+      <Skeleton width="100%" height={100} borderRadius={10} />
+      <View style={{ padding: 8, gap: 6 }}>
+        <Skeleton width={80} height={14} />
+        <Skeleton width={60} height={12} />
+        <Skeleton width={70} height={16} borderRadius={10} />
+      </View>
+    </View>
+  );
+}
+
+export function ChatBubbleSkeleton({ align }: { align: "left" | "right" }) {
+  return (
+    <View style={{ flexDirection: "row", justifyContent: align === "right" ? "flex-end" : "flex-start", paddingHorizontal: 12, marginVertical: 4 }}>
+      {align === "left" && <Skeleton width={32} height={32} borderRadius={16} style={{ marginRight: 8 }} />}
+      <View style={{ gap: 4 }}>
+        <Skeleton width={Math.random() * 100 + 100} height={36} borderRadius={16} />
+      </View>
+    </View>
+  );
+}
+
+export function ChatLoadingSkeleton() {
+  return (
+    <View style={{ flex: 1, padding: 8, justifyContent: "flex-end", gap: 6 }}>
+      <ChatBubbleSkeleton align="left" />
+      <ChatBubbleSkeleton align="right" />
+      <ChatBubbleSkeleton align="left" />
+      <ChatBubbleSkeleton align="right" />
+      <ChatBubbleSkeleton align="left" />
+    </View>
+  );
+}
+
 const sk = StyleSheet.create({
   row: {
     flexDirection: "row",
@@ -304,5 +341,11 @@ const sk = StyleSheet.create({
     padding: 14,
     marginHorizontal: 12,
     marginVertical: 4,
+  },
+  marketCard: {
+    width: "47%",
+    margin: "1.5%",
+    borderRadius: 14,
+    overflow: "hidden",
   },
 });

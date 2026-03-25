@@ -15,6 +15,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { MarketplaceCardSkeleton } from "@/components/ui/Skeleton";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -191,15 +192,34 @@ export default function GiftMarketplaceScreen() {
       }
 
       const { data: sellerProfile } = await supabase.from("profiles").select("acoin").eq("id", listing.seller_id).single();
-      await supabase
+      const { error: sellerErr } = await supabase
         .from("profiles")
         .update({ acoin: (sellerProfile?.acoin || 0) + sellerReceives })
         .eq("id", listing.seller_id);
 
-      await supabase
+      if (sellerErr) {
+        await supabase.from("profiles").update({ acoin: (freshBuyer.acoin || 0) }).eq("id", user.id);
+        await supabase.from("gift_marketplace").update({ status: "listed", buyer_id: null, sold_at: null }).eq("id", selectedListing.id);
+        showAlert("Error", "Could not credit seller. Transaction reversed.");
+        setBuying(false);
+        return;
+      }
+
+      const { data: transferred, error: transferErr } = await supabase
         .from("user_gifts")
         .update({ user_id: user.id })
-        .eq("id", listing.user_gift_id);
+        .eq("id", listing.user_gift_id)
+        .eq("user_id", listing.seller_id)
+        .select("id");
+
+      if (transferErr || !transferred || transferred.length === 0) {
+        await supabase.from("profiles").update({ acoin: (freshBuyer.acoin || 0) }).eq("id", user.id);
+        await supabase.from("profiles").update({ acoin: (sellerProfile?.acoin || 0) }).eq("id", listing.seller_id);
+        await supabase.from("gift_marketplace").update({ status: "listed", buyer_id: null, sold_at: null }).eq("id", selectedListing.id);
+        showAlert("Error", "Gift transfer failed. Transaction reversed.");
+        setBuying(false);
+        return;
+      }
 
       await supabase.from("acoin_transactions").insert([
         {
@@ -298,7 +318,9 @@ export default function GiftMarketplaceScreen() {
 
       {loading ? (
         <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color={Colors.gold} />
+          <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center" }}>
+            {[1,2,3,4,5,6].map(i => <MarketplaceCardSkeleton key={i} />)}
+          </View>
         </View>
       ) : (
         <FlatList

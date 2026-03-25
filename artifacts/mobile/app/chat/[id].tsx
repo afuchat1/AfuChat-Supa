@@ -24,6 +24,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import { Video, ResizeMode } from "expo-av";
 import Svg, { Path } from "react-native-svg";
+import { ChatLoadingSkeleton } from "@/components/ui/Skeleton";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -1178,9 +1179,7 @@ export default function ChatScreen() {
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={0}>
         {loading ? (
-          <View style={st.loadingCenter}>
-            <ActivityIndicator color={BRAND} size="large" />
-          </View>
+          <ChatLoadingSkeleton />
         ) : (
           <FlatList
             ref={flatListRef}
