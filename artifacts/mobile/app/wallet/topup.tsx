@@ -196,27 +196,18 @@ export default function TopUpScreen() {
       return (
         <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
           <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-            <TouchableOpacity onPress={() => setStage("select")}>
+            <TouchableOpacity onPress={() => { setStage("select"); refreshProfile(); }}>
               <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
             <Text style={[styles.headerTitle, { color: colors.text }]}>Complete Payment</Text>
             <View style={{ width: 24 }} />
           </View>
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 20 }}>
-            <Ionicons name="open-outline" size={48} color={Colors.gold} />
-            <Text style={[styles.webPayText, { color: colors.text }]}>Payment page opened</Text>
-            <Text style={[styles.webPaySub, { color: colors.textMuted }]}>
-              Complete your payment in the new tab. Return here when done.
-            </Text>
-            <TouchableOpacity
-              style={[styles.openBtn, { backgroundColor: Colors.gold }]}
-              onPress={() => { window.open(paymentUrl, "_blank"); }}
-            >
-              <Text style={styles.openBtnText}>Open Payment Page</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setStage("select"); refreshProfile(); }}>
-              <Text style={[styles.doneLink, { color: Colors.gold }]}>I've completed payment</Text>
-            </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <iframe
+              src={paymentUrl}
+              style={{ width: "100%", height: "100%", border: "none" } as any}
+              allow="payment"
+            />
           </View>
         </View>
       );
@@ -429,9 +420,4 @@ const styles = StyleSheet.create({
   successSub: { fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22, marginBottom: 24 },
   doneBtn: { borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32 },
   doneBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  webPayText: { fontSize: 20, fontFamily: "Inter_600SemiBold", marginTop: 16 },
-  webPaySub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20, marginTop: 8, marginBottom: 24 },
-  openBtn: { borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32, marginBottom: 16 },
-  openBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  doneLink: { fontSize: 15, fontFamily: "Inter_600SemiBold", marginTop: 12 },
 });
