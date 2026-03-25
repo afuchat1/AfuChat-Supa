@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -19,16 +19,6 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
-
-type CurrencyType = "nexa" | "acoin";
-
-const NEXA_PACKAGES = [
-  { label: "500 Nexa", amount: 500, price: 5, currency: "USD" },
-  { label: "1,500 Nexa", amount: 1500, price: 12, currency: "USD" },
-  { label: "5,000 Nexa", amount: 5000, price: 35, currency: "USD" },
-  { label: "15,000 Nexa", amount: 15000, price: 90, currency: "USD" },
-  { label: "50,000 Nexa", amount: 50000, price: 250, currency: "USD" },
-];
 
 const ACOIN_PACKAGES = [
   { label: "100 ACoin", amount: 100, price: 2, currency: "USD" },
@@ -44,39 +34,23 @@ export default function TopUpScreen() {
   const { colors } = useTheme();
   const { user, profile, refreshProfile } = useAuth();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ type?: string }>();
-  const [currencyType, setCurrencyType] = useState<CurrencyType>((params.type as CurrencyType) || "nexa");
   const [selectedPack, setSelectedPack] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState("");
   const [stage, setStage] = useState<TopUpStage>("select");
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
 
-  const packages = currencyType === "nexa" ? NEXA_PACKAGES : ACOIN_PACKAGES;
-  const currencyLabel = currencyType === "nexa" ? "Nexa" : "ACoin";
-  const currencyIcon = currencyType === "nexa" ? "flash" : "diamond";
-  const currencyColor = currencyType === "nexa" ? Colors.brand : Colors.gold;
-  const minCustom = currencyType === "nexa" ? 100 : 50;
-  const customRate = currencyType === "nexa" ? 0.007 : 0.014;
-
-  function switchCurrency(type: CurrencyType) {
-    setCurrencyType(type);
-    setSelectedPack(null);
-    setCustomAmount("");
-    Haptics.selectionAsync();
-  }
-
   async function initiatePayment() {
-    const pack = selectedPack !== null ? packages[selectedPack] : null;
+    const pack = selectedPack !== null ? ACOIN_PACKAGES[selectedPack] : null;
     const customVal = customAmount ? parseInt(customAmount) : 0;
 
-    if (!pack && (!customVal || customVal < minCustom)) {
-      showAlert("Select amount", `Please select a package or enter at least ${minCustom} ${currencyLabel}.`);
+    if (!pack && (!customVal || customVal < 50)) {
+      showAlert("Select amount", "Please select a package or enter at least 50 ACoin.");
       return;
     }
 
     const amount = pack ? pack.amount : customVal;
-    const priceUsd = pack ? pack.price : Math.ceil(customVal * customRate * 100) / 100;
+    const priceUsd = pack ? pack.price : Math.ceil(customVal * 0.014 * 100) / 100;
 
     setProcessing(true);
     Haptics.selectionAsync();
@@ -94,9 +68,9 @@ export default function TopUpScreen() {
         body: JSON.stringify({
           user_id: user?.id,
           email: user?.email,
-          currency_type: currencyType,
-          nexa_amount: currencyType === "nexa" ? amount : 0,
-          acoin_amount: currencyType === "acoin" ? amount : 0,
+          currency_type: "acoin",
+          acoin_amount: amount,
+          nexa_amount: 0,
           price_usd: priceUsd,
           first_name: profile?.display_name?.split(" ")[0] || "User",
           last_name: profile?.display_name?.split(" ").slice(1).join(" ") || "",
@@ -141,19 +115,19 @@ export default function TopUpScreen() {
             <View style={{ width: 24 }} />
           </View>
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 20 }}>
-            <Ionicons name="open-outline" size={48} color={currencyColor} />
+            <Ionicons name="open-outline" size={48} color={Colors.gold} />
             <Text style={[styles.webPayText, { color: colors.text }]}>Payment page opened</Text>
             <Text style={[styles.webPaySub, { color: colors.textMuted }]}>
               Complete your payment in the new tab. Return here when done.
             </Text>
             <TouchableOpacity
-              style={[styles.openBtn, { backgroundColor: currencyColor }]}
+              style={[styles.openBtn, { backgroundColor: Colors.gold }]}
               onPress={() => { window.open(paymentUrl, "_blank"); }}
             >
               <Text style={styles.openBtnText}>Open Payment Page</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => { setStage("select"); refreshProfile(); }}>
-              <Text style={[styles.doneLink, { color: currencyColor }]}>I've completed payment</Text>
+              <Text style={[styles.doneLink, { color: Colors.gold }]}>I've completed payment</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -174,7 +148,7 @@ export default function TopUpScreen() {
           style={{ flex: 1 }}
           onNavigationStateChange={(navState) => handleWebViewNavigation(navState.url)}
           startInLoadingState
-          renderLoading={() => <ActivityIndicator color={currencyColor} style={{ flex: 1 }} />}
+          renderLoading={() => <ActivityIndicator color={Colors.gold} style={{ flex: 1 }} />}
         />
       </View>
     );
@@ -188,9 +162,9 @@ export default function TopUpScreen() {
         </View>
         <Text style={[styles.successTitle, { color: colors.text }]}>Top Up Successful!</Text>
         <Text style={[styles.successSub, { color: colors.textMuted }]}>
-          Your {currencyLabel} balance has been updated. It may take a moment to reflect.
+          Your ACoin balance has been updated. It may take a moment to reflect.
         </Text>
-        <TouchableOpacity style={[styles.doneBtn, { backgroundColor: currencyColor }]} onPress={() => router.back()}>
+        <TouchableOpacity style={[styles.doneBtn, { backgroundColor: Colors.gold }]} onPress={() => router.back()}>
           <Text style={styles.doneBtnText}>Back to Wallet</Text>
         </TouchableOpacity>
       </View>
@@ -203,54 +177,35 @@ export default function TopUpScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Top Up</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Buy ACoin</Text>
         <View style={{ width: 24 }} />
       </View>
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
-        <View style={[styles.currencyTabs, { backgroundColor: colors.surface }]}>
-          <TouchableOpacity
-            style={[styles.currencyTab, currencyType === "nexa" && { backgroundColor: Colors.brand }]}
-            onPress={() => switchCurrency("nexa")}
-          >
-            <Ionicons name="flash" size={16} color={currencyType === "nexa" ? "#fff" : colors.textMuted} />
-            <Text style={[styles.currencyTabText, { color: currencyType === "nexa" ? "#fff" : colors.textMuted }]}>Nexa</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.currencyTab, currencyType === "acoin" && { backgroundColor: Colors.gold }]}
-            onPress={() => switchCurrency("acoin")}
-          >
-            <Ionicons name="diamond" size={16} color={currencyType === "acoin" ? "#fff" : colors.textMuted} />
-            <Text style={[styles.currencyTabText, { color: currencyType === "acoin" ? "#fff" : colors.textMuted }]}>ACoin</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={[styles.balanceCard, { backgroundColor: currencyColor }]}>
-          <Ionicons name={currencyIcon as any} size={28} color="rgba(255,255,255,0.9)" />
+        <View style={[styles.balanceCard, { backgroundColor: Colors.gold }]}>
+          <Ionicons name="diamond" size={28} color="rgba(255,255,255,0.9)" />
           <Text style={styles.balanceLabel}>Current Balance</Text>
-          <Text style={styles.balanceValue}>
-            {currencyType === "nexa" ? (profile?.xp || 0) : (profile?.acoin || 0)} {currencyLabel}
-          </Text>
+          <Text style={styles.balanceValue}>{profile?.acoin || 0} ACoin</Text>
         </View>
 
         <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>SELECT PACKAGE</Text>
 
-        {packages.map((pack, i) => (
+        {ACOIN_PACKAGES.map((pack, i) => (
           <TouchableOpacity
             key={i}
             style={[
               styles.packCard,
-              { backgroundColor: colors.surface, borderColor: selectedPack === i ? currencyColor : "transparent" },
+              { backgroundColor: colors.surface, borderColor: selectedPack === i ? Colors.gold : "transparent" },
             ]}
             onPress={() => { setSelectedPack(i); setCustomAmount(""); Haptics.selectionAsync(); }}
           >
             <View style={styles.packLeft}>
-              <Ionicons name={currencyIcon as any} size={20} color={currencyType === "nexa" ? "#FFD60A" : Colors.gold} />
+              <Ionicons name="diamond" size={20} color={Colors.gold} />
               <Text style={[styles.packLabel, { color: colors.text }]}>{pack.label}</Text>
             </View>
             <View style={styles.packRight}>
-              <Text style={[styles.packPrice, { color: currencyColor }]}>${pack.price}</Text>
-              {selectedPack === i && <Ionicons name="checkmark-circle" size={20} color={currencyColor} />}
+              <Text style={[styles.packPrice, { color: Colors.gold }]}>${pack.price}</Text>
+              {selectedPack === i && <Ionicons name="checkmark-circle" size={20} color={Colors.gold} />}
             </View>
           </TouchableOpacity>
         ))}
@@ -259,28 +214,28 @@ export default function TopUpScreen() {
         <View style={[styles.customRow, { backgroundColor: colors.surface }]}>
           <TextInput
             style={[styles.customInput, { color: colors.text }]}
-            placeholder={`Enter ${currencyLabel} amount (min. ${minCustom})`}
+            placeholder="Enter ACoin amount (min. 50)"
             placeholderTextColor={colors.textMuted}
             value={customAmount}
             onChangeText={(v) => { setCustomAmount(v); setSelectedPack(null); }}
             keyboardType="numeric"
           />
           {customAmount ? (
-            <Text style={[styles.customPrice, { color: currencyColor }]}>
-              ${Math.ceil(parseInt(customAmount || "0") * customRate * 100) / 100}
+            <Text style={[styles.customPrice, { color: Colors.gold }]}>
+              ${Math.ceil(parseInt(customAmount || "0") * 0.014 * 100) / 100}
             </Text>
           ) : null}
         </View>
 
         <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
-          <Ionicons name="shield-checkmark" size={18} color={currencyColor} />
+          <Ionicons name="shield-checkmark" size={18} color={Colors.gold} />
           <Text style={[styles.infoText, { color: colors.textMuted }]}>
             Payments are processed securely through Pesapal. Supports M-Pesa, Visa, Mastercard, and more.
           </Text>
         </View>
 
         <TouchableOpacity
-          style={[styles.payBtn, { backgroundColor: currencyColor }, (processing || (selectedPack === null && !customAmount)) && { opacity: 0.5 }]}
+          style={[styles.payBtn, { backgroundColor: Colors.gold }, (processing || (selectedPack === null && !customAmount)) && { opacity: 0.5 }]}
           onPress={initiatePayment}
           disabled={processing || (selectedPack === null && !customAmount)}
         >
@@ -310,22 +265,6 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
   content: { paddingHorizontal: 16, paddingTop: 16, gap: 12 },
-  currencyTabs: {
-    flexDirection: "row",
-    borderRadius: 14,
-    padding: 4,
-    gap: 4,
-  },
-  currencyTab: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  currencyTabText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   balanceCard: {
     borderRadius: 16,
     padding: 20,

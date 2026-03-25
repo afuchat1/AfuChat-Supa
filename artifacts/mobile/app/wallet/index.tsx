@@ -196,11 +196,7 @@ export default function WalletScreen() {
           </View>
         </View>
         <View style={styles.btnRow}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push({ pathname: "/wallet/topup", params: { type: "nexa" } })}>
-            <Ionicons name="flash" size={16} color={Colors.brand} />
-            <Text style={styles.actionBtnText}>Buy Nexa</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "rgba(212,168,83,0.15)" }]} onPress={() => router.push({ pathname: "/wallet/topup", params: { type: "acoin" } })}>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "rgba(212,168,83,0.15)" }]} onPress={() => router.push("/wallet/topup")}>
             <Ionicons name="diamond" size={16} color={Colors.gold} />
             <Text style={[styles.actionBtnText, { color: Colors.gold }]}>Buy ACoin</Text>
           </TouchableOpacity>
