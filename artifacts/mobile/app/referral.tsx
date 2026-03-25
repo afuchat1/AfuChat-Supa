@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   ScrollView,
   Share,
   StyleSheet,
@@ -8,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { ReferralSkeleton } from "@/components/ui/Skeleton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -162,7 +162,7 @@ export default function ReferralScreen() {
         </View>
 
         {loading ? (
-          <ActivityIndicator color={Colors.brand} style={{ marginTop: 20 }} />
+          <ReferralSkeleton />
         ) : referrals.length > 0 ? (
           <View style={[styles.listSection, { backgroundColor: colors.surface }]}>
             <Text style={[styles.listTitle, { color: colors.text }]}>Recent Referrals</Text>

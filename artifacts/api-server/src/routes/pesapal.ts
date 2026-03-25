@@ -43,10 +43,12 @@ router.post("/payments/pesapal/initiate", async (req, res) => {
       }
     }
 
-    const { user_id, email, nexa_amount, price_usd, first_name, last_name } = req.body;
+    const { user_id, email, nexa_amount, acoin_amount, currency_type, price_usd, first_name, last_name } = req.body;
     const resolvedUserId = authenticatedUserId || user_id;
+    const cType = currency_type || "nexa";
+    const amount = cType === "acoin" ? (acoin_amount || 0) : (nexa_amount || 0);
 
-    if (!resolvedUserId || !email || !nexa_amount || !price_usd) {
+    if (!resolvedUserId || !email || !amount || !price_usd) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
@@ -54,7 +56,12 @@ router.post("/payments/pesapal/initiate", async (req, res) => {
       return res.status(403).json({ error: "User ID mismatch" });
     }
 
-    const expectedPrice = nexa_amount <= 500 ? 5 : nexa_amount <= 1500 ? 12 : nexa_amount <= 5000 ? 35 : nexa_amount <= 15000 ? 90 : nexa_amount <= 50000 ? 250 : Math.ceil(nexa_amount * 0.007 * 100) / 100;
+    let expectedPrice: number;
+    if (cType === "acoin") {
+      expectedPrice = amount <= 100 ? 2 : amount <= 500 ? 8 : amount <= 2000 ? 28 : amount <= 5000 ? 60 : amount <= 20000 ? 200 : Math.ceil(amount * 0.014 * 100) / 100;
+    } else {
+      expectedPrice = amount <= 500 ? 5 : amount <= 1500 ? 12 : amount <= 5000 ? 35 : amount <= 15000 ? 90 : amount <= 50000 ? 250 : Math.ceil(amount * 0.007 * 100) / 100;
+    }
     if (Number(price_usd) < expectedPrice * 0.9) {
       return res.status(400).json({ error: "Invalid price for selected amount" });
     }
@@ -100,7 +107,7 @@ router.post("/payments/pesapal/initiate", async (req, res) => {
         id: orderId,
         currency: "USD",
         amount: price_usd,
-        description: `AfuChat Top Up - ${nexa_amount} Nexa`,
+        description: `AfuChat Top Up - ${amount} ${cType === "acoin" ? "ACoin" : "Nexa"}`,
         callback_url: `${callbackBase}/api/payments/pesapal/callback`,
         notification_id: ipnId,
         billing_address: {
@@ -116,8 +123,10 @@ router.post("/payments/pesapal/initiate", async (req, res) => {
     if (orderData.redirect_url) {
       await supabase.from("merchant_orders").insert({
         order_id: orderId,
-        user_id,
-        nexa_amount,
+        user_id: resolvedUserId,
+        nexa_amount: cType === "nexa" ? amount : 0,
+        acoin_amount: cType === "acoin" ? amount : 0,
+        currency_type: cType,
         price_usd,
         status: "pending",
         tracking_id: orderData.order_tracking_id || null,
@@ -162,23 +171,27 @@ router.post("/payments/pesapal/ipn", async (req, res) => {
         if (order && order.status !== "completed") {
           await supabase.from("merchant_orders").update({ status: "completed" }).eq("id", order.id);
 
+          const isAcoin = order.currency_type === "acoin";
+          const creditAmount = isAcoin ? (order.acoin_amount || 0) : (order.nexa_amount || 0);
+          const field = isAcoin ? "acoin" : "xp";
+
           const { data: profile } = await supabase
             .from("profiles")
-            .select("xp")
+            .select("xp, acoin")
             .eq("id", order.user_id)
             .single();
 
           if (profile) {
             await supabase.from("profiles").update({
-              xp: (profile.xp || 0) + order.nexa_amount,
+              [field]: ((profile as any)[field] || 0) + creditAmount,
             }).eq("id", order.user_id);
           }
 
           await supabase.from("acoin_transactions").insert({
             user_id: order.user_id,
-            amount: order.nexa_amount,
-            transaction_type: "topup",
-            metadata: { order_id: order.order_id, tracking_id: OrderTrackingId, price_usd: order.price_usd },
+            amount: creditAmount,
+            transaction_type: isAcoin ? "acoin_topup" : "topup",
+            metadata: { order_id: order.order_id, tracking_id: OrderTrackingId, price_usd: order.price_usd, currency_type: order.currency_type || "nexa" },
           });
         }
       }

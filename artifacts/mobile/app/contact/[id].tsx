@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Head } from "expo-router/head";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,7 +21,7 @@ import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { notifyNewFollow } from "@/lib/notifyUser";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
-import { ProfileSkeleton } from "@/components/ui/Skeleton";
+import { ProfileSkeleton, PostSkeleton } from "@/components/ui/Skeleton";
 
 type Profile = {
   id: string;
@@ -217,9 +218,23 @@ export default function ContactProfileScreen() {
   }
 
   const isOwnProfile = user?.id === id;
+  const seoTitle = profile ? `${profile.display_name} (@${profile.handle}) - AfuChat` : "Profile - AfuChat";
+  const seoDesc = profile?.bio || `Check out ${profile?.display_name || "this user"}'s profile on AfuChat`;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <Head>
+        <title>{seoTitle}</title>
+        <meta name="description" content={seoDesc} />
+        <meta property="og:title" content={seoTitle} />
+        <meta property="og:description" content={seoDesc} />
+        <meta property="og:type" content="profile" />
+        {profile?.avatar_url && <meta property="og:image" content={profile.avatar_url} />}
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content={seoTitle} />
+        <meta name="twitter:description" content={seoDesc} />
+        {profile?.avatar_url && <meta name="twitter:image" content={profile.avatar_url} />}
+      </Head>
       <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -397,7 +412,7 @@ export default function ContactProfileScreen() {
             <Text style={[styles.postsSectionCount, { color: colors.textMuted }]}>{posts.length}</Text>
           </View>
           {postsLoading ? (
-            <ActivityIndicator color={Colors.brand} style={{ paddingVertical: 20 }} />
+            <View style={{ gap: 8 }}>{[1, 2].map((i) => <PostSkeleton key={i} />)}</View>
           ) : posts.length === 0 ? (
             <Text style={[styles.emptyPosts, { color: colors.textMuted }]}>No posts yet</Text>
           ) : (

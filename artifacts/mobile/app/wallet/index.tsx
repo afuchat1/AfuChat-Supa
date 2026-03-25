@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   Modal,
   RefreshControl,
@@ -19,6 +18,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { WalletSkeleton } from "@/components/ui/Skeleton";
 
 type Transaction = {
   id: string;
@@ -196,9 +196,13 @@ export default function WalletScreen() {
           </View>
         </View>
         <View style={styles.btnRow}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/wallet/topup")}>
-            <Ionicons name="add-circle" size={16} color={Colors.brand} />
-            <Text style={styles.actionBtnText}>Top Up</Text>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push({ pathname: "/wallet/topup", params: { type: "nexa" } })}>
+            <Ionicons name="flash" size={16} color={Colors.brand} />
+            <Text style={styles.actionBtnText}>Buy Nexa</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "rgba(212,168,83,0.15)" }]} onPress={() => router.push({ pathname: "/wallet/topup", params: { type: "acoin" } })}>
+            <Ionicons name="diamond" size={16} color={Colors.gold} />
+            <Text style={[styles.actionBtnText, { color: Colors.gold }]}>Buy ACoin</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionBtn} onPress={() => setShowTransfer(true)}>
             <Ionicons name="send" size={16} color={Colors.brand} />
@@ -230,7 +234,7 @@ export default function WalletScreen() {
         ))}
       </View>
 
-      {loading ? <ActivityIndicator color={Colors.brand} style={{ marginTop: 20 }} /> : (
+      {loading ? <WalletSkeleton /> : (
         <FlatList
           data={filteredTx}
           keyExtractor={(item) => item.id + item.type}

@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -52,7 +52,7 @@ export default function MiniProgramsScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      {loading ? <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} /> : (
+      {loading ? <View style={{ padding: 4 }}>{[1, 2, 3, 4, 5].map((i) => <ListRowSkeleton key={i} />)}</View> : (
         <FlatList
           data={programs}
           keyExtractor={(item) => item.id}

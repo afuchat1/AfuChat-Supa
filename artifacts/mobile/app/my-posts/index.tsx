@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Dimensions,
   FlatList,
   Image,
@@ -10,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { PostSkeleton } from "@/components/ui/Skeleton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -113,7 +113,7 @@ export default function MyPostsScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.center}><ActivityIndicator color={Colors.brand} /></View>
+        <View style={{ gap: 8, paddingVertical: 8 }}>{[1, 2, 3].map((i) => <PostSkeleton key={i} />)}</View>
       ) : (
         <FlatList
           data={posts}

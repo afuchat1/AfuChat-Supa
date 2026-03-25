@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { GameCardSkeleton } from "@/components/ui/Skeleton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -84,7 +84,7 @@ export default function GamesScreen() {
         ))}
       </View>
 
-      {loading ? <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} /> : tab === "challenges" ? (
+      {loading ? <View style={{ padding: 12, gap: 8 }}>{[1, 2, 3, 4].map((i) => <GameCardSkeleton key={i} />)}</View> : tab === "challenges" ? (
         <FlatList
           data={challenges}
           keyExtractor={(item) => item.id}

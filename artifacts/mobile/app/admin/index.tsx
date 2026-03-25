@@ -21,6 +21,7 @@ import { useAuth } from "@/context/AuthContext";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { supabase } from "@/lib/supabase";
+import { AdminSkeleton } from "@/components/ui/Skeleton";
 
 const BRAND = "#00C2CB";
 const GOLD = "#D4A853";
@@ -644,9 +645,7 @@ export default function AdminDashboard() {
       </View>
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={BRAND} />
-        </View>
+        <AdminSkeleton />
       ) : (
         <ScrollView
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}

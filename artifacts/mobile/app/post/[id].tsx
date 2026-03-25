@@ -11,6 +11,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { PostDetailSkeleton } from "@/components/ui/Skeleton";
+import { Head } from "expo-router/head";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -215,13 +217,37 @@ export default function PostDetailScreen() {
     setSending(false);
   }
 
-  if (loading) return <View style={[styles.center, { backgroundColor: colors.background }]}><ActivityIndicator color={Colors.brand} /></View>;
+  if (loading) return (
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color={colors.text} /></TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Post</Text>
+        <View style={{ width: 24 }} />
+      </View>
+      <PostDetailSkeleton />
+    </View>
+  );
   if (!post) return <View style={[styles.center, { backgroundColor: colors.background }]}><Text style={{ color: colors.text }}>Post not found</Text></View>;
 
   const allImages = post.images.length > 0 ? post.images : post.image_url ? [post.image_url] : [];
+  const seoTitle = `${post.author.display_name} on AfuChat`;
+  const seoDesc = post.content.length > 160 ? post.content.slice(0, 157) + "..." : post.content;
+  const seoImage = allImages.length > 0 ? allImages[0] : post.author.avatar_url || undefined;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <Head>
+        <title>{seoTitle}</title>
+        <meta name="description" content={seoDesc} />
+        <meta property="og:title" content={seoTitle} />
+        <meta property="og:description" content={seoDesc} />
+        <meta property="og:type" content="article" />
+        {seoImage && <meta property="og:image" content={seoImage} />}
+        <meta name="twitter:card" content={seoImage ? "summary_large_image" : "summary"} />
+        <meta name="twitter:title" content={seoTitle} />
+        <meta name="twitter:description" content={seoDesc} />
+        {seoImage && <meta name="twitter:image" content={seoImage} />}
+      </Head>
       <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />

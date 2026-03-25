@@ -19,6 +19,7 @@ import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { notifyGiftReceived } from "@/lib/notifyUser";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
+import { ListRowSkeleton } from "@/components/ui/Skeleton";
 
 type Envelope = {
   id: string;
@@ -118,7 +119,13 @@ export default function RedEnvelopeScreen() {
     setClaiming(false);
   }
 
-  if (loading) return <View style={[styles.center, { backgroundColor: colors.background }]}><ActivityIndicator color="#FF3B30" /></View>;
+  if (loading) return (
+    <View style={[styles.center, { backgroundColor: colors.background }]}>
+      <View style={{ width: "100%", padding: 16, gap: 8 }}>
+        {[1, 2, 3].map((i) => <ListRowSkeleton key={i} />)}
+      </View>
+    </View>
+  );
   if (!envelope) return <View style={[styles.center, { backgroundColor: colors.background }]}><Text style={{ color: colors.text }}>Envelope not found</Text></View>;
 
   const remainingCount = envelope.recipient_count - envelope.claimed_count;
