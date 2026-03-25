@@ -31,7 +31,28 @@ export async function syncPendingMessages(): Promise<void> {
   syncing = false;
 }
 
+let realtimeReconnecting = false;
+
+async function reconnectRealtime(): Promise<void> {
+  if (realtimeReconnecting) return;
+  realtimeReconnecting = true;
+  try {
+    await supabase.realtime.disconnect();
+    await supabase.realtime.connect();
+  } catch {}
+  realtimeReconnecting = false;
+}
+
 let unsubscribe: (() => void) | null = null;
+const onlineListeners: Array<() => void> = [];
+
+export function addOnlineListener(fn: () => void): () => void {
+  onlineListeners.push(fn);
+  return () => {
+    const idx = onlineListeners.indexOf(fn);
+    if (idx !== -1) onlineListeners.splice(idx, 1);
+  };
+}
 
 export function startOfflineSync(): void {
   if (unsubscribe) return;
@@ -39,6 +60,8 @@ export function startOfflineSync(): void {
   unsubscribe = onConnectivityChange((online) => {
     if (online) {
       syncPendingMessages();
+      reconnectRealtime();
+      onlineListeners.forEach((fn) => { try { fn(); } catch {} });
     }
   });
 

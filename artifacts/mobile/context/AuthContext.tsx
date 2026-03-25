@@ -296,6 +296,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => { sub.remove(); clearInterval(interval); };
   }, [user]);
 
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onConnectivityChange((online) => {
+      if (online) {
+        fetchProfile(user.id);
+      }
+    });
+    return unsub;
+  }, [user]);
+
   const signOut = async () => {
     if (user) {
       await clearPushToken(user.id);

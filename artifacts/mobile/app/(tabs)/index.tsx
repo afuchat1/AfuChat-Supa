@@ -27,6 +27,7 @@ import { ChatRowSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { cacheConversations, getCachedConversations, isOnline } from "@/lib/offlineStore";
+import { addOnlineListener } from "@/lib/offlineSync";
 
 type Contact = {
   id: string;
@@ -606,6 +607,11 @@ export default function ChatsScreen() {
       )
       .subscribe();
     return () => { supabase.removeChannel(memberChannel); };
+  }, [user, loadChats]);
+
+  useEffect(() => {
+    if (!user) return;
+    return addOnlineListener(() => loadChats());
   }, [user, loadChats]);
 
   const chatIdsKey = chats.map((c) => c.id).sort().join(",");
