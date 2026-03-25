@@ -46,6 +46,7 @@ type Gift = {
   name: string;
   emoji: string;
   base_xp_cost: number;
+  acoin_price: number;
   rarity: string;
 };
 
@@ -196,20 +197,26 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   }
 
   if (isGiftMsg) {
+    const giftParts = msg.encrypted_content.replace("🎁 ", "").split("|");
+    const giftDisplay = giftParts[0];
+    const giftEmoji = giftDisplay.split(" ")[0] || "🎁";
+
     return (
       <View style={[st.msgRow, isMe ? st.msgRowMe : st.msgRowOther]}>
         <TouchableOpacity style={st.giftBoxBubble} onPress={() => onTapGift?.(msg)} activeOpacity={0.8}>
           <View style={st.giftBoxTop}>
-            <Text style={st.giftBoxEmoji}>🎁</Text>
+            <Text style={st.giftBoxEmoji}>{giftEmoji}</Text>
             <View style={{ flex: 1 }}>
               <Text style={st.giftBoxTitle}>
                 {isMe ? "You sent a gift" : `${msg.sender?.display_name || "Someone"} sent you a gift`}
               </Text>
-              <Text style={st.giftBoxSub}>Tap to open</Text>
+              <Text style={st.giftBoxSub}>
+                {isMe ? "Gift sent" : "Tap to open"}
+              </Text>
             </View>
           </View>
           <View style={st.giftBoxBottom}>
-            <Text style={st.giftBoxOpen}>Open Gift</Text>
+            <Text style={st.giftBoxOpen}>{isMe ? "View Gift" : "Open Gift 🎁"}</Text>
           </View>
         </TouchableOpacity>
       </View>
@@ -365,7 +372,7 @@ export default function ChatScreen() {
   const [gifts, setGifts] = useState<Gift[]>([]);
   const [giftSending, setGiftSending] = useState(false);
   const [giftMsg, setGiftMsg] = useState("");
-  const [giftReveal, setGiftReveal] = useState<{ content: string } | null>(null);
+  const [giftReveal, setGiftReveal] = useState<{ content: string; isReceiver: boolean } | null>(null);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [gifSearch, setGifSearch] = useState("");
@@ -727,7 +734,7 @@ export default function ChatScreen() {
 
   async function loadGifts() {
     const { data } = await supabase.from("gifts").select("*").order("base_xp_cost", { ascending: true });
-    if (data) setGifts(data);
+    if (data) setGifts(data.map((g: any) => ({ ...g, acoin_price: g.acoin_price ?? g.base_xp_cost })));
   }
 
   async function sendGift(gift: Gift) {
@@ -736,16 +743,65 @@ export default function ChatScreen() {
       showAlert("Message limit", `You can only send one message until ${chatInfo?.other_name || "this user"} replies or follows you.`);
       return;
     }
+
+    const price = gift.acoin_price ?? gift.base_xp_cost;
+
+    const { data: senderProfile } = await supabase.from("profiles").select("acoin").eq("id", user.id).single();
+    if (!senderProfile || (senderProfile.acoin || 0) < price) {
+      showAlert("Insufficient ACoins", `You need ${price} ACoins to send this gift. Your balance: ${senderProfile?.acoin || 0} ACoins.`);
+      return;
+    }
+
     setGiftSending(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     const activeChatId = await getOrCreateChatId();
     if (!activeChatId) { setGiftSending(false); return; }
 
+    const receiverId = chatInfo?.other_id;
+    if (!receiverId) { setGiftSending(false); return; }
+
+    const newBalance = (senderProfile.acoin || 0) - price;
+    const { error: deductErr } = await supabase.rpc("deduct_acoin", { p_user_id: user.id, p_amount: price }).maybeSingle();
+    if (deductErr) {
+      const { error: fallbackErr } = await supabase
+        .from("profiles")
+        .update({ acoin: newBalance })
+        .eq("id", user.id)
+        .gte("acoin", price);
+      if (fallbackErr) {
+        showAlert("Error", "Could not deduct ACoins. Please try again.");
+        setGiftSending(false);
+        return;
+      }
+    }
+
+    const { error: txErr } = await supabase.from("gift_transactions").insert({
+      gift_id: gift.id,
+      sender_id: user.id,
+      receiver_id: receiverId,
+      xp_cost: price,
+      message: giftMsg.trim() || null,
+    });
+
+    if (txErr) {
+      await supabase.from("profiles").update({ acoin: (senderProfile.acoin || 0) }).eq("id", user.id);
+      showAlert("Error", "Could not send gift. Your ACoins have been refunded.");
+      setGiftSending(false);
+      return;
+    }
+
+    await supabase.from("acoin_transactions").insert({
+      user_id: user.id,
+      amount: -price,
+      transaction_type: "gift_sent",
+      metadata: { gift_id: gift.id, gift_name: gift.name, receiver_id: receiverId },
+    });
+
     await supabase.from("messages").insert({
       chat_id: activeChatId,
       sender_id: user.id,
-      encrypted_content: `🎁 ${gift.emoji} ${gift.name}${giftMsg ? ` - ${giftMsg}` : ""}`,
+      encrypted_content: `🎁 ${gift.emoji} ${gift.name}${giftMsg ? ` - ${giftMsg}` : ""}|giftId:${gift.id}|receiverId:${receiverId}`,
     });
 
     setShowGiftPicker(false);
@@ -889,10 +945,38 @@ export default function ChatScreen() {
     loadMessages();
   }
 
-  function handleTapGift(msg: Message) {
+  async function handleTapGift(msg: Message) {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const content = msg.encrypted_content.replace("🎁 ", "");
-    setGiftReveal({ content });
+    const raw = msg.encrypted_content.replace("🎁 ", "");
+    const parts = raw.split("|");
+    const displayContent = parts[0];
+
+    const giftIdMatch = raw.match(/\|giftId:([a-f0-9-]+)/);
+    const receiverIdMatch = raw.match(/\|receiverId:([a-f0-9-]+)/);
+    const giftId = giftIdMatch?.[1];
+    const receiverId = receiverIdMatch?.[1];
+
+    const isReceiver = user?.id === receiverId;
+
+    if (isReceiver && giftId && user) {
+      const { data: existing } = await supabase
+        .from("user_gifts")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("gift_id", giftId)
+        .eq("from_message_id", msg.id)
+        .maybeSingle();
+
+      if (!existing) {
+        await supabase.from("user_gifts").insert({
+          user_id: user.id,
+          gift_id: giftId,
+          from_message_id: msg.id,
+        });
+      }
+    }
+
+    setGiftReveal({ content: displayContent, isReceiver: !!isReceiver });
   }
 
   async function handleTapEnvelope(msg: Message) {
@@ -1168,7 +1252,7 @@ export default function ChatScreen() {
               >
                 <Text style={st.giftEmoji}>{gift.emoji}</Text>
                 <Text style={[st.giftName, { color: colors.text }]} numberOfLines={1}>{gift.name}</Text>
-                <Text style={[st.giftCost, { color: BRAND }]}>{gift.base_xp_cost} Nexa</Text>
+                <Text style={[st.giftCost, { color: Colors.gold }]}>{gift.acoin_price ?? gift.base_xp_cost} ACoin</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -1245,12 +1329,22 @@ export default function ChatScreen() {
       <BottomSheet visible={!!giftReveal} onClose={() => setGiftReveal(null)}>
         <View style={st.giftRevealContent}>
           <Text style={st.giftRevealEmoji}>🎁</Text>
-          <Text style={[st.giftRevealTitle, { color: colors.text }]}>Gift Received!</Text>
+          <Text style={[st.giftRevealTitle, { color: colors.text }]}>
+            {giftReveal?.isReceiver ? "Gift Received!" : "Gift Sent!"}
+          </Text>
           <Text style={[st.giftRevealDetail, { color: colors.textSecondary }]}>{giftReveal?.content}</Text>
-          <Text style={[st.giftRevealNote, { color: colors.textMuted }]}>This gift has been added to your Gift Gallery</Text>
-          <TouchableOpacity style={st.giftRevealBtn} onPress={() => setGiftReveal(null)}>
-            <Text style={st.giftRevealBtnText}>Awesome!</Text>
-          </TouchableOpacity>
+          {giftReveal?.isReceiver && (
+            <Text style={[st.giftRevealNote, { color: colors.textMuted }]}>This gift has been added to your Gift Gallery</Text>
+          )}
+          {giftReveal?.isReceiver ? (
+            <TouchableOpacity style={st.giftRevealBtn} onPress={() => { setGiftReveal(null); router.push("/gifts"); }}>
+              <Text style={st.giftRevealBtnText}>View Gift Gallery</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={st.giftRevealBtn} onPress={() => setGiftReveal(null)}>
+              <Text style={st.giftRevealBtnText}>Awesome!</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </BottomSheet>
     </View>

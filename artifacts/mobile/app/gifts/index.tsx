@@ -25,6 +25,7 @@ type Gift = {
   name: string;
   emoji: string;
   base_xp_cost: number;
+  acoin_price: number;
   rarity: string;
   description: string | null;
 };
@@ -59,8 +60,8 @@ export default function GiftsScreen() {
   const [sending, setSending] = useState(false);
 
   const loadGifts = useCallback(async () => {
-    const { data } = await supabase.from("gifts").select("id, name, emoji, base_xp_cost, rarity, description").order("base_xp_cost", { ascending: true });
-    if (data) setGifts(data);
+    const { data } = await supabase.from("gifts").select("id, name, emoji, base_xp_cost, acoin_price, rarity, description").order("base_xp_cost", { ascending: true });
+    if (data) setGifts(data.map((g: any) => ({ ...g, acoin_price: g.acoin_price ?? g.base_xp_cost })));
     setLoading(false);
   }, []);
 
@@ -80,18 +81,52 @@ export default function GiftsScreen() {
     if (!sendGift || !sendHandle.trim() || !user) return;
     setSending(true);
 
+    const price = sendGift.acoin_price ?? sendGift.base_xp_cost;
+
+    const { data: senderProfile } = await supabase.from("profiles").select("acoin").eq("id", user.id).single();
+    if (!senderProfile || (senderProfile.acoin || 0) < price) {
+      showAlert("Insufficient ACoins", `You need ${price} ACoins to send this gift. Your balance: ${senderProfile?.acoin || 0} ACoins.`);
+      setSending(false);
+      return;
+    }
+
     const { data: recipient } = await supabase.from("profiles").select("id, display_name").eq("handle", sendHandle.trim().toLowerCase()).single();
     if (!recipient) { showAlert("Not found", "User not found."); setSending(false); return; }
+
+    const originalBalance = senderProfile.acoin || 0;
+    const { error: deductErr } = await supabase.rpc("deduct_acoin", { p_user_id: user.id, p_amount: price }).maybeSingle();
+    if (deductErr) {
+      const { error: fallbackErr } = await supabase
+        .from("profiles")
+        .update({ acoin: originalBalance - price })
+        .eq("id", user.id)
+        .gte("acoin", price);
+      if (fallbackErr) {
+        showAlert("Error", "Could not deduct ACoins. Please try again.");
+        setSending(false);
+        return;
+      }
+    }
 
     const { error } = await supabase.from("gift_transactions").insert({
       gift_id: sendGift.id,
       sender_id: user.id,
       receiver_id: recipient.id,
-      xp_cost: sendGift.base_xp_cost,
+      xp_cost: price,
       message: sendMsg.trim() || null,
     });
 
-    if (error) { showAlert("Error", error.message); } else {
+    if (error) {
+      await supabase.from("profiles").update({ acoin: originalBalance }).eq("id", user.id);
+      showAlert("Error", "Could not send gift. Your ACoins have been refunded.");
+    } else {
+      await supabase.from("acoin_transactions").insert({
+        user_id: user.id,
+        amount: -price,
+        transaction_type: "gift_sent",
+        metadata: { gift_id: sendGift.id, gift_name: sendGift.name, receiver_id: recipient.id },
+      });
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showAlert("Gift Sent!", `${sendGift.emoji} ${sendGift.name} sent to ${recipient.display_name}`);
       setSendGift(null);
@@ -135,8 +170,8 @@ export default function GiftsScreen() {
               <Text style={styles.giftEmoji}>{item.emoji}</Text>
               <Text style={[styles.giftName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
               <View style={styles.giftPriceRow}>
-                <Ionicons name="flash" size={12} color={rarityColors[item.rarity] || "#8E8E93"} />
-                <Text style={[styles.giftPrice, { color: rarityColors[item.rarity] || colors.textSecondary }]}>{item.base_xp_cost}</Text>
+                <Ionicons name="logo-bitcoin" size={12} color={Colors.gold} />
+                <Text style={[styles.giftPrice, { color: Colors.gold }]}>{item.acoin_price ?? item.base_xp_cost}</Text>
               </View>
               <Text style={[styles.rarityTag, { color: rarityColors[item.rarity] || "#8E8E93" }]}>{item.rarity}</Text>
             </TouchableOpacity>
@@ -167,7 +202,7 @@ export default function GiftsScreen() {
               <Text style={[styles.modalTitle, { color: colors.text }]}>Send {sendGift?.emoji} {sendGift?.name}</Text>
               <TouchableOpacity onPress={() => setSendGift(null)}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
             </View>
-            <Text style={[styles.costText, { color: colors.textSecondary }]}>Cost: {sendGift?.base_xp_cost} Nexa</Text>
+            <Text style={[styles.costText, { color: Colors.gold }]}>Cost: {sendGift?.acoin_price ?? sendGift?.base_xp_cost} ACoin</Text>
             <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Recipient handle" placeholderTextColor={colors.textMuted} value={sendHandle} onChangeText={setSendHandle} autoCapitalize="none" />
             <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Add a message (optional)" placeholderTextColor={colors.textMuted} value={sendMsg} onChangeText={setSendMsg} />
             <TouchableOpacity style={[styles.sendBtn, sending && { opacity: 0.6 }]} onPress={handleSendGift} disabled={sending}>
