@@ -390,7 +390,7 @@ export default function GiftsScreen() {
         </View>
         <View style={styles.giftValueRow}>
           <Ionicons name="diamond" size={12} color={Colors.gold} />
-          <Text style={styles.giftValue}>{getConvertValue(item.gift)}</Text>
+          <Text style={styles.giftValue}>{item.gift.acoin_price ?? item.gift.base_xp_cost}</Text>
         </View>
       </TouchableOpacity>
     );
@@ -422,7 +422,7 @@ export default function GiftsScreen() {
         </View>
         <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
         <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: Colors.gold }]}>{owned.reduce((sum, g) => sum + getConvertValue(g.gift), 0)}</Text>
+          <Text style={[styles.statValue, { color: Colors.gold }]}>{owned.reduce((sum, g) => sum + (g.gift.acoin_price ?? g.gift.base_xp_cost), 0)}</Text>
           <Text style={[styles.statLabel, { color: colors.textMuted }]}>Total Value</Text>
         </View>
         <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
@@ -520,7 +520,7 @@ export default function GiftsScreen() {
             {selectedGift && isRareOrAbove(selectedGift.gift.rarity) && (
               <TouchableOpacity
                 style={styles.sellRow}
-                onPress={() => { setShowListModal(true); setListPrice(String(selectedGift.gift.base_xp_cost)); }}
+                onPress={() => { setShowListModal(true); setListPrice(String(selectedGift.gift.acoin_price ?? selectedGift.gift.base_xp_cost)); }}
               >
                 <Ionicons name="storefront-outline" size={16} color="#FF9500" />
                 <Text style={[styles.sellLink, { color: "#FF9500" }]}>Sell on Marketplace</Text>
