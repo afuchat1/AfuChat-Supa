@@ -526,7 +526,7 @@ export default function ChatsScreen() {
           .from("message_status")
           .select("message_id")
           .eq("user_id", user.id)
-          .eq("status", "read")
+          .not("read_at", "is", null)
           .in("message_id", unreadMsgIds);
         readSet = new Set((readRows || []).map((r: any) => r.message_id));
       }

@@ -429,25 +429,25 @@ export default function ChatScreen() {
       const msgIds = data.map((m: any) => m.id);
 
       const [{ data: reactions }, { data: statuses }] = await Promise.all([
-        msgIds.length > 0 ? supabase.from("message_reactions").select("message_id, emoji, user_id").in("message_id", msgIds) : { data: [] },
-        msgIds.length > 0 ? supabase.from("message_status").select("message_id, status").in("message_id", msgIds) : { data: [] },
+        msgIds.length > 0 ? supabase.from("message_reactions").select("message_id, reaction, user_id").in("message_id", msgIds) : { data: [] },
+        msgIds.length > 0 ? supabase.from("message_status").select("message_id, read_at, delivered_at").in("message_id", msgIds) : { data: [] },
       ]);
 
       const reactionMap: Record<string, { emoji: string; count: number; myReaction: boolean }[]> = {};
       for (const r of (reactions || []) as any[]) {
         if (!reactionMap[r.message_id]) reactionMap[r.message_id] = [];
-        const existing = reactionMap[r.message_id].find((x) => x.emoji === r.emoji);
+        const existing = reactionMap[r.message_id].find((x) => x.emoji === r.reaction);
         if (existing) {
           existing.count++;
           if (r.user_id === user.id) existing.myReaction = true;
         } else {
-          reactionMap[r.message_id].push({ emoji: r.emoji, count: 1, myReaction: r.user_id === user.id });
+          reactionMap[r.message_id].push({ emoji: r.reaction, count: 1, myReaction: r.user_id === user.id });
         }
       }
 
-      const statusMap: Record<string, string> = {};
+      const readSet = new Set<string>();
       for (const s of (statuses || []) as any[]) {
-        if (!statusMap[s.message_id] || s.status === "read") statusMap[s.message_id] = s.status;
+        if (s.read_at) readSet.add(s.message_id);
       }
 
       const mapped = data.map((m: any) => ({
@@ -461,11 +461,27 @@ export default function ChatScreen() {
         attachment_type: m.attachment_type,
         sender: m.profiles,
         reactions: reactionMap[m.id] || [],
-        status: statusMap[m.id] || (m.sender_id === user.id ? "sent" : undefined),
+        status: m.sender_id === user.id
+          ? (readSet.has(m.id) ? "read" : "sent")
+          : undefined,
       }));
 
       setMessages(mapped);
       cacheMessages(chatId, mapped);
+
+      const unreadFromOthers = data.filter((m: any) => m.sender_id !== user.id);
+      if (unreadFromOthers.length > 0) {
+        const now = new Date().toISOString();
+        supabase.from("message_status").upsert(
+          unreadFromOthers.map((m: any) => ({
+            message_id: m.id,
+            user_id: user.id,
+            delivered_at: now,
+            read_at: now,
+          })),
+          { onConflict: "message_id,user_id" }
+        );
+      }
     }
     setLoading(false);
   }, [id, user, isDraft, realChatId]);
@@ -551,7 +567,7 @@ export default function ChatScreen() {
           setMessages((prev) => [{ ...newMsg, sender: senderProfile as any, reactions: [], status: undefined }, ...prev]);
 
           if (user) {
-            await supabase.from("message_status").upsert({ message_id: newMsg.id, user_id: user.id, status: "read" }, { onConflict: "message_id,user_id" });
+            await supabase.from("message_status").upsert({ message_id: newMsg.id, user_id: user.id, delivered_at: new Date().toISOString(), read_at: new Date().toISOString() }, { onConflict: "message_id,user_id" });
           }
         }
       )
@@ -597,9 +613,9 @@ export default function ChatScreen() {
 
     const existing = msg.reactions?.find((r) => r.emoji === emoji && r.myReaction);
     if (existing) {
-      await supabase.from("message_reactions").delete().eq("message_id", msg.id).eq("user_id", user.id).eq("emoji", emoji);
+      await supabase.from("message_reactions").delete().eq("message_id", msg.id).eq("user_id", user.id).eq("reaction", emoji);
     } else {
-      await supabase.from("message_reactions").insert({ message_id: msg.id, user_id: user.id, emoji });
+      await supabase.from("message_reactions").insert({ message_id: msg.id, user_id: user.id, reaction: emoji });
     }
     loadMessages();
   }
