@@ -212,7 +212,7 @@ router.get("/payments/pesapal/callback", async (req, res) => {
     <body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Inter,sans-serif;background:#000;color:#fff;">
       <div style="text-align:center;">
         <h1 style="color:#00C2CB;">Payment Received</h1>
-        <p>Your Nexa balance will be updated shortly.</p>
+        <p>Your ACoin balance will be updated shortly.</p>
         <p>You can close this window and return to AfuChat.</p>
       </div>
     </body>
