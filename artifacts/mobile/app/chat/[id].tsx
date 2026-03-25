@@ -73,6 +73,8 @@ type ChatInfo = {
   other_avatar: string | null;
   other_id: string;
   avatar_url: string | null;
+  is_verified?: boolean;
+  is_organization_verified?: boolean;
 };
 
 const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
@@ -388,7 +390,7 @@ export default function ChatScreen() {
     if (!id || !user || isDraft) return;
     const { data: chat } = await supabase
       .from("chats")
-      .select(`is_group, is_channel, name, avatar_url, chat_members(user_id, profiles(id, display_name, avatar_url, handle))`)
+      .select(`is_group, is_channel, name, avatar_url, chat_members(user_id, profiles(id, display_name, avatar_url, handle, is_verified, is_organization_verified))`)
       .eq("id", id)
       .single();
 
@@ -403,6 +405,8 @@ export default function ChatScreen() {
         other_avatar: other?.avatar_url || null,
         other_id: other?.id || "",
         avatar_url: chat.avatar_url,
+        is_verified: !!other?.is_verified,
+        is_organization_verified: !!other?.is_organization_verified,
       });
     }
   }, [id, user, isDraft]);
@@ -472,15 +476,23 @@ export default function ChatScreen() {
       const unreadFromOthers = data.filter((m: any) => m.sender_id !== user.id);
       if (unreadFromOthers.length > 0) {
         const now = new Date().toISOString();
-        supabase.from("message_status").upsert(
-          unreadFromOthers.map((m: any) => ({
-            message_id: m.id,
-            user_id: user.id,
-            delivered_at: now,
-            read_at: now,
-          })),
-          { onConflict: "message_id,user_id" }
-        );
+        const unreadIds = unreadFromOthers.map((m: any) => m.id);
+        const { data: myReadRows } = unreadIds.length > 0
+          ? await supabase.from("message_status").select("message_id").eq("user_id", user.id).not("read_at", "is", null).in("message_id", unreadIds)
+          : { data: [] };
+        const alreadyRead = new Set((myReadRows || []).map((r: any) => r.message_id));
+        const toMark = unreadFromOthers.filter((m: any) => !alreadyRead.has(m.id));
+        if (toMark.length > 0) {
+          await supabase.from("message_status").upsert(
+            toMark.map((m: any) => ({
+              message_id: m.id,
+              user_id: user.id,
+              delivered_at: now,
+              read_at: now,
+            })),
+            { onConflict: "message_id,user_id" }
+          );
+        }
       }
     }
     setLoading(false);
@@ -1110,13 +1122,21 @@ export default function ChatScreen() {
           activeOpacity={0.7}
           onPress={() => {
             if (chatInfo && !chatInfo.is_group && !chatInfo.is_channel && chatInfo.other_id) {
-              router.push({ pathname: "/profile/[id]", params: { id: chatInfo.other_id } });
+              router.push({ pathname: "/contact/[id]", params: { id: chatInfo.other_id } });
             }
           }}
         >
           <Avatar uri={headerAvatar} name={headerTitle} size={38} />
           <View style={st.headerInfo}>
-            <Text style={[st.headerName, { color: colors.text }]} numberOfLines={1}>{headerTitle}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Text style={[st.headerName, { color: colors.text }]} numberOfLines={1}>{headerTitle}</Text>
+              {chatInfo?.is_organization_verified && (
+                <Ionicons name="checkmark-circle" size={16} color="#D4A853" />
+              )}
+              {chatInfo?.is_verified && !chatInfo?.is_organization_verified && (
+                <Ionicons name="checkmark-circle" size={16} color={BRAND} />
+              )}
+            </View>
             {typingUsers.length > 0 ? (
               <Text style={[st.headerSub, { color: BRAND }]}>
                 {typingUsers.join(", ")} typing...

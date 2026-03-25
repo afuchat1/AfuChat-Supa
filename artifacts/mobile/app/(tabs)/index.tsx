@@ -57,6 +57,8 @@ type ChatItem = {
   is_archived: boolean;
   avatar_url: string | null;
   unread_count: number;
+  is_verified: boolean;
+  is_organization_verified: boolean;
 };
 
 function formatTime(iso: string): string {
@@ -99,6 +101,12 @@ function ChatRow({ item }: { item: ChatItem }) {
             >
               {displayName || "Chat"}
             </Text>
+            {item.is_organization_verified && !item.is_group && (
+              <Ionicons name="checkmark-circle" size={14} color="#D4A853" style={{ marginLeft: 4 }} />
+            )}
+            {item.is_verified && !item.is_organization_verified && !item.is_group && (
+              <Ionicons name="checkmark-circle" size={14} color={Colors.brand} style={{ marginLeft: 4 }} />
+            )}
             {item.is_channel && (
               <Ionicons name="megaphone" size={12} color={Colors.brand} style={{ marginLeft: 4 }} />
             )}
@@ -484,7 +492,7 @@ export default function ChatsScreen() {
       .from("chats")
       .select(`
         id, name, is_group, is_channel, is_pinned, is_archived, avatar_url, updated_at,
-        chat_members(user_id, profiles(id, display_name, avatar_url))
+        chat_members(user_id, profiles(id, display_name, avatar_url, is_verified, is_organization_verified))
       `)
       .in("id", chatIds)
       .eq("is_archived", false)
@@ -557,6 +565,8 @@ export default function ChatsScreen() {
           is_archived: !!c.is_archived,
           avatar_url: c.avatar_url,
           unread_count: unreadMap[c.id] || 0,
+          is_verified: !!other?.is_verified,
+          is_organization_verified: !!other?.is_organization_verified,
         };
       });
 
