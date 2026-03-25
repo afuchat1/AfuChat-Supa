@@ -80,7 +80,7 @@ export default function ContactProfileScreen() {
   const [showBadgeInfo, setShowBadgeInfo] = useState(false);
 
   useEffect(() => {
-    if (!id || !user) return;
+    if (!id) return;
     supabase
       .from("profiles")
       .select("id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified, xp, current_grade, website_url, country, created_at, last_seen, show_online_status")
@@ -91,8 +91,10 @@ export default function ContactProfileScreen() {
         setLoading(false);
       });
 
-    supabase.from("follows").select("id").eq("follower_id", user.id).eq("following_id", id).maybeSingle().then(({ data }) => setIsFollowing(!!data));
-    supabase.from("blocked_users").select("id").eq("blocker_id", user.id).eq("blocked_id", id).maybeSingle().then(({ data }) => setIsBlocked(!!data));
+    if (user) {
+      supabase.from("follows").select("id").eq("follower_id", user.id).eq("following_id", id).maybeSingle().then(({ data }) => setIsFollowing(!!data));
+      supabase.from("blocked_users").select("id").eq("blocker_id", user.id).eq("blocked_id", id).maybeSingle().then(({ data }) => setIsBlocked(!!data));
+    }
     supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", id).then(({ count }) => setFollowerCount(count || 0));
     supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", id).then(({ count }) => setFollowingCount(count || 0));
   }, [id, user]);
@@ -127,7 +129,8 @@ export default function ContactProfileScreen() {
   useEffect(() => { loadPosts(); }, [loadPosts]);
 
   async function startChat() {
-    if (!user || !id) return;
+    if (!id) return;
+    if (!user) { router.push("/(auth)/login"); return; }
     const { data: myChats } = await supabase.from("chat_members").select("chat_id").eq("user_id", user.id);
     const myIds = (myChats || []).map((m: any) => m.chat_id);
     if (myIds.length > 0) {
@@ -157,7 +160,8 @@ export default function ContactProfileScreen() {
   }
 
   async function toggleFollow() {
-    if (!user || !id) return;
+    if (!id) return;
+    if (!user) { router.push("/(auth)/login"); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (isFollowing) {
       await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", id);

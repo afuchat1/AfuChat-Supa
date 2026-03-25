@@ -67,7 +67,7 @@ export default function PostDetailScreen() {
   const imgViewer = useImageViewer();
 
   const loadPost = useCallback(async () => {
-    if (!id || !user) return;
+    if (!id) return;
     const { data } = await supabase
       .from("posts")
       .select(`id, content, image_url, created_at, view_count,
@@ -83,22 +83,28 @@ export default function PostDetailScreen() {
       .select("id", { count: "exact", head: true })
       .eq("post_id", id);
 
-    const { data: myLike } = await supabase
-      .from("post_acknowledgments")
-      .select("id")
-      .eq("post_id", id)
-      .eq("user_id", user.id)
-      .maybeSingle();
+    let myLike = null;
+    if (user) {
+      const { data: likeData } = await supabase
+        .from("post_acknowledgments")
+        .select("id")
+        .eq("post_id", id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      myLike = likeData;
+    }
 
     const { count: replyCount } = await supabase
       .from("post_replies")
       .select("id", { count: "exact", head: true })
       .eq("post_id", id);
 
-    const { data: existingView } = await supabase.from("post_views").select("id").eq("post_id", id).eq("viewer_id", user.id).maybeSingle();
-    if (!existingView) {
-      await supabase.from("post_views").insert({ post_id: id, viewer_id: user.id });
-      await supabase.from("posts").update({ view_count: (data.view_count || 0) + 1 }).eq("id", id);
+    if (user) {
+      const { data: existingView } = await supabase.from("post_views").select("id").eq("post_id", id).eq("viewer_id", user.id).maybeSingle();
+      if (!existingView) {
+        await supabase.from("post_views").insert({ post_id: id, viewer_id: user.id });
+        await supabase.from("posts").update({ view_count: (data.view_count || 0) + 1 }).eq("id", id);
+      }
     }
 
     setPost({
@@ -107,7 +113,7 @@ export default function PostDetailScreen() {
       image_url: data.image_url,
       images: ((data as any).post_images || []).sort((a: any, b: any) => a.display_order - b.display_order).map((i: any) => i.image_url),
       created_at: data.created_at,
-      view_count: (data.view_count || 0) + 1,
+      view_count: (data.view_count || 0) + (user ? 1 : 0),
       author: (data as any).profiles,
       liked: !!myLike,
       likeCount: likeCount || 0,
@@ -162,7 +168,8 @@ export default function PostDetailScreen() {
   }, [id, user, loadReplies]);
 
   async function toggleLike() {
-    if (!user || !post) return;
+    if (!post) return;
+    if (!user) { router.push("/(auth)/login"); return; }
     if (Platform.OS !== "web") { try { const H = require("expo-haptics"); H.impactAsync(H.ImpactFeedbackStyle.Light); } catch {} }
     if (post.liked) {
       const { error } = await supabase.from("post_acknowledgments").delete().eq("post_id", post.id).eq("user_id", user.id);
@@ -317,24 +324,36 @@ export default function PostDetailScreen() {
         showsVerticalScrollIndicator={false}
       />
 
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
+      {user ? (
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
+          <View style={[styles.replyBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
+            <TextInput
+              style={[styles.replyInput, { color: colors.text, backgroundColor: colors.inputBg }]}
+              placeholder="Write a reply..."
+              placeholderTextColor={colors.textMuted}
+              value={replyText}
+              onChangeText={setReplyText}
+              maxLength={280}
+              multiline
+            />
+            <TouchableOpacity onPress={sendReply} disabled={!replyText.trim() || sending}>
+              {sending ? <ActivityIndicator color={Colors.brand} /> : (
+                <Ionicons name="send" size={22} color={replyText.trim() ? Colors.brand : colors.textMuted} />
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      ) : (
         <View style={[styles.replyBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
-          <TextInput
-            style={[styles.replyInput, { color: colors.text, backgroundColor: colors.inputBg }]}
-            placeholder="Write a reply..."
-            placeholderTextColor={colors.textMuted}
-            value={replyText}
-            onChangeText={setReplyText}
-            maxLength={280}
-            multiline
-          />
-          <TouchableOpacity onPress={sendReply} disabled={!replyText.trim() || sending}>
-            {sending ? <ActivityIndicator color={Colors.brand} /> : (
-              <Ionicons name="send" size={22} color={replyText.trim() ? Colors.brand : colors.textMuted} />
-            )}
+          <TouchableOpacity
+            onPress={() => router.push("/(auth)/login")}
+            style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.brand, paddingVertical: 10, borderRadius: 20 }}
+          >
+            <Ionicons name="log-in-outline" size={18} color="#fff" />
+            <Text style={{ color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" }}>Sign in to reply</Text>
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      )}
       <ImageViewer
         images={imgViewer.images}
         initialIndex={imgViewer.index}

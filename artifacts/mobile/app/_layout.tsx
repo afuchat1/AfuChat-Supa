@@ -129,21 +129,21 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
-              <DesktopWrapper>
                 <ThemeProvider>
                   <AuthProvider>
-                    <PushNotificationManager />
-                    <RootLayoutNav />
-                    <IOSAlert
-                      visible={alertState.visible}
-                      title={alertState.title}
-                      message={alertState.message}
-                      buttons={alertState.buttons}
-                      onDismiss={dismissAlert}
-                    />
+                    <DesktopWrapper>
+                      <PushNotificationManager />
+                      <RootLayoutNav />
+                      <IOSAlert
+                        visible={alertState.visible}
+                        title={alertState.title}
+                        message={alertState.message}
+                        buttons={alertState.buttons}
+                        onDismiss={dismissAlert}
+                      />
+                    </DesktopWrapper>
                   </AuthProvider>
                 </ThemeProvider>
-              </DesktopWrapper>
             </KeyboardProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>

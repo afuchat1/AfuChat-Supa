@@ -3,6 +3,7 @@ import { Platform, View, StyleSheet, Text, useWindowDimensions } from "react-nat
 import { usePathname, useSegments, router } from "expo-router";
 import { DesktopSidebar } from "./DesktopSidebar";
 import { DesktopDetailProvider } from "@/context/DesktopDetailContext";
+import { useAuth } from "@/context/AuthContext";
 
 const DESKTOP_BREAKPOINT = 768;
 const BRAND_BG = "#00897B";
@@ -16,6 +17,9 @@ type Props = {
 export function DesktopWrapper({ children }: Props) {
   const { width, height } = useWindowDimensions();
   const segments = useSegments();
+  const { session, loading } = useAuth();
+
+  const isLoggedIn = !!session;
 
   if (Platform.OS !== "web" || width < DESKTOP_BREAKPOINT) {
     return (
@@ -45,7 +49,9 @@ export function DesktopWrapper({ children }: Props) {
         <View style={styles.topBar} />
         <View style={styles.contentArea}>
           <View style={[styles.appShell, { height: appHeight }]}>
-            <DesktopSidebar activeTab={activeTab} onTabPress={handleTabPress} />
+            {isLoggedIn && (
+              <DesktopSidebar activeTab={activeTab} onTabPress={handleTabPress} />
+            )}
             <View style={styles.mainContent}>
               {children}
             </View>

@@ -35,7 +35,7 @@ function NativeTabLayout() {
   );
 }
 
-function ClassicTabLayout() {
+function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
@@ -43,13 +43,15 @@ function ClassicTabLayout() {
   const { colors } = useTheme();
   const isDesktop = useIsDesktop();
 
+  const hideTabs = isDesktop || (!isLoggedIn && Platform.OS === "web");
+
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: Colors.brand,
         tabBarInactiveTintColor: colors.tabIconDefault,
         headerShown: false,
-        tabBarStyle: isDesktop
+        tabBarStyle: hideTabs
           ? { display: "none" }
           : {
               position: "absolute",
@@ -78,6 +80,7 @@ function ClassicTabLayout() {
         name="index"
         options={{
           title: "AfuChat",
+          href: isLoggedIn ? undefined : null,
           tabBarIcon: ({ color }) => (
             <Image source={afuSymbol} style={{ width: 26, height: 26, tintColor: color }} resizeMode="contain" />
           ),
@@ -103,6 +106,7 @@ function ClassicTabLayout() {
         name="me"
         options={{
           title: "Me",
+          href: isLoggedIn ? undefined : null,
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
               <SymbolView name={focused ? "person.circle.fill" : "person.circle"} tintColor={color} size={22} />
@@ -117,6 +121,7 @@ function ClassicTabLayout() {
 
 export default function TabLayout() {
   const { session, profile, loading } = useAuth();
+  const isDesktop = useIsDesktop();
 
   useEffect(() => {
     if (loading) return;
@@ -128,5 +133,5 @@ export default function TabLayout() {
   if (isLiquidGlassAvailable()) {
     return <NativeTabLayout />;
   }
-  return <ClassicTabLayout />;
+  return <ClassicTabLayout isLoggedIn={!!session} />;
 }

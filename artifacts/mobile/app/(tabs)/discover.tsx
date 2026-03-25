@@ -141,10 +141,8 @@ export default function DiscoverScreen() {
   const imgViewer = useImageViewer();
 
   const fetchPosts = useCallback(async (offset: number, isRefresh: boolean) => {
-    if (!user) { setLoading(false); setRefreshing(false); return; }
-
     if (!isOnline()) {
-      if (isRefresh) {
+      if (isRefresh && user) {
         const cached = await getCachedMoments();
         if (cached.length > 0) setPosts(cached);
       }
@@ -186,23 +184,23 @@ export default function DiscoverScreen() {
         postIds.length > 0
           ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds)
           : { data: [] },
-        postIds.length > 0
+        postIds.length > 0 && user
           ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id)
           : { data: [] },
         postIds.length > 0
           ? supabase.from("post_replies").select("post_id").in("post_id", postIds)
           : { data: [] },
-        authorIds.length > 0
+        authorIds.length > 0 && user
           ? supabase.from("post_acknowledgments")
               .select("post_id, posts!inner(author_id)")
               .eq("user_id", user.id)
               .in("posts.author_id", authorIds)
               .limit(500)
           : { data: [] },
-        authorIds.length > 0
+        authorIds.length > 0 && user
           ? supabase.from("follows").select("following_id").eq("follower_id", user.id).in("following_id", authorIds)
           : { data: [] },
-        authorIds.length > 0
+        authorIds.length > 0 && user
           ? supabase.from("post_replies")
               .select("post_id, posts!inner(author_id)")
               .eq("author_id", user.id)
@@ -335,7 +333,7 @@ export default function DiscoverScreen() {
   }, [loadPosts]);
 
   async function toggleLike(postId: string) {
-    if (!user) return;
+    if (!user) { router.push("/(auth)/login"); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const post = posts.find((p) => p.id === postId);
     if (!post) return;
@@ -376,12 +374,22 @@ export default function DiscoverScreen() {
         ]}
       >
         <Text style={[styles.headerTitle, { color: colors.text }]}>Discover</Text>
-        <TouchableOpacity
-          onPress={() => router.push("/moments/create")}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="add-circle-outline" size={24} color={colors.text} />
-        </TouchableOpacity>
+        {user ? (
+          <TouchableOpacity
+            onPress={() => router.push("/moments/create")}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="add-circle-outline" size={24} color={colors.text} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={() => router.push("/(auth)/login")}
+            style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.brand, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20 }}
+          >
+            <Ionicons name="log-in-outline" size={16} color="#fff" />
+            <Text style={{ color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" }}>Sign In</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {loading ? (
@@ -414,13 +422,13 @@ export default function DiscoverScreen() {
               <Ionicons name="newspaper-outline" size={64} color={colors.textMuted} />
               <Text style={[styles.emptyTitle, { color: colors.text }]}>No posts yet</Text>
               <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
-                Share what's on your mind
+                {user ? "Share what's on your mind" : "Sign in to start posting"}
               </Text>
               <TouchableOpacity
                 style={styles.createBtn}
-                onPress={() => router.push("/moments/create")}
+                onPress={() => user ? router.push("/moments/create") : router.push("/(auth)/login")}
               >
-                <Text style={styles.createBtnText}>Create Post</Text>
+                <Text style={styles.createBtnText}>{user ? "Create Post" : "Sign In"}</Text>
               </TouchableOpacity>
             </View>
           }

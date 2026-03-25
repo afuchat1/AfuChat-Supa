@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { ActivityIndicator, Image, StyleSheet, View, Text } from "react-native";
+import { ActivityIndicator, Image, Platform, StyleSheet, View, Text } from "react-native";
 import { router } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import Colors from "@/constants/colors";
@@ -17,6 +17,8 @@ export default function IndexScreen() {
       } else {
         router.replace("/(tabs)");
       }
+    } else if (Platform.OS === "web") {
+      router.replace("/(tabs)/discover");
     } else {
       router.replace("/(auth)/login");
     }
