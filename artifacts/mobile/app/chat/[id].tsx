@@ -677,7 +677,12 @@ export default function ChatScreen() {
     }
 
     if (!error && chatInfo) {
-      notifyNewMessage(chatInfo.other_id, user.id, text, profile?.display_name || "Someone");
+      notifyNewMessage({
+        recipientIds: [chatInfo.other_id],
+        senderName: profile?.display_name || "Someone",
+        messageText: text,
+        chatId: activeChatId,
+      });
     }
 
     setSending(false);
