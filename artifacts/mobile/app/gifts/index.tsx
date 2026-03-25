@@ -18,6 +18,7 @@ import * as Haptics from "expo-haptics";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { useGiftPrices } from "@/hooks/useGiftPrices";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { GiftCardSkeleton } from "@/components/ui/Skeleton";
@@ -81,6 +82,7 @@ export default function GiftsScreen() {
   const { colors } = useTheme();
   const { user, profile, refreshProfile } = useAuth();
   const insets = useSafeAreaInsets();
+  const { statsMap, getDynamicPrice, refreshStats } = useGiftPrices();
   const [owned, setOwned] = useState<OwnedGift[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -97,20 +99,14 @@ export default function GiftsScreen() {
 
   const loadOwned = useCallback(async () => {
     if (!user) return;
-    const [{ data }, { data: statsData }, { data: listedData }] = await Promise.all([
+    const [{ data }, { data: listedData }] = await Promise.all([
       supabase
         .from("user_gifts")
         .select("id, gift_id, is_pinned, acquired_at, transaction_id, gifts(id, name, emoji, base_xp_cost, rarity, description, image_url)")
         .eq("user_id", user.id)
         .order("acquired_at", { ascending: false }),
-      supabase.from("gift_statistics").select("gift_id, price_multiplier, total_sent"),
       supabase.from("gift_marketplace").select("user_gift_id").eq("seller_id", user.id).eq("status", "listed"),
     ]);
-
-    const statsMap: Record<string, { multiplier: number; totalSent: number }> = {};
-    (statsData || []).forEach((s: any) => {
-      statsMap[s.gift_id] = { multiplier: parseFloat(s.price_multiplier) || 1, totalSent: s.total_sent || 0 };
-    });
 
     const listedGiftIds = new Set((listedData || []).map((l: any) => l.user_gift_id));
 
@@ -133,15 +129,11 @@ export default function GiftsScreen() {
         }
       }
 
-      setOwned(available.map((g: any) => {
-        const stats = statsMap[g.gifts.id];
-        const dynamicPrice = stats ? Math.ceil(g.gifts.base_xp_cost * stats.multiplier) : g.gifts.base_xp_cost;
-        return {
-          ...g,
-          gift: { ...g.gifts, acoin_price: dynamicPrice },
-          sender_name: g.transaction_id ? senderMap[g.transaction_id] : undefined,
-        };
-      }));
+      setOwned(available.map((g: any) => ({
+        ...g,
+        gift: { ...g.gifts },
+        sender_name: g.transaction_id ? senderMap[g.transaction_id] : undefined,
+      })));
     }
     setLoading(false);
     setRefreshing(false);
@@ -150,7 +142,7 @@ export default function GiftsScreen() {
   useEffect(() => { loadOwned(); }, [loadOwned]);
 
   function getConvertValue(gift: Gift): number {
-    const baseValue = gift.acoin_price ?? gift.base_xp_cost;
+    const baseValue = getDynamicPrice(gift.id, gift.base_xp_cost);
     const fee = baseValue * (HIDDEN_FEE_PERCENT / 100);
     return Math.floor(baseValue - fee);
   }
@@ -331,6 +323,7 @@ export default function GiftsScreen() {
   function renderGiftCard({ item }: { item: OwnedGift }) {
     const rBg = rarityBgColors[item.gift.rarity] || rarityBgColors.common;
     const rColor = rarityColors[item.gift.rarity] || rarityColors.common;
+    const livePrice = getDynamicPrice(item.gift.id, item.gift.base_xp_cost);
 
     return (
       <TouchableOpacity
@@ -351,6 +344,10 @@ export default function GiftsScreen() {
         <View style={[styles.rarityBadge, { backgroundColor: rBg }]}>
           <View style={[styles.rarityDot, { backgroundColor: rColor }]} />
           <Text style={[styles.rarityText, { color: rColor }]}>{item.gift.rarity}</Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 }}>
+          <Ionicons name="diamond" size={10} color={Colors.gold} />
+          <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: Colors.gold }}>{livePrice}</Text>
         </View>
       </TouchableOpacity>
     );
@@ -402,9 +399,10 @@ export default function GiftsScreen() {
           keyExtractor={(item) => item.id}
           numColumns={2}
           renderItem={renderGiftCard}
+          extraData={statsMap}
           contentContainerStyle={{ padding: 8, paddingBottom: insets.bottom + 20 }}
           columnWrapperStyle={{ gap: 8 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadOwned(); }} tintColor={Colors.brand} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); refreshStats(); loadOwned(); }} tintColor={Colors.brand} />}
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
               <View style={[styles.emptyIconWrap, { backgroundColor: "rgba(212,168,83,0.1)" }]}>
@@ -440,7 +438,7 @@ export default function GiftsScreen() {
 
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
               <Ionicons name="diamond" size={14} color={Colors.gold} />
-              <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: Colors.gold }}>{selectedGift?.gift.acoin_price ?? selectedGift?.gift.base_xp_cost}</Text>
+              <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: Colors.gold }}>{selectedGift ? getDynamicPrice(selectedGift.gift.id, selectedGift.gift.base_xp_cost) : 0}</Text>
               <Text style={{ fontSize: 12, fontFamily: "Inter_500Medium", color: colors.textMuted, marginLeft: 2 }}>ACoin value</Text>
             </View>
 
@@ -477,7 +475,7 @@ export default function GiftsScreen() {
             {selectedGift && isRareOrAbove(selectedGift.gift.rarity) && (
               <TouchableOpacity
                 style={styles.sellRow}
-                onPress={() => { setShowListModal(true); setListPrice(String(selectedGift.gift.acoin_price ?? selectedGift.gift.base_xp_cost)); }}
+                onPress={() => { setShowListModal(true); setListPrice(String(getDynamicPrice(selectedGift.gift.id, selectedGift.gift.base_xp_cost))); }}
               >
                 <Ionicons name="storefront-outline" size={16} color="#FF9500" />
                 <Text style={[styles.sellLink, { color: "#FF9500" }]}>Sell on Marketplace</Text>
@@ -588,7 +586,7 @@ export default function GiftsScreen() {
                   <Text style={[styles.sendPreviewRarity, { color: rarityColors[sendGift?.gift.rarity || "common"] }]}>{sendGift?.gift.rarity}</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
                     <Ionicons name="diamond" size={11} color={Colors.gold} />
-                    <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: Colors.gold }}>{sendGift?.gift.acoin_price ?? sendGift?.gift.base_xp_cost}</Text>
+                    <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: Colors.gold }}>{sendGift ? getDynamicPrice(sendGift.gift.id, sendGift.gift.base_xp_cost) : 0}</Text>
                   </View>
                 </View>
               </View>

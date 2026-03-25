@@ -241,6 +241,25 @@ export default function GiftMarketplaceScreen() {
         },
       ]);
 
+      const giftId = selectedListing.gift.id;
+      const salePrice = totalCost;
+      const { data: currentStats } = await supabase
+        .from("gift_statistics")
+        .select("price_multiplier, total_sent, last_sale_price")
+        .eq("gift_id", giftId)
+        .maybeSingle();
+
+      const newLastSale = salePrice;
+      await supabase
+        .from("gift_statistics")
+        .upsert({
+          gift_id: giftId,
+          price_multiplier: currentStats?.price_multiplier ?? 1,
+          total_sent: currentStats?.total_sent ?? 0,
+          last_sale_price: newLastSale,
+          last_updated: new Date().toISOString(),
+        }, { onConflict: "gift_id" });
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showAlert("Purchased!", `You now own ${selectedListing.gift.emoji} ${selectedListing.gift.name}`);
       setSelectedListing(null);

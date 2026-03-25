@@ -28,6 +28,7 @@ import { ChatLoadingSkeleton } from "@/components/ui/Skeleton";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { useGiftPrices } from "@/hooks/useGiftPrices";
 import { Avatar } from "@/components/ui/Avatar";
 import { RichText } from "@/components/ui/RichText";
 import Colors from "@/constants/colors";
@@ -357,6 +358,7 @@ export default function ChatScreen() {
   const isDraft = id === "new";
   const { user, profile } = useAuth();
   const { colors } = useTheme();
+  const { statsMap, getDynamicPrice } = useGiftPrices();
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -788,22 +790,25 @@ export default function ChatScreen() {
   }
 
   async function loadGifts() {
-    const [{ data }, { data: statsData }] = await Promise.all([
-      supabase.from("gifts").select("*").order("base_xp_cost", { ascending: true }),
-      supabase.from("gift_statistics").select("gift_id, price_multiplier"),
-    ]);
+    const { data } = await supabase.from("gifts").select("*").order("base_xp_cost", { ascending: true });
     if (data) {
-      const statsMap: Record<string, number> = {};
-      (statsData || []).forEach((s: any) => {
-        statsMap[s.gift_id] = parseFloat(s.price_multiplier) || 1;
-      });
-      setGifts(data.map((g: any) => {
-        const multiplier = statsMap[g.id] || 1;
-        const dynamicPrice = Math.ceil(g.base_xp_cost * multiplier);
-        return { ...g, acoin_price: dynamicPrice };
-      }));
+      setGifts(data.map((g: any) => ({
+        ...g,
+        acoin_price: getDynamicPrice(g.id, g.base_xp_cost),
+      })));
     }
   }
+
+  useEffect(() => {
+    if (gifts.length > 0) {
+      setGifts((prev) =>
+        prev.map((g) => ({
+          ...g,
+          acoin_price: getDynamicPrice(g.id, g.base_xp_cost),
+        }))
+      );
+    }
+  }, [statsMap]);
 
   async function sendGift(gift: Gift) {
     if (!user || giftSending) return;
@@ -868,7 +873,7 @@ export default function ChatScreen() {
 
     const { data: currentStats } = await supabase
       .from("gift_statistics")
-      .select("price_multiplier, total_sent")
+      .select("price_multiplier, total_sent, last_sale_price")
       .eq("gift_id", gift.id)
       .maybeSingle();
 
@@ -882,7 +887,7 @@ export default function ChatScreen() {
         gift_id: gift.id,
         price_multiplier: newMultiplier,
         total_sent: currentSent + 1,
-        last_sale_price: price,
+        last_sale_price: currentStats?.last_sale_price ?? null,
         last_updated: new Date().toISOString(),
       }, { onConflict: "gift_id" });
 

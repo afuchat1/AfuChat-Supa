@@ -63,7 +63,8 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - **post_images** — `id`, `post_id`, `image_url`, `display_order`
 - **post_replies** — `id`, `post_id`, `author_id`, `content`, `parent_reply_id`
 - **stories** — `id`, `user_id`, `media_url`, `media_type`, `caption`, `expires_at`, `view_count`
-- **gifts** — `id`, `name`, `emoji`, `base_xp_cost`, `rarity`, `description`, `image_url`, `season`, `available_from`, `available_until`. Virtual gift catalog. No `acoin_price` column — uses `base_xp_cost` as value.
+- **gifts** — `id`, `name`, `emoji`, `base_xp_cost`, `rarity`, `description`, `image_url`, `season`, `available_from`, `available_until`. Virtual gift catalog. No `acoin_price` column — dynamic price computed at runtime.
+- **gift_statistics** — `id`, `gift_id` (unique), `total_sent`, `price_multiplier` (default 1.00, +0.01 per send, cap 3.0), `last_sale_price`, `last_updated`. Realtime-enabled. Dynamic price = `MAX(base_xp_cost × price_multiplier, last_sale_price)`. `last_sale_price` reflects actual last transaction price (can go up or down). `useGiftPrices` hook (`hooks/useGiftPrices.ts`) subscribes to Supabase Realtime changes on this table for instant price updates everywhere.
 - **gift_transactions** — `gift_id`, `sender_id`, `receiver_id`, `xp_cost`, `message`. Records gift sends. Uses Nexa (XP) for payment via `send_gift` RPC.
 - **user_gifts** — `id`, `user_id`, `gift_id`, `is_pinned`, `acquired_at`, `transaction_id`. User's gift gallery/collection.
 - **gift_marketplace** — `id`, `seller_id`, `user_gift_id`, `gift_id`, `asking_price`, `status` (listed/sold/cancelled), `buyer_id`, `listed_at`, `sold_at`. Rare/Epic/Legendary gifts only. 5% marketplace fee on sales.
