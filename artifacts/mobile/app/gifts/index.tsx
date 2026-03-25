@@ -82,11 +82,19 @@ export default function GiftsScreen() {
 
   const loadOwned = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from("user_gifts")
-      .select("id, gift_id, is_pinned, acquired_at, transaction_id, gifts(id, name, emoji, base_xp_cost, acoin_price, rarity, description, image_url)")
-      .eq("user_id", user.id)
-      .order("acquired_at", { ascending: false });
+    const [{ data }, { data: statsData }] = await Promise.all([
+      supabase
+        .from("user_gifts")
+        .select("id, gift_id, is_pinned, acquired_at, transaction_id, gifts(id, name, emoji, base_xp_cost, rarity, description, image_url)")
+        .eq("user_id", user.id)
+        .order("acquired_at", { ascending: false }),
+      supabase.from("gift_statistics").select("gift_id, price_multiplier, total_sent"),
+    ]);
+
+    const statsMap: Record<string, { multiplier: number; totalSent: number }> = {};
+    (statsData || []).forEach((s: any) => {
+      statsMap[s.gift_id] = { multiplier: parseFloat(s.price_multiplier) || 1, totalSent: s.total_sent || 0 };
+    });
 
     if (data) {
       const txIds = data.map((g: any) => g.transaction_id).filter(Boolean);
@@ -105,11 +113,15 @@ export default function GiftsScreen() {
         }
       }
 
-      setOwned(data.map((g: any) => ({
-        ...g,
-        gift: { ...g.gifts, acoin_price: g.gifts.acoin_price ?? g.gifts.base_xp_cost },
-        sender_name: g.transaction_id ? senderMap[g.transaction_id] : undefined,
-      })));
+      setOwned(data.map((g: any) => {
+        const stats = statsMap[g.gifts.id];
+        const dynamicPrice = stats ? Math.ceil(g.gifts.base_xp_cost * stats.multiplier) : g.gifts.base_xp_cost;
+        return {
+          ...g,
+          gift: { ...g.gifts, acoin_price: dynamicPrice },
+          sender_name: g.transaction_id ? senderMap[g.transaction_id] : undefined,
+        };
+      }));
     }
     setLoading(false);
     setRefreshing(false);
