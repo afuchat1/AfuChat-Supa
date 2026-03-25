@@ -244,12 +244,14 @@ function ContactPickerModal({ visible, onClose, userId, colors }: { visible: boo
         .select("chat_id, chats!inner(id, is_group, is_channel)")
         .eq("user_id", contact.id)
         .in("chat_id", myIds)
-        .eq("chats.is_group", false)
-        .eq("chats.is_channel", false);
+        .eq("chats.is_group", false);
       if (shared && shared.length > 0) {
-        onClose();
-        router.push({ pathname: "/chat/[id]", params: { id: shared[0].chat_id } });
-        return;
+        const directChat = shared.find((s: any) => !s.chats?.is_channel);
+        if (directChat) {
+          onClose();
+          router.push({ pathname: "/chat/[id]", params: { id: directChat.chat_id } });
+          return;
+        }
       }
     }
     onClose();
@@ -519,6 +521,19 @@ export default function ChatsScreen() {
 
   useEffect(() => { loadChats(); }, [loadChats]);
   useFocusEffect(useCallback(() => { loadChats(); }, [loadChats]));
+
+  useEffect(() => {
+    if (!user) return;
+    const memberChannel = supabase
+      .channel(`chatlist-member-inserts:${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "chat_members", filter: `user_id=eq.${user.id}` },
+        () => loadChats()
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(memberChannel); };
+  }, [user, loadChats]);
 
   const chatIdsKey = chats.map((c) => c.id).sort().join(",");
 

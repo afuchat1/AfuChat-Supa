@@ -131,11 +131,13 @@ export default function ContactProfileScreen() {
         .select("chat_id, chats!inner(id, is_group, is_channel)")
         .eq("user_id", id)
         .in("chat_id", myIds)
-        .eq("chats.is_group", false)
-        .eq("chats.is_channel", false);
+        .eq("chats.is_group", false);
       if (shared && shared.length > 0) {
-        router.push({ pathname: "/chat/[id]", params: { id: shared[0].chat_id } });
-        return;
+        const directChat = shared.find((s: any) => !s.chats?.is_channel);
+        if (directChat) {
+          router.push({ pathname: "/chat/[id]", params: { id: directChat.chat_id } });
+          return;
+        }
       }
     }
     router.push({
