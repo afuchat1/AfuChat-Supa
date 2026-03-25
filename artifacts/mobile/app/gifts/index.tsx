@@ -167,61 +167,25 @@ export default function GiftsScreen() {
     }
 
     try {
-      const { data: activeListing } = await supabase
-        .from("gift_marketplace")
-        .select("id")
-        .eq("user_gift_id", selectedGift.id)
-        .eq("status", "listed")
-        .maybeSingle();
+      const { data, error } = await supabase.rpc("convert_gift_to_acoin", {
+        p_user_gift_id: selectedGift.id,
+        p_acoin_amount: acoinAmount,
+      });
 
-      if (activeListing) {
-        showAlert("Listed", "This gift is listed on the marketplace. Cancel the listing first.");
+      if (error) {
+        showAlert("Error", "Something went wrong. Please try again.");
         setConverting(false);
         return;
       }
 
-      const { data: deleted, error: deleteErr } = await supabase
-        .from("user_gifts")
-        .delete()
-        .eq("id", selectedGift.id)
-        .eq("user_id", user.id)
-        .select("id");
-
-      if (deleteErr || !deleted || deleted.length === 0) {
-        showAlert("Error", "Gift not found or already converted.");
+      if (!data?.success) {
+        showAlert("Error", data?.message || "Could not convert gift.");
         setConverting(false);
         setSelectedGift(null);
         setConfirmConvert(false);
         loadOwned();
         return;
       }
-
-      const { data: freshProfile } = await supabase.from("profiles").select("acoin").eq("id", user.id).single();
-      if (!freshProfile) {
-        await supabase.from("user_gifts").insert({ id: selectedGift.id, user_id: user.id, gift_id: selectedGift.gift.id, is_pinned: selectedGift.is_pinned });
-        showAlert("Error", "Could not load your balance. Gift restored.");
-        setConverting(false);
-        return;
-      }
-
-      const { error: updateErr } = await supabase
-        .from("profiles")
-        .update({ acoin: (freshProfile.acoin || 0) + acoinAmount })
-        .eq("id", user.id);
-
-      if (updateErr) {
-        await supabase.from("user_gifts").insert({ id: selectedGift.id, user_id: user.id, gift_id: selectedGift.gift.id, is_pinned: selectedGift.is_pinned });
-        showAlert("Error", "Could not credit ACoin. Gift restored.");
-        setConverting(false);
-        return;
-      }
-
-      await supabase.from("acoin_transactions").insert({
-        user_id: user.id,
-        amount: acoinAmount,
-        transaction_type: "gift_conversion",
-        metadata: { gift_id: selectedGift.gift.id, gift_name: selectedGift.gift.name },
-      });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showAlert("Converted!", `${selectedGift.gift.emoji} ${selectedGift.gift.name} converted to ${acoinAmount} ACoin`);
