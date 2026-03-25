@@ -1,30 +1,46 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
   Platform,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams, useRootNavigationState } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
-import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
+function safeNavigate(path: string, params?: Record<string, string>) {
+  try {
+    if (params) {
+      router.replace({ pathname: path as any, params });
+    } else {
+      router.replace(path as any);
+    }
+  } catch {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const url = params
+        ? path.replace(/\[(\w+)\]/g, (_, k) => params[k] || "")
+        : path;
+      window.location.href = url;
+    }
+  }
+}
+
 export default function HandleScreen() {
   const { handle: rawHandle } = useLocalSearchParams<{ handle: string }>();
-  const { colors } = useTheme();
-  const { session } = useAuth();
+  const { session, loading: authLoading } = useAuth();
   const insets = useSafeAreaInsets();
-  const [loading, setLoading] = useState(true);
+  const navigationState = useRootNavigationState();
+  const hasNavigated = useRef(false);
+  const [profileId, setProfileId] = useState<string | null>(null);
+  const [dataReady, setDataReady] = useState(false);
 
   const isProfileLink = rawHandle?.startsWith("@");
   const cleanHandle = (rawHandle || "").replace(/^@/, "").toLowerCase();
@@ -32,48 +48,72 @@ export default function HandleScreen() {
 
   useEffect(() => {
     if (!cleanHandle || !isValidHandle) {
-      router.replace("/");
+      setDataReady(true);
+      return;
+    }
+    if (!isProfileLink) {
+      AsyncStorage.setItem("referrer_handle", cleanHandle).catch(() => {});
+      setDataReady(true);
+      return;
+    }
+
+    supabase
+      .from("profiles")
+      .select("id")
+      .eq("handle", cleanHandle)
+      .single()
+      .then(({ data }) => {
+        if (data) setProfileId(data.id);
+        setDataReady(true);
+      })
+      .catch(() => setDataReady(true));
+  }, [cleanHandle, isProfileLink, isValidHandle]);
+
+  useEffect(() => {
+    if (hasNavigated.current) return;
+    if (!dataReady) return;
+    if (authLoading) return;
+    if (!navigationState?.key) return;
+
+    hasNavigated.current = true;
+
+    if (!cleanHandle || !isValidHandle) {
+      safeNavigate("/");
       return;
     }
 
     if (isProfileLink) {
-      navigateToProfile(cleanHandle);
+      if (profileId) {
+        safeNavigate("/contact/[id]", { id: profileId });
+      } else {
+        safeNavigate("/(tabs)/discover");
+      }
     } else {
-      handleReferral(cleanHandle);
-    }
-  }, [cleanHandle, isProfileLink, isValidHandle]);
-
-  async function navigateToProfile(handle: string) {
-    try {
-      const { data } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("handle", handle)
-        .single();
-
-      if (data) {
-        router.replace({ pathname: "/contact/[id]", params: { id: data.id } });
-      } else {
-        router.replace("/");
-      }
-    } catch {
-      router.replace("/");
-    }
-  }
-
-  async function handleReferral(handle: string) {
-    try {
-      await AsyncStorage.setItem("referrer_handle", handle);
-
       if (session) {
-        router.replace("/(tabs)");
+        safeNavigate("/(tabs)");
       } else {
-        router.replace("/(auth)/register");
+        safeNavigate("/(auth)/register");
       }
-    } catch {
-      router.replace("/");
     }
-  }
+  }, [dataReady, authLoading, navigationState?.key, cleanHandle, isProfileLink, isValidHandle, profileId, session]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    if (hasNavigated.current) return;
+    const timeout = setTimeout(() => {
+      if (hasNavigated.current) return;
+      if (!dataReady) return;
+      hasNavigated.current = true;
+      if (typeof window !== "undefined") {
+        if (isProfileLink) {
+          window.location.href = "/discover";
+        } else {
+          window.location.href = "/";
+        }
+      }
+    }, 8000);
+    return () => clearTimeout(timeout);
+  }, [isProfileLink, dataReady]);
 
   return (
     <View style={[styles.container, { backgroundColor: Colors.brand, paddingTop: insets.top }]}>
@@ -81,7 +121,7 @@ export default function HandleScreen() {
       <Text style={styles.brandText}>AfuChat</Text>
       <ActivityIndicator size="small" color="#fff" style={styles.loader} />
       <Text style={styles.subText}>
-        {isProfileLink ? "Loading profile..." : "Processing referral..."}
+        {isProfileLink ? "Loading profile..." : "Processing invite..."}
       </Text>
     </View>
   );
