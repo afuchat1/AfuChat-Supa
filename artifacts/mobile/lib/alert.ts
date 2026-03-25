@@ -1,4 +1,4 @@
-import { Platform, ToastAndroid } from "react-native";
+import { Alert, Platform, ToastAndroid } from "react-native";
 
 export type AlertButton = {
   text: string;
@@ -38,6 +38,18 @@ export function showAlert(
   message?: string,
   buttons?: AlertButton[],
 ) {
+  if (Platform.OS === "android") {
+    const nativeButtons = (buttons && buttons.length > 0)
+      ? buttons.map((b) => ({
+          text: b.text,
+          style: b.style,
+          onPress: b.onPress,
+        }))
+      : [{ text: "OK" }];
+    Alert.alert(title || "", message || "", nativeButtons, { cancelable: true });
+    return;
+  }
+
   if (_listener) {
     _listener({ visible: true, title, message, buttons });
     return;
@@ -48,13 +60,13 @@ export function showAlert(
     return;
   }
 
-  if (!buttons || buttons.length === 0) {
-    if (Platform.OS === "android") {
-      const msg = message ? `${title}: ${message}` : title;
-      ToastAndroid.show(msg, ToastAndroid.LONG);
-    }
-    return;
-  }
+  Alert.alert(
+    title || "",
+    message || "",
+    buttons && buttons.length > 0
+      ? buttons.map((b) => ({ text: b.text, style: b.style, onPress: b.onPress }))
+      : [{ text: "OK" }],
+  );
 }
 
 function _webFallback(
