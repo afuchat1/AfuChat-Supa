@@ -178,7 +178,7 @@ The AfuChat app is cross-platform — same codebase runs on mobile (iOS/Android 
 - **Profile columns**: `gender` (text), `date_of_birth` (date), `country` (text), `phone_number` (text), `interests` (text[]), `onboarding_completed` (boolean, default false).
 - **Country data**: `constants/countries.ts` exports `COUNTRIES` array with name, code, dial code, flag emoji, and valid phone digit lengths for each country.
 - **Edit Profile**: `profile/edit.tsx` supports real avatar upload via expo-image-picker + Supabase Storage. Change Photo button opens gallery, selected image uploaded on save.
-- **Referral system**: No manual codes — referrals work via deep links only. `afuchat.com/username` (no @) = referral link. `afuchat.com/@username` (with @) = public profile. When someone opens a referral link and signs up, the referrer handle is stored via `AsyncStorage` and auto-applied during onboarding. Referrer gets +500 XP, referred user gets 1 week free Platinum premium.
+- **Referral system**: No manual codes — referrals work via deep links and web routes. `afuchat.com/username` (no @) = referral link → stores referrer handle and redirects to signup. `afuchat.com/@username` (with @) = public profile → looks up user by handle and shows their contact profile. Both patterns handled by `app/[handle].tsx` dynamic route (works on web and via native deep links). Referrer handle stored via `AsyncStorage` and auto-applied during onboarding. Referrer gets +500 XP, referred user gets 1 week free Platinum premium.
 
 ## UI Conventions
 

@@ -7,7 +7,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useCallback, useEffect, useState } from "react";
 import { Linking } from "react-native";
@@ -68,6 +68,7 @@ function RootLayoutNav() {
       <Stack.Screen name="settings/blocked" />
       <Stack.Screen name="admin/index" />
       <Stack.Screen name="onboarding/index" options={{ animation: "fade", gestureEnabled: false }} />
+      <Stack.Screen name="[handle]" options={{ animation: "fade" }} />
     </Stack>
   );
 }
@@ -103,21 +104,28 @@ export default function RootLayout() {
   }, [fontsLoaded, fontError]);
 
   useEffect(() => {
-    function extractReferrer(url: string | null) {
+    function handleDeepLink(url: string | null) {
       if (!url) return;
       try {
         const parsed = new URL(url);
-        if (parsed.hostname === "afuchat.com" || parsed.hostname === "www.afuchat.com") {
-          const path = parsed.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
-          if (path && !path.startsWith("@") && !path.includes("/") && /^[a-zA-Z0-9_]+$/.test(path)) {
-            AsyncStorage.setItem("referrer_handle", path.toLowerCase());
+        if (parsed.hostname !== "afuchat.com" && parsed.hostname !== "www.afuchat.com") return;
+        const path = parsed.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
+        if (!path || path.includes("/")) return;
+
+        if (path.startsWith("@")) {
+          const handle = path.slice(1);
+          if (/^[a-zA-Z0-9_]+$/.test(handle)) {
+            router.push({ pathname: "/[handle]", params: { handle: path } });
           }
+        } else if (/^[a-zA-Z0-9_]+$/.test(path)) {
+          AsyncStorage.setItem("referrer_handle", path.toLowerCase());
+          router.push({ pathname: "/[handle]", params: { handle: path } });
         }
       } catch (_) {}
     }
 
-    Linking.getInitialURL().then(extractReferrer);
-    const sub = Linking.addEventListener("url", ({ url }) => extractReferrer(url));
+    Linking.getInitialURL().then(handleDeepLink);
+    const sub = Linking.addEventListener("url", ({ url }) => handleDeepLink(url));
     return () => sub.remove();
   }, []);
 
