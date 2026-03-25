@@ -625,48 +625,30 @@ export default function ChatScreen() {
     if (realChatId) return realChatId;
     if (!user || !contactId) return null;
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) return null;
+    const { data: chatId, error } = await supabase.rpc("get_or_create_direct_chat", {
+      other_user_id: contactId,
+    });
 
-    const domain = process.env.EXPO_PUBLIC_DOMAIN;
-    const apiBase = domain ? `https://${domain}` : "";
-
-    try {
-      const response = await fetch(`${apiBase}/api/chats/create`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ contactId }),
-      });
-
-      if (!response.ok) {
-        const errBody = await response.json().catch(() => ({}));
-        console.error("[getOrCreateChatId] API error:", response.status, errBody);
-        return null;
-      }
-
-      const { chatId } = await response.json();
-      setRealChatId(chatId);
-
-      supabase
-        .channel(`chat:${chatId}`)
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `chat_id=eq.${chatId}` },
-          async (payload) => {
-            const newMsg = payload.new as any;
-            if (newMsg.sender_id === user.id) return;
-            const { data: senderProfile } = await supabase.from("profiles").select("display_name, avatar_url, handle").eq("id", newMsg.sender_id).single();
-            setMessages((prev) => [{ ...newMsg, sender: senderProfile as any, reactions: [], status: undefined }, ...prev]);
-          }
-        )
-        .subscribe();
-
-      return chatId;
-    } catch (err) {
-      console.error("[getOrCreateChatId] Network error:", err);
+    if (error || !chatId) {
+      console.error("[getOrCreateChatId] RPC error:", error?.message);
       return null;
     }
+
+    setRealChatId(chatId);
+
+    supabase
+      .channel(`chat:${chatId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `chat_id=eq.${chatId}` },
+        async (payload) => {
+          const newMsg = payload.new as any;
+          if (newMsg.sender_id === user.id) return;
+          const { data: senderProfile } = await supabase.from("profiles").select("display_name, avatar_url, handle").eq("id", newMsg.sender_id).single();
+          setMessages((prev) => [{ ...newMsg, sender: senderProfile as any, reactions: [], status: undefined }, ...prev]);
+        }
+      )
+      .subscribe();
+
+    return chatId;
   }
 
   async function sendMessage() {
@@ -748,17 +730,20 @@ export default function ChatScreen() {
     const activeChatId = await getOrCreateChatId();
     if (!activeChatId) return;
 
-    const { data: env } = await supabase.from("red_envelopes").insert({
-      chat_id: activeChatId,
-      sender_id: user.id,
-      total_amount: amount,
-      remaining_amount: amount,
-      total_count: count,
-      remaining_count: count,
-      message: envelopeMsg || "Good luck!",
-    }).select("id").single();
+    const { data: envResult, error: envError } = await supabase.rpc("create_red_envelope", {
+      p_total_amount: amount,
+      p_recipient_count: count,
+      p_message: envelopeMsg || "Good luck!",
+      p_envelope_type: "random",
+      p_chat_id: activeChatId,
+    });
 
-    const envId = env?.id || "";
+    if (envError || !envResult?.success) {
+      showAlert("Error", envResult?.message || envError?.message || "Failed to create red envelope.");
+      return;
+    }
+
+    const envId = envResult?.envelope_id || "";
     await supabase.from("messages").insert({
       chat_id: activeChatId,
       sender_id: user.id,

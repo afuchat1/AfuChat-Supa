@@ -23,12 +23,12 @@ type Envelope = {
   id: string;
   sender_id: string;
   total_amount: number;
-  remaining_amount: number;
-  total_count: number;
-  remaining_count: number;
+  recipient_count: number;
+  claimed_count: number;
   message: string;
-  split_type: string;
+  envelope_type: string;
   created_at: string;
+  is_expired: boolean;
   sender: { display_name: string; avatar_url: string | null };
 };
 
@@ -54,7 +54,7 @@ export default function RedEnvelopeScreen() {
     if (!id || !user) return;
     const { data } = await supabase
       .from("red_envelopes")
-      .select("id, sender_id, total_amount, remaining_amount, total_count, remaining_count, message, split_type, created_at, profiles!red_envelopes_sender_id_fkey(display_name, avatar_url)")
+      .select("id, sender_id, total_amount, recipient_count, claimed_count, message, envelope_type, created_at, is_expired, profiles!red_envelopes_sender_id_fkey(display_name, avatar_url)")
       .eq("id", id)
       .single();
 
@@ -65,7 +65,7 @@ export default function RedEnvelopeScreen() {
     const { data: claimData } = await supabase
       .from("red_envelope_claims")
       .select("id, amount, claimed_at, profiles!red_envelope_claims_claimer_id_fkey(display_name, avatar_url)")
-      .eq("envelope_id", id)
+      .eq("red_envelope_id", id)
       .order("claimed_at", { ascending: true });
 
     if (claimData) {
@@ -75,7 +75,7 @@ export default function RedEnvelopeScreen() {
     const { data: myClaimCheck } = await supabase
       .from("red_envelope_claims")
       .select("amount")
-      .eq("envelope_id", id)
+      .eq("red_envelope_id", id)
       .eq("claimer_id", user.id)
       .maybeSingle();
     if (myClaimCheck) setMyClaim(myClaimCheck.amount);
@@ -87,42 +87,27 @@ export default function RedEnvelopeScreen() {
 
   async function claim() {
     if (!user || !envelope || claiming) return;
-    setClaiming(true);
-
-    if (envelope.remaining_count <= 0) { showAlert("Gone!", "All envelopes have been claimed."); setClaiming(false); return; }
-
-    let amount: number;
-    if (envelope.split_type === "equal") {
-      amount = Math.floor(envelope.total_amount / envelope.total_count);
-    } else {
-      if (envelope.remaining_count === 1) {
-        amount = envelope.remaining_amount;
-      } else {
-        const max = Math.floor(envelope.remaining_amount / envelope.remaining_count * 2);
-        amount = Math.max(1, Math.floor(Math.random() * max));
-      }
+    const remainingCount = envelope.recipient_count - envelope.claimed_count;
+    if (remainingCount <= 0 || envelope.is_expired) {
+      showAlert("Gone!", "All envelopes have been claimed.");
+      return;
     }
 
-    const { error } = await supabase.from("red_envelope_claims").insert({
-      envelope_id: envelope.id,
-      claimer_id: user.id,
-      amount,
+    setClaiming(true);
+    const { data, error } = await supabase.rpc("claim_red_envelope", {
+      p_envelope_id: envelope.id,
     });
 
-    if (error) {
-      showAlert("Error", error.message);
+    if (error || !data?.success) {
+      showAlert("Error", data?.message || error?.message || "Failed to claim red envelope.");
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setMyClaim(amount);
-      await supabase.from("red_envelopes").update({
-        remaining_amount: envelope.remaining_amount - amount,
-        remaining_count: envelope.remaining_count - 1,
-      }).eq("id", envelope.id);
+      setMyClaim(data.amount);
       if (envelope.sender_id !== user.id) {
         notifyGiftReceived({
           recipientId: envelope.sender_id,
           senderName: "Someone",
-          giftName: `opened your red envelope (${amount} Nexa)`,
+          giftName: `opened your red envelope (${data.amount} Nexa)`,
         });
       }
       load();
@@ -132,6 +117,10 @@ export default function RedEnvelopeScreen() {
 
   if (loading) return <View style={[styles.center, { backgroundColor: colors.background }]}><ActivityIndicator color="#FF3B30" /></View>;
   if (!envelope) return <View style={[styles.center, { backgroundColor: colors.background }]}><Text style={{ color: colors.text }}>Envelope not found</Text></View>;
+
+  const remainingCount = envelope.recipient_count - envelope.claimed_count;
+  const claimedTotal = claims.reduce((sum, c) => sum + c.amount, 0);
+  const remainingAmount = envelope.total_amount - claimedTotal;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
@@ -151,7 +140,7 @@ export default function RedEnvelopeScreen() {
             <Text style={styles.claimedAmount}>{myClaim} Nexa</Text>
             <Text style={styles.claimedLabel}>You received</Text>
           </View>
-        ) : envelope.remaining_count > 0 ? (
+        ) : remainingCount > 0 && !envelope.is_expired ? (
           <TouchableOpacity style={styles.claimBtn} onPress={claim} disabled={claiming}>
             {claiming ? <ActivityIndicator color="#FF3B30" /> : <Text style={styles.claimBtnText}>Open</Text>}
           </TouchableOpacity>
@@ -160,7 +149,7 @@ export default function RedEnvelopeScreen() {
         )}
 
         <Text style={styles.statsText}>
-          {envelope.total_count - envelope.remaining_count}/{envelope.total_count} claimed · {envelope.remaining_amount} Nexa remaining
+          {envelope.claimed_count}/{envelope.recipient_count} claimed · {remainingAmount} Nexa remaining
         </Text>
       </View>
 
