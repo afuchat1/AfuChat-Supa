@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { router, useFocusEffect } from "expo-router";
+import { Tabs, router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -56,6 +56,7 @@ type ChatItem = {
   is_pinned: boolean;
   is_archived: boolean;
   avatar_url: string | null;
+  unread_count: number;
 };
 
 function formatTime(iso: string): string {
@@ -74,6 +75,7 @@ function ChatRow({ item }: { item: ChatItem }) {
   const { colors } = useTheme();
   const displayName = item.is_group || item.is_channel ? item.name : item.other_display_name;
   const avatar = item.is_group || item.is_channel ? item.avatar_url : item.other_avatar;
+  const hasUnread = item.unread_count > 0;
 
   return (
     <TouchableOpacity
@@ -91,20 +93,37 @@ function ChatRow({ item }: { item: ChatItem }) {
             {item.is_pinned && (
               <Ionicons name="pin" size={12} color={colors.textMuted} style={{ marginRight: 4 }} />
             )}
-            <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
+            <Text
+              style={[styles.name, { color: colors.text, fontFamily: hasUnread ? "Inter_700Bold" : "Inter_600SemiBold" }]}
+              numberOfLines={1}
+            >
               {displayName || "Chat"}
             </Text>
             {item.is_channel && (
               <Ionicons name="megaphone" size={12} color={Colors.brand} style={{ marginLeft: 4 }} />
             )}
           </View>
-          <Text style={[styles.time, { color: colors.textMuted }]}>
-            {item.last_message_at ? formatTime(item.last_message_at) : ""}
-          </Text>
+          <View style={styles.rowTopRight}>
+            <Text style={[styles.time, { color: hasUnread ? Colors.brand : colors.textMuted }]}>
+              {item.last_message_at ? formatTime(item.last_message_at) : ""}
+            </Text>
+          </View>
         </View>
-        <Text style={[styles.preview, { color: colors.textSecondary }]} numberOfLines={1}>
-          {item.last_message || "No messages yet"}
-        </Text>
+        <View style={styles.rowBottom}>
+          <Text
+            style={[styles.preview, { color: hasUnread ? colors.text : colors.textSecondary, fontFamily: hasUnread ? "Inter_500Medium" : "Inter_400Regular", flex: 1 }]}
+            numberOfLines={1}
+          >
+            {item.last_message || "No messages yet"}
+          </Text>
+          {hasUnread && (
+            <View style={[styles.unreadBadge, { backgroundColor: Colors.brand }]}>
+              <Text style={styles.unreadBadgeText}>
+                {item.unread_count > 99 ? "99+" : item.unread_count}
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -484,8 +503,40 @@ export default function ChatsScreen() {
           lastMessageAt: msgs?.[0]?.sent_at || c.updated_at,
         };
       });
-      const lastMsgs = await Promise.all(lastMsgPromises);
+
+      const unreadMsgsPromise = supabase
+        .from("messages")
+        .select("id, chat_id")
+        .in("chat_id", chatIds)
+        .neq("sender_id", user.id)
+        .order("sent_at", { ascending: false })
+        .limit(500);
+
+      const [lastMsgs, { data: unreadMsgRows }] = await Promise.all([
+        Promise.all(lastMsgPromises),
+        unreadMsgsPromise,
+      ]);
+
       const lastMsgMap = Object.fromEntries(lastMsgs.map((m) => [m.chatId, m]));
+
+      const unreadMsgIds = (unreadMsgRows || []).map((m: any) => m.id);
+      let readSet = new Set<string>();
+      if (unreadMsgIds.length > 0) {
+        const { data: readRows } = await supabase
+          .from("message_status")
+          .select("message_id")
+          .eq("user_id", user.id)
+          .eq("status", "read")
+          .in("message_id", unreadMsgIds);
+        readSet = new Set((readRows || []).map((r: any) => r.message_id));
+      }
+
+      const unreadMap: Record<string, number> = {};
+      for (const msg of (unreadMsgRows || [])) {
+        if (!readSet.has(msg.id)) {
+          unreadMap[msg.chat_id] = (unreadMap[msg.chat_id] || 0) + 1;
+        }
+      }
 
       const items: ChatItem[] = chatRows.map((c: any) => {
         const others = (c.chat_members || []).filter((m: any) => m.user_id !== user.id);
@@ -504,6 +555,7 @@ export default function ChatsScreen() {
           is_pinned: !!c.is_pinned,
           is_archived: !!c.is_archived,
           avatar_url: c.avatar_url,
+          unread_count: unreadMap[c.id] || 0,
         };
       });
 
@@ -563,8 +615,14 @@ export default function ChatsScreen() {
       })
     : chats;
 
+  const totalUnread = chats.reduce((sum, c) => sum + c.unread_count, 0);
+
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
+      <Tabs.Screen
+        name="index"
+        options={{ tabBarBadge: totalUnread > 0 ? (totalUnread > 99 ? "99+" : totalUnread) : undefined }}
+      />
       <View
         style={[
           styles.header,
@@ -702,8 +760,19 @@ const styles = StyleSheet.create({
   },
   nameRow: { flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 },
   name: { fontSize: 16, fontFamily: "Inter_600SemiBold", flexShrink: 1 },
+  rowTopRight: { alignItems: "flex-end" },
   time: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  rowBottom: { flexDirection: "row", alignItems: "center", gap: 6 },
   preview: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  unreadBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+  },
+  unreadBadgeText: { color: "#fff", fontSize: 11, fontFamily: "Inter_700Bold", lineHeight: 14 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   emptySubtitle: { fontSize: 14, fontFamily: "Inter_400Regular" },
