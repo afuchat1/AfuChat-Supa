@@ -38,18 +38,6 @@ export function showAlert(
   message?: string,
   buttons?: AlertButton[],
 ) {
-  if (Platform.OS === "android") {
-    const nativeButtons = (buttons && buttons.length > 0)
-      ? buttons.map((b) => ({
-          text: b.text,
-          style: b.style,
-          onPress: b.onPress,
-        }))
-      : [{ text: "OK" }];
-    Alert.alert(title || "", message || "", nativeButtons, { cancelable: true });
-    return;
-  }
-
   if (_listener) {
     _listener({ visible: true, title, message, buttons });
     return;
@@ -60,13 +48,14 @@ export function showAlert(
     return;
   }
 
-  Alert.alert(
-    title || "",
-    message || "",
-    buttons && buttons.length > 0
-      ? buttons.map((b) => ({ text: b.text, style: b.style, onPress: b.onPress }))
-      : [{ text: "OK" }],
-  );
+  const nativeButtons = (buttons && buttons.length > 0)
+    ? buttons.map((b) => ({
+        text: b.text,
+        style: b.style,
+        onPress: b.onPress,
+      }))
+    : [{ text: "OK" }];
+  Alert.alert(title || "", message || "", nativeButtons, { cancelable: true });
 }
 
 function _webFallback(
