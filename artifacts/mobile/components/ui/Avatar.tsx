@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Image, StyleSheet, Text, View, ViewStyle } from "react-native";
 import Colors from "@/constants/colors";
 
@@ -31,14 +31,20 @@ function hashColor(name?: string): string {
 export function Avatar({ uri, name, size = 44, style, online }: Props) {
   const initials = getInitials(name);
   const bgColor = hashColor(name);
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => { setImgError(false); }, [uri]);
+
+  const showImage = !!uri && !imgError;
 
   return (
     <View style={[{ width: size, height: size }, style]}>
-      {uri ? (
+      {showImage ? (
         <Image
           source={{ uri }}
           style={{ width: size, height: size, borderRadius: size / 2 }}
           resizeMode="cover"
+          onError={() => setImgError(true)}
         />
       ) : (
         <View

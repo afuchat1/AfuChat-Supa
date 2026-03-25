@@ -20,6 +20,7 @@ import Colors from "@/constants/colors";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { uploadToStorage } from "@/lib/mediaUpload";
 import { showAlert } from "@/lib/alert";
 
 export default function CreateChannelScreen() {
@@ -64,17 +65,10 @@ export default function CreateChannelScreen() {
     let avatarUrl: string | null = null;
 
     if (avatarUri) {
-      const ext = avatarUri.split(".").pop() ?? "jpg";
+      const ext = avatarUri.split(".").pop()?.split("?")[0]?.toLowerCase() ?? "jpg";
       const fileName = `channel-${user.id}-${Date.now()}.${ext}`;
-      const formData = new FormData();
-      formData.append("file", { uri: avatarUri, name: fileName, type: `image/${ext}` } as any);
-      const { data: uploadData } = await supabase.storage
-        .from("avatars")
-        .upload(fileName, formData as any, { upsert: true });
-      if (uploadData) {
-        const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(uploadData.path);
-        avatarUrl = urlData.publicUrl;
-      }
+      const { publicUrl } = await uploadToStorage("avatars", fileName, avatarUri, `image/${ext === "png" ? "png" : "jpeg"}`);
+      avatarUrl = publicUrl;
     }
 
     const { data: chat, error } = await supabase

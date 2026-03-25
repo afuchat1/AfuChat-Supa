@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "@/lib/supabase";
+import { uploadAvatar as uploadAvatarMedia } from "@/lib/mediaUpload";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
@@ -56,25 +57,11 @@ export default function EditProfileScreen() {
 
   async function uploadAvatar(): Promise<string | null> {
     if (!avatarUri || !profile?.id) return null;
-    try {
-      const ext = avatarUri.split(".").pop()?.toLowerCase() || "jpg";
-      const fileName = `${profile.id}/avatar_${Date.now()}.${ext}`;
-      const response = await fetch(avatarUri);
-      const blob = await response.blob();
-      const arrayBuffer = await new Response(blob).arrayBuffer();
-      const { error } = await supabase.storage
-        .from("avatars")
-        .upload(fileName, arrayBuffer, {
-          contentType: `image/${ext === "png" ? "png" : "jpeg"}`,
-          upsert: true,
-        });
-      if (error) throw error;
-      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(fileName);
-      return urlData.publicUrl;
-    } catch (e: any) {
-      showAlert("Upload failed", e.message || "Could not upload avatar. Please try again.");
-      return null;
+    const url = await uploadAvatarMedia(profile.id, avatarUri);
+    if (!url) {
+      showAlert("Upload failed", "Could not upload avatar. Please try again.");
     }
+    return url;
   }
 
   async function save() {

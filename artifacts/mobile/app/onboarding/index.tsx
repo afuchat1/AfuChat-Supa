@@ -22,6 +22,7 @@ import * as Haptics from "@/lib/haptics";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { supabase } from "@/lib/supabase";
+import { uploadAvatar as uploadAvatarMedia } from "@/lib/mediaUpload";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
@@ -200,25 +201,7 @@ export default function OnboardingScreen() {
 
   async function uploadAvatar(): Promise<string | null> {
     if (!avatarUri || !userId) return null;
-    try {
-      const ext = avatarUri.split(".").pop()?.toLowerCase() || "jpg";
-      const fileName = `${userId}/avatar_${Date.now()}.${ext}`;
-      const response = await fetch(avatarUri);
-      const blob = await response.blob();
-      const arrayBuffer = await new Response(blob).arrayBuffer();
-      const { error } = await supabase.storage
-        .from("avatars")
-        .upload(fileName, arrayBuffer, {
-          contentType: `image/${ext === "png" ? "png" : "jpeg"}`,
-          upsert: true,
-        });
-      if (error) throw error;
-      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(fileName);
-      return urlData.publicUrl;
-    } catch (e: any) {
-      console.warn("Avatar upload failed:", e.message);
-      return null;
-    }
+    return uploadAvatarMedia(userId, avatarUri);
   }
 
   async function handleComplete() {

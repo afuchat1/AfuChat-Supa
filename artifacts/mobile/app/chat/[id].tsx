@@ -43,6 +43,7 @@ import {
   isOnline,
   onConnectivityChange,
 } from "@/lib/offlineStore";
+import { uploadChatMedia } from "@/lib/mediaUpload";
 import { syncPendingMessages } from "@/lib/offlineSync";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 
@@ -967,51 +968,19 @@ export default function ChatScreen() {
     if (!activeChatId) { setSending(false); return; }
 
     try {
-      const ext = attachmentPreview.uri.split(".").pop()?.split("?")[0] || "file";
-      const fileName = attachmentPreview.name || `${Date.now()}.${ext}`;
-      const filePath = `chat-attachments/${activeChatId}/${user.id}/${fileName}`;
-
-      let uploadError: any = null;
-
-      if (Platform.OS === "web") {
-        const response = await fetch(attachmentPreview.uri);
-        const blob = await response.blob();
-        const result = await supabase.storage.from("chat-media").upload(filePath, blob, { upsert: true });
-        uploadError = result.error;
-      } else {
-        const mimeTypes: Record<string, string> = {
-          jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif",
-          mp4: "video/mp4", mov: "video/quicktime", pdf: "application/pdf",
-          doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        };
-        const mime = mimeTypes[ext.toLowerCase()] || "application/octet-stream";
-        const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-        const session = (await supabase.auth.getSession()).data.session;
-        const storageUrl = `${supabaseUrl}/storage/v1/object/chat-media/${filePath}`;
-        const uploadResult = await FileSystem.uploadAsync(
-          storageUrl,
-          attachmentPreview.uri,
-          {
-            httpMethod: "POST",
-            uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-            headers: {
-              "Content-Type": mime,
-              "Authorization": `Bearer ${session?.access_token || ""}`,
-              "apikey": process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "",
-              "x-upsert": "true",
-            },
-          }
-        );
-        uploadError = uploadResult.status >= 400 ? { message: `Upload failed: ${uploadResult.status}` } : null;
-      }
-
       const label = attachmentPreview.type === "image" ? "📷 Photo" : attachmentPreview.type === "video" ? "🎥 Video" : `📎 ${attachmentPreview.name || "File"}`;
 
-      if (uploadError) {
+      const { publicUrl, error: uploadErr } = await uploadChatMedia(
+        "chat-media",
+        activeChatId,
+        user.id,
+        attachmentPreview.uri,
+        attachmentPreview.name || undefined,
+      );
+
+      if (uploadErr || !publicUrl) {
         await supabase.from("messages").insert({ chat_id: activeChatId, sender_id: user.id, encrypted_content: label });
       } else {
-        const { data: urlData } = supabase.storage.from("chat-media").getPublicUrl(filePath);
-        const publicUrl = urlData?.publicUrl || "";
         await supabase.from("messages").insert({
           chat_id: activeChatId,
           sender_id: user.id,

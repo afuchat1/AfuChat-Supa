@@ -29,13 +29,6 @@ type SectionData = {
 
 const SECTIONS: SectionData[] = [
   {
-    title: "Financial Services",
-    items: [
-      { icon: "swap-horizontal", label: "Money\nTransfer", color: "#00C2CB", route: "/mini-programs/transfer" },
-      { icon: "wallet-outline", label: "Wallet", color: "#00C2CB", route: "/wallet" },
-    ],
-  },
-  {
     title: "Daily Services",
     items: [
       { icon: "phone-portrait-outline", label: "Mobile\nTop Up", color: "#007AFF", route: "/mini-programs/airtime" },

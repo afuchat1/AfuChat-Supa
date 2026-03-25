@@ -94,7 +94,8 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 
 ### Key Files
 
-- `lib/supabase.ts` — Supabase client config
+- `lib/supabase.ts` — Supabase client config (exports `supabaseUrl` and `supabaseAnonKey` constants)
+- `lib/mediaUpload.ts` — Centralized media upload utility. Handles web (fetch→blob) and native (FileSystem.uploadAsync) with proper auth headers. Exports `uploadToStorage()`, `uploadAvatar()`, `uploadChatMedia()`. Adds cache-busting `?t=` to URLs. Used by profile/edit, onboarding, chat, and channel/create.
 - `context/AuthContext.tsx` — Auth provider with profile + subscription loading. Premium status from `user_subscriptions` table.
 - `context/ThemeContext.tsx` — Theme provider with explicit light/dark/system toggle, persisted to AsyncStorage
 - `constants/colors.ts` — Brand colors + light/dark theme + gold badge color
