@@ -66,7 +66,14 @@
       ]
     },
     "web": {
-      "favicon": "./assets/images/logo.png"
+      "favicon": "./assets/images/logo.png",
+      "bundler": "metro",
+      "output": "single",
+      "name": "AfuChat",
+      "shortName": "AfuChat",
+      "description": "Connect, Chat, Discover. Your all-in-one social platform.",
+      "themeColor": "#00C2CB",
+      "backgroundColor": "#00C2CB"
     },
     "plugins": [
       [

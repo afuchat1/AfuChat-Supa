@@ -1,0 +1,22 @@
+{
+  "name": "AfuChat",
+  "short_name": "AfuChat",
+  "description": "Connect, Chat, Discover. Your all-in-one social platform.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#00C2CB",
+  "theme_color": "#00C2CB",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

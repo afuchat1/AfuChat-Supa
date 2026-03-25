@@ -22,7 +22,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 artifacts-monorepo/
 ├── artifacts/              # Deployable applications
 │   ├── api-server/         # Express API server
-│   ├── mobile/             # AfuChat Expo React Native app
+│   ├── mobile/             # AfuChat Expo React Native + Web app
 │   └── mockup-sandbox/     # Component preview server
 ├── lib/                    # Shared libraries
 │   ├── api-spec/           # OpenAPI spec + Orval codegen config
@@ -141,6 +141,27 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `lib/notifyUser.ts` — Notification trigger helpers (messages, follows, likes, replies, gifts) via authenticated Supabase Edge Function calls
 - `lib/share.ts` — Share utility (sharePost, shareProfile, shareStory, shareRedEnvelope) using React Native Share API. Generates afuchat.com deep links. Used across discover feed, post detail, my-posts, contact profile, stories, and red envelopes.
 - `components/PushNotificationManager.tsx` — Null component wired into root layout for notification setup
+
+## Web & Desktop Deployment (Vercel)
+
+The AfuChat app is cross-platform — same codebase runs on mobile (iOS/Android via Expo), web (afuchat.com), and desktop (desktop.afuchat.com).
+
+### Web Build
+- `npx expo export --platform web --output-dir dist` — builds static web assets to `dist/`
+- `vercel.json` — Vercel deployment config with SPA rewrites and cache headers
+- `app/+html.tsx` — Custom HTML document with meta tags, SEO, PWA support, and responsive desktop styles
+- `public/manifest.json` — PWA manifest for installable web app
+- `public/logo.png` — App icon for PWA
+- Web output uses `output: "single"` mode (SPA with client-side routing)
+
+### Platform Guards
+- Push notifications: Only register on native (`Platform.OS !== 'web'`)
+- Haptics: Safe-fail on web
+- SF Symbols: Falls back to Ionicons on web
+- Blur effects: Falls back to solid colors on web
+- Keyboard handling: `KeyboardAwareScrollViewCompat` switches to standard `ScrollView` on web
+- Offline detection: Uses `navigator.onLine` + `window.addEventListener` on web, NetInfo on native
+- Alerts: Web fallback uses `window.alert`/`window.confirm`/`window.prompt`
 
 ## Auth & Onboarding Flow
 
