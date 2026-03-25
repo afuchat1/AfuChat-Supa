@@ -150,24 +150,28 @@ export default function GiftMarketplaceScreen() {
     setBuying(true);
 
     try {
-      const { data: freshBuyer } = await supabase.from("profiles").select("acoin").eq("id", user.id).single();
-      if (!freshBuyer || (freshBuyer.acoin || 0) < totalCost) {
-        showAlert("Insufficient ACoin", "Your balance has changed. Please try again.");
-        setBuying(false);
-        return;
-      }
-
-      const { data: listing } = await supabase
+      const { data: claimed, error: claimErr } = await supabase
         .from("gift_marketplace")
-        .select("status, seller_id, user_gift_id")
+        .update({ status: "sold", buyer_id: user.id, sold_at: new Date().toISOString() })
         .eq("id", selectedListing.id)
-        .single();
+        .eq("status", "listed")
+        .select("id, seller_id, user_gift_id");
 
-      if (!listing || listing.status !== "listed") {
+      if (claimErr || !claimed || claimed.length === 0) {
         showAlert("Unavailable", "This gift has already been sold or removed.");
         setBuying(false);
         setSelectedListing(null);
         loadListings();
+        return;
+      }
+
+      const listing = claimed[0];
+
+      const { data: freshBuyer } = await supabase.from("profiles").select("acoin").eq("id", user.id).single();
+      if (!freshBuyer || (freshBuyer.acoin || 0) < totalCost) {
+        await supabase.from("gift_marketplace").update({ status: "listed", buyer_id: null, sold_at: null }).eq("id", selectedListing.id);
+        showAlert("Insufficient ACoin", "Your balance has changed. Listing restored.");
+        setBuying(false);
         return;
       }
 
@@ -180,7 +184,8 @@ export default function GiftMarketplaceScreen() {
         .eq("id", user.id);
 
       if (buyerErr) {
-        showAlert("Error", "Could not deduct ACoin. Try again.");
+        await supabase.from("gift_marketplace").update({ status: "listed", buyer_id: null, sold_at: null }).eq("id", selectedListing.id);
+        showAlert("Error", "Could not deduct ACoin. Listing restored.");
         setBuying(false);
         return;
       }
@@ -195,11 +200,6 @@ export default function GiftMarketplaceScreen() {
         .from("user_gifts")
         .update({ user_id: user.id })
         .eq("id", listing.user_gift_id);
-
-      await supabase
-        .from("gift_marketplace")
-        .update({ status: "sold", buyer_id: user.id, sold_at: new Date().toISOString() })
-        .eq("id", selectedListing.id);
 
       await supabase.from("acoin_transactions").insert([
         {
@@ -369,9 +369,18 @@ export default function GiftMarketplaceScreen() {
               <TouchableOpacity
                 style={[styles.cancelListingBtn, { borderColor: "#FF3B30" }]}
                 onPress={async () => {
-                  await supabase.from("gift_marketplace").update({ status: "cancelled" }).eq("id", selectedListing.id);
-                  Haptics.selectionAsync();
-                  showAlert("Cancelled", "Listing removed from marketplace.");
+                  const { data: cancelled } = await supabase
+                    .from("gift_marketplace")
+                    .update({ status: "cancelled" })
+                    .eq("id", selectedListing.id)
+                    .eq("status", "listed")
+                    .select("id");
+                  if (!cancelled || cancelled.length === 0) {
+                    showAlert("Error", "This listing has already been sold or removed.");
+                  } else {
+                    Haptics.selectionAsync();
+                    showAlert("Cancelled", "Listing removed from marketplace.");
+                  }
                   setSelectedListing(null);
                   loadListings();
                 }}

@@ -162,8 +162,42 @@ export default function GiftsScreen() {
     }
 
     try {
+      const { data: activeListing } = await supabase
+        .from("gift_marketplace")
+        .select("id")
+        .eq("user_gift_id", selectedGift.id)
+        .eq("status", "listed")
+        .maybeSingle();
+
+      if (activeListing) {
+        showAlert("Listed", "This gift is listed on the marketplace. Cancel the listing first.");
+        setConverting(false);
+        return;
+      }
+
+      const { data: deleted, error: deleteErr } = await supabase
+        .from("user_gifts")
+        .delete()
+        .eq("id", selectedGift.id)
+        .eq("user_id", user.id)
+        .select("id");
+
+      if (deleteErr || !deleted || deleted.length === 0) {
+        showAlert("Error", "Gift not found or already converted.");
+        setConverting(false);
+        setSelectedGift(null);
+        setConfirmConvert(false);
+        loadOwned();
+        return;
+      }
+
       const { data: freshProfile } = await supabase.from("profiles").select("acoin").eq("id", user.id).single();
-      if (!freshProfile) { showAlert("Error", "Could not load your balance."); setConverting(false); return; }
+      if (!freshProfile) {
+        await supabase.from("user_gifts").insert({ id: selectedGift.id, user_id: user.id, gift_id: selectedGift.gift.id, is_pinned: selectedGift.is_pinned });
+        showAlert("Error", "Could not load your balance. Gift restored.");
+        setConverting(false);
+        return;
+      }
 
       const { error: updateErr } = await supabase
         .from("profiles")
@@ -171,15 +205,8 @@ export default function GiftsScreen() {
         .eq("id", user.id);
 
       if (updateErr) {
-        showAlert("Error", "Could not credit ACoin. Please try again.");
-        setConverting(false);
-        return;
-      }
-
-      const { error: deleteErr } = await supabase.from("user_gifts").delete().eq("id", selectedGift.id);
-      if (deleteErr) {
-        await supabase.from("profiles").update({ acoin: freshProfile.acoin || 0 }).eq("id", user.id);
-        showAlert("Error", "Could not remove gift. Conversion rolled back.");
+        await supabase.from("user_gifts").insert({ id: selectedGift.id, user_id: user.id, gift_id: selectedGift.gift.id, is_pinned: selectedGift.is_pinned });
+        showAlert("Error", "Could not credit ACoin. Gift restored.");
         setConverting(false);
         return;
       }
@@ -208,29 +235,43 @@ export default function GiftsScreen() {
     setSending(true);
 
     try {
+      const { data: activeListing } = await supabase
+        .from("gift_marketplace")
+        .select("id")
+        .eq("user_gift_id", sendGift.id)
+        .eq("status", "listed")
+        .maybeSingle();
+
+      if (activeListing) {
+        showAlert("Listed", "This gift is listed on the marketplace. Cancel the listing first.");
+        setSending(false);
+        return;
+      }
+
       const { data: recipient } = await supabase.from("profiles").select("id, display_name").eq("handle", sendHandle.trim().toLowerCase()).single();
       if (!recipient) { showAlert("Not found", "User not found."); setSending(false); return; }
       if (recipient.id === user.id) { showAlert("Oops", "You can't send a gift to yourself."); setSending(false); return; }
 
-      const { error: insertErr } = await supabase.from("user_gifts").insert({
+      const { data: removed, error: deleteErr } = await supabase
+        .from("user_gifts")
+        .delete()
+        .eq("id", sendGift.id)
+        .eq("user_id", user.id)
+        .select("id");
+
+      if (deleteErr || !removed || removed.length === 0) {
+        showAlert("Error", "Gift not found or already transferred.");
+        setSending(false);
+        setSendGift(null);
+        loadOwned();
+        return;
+      }
+
+      await supabase.from("user_gifts").insert({
         user_id: recipient.id,
         gift_id: sendGift.gift.id,
         is_pinned: false,
       });
-
-      if (insertErr) {
-        showAlert("Error", "Could not deliver gift. Please try again.");
-        setSending(false);
-        return;
-      }
-
-      const { error: deleteErr } = await supabase.from("user_gifts").delete().eq("id", sendGift.id);
-      if (deleteErr) {
-        await supabase.from("user_gifts").delete().eq("user_id", recipient.id).eq("gift_id", sendGift.gift.id).order("acquired_at", { ascending: false }).limit(1);
-        showAlert("Error", "Could not complete transfer. Please try again.");
-        setSending(false);
-        return;
-      }
 
       await supabase.from("gift_transactions").insert({
         gift_id: sendGift.gift.id,
