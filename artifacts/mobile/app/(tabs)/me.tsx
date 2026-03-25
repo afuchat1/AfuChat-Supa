@@ -16,6 +16,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { Separator } from "@/components/ui/Separator";
+import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import Colors from "@/constants/colors";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 
@@ -103,12 +104,7 @@ export default function MeScreen() {
             <Text style={[styles.profileName, { color: colors.text }]}>
               {profile?.display_name || "User"}
             </Text>
-            {profile?.is_organization_verified && (
-              <Ionicons name="checkmark-circle" size={18} color={Colors.gold} style={{ marginLeft: 4 }} />
-            )}
-            {!profile?.is_organization_verified && profile?.is_verified && (
-              <Ionicons name="checkmark-circle" size={18} color={Colors.brand} style={{ marginLeft: 4 }} />
-            )}
+            <VerifiedBadge isVerified={profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={18} />
             {isPremium && (
               <View style={styles.premiumStarBadge}>
                 <Ionicons name="diamond" size={12} color="#fff" />

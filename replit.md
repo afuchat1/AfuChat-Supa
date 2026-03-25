@@ -125,7 +125,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `app/red-envelope/[id].tsx` — Red envelope claim and status
 - `app/games/index.tsx` — Game challenges and scores
 - `app/mini-programs/index.tsx` — Mini programs discovery
-- `app/ai/index.tsx` — AfuAi chat (powered by Lovable gateway via Supabase Edge Function `ai-chat`)
+- `app/ai/index.tsx` — AfuAi chat with full user context (balance, stats, gifts, premium status), animated thinking dots indicator, actionable navigation buttons from AI responses (allowlisted routes only), platform-aware system prompt. Powered by Supabase Edge Function `ai-chat`.
 - `app/admin/index.tsx` — Admin Dashboard (admin-only, accessible from Me tab). Features: platform overview stats, user management (verify toggle, balance adjust), content moderation (block/delete posts), subscription plans view, currency settings, moderation reports. Only visible to users with `is_admin=true` in profiles.
 - `app/my-posts/index.tsx` — Dedicated My Posts screen (user's own posts with delete)
 - `app/premium.tsx` — Premium subscription with plans from `subscription_plans` table, ACoin payment, free features list, active subscription display

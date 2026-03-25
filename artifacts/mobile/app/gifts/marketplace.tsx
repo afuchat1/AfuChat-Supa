@@ -19,6 +19,7 @@ import { MarketplaceCardSkeleton } from "@/components/ui/Skeleton";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
@@ -32,6 +33,8 @@ type MarketplaceListing = {
   listed_at: string;
   seller_name: string;
   seller_avatar: string | null;
+  seller_is_verified: boolean;
+  seller_is_organization_verified: boolean;
   gift: {
     id: string;
     name: string;
@@ -98,17 +101,17 @@ export default function GiftMarketplaceScreen() {
 
     if (data) {
       const sellerIds = [...new Set(data.map((l: any) => l.seller_id))];
-      let sellerMap: Record<string, { name: string; avatar: string | null }> = {};
+      let sellerMap: Record<string, { name: string; avatar: string | null; is_verified: boolean; is_organization_verified: boolean }> = {};
 
       if (sellerIds.length > 0) {
         const { data: sellers } = await supabase
           .from("profiles")
-          .select("id, display_name, avatar_url")
+          .select("id, display_name, avatar_url, is_verified, is_organization_verified")
           .in("id", sellerIds);
 
         if (sellers) {
           sellers.forEach((s: any) => {
-            sellerMap[s.id] = { name: s.display_name || "Anonymous", avatar: s.avatar_url };
+            sellerMap[s.id] = { name: s.display_name || "Anonymous", avatar: s.avatar_url, is_verified: !!s.is_verified, is_organization_verified: !!s.is_organization_verified };
           });
         }
       }
@@ -120,6 +123,8 @@ export default function GiftMarketplaceScreen() {
           gift: l.gifts,
           seller_name: sellerMap[l.seller_id]?.name || "Anonymous",
           seller_avatar: sellerMap[l.seller_id]?.avatar || null,
+          seller_is_verified: sellerMap[l.seller_id]?.is_verified || false,
+          seller_is_organization_verified: sellerMap[l.seller_id]?.is_organization_verified || false,
         }));
 
       if (filterRarity !== "all") {
@@ -275,7 +280,10 @@ export default function GiftMarketplaceScreen() {
           <Ionicons name="diamond" size={14} color={Colors.gold} />
           <Text style={styles.priceText}>{item.asking_price}</Text>
         </View>
-        <Text style={[styles.sellerText, { color: colors.textMuted }]} numberOfLines={1}>by {item.seller_name}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 2, justifyContent: "center" }}>
+          <Text style={[styles.sellerText, { color: colors.textMuted }]} numberOfLines={1}>by {item.seller_name}</Text>
+          <VerifiedBadge isVerified={item.seller_is_verified} isOrganizationVerified={item.seller_is_organization_verified} size={12} />
+        </View>
       </TouchableOpacity>
     );
   }
@@ -370,9 +378,11 @@ export default function GiftMarketplaceScreen() {
 
             <View style={[styles.sellerInfoRow, { backgroundColor: colors.inputBg }]}>
               <Ionicons name="person-circle-outline" size={18} color={colors.textMuted} />
-              <Text style={[styles.sellerInfoText, { color: colors.textSecondary }]}>
-                Listed by <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.text }}>{selectedListing?.seller_name}</Text>
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flex: 1 }}>
+                <Text style={[styles.sellerInfoText, { color: colors.textSecondary }]}>Listed by </Text>
+                <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.text }}>{selectedListing?.seller_name}</Text>
+                {selectedListing && <VerifiedBadge isVerified={selectedListing.seller_is_verified} isOrganizationVerified={selectedListing.seller_is_organization_verified} size={14} />}
+              </View>
               <Text style={[styles.listedDate, { color: colors.textMuted }]}>
                 {selectedListing ? new Date(selectedListing.listed_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}
               </Text>

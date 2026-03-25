@@ -19,6 +19,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { RichText } from "@/components/ui/RichText";
+import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
@@ -130,7 +131,10 @@ export default function MyPostsScreen() {
                 <View style={styles.cardHeader}>
                   <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={40} />
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.cardName, { color: colors.text }]}>{profile?.display_name || "You"}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <Text style={[styles.cardName, { color: colors.text }]}>{profile?.display_name || "You"}</Text>
+                      <VerifiedBadge isVerified={profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={14} />
+                    </View>
                     <Text style={[styles.cardTime, { color: colors.textMuted }]}>{formatRelative(item.created_at)}</Text>
                   </View>
                   <TouchableOpacity onPress={() => deletePost(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
