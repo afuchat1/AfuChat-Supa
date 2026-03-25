@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -21,14 +21,142 @@ import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
 const ACOIN_PACKAGES = [
-  { label: "100 ACoin", amount: 100, price: 2, currency: "USD" },
-  { label: "500 ACoin", amount: 500, price: 8, currency: "USD" },
-  { label: "2,000 ACoin", amount: 2000, price: 28, currency: "USD" },
-  { label: "5,000 ACoin", amount: 5000, price: 60, currency: "USD" },
-  { label: "20,000 ACoin", amount: 20000, price: 200, currency: "USD" },
+  { label: "100 ACoin", amount: 100, priceUsd: 2 },
+  { label: "500 ACoin", amount: 500, priceUsd: 8 },
+  { label: "2,000 ACoin", amount: 2000, priceUsd: 28 },
+  { label: "5,000 ACoin", amount: 5000, priceUsd: 60 },
+  { label: "20,000 ACoin", amount: 20000, priceUsd: 200 },
 ];
 
+const CUSTOM_RATE_USD = 0.014;
+
+const COUNTRY_CURRENCY: Record<string, { code: string; symbol: string }> = {
+  "Kenya": { code: "KES", symbol: "KSh" },
+  "Uganda": { code: "UGX", symbol: "USh" },
+  "Tanzania": { code: "TZS", symbol: "TSh" },
+  "Nigeria": { code: "NGN", symbol: "₦" },
+  "South Africa": { code: "ZAR", symbol: "R" },
+  "Ghana": { code: "GHS", symbol: "GH₵" },
+  "Ethiopia": { code: "ETB", symbol: "Br" },
+  "Rwanda": { code: "RWF", symbol: "FRw" },
+  "Cameroon": { code: "XAF", symbol: "FCFA" },
+  "Senegal": { code: "XOF", symbol: "CFA" },
+  "Egypt": { code: "EGP", symbol: "E£" },
+  "Morocco": { code: "MAD", symbol: "MAD" },
+  "Zambia": { code: "ZMW", symbol: "ZK" },
+  "Malawi": { code: "MWK", symbol: "MK" },
+  "Mozambique": { code: "MZN", symbol: "MT" },
+  "Zimbabwe": { code: "ZWL", symbol: "Z$" },
+  "Botswana": { code: "BWP", symbol: "P" },
+  "Namibia": { code: "NAD", symbol: "N$" },
+  "Democratic Republic of the Congo": { code: "CDF", symbol: "FC" },
+  "Angola": { code: "AOA", symbol: "Kz" },
+  "United States": { code: "USD", symbol: "$" },
+  "United Kingdom": { code: "GBP", symbol: "£" },
+  "Canada": { code: "CAD", symbol: "C$" },
+  "Australia": { code: "AUD", symbol: "A$" },
+  "India": { code: "INR", symbol: "₹" },
+  "Pakistan": { code: "PKR", symbol: "Rs" },
+  "Bangladesh": { code: "BDT", symbol: "৳" },
+  "Brazil": { code: "BRL", symbol: "R$" },
+  "Mexico": { code: "MXN", symbol: "MX$" },
+  "Philippines": { code: "PHP", symbol: "₱" },
+  "Indonesia": { code: "IDR", symbol: "Rp" },
+  "Malaysia": { code: "MYR", symbol: "RM" },
+  "Thailand": { code: "THB", symbol: "฿" },
+  "Vietnam": { code: "VND", symbol: "₫" },
+  "South Korea": { code: "KRW", symbol: "₩" },
+  "Japan": { code: "JPY", symbol: "¥" },
+  "China": { code: "CNY", symbol: "¥" },
+  "Germany": { code: "EUR", symbol: "€" },
+  "France": { code: "EUR", symbol: "€" },
+  "Italy": { code: "EUR", symbol: "€" },
+  "Spain": { code: "EUR", symbol: "€" },
+  "Netherlands": { code: "EUR", symbol: "€" },
+  "Belgium": { code: "EUR", symbol: "€" },
+  "Portugal": { code: "EUR", symbol: "€" },
+  "Ireland": { code: "EUR", symbol: "€" },
+  "Austria": { code: "EUR", symbol: "€" },
+  "Finland": { code: "EUR", symbol: "€" },
+  "Greece": { code: "EUR", symbol: "€" },
+  "Turkey": { code: "TRY", symbol: "₺" },
+  "Saudi Arabia": { code: "SAR", symbol: "SAR" },
+  "United Arab Emirates": { code: "AED", symbol: "AED" },
+  "Qatar": { code: "QAR", symbol: "QAR" },
+  "Kuwait": { code: "KWD", symbol: "KD" },
+  "Oman": { code: "OMR", symbol: "OMR" },
+  "Bahrain": { code: "BHD", symbol: "BD" },
+  "Jordan": { code: "JOD", symbol: "JD" },
+  "Lebanon": { code: "LBP", symbol: "L£" },
+  "Israel": { code: "ILS", symbol: "₪" },
+  "Sweden": { code: "SEK", symbol: "kr" },
+  "Norway": { code: "NOK", symbol: "kr" },
+  "Denmark": { code: "DKK", symbol: "kr" },
+  "Switzerland": { code: "CHF", symbol: "CHF" },
+  "Poland": { code: "PLN", symbol: "zł" },
+  "Czech Republic": { code: "CZK", symbol: "Kč" },
+  "Hungary": { code: "HUF", symbol: "Ft" },
+  "Romania": { code: "RON", symbol: "lei" },
+  "Colombia": { code: "COP", symbol: "COL$" },
+  "Argentina": { code: "ARS", symbol: "AR$" },
+  "Chile": { code: "CLP", symbol: "CL$" },
+  "Peru": { code: "PEN", symbol: "S/" },
+  "Singapore": { code: "SGD", symbol: "S$" },
+  "New Zealand": { code: "NZD", symbol: "NZ$" },
+  "Sri Lanka": { code: "LKR", symbol: "Rs" },
+  "Nepal": { code: "NPR", symbol: "Rs" },
+  "Myanmar": { code: "MMK", symbol: "K" },
+  "Somalia": { code: "SOS", symbol: "Sh" },
+  "Sudan": { code: "SDG", symbol: "SDG" },
+  "South Sudan": { code: "SSP", symbol: "SSP" },
+  "Ivory Coast": { code: "XOF", symbol: "CFA" },
+  "Burkina Faso": { code: "XOF", symbol: "CFA" },
+  "Mali": { code: "XOF", symbol: "CFA" },
+  "Niger": { code: "XOF", symbol: "CFA" },
+  "Togo": { code: "XOF", symbol: "CFA" },
+  "Benin": { code: "XOF", symbol: "CFA" },
+  "Congo": { code: "XAF", symbol: "FCFA" },
+  "Gabon": { code: "XAF", symbol: "FCFA" },
+  "Chad": { code: "XAF", symbol: "FCFA" },
+  "Madagascar": { code: "MGA", symbol: "Ar" },
+  "Mauritius": { code: "MUR", symbol: "Rs" },
+  "Burundi": { code: "BIF", symbol: "FBu" },
+  "Sierra Leone": { code: "SLL", symbol: "Le" },
+  "Liberia": { code: "LRD", symbol: "L$" },
+  "Gambia": { code: "GMD", symbol: "D" },
+  "Guinea": { code: "GNF", symbol: "FG" },
+  "Eritrea": { code: "ERN", symbol: "Nfk" },
+  "Djibouti": { code: "DJF", symbol: "Fdj" },
+  "Comoros": { code: "KMF", symbol: "CF" },
+  "Cape Verde": { code: "CVE", symbol: "Esc" },
+  "Eswatini": { code: "SZL", symbol: "E" },
+  "Lesotho": { code: "LSL", symbol: "L" },
+  "Seychelles": { code: "SCR", symbol: "Rs" },
+  "São Tomé and Príncipe": { code: "STN", symbol: "Db" },
+  "Equatorial Guinea": { code: "XAF", symbol: "FCFA" },
+  "Central African Republic": { code: "XAF", symbol: "FCFA" },
+  "Haiti": { code: "HTG", symbol: "G" },
+  "Jamaica": { code: "JMD", symbol: "J$" },
+  "Trinidad and Tobago": { code: "TTD", symbol: "TT$" },
+  "Dominican Republic": { code: "DOP", symbol: "RD$" },
+  "Cuba": { code: "CUP", symbol: "₱" },
+};
+
 type TopUpStage = "select" | "processing" | "payment" | "success";
+
+function getUserCurrency(country: string | null | undefined): { code: string; symbol: string } {
+  if (!country) return { code: "USD", symbol: "$" };
+  return COUNTRY_CURRENCY[country] || { code: "USD", symbol: "$" };
+}
+
+function formatLocalPrice(usdPrice: number, rate: number, symbol: string, code: string): string {
+  if (code === "USD") return `$${usdPrice.toFixed(2)}`;
+  const local = Math.ceil(usdPrice * rate);
+  if (local >= 1000) {
+    return `${symbol}${local.toLocaleString()}`;
+  }
+  return `${symbol}${local}`;
+}
 
 export default function TopUpScreen() {
   const { colors } = useTheme();
@@ -39,6 +167,41 @@ export default function TopUpScreen() {
   const [stage, setStage] = useState<TopUpStage>("select");
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [exchangeRate, setExchangeRate] = useState<number>(1);
+  const [rateLoading, setRateLoading] = useState(true);
+
+  const userCurrency = getUserCurrency(profile?.country);
+  const isLocalCurrency = userCurrency.code !== "USD";
+
+  useEffect(() => {
+    async function fetchRate() {
+      if (userCurrency.code === "USD") {
+        setExchangeRate(1);
+        setRateLoading(false);
+        return;
+      }
+      try {
+        const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token || "";
+        const res = await fetch(`${supabaseUrl}/functions/v1/fetch-currency-rates`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+          body: JSON.stringify({ base: "USD", target: userCurrency.code }),
+        });
+        const data = await res.json();
+        if (data.rate) {
+          setExchangeRate(data.rate);
+        }
+      } catch {}
+      setRateLoading(false);
+    }
+    fetchRate();
+  }, [userCurrency.code]);
+
+  function displayPrice(usdPrice: number): string {
+    return formatLocalPrice(usdPrice, exchangeRate, userCurrency.symbol, userCurrency.code);
+  }
 
   async function initiatePayment() {
     const pack = selectedPack !== null ? ACOIN_PACKAGES[selectedPack] : null;
@@ -50,7 +213,7 @@ export default function TopUpScreen() {
     }
 
     const amount = pack ? pack.amount : customVal;
-    const priceUsd = pack ? pack.price : Math.ceil(customVal * 0.014 * 100) / 100;
+    const priceUsd = pack ? pack.priceUsd : Math.ceil(customVal * CUSTOM_RATE_USD * 100) / 100;
 
     setProcessing(true);
     Haptics.selectionAsync();
@@ -69,6 +232,8 @@ export default function TopUpScreen() {
           action: "initiate",
           acoin_amount: amount,
           price_usd: priceUsd,
+          currency: userCurrency.code,
+          local_amount: isLocalCurrency ? Math.ceil(priceUsd * exchangeRate) : priceUsd,
           email: user?.email,
           first_name: profile?.display_name?.split(" ")[0] || "User",
           last_name: profile?.display_name?.split(" ").slice(1).join(" ") || "",
@@ -202,7 +367,11 @@ export default function TopUpScreen() {
               <Text style={[styles.packLabel, { color: colors.text }]}>{pack.label}</Text>
             </View>
             <View style={styles.packRight}>
-              <Text style={[styles.packPrice, { color: Colors.gold }]}>${pack.price}</Text>
+              {rateLoading ? (
+                <ActivityIndicator size="small" color={Colors.gold} />
+              ) : (
+                <Text style={[styles.packPrice, { color: Colors.gold }]}>{displayPrice(pack.priceUsd)}</Text>
+              )}
               {selectedPack === i && <Ionicons name="checkmark-circle" size={20} color={Colors.gold} />}
             </View>
           </TouchableOpacity>
@@ -218,12 +387,21 @@ export default function TopUpScreen() {
             onChangeText={(v) => { setCustomAmount(v); setSelectedPack(null); }}
             keyboardType="numeric"
           />
-          {customAmount ? (
+          {customAmount && !rateLoading ? (
             <Text style={[styles.customPrice, { color: Colors.gold }]}>
-              ${Math.ceil(parseInt(customAmount || "0") * 0.014 * 100) / 100}
+              {displayPrice(Math.ceil(parseInt(customAmount || "0") * CUSTOM_RATE_USD * 100) / 100)}
             </Text>
           ) : null}
         </View>
+
+        {isLocalCurrency && !rateLoading && (
+          <View style={[styles.rateNote, { backgroundColor: colors.surface }]}>
+            <Ionicons name="swap-horizontal" size={14} color={colors.textMuted} />
+            <Text style={[styles.rateNoteText, { color: colors.textMuted }]}>
+              1 USD ≈ {exchangeRate.toLocaleString()} {userCurrency.code}
+            </Text>
+          </View>
+        )}
 
         <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
           <Ionicons name="shield-checkmark" size={18} color={Colors.gold} />
@@ -233,9 +411,9 @@ export default function TopUpScreen() {
         </View>
 
         <TouchableOpacity
-          style={[styles.payBtn, { backgroundColor: Colors.gold }, (processing || (selectedPack === null && !customAmount)) && { opacity: 0.5 }]}
+          style={[styles.payBtn, { backgroundColor: Colors.gold }, (processing || rateLoading || (selectedPack === null && !customAmount)) && { opacity: 0.5 }]}
           onPress={initiatePayment}
-          disabled={processing || (selectedPack === null && !customAmount)}
+          disabled={processing || rateLoading || (selectedPack === null && !customAmount)}
         >
           {processing ? (
             <ActivityIndicator color="#fff" />
@@ -293,6 +471,15 @@ const styles = StyleSheet.create({
   },
   customInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 48 },
   customPrice: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  rateNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  rateNoteText: { fontSize: 12, fontFamily: "Inter_400Regular" },
   infoCard: {
     flexDirection: "row",
     alignItems: "flex-start",
