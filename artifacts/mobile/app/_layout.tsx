@@ -56,17 +56,24 @@ function RootLayoutNav() {
       <Stack.Screen name="wallet/index" />
       <Stack.Screen name="gifts/index" />
       <Stack.Screen name="games/index" />
-      <Stack.Screen name="games/emoji-quiz" />
-      <Stack.Screen name="games/word-scramble" />
+      <Stack.Screen name="games/snake" />
+      <Stack.Screen name="games/game-2048" />
+      <Stack.Screen name="games/tetris" />
+      <Stack.Screen name="games/flappy" />
+      <Stack.Screen name="games/space-shooter" />
+      <Stack.Screen name="games/brick-breaker" />
+      <Stack.Screen name="games/minesweeper" />
       <Stack.Screen name="games/memory-match" />
-      <Stack.Screen name="games/trivia" />
-      <Stack.Screen name="games/math-rush" />
       <Stack.Screen name="mini-programs/index" />
       <Stack.Screen name="mini-programs/calculator" />
       <Stack.Screen name="mini-programs/tip-calculator" />
       <Stack.Screen name="mini-programs/unit-converter" />
       <Stack.Screen name="mini-programs/habit-tracker" />
       <Stack.Screen name="mini-programs/color-picker" />
+      <Stack.Screen name="mini-programs/stopwatch" />
+      <Stack.Screen name="mini-programs/pomodoro" />
+      <Stack.Screen name="mini-programs/bmi" />
+      <Stack.Screen name="mini-programs/notes" />
       <Stack.Screen name="notifications" />
       <Stack.Screen name="stories/create" options={{ animation: "slide_from_bottom", gestureDirection: "vertical" }} />
       <Stack.Screen name="stories/view" options={{ animation: "fade" }} />
