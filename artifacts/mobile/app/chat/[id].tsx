@@ -798,6 +798,23 @@ export default function ChatScreen() {
       metadata: { gift_id: gift.id, gift_name: gift.name, receiver_id: receiverId },
     });
 
+    const rarityMultipliers: Record<string, number> = {
+      common: 0,
+      uncommon: 0.02,
+      rare: 0.05,
+      epic: 0.08,
+      legendary: 0.12,
+    };
+    const multiplier = rarityMultipliers[gift.rarity] || 0;
+    if (multiplier > 0) {
+      await supabase.rpc("escalate_gift_price", { p_gift_id: gift.id, p_multiplier: multiplier }).maybeSingle().then(({ error: rpcErr }) => {
+        if (rpcErr) {
+          const newPrice = Math.ceil(price * (1 + multiplier));
+          supabase.from("gifts").update({ acoin_price: newPrice }).eq("id", gift.id);
+        }
+      });
+    }
+
     await supabase.from("messages").insert({
       chat_id: activeChatId,
       sender_id: user.id,
@@ -808,6 +825,7 @@ export default function ChatScreen() {
     setGiftMsg("");
     setGiftSending(false);
     loadMessages();
+    loadGifts();
   }
 
   async function pickFromCamera() {

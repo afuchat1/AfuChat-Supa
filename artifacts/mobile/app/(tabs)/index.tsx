@@ -518,6 +518,7 @@ export default function ChatsScreen() {
   }, [user]);
 
   useEffect(() => { loadChats(); }, [loadChats]);
+  useFocusEffect(useCallback(() => { loadChats(); }, [loadChats]));
 
   const chatIdsKey = chats.map((c) => c.id).sort().join(",");
 

@@ -127,12 +127,29 @@ export default function GiftsScreen() {
         metadata: { gift_id: sendGift.id, gift_name: sendGift.name, receiver_id: recipient.id },
       });
 
+      const rarityMultipliers: Record<string, number> = {
+        common: 0,
+        uncommon: 0.02,
+        rare: 0.05,
+        epic: 0.08,
+        legendary: 0.12,
+      };
+      const multiplier = rarityMultipliers[sendGift.rarity] || 0;
+      if (multiplier > 0) {
+        const { error: rpcErr } = await supabase.rpc("escalate_gift_price", { p_gift_id: sendGift.id, p_multiplier: multiplier }).maybeSingle();
+        if (rpcErr) {
+          const newPrice = Math.ceil(price * (1 + multiplier));
+          await supabase.from("gifts").update({ acoin_price: newPrice }).eq("id", sendGift.id);
+        }
+      }
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showAlert("Gift Sent!", `${sendGift.emoji} ${sendGift.name} sent to ${recipient.display_name}`);
       setSendGift(null);
       setSendHandle("");
       setSendMsg("");
       loadOwned();
+      loadGifts();
     }
     setSending(false);
   }
