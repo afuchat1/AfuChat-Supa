@@ -577,6 +577,11 @@ export default function ChatsScreen() {
 
   useEffect(() => {
     if (!user) return;
+    import("../../lib/rewardXp").then(({ rewardXp }) => rewardXp("daily_login")).catch(() => {});
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
     const memberChannel = supabase
       .channel(`chatlist-member-inserts:${user.id}`)
       .on(

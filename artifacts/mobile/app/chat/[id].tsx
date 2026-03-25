@@ -714,6 +714,7 @@ export default function ChatScreen() {
       });
     }
 
+    try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("message_sent"); } catch (_) {}
     setSending(false);
   }
 
@@ -750,6 +751,7 @@ export default function ChatScreen() {
       encrypted_content: `🧧 Red Envelope [${envId}] - ${envelopeMsg || "Good luck!"}`,
     });
 
+    try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("red_envelope_sent"); } catch (_) {}
     setShowRedEnvelope(false);
     setEnvelopeAmount("");
     setEnvelopeMsg("");
@@ -846,6 +848,7 @@ export default function ChatScreen() {
       encrypted_content: `🎁 ${gift.emoji} ${gift.name}${giftMsg ? ` - ${giftMsg}` : ""}|giftId:${gift.id}|receiverId:${receiverId}`,
     });
 
+    try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("gift_sent"); } catch (_) {}
     setShowGiftPicker(false);
     setGiftMsg("");
     setGiftSending(false);

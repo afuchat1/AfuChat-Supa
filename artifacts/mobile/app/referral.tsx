@@ -74,7 +74,7 @@ export default function ReferralScreen() {
       setReferrals(entries);
       setStats({
         total_referrals: data.length,
-        total_nexa_earned: data.filter((r: any) => r.reward_given).length * 500,
+        total_nexa_earned: data.filter((r: any) => r.reward_given).length * 2000,
       });
     }
     setLoading(false);
@@ -113,7 +113,7 @@ export default function ReferralScreen() {
           <Ionicons name="gift" size={40} color="rgba(255,255,255,0.9)" />
           <Text style={styles.heroTitle}>Invite Friends, Earn Rewards</Text>
           <Text style={styles.heroSub}>
-            Share your link. When friends join, they get 1 week of free Platinum premium, and you earn 500 Nexa!
+            Share your link. When friends join, they get 1 week of free Platinum premium, and you earn 2,000 Nexa!
           </Text>
         </View>
 
@@ -150,7 +150,7 @@ export default function ReferralScreen() {
             { icon: "link-outline", text: `Share your link: afuchat.com/${profile?.handle || "username"}` },
             { icon: "person-add-outline", text: "Friends open your link and sign up" },
             { icon: "diamond-outline", text: "They automatically get 1 week free Platinum" },
-            { icon: "flash-outline", text: "You receive 500 Nexa bonus" },
+            { icon: "flash-outline", text: "You receive 2,000 Nexa bonus" },
           ].map((step, i) => (
             <View key={i} style={styles.stepRow}>
               <View style={[styles.stepIcon, { backgroundColor: Colors.brand + "18" }]}>
@@ -174,7 +174,7 @@ export default function ReferralScreen() {
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
                   <Text style={[styles.referralReward, { color: r.reward_given ? "#34C759" : colors.textMuted }]}>
-                    {r.reward_given ? "+500 Nexa" : "Pending"}
+                    {r.reward_given ? "+2,000 Nexa" : "Pending"}
                   </Text>
                   <Text style={[styles.referralDate, { color: colors.textMuted }]}>
                     {new Date(r.created_at).toLocaleDateString()}

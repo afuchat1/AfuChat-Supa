@@ -82,6 +82,11 @@ export default function CreatePostScreen() {
       await supabase.from("post_images").insert(imageRows);
     }
 
+    try {
+      const { rewardXp } = await import("../../lib/rewardXp");
+      await rewardXp("post_created");
+    } catch (_) {}
+
     setLoading(false);
     router.back();
   }

@@ -332,6 +332,7 @@ export default function DiscoverScreen() {
         setPosts((prev) =>
           prev.map((p) => p.id === postId ? { ...p, liked: true, likeCount: p.likeCount + 1 } : p)
         );
+        try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("post_liked"); } catch (_) {}
       }
     }
   }

@@ -58,6 +58,7 @@ export default function CreateStoryScreen() {
     if (error) {
       showAlert("Error", "Could not post story.");
     } else {
+      try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("story_created"); } catch (_) {}
       router.back();
     }
   }

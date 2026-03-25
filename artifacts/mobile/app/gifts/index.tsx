@@ -143,6 +143,7 @@ export default function GiftsScreen() {
         }
       }
 
+      try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("gift_sent"); } catch (_) {}
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showAlert("Gift Sent!", `${sendGift.emoji} ${sendGift.name} sent to ${recipient.display_name}`);
       setSendGift(null);

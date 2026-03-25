@@ -86,7 +86,8 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - **Real-time**: Supabase Realtime subscriptions for incoming messages
 - **State**: React Context (AuthContext, ThemeContext) + local component state
 - **Premium**: Uses `user_subscriptions` table (NOT `profiles.is_premium`). Plans loaded from `subscription_plans` table. Payment via ACoin. AuthContext exposes `isPremium`, `subscription` fields.
-- **Currency**: XP displayed as "Nexa" throughout. ACoin is premium currency. Nexa→ACoin conversion via `currency_settings` table rates/fees.
+- **Currency**: XP displayed as "Nexa" throughout. ACoin is premium currency. Nexa→ACoin conversion via `currency_settings` table rates/fees. Red envelopes and gifts use ACoins (DB functions `create_red_envelope`, `claim_red_envelope`, `deduct_acoin` are SECURITY DEFINER and operate on `profiles.acoin`).
+- **Activity Rewards (Nexa/XP)**: Users earn Nexa for nearly every activity via `reward_activity_xp` DB function (SECURITY DEFINER) with cooldown-based spam prevention. Tracked in `activity_rewards` table. Helper: `lib/rewardXp.ts`. Reward amounts: profile completion 1000, referral 2000, daily login 20, post 50, reply 20, like 5, follow 10, message 2, story create 30, story view 3, gift sent 25, group/channel create 50, red envelope sent 30, red envelope claimed 10.
 
 ### Key Files
 

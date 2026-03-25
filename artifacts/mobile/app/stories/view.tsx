@@ -108,6 +108,7 @@ export default function ViewStoryScreen() {
         if (!existing) {
           supabase.from("story_views").insert({ story_id: s.id, viewer_id: user.id }).then(() => {
             supabase.from("stories").update({ view_count: (s.view_count || 0) + 1 }).eq("id", s.id);
+            import("../../lib/rewardXp").then(({ rewardXp }) => rewardXp("story_viewed")).catch(() => {});
           });
         }
       });

@@ -116,6 +116,7 @@ export default function CreateChannelScreen() {
         is_admin: true,
       });
 
+      try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("channel_created"); } catch (_) {}
       router.replace({ pathname: "/chat/[id]", params: { id: chat2.id } });
       setCreating(false);
       return;
@@ -127,6 +128,7 @@ export default function CreateChannelScreen() {
       is_admin: true,
     });
 
+    try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("channel_created"); } catch (_) {}
     router.replace({ pathname: "/chat/[id]", params: { id: chat.id } });
     setCreating(false);
   }

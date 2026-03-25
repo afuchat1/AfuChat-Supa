@@ -312,7 +312,7 @@ export default function OnboardingScreen() {
 
               await supabase
                 .from("profiles")
-                .update({ xp: (referrer.xp || 0) + 500 })
+                .update({ xp: (referrer.xp || 0) + 2000 })
                 .eq("id", referrer.id);
 
               const { data: platinumPlan } = await supabase
@@ -339,6 +339,11 @@ export default function OnboardingScreen() {
           }
         }
       }
+    } catch (_) {}
+
+    try {
+      const { rewardXp } = await import("../../lib/rewardXp");
+      await rewardXp("profile_completed");
     } catch (_) {}
 
     await refreshProfile();

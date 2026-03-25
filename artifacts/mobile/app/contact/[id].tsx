@@ -166,6 +166,7 @@ export default function ContactProfileScreen() {
         targetUserId: id as string,
         followerName: myProfile?.display_name || "Someone",
       });
+      try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("follow_user"); } catch (_) {}
     }
   }
 

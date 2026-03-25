@@ -103,6 +103,7 @@ export default function RedEnvelopeScreen() {
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setMyClaim(data.amount);
+      try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("red_envelope_claimed"); } catch (_) {}
       if (envelope.sender_id !== user.id) {
         notifyGiftReceived({
           recipientId: envelope.sender_id,

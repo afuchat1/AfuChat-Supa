@@ -175,6 +175,7 @@ export default function PostDetailScreen() {
             postId: post.id,
           });
         }
+        try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("post_liked"); } catch (_) {}
       }
     }
   }
@@ -199,6 +200,7 @@ export default function PostDetailScreen() {
       setReplyText("");
       setPost((p) => p ? { ...p, replyCount: p.replyCount + 1 } : p);
       loadReplies();
+      try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("post_reply"); } catch (_) {}
       if (post && post.author.id !== user.id) {
         notifyPostReply({
           postAuthorId: post.author.id,

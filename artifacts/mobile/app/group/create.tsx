@@ -97,6 +97,7 @@ export default function CreateGroupScreen() {
         is_admin: uid === user.id,
       }));
       await supabase.from("chat_members").insert(members);
+      try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("group_created"); } catch (_) {}
       router.replace({ pathname: "/chat/[id]", params: { id: chat.id } });
     }
     setCreating(false);
