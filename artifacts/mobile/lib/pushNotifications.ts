@@ -1,22 +1,33 @@
-import * as Notifications from "expo-notifications";
-import * as Device from "expo-device";
 import { Platform } from "react-native";
 import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-    priority: Notifications.AndroidNotificationPriority.MAX,
-  }),
-});
+let Notifications: typeof import("expo-notifications") | null = null;
+let Device: typeof import("expo-device") | null = null;
+
+if (Platform.OS !== "web") {
+  try {
+    Notifications = require("expo-notifications");
+    Device = require("expo-device");
+
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+        priority: Notifications.AndroidNotificationPriority.MAX,
+      }),
+    });
+  } catch {
+    Notifications = null;
+    Device = null;
+  }
+}
 
 export async function registerForPushNotifications(userId: string): Promise<string | null> {
-  if (Platform.OS === "web") return null;
+  if (Platform.OS === "web" || !Notifications || !Device) return null;
   if (!Device.isDevice) {
     console.log("Push notifications require a physical device");
     return null;
@@ -112,6 +123,8 @@ export async function clearPushToken(userId: string): Promise<void> {
 }
 
 export function setupNotificationListeners() {
+  if (Platform.OS === "web" || !Notifications) return () => {};
+
   const responseSubscription = Notifications.addNotificationResponseReceivedListener(
     (response) => {
       const data = response.notification.request.content.data;
@@ -167,9 +180,11 @@ export async function sendPushNotification(params: {
 }
 
 export async function getBadgeCount(): Promise<number> {
+  if (Platform.OS === "web" || !Notifications) return 0;
   return Notifications.getBadgeCountAsync();
 }
 
 export async function clearBadge(): Promise<void> {
+  if (Platform.OS === "web" || !Notifications) return;
   await Notifications.setBadgeCountAsync(0);
 }
