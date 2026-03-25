@@ -107,7 +107,7 @@ export default function RedEnvelopeScreen() {
         notifyGiftReceived({
           recipientId: envelope.sender_id,
           senderName: "Someone",
-          giftName: `opened your red envelope (${data.amount} Nexa)`,
+          giftName: `opened your red envelope (${data.amount} ACoin)`,
         });
       }
       load();
@@ -137,7 +137,7 @@ export default function RedEnvelopeScreen() {
 
         {myClaim !== null ? (
           <View style={styles.claimedSection}>
-            <Text style={styles.claimedAmount}>{myClaim} Nexa</Text>
+            <Text style={styles.claimedAmount}>{myClaim} ACoin</Text>
             <Text style={styles.claimedLabel}>You received</Text>
           </View>
         ) : remainingCount > 0 && !envelope.is_expired ? (
@@ -149,7 +149,7 @@ export default function RedEnvelopeScreen() {
         )}
 
         <Text style={styles.statsText}>
-          {envelope.claimed_count}/{envelope.recipient_count} claimed · {remainingAmount} Nexa remaining
+          {envelope.claimed_count}/{envelope.recipient_count} claimed · {remainingAmount} ACoin remaining
         </Text>
       </View>
 
@@ -164,7 +164,7 @@ export default function RedEnvelopeScreen() {
               <Text style={[styles.claimName, { color: colors.text }]}>{item.claimer.display_name}</Text>
               <Text style={[styles.claimTime, { color: colors.textMuted }]}>{new Date(item.claimed_at).toLocaleTimeString()}</Text>
             </View>
-            <Text style={[styles.claimAmount, { color: "#FF3B30" }]}>{item.amount} Nexa</Text>
+            <Text style={[styles.claimAmount, { color: "#FF3B30" }]}>{item.amount} ACoin</Text>
           </View>
         )}
         contentContainerStyle={{ paddingBottom: 90 }}
