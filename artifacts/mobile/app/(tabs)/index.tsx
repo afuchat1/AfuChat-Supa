@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Tabs, router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, useNavigation } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -428,6 +428,7 @@ export default function ChatsScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
   const [chats, setChats] = useState<ChatItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -617,12 +618,14 @@ export default function ChatsScreen() {
 
   const totalUnread = chats.reduce((sum, c) => sum + c.unread_count, 0);
 
+  useEffect(() => {
+    navigation.setOptions({
+      tabBarBadge: totalUnread > 0 ? (totalUnread > 99 ? "99+" : totalUnread) : undefined,
+    });
+  }, [navigation, totalUnread]);
+
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <Tabs.Screen
-        name="index"
-        options={{ tabBarBadge: totalUnread > 0 ? (totalUnread > 99 ? "99+" : totalUnread) : undefined }}
-      />
       <View
         style={[
           styles.header,
