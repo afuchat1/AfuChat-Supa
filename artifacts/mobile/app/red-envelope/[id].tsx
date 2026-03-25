@@ -42,7 +42,7 @@ type Claim = {
 
 export default function RedEnvelopeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [envelope, setEnvelope] = useState<Envelope | null>(null);
@@ -108,7 +108,8 @@ export default function RedEnvelopeScreen() {
       if (envelope.sender_id !== user.id) {
         notifyGiftReceived({
           recipientId: envelope.sender_id,
-          senderName: "Someone",
+          senderName: profile?.display_name || "Someone",
+          senderUserId: user.id,
           giftName: `opened your red envelope (${data.amount} ACoin)`,
         });
       }

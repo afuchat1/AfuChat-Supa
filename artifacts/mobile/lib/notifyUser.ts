@@ -8,6 +8,9 @@ async function callNotify(params: {
   title: string;
   body: string;
   data?: Record<string, string>;
+  notificationType?: string;
+  actorId?: string;
+  postId?: string | null;
 }) {
   try {
     const { data: { session } } = await supabase.auth.getSession();
@@ -24,6 +27,18 @@ async function callNotify(params: {
       body: JSON.stringify(params),
     });
   } catch {}
+
+  if (params.notificationType && params.actorId) {
+    try {
+      await supabase.from("notifications").insert({
+        user_id: params.userId,
+        actor_id: params.actorId,
+        type: params.notificationType,
+        post_id: params.postId || null,
+        is_read: false,
+      });
+    } catch {}
+  }
 }
 
 export async function notifyNewMessage(params: {
@@ -49,21 +64,25 @@ export async function notifyNewMessage(params: {
   }
 }
 
-export function notifyNewFollow(params: {
+export async function notifyNewFollow(params: {
   targetUserId: string;
   followerName: string;
+  followerUserId: string;
 }) {
   callNotify({
     userId: params.targetUserId,
     title: "New Follower",
     body: `${params.followerName} started following you`,
     data: { type: "follow" },
+    notificationType: "new_follower",
+    actorId: params.followerUserId,
   });
 }
 
-export function notifyPostLike(params: {
+export async function notifyPostLike(params: {
   postAuthorId: string;
   likerName: string;
+  likerUserId: string;
   postId: string;
 }) {
   callNotify({
@@ -71,12 +90,16 @@ export function notifyPostLike(params: {
     title: "Post Liked",
     body: `${params.likerName} liked your post`,
     data: { postId: params.postId, type: "like" },
+    notificationType: "new_like",
+    actorId: params.likerUserId,
+    postId: params.postId,
   });
 }
 
-export function notifyPostReply(params: {
+export async function notifyPostReply(params: {
   postAuthorId: string;
   replierName: string;
+  replierUserId: string;
   postId: string;
   replyPreview: string;
 }) {
@@ -88,12 +111,16 @@ export function notifyPostReply(params: {
         ? params.replyPreview.substring(0, 97) + "..."
         : params.replyPreview,
     data: { postId: params.postId, type: "reply" },
+    notificationType: "new_reply",
+    actorId: params.replierUserId,
+    postId: params.postId,
   });
 }
 
-export function notifyGiftReceived(params: {
+export async function notifyGiftReceived(params: {
   recipientId: string;
   senderName: string;
+  senderUserId: string;
   giftName: string;
 }) {
   callNotify({
@@ -101,5 +128,7 @@ export function notifyGiftReceived(params: {
     title: "Gift Received!",
     body: `${params.senderName} sent you ${params.giftName}`,
     data: { type: "gift" },
+    notificationType: "gift",
+    actorId: params.senderUserId,
   });
 }

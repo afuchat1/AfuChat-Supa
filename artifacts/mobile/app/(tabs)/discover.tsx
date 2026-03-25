@@ -24,6 +24,7 @@ import { PostSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { cacheMoments, getCachedMoments, isOnline } from "@/lib/offlineStore";
+import { notifyPostLike } from "@/lib/notifyUser";
 import { matchInterests, computeFeedScore, diversifyFeed, type FeedSignals } from "@/lib/feedAlgorithm";
 
 const { width } = Dimensions.get("window");
@@ -343,6 +344,14 @@ export default function DiscoverScreen() {
         setPosts((prev) =>
           prev.map((p) => p.id === postId ? { ...p, liked: true, likeCount: p.likeCount + 1 } : p)
         );
+        if (post.author_id !== user.id) {
+          notifyPostLike({
+            postAuthorId: post.author_id,
+            likerName: profile?.display_name || "Someone",
+            likerUserId: user.id,
+            postId,
+          });
+        }
         try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("post_liked"); } catch (_) {}
       }
     }

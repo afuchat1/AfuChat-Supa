@@ -32,7 +32,7 @@ import { RichText } from "@/components/ui/RichText";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
-import { notifyNewMessage } from "@/lib/notifyUser";
+import { notifyNewMessage, notifyGiftReceived } from "@/lib/notifyUser";
 import {
   cacheMessages,
   getCachedMessages,
@@ -875,6 +875,12 @@ export default function ChatScreen() {
       encrypted_content: `🎁 ${gift.emoji} ${gift.name}${giftMsg ? ` - ${giftMsg}` : ""}|giftId:${gift.id}|receiverId:${receiverId}`,
     });
 
+    notifyGiftReceived({
+      recipientId: receiverId,
+      senderName: profile?.display_name || "Someone",
+      senderUserId: user.id,
+      giftName: `${gift.emoji} ${gift.name}`,
+    });
     try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("gift_sent"); } catch (_) {}
     setShowGiftPicker(false);
     setGiftMsg("");

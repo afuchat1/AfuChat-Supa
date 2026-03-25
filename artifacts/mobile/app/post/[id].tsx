@@ -172,6 +172,7 @@ export default function PostDetailScreen() {
           notifyPostLike({
             postAuthorId: post.author.id,
             likerName: myProfile?.display_name || "Someone",
+            likerUserId: user.id,
             postId: post.id,
           });
         }
@@ -205,6 +206,7 @@ export default function PostDetailScreen() {
         notifyPostReply({
           postAuthorId: post.author.id,
           replierName: myProfile?.display_name || "Someone",
+          replierUserId: user.id,
           postId: post.id,
           replyPreview: content,
         });

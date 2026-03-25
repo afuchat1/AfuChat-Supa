@@ -13,6 +13,7 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { notifyGiftReceived } from "@/lib/notifyUser";
 import * as Haptics from "expo-haptics";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
@@ -48,7 +49,7 @@ const rarityColors: Record<string, string> = {
 
 export default function GiftsScreen() {
   const { colors } = useTheme();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<"shop" | "owned">("shop");
   const [gifts, setGifts] = useState<Gift[]>([]);
@@ -143,6 +144,12 @@ export default function GiftsScreen() {
         }
       }
 
+      notifyGiftReceived({
+        recipientId: recipient.id,
+        senderName: profile?.display_name || "Someone",
+        senderUserId: user.id,
+        giftName: `${sendGift.emoji} ${sendGift.name}`,
+      });
       try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("gift_sent"); } catch (_) {}
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showAlert("Gift Sent!", `${sendGift.emoji} ${sendGift.name} sent to ${recipient.display_name}`);

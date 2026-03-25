@@ -169,6 +169,7 @@ export default function ContactProfileScreen() {
       notifyNewFollow({
         targetUserId: id as string,
         followerName: myProfile?.display_name || "Someone",
+        followerUserId: user.id,
       });
       try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("follow_user"); } catch (_) {}
     }

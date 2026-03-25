@@ -33,11 +33,12 @@ type NotifItem = {
 };
 
 const typeConfig: Record<string, { icon: string; label: string; color: string }> = {
-  like: { icon: "heart", label: "liked your post", color: "#FF3B30" },
-  follow: { icon: "person-add", label: "started following you", color: Colors.brand },
-  reply: { icon: "chatbubble", label: "replied to your post", color: "#007AFF" },
-  mention: { icon: "at", label: "mentioned you", color: "#FF9500" },
+  new_like: { icon: "heart", label: "liked your post", color: "#FF3B30" },
+  new_follower: { icon: "person-add", label: "started following you", color: Colors.brand },
+  new_reply: { icon: "chatbubble", label: "replied to your post", color: "#007AFF" },
+  new_mention: { icon: "at", label: "mentioned you", color: "#FF9500" },
   gift: { icon: "gift", label: "sent you a gift", color: "#AF52DE" },
+  profile_view: { icon: "eye", label: "viewed your profile", color: "#8E8E93" },
 };
 
 function timeAgo(iso: string): string {
@@ -140,7 +141,11 @@ export default function NotificationsScreen() {
                 style={[styles.row, { backgroundColor: item.is_read ? colors.surface : colors.backgroundSecondary }]}
                 onPress={() => {
                   markRead(item.id);
-                  if (item.post_id) router.push({ pathname: "/post/[id]", params: { id: item.post_id } });
+                  if (item.post_id) {
+                    router.push({ pathname: "/post/[id]", params: { id: item.post_id } });
+                  } else if (item.actor?.id) {
+                    router.push({ pathname: "/contact/[id]", params: { id: item.actor.id } });
+                  }
                 }}
                 activeOpacity={0.7}
               >
