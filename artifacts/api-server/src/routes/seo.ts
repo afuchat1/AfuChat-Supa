@@ -9,6 +9,35 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const SITE_URL = "https://afuchat.com";
 
+router.get("/.well-known/assetlinks.json", (_req, res) => {
+  res.type("application/json").send(JSON.stringify([
+    {
+      relation: ["delegate_permission/common.handle_all_urls"],
+      target: {
+        namespace: "android_app",
+        package_name: "com.afuchat.app",
+        sha256_cert_fingerprints: [
+          process.env.ANDROID_SHA256_FINGERPRINT || "TO_BE_CONFIGURED"
+        ]
+      }
+    }
+  ]));
+});
+
+router.get("/.well-known/apple-app-site-association", (_req, res) => {
+  res.type("application/json").send(JSON.stringify({
+    applinks: {
+      apps: [],
+      details: [
+        {
+          appID: `${process.env.APPLE_TEAM_ID || "TEAMID"}.com.afuchat.app`,
+          paths: ["*"]
+        }
+      ]
+    }
+  }));
+});
+
 router.get("/robots.txt", (_req, res) => {
   res.type("text/plain").send(`User-agent: *
 Allow: /

@@ -84,7 +84,9 @@ export async function registerForPushNotifications(userId: string): Promise<stri
   }
 
   try {
-    const projectId = process.env.EXPO_PUBLIC_REPL_ID;
+    const projectId =
+      process.env.EXPO_PUBLIC_EAS_PROJECT_ID ||
+      process.env.EXPO_PUBLIC_REPL_ID;
     const tokenData = await Notifications.getExpoPushTokenAsync({
       projectId: projectId || undefined,
     });

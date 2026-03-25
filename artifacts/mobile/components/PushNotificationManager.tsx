@@ -15,7 +15,7 @@ export function PushNotificationManager() {
     if (!user || registered.current || Platform.OS === "web") return;
 
     registered.current = true;
-    registerForPushNotifications(user.id);
+    registerForPushNotifications(user.id).catch(() => {});
     const cleanup = setupNotificationListeners();
 
     return () => {
@@ -25,16 +25,17 @@ export function PushNotificationManager() {
   }, [user]);
 
   useEffect(() => {
-    if (Platform.OS === "web") return;
+    if (Platform.OS === "web" || !user) return;
 
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         clearBadge();
+        registerForPushNotifications(user.id).catch(() => {});
       }
     });
 
     return () => subscription.remove();
-  }, []);
+  }, [user]);
 
   return null;
 }
