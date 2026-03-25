@@ -56,22 +56,20 @@ export default function TopUpScreen() {
     Haptics.selectionAsync();
 
     try {
-      const apiBase = process.env.EXPO_PUBLIC_API_URL || `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token || "";
-      const response = await fetch(`${apiBase}/api/payments/pesapal/initiate`, {
+      const response = await fetch(`${supabaseUrl}/functions/v1/pesapal-payment`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          user_id: user?.id,
-          email: user?.email,
-          currency_type: "acoin",
+          action: "initiate",
           acoin_amount: amount,
-          nexa_amount: 0,
           price_usd: priceUsd,
+          email: user?.email,
           first_name: profile?.display_name?.split(" ")[0] || "User",
           last_name: profile?.display_name?.split(" ").slice(1).join(" ") || "",
         }),
