@@ -4,6 +4,7 @@ import {
   Dimensions,
   FlatList,
   Image,
+  Platform,
   RefreshControl,
   StyleSheet,
   Text,
@@ -14,6 +15,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
+import { ImageViewer, useImageViewer } from "@/components/ImageViewer";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -55,7 +57,7 @@ function formatRelative(iso: string): string {
   return `${Math.floor(diff / 86400000)}d ago`;
 }
 
-function PostCard({ item, onToggleLike }: { item: PostItem; onToggleLike: (postId: string) => void }) {
+function PostCard({ item, onToggleLike, onImagePress }: { item: PostItem; onToggleLike: (postId: string) => void; onImagePress?: (images: string[], index: number) => void }) {
   const { colors } = useTheme();
   const allImages = item.images.length > 0 ? item.images : item.image_url ? [item.image_url] : [];
   const imgW = allImages.length === 1 ? width - 48 : (width - 56) / 2;
@@ -87,12 +89,17 @@ function PostCard({ item, onToggleLike }: { item: PostItem; onToggleLike: (postI
       {allImages.length > 0 && (
         <View style={styles.images}>
           {allImages.map((uri, i) => (
-            <Image
+            <TouchableOpacity
               key={i}
-              source={{ uri }}
-              style={[styles.img, { width: imgW, height: imgW * 0.75 }]}
-              resizeMode="cover"
-            />
+              activeOpacity={0.9}
+              onPress={(e) => { e.stopPropagation(); onImagePress?.(allImages, i); }}
+            >
+              <Image
+                source={{ uri }}
+                style={[styles.img, { width: imgW, height: imgW * 0.75 }]}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
           ))}
         </View>
       )}
@@ -131,6 +138,7 @@ export default function DiscoverScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const PAGE_SIZE = 30;
+  const imgViewer = useImageViewer();
 
   const fetchPosts = useCallback(async (offset: number, isRefresh: boolean) => {
     if (!user) { setLoading(false); setRefreshing(false); return; }
@@ -382,7 +390,7 @@ export default function DiscoverScreen() {
         <FlatList
           data={posts}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <PostCard item={item} onToggleLike={toggleLike} />}
+          renderItem={({ item }) => <PostCard item={item} onToggleLike={toggleLike} onImagePress={imgViewer.openViewer} />}
           contentContainerStyle={{ gap: 8, paddingVertical: 8, paddingBottom: 90 }}
           showsVerticalScrollIndicator={false}
           onEndReached={loadMore}
@@ -418,6 +426,12 @@ export default function DiscoverScreen() {
           }
         />
       )}
+      <ImageViewer
+        images={imgViewer.images}
+        initialIndex={imgViewer.index}
+        visible={imgViewer.visible}
+        onClose={imgViewer.closeViewer}
+      />
     </View>
   );
 }

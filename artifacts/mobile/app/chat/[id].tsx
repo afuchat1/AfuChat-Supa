@@ -19,6 +19,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
+import { ImageViewer, useImageViewer } from "@/components/ImageViewer";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
@@ -172,7 +173,7 @@ function BottomSheet({ visible, onClose, children }: { visible: boolean; onClose
   );
 }
 
-function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, replyPreview, onTapEnvelope, onTapGift }: {
+function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, replyPreview, onTapEnvelope, onTapGift, onImageTap }: {
   msg: Message;
   isMe: boolean;
   showTail: boolean;
@@ -182,6 +183,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   replyPreview?: string | null;
   onTapEnvelope?: (msg: Message) => void;
   onTapGift?: (msg: Message) => void;
+  onImageTap?: (images: string[], index: number) => void;
 }) {
   const { colors } = useTheme();
   const isRedEnvelope = msg.encrypted_content.startsWith("🧧");
@@ -273,7 +275,12 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
           )}
 
           {hasImage ? (
-            <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
+            <TouchableOpacity
+              onPress={() => onImageTap?.([msg.attachment_url!], 0)}
+              onLongPress={() => onLongPress(msg)}
+              delayLongPress={300}
+              activeOpacity={0.9}
+            >
               <Image source={{ uri: msg.attachment_url! }} style={st.attachImage} resizeMode="cover" />
               {hasTextContent && (
                 <RichText style={[st.bubbleText, { color: textColor, marginTop: 6 }]} linkColor={isMe ? "#FFFFFF" : "#00C2CB"}>{msg.encrypted_content}</RichText>
@@ -364,6 +371,7 @@ export default function ChatScreen() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(!isDraft);
   const [sending, setSending] = useState(false);
+  const imgViewer = useImageViewer();
   const [realChatId, setRealChatId] = useState<string | null>(null);
   const [chatInfo, setChatInfo] = useState<ChatInfo | null>(
     isDraft && contactName
@@ -1149,6 +1157,7 @@ export default function ChatScreen() {
           replyPreview={getReplyPreview(item.reply_to_message_id)}
           onTapEnvelope={handleTapEnvelope}
           onTapGift={handleTapGift}
+          onImageTap={imgViewer.openViewer}
         />
       </View>
     );
@@ -1451,6 +1460,12 @@ export default function ChatScreen() {
           )}
         </View>
       </BottomSheet>
+      <ImageViewer
+        images={imgViewer.images}
+        initialIndex={imgViewer.index}
+        visible={imgViewer.visible}
+        onClose={imgViewer.closeViewer}
+      />
     </View>
   );
 }

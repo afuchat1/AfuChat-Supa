@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -40,6 +41,7 @@ function ClassicTabLayout() {
   const isIOS = Platform.OS === "ios";
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const isDesktop = useIsDesktop();
 
   return (
     <Tabs
@@ -47,15 +49,17 @@ function ClassicTabLayout() {
         tabBarActiveTintColor: Colors.brand,
         tabBarInactiveTintColor: colors.tabIconDefault,
         headerShown: false,
-        tabBarStyle: {
-          position: "absolute",
-          backgroundColor: isIOS ? "transparent" : colors.surface,
-          borderTopWidth: StyleSheet.hairlineWidth,
-          borderTopColor: colors.border,
-          elevation: 0,
-          height: 52 + (insets.bottom > 0 ? insets.bottom : 8),
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
-        },
+        tabBarStyle: isDesktop
+          ? { display: "none" }
+          : {
+              position: "absolute",
+              backgroundColor: isIOS ? "transparent" : colors.surface,
+              borderTopWidth: StyleSheet.hairlineWidth,
+              borderTopColor: colors.border,
+              elevation: 0,
+              height: 52 + (insets.bottom > 0 ? insets.bottom : 8),
+              paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
+            },
         tabBarLabelStyle: {
           fontSize: 10,
           fontFamily: "Inter_500Medium",

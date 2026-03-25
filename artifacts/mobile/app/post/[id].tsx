@@ -21,6 +21,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { RichText } from "@/components/ui/RichText";
 import { Avatar } from "@/components/ui/Avatar";
+import { ImageViewer, useImageViewer } from "@/components/ImageViewer";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { notifyPostLike, notifyPostReply } from "@/lib/notifyUser";
@@ -63,6 +64,7 @@ export default function PostDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
+  const imgViewer = useImageViewer();
 
   const loadPost = useCallback(async () => {
     if (!id || !user) return;
@@ -267,7 +269,9 @@ export default function PostDetailScreen() {
             {allImages.length > 0 && (
               <View style={styles.imgWrap}>
                 {allImages.map((uri, i) => (
-                  <Image key={i} source={{ uri }} style={styles.postImg} resizeMode="cover" />
+                  <TouchableOpacity key={i} activeOpacity={0.9} onPress={() => imgViewer.openViewer(allImages, i)}>
+                    <Image source={{ uri }} style={styles.postImg} resizeMode="cover" />
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
@@ -331,6 +335,12 @@ export default function PostDetailScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+      <ImageViewer
+        images={imgViewer.images}
+        initialIndex={imgViewer.index}
+        visible={imgViewer.visible}
+        onClose={imgViewer.closeViewer}
+      />
     </View>
   );
 }
