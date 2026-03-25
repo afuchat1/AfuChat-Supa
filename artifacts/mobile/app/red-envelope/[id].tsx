@@ -18,6 +18,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { notifyGiftReceived } from "@/lib/notifyUser";
+import { shareRedEnvelope } from "@/lib/share";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { ListRowSkeleton } from "@/components/ui/Skeleton";
 
@@ -137,7 +138,9 @@ export default function RedEnvelopeScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: "#FF3B30" }]}>
         <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color="#fff" /></TouchableOpacity>
         <Text style={styles.headerTitle}>🧧 Red Envelope</Text>
-        <View style={{ width: 24 }} />
+        <TouchableOpacity onPress={() => shareRedEnvelope({ envelopeId: id!, senderName: envelope.sender.display_name })}>
+          <Ionicons name="share-outline" size={22} color="#fff" />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.envelopeCard}>

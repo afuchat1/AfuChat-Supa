@@ -136,6 +136,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `app/settings/blocked.tsx` — Blocked users management
 - `lib/pushNotifications.ts` — Push notification registration, permission, badge, tap navigation, token management
 - `lib/notifyUser.ts` — Notification trigger helpers (messages, follows, likes, replies, gifts) via authenticated Supabase Edge Function calls
+- `lib/share.ts` — Share utility (sharePost, shareProfile, shareStory, shareRedEnvelope) using React Native Share API. Generates afuchat.com deep links. Used across discover feed, post detail, my-posts, contact profile, stories, and red envelopes.
 - `components/PushNotificationManager.tsx` — Null component wired into root layout for notification setup
 
 ## Auth & Onboarding Flow

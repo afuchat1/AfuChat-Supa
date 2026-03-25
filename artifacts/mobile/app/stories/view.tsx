@@ -17,6 +17,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
+import { shareStory } from "@/lib/share";
 
 const { width, height } = Dimensions.get("window");
 const STORY_DURATION = 5000;
@@ -215,6 +216,9 @@ export default function ViewStoryScreen() {
           </View>
           <Text style={styles.storyTime}>{timeLabel}</Text>
         </View>
+        <TouchableOpacity onPress={() => { setPaused(true); shareStory({ userName: story.profile.display_name, userId: story.user_id }).finally(() => setPaused(false)); }}>
+          <Ionicons name="share-outline" size={24} color="#fff" />
+        </TouchableOpacity>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="close" size={28} color="#fff" />
         </TouchableOpacity>

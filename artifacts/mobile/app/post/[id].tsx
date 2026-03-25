@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { supabase } from "@/lib/supabase";
+import { sharePost } from "@/lib/share";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { RichText } from "@/components/ui/RichText";
@@ -298,7 +299,7 @@ export default function PostDetailScreen() {
                 <Ionicons name="chatbubble-outline" size={20} color={colors.textSecondary} />
                 <Text style={[styles.statText, { color: colors.textSecondary }]}>{post.replyCount}</Text>
               </View>
-              <TouchableOpacity style={styles.statBtn}>
+              <TouchableOpacity style={styles.statBtn} onPress={() => sharePost({ postId: post.id, authorName: post.author.display_name, content: post.content })}>
                 <Ionicons name="share-outline" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>

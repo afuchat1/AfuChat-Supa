@@ -20,6 +20,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { notifyNewFollow } from "@/lib/notifyUser";
+import { shareProfile } from "@/lib/share";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { ProfileSkeleton, PostSkeleton } from "@/components/ui/Skeleton";
 
@@ -240,11 +241,18 @@ export default function ContactProfileScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Profile</Text>
-        {!isOwnProfile ? (
-          <TouchableOpacity onPress={reportUser}>
-            <Ionicons name="flag-outline" size={22} color={colors.textMuted} />
-          </TouchableOpacity>
-        ) : <View style={{ width: 24 }} />}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+          {profile?.handle ? (
+            <TouchableOpacity onPress={() => shareProfile({ handle: profile.handle, displayName: profile.display_name, bio: profile.bio })}>
+              <Ionicons name="share-outline" size={22} color={colors.textMuted} />
+            </TouchableOpacity>
+          ) : null}
+          {!isOwnProfile && (
+            <TouchableOpacity onPress={reportUser}>
+              <Ionicons name="flag-outline" size={22} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>

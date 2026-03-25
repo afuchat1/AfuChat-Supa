@@ -25,6 +25,7 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { cacheMoments, getCachedMoments, isOnline } from "@/lib/offlineStore";
 import { notifyPostLike } from "@/lib/notifyUser";
+import { sharePost } from "@/lib/share";
 import { matchInterests, computeFeedScore, diversifyFeed, type FeedSignals } from "@/lib/feedAlgorithm";
 
 const { width } = Dimensions.get("window");
@@ -108,7 +109,7 @@ function PostCard({ item, onToggleLike }: { item: PostItem; onToggleLike: (postI
           <Ionicons name="chatbubble-outline" size={18} color={colors.textMuted} />
           {item.replyCount > 0 && <Text style={[styles.actionText, { color: colors.textMuted }]}>{item.replyCount}</Text>}
         </TouchableOpacity>
-        <TouchableOpacity style={styles.action}>
+        <TouchableOpacity style={styles.action} onPress={() => sharePost({ postId: item.id, authorName: item.profile.display_name, content: item.content })}>
           <Ionicons name="share-outline" size={18} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.viewCount}>

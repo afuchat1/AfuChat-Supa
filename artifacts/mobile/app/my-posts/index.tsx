@@ -14,6 +14,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
+import { sharePost } from "@/lib/share";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
@@ -160,6 +161,9 @@ export default function MyPostsScreen() {
                     <Ionicons name="eye-outline" size={16} color={colors.textMuted} />
                     <Text style={[styles.statText, { color: colors.textMuted }]}>{item.view_count}</Text>
                   </View>
+                  <TouchableOpacity style={styles.stat} onPress={() => sharePost({ postId: item.id, authorName: profile?.display_name || "Me", content: item.content })}>
+                    <Ionicons name="share-outline" size={16} color={colors.textMuted} />
+                  </TouchableOpacity>
                 </View>
               </TouchableOpacity>
             );
