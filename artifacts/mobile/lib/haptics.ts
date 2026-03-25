@@ -1,50 +1,38 @@
 import { Platform } from "react-native";
 
-const noop = () => {};
-
-type ImpactStyle = "Light" | "Medium" | "Heavy";
-type NotificationType = "Success" | "Warning" | "Error";
-
-const ImpactFeedbackStyle: Record<ImpactStyle, string> = {
-  Light: "Light",
-  Medium: "Medium",
-  Heavy: "Heavy",
-};
-
-const NotificationFeedbackType: Record<NotificationType, string> = {
-  Success: "Success",
-  Warning: "Warning",
-  Error: "Error",
-};
-
-let _haptics: any = null;
+let _mod: typeof import("expo-haptics") | null | undefined;
 
 function getHaptics() {
   if (Platform.OS === "web") return null;
-  if (_haptics === undefined) return null;
-  if (_haptics) return _haptics;
-  try {
-    _haptics = require("expo-haptics");
-    return _haptics;
-  } catch {
-    _haptics = undefined;
-    return null;
+  if (_mod === undefined) {
+    try {
+      _mod = require("expo-haptics");
+    } catch {
+      _mod = null;
+    }
   }
+  return _mod;
 }
 
-function impactAsync(style?: string) {
+export function impactAsync(style?: any) {
   const h = getHaptics();
   if (h) h.impactAsync(style);
 }
 
-function notificationAsync(type?: string) {
+export function notificationAsync(type?: any) {
   const h = getHaptics();
   if (h) h.notificationAsync(type);
 }
 
-function selectionAsync() {
+export function selectionAsync() {
   const h = getHaptics();
   if (h) h.selectionAsync();
 }
 
-export { impactAsync, notificationAsync, selectionAsync, ImpactFeedbackStyle, NotificationFeedbackType };
+export const ImpactFeedbackStyle = Platform.OS === "web"
+  ? { Light: "light", Medium: "medium", Heavy: "heavy" }
+  : (() => { try { return require("expo-haptics").ImpactFeedbackStyle; } catch { return { Light: "light", Medium: "medium", Heavy: "heavy" }; } })();
+
+export const NotificationFeedbackType = Platform.OS === "web"
+  ? { Success: "success", Warning: "warning", Error: "error" }
+  : (() => { try { return require("expo-haptics").NotificationFeedbackType; } catch { return { Success: "success", Warning: "warning", Error: "error" }; } })();

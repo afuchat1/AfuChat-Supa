@@ -392,7 +392,7 @@ export default function ContactProfileScreen() {
             </View>
             <Text style={[styles.actionLabel, { color: colors.text }]}>Video</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/gifts")}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push({ pathname: "/gifts", params: { userId: profile?.id, userName: profile?.display_name } })}>
             <View style={[styles.actionIcon, { backgroundColor: "#FF9500" }]}>
               <Ionicons name="gift" size={22} color="#fff" />
             </View>

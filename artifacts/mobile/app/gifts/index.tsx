@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { notifyGiftReceived } from "@/lib/notifyUser";
@@ -83,6 +83,10 @@ export default function GiftsScreen() {
   const { user, profile, refreshProfile } = useAuth();
   const insets = useSafeAreaInsets();
   const { statsMap, getDynamicPrice, refreshStats } = useGiftPrices();
+  const params = useLocalSearchParams<{ userId?: string; userName?: string }>();
+  const viewUserId = params.userId || user?.id;
+  const viewUserName = params.userName;
+  const isOwnProfile = !params.userId || params.userId === user?.id;
   const [owned, setOwned] = useState<OwnedGift[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -98,14 +102,16 @@ export default function GiftsScreen() {
   const [listing, setListing] = useState(false);
 
   const loadOwned = useCallback(async () => {
-    if (!user) return;
+    if (!viewUserId) return;
     const [{ data }, { data: listedData }] = await Promise.all([
       supabase
         .from("user_gifts")
         .select("id, gift_id, is_pinned, acquired_at, transaction_id, gifts(id, name, emoji, base_xp_cost, rarity, description, image_url)")
-        .eq("user_id", user.id)
+        .eq("user_id", viewUserId)
         .order("acquired_at", { ascending: false }),
-      supabase.from("gift_marketplace").select("user_gift_id").eq("seller_id", user.id).eq("status", "listed"),
+      isOwnProfile
+        ? supabase.from("gift_marketplace").select("user_gift_id").eq("seller_id", viewUserId).eq("status", "listed")
+        : Promise.resolve({ data: [] }),
     ]);
 
     const listedGiftIds = new Set((listedData || []).map((l: any) => l.user_gift_id));
@@ -137,7 +143,7 @@ export default function GiftsScreen() {
     }
     setLoading(false);
     setRefreshing(false);
-  }, [user]);
+  }, [viewUserId, isOwnProfile]);
 
   useEffect(() => { loadOwned(); }, [loadOwned]);
 
@@ -329,7 +335,7 @@ export default function GiftsScreen() {
       <TouchableOpacity
         style={[styles.giftCard, { backgroundColor: colors.surface }]}
         onPress={() => setSelectedGift(item)}
-        onLongPress={() => togglePin(item)}
+        onLongPress={isOwnProfile ? () => togglePin(item) : undefined}
         activeOpacity={0.7}
       >
         {item.is_pinned && (
@@ -357,19 +363,23 @@ export default function GiftsScreen() {
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
       <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color={colors.text} /></TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>My Gifts</Text>
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          <TouchableOpacity onPress={() => router.push("/gifts/marketplace")} style={styles.marketplaceBtn}>
-            <Ionicons name="storefront" size={14} color="#FF9500" />
-            <Text style={styles.marketplaceBtnText}>Market</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push("/wallet")}>
-            <View style={styles.acoinBadge}>
-              <Ionicons name="diamond" size={14} color="#fff" />
-              <Text style={styles.acoinText}>{profile?.acoin || 0}</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>{isOwnProfile ? "My Gifts" : `${viewUserName || "User"}'s Gifts`}</Text>
+        {isOwnProfile ? (
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <TouchableOpacity onPress={() => router.push("/gifts/marketplace")} style={styles.marketplaceBtn}>
+              <Ionicons name="storefront" size={14} color="#FF9500" />
+              <Text style={styles.marketplaceBtnText}>Market</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push("/wallet")}>
+              <View style={styles.acoinBadge}>
+                <Ionicons name="diamond" size={14} color="#fff" />
+                <Text style={styles.acoinText}>{profile?.acoin || 0}</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={{ width: 24 }} />
+        )}
       </View>
 
       <View style={[styles.statsBar, { backgroundColor: colors.surface }]}>
@@ -454,25 +464,27 @@ export default function GiftsScreen() {
               </View>
             )}
 
-            <View style={styles.actionRow}>
-              <TouchableOpacity
-                style={styles.convertBtn}
-                onPress={() => setConfirmConvert(true)}
-              >
-                <Ionicons name="swap-horizontal" size={18} color="#fff" />
-                <Text style={styles.convertBtnText}>Convert to ACoin</Text>
-              </TouchableOpacity>
+            {isOwnProfile && (
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={styles.convertBtn}
+                  onPress={() => setConfirmConvert(true)}
+                >
+                  <Ionicons name="swap-horizontal" size={18} color="#fff" />
+                  <Text style={styles.convertBtnText}>Convert to ACoin</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.sendGiftBtn, { borderColor: Colors.brand }]}
-                onPress={() => { setSendGift(selectedGift); setSelectedGift(null); }}
-              >
-                <Ionicons name="send" size={16} color={Colors.brand} />
-                <Text style={[styles.sendGiftBtnText, { color: Colors.brand }]}>Send</Text>
-              </TouchableOpacity>
-            </View>
+                <TouchableOpacity
+                  style={[styles.sendGiftBtn, { borderColor: Colors.brand }]}
+                  onPress={() => { setSendGift(selectedGift); setSelectedGift(null); }}
+                >
+                  <Ionicons name="send" size={16} color={Colors.brand} />
+                  <Text style={[styles.sendGiftBtnText, { color: Colors.brand }]}>Send</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
-            {selectedGift && isRareOrAbove(selectedGift.gift.rarity) && (
+            {isOwnProfile && selectedGift && isRareOrAbove(selectedGift.gift.rarity) && (
               <TouchableOpacity
                 style={styles.sellRow}
                 onPress={() => { setShowListModal(true); setListPrice(String(getDynamicPrice(selectedGift.gift.id, selectedGift.gift.base_xp_cost))); }}
@@ -482,12 +494,14 @@ export default function GiftsScreen() {
               </TouchableOpacity>
             )}
 
-            <TouchableOpacity style={styles.pinRow} onPress={() => { if (selectedGift) togglePin(selectedGift); setSelectedGift(null); }}>
-              <Ionicons name={selectedGift?.is_pinned ? "pin" : "pin-outline"} size={16} color={colors.textSecondary} />
-              <Text style={[styles.pinLink, { color: colors.textSecondary }]}>
-                {selectedGift?.is_pinned ? "Unpin from profile" : "Pin to profile"}
-              </Text>
-            </TouchableOpacity>
+            {isOwnProfile && (
+              <TouchableOpacity style={styles.pinRow} onPress={() => { if (selectedGift) togglePin(selectedGift); setSelectedGift(null); }}>
+                <Ionicons name={selectedGift?.is_pinned ? "pin" : "pin-outline"} size={16} color={colors.textSecondary} />
+                <Text style={[styles.pinLink, { color: colors.textSecondary }]}>
+                  {selectedGift?.is_pinned ? "Unpin from profile" : "Pin to profile"}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </Modal>
