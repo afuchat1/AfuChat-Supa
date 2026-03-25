@@ -1,89 +1,75 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React from "react";
 import {
-  FlatList,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 
-type MiniProgram = {
+type ProgramInfo = {
   id: string;
-  name: string;
-  description: string | null;
-  icon_url: string | null;
-  category: string;
-  rating: number;
-  install_count: number;
+  title: string;
+  description: string;
+  icon: string;
+  color: string;
+  route: string;
 };
+
+const PROGRAMS: ProgramInfo[] = [
+  { id: "calculator", title: "Calculator", description: "Quick calculations", icon: "🧮", color: "#FF6B6B", route: "/mini-programs/calculator" },
+  { id: "tip-calculator", title: "Tip Calculator", description: "Split bills easily", icon: "💰", color: "#4ECDC4", route: "/mini-programs/tip-calculator" },
+  { id: "unit-converter", title: "Unit Converter", description: "Convert measurements", icon: "📏", color: "#45B7D1", route: "/mini-programs/unit-converter" },
+  { id: "habit-tracker", title: "Habit Tracker", description: "Build daily habits", icon: "✅", color: "#96CEB4", route: "/mini-programs/habit-tracker" },
+  { id: "color-picker", title: "Color Picker", description: "Find perfect colors", icon: "🎨", color: "#DDA0DD", route: "/mini-programs/color-picker" },
+];
 
 export default function MiniProgramsScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const [programs, setPrograms] = useState<MiniProgram[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    const { data } = await supabase
-      .from("mini_programs")
-      .select("id, name, description, icon_url, category, rating, install_count")
-      .eq("is_published", true)
-      .eq("status", "approved")
-      .order("install_count", { ascending: false })
-      .limit(30);
-    if (data) setPrograms(data);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
       <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color={colors.text} /></TouchableOpacity>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Mini Programs</Text>
         <View style={{ width: 24 }} />
       </View>
 
-      {loading ? <View style={{ padding: 4 }}>{[1, 2, 3, 4, 5].map((i) => <ListRowSkeleton key={i} />)}</View> : (
-        <FlatList
-          data={programs}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <TouchableOpacity style={[styles.row, { backgroundColor: colors.surface }]} activeOpacity={0.7}>
-              <View style={[styles.iconWrap, { backgroundColor: colors.inputBg }]}>
-                <Text style={styles.iconText}>{item.icon_url ? "🔧" : "📱"}</Text>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
+        <View style={[styles.banner, { backgroundColor: "#6C5CE7" }]}>
+          <Text style={styles.bannerIcon}>⚡</Text>
+          <Text style={styles.bannerTitle}>Quick Tools</Text>
+          <Text style={styles.bannerSub}>Handy utilities right in your chat app</Text>
+        </View>
+
+        <View style={styles.list}>
+          {PROGRAMS.map((prog) => (
+            <TouchableOpacity
+              key={prog.id}
+              style={[styles.programRow, { backgroundColor: colors.surface }]}
+              activeOpacity={0.7}
+              onPress={() => router.push(prog.route as any)}
+            >
+              <View style={[styles.iconCircle, { backgroundColor: prog.color + "20" }]}>
+                <Text style={styles.iconEmoji}>{prog.icon}</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.name, { color: colors.text }]}>{item.name}</Text>
-                <Text style={[styles.desc, { color: colors.textSecondary }]} numberOfLines={1}>{item.description || item.category}</Text>
-                <View style={styles.metaRow}>
-                  <Ionicons name="star" size={12} color="#FFD60A" />
-                  <Text style={[styles.metaText, { color: colors.textMuted }]}>{item.rating.toFixed(1)}</Text>
-                  <Text style={[styles.metaText, { color: colors.textMuted }]}>{item.install_count} installs</Text>
-                </View>
+                <Text style={[styles.progTitle, { color: colors.text }]}>{prog.title}</Text>
+                <Text style={[styles.progDesc, { color: colors.textSecondary }]}>{prog.description}</Text>
               </View>
-              <TouchableOpacity style={styles.openBtn}>
-                <Text style={styles.openBtnText}>Open</Text>
-              </TouchableOpacity>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
             </TouchableOpacity>
-          )}
-          contentContainerStyle={{ paddingBottom: 90 }}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Ionicons name="apps-outline" size={64} color={colors.textMuted} />
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No mini programs available</Text>
-            </View>
-          }
-        />
-      )}
+          ))}
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -92,15 +78,15 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  row: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
-  iconWrap: { width: 52, height: 52, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  iconText: { fontSize: 24 },
-  name: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  desc: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
-  metaText: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  openBtn: { backgroundColor: Colors.brand, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16 },
-  openBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  empty: { alignItems: "center", paddingTop: 80, gap: 12 },
-  emptyText: { fontSize: 15, fontFamily: "Inter_400Regular" },
+  content: { padding: 16, gap: 16 },
+  banner: { borderRadius: 20, padding: 24, alignItems: "center", gap: 8 },
+  bannerIcon: { fontSize: 40 },
+  bannerTitle: { fontSize: 24, fontFamily: "Inter_700Bold", color: "#fff" },
+  bannerSub: { fontSize: 14, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.8)", textAlign: "center" },
+  list: { gap: 8 },
+  programRow: { flexDirection: "row", alignItems: "center", padding: 16, borderRadius: 14, gap: 14 },
+  iconCircle: { width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  iconEmoji: { fontSize: 24 },
+  progTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  progDesc: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
 });
