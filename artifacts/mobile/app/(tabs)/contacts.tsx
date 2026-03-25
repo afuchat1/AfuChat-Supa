@@ -23,6 +23,8 @@ import { Separator } from "@/components/ui/Separator";
 import Colors from "@/constants/colors";
 import { ContactRowSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
+import OfflineBanner from "@/components/ui/OfflineBanner";
+import { cacheContacts, getCachedContacts, isOnline } from "@/lib/offlineStore";
 
 type Contact = {
   id: string;
@@ -126,6 +128,14 @@ export default function ContactsScreen() {
   const loadContacts = useCallback(async () => {
     if (!user) return;
 
+    if (!isOnline()) {
+      const cached = await getCachedContacts();
+      if (cached.length > 0) setContacts(cached);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     const { data: followRows } = await supabase
       .from("follows")
       .select("following_id, profiles!follows_following_id_fkey(id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified)")
@@ -137,6 +147,7 @@ export default function ContactsScreen() {
         .filter(Boolean)
         .sort((a: Contact, b: Contact) => a.display_name.localeCompare(b.display_name));
       setContacts(list);
+      cacheContacts(list);
     }
     setLoading(false);
     setRefreshing(false);
@@ -198,6 +209,7 @@ export default function ContactsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
+      <OfflineBanner />
       <View
         style={[
           styles.header,

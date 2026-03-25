@@ -3,7 +3,7 @@ import { AppState } from "react-native";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { getStoredAccounts, storeAccount, removeStoredAccount, updateAccountTokens, type StoredAccount } from "@/lib/accountStore";
-import { cacheProfile, getCachedProfile } from "@/lib/offlineStore";
+import { cacheProfile, getCachedProfile, isOnline } from "@/lib/offlineStore";
 import { startOfflineSync } from "@/lib/offlineSync";
 import { clearPushToken } from "@/lib/pushNotifications";
 
@@ -88,43 +88,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [linkedAccounts, setLinkedAccounts] = useState<StoredAccount[]>([]);
 
   async function fetchProfile(userId: string) {
-    const [{ data: profileData }, { data: subData }] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select("id, handle, display_name, avatar_url, banner_url, bio, phone_number, xp, acoin, current_grade, is_verified, is_private, show_online_status, country, website_url, language, tipping_enabled, is_admin, is_organization_verified, gender, date_of_birth, region, interests, onboarding_completed, scheduled_deletion_at")
-        .eq("id", userId)
-        .single(),
-      supabase
-        .from("user_subscriptions")
-        .select("id, plan_id, started_at, expires_at, is_active, acoin_paid, subscription_plans(name, tier, features)")
-        .eq("user_id", userId)
-        .eq("is_active", true)
-        .gte("expires_at", new Date().toISOString())
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-    ]);
-
-    if (profileData) {
-      setProfile(profileData as Profile);
-      cacheProfile(profileData);
+    if (!isOnline()) {
+      const cached = await getCachedProfile();
+      if (cached) setProfile(cached as Profile);
+      setSubscription(null);
+      return;
     }
 
-    if (subData) {
-      const plan = (subData as any).subscription_plans;
-      setSubscription({
-        id: subData.id,
-        plan_id: subData.plan_id,
-        started_at: subData.started_at,
-        expires_at: subData.expires_at,
-        is_active: subData.is_active,
-        acoin_paid: subData.acoin_paid,
-        plan_name: plan?.name || "",
-        plan_tier: plan?.tier || "free",
-        plan_features: plan?.features || [],
-      });
-    } else {
-      setSubscription(null);
+    try {
+      const [{ data: profileData }, { data: subData }] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, handle, display_name, avatar_url, banner_url, bio, phone_number, xp, acoin, current_grade, is_verified, is_private, show_online_status, country, website_url, language, tipping_enabled, is_admin, is_organization_verified, gender, date_of_birth, region, interests, onboarding_completed, scheduled_deletion_at")
+          .eq("id", userId)
+          .single(),
+        supabase
+          .from("user_subscriptions")
+          .select("id, plan_id, started_at, expires_at, is_active, acoin_paid, subscription_plans(name, tier, features)")
+          .eq("user_id", userId)
+          .eq("is_active", true)
+          .gte("expires_at", new Date().toISOString())
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+
+      if (profileData) {
+        setProfile(profileData as Profile);
+        cacheProfile(profileData);
+      }
+
+      if (subData) {
+        const plan = (subData as any).subscription_plans;
+        setSubscription({
+          id: subData.id,
+          plan_id: subData.plan_id,
+          started_at: subData.started_at,
+          expires_at: subData.expires_at,
+          is_active: subData.is_active,
+          acoin_paid: subData.acoin_paid,
+          plan_name: plan?.name || "",
+          plan_tier: plan?.tier || "free",
+          plan_features: plan?.features || [],
+        });
+      } else {
+        setSubscription(null);
+      }
+    } catch {
+      const cached = await getCachedProfile();
+      if (cached) setProfile(cached as Profile);
     }
   }
 
@@ -274,7 +286,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!user) return;
     const updateLastSeen = () => {
-      supabase.rpc("update_last_seen").then(() => {});
+      if (isOnline()) supabase.rpc("update_last_seen").then(() => {});
     };
     updateLastSeen();
     const sub = AppState.addEventListener("change", (state) => {

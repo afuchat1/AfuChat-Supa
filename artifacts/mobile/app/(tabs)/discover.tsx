@@ -22,6 +22,8 @@ import { RichText } from "@/components/ui/RichText";
 import Colors from "@/constants/colors";
 import { PostSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
+import OfflineBanner from "@/components/ui/OfflineBanner";
+import { cacheMoments, getCachedMoments, isOnline } from "@/lib/offlineStore";
 import { matchInterests, computeFeedScore, diversifyFeed, type FeedSignals } from "@/lib/feedAlgorithm";
 
 const { width } = Dimensions.get("window");
@@ -130,6 +132,17 @@ export default function DiscoverScreen() {
 
   const fetchPosts = useCallback(async (offset: number, isRefresh: boolean) => {
     if (!user) { setLoading(false); setRefreshing(false); return; }
+
+    if (!isOnline()) {
+      if (isRefresh) {
+        const cached = await getCachedMoments();
+        if (cached.length > 0) setPosts(cached);
+      }
+      setLoading(false);
+      setRefreshing(false);
+      setLoadingMore(false);
+      return;
+    }
 
     const userInterests: string[] = profile?.interests || [];
     const userCountry: string = profile?.country || "";
@@ -269,6 +282,7 @@ export default function DiscoverScreen() {
 
       if (isRefresh) {
         setPosts(diversified as PostItem[]);
+        cacheMoments(diversified as PostItem[]);
       } else {
         setPosts((prev) => {
           const existingIds = new Set(prev.map((p) => p.id));
@@ -336,6 +350,7 @@ export default function DiscoverScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
+      <OfflineBanner />
       <View
         style={[
           styles.header,

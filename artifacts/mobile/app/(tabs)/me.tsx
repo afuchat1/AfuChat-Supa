@@ -17,6 +17,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { Separator } from "@/components/ui/Separator";
 import Colors from "@/constants/colors";
+import OfflineBanner from "@/components/ui/OfflineBanner";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -81,14 +82,16 @@ export default function MeScreen() {
   const gradeIcon = profile?.current_grade === "Newcomer" ? "leaf-outline" : "star-outline";
 
   return (
-    <ScrollView
-      style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 24 },
-      ]}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={{ flex: 1, backgroundColor: colors.backgroundSecondary }}>
+      <OfflineBanner />
+      <ScrollView
+        style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 24 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
       <TouchableOpacity
         style={[styles.profileCard, { backgroundColor: colors.surface }]}
         onPress={() => router.push("/profile/edit")}
@@ -260,6 +263,7 @@ export default function MeScreen() {
         <Text style={[styles.version, { color: colors.textMuted }]}>AfuChat v1.0.0</Text>
       </View>
     </ScrollView>
+    </View>
   );
 }
 

@@ -7,6 +7,7 @@ const CACHE_KEYS = {
   CONTACTS: "offline_contacts",
   MESSAGES_PREFIX: "offline_messages_",
   MOMENTS: "offline_moments",
+  NOTIFICATIONS: "offline_notifications",
   PENDING_MESSAGES: "offline_pending_messages",
 };
 
@@ -132,6 +133,21 @@ export async function cacheMoments(moments: any[]): Promise<void> {
 export async function getCachedMoments(): Promise<any[]> {
   try {
     const raw = await AsyncStorage.getItem(CACHE_KEYS.MOMENTS);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function cacheNotifications(notifications: any[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(CACHE_KEYS.NOTIFICATIONS, JSON.stringify(notifications));
+  } catch {}
+}
+
+export async function getCachedNotifications(): Promise<any[]> {
+  try {
+    const raw = await AsyncStorage.getItem(CACHE_KEYS.NOTIFICATIONS);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];

@@ -41,6 +41,7 @@ import {
   onConnectivityChange,
 } from "@/lib/offlineStore";
 import { syncPendingMessages } from "@/lib/offlineSync";
+import OfflineBanner from "@/components/ui/OfflineBanner";
 
 type Gift = {
   id: string;
@@ -1127,6 +1128,7 @@ export default function ChatScreen() {
 
   return (
     <View style={[st.root, { backgroundColor: colors.background }]}>
+      <OfflineBanner />
       <View style={[st.header, { backgroundColor: colors.surface, paddingTop: insets.top + 4, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={st.backBtn} hitSlop={12}>
           <Ionicons name="chevron-back" size={26} color={colors.text} />

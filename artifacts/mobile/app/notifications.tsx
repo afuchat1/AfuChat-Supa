@@ -20,6 +20,8 @@ import Colors from "@/constants/colors";
 import { clearBadge } from "@/lib/pushNotifications";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { NotificationSkeleton } from "@/components/ui/Skeleton";
+import OfflineBanner from "@/components/ui/OfflineBanner";
+import { cacheNotifications, getCachedNotifications, isOnline } from "@/lib/offlineStore";
 
 type NotifItem = {
   id: string;
@@ -56,6 +58,15 @@ export default function NotificationsScreen() {
 
   const load = useCallback(async () => {
     if (!user) return;
+
+    if (!isOnline()) {
+      const cached = await getCachedNotifications();
+      if (cached.length > 0) setItems(cached);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     const { data } = await supabase
       .from("notifications")
       .select("id, type, is_read, created_at, post_id, profiles!notifications_actor_id_fkey(id, display_name, avatar_url, handle, is_verified, is_organization_verified)")
@@ -64,7 +75,9 @@ export default function NotificationsScreen() {
       .limit(50);
 
     if (data) {
-      setItems(data.map((n: any) => ({ ...n, actor: n.profiles })));
+      const mapped = data.map((n: any) => ({ ...n, actor: n.profiles }));
+      setItems(mapped);
+      cacheNotifications(mapped);
     }
     setLoading(false);
     setRefreshing(false);
@@ -103,6 +116,7 @@ export default function NotificationsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
+      <OfflineBanner />
       <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />

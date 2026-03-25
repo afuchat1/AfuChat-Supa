@@ -25,6 +25,8 @@ import { Separator } from "@/components/ui/Separator";
 import Colors from "@/constants/colors";
 import { ChatRowSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
+import OfflineBanner from "@/components/ui/OfflineBanner";
+import { cacheConversations, getCachedConversations, isOnline } from "@/lib/offlineStore";
 
 type Contact = {
   id: string;
@@ -468,6 +470,14 @@ export default function ChatsScreen() {
   const loadChats = useCallback(async () => {
     if (!user) return;
 
+    if (!isOnline()) {
+      const cached = await getCachedConversations();
+      if (cached.length > 0) setChats(cached);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     const { data: memberRows } = await supabase
       .from("chat_members")
       .select("chat_id")
@@ -571,6 +581,7 @@ export default function ChatsScreen() {
       });
 
       setChats(items);
+      cacheConversations(items);
     }
     setLoading(false);
     setRefreshing(false);
@@ -635,6 +646,7 @@ export default function ChatsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
+      <OfflineBanner />
       <View
         style={[
           styles.header,

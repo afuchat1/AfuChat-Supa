@@ -83,6 +83,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - **Themes**: Dark theme uses pure `#000000` black. Light theme uses cream tones (`#FDF8F3` background). User can toggle via Appearance setting on Me tab (System/Dark/Light). ThemeContext with AsyncStorage persistence.
 - **Account Deletion**: Soft-delete with 30-day grace period. `profiles.scheduled_deletion_at` set to now+30d on delete request. User is signed out. On next login, if scheduled_deletion_at is set, user is prompted to restore or proceed with deletion. After 30 days, `POST /api/account-purge` (requires `ACCOUNT_PURGE_SECRET`) permanently removes all user data (moments, messages, follows, contacts, stories, transactions, subscriptions, notifications) and deletes the Supabase auth user. `profiles.account_deleted` boolean marks fully purged accounts.
 - **Push Notifications**: Expo Push Notifications via `expo-notifications` + `expo-device`. Token stored in `profiles.expo_push_token`. Edge function `send-push-notification` uses Expo Push API with JWT auth verification (caller must be authenticated). Notifications triggered client-side for: new messages, follows, post likes, post replies, red envelope claims. Badge cleared on app active + opening Notifications screen. Token cleared on sign-out. Custom notification sound (`assets/sounds/notification.wav`) used across all channels (default, messages, social).
+- **Offline Support**: Full offline-first architecture. `lib/offlineStore.ts` caches profile, conversations, contacts, moments, notifications, and per-chat messages to AsyncStorage. `lib/offlineSync.ts` queues messages when offline (shown with clock icon) and auto-syncs on reconnect via `onConnectivityChange`. `OfflineBanner` component (red "No internet" / green "Back online") shown on all tabs, chat screen, and notifications. AuthContext uses cached profile when offline and guards against network errors. Supabase client has `persistSession: true` so users stay logged in offline.
 - **Real-time**: Supabase Realtime subscriptions for incoming messages
 - **State**: React Context (AuthContext, ThemeContext) + local component state
 - **Premium**: Uses `user_subscriptions` table (NOT `profiles.is_premium`). Plans loaded from `subscription_plans` table. Payment via ACoin. AuthContext exposes `isPremium`, `subscription` fields.
@@ -100,6 +101,9 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `components/ui/Separator.tsx` — List separator
 - `components/ui/VerifiedBadge.tsx` — Shared verified badge (gold for business, teal for personal)
 - `components/ui/Skeleton.tsx` — Animated skeleton loading placeholders (ChatRowSkeleton, ContactRowSkeleton, PostSkeleton, ProfileSkeleton, NotificationSkeleton)
+- `components/ui/OfflineBanner.tsx` — Network status banner (red offline / green reconnected) with animated fade
+- `lib/offlineStore.ts` — AsyncStorage-based caching for profile, conversations, contacts, moments, notifications, messages; pending message queue; NetInfo connectivity tracking
+- `lib/offlineSync.ts` — Auto-sync pending messages on reconnect
 - `app/(tabs)/index.tsx` — Chats list with stories bar
 - `app/(tabs)/contacts.tsx` — Contacts (follows) list
 - `app/(tabs)/discover.tsx` — Posts feed (tap to post detail)
