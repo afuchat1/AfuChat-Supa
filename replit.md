@@ -124,8 +124,17 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `app/gifts/index.tsx` — User's owned gifts gallery (no shop tab). Convert gifts to ACoin (5.99% hidden fee), send gifts to friends, pin/unpin via long press. Listed marketplace gifts hidden from gallery. Double-listing prevented. Marketplace listing check before send/convert.
 - `app/gifts/marketplace.tsx` — Gift marketplace for rare/epic/legendary gifts. Atomic buy flow with full rollback on failure. 5% marketplace fee. Seller ownership verified on transfer. Skeleton loading.
 - `app/red-envelope/[id].tsx` — Red envelope claim and status
-- `app/games/index.tsx` — Game challenges and scores
-- `app/mini-programs/index.tsx` — Mini programs discovery
+- `app/games/index.tsx` — Games hub with 8 real video games (Snake, Tetris, 2048, Flappy Bird, Space Shooter, Brick Breaker, Minesweeper, Memory Match) with Acoin power-ups
+- `app/mini-programs/index.tsx` — Services hub with daily-life services + embedded games section
+- `app/mini-programs/airtime.tsx` — Buy airtime (MTN, Airtel, Glo, 9mobile) with 2% fee
+- `app/mini-programs/data-bundles.tsx` — Buy data bundles (1GB-50GB) with 2% fee
+- `app/mini-programs/bills.tsx` — Pay bills (electricity, water, TV, internet, waste, insurance) with 3% fee
+- `app/mini-programs/hotels.tsx` — Book hotels (single/double/suite rooms) with 5% fee
+- `app/mini-programs/tickets.tsx` — Buy event tickets (regular/VIP/VVIP) with 4% fee
+- `app/mini-programs/transfer.tsx` — Send money to users with 1.5% fee
+- `app/mini-programs/fee-details.tsx` — Fee breakdown page for all services
+- `lib/serviceTransactions.ts` — Service transaction helper (fee calc, ACoin debit, transaction recording with full metadata)
+- `lib/gameCoins.ts` — Game Acoin utility (spend for power-ups, extra lives, etc.)
 - `app/ai/index.tsx` — AfuAi chat with full user context (balance, stats, gifts, premium status), animated thinking dots indicator, actionable navigation buttons from AI responses (allowlisted routes only), platform-aware system prompt. Powered by Supabase Edge Function `ai-chat`.
 - `app/admin/index.tsx` — Admin Dashboard (admin-only, accessible from Me tab). Features: platform overview stats, user management (verify toggle, balance adjust), content moderation (block/delete posts), subscription plans view, currency settings, moderation reports. Only visible to users with `is_admin=true` in profiles.
 - `app/my-posts/index.tsx` — Dedicated My Posts screen (user's own posts with delete)

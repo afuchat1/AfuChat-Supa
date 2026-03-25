@@ -65,15 +65,13 @@ function RootLayoutNav() {
       <Stack.Screen name="games/minesweeper" />
       <Stack.Screen name="games/memory-match" />
       <Stack.Screen name="mini-programs/index" />
-      <Stack.Screen name="mini-programs/calculator" />
-      <Stack.Screen name="mini-programs/tip-calculator" />
-      <Stack.Screen name="mini-programs/unit-converter" />
-      <Stack.Screen name="mini-programs/habit-tracker" />
-      <Stack.Screen name="mini-programs/color-picker" />
-      <Stack.Screen name="mini-programs/stopwatch" />
-      <Stack.Screen name="mini-programs/pomodoro" />
-      <Stack.Screen name="mini-programs/bmi" />
-      <Stack.Screen name="mini-programs/notes" />
+      <Stack.Screen name="mini-programs/airtime" />
+      <Stack.Screen name="mini-programs/data-bundles" />
+      <Stack.Screen name="mini-programs/bills" />
+      <Stack.Screen name="mini-programs/hotels" />
+      <Stack.Screen name="mini-programs/tickets" />
+      <Stack.Screen name="mini-programs/transfer" />
+      <Stack.Screen name="mini-programs/fee-details" />
       <Stack.Screen name="notifications" />
       <Stack.Screen name="stories/create" options={{ animation: "slide_from_bottom", gestureDirection: "vertical" }} />
       <Stack.Screen name="stories/view" options={{ animation: "fade" }} />
