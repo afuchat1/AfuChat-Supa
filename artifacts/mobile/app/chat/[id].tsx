@@ -371,6 +371,7 @@ export default function ChatScreen() {
   const [gifSearch, setGifSearch] = useState("");
   const [attachmentPreview, setAttachmentPreview] = useState<{ uri: string; type: string; name?: string } | null>(null);
   const [networkOnline, setNetworkOnline] = useState(isOnline());
+  const [messageLimited, setMessageLimited] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const typingTimeout = useRef<any>(null);
 
@@ -473,6 +474,51 @@ export default function ChatScreen() {
     }
     setLoading(false);
   }, [id, user, isDraft, realChatId]);
+
+  const checkMessageGating = useCallback(async () => {
+    if (!user) return;
+    const info = chatInfo;
+    if (!info || info.is_group || info.is_channel || !info.other_id) {
+      setMessageLimited(false);
+      return;
+    }
+    const otherId = info.other_id;
+    const { data: theyFollowMe } = await supabase
+      .from("follows")
+      .select("id")
+      .eq("follower_id", otherId)
+      .eq("following_id", user.id)
+      .maybeSingle();
+    if (theyFollowMe) {
+      setMessageLimited(false);
+      return;
+    }
+    const chatId = isDraft ? realChatId : id;
+    if (!chatId) {
+      setMessageLimited(false);
+      return;
+    }
+    const { data: theirReplies } = await supabase
+      .from("messages")
+      .select("id")
+      .eq("chat_id", chatId)
+      .eq("sender_id", otherId)
+      .limit(1);
+    if (theirReplies && theirReplies.length > 0) {
+      setMessageLimited(false);
+      return;
+    }
+    const { count } = await supabase
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("chat_id", chatId)
+      .eq("sender_id", user.id);
+    setMessageLimited((count || 0) >= 1);
+  }, [user, chatInfo, isDraft, realChatId, id]);
+
+  useEffect(() => {
+    checkMessageGating();
+  }, [checkMessageGating, messages.length]);
 
   useEffect(() => {
     if (isDraft) return;
@@ -583,6 +629,10 @@ export default function ChatScreen() {
   async function sendMessage() {
     const text = input.trim();
     if (!text || !user || sending) return;
+    if (messageLimited) {
+      showAlert("Message limit", `You can only send one message until ${chatInfo?.other_name || "this user"} replies or follows you.`);
+      return;
+    }
     setSending(true);
     setInput("");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -637,6 +687,10 @@ export default function ChatScreen() {
     const amount = parseInt(envelopeAmount, 10);
     const count = parseInt(envelopeCount, 10) || 1;
     if (!amount || amount < 1 || !user) return;
+    if (messageLimited) {
+      showAlert("Message limit", `You can only send one message until ${chatInfo?.other_name || "this user"} replies or follows you.`);
+      return;
+    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     const activeChatId = await getOrCreateChatId();
@@ -673,6 +727,10 @@ export default function ChatScreen() {
 
   async function sendGift(gift: Gift) {
     if (!user || giftSending) return;
+    if (messageLimited) {
+      showAlert("Message limit", `You can only send one message until ${chatInfo?.other_name || "this user"} replies or follows you.`);
+      return;
+    }
     setGiftSending(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
@@ -728,6 +786,10 @@ export default function ChatScreen() {
 
   async function sendAttachment() {
     if (!user || !attachmentPreview) return;
+    if (messageLimited) {
+      showAlert("Message limit", `You can only send one message until ${chatInfo?.other_name || "this user"} replies or follows you.`);
+      return;
+    }
     setSending(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -800,6 +862,11 @@ export default function ChatScreen() {
 
   async function sendGifMessage(gifUrl: string) {
     if (!user) return;
+    if (messageLimited) {
+      showAlert("Message limit", `You can only send one message until ${chatInfo?.other_name || "this user"} replies or follows you.`);
+      setShowGifPicker(false);
+      return;
+    }
     setShowGifPicker(false);
     setGifSearch("");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -982,39 +1049,48 @@ export default function ChatScreen() {
           </View>
         )}
 
-        <View style={[st.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 8) }]}>
-          <TouchableOpacity onPress={() => setShowAttachMenu(true)} style={st.inputAction} hitSlop={6}>
-            <Ionicons name="add-circle" size={28} color={colors.textMuted} />
-          </TouchableOpacity>
-          <View style={[st.inputField, { backgroundColor: colors.inputBg }]}>
-            <TextInput
-              style={[st.input, { color: colors.text }]}
-              placeholder="Message"
-              placeholderTextColor={colors.textMuted}
-              value={input}
-              onChangeText={(t) => { setInput(t); handleTyping(); }}
-              multiline
-              maxLength={4000}
-            />
+        {messageLimited ? (
+          <View style={[st.limitedBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
+            <Ionicons name="lock-closed" size={16} color={colors.textMuted} style={{ marginRight: 8 }} />
+            <Text style={[st.limitedText, { color: colors.textSecondary }]}>
+              You can send more messages once {chatInfo?.other_name || "this user"} replies or follows you
+            </Text>
           </View>
-          {(input.trim() || attachmentPreview) ? (
-            <TouchableOpacity
-              onPress={attachmentPreview ? sendAttachment : sendMessage}
-              disabled={sending}
-              style={[st.sendBtn, { backgroundColor: BRAND }]}
-            >
-              {sending ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Ionicons name="send" size={18} color="#fff" />
-              )}
+        ) : (
+          <View style={[st.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 8) }]}>
+            <TouchableOpacity onPress={() => setShowAttachMenu(true)} style={st.inputAction} hitSlop={6}>
+              <Ionicons name="add-circle" size={28} color={colors.textMuted} />
             </TouchableOpacity>
-          ) : (
-            <TouchableOpacity onPress={() => {}} style={st.inputAction} hitSlop={6}>
-              <Ionicons name="mic" size={26} color={colors.textMuted} />
-            </TouchableOpacity>
-          )}
-        </View>
+            <View style={[st.inputField, { backgroundColor: colors.inputBg }]}>
+              <TextInput
+                style={[st.input, { color: colors.text }]}
+                placeholder="Message"
+                placeholderTextColor={colors.textMuted}
+                value={input}
+                onChangeText={(t) => { setInput(t); handleTyping(); }}
+                multiline
+                maxLength={4000}
+              />
+            </View>
+            {(input.trim() || attachmentPreview) ? (
+              <TouchableOpacity
+                onPress={attachmentPreview ? sendAttachment : sendMessage}
+                disabled={sending}
+                style={[st.sendBtn, { backgroundColor: BRAND }]}
+              >
+                {sending ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Ionicons name="send" size={18} color="#fff" />
+                )}
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity onPress={() => {}} style={st.inputAction} hitSlop={6}>
+                <Ionicons name="mic" size={26} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </KeyboardAvoidingView>
 
       <BottomSheet visible={!!showReactions} onClose={() => setShowReactions(null)}>
@@ -1287,6 +1363,20 @@ const st = StyleSheet.create({
   attachPreviewFile: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
   attachPreviewName: { fontSize: 13, fontFamily: "Inter_500Medium", maxWidth: 160 },
   attachPreviewClose: { marginLeft: "auto" },
+
+  limitedBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  limitedText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    flex: 1,
+    lineHeight: 18,
+  },
 
   inputBar: {
     flexDirection: "row",
