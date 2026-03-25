@@ -53,15 +53,17 @@ export default function WalletScreen() {
   const [convertAmount, setConvertAmount] = useState("");
   const [converting, setConverting] = useState(false);
   const [currencySettings, setCurrencySettings] = useState<CurrencySettings | null>(null);
-  const [activeTab, setActiveTab] = useState<"all" | "nexa" | "acoin">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "nexa" | "acoin" | "gifts">("all");
 
   const loadData = useCallback(async () => {
     if (!user) return;
-    const [{ data: xpSent }, { data: xpReceived }, { data: acoinTx }, { data: settings }] = await Promise.all([
+    const [{ data: xpSent }, { data: xpReceived }, { data: acoinTx }, { data: settings }, { data: giftsSent }, { data: giftsReceived }] = await Promise.all([
       supabase.from("xp_transfers").select("id, amount, created_at, status, receiver_id").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(30),
       supabase.from("xp_transfers").select("id, amount, created_at, status, sender_id").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(30),
-      supabase.from("acoin_transactions").select("id, amount, transaction_type, nexa_spent, fee_charged, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(30),
+      supabase.from("acoin_transactions").select("id, amount, transaction_type, nexa_spent, fee_charged, created_at, metadata").eq("user_id", user.id).order("created_at", { ascending: false }).limit(50),
       supabase.from("currency_settings").select("nexa_to_acoin_rate, conversion_fee_percent, p2p_fee_percent").limit(1).single(),
+      supabase.from("gift_transactions").select("id, gift_id, receiver_id, xp_cost, created_at, gifts(name, emoji)").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(30),
+      supabase.from("gift_transactions").select("id, gift_id, sender_id, xp_cost, created_at, gifts(name, emoji)").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(30),
     ]);
 
     if (settings) setCurrencySettings(settings as CurrencySettings);
@@ -69,10 +71,37 @@ export default function WalletScreen() {
     const all: Transaction[] = [];
     (xpSent || []).forEach((t: any) => all.push({ id: t.id, type: "nexa_sent", amount: -t.amount, created_at: t.created_at, label: "Nexa Sent", icon: "arrow-up-circle", color: "#FF3B30", currency: "nexa" }));
     (xpReceived || []).forEach((t: any) => all.push({ id: t.id, type: "nexa_received", amount: t.amount, created_at: t.created_at, label: "Nexa Received", icon: "arrow-down-circle", color: Colors.brand, currency: "nexa" }));
+
+    const acoinLabelMap: Record<string, { label: string; icon: string }> = {
+      conversion: { label: "Nexa → ACoin", icon: "swap-horizontal" },
+      subscription: { label: "Premium Subscription", icon: "diamond" },
+      gift_conversion: { label: "Gift Converted", icon: "gift" },
+      marketplace_purchase: { label: "Marketplace Purchase", icon: "cart" },
+      marketplace_sale: { label: "Marketplace Sale", icon: "storefront" },
+      topup: { label: "ACoin Top-Up", icon: "card" },
+    };
+
     (acoinTx || []).forEach((t: any) => {
-      const label = t.transaction_type === "conversion" ? "Nexa → ACoin" : t.transaction_type === "subscription" ? "Premium Subscription" : t.transaction_type.replace(/_/g, " ");
-      const icon = t.transaction_type === "conversion" ? "swap-horizontal" : t.transaction_type === "subscription" ? "diamond" : t.amount > 0 ? "arrow-down-circle" : "arrow-up-circle";
+      const mapped = acoinLabelMap[t.transaction_type];
+      const giftName = t.metadata?.gift_name;
+      let label = mapped?.label || t.transaction_type.replace(/_/g, " ");
+      if (giftName && (t.transaction_type === "gift_conversion" || t.transaction_type === "marketplace_purchase" || t.transaction_type === "marketplace_sale")) {
+        label += ` · ${giftName}`;
+      }
+      const icon = mapped?.icon || (t.amount > 0 ? "arrow-down-circle" : "arrow-up-circle");
       all.push({ id: t.id, type: t.transaction_type, amount: t.amount, created_at: t.created_at, label, icon, color: t.amount > 0 ? "#34C759" : "#FF9500", currency: "acoin" });
+    });
+
+    (giftsSent || []).forEach((t: any) => {
+      const giftName = t.gifts?.name || "Gift";
+      const giftEmoji = t.gifts?.emoji || "🎁";
+      all.push({ id: "gs_" + t.id, type: "gift_sent", amount: -(t.xp_cost || 0), created_at: t.created_at, label: `Sent ${giftEmoji} ${giftName}`, icon: "gift", color: "#FF3B30", currency: "nexa" });
+    });
+
+    (giftsReceived || []).forEach((t: any) => {
+      const giftName = t.gifts?.name || "Gift";
+      const giftEmoji = t.gifts?.emoji || "🎁";
+      all.push({ id: "gr_" + t.id, type: "gift_received", amount: 0, created_at: t.created_at, label: `Received ${giftEmoji} ${giftName}`, icon: "gift", color: "#AF52DE", currency: "gift" });
     });
 
     all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -83,7 +112,9 @@ export default function WalletScreen() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const filteredTx = activeTab === "all" ? transactions : transactions.filter((t) => t.currency === activeTab);
+  const filteredTx = activeTab === "all" ? transactions : activeTab === "gifts"
+    ? transactions.filter((t) => t.type === "gift_sent" || t.type === "gift_received" || t.type === "gift_conversion" || t.type === "marketplace_purchase" || t.type === "marketplace_sale")
+    : transactions.filter((t) => t.currency === activeTab);
 
   async function sendNexa() {
     if (!transferHandle.trim() || !transferAmount.trim() || !user) return;
@@ -221,10 +252,10 @@ export default function WalletScreen() {
       )}
 
       <View style={styles.tabRow}>
-        {(["all", "nexa", "acoin"] as const).map((tab) => (
+        {(["all", "nexa", "acoin", "gifts"] as const).map((tab) => (
           <TouchableOpacity key={tab} style={[styles.tab, activeTab === tab && { backgroundColor: Colors.brand }]} onPress={() => setActiveTab(tab)}>
             <Text style={[styles.tabText, activeTab === tab && { color: "#fff" }]}>
-              {tab === "all" ? "All" : tab === "nexa" ? "Nexa" : "ACoin"}
+              {tab === "all" ? "All" : tab === "nexa" ? "Nexa" : tab === "acoin" ? "ACoin" : "Gifts"}
             </Text>
           </TouchableOpacity>
         ))}
@@ -244,12 +275,18 @@ export default function WalletScreen() {
                 <Text style={[styles.txTime, { color: colors.textMuted }]}>{new Date(item.created_at).toLocaleDateString()}</Text>
               </View>
               <View style={styles.txRight}>
-                <Text style={[styles.txAmount, { color: item.amount > 0 ? "#34C759" : "#FF3B30" }]}>
-                  {item.amount > 0 ? "+" : ""}{item.amount}
-                </Text>
-                <Text style={[styles.txCurrency, { color: colors.textMuted }]}>
-                  {item.currency === "nexa" ? "Nexa" : "ACoin"}
-                </Text>
+                {item.type === "gift_received" ? (
+                  <Text style={[styles.txAmount, { color: "#AF52DE" }]}>🎁</Text>
+                ) : (
+                  <>
+                    <Text style={[styles.txAmount, { color: item.amount > 0 ? "#34C759" : "#FF3B30" }]}>
+                      {item.amount > 0 ? "+" : ""}{item.amount}
+                    </Text>
+                    <Text style={[styles.txCurrency, { color: colors.textMuted }]}>
+                      {item.currency === "nexa" ? "Nexa" : item.currency === "gift" ? "" : "ACoin"}
+                    </Text>
+                  </>
+                )}
               </View>
             </View>
           )}

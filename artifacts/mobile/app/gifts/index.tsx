@@ -44,6 +44,7 @@ type OwnedGift = {
 };
 
 const HIDDEN_FEE_PERCENT = 5.99;
+const MARKETPLACE_FEE_PERCENT = 5;
 
 const rarityColors: Record<string, string> = {
   common: "#8E8E93",
@@ -75,6 +76,9 @@ export default function GiftsScreen() {
   const [sendHandle, setSendHandle] = useState("");
   const [sendMsg, setSendMsg] = useState("");
   const [sending, setSending] = useState(false);
+  const [listPrice, setListPrice] = useState("");
+  const [showListModal, setShowListModal] = useState(false);
+  const [listing, setListing] = useState(false);
 
   const loadOwned = useCallback(async () => {
     if (!user) return;
@@ -234,6 +238,40 @@ export default function GiftsScreen() {
     loadOwned();
   }
 
+  function isRareOrAbove(rarity: string): boolean {
+    return ["rare", "epic", "legendary"].includes(rarity);
+  }
+
+  async function handleListOnMarketplace() {
+    if (!selectedGift || !user || !listPrice.trim()) return;
+    const price = parseInt(listPrice);
+    if (isNaN(price) || price <= 0) {
+      showAlert("Invalid", "Enter a valid price in ACoin.");
+      return;
+    }
+    setListing(true);
+    try {
+      const { error } = await supabase.from("gift_marketplace").insert({
+        seller_id: user.id,
+        user_gift_id: selectedGift.id,
+        gift_id: selectedGift.gift.id,
+        asking_price: price,
+      });
+      if (error) {
+        showAlert("Error", error.message);
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        showAlert("Listed!", `${selectedGift.gift.emoji} ${selectedGift.gift.name} is now on the marketplace for ${price} ACoin.`);
+        setSelectedGift(null);
+        setShowListModal(false);
+        setListPrice("");
+      }
+    } catch {
+      showAlert("Error", "Something went wrong.");
+    }
+    setListing(false);
+  }
+
   function formatDate(dateStr: string): string {
     const d = new Date(dateStr);
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -280,12 +318,18 @@ export default function GiftsScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color={colors.text} /></TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>My Gifts</Text>
-        <TouchableOpacity onPress={() => router.push("/wallet")}>
-          <View style={styles.acoinBadge}>
-            <Ionicons name="diamond" size={14} color="#fff" />
-            <Text style={styles.acoinText}>{profile?.acoin || 0}</Text>
-          </View>
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <TouchableOpacity onPress={() => router.push("/gifts/marketplace")} style={styles.marketplaceBtn}>
+            <Ionicons name="storefront" size={14} color="#FF9500" />
+            <Text style={styles.marketplaceBtnText}>Market</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push("/wallet")}>
+            <View style={styles.acoinBadge}>
+              <Ionicons name="diamond" size={14} color="#fff" />
+              <Text style={styles.acoinText}>{profile?.acoin || 0}</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={[styles.statsBar, { backgroundColor: colors.surface }]}>
@@ -394,6 +438,16 @@ export default function GiftsScreen() {
               </TouchableOpacity>
             </View>
 
+            {selectedGift && isRareOrAbove(selectedGift.gift.rarity) && (
+              <TouchableOpacity
+                style={styles.sellRow}
+                onPress={() => { setShowListModal(true); setListPrice(String(selectedGift.gift.base_xp_cost)); }}
+              >
+                <Ionicons name="storefront-outline" size={16} color="#FF9500" />
+                <Text style={[styles.sellLink, { color: "#FF9500" }]}>Sell on Marketplace</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity style={styles.pinRow} onPress={() => { if (selectedGift) togglePin(selectedGift); setSelectedGift(null); }}>
               <Ionicons name={selectedGift?.is_pinned ? "pin" : "pin-outline"} size={16} color={colors.textSecondary} />
               <Text style={[styles.pinLink, { color: colors.textSecondary }]}>
@@ -433,6 +487,48 @@ export default function GiftsScreen() {
                 ) : (
                   <Text style={styles.confirmOkText}>Convert</Text>
                 )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showListModal} animationType="fade" transparent>
+        <View style={styles.confirmOverlay}>
+          <View style={[styles.confirmBox, { backgroundColor: colors.surface }]}>
+            <View style={[styles.confirmIconWrap, { backgroundColor: "rgba(255,149,0,0.1)" }]}>
+              <Ionicons name="storefront" size={32} color="#FF9500" />
+            </View>
+            <Text style={[styles.confirmTitle, { color: colors.text }]}>List on Marketplace</Text>
+            <Text style={[styles.confirmDesc, { color: colors.textSecondary }]}>
+              Set your asking price for{" "}
+              <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.text }}>
+                {selectedGift?.gift.emoji} {selectedGift?.gift.name}
+              </Text>
+              . A {MARKETPLACE_FEE_PERCENT}% fee applies on sale.
+            </Text>
+            <TextInput
+              style={[styles.listInput, { color: colors.text, backgroundColor: colors.inputBg }]}
+              placeholder="Price in ACoin"
+              placeholderTextColor={colors.textMuted}
+              value={listPrice}
+              onChangeText={setListPrice}
+              keyboardType="numeric"
+            />
+            <View style={styles.confirmBtns}>
+              <TouchableOpacity
+                style={[styles.confirmCancel, { backgroundColor: colors.inputBg }]}
+                onPress={() => { setShowListModal(false); setListPrice(""); }}
+                disabled={listing}
+              >
+                <Text style={[styles.confirmCancelText, { color: colors.text }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmOk, { backgroundColor: "#FF9500" }, listing && { opacity: 0.6 }]}
+                onPress={handleListOnMarketplace}
+                disabled={listing}
+              >
+                <Text style={styles.confirmOkText}>{listing ? "Listing..." : "List"}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -566,4 +662,9 @@ const styles = StyleSheet.create({
   confirmCancelText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   confirmOk: { flex: 1, borderRadius: 12, paddingVertical: 12, alignItems: "center", backgroundColor: Colors.gold },
   confirmOkText: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: "#fff" },
+  marketplaceBtn: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderColor: "#FF9500", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 16 },
+  marketplaceBtnText: { color: "#FF9500", fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  sellRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 4 },
+  sellLink: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  listInput: { borderRadius: 12, padding: 14, fontSize: 15, fontFamily: "Inter_400Regular", width: "100%" },
 });
