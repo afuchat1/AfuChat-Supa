@@ -16,6 +16,7 @@ import { Video, ResizeMode } from "expo-av";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
+import VerifiedBadge from "@/components/ui/VerifiedBadge";
 
 const { width, height } = Dimensions.get("window");
 const STORY_DURATION = 5000;
@@ -28,7 +29,7 @@ type Story = {
   created_at: string;
   view_count: number;
   user_id: string;
-  profile: { display_name: string; avatar_url: string | null; handle: string };
+  profile: { display_name: string; avatar_url: string | null; handle: string; is_verified?: boolean; is_organization_verified?: boolean };
 };
 
 type Viewer = {
@@ -37,6 +38,8 @@ type Viewer = {
   avatar_url: string | null;
   handle: string;
   viewed_at: string;
+  is_verified?: boolean;
+  is_organization_verified?: boolean;
 };
 
 export default function ViewStoryScreen() {
@@ -58,7 +61,7 @@ export default function ViewStoryScreen() {
     if (!userId) return;
     supabase
       .from("stories")
-      .select("id, media_url, media_type, caption, created_at, view_count, user_id, profiles!stories_user_id_fkey(display_name, avatar_url, handle)")
+      .select("id, media_url, media_type, caption, created_at, view_count, user_id, profiles!stories_user_id_fkey(display_name, avatar_url, handle, is_verified, is_organization_verified)")
       .eq("user_id", userId)
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: true })
@@ -124,7 +127,7 @@ export default function ViewStoryScreen() {
 
     const { data } = await supabase
       .from("story_views")
-      .select("viewed_at, profiles!story_views_viewer_id_fkey(id, display_name, avatar_url, handle)")
+      .select("viewed_at, profiles!story_views_viewer_id_fkey(id, display_name, avatar_url, handle, is_verified, is_organization_verified)")
       .eq("story_id", story.id)
       .order("viewed_at", { ascending: false });
 
@@ -134,6 +137,8 @@ export default function ViewStoryScreen() {
       avatar_url: v.profiles?.avatar_url || null,
       handle: v.profiles?.handle || "",
       viewed_at: v.viewed_at,
+      is_verified: v.profiles?.is_verified,
+      is_organization_verified: v.profiles?.is_organization_verified,
     }));
     setViewers(list);
     setLoadingViewers(false);
@@ -204,7 +209,10 @@ export default function ViewStoryScreen() {
       <View style={[styles.topBar, { top: insets.top + 20 }]}>
         <Avatar uri={story.profile.avatar_url} name={story.profile.display_name} size={36} />
         <View style={{ flex: 1 }}>
-          <Text style={styles.storyName}>{story.profile.display_name}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Text style={styles.storyName}>{story.profile.display_name}</Text>
+            <VerifiedBadge isVerified={story.profile.is_verified} isOrganizationVerified={story.profile.is_organization_verified} size={14} />
+          </View>
           <Text style={styles.storyTime}>{timeLabel}</Text>
         </View>
         <TouchableOpacity onPress={() => router.back()}>
@@ -287,7 +295,10 @@ export default function ViewStoryScreen() {
                     <View style={styles.viewerRow}>
                       <Avatar uri={item.avatar_url} name={item.display_name} size={40} />
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.viewerName}>{item.display_name}</Text>
+                        <View style={{ flexDirection: "row", alignItems: "center" }}>
+                          <Text style={styles.viewerName}>{item.display_name}</Text>
+                          <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={13} />
+                        </View>
                         <Text style={styles.viewerHandle}>@{item.handle}</Text>
                       </View>
                       <Text style={styles.viewerTime}>{viewedLabel}</Text>

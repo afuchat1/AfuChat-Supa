@@ -16,11 +16,13 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import VerifiedBadge from "@/components/ui/VerifiedBadge";
+import { ContactRowSkeleton } from "@/components/ui/Skeleton";
 
 type BlockedItem = {
   id: string;
   blocked_at: string;
-  profile: { id: string; display_name: string; handle: string; avatar_url: string | null };
+  profile: { id: string; display_name: string; handle: string; avatar_url: string | null; is_verified?: boolean; is_organization_verified?: boolean };
 };
 
 export default function BlockedUsersScreen() {
@@ -34,7 +36,7 @@ export default function BlockedUsersScreen() {
     if (!user) return;
     const { data } = await supabase
       .from("blocked_users")
-      .select("id, blocked_at, profiles!blocked_users_blocked_id_fkey(id, display_name, handle, avatar_url)")
+      .select("id, blocked_at, profiles!blocked_users_blocked_id_fkey(id, display_name, handle, avatar_url, is_verified, is_organization_verified)")
       .eq("blocker_id", user.id)
       .order("blocked_at", { ascending: false });
     if (data) setItems(data.map((b: any) => ({ ...b, profile: b.profiles })));
@@ -61,7 +63,7 @@ export default function BlockedUsersScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      {loading ? <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} /> : (
+      {loading ? <View style={{ padding: 8 }}>{[1,2,3,4].map(i => <ContactRowSkeleton key={i} />)}</View> : (
         <FlatList
           data={items}
           keyExtractor={(item) => item.id}
@@ -69,7 +71,10 @@ export default function BlockedUsersScreen() {
             <View style={[styles.row, { backgroundColor: colors.surface }]}>
               <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={44} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.name, { color: colors.text }]}>{item.profile.display_name}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Text style={[styles.name, { color: colors.text }]}>{item.profile.display_name}</Text>
+                  <VerifiedBadge isVerified={item.profile.is_verified} isOrganizationVerified={item.profile.is_organization_verified} size={13} />
+                </View>
                 <Text style={[styles.handle, { color: colors.textMuted }]}>@{item.profile.handle}</Text>
               </View>
               <TouchableOpacity style={styles.unblockBtn} onPress={() => unblock(item)}>

@@ -21,6 +21,8 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { Separator } from "@/components/ui/Separator";
 import Colors from "@/constants/colors";
+import { ContactRowSkeleton } from "@/components/ui/Skeleton";
+import VerifiedBadge from "@/components/ui/VerifiedBadge";
 
 type Contact = {
   id: string;
@@ -97,12 +99,7 @@ function ContactRow({ item }: { item: Contact }) {
       <View style={styles.rowContent}>
         <View style={styles.nameRow}>
           <Text style={[styles.name, { color: colors.text }]}>{item.display_name}</Text>
-          {item.is_organization_verified && (
-            <Ionicons name="checkmark-circle" size={14} color={Colors.gold} style={{ marginLeft: 4 }} />
-          )}
-          {!item.is_organization_verified && item.is_verified && (
-            <Ionicons name="checkmark-circle" size={14} color={Colors.brand} style={{ marginLeft: 4 }} />
-          )}
+          <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={14} />
         </View>
         <Text style={[styles.handle, { color: colors.textSecondary }]} numberOfLines={1}>
           @{item.handle}
@@ -264,12 +261,7 @@ export default function ContactsScreen() {
               <View style={{ flex: 1 }}>
                 <View style={styles.nameRow}>
                   <Text style={[styles.name, { color: colors.text }]}>{addResult.display_name}</Text>
-                  {addResult.is_organization_verified && (
-                    <Ionicons name="checkmark-circle" size={14} color={Colors.gold} style={{ marginLeft: 4 }} />
-                  )}
-                  {!addResult.is_organization_verified && addResult.is_verified && (
-                    <Ionicons name="checkmark-circle" size={14} color={Colors.brand} style={{ marginLeft: 4 }} />
-                  )}
+                  <VerifiedBadge isVerified={addResult.is_verified} isOrganizationVerified={addResult.is_organization_verified} size={14} />
                 </View>
                 <Text style={[styles.handle, { color: colors.textSecondary }]}>@{addResult.handle}</Text>
               </View>
@@ -285,9 +277,7 @@ export default function ContactsScreen() {
       )}
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={Colors.brand} />
-        </View>
+        <View style={{ padding: 8 }}>{[1,2,3,4,5,6,7,8].map(i => <ContactRowSkeleton key={i} />)}</View>
       ) : sections.length === 0 ? (
         <View style={styles.center}>
           <Ionicons name="people-outline" size={64} color={colors.textMuted} />

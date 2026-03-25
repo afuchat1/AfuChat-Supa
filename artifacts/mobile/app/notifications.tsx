@@ -18,6 +18,8 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { clearBadge } from "@/lib/pushNotifications";
+import VerifiedBadge from "@/components/ui/VerifiedBadge";
+import { NotificationSkeleton } from "@/components/ui/Skeleton";
 
 type NotifItem = {
   id: string;
@@ -25,7 +27,7 @@ type NotifItem = {
   is_read: boolean;
   created_at: string;
   post_id: string | null;
-  actor: { id: string; display_name: string; avatar_url: string | null; handle: string } | null;
+  actor: { id: string; display_name: string; avatar_url: string | null; handle: string; is_verified?: boolean; is_organization_verified?: boolean } | null;
 };
 
 const typeConfig: Record<string, { icon: string; label: string; color: string }> = {
@@ -56,7 +58,7 @@ export default function NotificationsScreen() {
     if (!user) return;
     const { data } = await supabase
       .from("notifications")
-      .select("id, type, is_read, created_at, post_id, profiles!notifications_actor_id_fkey(id, display_name, avatar_url, handle)")
+      .select("id, type, is_read, created_at, post_id, profiles!notifications_actor_id_fkey(id, display_name, avatar_url, handle, is_verified, is_organization_verified)")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(50);
@@ -112,7 +114,7 @@ export default function NotificationsScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.center}><ActivityIndicator color={Colors.brand} /></View>
+        <View style={{ padding: 8 }}>{[1,2,3,4,5,6].map(i => <NotificationSkeleton key={i} />)}</View>
       ) : (
         <FlatList
           data={items}
@@ -135,10 +137,11 @@ export default function NotificationsScreen() {
                   </View>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.notifText, { color: colors.text }]}>
-                    <Text style={styles.bold}>{item.actor?.display_name || "Someone"}</Text>
-                    {" "}{cfg.label}
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap" }}>
+                    <Text style={[styles.bold, { color: colors.text }]}>{item.actor?.display_name || "Someone"}</Text>
+                    <VerifiedBadge isVerified={item.actor?.is_verified} isOrganizationVerified={item.actor?.is_organization_verified} size={13} />
+                    <Text style={[styles.notifText, { color: colors.text }]}> {cfg.label}</Text>
+                  </View>
                   <Text style={[styles.notifTime, { color: colors.textMuted }]}>{timeAgo(item.created_at)}</Text>
                 </View>
                 {!item.is_read && <View style={styles.unreadDot} />}

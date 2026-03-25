@@ -20,12 +20,16 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import VerifiedBadge from "@/components/ui/VerifiedBadge";
+import { ContactRowSkeleton } from "@/components/ui/Skeleton";
 
 type FollowedUser = {
   id: string;
   display_name: string;
   handle: string;
   avatar_url: string | null;
+  is_verified?: boolean;
+  is_organization_verified?: boolean;
 };
 
 export default function CreateGroupScreen() {
@@ -43,7 +47,7 @@ export default function CreateGroupScreen() {
     setLoading(true);
     const { data } = await supabase
       .from("follows")
-      .select("following_id, profiles!follows_following_id_fkey(id, display_name, handle, avatar_url)")
+      .select("following_id, profiles!follows_following_id_fkey(id, display_name, handle, avatar_url, is_verified, is_organization_verified)")
       .eq("follower_id", user.id);
 
     if (data) {
@@ -145,7 +149,7 @@ export default function CreateGroupScreen() {
       </View>
 
       {loading ? (
-        <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} />
+        <View style={{ padding: 8 }}>{[1,2,3,4,5].map(i => <ContactRowSkeleton key={i} />)}</View>
       ) : (
         <FlatList
           data={followedUsers}
@@ -160,7 +164,10 @@ export default function CreateGroupScreen() {
               >
                 <Avatar uri={item.avatar_url} name={item.display_name} size={44} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.contactName, { color: colors.text }]}>{item.display_name}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <Text style={[styles.contactName, { color: colors.text }]}>{item.display_name}</Text>
+                    <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={13} />
+                  </View>
                   <Text style={[styles.contactHandle, { color: colors.textMuted }]}>@{item.handle}</Text>
                 </View>
                 <View

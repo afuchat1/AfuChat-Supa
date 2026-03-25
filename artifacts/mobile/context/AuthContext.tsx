@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import { AppState } from "react-native";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { getStoredAccounts, storeAccount, removeStoredAccount, updateAccountTokens, type StoredAccount } from "@/lib/accountStore";
@@ -269,6 +270,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       saveCurrentSession();
     }
   }, [session, profile]);
+
+  useEffect(() => {
+    if (!user) return;
+    const updateLastSeen = () => {
+      supabase.rpc("update_last_seen").then(() => {});
+    };
+    updateLastSeen();
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") updateLastSeen();
+    });
+    const interval = setInterval(updateLastSeen, 60000);
+    return () => { sub.remove(); clearInterval(interval); };
+  }, [user]);
 
   const signOut = async () => {
     if (user) {

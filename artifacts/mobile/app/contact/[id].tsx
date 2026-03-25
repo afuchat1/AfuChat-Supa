@@ -19,6 +19,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { notifyNewFollow } from "@/lib/notifyUser";
+import VerifiedBadge from "@/components/ui/VerifiedBadge";
+import { ProfileSkeleton } from "@/components/ui/Skeleton";
 
 type Profile = {
   id: string;
@@ -33,6 +35,8 @@ type Profile = {
   website_url: string | null;
   country: string | null;
   created_at: string | null;
+  last_seen: string | null;
+  show_online_status: boolean;
 };
 
 type UserPost = {
@@ -78,7 +82,7 @@ export default function ContactProfileScreen() {
     if (!id || !user) return;
     supabase
       .from("profiles")
-      .select("id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified, xp, current_grade, website_url, country, created_at")
+      .select("id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified, xp, current_grade, website_url, country, created_at, last_seen, show_online_status")
       .eq("id", id)
       .single()
       .then(({ data }) => {
@@ -208,7 +212,7 @@ export default function ContactProfileScreen() {
   }
 
   if (loading) {
-    return <View style={[styles.center, { backgroundColor: colors.background }]}><ActivityIndicator color={Colors.brand} /></View>;
+    return <View style={[styles.center, { backgroundColor: colors.background }]}><ProfileSkeleton /></View>;
   }
 
   const isOwnProfile = user?.id === id;
@@ -233,19 +237,25 @@ export default function ContactProfileScreen() {
 
           <TouchableOpacity style={styles.nameRow} onPress={() => (profile?.is_verified || profile?.is_organization_verified) && setShowBadgeInfo(!showBadgeInfo)}>
             <Text style={[styles.displayName, { color: colors.text }]}>{profile?.display_name}</Text>
-            {profile?.is_organization_verified && (
-              <View style={styles.goldBadge}>
-                <Ionicons name="checkmark-circle" size={20} color={Colors.gold} />
-              </View>
-            )}
-            {!profile?.is_organization_verified && profile?.is_verified && (
-              <View style={styles.goldBadge}>
-                <Ionicons name="checkmark-circle" size={20} color={Colors.brand} />
-              </View>
-            )}
+            <VerifiedBadge isVerified={profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={20} />
           </TouchableOpacity>
 
           <Text style={[styles.handle, { color: colors.textSecondary }]}>@{profile?.handle}</Text>
+
+          {profile?.show_online_status && profile?.last_seen && (() => {
+            const diff = Date.now() - new Date(profile.last_seen).getTime();
+            const isOnline = diff < 2 * 60 * 1000;
+            const lastSeenText = isOnline ? "Online" :
+              diff < 3600000 ? `Last seen ${Math.floor(diff / 60000)}m ago` :
+              diff < 86400000 ? `Last seen ${Math.floor(diff / 3600000)}h ago` :
+              `Last seen ${new Date(profile.last_seen).toLocaleDateString()}`;
+            return (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isOnline ? "#34C759" : colors.textMuted }} />
+                <Text style={{ fontSize: 12, color: isOnline ? "#34C759" : colors.textMuted, fontFamily: "Inter_400Regular" }}>{lastSeenText}</Text>
+              </View>
+            );
+          })()}
 
           {profile?.is_organization_verified && (
             <View style={styles.verifiedBadge}>

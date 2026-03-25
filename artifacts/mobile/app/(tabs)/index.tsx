@@ -23,6 +23,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import { StoryRing } from "@/components/ui/StoryRing";
 import { Separator } from "@/components/ui/Separator";
 import Colors from "@/constants/colors";
+import { ChatRowSkeleton } from "@/components/ui/Skeleton";
+import VerifiedBadge from "@/components/ui/VerifiedBadge";
 
 type Contact = {
   id: string;
@@ -101,11 +103,8 @@ function ChatRow({ item }: { item: ChatItem }) {
             >
               {displayName || "Chat"}
             </Text>
-            {item.is_organization_verified && !item.is_group && (
-              <Ionicons name="checkmark-circle" size={14} color="#D4A853" style={{ marginLeft: 4 }} />
-            )}
-            {item.is_verified && !item.is_organization_verified && !item.is_group && (
-              <Ionicons name="checkmark-circle" size={14} color={Colors.brand} style={{ marginLeft: 4 }} />
+            {!item.is_group && (
+              <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={14} />
             )}
             {item.is_channel && (
               <Ionicons name="megaphone" size={12} color={Colors.brand} style={{ marginLeft: 4 }} />
@@ -392,12 +391,7 @@ function ContactPickerModal({ visible, onClose, userId, colors }: { visible: boo
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <Text style={[pickerStyles.contactName, { color: colors.text }]}>{item.display_name}</Text>
-                  {item.is_organization_verified && (
-                    <Ionicons name="checkmark-circle" size={14} color={Colors.gold} />
-                  )}
-                  {!item.is_organization_verified && item.is_verified && (
-                    <Ionicons name="checkmark-circle" size={14} color={Colors.brand} />
-                  )}
+                  <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={14} />
                 </View>
                 <Text style={[pickerStyles.contactHandle, { color: colors.textSecondary }]}>@{item.handle}</Text>
               </View>
@@ -678,9 +672,7 @@ export default function ChatsScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={Colors.brand} />
-        </View>
+        <View style={{ padding: 8 }}>{[1,2,3,4,5,6].map(i => <ChatRowSkeleton key={i} />)}</View>
       ) : filtered.length === 0 ? (
         <View style={styles.center}>
           <Ionicons name="chatbubbles-outline" size={64} color={colors.textMuted} />

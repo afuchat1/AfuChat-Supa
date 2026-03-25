@@ -31,6 +31,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { RichText } from "@/components/ui/RichText";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { notifyNewMessage } from "@/lib/notifyUser";
 import {
   cacheMessages,
@@ -75,11 +76,21 @@ type ChatInfo = {
   avatar_url: string | null;
   is_verified?: boolean;
   is_organization_verified?: boolean;
+  other_last_seen?: string | null;
 };
 
 const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const BRAND = Colors.brand;
+
+function formatLastSeen(ts: string | null | undefined): { text: string; isOnline: boolean } {
+  if (!ts) return { text: "Offline", isOnline: false };
+  const diff = Date.now() - new Date(ts).getTime();
+  if (diff < 2 * 60 * 1000) return { text: "Online", isOnline: true };
+  if (diff < 60 * 60 * 1000) return { text: `Last seen ${Math.floor(diff / 60000)}m ago`, isOnline: false };
+  if (diff < 24 * 60 * 60 * 1000) return { text: `Last seen ${Math.floor(diff / 3600000)}h ago`, isOnline: false };
+  return { text: `Last seen ${new Date(ts).toLocaleDateString()}`, isOnline: false };
+}
 
 function formatMsgTime(iso: string): string {
   const d = new Date(iso);
@@ -390,7 +401,7 @@ export default function ChatScreen() {
     if (!id || !user || isDraft) return;
     const { data: chat } = await supabase
       .from("chats")
-      .select(`is_group, is_channel, name, avatar_url, chat_members(user_id, profiles(id, display_name, avatar_url, handle, is_verified, is_organization_verified))`)
+      .select(`is_group, is_channel, name, avatar_url, chat_members(user_id, profiles(id, display_name, avatar_url, handle, is_verified, is_organization_verified, last_seen, show_online_status))`)
       .eq("id", id)
       .single();
 
@@ -407,6 +418,7 @@ export default function ChatScreen() {
         avatar_url: chat.avatar_url,
         is_verified: !!other?.is_verified,
         is_organization_verified: !!other?.is_organization_verified,
+        other_last_seen: other?.show_online_status !== false ? (other?.last_seen || null) : null,
       });
     }
   }, [id, user, isDraft]);
@@ -450,8 +462,10 @@ export default function ChatScreen() {
       }
 
       const readSet = new Set<string>();
+      const deliveredSet = new Set<string>();
       for (const s of (statuses || []) as any[]) {
         if (s.read_at) readSet.add(s.message_id);
+        else if (s.delivered_at) deliveredSet.add(s.message_id);
       }
 
       const mapped = data.map((m: any) => ({
@@ -466,7 +480,7 @@ export default function ChatScreen() {
         sender: m.profiles,
         reactions: reactionMap[m.id] || [],
         status: m.sender_id === user.id
-          ? (readSet.has(m.id) ? "read" : "sent")
+          ? (readSet.has(m.id) ? "read" : deliveredSet.has(m.id) ? "delivered" : "sent")
           : undefined,
       }));
 
@@ -1130,12 +1144,7 @@ export default function ChatScreen() {
           <View style={st.headerInfo}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
               <Text style={[st.headerName, { color: colors.text }]} numberOfLines={1}>{headerTitle}</Text>
-              {chatInfo?.is_organization_verified && (
-                <Ionicons name="checkmark-circle" size={16} color="#D4A853" />
-              )}
-              {chatInfo?.is_verified && !chatInfo?.is_organization_verified && (
-                <Ionicons name="checkmark-circle" size={16} color={BRAND} />
-              )}
+              <VerifiedBadge isVerified={chatInfo?.is_verified} isOrganizationVerified={chatInfo?.is_organization_verified} size={16} />
             </View>
             {typingUsers.length > 0 ? (
               <Text style={[st.headerSub, { color: BRAND }]}>
@@ -1143,11 +1152,12 @@ export default function ChatScreen() {
               </Text>
             ) : !networkOnline ? (
               <Text style={[st.headerSub, { color: "#FF9500" }]}>Waiting for network...</Text>
-            ) : (
-              <Text style={[st.headerSub, { color: colors.textMuted }]}>
-                {chatInfo?.is_group ? "Group chat" : "Online"}
-              </Text>
-            )}
+            ) : chatInfo?.is_group ? (
+              <Text style={[st.headerSub, { color: colors.textMuted }]}>Group chat</Text>
+            ) : (() => {
+              const ls = formatLastSeen(chatInfo?.other_last_seen);
+              return <Text style={[st.headerSub, { color: ls.isOnline ? "#34C759" : colors.textMuted }]}>{ls.text}</Text>;
+            })()}
           </View>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => { loadGifts(); setShowGiftPicker(true); }} style={st.headerAction} hitSlop={8}>

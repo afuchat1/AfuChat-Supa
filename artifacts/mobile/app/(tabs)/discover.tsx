@@ -20,6 +20,8 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { RichText } from "@/components/ui/RichText";
 import Colors from "@/constants/colors";
+import { PostSkeleton } from "@/components/ui/Skeleton";
+import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { matchInterests, computeFeedScore, diversifyFeed, type FeedSignals } from "@/lib/feedAlgorithm";
 
 const { width } = Dimensions.get("window");
@@ -67,12 +69,7 @@ function PostCard({ item, onToggleLike }: { item: PostItem; onToggleLike: (postI
         <View style={{ flex: 1 }}>
           <View style={styles.nameRow}>
             <Text style={[styles.cardName, { color: colors.text }]}>{item.profile.display_name}</Text>
-            {item.is_organization_verified && (
-              <Ionicons name="checkmark-circle" size={13} color={Colors.gold} style={{ marginLeft: 4 }} />
-            )}
-            {!item.is_organization_verified && item.is_verified && (
-              <Ionicons name="checkmark-circle" size={13} color={Colors.brand} style={{ marginLeft: 4 }} />
-            )}
+            <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={13} />
           </View>
           <Text style={[styles.cardTime, { color: colors.textMuted }]}>
             @{item.profile.handle} · {formatRelative(item.created_at)}
@@ -355,9 +352,7 @@ export default function DiscoverScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={Colors.brand} />
-        </View>
+        <View style={{ padding: 8, gap: 8 }}>{[1,2,3].map(i => <PostSkeleton key={i} />)}</View>
       ) : (
         <FlatList
           data={posts}

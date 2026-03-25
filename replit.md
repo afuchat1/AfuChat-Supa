@@ -47,7 +47,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 
 ### Key Supabase Tables Used
 
-- **profiles** — `id`, `handle`, `display_name`, `avatar_url`, `bio`, `xp` (Nexa), `acoin`, `current_grade`, `is_verified`, `is_organization_verified`, `is_admin`, `country`, `website_url`, `phone_number`, `banner_url`, `language`, `tipping_enabled`, etc. NOTE: No `is_premium` field — premium status comes from `user_subscriptions`.
+- **profiles** — `id`, `handle`, `display_name`, `avatar_url`, `bio`, `xp` (Nexa), `acoin`, `current_grade`, `is_verified`, `is_organization_verified`, `is_admin`, `country`, `website_url`, `phone_number`, `banner_url`, `language`, `tipping_enabled`, `last_seen` (timestamptz), `show_online_status`, etc. NOTE: No `is_premium` field — premium status comes from `user_subscriptions`.
 - **subscription_plans** — `id`, `name`, `description`, `acoin_price`, `duration_days`, `features` (jsonb), `grants_verification`, `is_active`, `tier` (silver/gold/platinum)
 - **user_subscriptions** — `id`, `user_id` (UNIQUE), `plan_id`, `started_at`, `expires_at`, `is_active`, `acoin_paid`. Premium = active + not expired.
 - **currency_settings** — `nexa_to_acoin_rate`, `conversion_fee_percent`, `p2p_fee_percent`. Used for Nexa→ACoin conversion.
@@ -98,6 +98,8 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `hooks/useTheme.ts` — Theme hook (reads from ThemeContext, exposes `setThemeMode`)
 - `components/ui/Avatar.tsx` — Avatar with initials fallback
 - `components/ui/Separator.tsx` — List separator
+- `components/ui/VerifiedBadge.tsx` — Shared verified badge (gold for business, teal for personal)
+- `components/ui/Skeleton.tsx` — Animated skeleton loading placeholders (ChatRowSkeleton, ContactRowSkeleton, PostSkeleton, ProfileSkeleton, NotificationSkeleton)
 - `app/(tabs)/index.tsx` — Chats list with stories bar
 - `app/(tabs)/contacts.tsx` — Contacts (follows) list
 - `app/(tabs)/discover.tsx` — Posts feed (tap to post detail)
