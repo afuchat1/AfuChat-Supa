@@ -11,7 +11,7 @@ import { ReferralSkeleton } from "@/components/ui/Skeleton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "@/lib/haptics";
 import * as Clipboard from "expo-clipboard";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";

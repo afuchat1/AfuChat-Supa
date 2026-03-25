@@ -12,11 +12,9 @@ import {
   View,
 } from "react-native";
 import { PostDetailSkeleton } from "@/components/ui/Skeleton";
-import { Head } from "expo-router/head";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
 import { supabase } from "@/lib/supabase";
 import { sharePost } from "@/lib/share";
 import { useAuth } from "@/context/AuthContext";
@@ -163,7 +161,7 @@ export default function PostDetailScreen() {
 
   async function toggleLike() {
     if (!user || !post) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS !== "web") { try { const H = require("expo-haptics"); H.impactAsync(H.ImpactFeedbackStyle.Light); } catch {} }
     if (post.liked) {
       const { error } = await supabase.from("post_acknowledgments").delete().eq("post_id", post.id).eq("user_id", user.id);
       if (!error) setPost({ ...post, liked: false, likeCount: Math.max(0, post.likeCount - 1) });
@@ -191,7 +189,7 @@ export default function PostDetailScreen() {
       return;
     }
     setSending(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS !== "web") { try { const H = require("expo-haptics"); H.impactAsync(H.ImpactFeedbackStyle.Light); } catch {} }
     const content = replyText.trim();
     const { error } = await supabase.from("post_replies").insert({
       post_id: id,
@@ -237,18 +235,6 @@ export default function PostDetailScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <Head>
-        <title>{seoTitle}</title>
-        <meta name="description" content={seoDesc} />
-        <meta property="og:title" content={seoTitle} />
-        <meta property="og:description" content={seoDesc} />
-        <meta property="og:type" content="article" />
-        {seoImage && <meta property="og:image" content={seoImage} />}
-        <meta name="twitter:card" content={seoImage ? "summary_large_image" : "summary"} />
-        <meta name="twitter:title" content={seoTitle} />
-        <meta name="twitter:description" content={seoDesc} />
-        {seoImage && <meta name="twitter:image" content={seoImage} />}
-      </Head>
       <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
