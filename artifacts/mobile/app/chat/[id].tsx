@@ -375,18 +375,6 @@ export default function ChatScreen() {
   const flatListRef = useRef<FlatList>(null);
   const typingTimeout = useRef<any>(null);
 
-  useEffect(() => {
-    const unsub = onConnectivityChange(async (online) => {
-      setNetworkOnline(online);
-      if (online) {
-        await syncPendingMessages();
-        setMessages((prev) => prev.filter((m) => !m._pending));
-        loadMessages();
-      }
-    });
-    return unsub;
-  }, [loadMessages]);
-
   const effectiveChatId = isDraft ? realChatId : id;
 
   const loadChatInfo = useCallback(async () => {
@@ -474,6 +462,18 @@ export default function ChatScreen() {
     }
     setLoading(false);
   }, [id, user, isDraft, realChatId]);
+
+  useEffect(() => {
+    const unsub = onConnectivityChange(async (online) => {
+      setNetworkOnline(online);
+      if (online) {
+        await syncPendingMessages();
+        setMessages((prev) => prev.filter((m) => !m._pending));
+        loadMessages();
+      }
+    });
+    return unsub;
+  }, [loadMessages]);
 
   const checkMessageGating = useCallback(async () => {
     if (!user) return;
