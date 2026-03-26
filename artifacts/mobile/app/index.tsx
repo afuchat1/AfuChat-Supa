@@ -18,7 +18,7 @@ export default function IndexScreen() {
         router.replace("/(tabs)");
       }
     } else {
-      router.replace("/(auth)/welcome");
+      router.replace("/(auth)/browse");
     }
   }, [session, profile, loading]);
 

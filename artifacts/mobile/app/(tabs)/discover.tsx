@@ -153,15 +153,18 @@ export default function DiscoverScreen() {
   const { colors } = useTheme();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
+  const [feedTab, setFeedTab] = useState<"for_you" | "following">("for_you");
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [followingEmpty, setFollowingEmpty] = useState(false);
   const PAGE_SIZE = 30;
   const imgViewer = useImageViewer();
 
-  const fetchPosts = useCallback(async (offset: number, isRefresh: boolean) => {
+  const fetchPosts = useCallback(async (offset: number, isRefresh: boolean, tab?: "for_you" | "following") => {
+    const activeTab = tab ?? feedTab;
     if (!isOnline()) {
       if (isRefresh && user) {
         const cached = await getCachedMoments();
@@ -173,6 +176,73 @@ export default function DiscoverScreen() {
       return;
     }
 
+    // --- Following tab ---
+    if (activeTab === "following") {
+      if (!user) { setLoading(false); setRefreshing(false); setLoadingMore(false); return; }
+
+      const { data: followData } = await supabase
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", user.id);
+
+      const followingIds = (followData || []).map((f: any) => f.following_id);
+
+      if (followingIds.length === 0) {
+        setFollowingEmpty(true);
+        if (isRefresh) setPosts([]);
+        setLoading(false); setRefreshing(false); setLoadingMore(false);
+        return;
+      }
+      setFollowingEmpty(false);
+
+      const { data } = await supabase
+        .from("posts")
+        .select(`
+          id, author_id, content, image_url, created_at, view_count, language_code,
+          profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified),
+          post_images(image_url, display_order)
+        `)
+        .eq("is_blocked", false)
+        .in("author_id", followingIds)
+        .order("created_at", { ascending: false })
+        .range(offset, offset + PAGE_SIZE - 1);
+
+      if (data) {
+        if (data.length < PAGE_SIZE) setHasMore(false); else setHasMore(true);
+
+        const postIds = data.map((p: any) => p.id);
+        const [{ data: myLikes }, { data: replyCounts }, { data: myBookmarks }, { data: likeCounts }] = await Promise.all([
+          postIds.length > 0 && user ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id) : { data: [] },
+          postIds.length > 0 ? supabase.from("post_replies").select("post_id").in("post_id", postIds) : { data: [] },
+          postIds.length > 0 && user ? supabase.from("post_bookmarks").select("post_id").in("post_id", postIds).eq("user_id", user.id) : { data: [] },
+          postIds.length > 0 ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds) : { data: [] },
+        ]);
+
+        const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
+        const myBookmarkSet = new Set((myBookmarks || []).map((b: any) => b.post_id));
+        const likeMap: Record<string, number> = {};
+        for (const l of (likeCounts || [])) { likeMap[l.post_id] = (likeMap[l.post_id] || 0) + 1; }
+        const replyMap: Record<string, number> = {};
+        for (const r of (replyCounts || [])) { replyMap[r.post_id] = (replyMap[r.post_id] || 0) + 1; }
+
+        const mapped: PostItem[] = data.map((p: any) => ({
+          id: p.id, author_id: p.author_id, content: p.content || "",
+          image_url: p.image_url,
+          images: (p.post_images || []).sort((a: any, b: any) => a.display_order - b.display_order).map((i: any) => i.image_url),
+          created_at: p.created_at, view_count: p.view_count || 0,
+          is_verified: p.profiles?.is_verified || false,
+          is_organization_verified: p.profiles?.is_organization_verified || false,
+          profile: { display_name: p.profiles?.display_name || "User", handle: p.profiles?.handle || "user", avatar_url: p.profiles?.avatar_url || null },
+          liked: myLikeSet.has(p.id), likeCount: likeMap[p.id] || 0, replyCount: replyMap[p.id] || 0, score: 0, bookmarked: myBookmarkSet.has(p.id),
+        }));
+
+        if (isRefresh) setPosts(mapped); else setPosts((prev) => { const ids = new Set(prev.map((p) => p.id)); return [...prev, ...mapped.filter((i) => !ids.has(i.id))]; });
+      }
+      setLoading(false); setRefreshing(false); setLoadingMore(false);
+      return;
+    }
+
+    // --- For You tab (existing logic) ---
     const userInterests: string[] = profile?.interests || [];
     const userCountry: string = profile?.country || "";
 
@@ -331,13 +401,21 @@ export default function DiscoverScreen() {
     setLoadingMore(false);
   }, [user, profile]);
 
-  const loadPosts = useCallback(() => fetchPosts(0, true), [fetchPosts]);
+  const loadPosts = useCallback((tab?: "for_you" | "following") => fetchPosts(0, true, tab), [fetchPosts]);
 
   const loadMore = useCallback(() => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
-    fetchPosts(posts.length, false);
-  }, [fetchPosts, posts.length, loadingMore, hasMore]);
+    fetchPosts(posts.length, false, feedTab);
+  }, [fetchPosts, posts.length, loadingMore, hasMore, feedTab]);
+
+  useEffect(() => {
+    setLoading(true);
+    setPosts([]);
+    setHasMore(true);
+    setFollowingEmpty(false);
+    loadPosts(feedTab);
+  }, [feedTab]);
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
 
@@ -414,7 +492,29 @@ export default function DiscoverScreen() {
           { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border },
         ]}
       >
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Discover</Text>
+        {/* Tab switcher */}
+        <View style={[styles.tabRow, { backgroundColor: colors.backgroundTertiary }]}>
+          <TouchableOpacity
+            style={[styles.tabPill, feedTab === "for_you" && { backgroundColor: Colors.brand }]}
+            onPress={() => setFeedTab("for_you")}
+          >
+            <Text style={[styles.tabPillText, { color: feedTab === "for_you" ? "#fff" : colors.textMuted }]}>
+              For You
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabPill, feedTab === "following" && { backgroundColor: Colors.brand }]}
+            onPress={() => {
+              if (!user) { router.push("/(auth)/login"); return; }
+              setFeedTab("following");
+            }}
+          >
+            <Text style={[styles.tabPillText, { color: feedTab === "following" ? "#fff" : colors.textMuted }]}>
+              Following
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {user ? (
           <TouchableOpacity
             onPress={() => router.push("/moments/create")}
@@ -433,7 +533,26 @@ export default function DiscoverScreen() {
         )}
       </View>
 
-      {loading ? (
+      {/* Following tab — not signed in */}
+      {feedTab === "following" && !user ? (
+        <View style={styles.center}>
+          <Ionicons name="lock-closed-outline" size={56} color={colors.textMuted} />
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>Sign in to see Following</Text>
+          <Text style={[styles.emptySub, { color: colors.textSecondary }]}>Follow people to see their posts here</Text>
+          <TouchableOpacity style={styles.createBtn} onPress={() => router.push("/(auth)/login")}>
+            <Text style={styles.createBtnText}>Sign In</Text>
+          </TouchableOpacity>
+        </View>
+      ) : feedTab === "following" && followingEmpty ? (
+        <View style={styles.center}>
+          <Ionicons name="people-outline" size={56} color={colors.textMuted} />
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>No one followed yet</Text>
+          <Text style={[styles.emptySub, { color: colors.textSecondary }]}>Follow people to see their posts here</Text>
+          <TouchableOpacity style={styles.createBtn} onPress={() => setFeedTab("for_you")}>
+            <Text style={styles.createBtnText}>Browse For You</Text>
+          </TouchableOpacity>
+        </View>
+      ) : loading ? (
         <View style={{ padding: 8, gap: 8 }}>{[1,2,3].map(i => <PostSkeleton key={i} />)}</View>
       ) : (
         <FlatList
@@ -447,7 +566,7 @@ export default function DiscoverScreen() {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => { setRefreshing(true); setHasMore(true); loadPosts(); }}
+              onRefresh={() => { setRefreshing(true); setHasMore(true); loadPosts(feedTab); }}
               tintColor={Colors.brand}
             />
           }
@@ -489,13 +608,16 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   header: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 12,
   },
-  headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
+  tabRow: { flexDirection: "row", borderRadius: 22, padding: 3, flex: 1 },
+  tabPill: { flex: 1, paddingVertical: 7, borderRadius: 19, alignItems: "center" },
+  tabPillText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   card: {
     marginHorizontal: 8,
     borderRadius: 16,

@@ -385,9 +385,9 @@ export default function LoginScreen() {
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity onPress={() => router.push("/(auth)/welcome")} style={styles.backToWelcome}>
+        <TouchableOpacity onPress={() => router.push("/(auth)/browse")} style={styles.backToWelcome}>
           <Ionicons name="chevron-back" size={20} color={Colors.brand} />
-          <Text style={[styles.backToWelcomeText, { color: Colors.brand }]}>Back</Text>
+          <Text style={[styles.backToWelcomeText, { color: Colors.brand }]}>Browse Feed</Text>
         </TouchableOpacity>
         <View style={[styles.logoWrap, { marginTop: 20 }]}>
           <Image source={afuSymbol} style={{ width: 88, height: 88, marginBottom: 16, tintColor: Colors.brand }} resizeMode="contain" />

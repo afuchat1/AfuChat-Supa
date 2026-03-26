@@ -187,16 +187,16 @@ export default function BrowseScreen() {
   return (
     <View style={[styles.root, { backgroundColor: "#070B0F" }]}>
       {/* Header */}
-      <LinearGradient colors={["#0D1117", "transparent"]} style={[styles.header, { paddingTop: insets.top + 6 }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={22} color="#fff" />
-        </TouchableOpacity>
+      <LinearGradient colors={["#0D1117", "#0D111700"]} style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>Discover · Public Feed</Text>
-          <Text style={styles.headerSub}>See what AfuChat members are sharing</Text>
+          <Text style={styles.headerTitle}>AfuChat</Text>
+          <Text style={styles.headerSub}>Discover what people are sharing</Text>
         </View>
+        <TouchableOpacity style={styles.signInBtn} onPress={() => router.push("/(auth)/login")}>
+          <Text style={styles.signInBtnText}>Sign In</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.signupHeaderBtn} onPress={() => router.push("/(auth)/register")}>
-          <Text style={styles.signupHeaderText}>Join</Text>
+          <Text style={styles.signupHeaderText}>Join Free</Text>
         </TouchableOpacity>
       </LinearGradient>
 
@@ -255,6 +255,8 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingBottom: 16 },
   backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#FFFFFF15", alignItems: "center", justifyContent: "center" },
+  signInBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: "#FFFFFF22" },
+  signInBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#fff" },
   headerTitle: { fontSize: 16, fontFamily: "Inter_700Bold", color: "#fff" },
   headerSub: { fontSize: 11, fontFamily: "Inter_400Regular", color: "#6B7A8D" },
   signupHeaderBtn: { backgroundColor: Colors.brand, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
