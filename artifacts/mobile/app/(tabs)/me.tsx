@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import {
   Image,
   ScrollView,
@@ -7,6 +7,14 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
 
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -63,6 +71,52 @@ function MenuGroup({ children }: { children: React.ReactNode }) {
     <View style={[styles.menuGroup, { borderRadius: 14, overflow: "hidden" }]}>
       {children}
     </View>
+  );
+}
+
+function XpLevelBar({ xp }: { xp: number }) {
+  const { colors } = useTheme();
+  const level = Math.floor(Math.sqrt(xp / 100)) + 1;
+  const xpForLevel = (level - 1) * (level - 1) * 100;
+  const xpForNext = level * level * 100;
+  const progress = Math.min((xp - xpForLevel) / (xpForNext - xpForLevel), 1);
+  const fillAnim = useSharedValue(0);
+
+  useEffect(() => {
+    fillAnim.value = withDelay(300, withTiming(progress, { duration: 1000, easing: Easing.out(Easing.cubic) }));
+  }, [xp]);
+
+  const fillStyle = useAnimatedStyle(() => ({
+    width: `${fillAnim.value * 100}%` as any,
+  }));
+
+  return (
+    <TouchableOpacity
+      onPress={() => router.push("/achievements")}
+      activeOpacity={0.8}
+      style={[styles.xpBar, { backgroundColor: colors.surface }]}
+    >
+      <View style={styles.xpRow}>
+        <View style={styles.xpLevelBadge}>
+          <Text style={styles.xpLevelText}>Lv.{level}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <View style={[styles.xpTrack, { backgroundColor: colors.backgroundTertiary }]}>
+            <Animated.View style={[styles.xpFill, fillStyle]}>
+              <LinearGradient
+                colors={["#00C2CB", "#AF52DE"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={StyleSheet.absoluteFill}
+              />
+            </Animated.View>
+          </View>
+          <Text style={[styles.xpSubLabel, { color: colors.textMuted }]}>
+            {xp.toLocaleString()} / {xpForNext.toLocaleString()} XP • Tap for Achievements
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
   );
 }
 
@@ -149,6 +203,8 @@ export default function MeScreen() {
         </View>
       </View>
 
+      <XpLevelBar xp={profile?.xp || 0} />
+
       {!isPremium && (
         <TouchableOpacity
           style={styles.premiumBanner}
@@ -165,6 +221,14 @@ export default function MeScreen() {
           <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.6)" />
         </TouchableOpacity>
       )}
+
+      <MenuGroup>
+        <MenuItem icon="id-card-outline" iconBg="#1E3A5F" label="Digital ID" onPress={() => router.push("/digital-id")} badge="3D" />
+        <Separator indent={54} />
+        <MenuItem icon="trophy-outline" iconBg="#FF9500" label="Achievements" onPress={() => router.push("/achievements")} />
+        <Separator indent={54} />
+        <MenuItem icon="storefront-outline" iconBg="#AF52DE" label="Virtual Shop" onPress={() => router.push("/store")} badge="NEW" />
+      </MenuGroup>
 
       <MenuGroup>
         <MenuItem icon="sparkles-outline" iconBg="#00C2CB" label="AfuAi" onPress={() => router.push("/ai")} />
@@ -309,6 +373,18 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 16, fontFamily: "Inter_700Bold" },
   statLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
   statDivider: { width: StyleSheet.hairlineWidth, marginVertical: 4 },
+  xpBar: { borderRadius: 14, padding: 12 },
+  xpRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  xpLevelBadge: {
+    backgroundColor: Colors.brand,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  xpLevelText: { color: "#fff", fontSize: 12, fontFamily: "Inter_700Bold" },
+  xpTrack: { height: 6, borderRadius: 3, overflow: "hidden", marginBottom: 4 },
+  xpFill: { height: "100%", borderRadius: 3, overflow: "hidden" },
+  xpSubLabel: { fontSize: 10, fontFamily: "Inter_400Regular" },
   premiumBanner: {
     flexDirection: "row",
     alignItems: "center",
