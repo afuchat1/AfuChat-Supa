@@ -75,6 +75,7 @@ export default function ContactProfileScreen() {
   const [isBlocked, setIsBlocked] = useState(false);
   const [followerCount, setFollowerCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
+  const [mutualCount, setMutualCount] = useState(0);
   const [posts, setPosts] = useState<UserPost[]>([]);
   const [postsLoading, setPostsLoading] = useState(true);
   const [showBadgeInfo, setShowBadgeInfo] = useState(false);
@@ -97,6 +98,9 @@ export default function ContactProfileScreen() {
     }
     supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", id).then(({ count }) => setFollowerCount(count || 0));
     supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", id).then(({ count }) => setFollowingCount(count || 0));
+    if (user) {
+      supabase.rpc("get_mutual_followers_count", { user_a: user.id, user_b: id }).then(({ data }) => setMutualCount(data || 0)).catch(() => {});
+    }
   }, [id, user]);
 
   const loadPosts = useCallback(async () => {
@@ -127,6 +131,20 @@ export default function ContactProfileScreen() {
   }, [id]);
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
+
+  async function sendWave() {
+    if (!user || !id) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const chatData = await supabase.rpc("get_or_create_direct_chat", { other_user_id: id });
+    if (chatData.data) {
+      await supabase.from("messages").insert({
+        chat_id: chatData.data,
+        sender_id: user.id,
+        encrypted_content: "👋 Waved at you!",
+      });
+      showAlert("Wave Sent!", `You waved at ${profile?.display_name || "them"} 👋`);
+    }
+  }
 
   async function startChat() {
     if (!id) return;
@@ -349,6 +367,15 @@ export default function ContactProfileScreen() {
               <Text style={[styles.followNum, { color: colors.text }]}>{followingCount}</Text>
               <Text style={[styles.followLabel, { color: colors.textMuted }]}>Following</Text>
             </View>
+            {mutualCount > 0 && (
+              <>
+                <View style={[styles.followDivider, { backgroundColor: colors.border }]} />
+                <View style={styles.followStat}>
+                  <Text style={[styles.followNum, { color: colors.text }]}>{mutualCount}</Text>
+                  <Text style={[styles.followLabel, { color: colors.textMuted }]}>Mutual</Text>
+                </View>
+              </>
+            )}
           </View>
 
           <View style={styles.infoRow}>
@@ -384,20 +411,20 @@ export default function ContactProfileScreen() {
             </View>
             <Text style={[styles.actionLabel, { color: colors.text }]}>Message</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.actionBtn} onPress={sendWave}>
+            <View style={[styles.actionIcon, { backgroundColor: "#FF9500" }]}>
+              <Text style={{ fontSize: 20 }}>👋</Text>
+            </View>
+            <Text style={[styles.actionLabel, { color: colors.text }]}>Wave</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.actionBtn}>
             <View style={[styles.actionIcon, { backgroundColor: "#007AFF" }]}>
               <Ionicons name="call" size={22} color="#fff" />
             </View>
             <Text style={[styles.actionLabel, { color: colors.text }]}>Call</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn}>
-            <View style={[styles.actionIcon, { backgroundColor: "#FF3B30" }]}>
-              <Ionicons name="videocam" size={22} color="#fff" />
-            </View>
-            <Text style={[styles.actionLabel, { color: colors.text }]}>Video</Text>
-          </TouchableOpacity>
           <TouchableOpacity style={styles.actionBtn} onPress={() => router.push({ pathname: "/gifts", params: { userId: profile?.id, userName: profile?.display_name } })}>
-            <View style={[styles.actionIcon, { backgroundColor: "#FF9500" }]}>
+            <View style={[styles.actionIcon, { backgroundColor: "#AF52DE" }]}>
               <Ionicons name="gift" size={22} color="#fff" />
             </View>
             <Text style={[styles.actionLabel, { color: colors.text }]}>Gift</Text>

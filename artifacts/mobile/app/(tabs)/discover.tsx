@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Dimensions,
   FlatList,
   Image,
@@ -47,6 +48,7 @@ type PostItem = {
   likeCount: number;
   replyCount: number;
   score: number;
+  bookmarked: boolean;
 };
 
 function formatRelative(iso: string): string {
@@ -57,7 +59,25 @@ function formatRelative(iso: string): string {
   return `${Math.floor(diff / 86400000)}d ago`;
 }
 
-function PostCard({ item, onToggleLike, onImagePress }: { item: PostItem; onToggleLike: (postId: string) => void; onImagePress?: (images: string[], index: number) => void }) {
+function BookmarkButton({ bookmarked, onPress }: { bookmarked: boolean; onPress: () => void }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  function handlePress() {
+    Animated.sequence([
+      Animated.timing(scale, { toValue: 0.7, duration: 100, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, tension: 200, friction: 8, useNativeDriver: true }),
+    ]).start();
+    onPress();
+  }
+  return (
+    <Animated.View style={{ transform: [{ scale }], marginLeft: "auto" }}>
+      <TouchableOpacity onPress={handlePress} hitSlop={8}>
+        <Ionicons name={bookmarked ? "bookmark" : "bookmark-outline"} size={18} color={bookmarked ? Colors.gold : "#8E8E93"} />
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress }: { item: PostItem; onToggleLike: (postId: string) => void; onToggleBookmark: (postId: string) => void; onImagePress?: (images: string[], index: number) => void }) {
   const { colors } = useTheme();
   const allImages = item.images.length > 0 ? item.images : item.image_url ? [item.image_url] : [];
   const imgW = allImages.length === 1 ? width - 48 : (width - 56) / 2;
@@ -123,6 +143,7 @@ function PostCard({ item, onToggleLike, onImagePress }: { item: PostItem; onTogg
           <Ionicons name="eye-outline" size={14} color={colors.textMuted} />
           <Text style={[styles.viewText, { color: colors.textMuted }]}>{item.view_count}</Text>
         </View>
+        <BookmarkButton bookmarked={item.bookmarked} onPress={() => onToggleBookmark(item.id)} />
       </View>
     </TouchableOpacity>
   );
@@ -180,6 +201,7 @@ export default function DiscoverScreen() {
         { data: myAuthorLikes },
         { data: followingData },
         { data: myReplies },
+        { data: myBookmarks },
       ] = await Promise.all([
         postIds.length > 0
           ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds)
@@ -207,12 +229,16 @@ export default function DiscoverScreen() {
               .in("posts.author_id", authorIds)
               .limit(500)
           : { data: [] },
+        postIds.length > 0 && user
+          ? supabase.from("post_bookmarks").select("post_id").in("post_id", postIds).eq("user_id", user.id)
+          : { data: [] },
       ]);
 
       const likeMap: Record<string, number> = {};
       for (const l of (likeCounts || [])) { likeMap[l.post_id] = (likeMap[l.post_id] || 0) + 1; }
 
       const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
+      const myBookmarkSet = new Set((myBookmarks || []).map((b: any) => b.post_id));
 
       const replyMap: Record<string, number> = {};
       for (const r of (replyCounts || [])) { replyMap[r.post_id] = (replyMap[r.post_id] || 0) + 1; }
@@ -283,6 +309,7 @@ export default function DiscoverScreen() {
           likeCount,
           replyCount,
           score,
+          bookmarked: myBookmarkSet.has(p.id),
         };
       });
 
@@ -331,6 +358,20 @@ export default function DiscoverScreen() {
 
     return () => { supabase.removeChannel(channel); };
   }, [loadPosts]);
+
+  async function toggleBookmark(postId: string) {
+    if (!user) { router.push("/(auth)/login"); return; }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const post = posts.find((p) => p.id === postId);
+    if (!post) return;
+    if (post.bookmarked) {
+      await supabase.from("post_bookmarks").delete().eq("post_id", postId).eq("user_id", user.id);
+      setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, bookmarked: false } : p));
+    } else {
+      await supabase.from("post_bookmarks").upsert({ post_id: postId, user_id: user.id }, { onConflict: "post_id,user_id" });
+      setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, bookmarked: true } : p));
+    }
+  }
 
   async function toggleLike(postId: string) {
     if (!user) { router.push("/(auth)/login"); return; }
@@ -398,7 +439,7 @@ export default function DiscoverScreen() {
         <FlatList
           data={posts}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <PostCard item={item} onToggleLike={toggleLike} onImagePress={imgViewer.openViewer} />}
+          renderItem={({ item }) => <PostCard item={item} onToggleLike={toggleLike} onToggleBookmark={toggleBookmark} onImagePress={imgViewer.openViewer} />}
           contentContainerStyle={{ gap: 8, paddingVertical: 8, paddingBottom: 90 }}
           showsVerticalScrollIndicator={false}
           onEndReached={loadMore}

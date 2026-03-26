@@ -6,6 +6,7 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
+  Modal,
   PanResponder,
   Platform,
   ScrollView,
@@ -26,6 +27,7 @@ import * as FileSystem from "expo-file-system";
 import { Video, ResizeMode } from "expo-av";
 import Svg, { Path } from "react-native-svg";
 import { ChatLoadingSkeleton } from "@/components/ui/Skeleton";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -159,6 +161,136 @@ function BubbleTail({ isMe, color }: { isMe: boolean; color: string }) {
       <Svg width={12} height={16} viewBox="0 0 12 16">
         <Path d="M12 0 C12 0 12 8 6 12 C3 14 0 16 0 16 L0 0 Z" fill={color} />
       </Svg>
+    </View>
+  );
+}
+
+const SMART_REPLIES: Record<string, string[]> = {
+  question:  ["Sure!", "Let me check", "Tell me more!"],
+  greeting:  ["Hey! 👋", "Hello!", "What's up?"],
+  howAreYou: ["I'm great! 😊", "Doing well!", "Pretty good, you?"],
+  thanks:    ["You're welcome!", "No problem!", "Anytime 😊"],
+  love:      ["❤️", "That's sweet!", "Aww!"],
+  okay:      ["Perfect!", "Sounds good!", "Got it 👍"],
+  bye:       ["Bye! 👋", "See ya!", "Take care!"],
+  miss:      ["Miss you too! 💙", "Same here!", "Come visit!"],
+  agree:     ["Totally!", "100%", "Exactly!"],
+  default:   ["👍", "Got it!", "Sounds good!"],
+};
+
+function getSmartReplies(text: string): string[] {
+  const t = text.toLowerCase();
+  if (t.endsWith("?") || /\bright\?|isn't it|correct\?/.test(t)) return SMART_REPLIES.question;
+  if (/\b(hi|hey|hello|howdy|hiya|sup)\b/.test(t)) return SMART_REPLIES.greeting;
+  if (/how (are|r) you|how's it going|how are things|hows life/.test(t)) return SMART_REPLIES.howAreYou;
+  if (/thank|thanks|ty\b|thx/.test(t)) return SMART_REPLIES.thanks;
+  if (/love|❤|💕|💙|💗|adore/.test(t)) return SMART_REPLIES.love;
+  if (/\b(ok|okay|sure|alright|fine|k\b)\b/.test(t)) return SMART_REPLIES.okay;
+  if (/\b(bye|goodbye|gtg|cya|see ya|ttyl)\b/.test(t)) return SMART_REPLIES.bye;
+  if (/miss (you|u)\b/.test(t)) return SMART_REPLIES.miss;
+  if (/agree|same|exactly|totally/.test(t)) return SMART_REPLIES.agree;
+  return SMART_REPLIES.default;
+}
+
+function SmartReplyBar({ messages, myId, input, onSend, colors }: {
+  messages: Message[];
+  myId: string;
+  input: string;
+  onSend: (text: string) => void;
+  colors: any;
+}) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const lastOtherMsg = messages.find((m) => m.sender_id !== myId && !m._pending);
+  const replies = lastOtherMsg ? getSmartReplies(lastOtherMsg.encrypted_content) : [];
+  const show = replies.length > 0 && !input.trim();
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, { toValue: show ? 1 : 0, duration: 180, useNativeDriver: true }).start();
+  }, [show]);
+
+  if (!lastOtherMsg) return null;
+
+  return (
+    <Animated.View
+      style={{
+        opacity: fadeAnim,
+        flexDirection: "row",
+        paddingHorizontal: 12,
+        paddingTop: 6,
+        paddingBottom: 2,
+        gap: 8,
+        flexWrap: "wrap",
+        borderTopWidth: show ? StyleSheet.hairlineWidth : 0,
+        borderTopColor: colors.border,
+      }}
+      pointerEvents={show ? "auto" : "none"}
+    >
+      {replies.map((r) => (
+        <TouchableOpacity
+          key={r}
+          onPress={() => onSend(r)}
+          style={{
+            backgroundColor: colors.inputBg,
+            borderColor: BRAND + "60",
+            borderWidth: 1,
+            borderRadius: 18,
+            paddingHorizontal: 13,
+            paddingVertical: 7,
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_500Medium" }}>{r}</Text>
+        </TouchableOpacity>
+      ))}
+    </Animated.View>
+  );
+}
+
+function TypingBubble({ names, colors }: { names: string[]; colors: any }) {
+  const dot1 = useRef(new Animated.Value(0)).current;
+  const dot2 = useRef(new Animated.Value(0)).current;
+  const dot3 = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const bounce = (dot: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dot, { toValue: -5, duration: 300, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0, duration: 300, useNativeDriver: true }),
+          Animated.delay(600),
+        ])
+      );
+    const a1 = bounce(dot1, 0);
+    const a2 = bounce(dot2, 150);
+    const a3 = bounce(dot3, 300);
+    a1.start(); a2.start(); a3.start();
+    return () => { a1.stop(); a2.stop(); a3.stop(); };
+  }, []);
+
+  return (
+    <View style={{ paddingHorizontal: 16, paddingBottom: 4 }}>
+      <View style={[{ backgroundColor: colors.bubbleIncoming, borderRadius: 18, borderBottomLeftRadius: 4, paddingHorizontal: 16, paddingVertical: 10, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 10 }]}>
+        <View style={{ flexDirection: "row", gap: 4, alignItems: "center" }}>
+          {[dot1, dot2, dot3].map((dot, i) => (
+            <Animated.View
+              key={i}
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: 3.5,
+                backgroundColor: colors.bubbleIncomingText === "#FFFFFF" ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.35)",
+                transform: [{ translateY: dot }],
+              }}
+            />
+          ))}
+        </View>
+        {names.length > 0 && (
+          <Text style={{ color: colors.textMuted, fontSize: 11, fontFamily: "Inter_400Regular" }}>
+            {names.join(", ")} {names.length === 1 ? "is" : "are"} typing
+          </Text>
+        )}
+      </View>
     </View>
   );
 }
@@ -447,8 +579,12 @@ export default function ChatScreen() {
   const [attachmentPreview, setAttachmentPreview] = useState<{ uri: string; type: string; name?: string } | null>(null);
   const [networkOnline, setNetworkOnline] = useState(isOnline());
   const [messageLimited, setMessageLimited] = useState(false);
+  const [forwardMsg, setForwardMsg] = useState<Message | null>(null);
+  const [forwardChats, setForwardChats] = useState<{ id: string; name: string; avatar: string | null }[]>([]);
+  const [forwardSending, setForwardSending] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const typingTimeout = useRef<any>(null);
+  const draftSaveTimer = useRef<any>(null);
 
   const effectiveChatId = isDraft ? realChatId : id;
 
@@ -687,6 +823,61 @@ export default function ChatScreen() {
     }, 3000);
   }
 
+  function saveDraft(text: string) {
+    if (!id) return;
+    if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+    draftSaveTimer.current = setTimeout(() => {
+      const key = `chat_draft_${id}`;
+      if (text.trim()) {
+        AsyncStorage.setItem(key, text).catch(() => {});
+      } else {
+        AsyncStorage.removeItem(key).catch(() => {});
+      }
+    }, 800);
+  }
+
+  useEffect(() => {
+    if (!id) return;
+    AsyncStorage.getItem(`chat_draft_${id}`).then((draft) => {
+      if (draft) setInput(draft);
+    }).catch(() => {});
+  }, [id]);
+
+  function handleSmartReply(text: string) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    sendMessage(text);
+  }
+
+  async function openForward(msg: Message) {
+    setForwardMsg(msg);
+    const { data } = await supabase
+      .from("chats")
+      .select("id, name, avatar_url, chat_members!inner(user_id), profiles!chats_created_by_fkey(display_name, avatar_url)")
+      .eq("chat_members.user_id", user?.id || "")
+      .order("updated_at", { ascending: false })
+      .limit(30);
+    const mapped = (data || []).map((c: any) => ({
+      id: c.id,
+      name: c.name || c.profiles?.display_name || "Chat",
+      avatar: c.avatar_url || c.profiles?.avatar_url || null,
+    }));
+    setForwardChats(mapped);
+  }
+
+  async function sendForward(targetChatId: string) {
+    if (!forwardMsg || !user) return;
+    setForwardSending(true);
+    await supabase.from("messages").insert({
+      chat_id: targetChatId,
+      sender_id: user.id,
+      encrypted_content: `↪ Forwarded\n${forwardMsg.encrypted_content}`,
+    });
+    setForwardSending(false);
+    setForwardMsg(null);
+    setForwardChats([]);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }
+
   async function addReaction(msg: Message, emoji: string) {
     if (!user) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -732,15 +923,16 @@ export default function ChatScreen() {
     return chatId;
   }
 
-  async function sendMessage() {
-    const text = input.trim();
+  async function sendMessage(directText?: string) {
+    const text = (directText ?? input).trim();
     if (!text || !user || sending) return;
     if (messageLimited) {
       showAlert("Message limit", `You can only send one message until ${chatInfo?.other_name || "this user"} replies or follows you.`);
       return;
     }
     setSending(true);
-    setInput("");
+    if (!directText) setInput("");
+    if (id) AsyncStorage.removeItem(`chat_draft_${id}`).catch(() => {});
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const activeChatId = await getOrCreateChatId();
@@ -1231,6 +1423,9 @@ export default function ChatScreen() {
             inverted
             contentContainerStyle={st.listContent}
             showsVerticalScrollIndicator={false}
+            ListFooterComponent={
+              typingUsers.length > 0 ? <TypingBubble names={typingUsers} colors={colors} /> : null
+            }
           />
         )}
 
@@ -1271,7 +1466,9 @@ export default function ChatScreen() {
             </Text>
           </View>
         ) : (
-          <View style={[st.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 8) }]}>
+          <View style={{ backgroundColor: colors.surface }}>
+            <SmartReplyBar messages={messages} myId={user?.id || ""} input={input} onSend={handleSmartReply} colors={colors} />
+            <View style={[st.inputBar, { borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 8) }]}>
             <TouchableOpacity onPress={() => setShowAttachMenu(true)} style={st.inputAction} hitSlop={6}>
               <Ionicons name="add-circle" size={28} color={colors.textMuted} />
             </TouchableOpacity>
@@ -1281,7 +1478,7 @@ export default function ChatScreen() {
                 placeholder="Message"
                 placeholderTextColor={colors.textMuted}
                 value={input}
-                onChangeText={(t) => { setInput(t); handleTyping(); }}
+                onChangeText={(t) => { setInput(t); handleTyping(); saveDraft(t); }}
                 multiline
                 maxLength={4000}
               />
@@ -1303,6 +1500,7 @@ export default function ChatScreen() {
                 <Ionicons name="mic" size={26} color={colors.textMuted} />
               </TouchableOpacity>
             )}
+            </View>
           </View>
         )}
       </KeyboardAvoidingView>
@@ -1322,6 +1520,18 @@ export default function ChatScreen() {
         <TouchableOpacity style={st.sheetActionRow} onPress={() => { if (showReactions) { setReplyTo(showReactions); setShowReactions(null); } }}>
           <Ionicons name="arrow-undo" size={20} color={colors.text} />
           <Text style={[st.sheetActionText, { color: colors.text }]}>Reply</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={st.sheetActionRow}
+          onPress={() => {
+            if (showReactions) {
+              openForward(showReactions);
+              setShowReactions(null);
+            }
+          }}
+        >
+          <Ionicons name="arrow-redo" size={20} color={colors.text} />
+          <Text style={[st.sheetActionText, { color: colors.text }]}>Forward</Text>
         </TouchableOpacity>
       </BottomSheet>
 
@@ -1478,6 +1688,58 @@ export default function ChatScreen() {
         visible={imgViewer.visible}
         onClose={imgViewer.closeViewer}
       />
+
+      {forwardMsg && (
+        <Modal
+          visible
+          transparent
+          animationType="slide"
+          onRequestClose={() => { setForwardMsg(null); setForwardChats([]); }}
+        >
+          <View style={[st.forwardOverlay]}>
+            <TouchableOpacity style={{ flex: 1 }} onPress={() => { setForwardMsg(null); setForwardChats([]); }} />
+            <View style={[st.forwardSheet, { backgroundColor: colors.surface }]}>
+              <View style={[st.forwardHeader, { borderBottomColor: colors.border }]}>
+                <Text style={[st.forwardTitle, { color: colors.text }]}>Forward to…</Text>
+                <TouchableOpacity onPress={() => { setForwardMsg(null); setForwardChats([]); }} hitSlop={12}>
+                  <Ionicons name="close" size={22} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+              <View style={[st.forwardPreview, { backgroundColor: colors.inputBg }]}>
+                <Ionicons name="arrow-redo-outline" size={14} color={colors.textMuted} style={{ marginTop: 1 }} />
+                <Text style={[st.forwardPreviewText, { color: colors.textSecondary }]} numberOfLines={2}>
+                  {forwardMsg.encrypted_content}
+                </Text>
+              </View>
+              {forwardChats.length === 0 ? (
+                <ActivityIndicator color={BRAND} style={{ marginVertical: 24 }} />
+              ) : (
+                <FlatList
+                  data={forwardChats}
+                  keyExtractor={(c) => c.id}
+                  style={{ maxHeight: 380 }}
+                  showsVerticalScrollIndicator={false}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={[st.forwardChatRow, { borderBottomColor: colors.border }]}
+                      onPress={() => sendForward(item.id)}
+                      disabled={forwardSending}
+                    >
+                      <Avatar uri={item.avatar} name={item.name} size={42} />
+                      <Text style={[st.forwardChatName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
+                      {forwardSending ? (
+                        <ActivityIndicator color={BRAND} size="small" />
+                      ) : (
+                        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                      )}
+                    </TouchableOpacity>
+                  )}
+                />
+              )}
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -1674,4 +1936,13 @@ const st = StyleSheet.create({
   gifItem: { width: "31%", alignItems: "center", gap: 4 },
   gifThumb: { width: "100%", height: 80, borderRadius: 10 },
   gifLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
+
+  forwardOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" },
+  forwardSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 40, overflow: "hidden" },
+  forwardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, borderBottomWidth: StyleSheet.hairlineWidth },
+  forwardTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
+  forwardPreview: { flexDirection: "row", gap: 8, padding: 12, marginHorizontal: 16, marginVertical: 10, borderRadius: 10 },
+  forwardPreviewText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
+  forwardChatRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  forwardChatName: { flex: 1, fontSize: 15, fontFamily: "Inter_500Medium" },
 });

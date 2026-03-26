@@ -74,6 +74,57 @@ function MenuGroup({ children }: { children: React.ReactNode }) {
   );
 }
 
+type ProfileFields = { avatar_url?: string | null; bio?: string | null; country?: string | null; website_url?: string | null; display_name?: string | null; handle?: string | null };
+
+function ProfileCompletionBar({ profile, isPremium }: { profile: ProfileFields | null; isPremium: boolean }) {
+  const { colors } = useTheme();
+  const fillAnim = useSharedValue(0);
+
+  const checks = [
+    { label: "Avatar", done: !!profile?.avatar_url },
+    { label: "Bio", done: !!profile?.bio },
+    { label: "Country", done: !!profile?.country },
+    { label: "Website", done: !!profile?.website_url },
+    { label: "Premium", done: isPremium },
+  ];
+  const score = checks.filter((c) => c.done).length;
+  const pct = score / checks.length;
+
+  useEffect(() => {
+    fillAnim.value = withDelay(400, withTiming(pct, { duration: 900, easing: Easing.out(Easing.cubic) }));
+  }, [pct]);
+
+  const fillStyle = useAnimatedStyle(() => ({ width: `${fillAnim.value * 100}%` as any }));
+
+  if (score === checks.length) return null;
+
+  return (
+    <TouchableOpacity
+      style={[{ backgroundColor: colors.surface, borderRadius: 14, padding: 14, marginVertical: 4 }]}
+      onPress={() => router.push("/profile/edit")}
+      activeOpacity={0.8}
+    >
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>Profile Completion</Text>
+        <Text style={{ color: Colors.brand, fontFamily: "Inter_700Bold", fontSize: 13 }}>{Math.round(pct * 100)}%</Text>
+      </View>
+      <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.backgroundTertiary, overflow: "hidden" }}>
+        <Animated.View style={[{ height: "100%", borderRadius: 3, overflow: "hidden" }, fillStyle]}>
+          <LinearGradient colors={[Colors.brand, Colors.gold]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+        </Animated.View>
+      </View>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+        {checks.map((c) => (
+          <View key={c.label} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Ionicons name={c.done ? "checkmark-circle" : "ellipse-outline"} size={13} color={c.done ? "#34C759" : colors.textMuted} />
+            <Text style={{ color: c.done ? colors.textSecondary : colors.textMuted, fontSize: 11, fontFamily: "Inter_400Regular" }}>{c.label}</Text>
+          </View>
+        ))}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 function XpLevelBar({ xp }: { xp: number }) {
   const { colors } = useTheme();
   const level = Math.floor(Math.sqrt(xp / 100)) + 1;
@@ -205,6 +256,8 @@ export default function MeScreen() {
 
       <XpLevelBar xp={profile?.xp || 0} />
 
+      <ProfileCompletionBar profile={profile} isPremium={isPremium} />
+
       {!isPremium && (
         <TouchableOpacity
           style={styles.premiumBanner}
@@ -234,6 +287,8 @@ export default function MeScreen() {
         <MenuItem icon="sparkles-outline" iconBg="#00C2CB" label="AfuAi" onPress={() => router.push("/ai")} />
         <Separator indent={54} />
         <MenuItem icon="newspaper-outline" iconBg="#FF9500" label="My Posts" onPress={() => router.push("/my-posts")} />
+        <Separator indent={54} />
+        <MenuItem icon="bookmark-outline" iconBg="#FF6B35" label="Saved Posts" onPress={() => router.push("/saved-posts")} />
         <Separator indent={54} />
         <MenuItem icon="images-outline" iconBg="#5856D6" label="Stories" onPress={() => router.push("/stories/create")} />
         <Separator indent={54} />
