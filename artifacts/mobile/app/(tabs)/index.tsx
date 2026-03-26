@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Modal,
   Pressable,
@@ -83,6 +84,21 @@ function ChatRow({ item }: { item: ChatItem }) {
   const displayName = item.is_group || item.is_channel ? item.name : item.other_display_name;
   const avatar = item.is_group || item.is_channel ? item.avatar_url : item.other_avatar;
   const hasUnread = item.unread_count > 0;
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (hasUnread) {
+      const anim = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, { toValue: 1.28, duration: 650, useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 1, duration: 650, useNativeDriver: true }),
+        ])
+      );
+      anim.start();
+      return () => anim.stop();
+    } else {
+      pulse.setValue(1);
+    }
+  }, [hasUnread]);
 
   return (
     <TouchableOpacity
@@ -127,11 +143,11 @@ function ChatRow({ item }: { item: ChatItem }) {
             {item.last_message || "No messages yet"}
           </Text>
           {hasUnread && (
-            <View style={[styles.unreadBadge, { backgroundColor: Colors.brand }]}>
+            <Animated.View style={[styles.unreadBadge, { backgroundColor: Colors.brand, transform: [{ scale: pulse }] }]}>
               <Text style={styles.unreadBadgeText}>
                 {item.unread_count > 99 ? "99+" : item.unread_count}
               </Text>
-            </View>
+            </Animated.View>
           )}
         </View>
       </View>

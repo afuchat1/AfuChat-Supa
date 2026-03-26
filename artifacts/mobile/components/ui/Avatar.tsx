@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Image, StyleSheet, Text, View, ViewStyle } from "react-native";
 import Colors from "@/constants/colors";
+import { PremiumRing } from "./PremiumRing";
 
 type Props = {
   uri?: string | null;
@@ -8,6 +9,7 @@ type Props = {
   size?: number;
   style?: ViewStyle;
   online?: boolean;
+  premium?: boolean;
 };
 
 function getInitials(name?: string): string {
@@ -28,7 +30,7 @@ function hashColor(name?: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
-export function Avatar({ uri, name, size = 44, style, online }: Props) {
+export function Avatar({ uri, name, size = 44, style, online, premium }: Props) {
   const initials = getInitials(name);
   const bgColor = hashColor(name);
   const [imgError, setImgError] = useState(false);
@@ -37,8 +39,12 @@ export function Avatar({ uri, name, size = 44, style, online }: Props) {
 
   const showImage = !!uri && !imgError;
 
-  return (
-    <View style={[{ width: size, height: size }, style]}>
+  const ring = 2.5;
+  const gap = 2;
+  const outerSize = size + (ring + gap) * 2;
+
+  const innerNode = (
+    <View style={{ width: size, height: size }}>
       {showImage ? (
         <Image
           source={{ uri }}
@@ -70,6 +76,22 @@ export function Avatar({ uri, name, size = 44, style, online }: Props) {
           ]}
         />
       )}
+    </View>
+  );
+
+  if (premium) {
+    return (
+      <View style={[{ width: outerSize, height: outerSize }, style]}>
+        <PremiumRing size={size}>
+          {innerNode}
+        </PremiumRing>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[{ width: size, height: size }, style]}>
+      {innerNode}
     </View>
   );
 }

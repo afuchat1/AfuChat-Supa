@@ -33,6 +33,7 @@ import { useGiftPrices } from "@/hooks/useGiftPrices";
 import { Avatar } from "@/components/ui/Avatar";
 import { RichText } from "@/components/ui/RichText";
 import Colors from "@/constants/colors";
+import { LinearGradient } from "expo-linear-gradient";
 import { showAlert } from "@/lib/alert";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { notifyNewMessage, notifyGiftReceived } from "@/lib/notifyUser";
@@ -113,6 +114,36 @@ function formatDateHeader(iso: string): string {
   return d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
 }
 
+function PremiumBubbleShimmer() {
+  const shimmer = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 1400, useNativeDriver: true }),
+        Animated.delay(3800),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, []);
+  const translateX = shimmer.interpolate({ inputRange: [0, 1], outputRange: [-80, 220] });
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 16, overflow: "hidden" }}
+    >
+      <Animated.View style={{ position: "absolute", top: 0, bottom: 0, width: 70, transform: [{ translateX }] }}>
+        <LinearGradient
+          colors={["transparent", "rgba(255,255,255,0.22)", "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ flex: 1 }}
+        />
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
 function BubbleTail({ isMe, color }: { isMe: boolean; color: string }) {
   if (isMe) {
     return (
@@ -174,7 +205,7 @@ function BottomSheet({ visible, onClose, children }: { visible: boolean; onClose
   );
 }
 
-function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, replyPreview, onTapEnvelope, onTapGift, onImageTap }: {
+function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, replyPreview, onTapEnvelope, onTapGift, onImageTap, isPremiumSender }: {
   msg: Message;
   isMe: boolean;
   showTail: boolean;
@@ -185,6 +216,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   onTapEnvelope?: (msg: Message) => void;
   onTapGift?: (msg: Message) => void;
   onImageTap?: (images: string[], index: number) => void;
+  isPremiumSender?: boolean;
 }) {
   const { colors } = useTheme();
   const isRedEnvelope = msg.encrypted_content.startsWith("🧧");
@@ -194,6 +226,15 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   const bubbleColor = isMe ? meBubbleColor : otherBubbleColor;
   const textColor = isMe ? "#FFFFFF" : colors.bubbleIncomingText;
   const isPending = msg._pending || msg.status === "sending";
+
+  const slideX = useRef(new Animated.Value(isMe ? 18 : -18)).current;
+  const fadeIn = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(slideX, { toValue: 0, tension: 100, friction: 11, useNativeDriver: true }),
+      Animated.timing(fadeIn, { toValue: 1, duration: 180, useNativeDriver: true }),
+    ]).start();
+  }, []);
 
   if (isRedEnvelope) {
     const displayMsg = msg.encrypted_content.replace(/🧧 Red Envelope \[[a-f0-9-]+\] - /, "").replace("🧧 Red Envelope - ", "");
@@ -249,7 +290,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   const hasTextContent = msg.encrypted_content && !["📷 Photo", "🎥 Video", "GIF"].includes(msg.encrypted_content);
 
   return (
-    <View style={[st.msgRow, isMe ? st.msgRowMe : st.msgRowOther]}>
+    <Animated.View style={[st.msgRow, isMe ? st.msgRowMe : st.msgRowOther, { transform: [{ translateX: slideX }], opacity: fadeIn }]}>
       <View style={[st.bubbleContainer, isMe ? st.bubbleContainerMe : st.bubbleContainerOther]}>
         {showTail && <BubbleTail isMe={isMe} color={bubbleColor} />}
 
@@ -260,6 +301,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
           showTail ? (isMe ? st.bubbleTailMe : st.bubbleTailOther) : null,
           isPending && { opacity: 0.6 },
         ]}>
+          {isPremiumSender && <PremiumBubbleShimmer />}
           {!isMe && showName && (
             <Text style={[st.senderName, { color: BRAND }]}>
               {msg.sender?.display_name}
@@ -352,7 +394,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
           </View>
         )}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -364,7 +406,7 @@ export default function ChatScreen() {
     contactAvatar?: string;
   }>();
   const isDraft = id === "new";
-  const { user, profile } = useAuth();
+  const { user, profile, isPremium } = useAuth();
   const { colors } = useTheme();
   const { statsMap, getDynamicPrice } = useGiftPrices();
   const insets = useSafeAreaInsets();
@@ -1127,6 +1169,7 @@ export default function ChatScreen() {
           onTapEnvelope={handleTapEnvelope}
           onTapGift={handleTapGift}
           onImageTap={imgViewer.openViewer}
+          isPremiumSender={isMe && isPremium}
         />
       </View>
     );

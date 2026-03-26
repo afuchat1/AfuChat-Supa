@@ -152,7 +152,7 @@ export default function MeScreen() {
         onPress={() => router.push("/profile/edit")}
         activeOpacity={0.85}
       >
-        <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={68} />
+        <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={68} premium={isPremium} />
         <View style={styles.profileInfo}>
           <View style={styles.nameRow}>
             <Text style={[styles.profileName, { color: colors.text }]}>
