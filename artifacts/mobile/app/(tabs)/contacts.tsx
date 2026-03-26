@@ -302,6 +302,20 @@ export default function ContactsScreen() {
         <SectionList
           sections={sections}
           keyExtractor={(item) => item.id}
+          ListHeaderComponent={
+            <TouchableOpacity
+              style={[styles.phoneBanner, { backgroundColor: colors.surface }]}
+              onPress={() => router.push("/phone-contacts")}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="people" size={20} color={Colors.brand} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.phoneBannerTitle, { color: colors.text }]}>Find contacts on AfuChat</Text>
+                <Text style={[styles.phoneBannerSub, { color: colors.textMuted }]}>See which friends are already here</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          }
           renderItem={({ item }) => <ContactRow item={item} />}
           renderSectionHeader={({ section: { title } }) => (
             <View style={[styles.sectionHeader, { backgroundColor: colors.backgroundSecondary }]}>
@@ -358,6 +372,9 @@ const styles = StyleSheet.create({
   handle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
   sectionHeader: { paddingHorizontal: 16, paddingVertical: 6 },
   sectionTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  phoneBanner: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14, marginHorizontal: 12, marginVertical: 8, borderRadius: 14 },
+  phoneBannerTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  phoneBannerSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   emptySubtitle: { fontSize: 14, fontFamily: "Inter_400Regular" },

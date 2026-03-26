@@ -22,6 +22,7 @@ import { notifyNewFollow } from "@/lib/notifyUser";
 import { shareProfile } from "@/lib/share";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { ProfileSkeleton, PostSkeleton } from "@/components/ui/Skeleton";
+import { PrestigeBadge } from "@/components/ui/PrestigeBadge";
 
 type Profile = {
   id: string;
@@ -38,6 +39,7 @@ type Profile = {
   created_at: string | null;
   last_seen: string | null;
   show_online_status: boolean;
+  acoin: number;
 };
 
 type UserPost = {
@@ -84,7 +86,7 @@ export default function ContactProfileScreen() {
     if (!id) return;
     supabase
       .from("profiles")
-      .select("id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified, xp, current_grade, website_url, country, created_at, last_seen, show_online_status")
+      .select("id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified, xp, current_grade, website_url, country, created_at, last_seen, show_online_status, acoin")
       .eq("id", id)
       .single()
       .then(({ data }) => {
@@ -272,6 +274,7 @@ export default function ContactProfileScreen() {
             <Text style={[styles.displayName, { color: colors.text }]}>{profile?.display_name}</Text>
             <VerifiedBadge isVerified={profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={20} />
           </TouchableOpacity>
+          <PrestigeBadge acoin={profile?.acoin || 0} size="md" showLabel />
 
           <Text style={[styles.handle, { color: colors.textSecondary }]}>@{profile?.handle}</Text>
 

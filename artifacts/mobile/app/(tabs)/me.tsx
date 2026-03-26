@@ -27,6 +27,7 @@ import { Separator } from "@/components/ui/Separator";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import Colors from "@/constants/colors";
 import OfflineBanner from "@/components/ui/OfflineBanner";
+import { PrestigeBadge } from "@/components/ui/PrestigeBadge";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -216,6 +217,7 @@ export default function MeScreen() {
               </View>
             )}
           </View>
+          <PrestigeBadge acoin={profile?.acoin || 0} size="md" showLabel />
           <Text style={[styles.profileHandle, { color: colors.textSecondary }]}>
             @{profile?.handle || "handle"}
           </Text>
@@ -277,6 +279,7 @@ export default function MeScreen() {
 
       <MenuGroup>
         <MenuItem icon="id-card-outline" iconBg="#1E3A5F" label="Digital ID" onPress={() => router.push("/digital-id")} badge="3D" />
+        <MenuItem icon="crown" iconBg="#D4A853" label="Prestige Status" onPress={() => router.push("/prestige")} badge="NEW" />
         <Separator indent={54} />
         <MenuItem icon="trophy-outline" iconBg="#FF9500" label="Achievements" onPress={() => router.push("/achievements")} />
         <Separator indent={54} />
@@ -289,6 +292,7 @@ export default function MeScreen() {
         <MenuItem icon="newspaper-outline" iconBg="#FF9500" label="My Posts" onPress={() => router.push("/my-posts")} />
         <Separator indent={54} />
         <MenuItem icon="bookmark-outline" iconBg="#FF6B35" label="Saved Posts" onPress={() => router.push("/saved-posts")} />
+        <MenuItem icon="people-outline" iconBg="#34C759" label="Contacts on AfuChat" onPress={() => router.push("/phone-contacts")} />
         <Separator indent={54} />
         <MenuItem icon="images-outline" iconBg="#5856D6" label="Stories" onPress={() => router.push("/stories/create")} />
         <Separator indent={54} />

@@ -9,6 +9,8 @@ id = "artifacts/mockup-sandbox"
 [deployment]
 router = "application"
 deploymentTarget = "autoscale"
+build = ["sh", "-c", "npm-build"]
+run = ["sh", "-c", "npm-run"]
 
 [deployment.postBuild]
 args = ["pnpm", "store", "prune"]
