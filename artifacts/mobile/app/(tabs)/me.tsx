@@ -294,9 +294,16 @@ export default function MeScreen() {
         <MenuItem icon="newspaper-outline" iconBg="#FF9500" label="My Posts" onPress={() => router.push("/my-posts")} />
         <Separator indent={54} />
         <MenuItem icon="bookmark-outline" iconBg="#FF6B35" label="Saved Posts" onPress={() => router.push("/saved-posts")} />
+        <Separator indent={54} />
+        <MenuItem icon="folder-open-outline" iconBg="#BF5AF2" label="Collections" onPress={() => router.push("/collections")} />
+        <Separator indent={54} />
+        <MenuItem icon="document-outline" iconBg="#5856D6" label="File Manager" onPress={() => router.push("/file-manager")} />
+        <Separator indent={54} />
         <MenuItem icon="people-outline" iconBg="#34C759" label="Contacts on AfuChat" onPress={() => router.push("/phone-contacts")} />
         <Separator indent={54} />
-        <MenuItem icon="images-outline" iconBg="#5856D6" label="Stories" onPress={() => router.push("/stories/create")} />
+        <MenuItem icon="person-add-outline" iconBg="#00C2CB" label="Find People" onPress={() => router.push("/user-discovery")} badge="NEW" />
+        <Separator indent={54} />
+        <MenuItem icon="images-outline" iconBg="#FF9500" label="Stories" onPress={() => router.push("/stories/create")} />
         <Separator indent={54} />
         <MenuItem icon="notifications-outline" iconBg="#007AFF" label="Notifications" onPress={() => router.push("/notifications")} />
       </MenuGroup>
@@ -365,6 +372,21 @@ export default function MeScreen() {
           iconBg="#5856D6"
           label="Notification Settings"
           onPress={() => router.push("/settings/notifications")}
+        />
+        <Separator indent={54} />
+        <MenuItem
+          icon="sparkles-outline"
+          iconBg="#BF5AF2"
+          label="Advanced Features"
+          onPress={() => router.push("/advanced-features")}
+          badge="38"
+        />
+        <Separator indent={54} />
+        <MenuItem
+          icon="shield-half-outline"
+          iconBg="#FF3B30"
+          label="Device Security"
+          onPress={() => router.push("/device-security")}
         />
       </MenuGroup>
 
