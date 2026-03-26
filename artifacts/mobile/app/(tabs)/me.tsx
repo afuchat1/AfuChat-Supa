@@ -281,6 +281,8 @@ export default function MeScreen() {
         <MenuItem icon="id-card-outline" iconBg="#1E3A5F" label="Digital ID" onPress={() => router.push("/digital-id")} badge="3D" />
         <MenuItem icon="crown" iconBg="#D4A853" label="Prestige Status" onPress={() => router.push("/prestige")} badge="NEW" />
         <Separator indent={54} />
+        <MenuItem icon="cash-outline" iconBg="#32D74B" label="Monetize" onPress={() => router.push("/monetize")} badge="15 ways" />
+        <Separator indent={54} />
         <MenuItem icon="trophy-outline" iconBg="#FF9500" label="Achievements" onPress={() => router.push("/achievements")} />
         <Separator indent={54} />
         <MenuItem icon="storefront-outline" iconBg="#AF52DE" label="Virtual Shop" onPress={() => router.push("/store")} badge="NEW" />
