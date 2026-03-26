@@ -381,11 +381,15 @@ export default function LoginScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
-          { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 },
+          { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 },
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.logoWrap}>
+        <TouchableOpacity onPress={() => router.push("/(auth)/welcome")} style={styles.backToWelcome}>
+          <Ionicons name="chevron-back" size={20} color={Colors.brand} />
+          <Text style={[styles.backToWelcomeText, { color: Colors.brand }]}>Back</Text>
+        </TouchableOpacity>
+        <View style={[styles.logoWrap, { marginTop: 20 }]}>
           <Image source={afuSymbol} style={{ width: 88, height: 88, marginBottom: 16, tintColor: Colors.brand }} resizeMode="contain" />
           <Text style={[styles.appName, { color: colors.text }]}>AfuChat</Text>
           <Text style={[styles.tagline, { color: colors.textSecondary }]}>
@@ -607,4 +611,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Inter_500Medium",
   },
+  backToWelcome: { flexDirection: "row", alignItems: "center", gap: 4 },
+  backToWelcomeText: { fontSize: 15, fontFamily: "Inter_500Medium" },
 });

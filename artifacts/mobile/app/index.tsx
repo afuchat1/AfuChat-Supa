@@ -17,10 +17,8 @@ export default function IndexScreen() {
       } else {
         router.replace("/(tabs)");
       }
-    } else if (Platform.OS === "web") {
-      router.replace("/(tabs)/discover");
     } else {
-      router.replace("/(auth)/login");
+      router.replace("/(auth)/welcome");
     }
   }, [session, profile, loading]);
 
