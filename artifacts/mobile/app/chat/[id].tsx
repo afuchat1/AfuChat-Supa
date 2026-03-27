@@ -630,9 +630,15 @@ export default function ChatScreen() {
   } | null>(null);
   const [envClaiming, setEnvClaiming] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [recordingLocked, setRecordingLocked] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
+  const [waveformLevels, setWaveformLevels] = useState<number[]>([]);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const recordingTimer = useRef<any>(null);
+  const meterInterval = useRef<any>(null);
+  const micPressY = useRef(0);
+  const recordingLockedRef = useRef(false);
+  const lockThreshold = 60;
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [gifSearch, setGifSearch] = useState("");
@@ -781,6 +787,17 @@ export default function ChatScreen() {
     });
     return unsub;
   }, [loadMessages]);
+
+  useEffect(() => {
+    return () => {
+      clearInterval(recordingTimer.current);
+      clearInterval(meterInterval.current);
+      if (recordingRef.current) {
+        recordingRef.current.stopAndUnloadAsync().catch(() => {});
+        recordingRef.current = null;
+      }
+    };
+  }, []);
 
   const checkMessageGating = useCallback(async () => {
     if (!user) return;
@@ -1414,6 +1431,7 @@ export default function ChatScreen() {
   }
 
   async function startVoiceRecording() {
+    if (recordingRef.current || isRecording) return;
     try {
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== "granted") {
@@ -1424,17 +1442,36 @@ export default function ChatScreen() {
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
       });
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
+      const { recording } = await Audio.Recording.createAsync({
+        ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
+        isMeteringEnabled: true,
+      });
       recordingRef.current = recording;
       setIsRecording(true);
+      setRecordingLocked(false);
+      recordingLockedRef.current = false;
       setRecordingDuration(0);
+      setWaveformLevels([]);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       recordingTimer.current = setInterval(() => {
         setRecordingDuration((d) => d + 1);
       }, 1000);
+      meterInterval.current = setInterval(async () => {
+        if (!recordingRef.current) return;
+        try {
+          const s = await recordingRef.current.getStatusAsync();
+          if (s.isRecording && s.metering !== undefined) {
+            const db = s.metering;
+            const normalized = Math.max(0, Math.min(1, (db + 160) / 160));
+            setWaveformLevels((prev) => {
+              const next = [...prev, normalized];
+              return next.length > 40 ? next.slice(-40) : next;
+            });
+          }
+        } catch (_) {}
+      }, 100);
     } catch (err) {
+      try { await Audio.setAudioModeAsync({ allowsRecordingIOS: false }); } catch (_) {}
       showAlert("Error", "Could not start recording.");
     }
   }
@@ -1442,8 +1479,11 @@ export default function ChatScreen() {
   async function stopVoiceRecording() {
     if (!recordingRef.current) return;
     clearInterval(recordingTimer.current);
+    clearInterval(meterInterval.current);
     setIsRecording(false);
+    setRecordingLocked(false);
     setRecordingDuration(0);
+    setWaveformLevels([]);
 
     try {
       await recordingRef.current.stopAndUnloadAsync();
@@ -1480,13 +1520,36 @@ export default function ChatScreen() {
   async function cancelVoiceRecording() {
     if (!recordingRef.current) return;
     clearInterval(recordingTimer.current);
+    clearInterval(meterInterval.current);
     setIsRecording(false);
+    setRecordingLocked(false);
     setRecordingDuration(0);
+    setWaveformLevels([]);
     try {
       await recordingRef.current.stopAndUnloadAsync();
       await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
     } catch (_) {}
     recordingRef.current = null;
+  }
+
+  function handleMicPressIn(e: any) {
+    micPressY.current = e.nativeEvent.pageY;
+  }
+
+  function handleMicMove(e: any) {
+    if (!isRecording || recordingLockedRef.current) return;
+    const dy = micPressY.current - e.nativeEvent.pageY;
+    if (dy > lockThreshold) {
+      recordingLockedRef.current = true;
+      setRecordingLocked(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    }
+  }
+
+  function handleMicPressOut() {
+    if (isRecording && !recordingLockedRef.current) {
+      stopVoiceRecording();
+    }
   }
 
   async function handleTapGift(msg: Message) {
@@ -1856,26 +1919,56 @@ export default function ChatScreen() {
               ) : (
                 <TouchableOpacity
                   onLongPress={startVoiceRecording}
-                  onPressOut={() => { if (isRecording) stopVoiceRecording(); }}
+                  onPressIn={handleMicPressIn}
+                  onPressOut={handleMicPressOut}
+                  onResponderMove={handleMicMove}
+                  onStartShouldSetResponder={() => true}
+                  onMoveShouldSetResponder={() => true}
                   delayLongPress={200}
                   style={[st.sendBtn, { backgroundColor: isRecording ? "#FF3B30" : BRAND }]}
                   hitSlop={8}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name={isRecording ? "stop" : "mic"} size={20} color="#fff" />
+                  {isRecording && !recordingLocked ? (
+                    <Ionicons name="lock-open-outline" size={18} color="#fff" />
+                  ) : (
+                    <Ionicons name={isRecording ? "stop" : "mic"} size={20} color="#fff" />
+                  )}
                 </TouchableOpacity>
               )}
             </View>
             {isRecording && (
               <View style={st.recordingBar}>
-                <View style={st.recordingDot} />
-                <Text style={st.recordingText}>
-                  {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, "0")}
-                </Text>
-                <Text style={st.recordingHint}>Release to send</Text>
-                <TouchableOpacity onPress={cancelVoiceRecording} hitSlop={12}>
-                  <Ionicons name="trash-outline" size={18} color="#FF3B30" />
+                <TouchableOpacity onPress={cancelVoiceRecording} hitSlop={12} style={st.recordingCancelBtn}>
+                  <Ionicons name="trash-outline" size={20} color="#FF3B30" />
                 </TouchableOpacity>
+                <View style={st.waveformContainer}>
+                  {waveformLevels.map((level, i) => (
+                    <View
+                      key={i}
+                      style={[
+                        st.waveformBar,
+                        { height: Math.max(4, level * 28), backgroundColor: "#FF3B30", opacity: 0.4 + level * 0.6 },
+                      ]}
+                    />
+                  ))}
+                </View>
+                <View style={st.recordingTimeWrap}>
+                  <View style={st.recordingDot} />
+                  <Text style={st.recordingText}>
+                    {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, "0")}
+                  </Text>
+                </View>
+                {recordingLocked ? (
+                  <TouchableOpacity onPress={stopVoiceRecording} style={[st.sendBtn, { backgroundColor: BRAND }]}>
+                    <Ionicons name="send" size={18} color="#fff" />
+                  </TouchableOpacity>
+                ) : (
+                  <View style={st.lockHintWrap}>
+                    <Ionicons name="arrow-up" size={14} color="#999" />
+                    <Ionicons name="lock-closed" size={12} color="#999" />
+                  </View>
+                )}
               </View>
             )}
           </>
@@ -2474,10 +2567,14 @@ const st = StyleSheet.create({
   pillIcon: { paddingHorizontal: 6 },
   input: { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 22, borderWidth: 0, outlineStyle: "none" as any, paddingTop: 10, paddingBottom: 10, minHeight: 28, maxHeight: 120 },
   sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  recordingBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, gap: 8 },
+  recordingBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 8, gap: 8 },
+  recordingCancelBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,59,48,0.1)", alignItems: "center", justifyContent: "center" },
+  waveformContainer: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 2, height: 32, overflow: "hidden" },
+  waveformBar: { width: 3, borderRadius: 1.5, minHeight: 4 },
+  recordingTimeWrap: { flexDirection: "row", alignItems: "center", gap: 4, minWidth: 50 },
   recordingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#FF3B30" },
-  recordingText: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: "#FF3B30" },
-  recordingHint: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", color: "#999", textAlign: "center" },
+  recordingText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#FF3B30" },
+  lockHintWrap: { alignItems: "center", justifyContent: "center", width: 24 },
 
   sheetOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
   sheetContent: { position: "absolute", bottom: 0, left: 0, right: 0, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 14, maxHeight: SCREEN_HEIGHT * 0.7 },
