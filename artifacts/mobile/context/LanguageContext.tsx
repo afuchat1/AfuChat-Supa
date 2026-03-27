@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import { AppState } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { translateText, LANG_LABELS } from "@/lib/translate";
 import { supabase } from "@/lib/supabase";
@@ -26,6 +27,8 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [preferredLang, setPreferredLangState] = useState<string | null>(null);
   const [voiceToText, setVoiceToText] = useState(false);
+  const userRef = useRef(user);
+  userRef.current = user;
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((stored) => {
@@ -33,24 +36,35 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  useEffect(() => {
-    if (!user) return;
-    supabase
+  async function fetchSettings(uid: string) {
+    const { data } = await supabase
       .from("advanced_feature_settings")
       .select("message_translation, translation_language, voice_to_text")
-      .eq("user_id", user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!data) return;
-        const lang =
-          data.message_translation && data.translation_language
-            ? data.translation_language
-            : null;
-        setPreferredLangState(lang);
-        AsyncStorage.setItem(STORAGE_KEY, lang ?? "none");
-        setVoiceToText(!!data.voice_to_text);
-      });
+      .eq("user_id", uid)
+      .maybeSingle();
+    if (!data) return;
+    const lang =
+      data.message_translation && data.translation_language
+        ? data.translation_language
+        : null;
+    setPreferredLangState(lang);
+    AsyncStorage.setItem(STORAGE_KEY, lang ?? "none");
+    setVoiceToText(!!data.voice_to_text);
+  }
+
+  useEffect(() => {
+    if (!user) return;
+    fetchSettings(user.id);
   }, [user]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active" && userRef.current) {
+        fetchSettings(userRef.current.id);
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     if (!user) return;
