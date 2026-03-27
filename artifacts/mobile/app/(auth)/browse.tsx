@@ -17,6 +17,8 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
+import { useAutoTranslate } from "@/context/LanguageContext";
+import { LANG_LABELS } from "@/lib/translate";
 
 const { width } = Dimensions.get("window");
 
@@ -51,6 +53,7 @@ function AvatarCircle({ uri, name, size = 40 }: { uri: string | null; name: stri
 }
 
 function PublicPostCard({ item, index }: { item: PublicPost; index: number }) {
+  const { displayText, isTranslated, lang } = useAutoTranslate(item.content);
   const slideAnim = useRef(new Animated.Value(30)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -85,7 +88,15 @@ function PublicPostCard({ item, index }: { item: PublicPost; index: number }) {
       </View>
 
       {/* Content */}
-      <Text style={styles.postContent} numberOfLines={hasImage ? 3 : 7}>{item.content}</Text>
+      <Text style={styles.postContent} numberOfLines={hasImage ? 3 : 7}>{displayText}</Text>
+      {isTranslated && (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginBottom: 4 }}>
+          <Ionicons name="language" size={10} color="#6B7A8D" />
+          <Text style={{ fontSize: 10, color: "#6B7A8D" }}>
+            {`Translated · ${LANG_LABELS[lang || ""] ?? lang}`}
+          </Text>
+        </View>
+      )}
 
       {/* Image */}
       {hasImage && imgUrl && (

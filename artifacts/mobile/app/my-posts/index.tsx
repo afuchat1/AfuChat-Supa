@@ -22,6 +22,7 @@ import { RichText } from "@/components/ui/RichText";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { useAutoTranslate } from "@/context/LanguageContext";
 
 const { width } = Dimensions.get("window");
 
@@ -42,6 +43,58 @@ function formatRelative(iso: string): string {
   if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
   return `${Math.floor(diff / 86400000)}d ago`;
+}
+
+function MyPostCard({ item, profile, onDelete }: { item: PostItem; profile: any; onDelete: (id: string) => void }) {
+  const { colors } = useTheme();
+  const { displayText } = useAutoTranslate(item.content);
+  const allImages = item.images.length > 0 ? item.images : item.image_url ? [item.image_url] : [];
+  return (
+    <TouchableOpacity
+      style={[styles.card, { backgroundColor: colors.surface }]}
+      onPress={() => router.push({ pathname: "/post/[id]", params: { id: item.id } })}
+      activeOpacity={0.85}
+    >
+      <View style={styles.cardHeader}>
+        <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={40} />
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Text style={[styles.cardName, { color: colors.text }]}>{profile?.display_name || "You"}</Text>
+            <VerifiedBadge isVerified={profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={14} />
+          </View>
+          <Text style={[styles.cardTime, { color: colors.textMuted }]}>{formatRelative(item.created_at)}</Text>
+        </View>
+        <TouchableOpacity onPress={() => onDelete(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
+        </TouchableOpacity>
+      </View>
+      <RichText style={[styles.cardContent, { color: colors.text }]} numberOfLines={4}>{displayText}</RichText>
+      {allImages.length > 0 && (
+        <View style={styles.images}>
+          {allImages.slice(0, 2).map((uri, i) => (
+            <Image key={i} source={{ uri }} style={styles.img} resizeMode="cover" />
+          ))}
+        </View>
+      )}
+      <View style={[styles.statsRow, { borderTopColor: colors.separator }]}>
+        <View style={styles.stat}>
+          <Ionicons name="heart-outline" size={16} color={colors.textMuted} />
+          <Text style={[styles.statText, { color: colors.textMuted }]}>{item.likeCount}</Text>
+        </View>
+        <View style={styles.stat}>
+          <Ionicons name="chatbubble-outline" size={16} color={colors.textMuted} />
+          <Text style={[styles.statText, { color: colors.textMuted }]}>{item.replyCount}</Text>
+        </View>
+        <View style={styles.stat}>
+          <Ionicons name="eye-outline" size={16} color={colors.textMuted} />
+          <Text style={[styles.statText, { color: colors.textMuted }]}>{item.view_count}</Text>
+        </View>
+        <TouchableOpacity style={styles.stat} onPress={() => sharePost({ postId: item.id, authorName: profile?.display_name || "Me", content: item.content })}>
+          <Ionicons name="share-outline" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  );
 }
 
 export default function MyPostsScreen() {
@@ -120,58 +173,9 @@ export default function MyPostsScreen() {
         <FlatList
           data={posts}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => {
-            const allImages = item.images.length > 0 ? item.images : item.image_url ? [item.image_url] : [];
-            return (
-              <TouchableOpacity
-                style={[styles.card, { backgroundColor: colors.surface }]}
-                onPress={() => router.push({ pathname: "/post/[id]", params: { id: item.id } })}
-                activeOpacity={0.85}
-              >
-                <View style={styles.cardHeader}>
-                  <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={40} />
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                      <Text style={[styles.cardName, { color: colors.text }]}>{profile?.display_name || "You"}</Text>
-                      <VerifiedBadge isVerified={profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={14} />
-                    </View>
-                    <Text style={[styles.cardTime, { color: colors.textMuted }]}>{formatRelative(item.created_at)}</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => deletePost(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
-                  </TouchableOpacity>
-                </View>
-
-                <RichText style={[styles.cardContent, { color: colors.text }]} numberOfLines={4}>{item.content}</RichText>
-
-                {allImages.length > 0 && (
-                  <View style={styles.images}>
-                    {allImages.slice(0, 2).map((uri, i) => (
-                      <Image key={i} source={{ uri }} style={styles.img} resizeMode="cover" />
-                    ))}
-                  </View>
-                )}
-
-                <View style={[styles.statsRow, { borderTopColor: colors.separator }]}>
-                  <View style={styles.stat}>
-                    <Ionicons name="heart-outline" size={16} color={colors.textMuted} />
-                    <Text style={[styles.statText, { color: colors.textMuted }]}>{item.likeCount}</Text>
-                  </View>
-                  <View style={styles.stat}>
-                    <Ionicons name="chatbubble-outline" size={16} color={colors.textMuted} />
-                    <Text style={[styles.statText, { color: colors.textMuted }]}>{item.replyCount}</Text>
-                  </View>
-                  <View style={styles.stat}>
-                    <Ionicons name="eye-outline" size={16} color={colors.textMuted} />
-                    <Text style={[styles.statText, { color: colors.textMuted }]}>{item.view_count}</Text>
-                  </View>
-                  <TouchableOpacity style={styles.stat} onPress={() => sharePost({ postId: item.id, authorName: profile?.display_name || "Me", content: item.content })}>
-                    <Ionicons name="share-outline" size={16} color={colors.textMuted} />
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-            );
-          }}
+          renderItem={({ item }) => (
+            <MyPostCard item={item} profile={profile} onDelete={deletePost} />
+          )}
           contentContainerStyle={{ gap: 8, paddingVertical: 8, paddingBottom: 90 }}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={Colors.brand} />}

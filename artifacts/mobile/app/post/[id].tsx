@@ -25,6 +25,8 @@ import { ImageViewer, useImageViewer } from "@/components/ImageViewer";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { notifyPostLike, notifyPostReply } from "@/lib/notifyUser";
+import { useAutoTranslate } from "@/context/LanguageContext";
+import { LANG_LABELS } from "@/lib/translate";
 
 type Reply = {
   id: string;
@@ -54,6 +56,32 @@ function timeAgo(iso: string): string {
   return `${Math.floor(diff / 86400000)}d`;
 }
 
+function ReplyCard({ item, colors }: { item: Reply; colors: any }) {
+  const { displayText, isTranslated, lang } = useAutoTranslate(item.content);
+  return (
+    <View style={[styles.replyRow, { backgroundColor: colors.surface }]}>
+      <Avatar uri={item.author.avatar_url} name={item.author.display_name} size={36} />
+      <View style={{ flex: 1 }}>
+        <View style={styles.replyHeader}>
+          <Text style={[styles.replyName, { color: colors.text }]}>{item.author.display_name}</Text>
+          {item.author.is_organization_verified && <Ionicons name="checkmark-circle" size={12} color={Colors.gold} style={{ marginLeft: 3 }} />}
+          {!item.author.is_organization_verified && item.author.is_verified && <Ionicons name="checkmark-circle" size={12} color={Colors.brand} style={{ marginLeft: 3 }} />}
+          <Text style={[styles.replyTime, { color: colors.textMuted }]}> {timeAgo(item.created_at)}</Text>
+        </View>
+        <RichText style={[styles.replyContent, { color: colors.text }]}>{displayText}</RichText>
+        {isTranslated && (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 }}>
+            <Ionicons name="language" size={10} color={colors.textMuted} />
+            <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: colors.textMuted }}>
+              {`Translated · ${LANG_LABELS[lang || ""] ?? lang}`}
+            </Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, profile: myProfile } = useAuth();
@@ -65,6 +93,7 @@ export default function PostDetailScreen() {
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
   const imgViewer = useImageViewer();
+  const { displayText: postDisplayText, isTranslated: postIsTranslated, lang: postLang } = useAutoTranslate(post?.content);
 
   const loadPost = useCallback(async () => {
     if (!id) return;
@@ -271,7 +300,15 @@ export default function PostDetailScreen() {
               </View>
             </View>
 
-            <RichText style={[styles.postContent, { color: colors.text }]}>{post.content}</RichText>
+            <RichText style={[styles.postContent, { color: colors.text }]}>{postDisplayText || post.content}</RichText>
+            {postIsTranslated && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 0, marginBottom: 6 }}>
+                <Ionicons name="language" size={11} color={colors.textMuted} />
+                <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.textMuted }}>
+                  {`Translated · ${LANG_LABELS[postLang || ""] ?? postLang}`}
+                </Text>
+              </View>
+            )}
 
             {allImages.length > 0 && (
               <View style={styles.imgWrap}>
@@ -306,20 +343,7 @@ export default function PostDetailScreen() {
             )}
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={[styles.replyRow, { backgroundColor: colors.surface }]}>
-            <Avatar uri={item.author.avatar_url} name={item.author.display_name} size={36} />
-            <View style={{ flex: 1 }}>
-              <View style={styles.replyHeader}>
-                <Text style={[styles.replyName, { color: colors.text }]}>{item.author.display_name}</Text>
-                {item.author.is_organization_verified && <Ionicons name="checkmark-circle" size={12} color={Colors.gold} style={{ marginLeft: 3 }} />}
-                {!item.author.is_organization_verified && item.author.is_verified && <Ionicons name="checkmark-circle" size={12} color={Colors.brand} style={{ marginLeft: 3 }} />}
-                <Text style={[styles.replyTime, { color: colors.textMuted }]}> {timeAgo(item.created_at)}</Text>
-              </View>
-              <RichText style={[styles.replyContent, { color: colors.text }]}>{item.content}</RichText>
-            </View>
-          </View>
-        )}
+        renderItem={({ item }) => <ReplyCard item={item} colors={colors} />}
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
       />

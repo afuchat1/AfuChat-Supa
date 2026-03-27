@@ -22,6 +22,8 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { RichText } from "@/components/ui/RichText";
 import Colors from "@/constants/colors";
+import { useAutoTranslate } from "@/context/LanguageContext";
+import { LANG_LABELS } from "@/lib/translate";
 
 const { width } = Dimensions.get("window");
 
@@ -45,6 +47,7 @@ function formatRelative(iso: string): string {
 
 function SavedPostCard({ item, onUnsave, index }: { item: SavedPost; onUnsave: (id: string) => void; index: number }) {
   const { colors } = useTheme();
+  const { displayText, isTranslated, lang } = useAutoTranslate(item.content);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
 
@@ -81,8 +84,16 @@ function SavedPostCard({ item, onUnsave, index }: { item: SavedPost; onUnsave: (
         </View>
 
         <RichText style={[styles.cardContent, { color: colors.text }]} numberOfLines={4}>
-          {item.content}
+          {displayText}
         </RichText>
+        {isTranslated && (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginBottom: 4 }}>
+            <Ionicons name="language" size={10} color={colors.textMuted} />
+            <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: colors.textMuted }}>
+              {`Translated · ${LANG_LABELS[lang || ""] ?? lang}`}
+            </Text>
+          </View>
+        )}
 
         {item.image_url && (
           <Image

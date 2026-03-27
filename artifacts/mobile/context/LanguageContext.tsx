@@ -111,3 +111,25 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 export function useLanguage() {
   return useContext(LanguageContext);
 }
+
+export function useAutoTranslate(text: string | null | undefined) {
+  const { preferredLang } = useLanguage();
+  const [displayText, setDisplayText] = useState(text || "");
+  const [isTranslated, setIsTranslated] = useState(false);
+
+  useEffect(() => {
+    setDisplayText(text || "");
+    setIsTranslated(false);
+    if (!preferredLang || !text?.trim()) return;
+    let cancelled = false;
+    translateText(text, preferredLang).then((result) => {
+      if (!cancelled && result && result !== text) {
+        setDisplayText(result);
+        setIsTranslated(true);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [preferredLang, text]);
+
+  return { displayText, isTranslated, lang: preferredLang };
+}
