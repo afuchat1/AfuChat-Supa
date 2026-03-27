@@ -24,25 +24,25 @@ async function transcribeWithGroq(audioUrl: string, apiKey: string): Promise<str
   return data.text || "";
 }
 
-// ── AIML text chat ────────────────────────────────────────────────────────────
-async function chatWithAIML(messages: any[], maxTokens: number, apiKey: string): Promise<string> {
-  const res = await fetch("https://api.aimlapi.com/v1/chat/completions", {
+// ── Groq text chat (Llama) ────────────────────────────────────────────────────
+async function chatWithGroq(messages: any[], maxTokens: number, apiKey: string): Promise<string> {
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
+      model: "llama-3.3-70b-versatile",
       messages,
       max_tokens: maxTokens,
       temperature: 0.7,
     }),
   });
-  if (!res.ok) throw new Error(`AIML ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`Groq ${res.status}: ${await res.text()}`);
   const data = await res.json();
   const text = data.choices?.[0]?.message?.content ?? "";
-  if (!text) throw new Error("AIML returned empty response");
+  if (!text) throw new Error("Groq returned empty response");
   return text;
 }
 
@@ -83,21 +83,21 @@ serve(async (req) => {
       return json({ error: "messages array is required" }, 400);
     }
 
-    const AIMLAPI_KEY = Deno.env.get("AIMLAPI_KEY");
-    if (!AIMLAPI_KEY) {
-      console.error("AIMLAPI_KEY not configured");
-      return json({ reply: "AI service is not configured. Please set the AIMLAPI_KEY secret in Supabase." });
+    const GROQ_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_KEY) {
+      console.error("GROQ_API_KEY not configured");
+      return json({ reply: "AI service is not configured. Please set the GROQ_API_KEY secret in Supabase." });
     }
 
     const tokenLimit = max_tokens || (fast ? 300 : 2048);
 
     try {
-      console.log(`AIML chat: ${messages.length} messages, ${tokenLimit} tokens`);
-      const reply = await chatWithAIML(messages, tokenLimit, AIMLAPI_KEY);
-      console.log("AIML chat succeeded");
+      console.log(`Groq chat: ${messages.length} messages, ${tokenLimit} tokens`);
+      const reply = await chatWithGroq(messages, tokenLimit, GROQ_KEY);
+      console.log("Groq chat succeeded");
       return json({ reply });
     } catch (e: any) {
-      console.error("AIML chat failed:", e?.message || e);
+      console.error("Groq chat failed:", e?.message || e);
       return json({ reply: "I'm having trouble connecting to my AI systems right now. Please try again in a moment." });
     }
   } catch (error: any) {
