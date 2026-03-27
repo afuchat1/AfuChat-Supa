@@ -403,8 +403,8 @@ const s = StyleSheet.create({
   quickBtn: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
   quickBtnText: { fontSize: 14, fontWeight: "500" },
   inputBar: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingTop: 8 },
-  inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
-  inputWrap: { flex: 1, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 4 },
+  inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 6 },
+  inputWrap: { flex: 1, borderRadius: 22, paddingHorizontal: 14, paddingVertical: 6 },
   input: { flex: 1, fontSize: 15, maxHeight: 100, lineHeight: 20, borderWidth: 0, outlineStyle: "none" as any, paddingVertical: 0, minHeight: 20 },
-  sendBtn: { width: 36, height: 36, borderRadius: 18, justifyContent: "center", alignItems: "center" },
+  sendBtn: { width: 34, height: 34, borderRadius: 17, justifyContent: "center", alignItems: "center", marginBottom: 1 },
 });
