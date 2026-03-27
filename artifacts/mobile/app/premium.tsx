@@ -57,6 +57,7 @@ export default function PremiumScreen() {
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [subscribing, setSubscribing] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const loadPlans = useCallback(async () => {
     const { data } = await supabase
@@ -67,12 +68,13 @@ export default function PremiumScreen() {
     if (data) {
       setPlans(data as Plan[]);
       if (data.length > 0 && !selectedPlanId) {
-        const mid = data.length > 1 ? data[Math.floor(data.length / 2)] : data[0];
-        setSelectedPlanId(mid.id);
+        const currentPlanInList = subscription ? data.find((p) => p.id === subscription.plan_id) : null;
+        const defaultPlan = currentPlanInList ?? (data.length > 1 ? data[Math.floor(data.length / 2)] : data[0]);
+        setSelectedPlanId(defaultPlan.id);
       }
     }
     setLoading(false);
-  }, []);
+  }, [subscription]);
 
   useEffect(() => { loadPlans(); }, [loadPlans]);
 
@@ -89,61 +91,93 @@ export default function PremiumScreen() {
       return;
     }
 
+    const isSwitching = isPremium && subscription?.plan_id !== plan.id;
+    const title = isSwitching ? "Switch Plan" : "Confirm Subscription";
+    const message = isSwitching
+      ? `Switch from ${subscription?.plan_name} to ${plan.name} for ${plan.acoin_price} ACoin?\nYour current plan will be cancelled immediately and the new ${plan.duration_days}-day plan starts now.`
+      : `Subscribe to ${plan.name} for ${plan.acoin_price} ACoin?\nDuration: ${plan.duration_days} days`;
+    const actionLabel = isSwitching ? "Switch Plan" : "Subscribe";
+
+    showAlert(title, message, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: actionLabel,
+        onPress: async () => {
+          setSubscribing(true);
+          const newBalance = (profile.acoin || 0) - plan.acoin_price;
+
+          const { error: deductError } = await supabase.from("profiles").update({
+            acoin: newBalance,
+          }).eq("id", profile.id).gte("acoin", plan.acoin_price);
+
+          if (deductError) {
+            showAlert("Error", "Could not deduct ACoin. Please try again.");
+            setSubscribing(false);
+            return;
+          }
+
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + plan.duration_days);
+
+          const { error: subError } = await supabase.from("user_subscriptions").upsert({
+            user_id: profile.id,
+            plan_id: plan.id,
+            started_at: new Date().toISOString(),
+            expires_at: expiresAt.toISOString(),
+            is_active: true,
+            acoin_paid: plan.acoin_price,
+          }, { onConflict: "user_id" });
+
+          if (subError) {
+            await supabase.from("profiles").update({ acoin: profile.acoin || 0 }).eq("id", profile.id);
+            showAlert("Error", "Could not activate subscription. Your ACoin has been refunded.");
+            setSubscribing(false);
+            return;
+          }
+
+          await supabase.from("acoin_transactions").insert({
+            user_id: profile.id,
+            amount: -plan.acoin_price,
+            transaction_type: isSwitching ? "subscription_switch" : "subscription",
+            metadata: { plan_name: plan.name, plan_tier: plan.tier, duration_days: plan.duration_days, previous_plan: subscription?.plan_name },
+          });
+
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          await refreshProfile();
+          const successTitle = isSwitching ? "Plan Switched!" : "Welcome to Premium!";
+          const successMsg = `Your ${plan.name} subscription is now active for ${plan.duration_days} days.`;
+          showAlert(successTitle, successMsg, [{ text: "Awesome!", onPress: () => router.back() }]);
+          setSubscribing(false);
+        },
+      },
+    ]);
+  }
+
+  async function handleCancel() {
+    if (!user || !subscription) return;
     showAlert(
-      "Confirm Subscription",
-      `Subscribe to ${plan.name} for ${plan.acoin_price} ACoin?\nDuration: ${plan.duration_days} days`,
+      "Cancel Subscription",
+      `Are you sure you want to cancel your ${subscription.plan_name} plan?\n\nYou will lose access to premium features immediately. Unused days are non-refundable.`,
       [
-        { text: "Cancel", style: "cancel" },
+        { text: "Keep Subscription", style: "cancel" },
         {
-          text: "Subscribe",
+          text: "Cancel Subscription",
+          style: "destructive",
           onPress: async () => {
-            setSubscribing(true);
-            const newBalance = (profile.acoin || 0) - plan.acoin_price;
-
-            const { error: deductError } = await supabase.from("profiles").update({
-              acoin: newBalance,
-            }).eq("id", profile.id).gte("acoin", plan.acoin_price);
-
-            if (deductError) {
-              showAlert("Error", "Could not deduct ACoin. Please try again.");
-              setSubscribing(false);
-              return;
-            }
-
-            const expiresAt = new Date();
-            expiresAt.setDate(expiresAt.getDate() + plan.duration_days);
-
-            const { error: subError } = await supabase.from("user_subscriptions").upsert({
-              user_id: profile.id,
-              plan_id: plan.id,
-              started_at: new Date().toISOString(),
-              expires_at: expiresAt.toISOString(),
-              is_active: true,
-              acoin_paid: plan.acoin_price,
-            }, { onConflict: "user_id" });
-
-            if (subError) {
-              await supabase.from("profiles").update({
-                acoin: (profile.acoin || 0),
-              }).eq("id", profile.id);
-              showAlert("Error", "Could not activate subscription. Your ACoin has been refunded.");
-              setSubscribing(false);
-              return;
-            }
-
+            setCancelling(true);
+            await supabase.from("user_subscriptions").update({ is_active: false }).eq("user_id", user.id);
             await supabase.from("acoin_transactions").insert({
-              user_id: profile.id,
-              amount: -plan.acoin_price,
-              transaction_type: "subscription",
-              metadata: { plan_name: plan.name, plan_tier: plan.tier, duration_days: plan.duration_days },
+              user_id: user.id,
+              amount: 0,
+              transaction_type: "subscription_cancelled",
+              metadata: { plan_name: subscription.plan_name, plan_tier: subscription.plan_tier },
             });
-
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             await refreshProfile();
-            showAlert("Welcome to Premium!", `Your ${plan.name} subscription is now active for ${plan.duration_days} days.`, [
-              { text: "Awesome!", onPress: () => router.back() },
+            setCancelling(false);
+            showAlert("Subscription Cancelled", "Your subscription has been cancelled. You are now on the free plan.", [
+              { text: "OK", onPress: () => setSelectedPlanId(plans[0]?.id ?? null) },
             ]);
-            setSubscribing(false);
           },
         },
       ]
@@ -188,6 +222,16 @@ export default function PremiumScreen() {
                 <Text style={[styles.activeSub, { color: colors.textMuted }]}>
                   Paid {subscription.acoin_paid} ACoin
                 </Text>
+                <TouchableOpacity
+                  style={styles.cancelLink}
+                  onPress={handleCancel}
+                  disabled={cancelling}
+                >
+                  <Ionicons name="close-circle-outline" size={14} color="#FF3B30" />
+                  <Text style={styles.cancelLinkText}>
+                    {cancelling ? "Cancelling…" : "Cancel subscription"}
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -271,7 +315,7 @@ export default function PremiumScreen() {
             </View>
           )}
 
-          {!isPremium && selectedPlan && (
+          {selectedPlan && !(isPremium && subscription?.plan_id === selectedPlan.id) && (
             <>
               <View style={[styles.costSummary, { backgroundColor: colors.surface }]}>
                 <View style={styles.costRow}>
@@ -290,30 +334,39 @@ export default function PremiumScreen() {
                     {(profile?.acoin || 0) - selectedPlan.acoin_price}
                   </Text>
                 </View>
+                {isPremium && (
+                  <>
+                    <View style={[styles.costDivider, { backgroundColor: colors.border }]} />
+                    <View style={styles.costRow}>
+                      <Text style={[styles.costLabel, { color: colors.textSecondary }]}>Current plan cancelled</Text>
+                      <Text style={[styles.costValue, { color: "#FF3B30" }]}>Immediately</Text>
+                    </View>
+                  </>
+                )}
               </View>
 
               <TouchableOpacity
-                style={[styles.subscribeBtn, subscribing && { opacity: 0.6 }]}
+                style={[styles.subscribeBtn, (subscribing || cancelling) && { opacity: 0.6 }]}
                 onPress={handleSubscribe}
-                disabled={subscribing}
+                disabled={subscribing || cancelling}
                 activeOpacity={0.85}
               >
                 <Ionicons name="diamond" size={20} color="#1C1C1E" />
                 <Text style={styles.subscribeBtnText}>
-                  {subscribing ? "Processing..." : `Subscribe for ${selectedPlan.acoin_price} ACoin`}
+                  {subscribing
+                    ? "Processing..."
+                    : isPremium
+                      ? `Switch to ${selectedPlan.name} · ${selectedPlan.acoin_price} ACoin`
+                      : `Subscribe for ${selectedPlan.acoin_price} ACoin`}
                 </Text>
               </TouchableOpacity>
 
               <Text style={[styles.legalText, { color: colors.textMuted }]}>
-                Subscription lasts {selectedPlan.duration_days} days. ACoin will be deducted from your wallet immediately. Convert Nexa to ACoin in the Wallet.
+                {isPremium
+                  ? `Switching cancels your current plan immediately with no refund. The new ${selectedPlan.duration_days}-day plan activates at once.`
+                  : `Subscription lasts ${selectedPlan.duration_days} days. ACoin will be deducted from your wallet immediately. Convert Nexa to ACoin in the Wallet.`}
               </Text>
             </>
-          )}
-
-          {isPremium && !loading && (
-            <Text style={[styles.legalText, { color: colors.textMuted }]}>
-              You can upgrade your plan anytime. The new plan will replace your current one.
-            </Text>
           )}
         </ScrollView>
       )}
@@ -361,4 +414,6 @@ const styles = StyleSheet.create({
   subscribeBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#FFD60A", height: 56, borderRadius: 16 },
   subscribeBtnText: { color: "#1C1C1E", fontSize: 18, fontFamily: "Inter_700Bold" },
   legalText: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 18 },
+  cancelLink: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 8 },
+  cancelLinkText: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#FF3B30" },
 });
