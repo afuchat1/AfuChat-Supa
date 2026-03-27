@@ -121,12 +121,85 @@ function buildProviders(): AiProvider[] {
   return providers;
 }
 
+async function transcribeWithGemini(audioUrl: string, apiKey: string): Promise<string> {
+  const audioResp = await fetch(audioUrl);
+  if (!audioResp.ok) throw new Error("Failed to download audio");
+  const audioBuffer = await audioResp.arrayBuffer();
+  const bytes = new Uint8Array(audioBuffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  const base64 = btoa(binary);
+  const ext = (audioUrl.split("?")[0].split(".").pop() || "m4a").toLowerCase();
+  const mimeMap: Record<string, string> = {
+    m4a: "audio/mp4", mp3: "audio/mpeg", wav: "audio/wav",
+    ogg: "audio/ogg", webm: "audio/webm", aac: "audio/aac",
+  };
+  const mimeType = mimeMap[ext] || "audio/mp4";
+  const body = {
+    contents: [{
+      parts: [
+        { inlineData: { mimeType, data: base64 } },
+        { text: "Transcribe this audio accurately. Return only the spoken words, nothing else." },
+      ],
+    }],
+    generationConfig: { maxOutputTokens: 1024, temperature: 0 },
+  };
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+  );
+  if (!res.ok) throw new Error(`Gemini transcription ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return data.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "";
+}
+
+async function transcribeWithWhisper(audioUrl: string, apiKey: string): Promise<string> {
+  const audioResp = await fetch(audioUrl);
+  if (!audioResp.ok) throw new Error("Failed to download audio");
+  const audioBlob = await audioResp.blob();
+  const ext = (audioUrl.split("?")[0].split(".").pop() || "m4a").toLowerCase();
+  const form = new FormData();
+  form.append("file", audioBlob, `audio.${ext}`);
+  form.append("model", "whisper-1");
+  const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${apiKey}` },
+    body: form,
+  });
+  if (!res.ok) throw new Error(`Whisper ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return data.text || "";
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    const body = await req.json();
+
+    // Audio transcription route
+    if (body.audioUrl) {
+      const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+      const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+      let text = "";
+      if (GEMINI_API_KEY) {
+        text = await transcribeWithGemini(body.audioUrl, GEMINI_API_KEY);
+      } else if (OPENAI_API_KEY) {
+        text = await transcribeWithWhisper(body.audioUrl, OPENAI_API_KEY);
+      } else {
+        return new Response(
+          JSON.stringify({ error: "No transcription API key configured" }),
+          { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      return new Response(
+        JSON.stringify({ text }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const providers = buildProviders();
 
     if (providers.length === 0) {
@@ -136,7 +209,7 @@ serve(async (req) => {
       );
     }
 
-    const { messages, max_tokens, fast } = await req.json();
+    const { messages, max_tokens, fast } = body;
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new Response(
         JSON.stringify({ error: "messages array is required" }),

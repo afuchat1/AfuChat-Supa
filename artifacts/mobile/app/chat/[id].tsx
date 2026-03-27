@@ -407,9 +407,13 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
       if (result) {
         setTranscript(result);
         setShowTranscript(true);
+      } else {
+        setTranscript("(no speech detected)");
+        setShowTranscript(true);
       }
-    } catch {
-      // silently fail
+    } catch (err) {
+      setTranscript("Transcription failed — please try again.");
+      setShowTranscript(true);
     }
     setTranscribing(false);
   }

@@ -107,7 +107,7 @@ export async function aiSummarizeThread(post: string, replies: { author: string;
 }
 
 export async function transcribeAudio(audioUrl: string): Promise<string> {
-  const res = await fetch(`${supabaseUrl}/functions/v1/transcribe-audio`, {
+  const res = await fetch(`${supabaseUrl}/functions/v1/ai-chat`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
