@@ -33,9 +33,8 @@ type ActionButton = {
   params?: Record<string, any>;
 };
 
-const API_SERVER_URL = process.env.EXPO_PUBLIC_DOMAIN
-  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}:8080`
-  : "http://localhost:8080";
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 const QUICK_PROMPTS = [
   { label: "My Balance", icon: "wallet-outline" as const, prompt: "What's my current balance?" },
@@ -218,10 +217,12 @@ RESPONSE GUIDELINES:
         .map(m => ({ role: m.role, content: m.content }));
       conversationMessages.push({ role: "user", content });
 
-      const res = await fetch(`${API_SERVER_URL}/api/ai/chat`, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+          "apikey": SUPABASE_ANON_KEY || "",
         },
         body: JSON.stringify({
           messages: [{ role: "system", content: systemPrompt }, ...conversationMessages],
@@ -288,59 +289,52 @@ RESPONSE GUIDELINES:
   };
 
   return (
-    <View style={[s.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View style={[s.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+    <KeyboardAvoidingView
+      style={[s.container, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={0}
+    >
+      <View style={[s.header, { paddingTop: insets.top + 8, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+          <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <View style={s.headerCenter}>
-          <View style={[s.aiIcon, { backgroundColor: Colors.brand }]}>
+          <View style={[s.headerIcon, { backgroundColor: Colors.brand }]}>
             <Ionicons name="sparkles" size={16} color="#fff" />
           </View>
           <View>
             <Text style={[s.headerTitle, { color: colors.text }]}>AfuAi</Text>
-            <Text style={[s.headerSub, { color: colors.textMuted }]}>
-              {loading ? "Thinking..." : "Online"}
-            </Text>
+            <Text style={[s.headerSub, { color: Colors.brand }]}>● Online</Text>
           </View>
         </View>
-        <TouchableOpacity onPress={() => { setMessages([]); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}>
-          <Ionicons name="refresh-outline" size={22} color={colors.textSecondary} />
-        </TouchableOpacity>
+        <View style={{ width: 40 }} />
       </View>
 
       <FlatList
         ref={flatListRef}
-        data={messages}
-        keyExtractor={(item) => item.id}
-        renderItem={renderMessage}
-        contentContainerStyle={messages.length === 0 ? s.emptyContainer : { paddingVertical: 16, paddingBottom: 16 }}
-        showsVerticalScrollIndicator={false}
+        data={loading ? [...messages, { id: "thinking", role: "thinking" as const, content: "" }] : messages}
+        keyExtractor={item => item.id}
+        renderItem={({ item }) => item.role === "thinking" ? <ThinkingIndicator colors={colors} /> : renderMessage({ item })}
+        contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 80 }]}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
         ListEmptyComponent={
-          <View style={s.emptyState}>
-            <View style={[s.emptyIcon, { backgroundColor: Colors.brand + "15" }]}>
-              <Ionicons name="sparkles" size={48} color={Colors.brand} />
+          <View style={s.emptyWrap}>
+            <View style={[s.emptyIcon, { backgroundColor: Colors.brand + "20" }]}>
+              <Ionicons name="sparkles" size={40} color={Colors.brand} />
             </View>
             <Text style={[s.emptyTitle, { color: colors.text }]}>AfuAi</Text>
-            <Text style={[s.emptySub, { color: colors.textSecondary }]}>
-              Your personal AI assistant that knows your AfuChat data. Ask me about your balance, stats, or anything else!
+            <Text style={[s.emptySub, { color: colors.textMuted }]}>
+              Your personal AI assistant. Ask me anything about AfuChat or just have a conversation!
             </Text>
             <View style={s.quickPrompts}>
-              {QUICK_PROMPTS.map((p) => (
+              {QUICK_PROMPTS.map((p, i) => (
                 <TouchableOpacity
-                  key={p.label}
+                  key={i}
                   style={[s.quickBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  onPress={() => {
-                    if (p.prompt.endsWith(" ")) {
-                      setInput(p.prompt);
-                    } else {
-                      sendMessage(p.prompt);
-                    }
-                  }}
+                  onPress={() => sendMessage(p.prompt)}
                 >
                   <Ionicons name={p.icon} size={16} color={Colors.brand} />
-                  <Text style={[s.quickLabel, { color: colors.text }]}>{p.label}</Text>
+                  <Text style={[s.quickBtnText, { color: colors.text }]}>{p.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -348,67 +342,71 @@ RESPONSE GUIDELINES:
         }
       />
 
-      {loading && <ThinkingIndicator colors={colors} />}
-
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
-        <View style={[s.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
-          <View style={[s.inputField, { backgroundColor: colors.inputBg }]}>
-            <TextInput
-              style={[s.input, { color: colors.text }]}
-              placeholder="Ask AfuAi anything..."
-              placeholderTextColor={colors.textMuted}
-              value={input}
-              onChangeText={setInput}
-              multiline
-              maxLength={2000}
-              returnKeyType="default"
-            />
-          </View>
-          {input.trim().length > 0 ? (
-            <TouchableOpacity style={[s.sendBtn, { backgroundColor: Colors.brand }]} onPress={() => sendMessage()} disabled={loading}>
-              <Ionicons name="arrow-up" size={18} color="#fff" />
-            </TouchableOpacity>
-          ) : (
-            <View style={{ width: 36 }} />
-          )}
+      <View style={[s.inputBar, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom + 8 }]}>
+        <View style={[s.inputWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <TextInput
+            style={[s.input, { color: colors.text }]}
+            placeholder="Ask AfuAi anything..."
+            placeholderTextColor={colors.textMuted}
+            value={input}
+            onChangeText={setInput}
+            multiline
+            maxLength={2000}
+            onSubmitEditing={() => sendMessage()}
+          />
+          <TouchableOpacity
+            style={[s.sendBtn, { backgroundColor: input.trim() && !loading ? Colors.brand : colors.border }]}
+            onPress={() => sendMessage()}
+            disabled={!input.trim() || loading}
+          >
+            <Ionicons name="send" size={16} color={input.trim() && !loading ? "#fff" : colors.textMuted} />
+          </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
-    </View>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  container: { flex: 1 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  backBtn: { width: 40, height: 40, justifyContent: "center" },
   headerCenter: { flexDirection: "row", alignItems: "center", gap: 10 },
-  aiIcon: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  headerSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  emptyContainer: { flexGrow: 1 },
-  emptyState: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 32 },
-  emptyIcon: { width: 96, height: 96, borderRadius: 48, alignItems: "center", justifyContent: "center", marginBottom: 8 },
-  emptyTitle: { fontSize: 24, fontFamily: "Inter_700Bold" },
-  emptySub: { fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22 },
-  quickPrompts: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 16, justifyContent: "center" },
-  quickBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, borderWidth: 1 },
-  quickLabel: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  msgRow: { paddingHorizontal: 12, marginVertical: 4 },
-  msgRowUser: { alignItems: "flex-end" },
-  msgRowAi: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
-  aiBubbleIcon: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", marginTop: 4 },
-  bubble: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10, maxWidth: "78%" },
-  bubbleText: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22 },
-  actionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8, paddingLeft: 4 },
-  actionBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, borderWidth: 1 },
-  actionBtnText: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  thinkingRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, gap: 8, paddingBottom: 8 },
+  headerIcon: { width: 32, height: 32, borderRadius: 16, justifyContent: "center", alignItems: "center" },
+  headerTitle: { fontSize: 16, fontWeight: "700" },
+  headerSub: { fontSize: 11, fontWeight: "500" },
+  list: { padding: 16, gap: 12 },
+  msgRow: { flexDirection: "row", alignItems: "flex-end", gap: 8, marginBottom: 4 },
+  msgRowUser: { justifyContent: "flex-end" },
+  msgRowAi: { justifyContent: "flex-start" },
+  aiBubbleIcon: { width: 24, height: 24, borderRadius: 12, justifyContent: "center", alignItems: "center", flexShrink: 0 },
+  bubble: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10, maxWidth: "80%" },
+  bubbleText: { fontSize: 15, lineHeight: 22 },
+  actionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
+  actionBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
+  actionBtnText: { fontSize: 13, fontWeight: "600" },
+  thinkingRow: { flexDirection: "row", alignItems: "flex-end", gap: 8, marginBottom: 4 },
   thinkingBubble: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
-  thinkingContent: { flexDirection: "row", alignItems: "center", gap: 8 },
-  thinkingLabel: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  dotsRow: { flexDirection: "row", gap: 4, alignItems: "center" },
-  dot: { width: 6, height: 6, borderRadius: 3 },
-  inputBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, gap: 10 },
-  inputField: { flex: 1, borderRadius: 12, paddingHorizontal: 14, minHeight: 40, maxHeight: 100, justifyContent: "center" },
-  input: { fontSize: 15, fontFamily: "Inter_400Regular", paddingVertical: 8 },
-  sendBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  thinkingContent: { flexDirection: "row", alignItems: "center", gap: 6 },
+  thinkingLabel: { fontSize: 13, fontWeight: "500" },
+  dotsRow: { flexDirection: "row", gap: 4 },
+  dot: { width: 5, height: 5, borderRadius: 3 },
+  emptyWrap: { flex: 1, alignItems: "center", paddingTop: 60, paddingHorizontal: 24 },
+  emptyIcon: { width: 80, height: 80, borderRadius: 40, justifyContent: "center", alignItems: "center", marginBottom: 16 },
+  emptyTitle: { fontSize: 24, fontWeight: "700", marginBottom: 8 },
+  emptySub: { fontSize: 15, textAlign: "center", lineHeight: 22, marginBottom: 32 },
+  quickPrompts: { width: "100%", gap: 10 },
+  quickBtn: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
+  quickBtnText: { fontSize: 14, fontWeight: "500" },
+  inputBar: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingTop: 8 },
+  inputWrap: { flexDirection: "row", alignItems: "flex-end", borderRadius: 24, borderWidth: 1, paddingLeft: 16, paddingRight: 6, paddingVertical: 6, gap: 8 },
+  input: { flex: 1, fontSize: 15, maxHeight: 100, lineHeight: 20 },
+  sendBtn: { width: 36, height: 36, borderRadius: 18, justifyContent: "center", alignItems: "center" },
 });
