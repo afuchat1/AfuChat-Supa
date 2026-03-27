@@ -1541,13 +1541,15 @@ export default function ChatScreen() {
         <TouchableOpacity onPress={() => setShowRedEnvelope(true)} style={st.headerAction} hitSlop={8}>
           <Text style={{ fontSize: 20 }}>🧧</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => { setAiSummary(null); setAiReplies([]); setShowAiSummary(true); }}
-          style={st.headerAction}
-          hitSlop={8}
-        >
-          <Ionicons name="sparkles" size={20} color={Colors.brand} />
-        </TouchableOpacity>
+        {(chatInfo?.is_group || chatInfo?.is_channel) && (
+          <TouchableOpacity
+            onPress={() => { setAiSummary(null); setAiReplies([]); setShowAiSummary(true); }}
+            style={st.headerAction}
+            hitSlop={8}
+          >
+            <Ionicons name="sparkles" size={20} color={Colors.brand} />
+          </TouchableOpacity>
+        )}
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={0}>
@@ -1606,7 +1608,9 @@ export default function ChatScreen() {
           </View>
         ) : (
           <View style={{ backgroundColor: colors.surface }}>
-            <SmartReplyBar messages={messages} myId={user?.id || ""} input={input} onSend={handleSmartReply} colors={colors} />
+            {(chatInfo?.is_group || chatInfo?.is_channel) && (
+              <SmartReplyBar messages={messages} myId={user?.id || ""} input={input} onSend={handleSmartReply} colors={colors} />
+            )}
             <View style={[st.inputBar, { borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 8) }]}>
             <TouchableOpacity onPress={() => setShowAttachMenu(true)} style={st.inputAction} hitSlop={6}>
               <Ionicons name="add-circle" size={28} color={colors.textMuted} />
