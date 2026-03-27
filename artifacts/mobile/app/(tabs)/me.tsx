@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { Separator } from "@/components/ui/Separator";
@@ -175,6 +176,7 @@ function XpLevelBar({ xp }: { xp: number }) {
 export default function MeScreen() {
   const { colors, isDark, themeMode, setThemeMode } = useTheme();
   const { profile, isPremium, subscription } = useAuth();
+  const { langLabel } = useLanguage();
   const insets = useSafeAreaInsets();
 
   function cycleTheme() {
@@ -344,6 +346,14 @@ export default function MeScreen() {
           label="Appearance"
           value={themeLabel}
           onPress={cycleTheme}
+        />
+        <Separator indent={54} />
+        <MenuItem
+          icon="language-outline"
+          iconBg="#007AFF"
+          label="Language"
+          value={langLabel}
+          onPress={() => router.push("/language-settings")}
         />
         <Separator indent={54} />
         <MenuItem

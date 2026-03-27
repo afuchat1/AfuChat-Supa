@@ -17,6 +17,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { DesktopWrapper } from "@/components/DesktopWrapper";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { LanguageProvider } from "@/context/LanguageContext";
 import { PushNotificationManager } from "@/components/PushNotificationManager";
 import { IOSAlert, type IOSAlertButton } from "@/components/ui/IOSAlert";
 import { AuthProvider } from "@/context/AuthContext";
@@ -83,6 +84,7 @@ function RootLayoutNav() {
       <Stack.Screen name="admin/index" />
       <Stack.Screen name="onboarding/index" options={{ animation: "fade", gestureEnabled: false }} />
       <Stack.Screen name="referral" />
+      <Stack.Screen name="language-settings" />
       <Stack.Screen name="linked-accounts" />
       <Stack.Screen name="terms" options={{ animation: "slide_from_bottom", gestureDirection: "vertical" }} />
       <Stack.Screen name="privacy" options={{ animation: "slide_from_bottom", gestureDirection: "vertical" }} />
@@ -159,15 +161,17 @@ export default function RootLayout() {
               <DesktopWrapper>
                 <ThemeProvider>
                   <AuthProvider>
-                    <PushNotificationManager />
-                    <RootLayoutNav />
-                    <IOSAlert
-                      visible={alertState.visible}
-                      title={alertState.title}
-                      message={alertState.message}
-                      buttons={alertState.buttons}
-                      onDismiss={dismissAlert}
-                    />
+                    <LanguageProvider>
+                      <PushNotificationManager />
+                      <RootLayoutNav />
+                      <IOSAlert
+                        visible={alertState.visible}
+                        title={alertState.title}
+                        message={alertState.message}
+                        buttons={alertState.buttons}
+                        onDismiss={dismissAlert}
+                      />
+                    </LanguageProvider>
                   </AuthProvider>
                 </ThemeProvider>
               </DesktopWrapper>

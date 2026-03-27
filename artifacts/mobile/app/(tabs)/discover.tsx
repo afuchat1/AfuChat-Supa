@@ -30,6 +30,8 @@ import { cacheMoments, getCachedMoments, isOnline } from "@/lib/offlineStore";
 import { notifyPostLike } from "@/lib/notifyUser";
 import { sharePost } from "@/lib/share";
 import { matchInterests, computeFeedScore, diversifyFeed, type FeedSignals } from "@/lib/feedAlgorithm";
+import { useLanguage } from "@/context/LanguageContext";
+import { translateText, LANG_LABELS } from "@/lib/translate";
 
 const { width } = Dimensions.get("window");
 
@@ -79,8 +81,26 @@ function BookmarkButton({ bookmarked, onPress }: { bookmarked: boolean; onPress:
 
 function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress }: { item: PostItem; onToggleLike: (postId: string) => void; onToggleBookmark: (postId: string) => void; onImagePress?: (images: string[], index: number) => void }) {
   const { colors } = useTheme();
+  const { preferredLang } = useLanguage();
+  const [displayContent, setDisplayContent] = useState(item.content);
+  const [isTranslated, setIsTranslated] = useState(false);
+
   const allImages = item.images.length > 0 ? item.images : item.image_url ? [item.image_url] : [];
   const imgW = allImages.length === 1 ? width - 48 : (width - 56) / 2;
+
+  useEffect(() => {
+    if (!preferredLang || !item.content?.trim()) { setDisplayContent(item.content); setIsTranslated(false); return; }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      translateText(item.content, preferredLang).then((result) => {
+        if (!cancelled && result && result !== item.content) {
+          setDisplayContent(result);
+          setIsTranslated(true);
+        }
+      });
+    }, Math.random() * 800);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [preferredLang, item.content]);
 
   function openPost() {
     router.push({ pathname: "/post/[id]", params: { id: item.id } });
@@ -104,7 +124,15 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress }: { item
         <Ionicons name="ellipsis-horizontal" size={18} color={colors.textMuted} />
       </View>
 
-      <RichText style={[styles.cardContent, { color: colors.text }]}>{item.content}</RichText>
+      <RichText style={[styles.cardContent, { color: colors.text }]}>{displayContent}</RichText>
+      {isTranslated && (
+        <View style={styles.translatedBadge}>
+          <Ionicons name="language" size={10} color={colors.textMuted} />
+          <Text style={[styles.translatedText, { color: colors.textMuted }]}>
+            {`Translated · ${LANG_LABELS[preferredLang || ""] ?? preferredLang}`}
+          </Text>
+        </View>
+      )}
 
       {allImages.length > 0 && (
         <View style={styles.images}>
@@ -634,7 +662,9 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: "row", alignItems: "center" },
   cardName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   cardTime: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  cardContent: { fontSize: 15, fontFamily: "Inter_400Regular", paddingHorizontal: 14, marginBottom: 10, lineHeight: 22 },
+  cardContent: { fontSize: 15, fontFamily: "Inter_400Regular", paddingHorizontal: 14, marginBottom: 4, lineHeight: 22 },
+  translatedBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 14, marginBottom: 8 },
+  translatedText: { fontSize: 10, fontFamily: "Inter_400Regular" },
   images: { flexDirection: "row", flexWrap: "wrap", gap: 4, paddingHorizontal: 14, marginBottom: 2 },
   img: { borderRadius: 8 },
   cardFooter: {

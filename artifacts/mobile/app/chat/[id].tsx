@@ -50,6 +50,7 @@ import { uploadChatMedia } from "@/lib/mediaUpload";
 import { syncPendingMessages } from "@/lib/offlineSync";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { translateText, LANG_LABELS } from "@/lib/translate";
+import { useLanguage } from "@/context/LanguageContext";
 
 type Gift = {
   id: string;
@@ -338,7 +339,7 @@ function BottomSheet({ visible, onClose, children }: { visible: boolean; onClose
   );
 }
 
-function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, replyPreview, onTapEnvelope, onTapGift, onImageTap, isPremiumSender, translationEnabled, translationLanguage }: {
+function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, replyPreview, onTapEnvelope, onTapGift, onImageTap, isPremiumSender }: {
   msg: Message;
   isMe: boolean;
   showTail: boolean;
@@ -350,26 +351,47 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   onTapGift?: (msg: Message) => void;
   onImageTap?: (images: string[], index: number) => void;
   isPremiumSender?: boolean;
-  translationEnabled?: boolean;
-  translationLanguage?: string;
 }) {
   const { colors } = useTheme();
+  const { preferredLang } = useLanguage();
   const [translated, setTranslated] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
   const [showTranslated, setShowTranslated] = useState(false);
+
+  const isSpecial =
+    msg.encrypted_content?.startsWith("🧧") ||
+    msg.encrypted_content?.startsWith("🎁") ||
+    ["📷 Photo", "🎥 Video", "GIF"].includes(msg.encrypted_content ?? "");
+
+  const canTranslate = !isMe && !!msg.encrypted_content && !isSpecial && !!preferredLang;
+
+  useEffect(() => {
+    if (!canTranslate || !preferredLang) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      translateText(msg.encrypted_content, preferredLang).then((result) => {
+        if (!cancelled && result && result !== msg.encrypted_content) {
+          setTranslated(result);
+          setShowTranslated(true);
+        }
+      });
+    }, Math.random() * 600);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [canTranslate, preferredLang, msg.encrypted_content]);
 
   async function handleTranslate() {
     if (showTranslated) { setShowTranslated(false); return; }
     if (translated) { setShowTranslated(true); return; }
     setTranslating(true);
-    const result = await translateText(msg.encrypted_content, translationLanguage || "en");
-    setTranslated(result);
-    setShowTranslated(true);
+    const result = await translateText(msg.encrypted_content, preferredLang || "en");
+    if (result && result !== msg.encrypted_content) {
+      setTranslated(result);
+      setShowTranslated(true);
+    }
     setTranslating(false);
   }
 
   const displayText = showTranslated && translated ? translated : msg.encrypted_content;
-  const canTranslate = translationEnabled && !isMe && msg.encrypted_content && !msg.encrypted_content.startsWith("🧧") && !msg.encrypted_content.startsWith("🎁") && !["📷 Photo", "🎥 Video", "GIF"].includes(msg.encrypted_content);
 
   const isRedEnvelope = msg.encrypted_content.startsWith("🧧");
   const isGiftMsg = msg.encrypted_content.startsWith("🎁");
@@ -529,7 +551,11 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
                 <Ionicons name="language" size={11} color={showTranslated ? BRAND : colors.textMuted} style={{ marginRight: 3 }} />
               )}
               <Text style={[st.translateChipText, { color: showTranslated ? BRAND : colors.textMuted }]}>
-                {translating ? "Translating…" : showTranslated ? `Original · ${LANG_LABELS[translationLanguage || "en"] || translationLanguage}` : `Translate to ${LANG_LABELS[translationLanguage || "en"] || translationLanguage}`}
+                {translating
+                  ? "Translating…"
+                  : showTranslated
+                  ? `Original · ${LANG_LABELS[preferredLang || "en"] ?? preferredLang}`
+                  : `Translate · ${LANG_LABELS[preferredLang || "en"] ?? preferredLang}`}
               </Text>
             </TouchableOpacity>
           )}
@@ -620,8 +646,6 @@ export default function ChatScreen() {
   const [forwardMsg, setForwardMsg] = useState<Message | null>(null);
   const [forwardChats, setForwardChats] = useState<{ id: string; name: string; avatar: string | null }[]>([]);
   const [forwardSending, setForwardSending] = useState(false);
-  const [translationEnabled, setTranslationEnabled] = useState(false);
-  const [translationLanguage, setTranslationLanguage] = useState("en");
   const flatListRef = useRef<FlatList>(null);
   const typingTimeout = useRef<any>(null);
   const draftSaveTimer = useRef<any>(null);
@@ -800,21 +824,6 @@ export default function ChatScreen() {
     checkMessageGating();
   }, [checkMessageGating, messages.length]);
 
-  // Load user's translation preferences from Advanced Features settings
-  useEffect(() => {
-    if (!user) return;
-    supabase
-      .from("advanced_feature_settings")
-      .select("message_translation, translation_language")
-      .eq("user_id", user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          setTranslationEnabled(!!data.message_translation);
-          if (data.translation_language) setTranslationLanguage(data.translation_language);
-        }
-      });
-  }, [user]);
 
   useEffect(() => {
     if (isDraft) return;
@@ -1418,8 +1427,6 @@ export default function ChatScreen() {
           onTapGift={handleTapGift}
           onImageTap={imgViewer.openViewer}
           isPremiumSender={isMe && isPremium}
-          translationEnabled={translationEnabled}
-          translationLanguage={translationLanguage}
         />
       </View>
     );
