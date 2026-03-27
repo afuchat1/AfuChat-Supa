@@ -28,6 +28,10 @@ author = "agent"
 task = "workflow.run"
 args = "AfuChat Mobile"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "AfuChat API Server"
+
 [[workflows.workflow]]
 name = "AfuChat Mobile"
 author = "agent"
@@ -39,6 +43,18 @@ outputType = "webview"
 task = "shell.exec"
 args = "PORT=18115 pnpm --filter @workspace/mobile run dev"
 waitForPort = 18115
+
+[[workflows.workflow]]
+name = "AfuChat API Server"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=8080 pnpm --filter @workspace/api-server run dev"
+waitForPort = 8080
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [agent]
 stack = "PNPM_WORKSPACE"

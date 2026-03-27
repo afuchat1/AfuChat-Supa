@@ -3,9 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 
 const router = Router();
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 const BRAND_COLOR = "#00C2CB";
 const SITE_NAME = "AfuChat";
@@ -259,6 +259,7 @@ function render404Page(): string {
 router.get("/@:handle", async (req, res) => {
   const handle = req.params.handle?.toLowerCase();
   if (!handle) return res.status(404).send(render404Page());
+  if (!supabase) return res.status(404).send(render404Page());
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -294,6 +295,7 @@ router.get("/:handle", async (req, res, next) => {
   if (!handle || handle.includes(".") || handle === "api" || handle === "admin") {
     return next();
   }
+  if (!supabase) return next();
 
   const { data: profile } = await supabase
     .from("profiles")

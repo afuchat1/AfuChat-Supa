@@ -3,10 +3,6 @@ import { createClient } from "@supabase/supabase-js";
 
 const router = Router();
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
-const supabase = createClient(supabaseUrl, supabaseKey);
-
 const PURGE_SECRET = process.env.ACCOUNT_PURGE_SECRET;
 
 router.post("/account-purge", async (req, res) => {
@@ -14,6 +10,13 @@ router.post("/account-purge", async (req, res) => {
     if (!PURGE_SECRET) {
       return res.status(503).json({ error: "Purge endpoint not configured" });
     }
+
+    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
+    if (!supabaseUrl || !supabaseKey) {
+      return res.status(503).json({ error: "Supabase not configured" });
+    }
+    const supabase = createClient(supabaseUrl, supabaseKey);
     const { secret } = req.body;
     if (!secret || secret !== PURGE_SECRET) {
       return res.status(401).json({ error: "Unauthorized" });

@@ -3,9 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 
 const router = Router();
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 const SITE_URL = "https://afuchat.com";
 
@@ -51,15 +51,19 @@ Sitemap: ${SITE_URL}/sitemap.xml
 });
 
 router.get("/sitemap.xml", async (_req, res) => {
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("handle, updated_at")
-    .eq("is_private", false)
-    .not("handle", "like", "deleted_%")
-    .order("updated_at", { ascending: false })
-    .limit(1000);
+  const profiles: any[] = [];
+  if (supabase) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("handle, updated_at")
+      .eq("is_private", false)
+      .not("handle", "like", "deleted_%")
+      .order("updated_at", { ascending: false })
+      .limit(1000);
+    profiles.push(...(data || []));
+  }
 
-  const urls = (profiles || []).map((p) => `
+  const urls = profiles.map((p) => `
   <url>
     <loc>${SITE_URL}/@${p.handle}</loc>
     <lastmod>${new Date(p.updated_at || Date.now()).toISOString().split("T")[0]}</lastmod>

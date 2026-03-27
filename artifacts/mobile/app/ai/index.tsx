@@ -33,8 +33,9 @@ type ActionButton = {
   params?: Record<string, any>;
 };
 
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const API_SERVER_URL = process.env.EXPO_PUBLIC_DOMAIN
+  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}:8080`
+  : "http://localhost:8080";
 
 const QUICK_PROMPTS = [
   { label: "My Balance", icon: "wallet-outline" as const, prompt: "What's my current balance?" },
@@ -217,12 +218,10 @@ RESPONSE GUIDELINES:
         .map(m => ({ role: m.role, content: m.content }));
       conversationMessages.push({ role: "user", content });
 
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-chat`, {
+      const res = await fetch(`${API_SERVER_URL}/api/ai/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-          "apikey": SUPABASE_ANON_KEY || "",
         },
         body: JSON.stringify({
           messages: [{ role: "system", content: systemPrompt }, ...conversationMessages],
