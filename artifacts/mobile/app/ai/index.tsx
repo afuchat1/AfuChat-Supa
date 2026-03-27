@@ -18,6 +18,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { supabase, supabaseUrl as SUPABASE_URL, supabaseAnonKey as SUPABASE_ANON_KEY } from "@/lib/supabase";
 import Colors from "@/constants/colors";
+import EmojiPicker from "rn-emoji-keyboard";
 
 type AiMessage = {
   id: string;
@@ -89,6 +90,7 @@ export default function AiChatScreen() {
   const { user, profile, refreshProfile } = useAuth();
   const [messages, setMessages] = useState<AiMessage[]>([]);
   const [input, setInput] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
@@ -341,7 +343,7 @@ RESPONSE GUIDELINES:
 
       <View style={[s.inputRow, { marginBottom: insets.bottom + 4 }]}>
         <View style={[s.inputPill, { backgroundColor: colors.surface }]}>
-          <TouchableOpacity hitSlop={8} style={s.pillIcon}>
+          <TouchableOpacity hitSlop={8} style={s.pillIcon} onPress={() => setShowEmojiPicker(true)}>
             <Ionicons name="happy-outline" size={24} color={colors.textMuted} />
           </TouchableOpacity>
           <TextInput
@@ -363,6 +365,23 @@ RESPONSE GUIDELINES:
           <Ionicons name="send" size={18} color={input.trim() && !loading ? "#fff" : colors.textMuted} />
         </TouchableOpacity>
       </View>
+      <EmojiPicker
+        onEmojiSelected={(emojiObject: { emoji: string }) => {
+          setInput((prev) => prev + emojiObject.emoji);
+        }}
+        open={showEmojiPicker}
+        onClose={() => setShowEmojiPicker(false)}
+        theme={{
+          backdrop: "#00000070",
+          knob: colors.textMuted,
+          container: colors.surface,
+          header: colors.text,
+          skinTonesContainer: colors.surface,
+          category: { icon: colors.textMuted, iconActive: Colors.brand, container: colors.surface, containerActive: colors.inputBg },
+          search: { text: colors.text, placeholder: colors.textMuted, icon: colors.textMuted, background: colors.inputBg },
+          emoji: { selected: colors.inputBg },
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }

@@ -73,6 +73,7 @@
     "expo-sharing": "^55.0.14",
     "react-native-url-polyfill": "^3.0.0",
     "react-native-webview": "^13.16.1",
+    "rn-emoji-keyboard": "^1.7.0",
     "three": "^0.183.2"
   }
 }

@@ -52,6 +52,7 @@ import OfflineBanner from "@/components/ui/OfflineBanner";
 import { translateText, LANG_LABELS } from "@/lib/translate";
 import { useLanguage } from "@/context/LanguageContext";
 import { askAi, aiSuggestReply } from "@/lib/aiHelper";
+import EmojiPicker from "rn-emoji-keyboard";
 
 type Gift = {
   id: string;
@@ -633,6 +634,7 @@ export default function ChatScreen() {
   const [envelopeAmount, setEnvelopeAmount] = useState("");
   const [envelopeMsg, setEnvelopeMsg] = useState("");
   const [envelopeCount, setEnvelopeCount] = useState("1");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showGiftPicker, setShowGiftPicker] = useState(false);
   const [gifts, setGifts] = useState<Gift[]>([]);
   const [giftSending, setGiftSending] = useState(false);
@@ -1564,9 +1566,11 @@ export default function ChatScreen() {
             })()}
           </View>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => { loadGifts(); setShowGiftPicker(true); }} style={st.headerAction} hitSlop={8}>
-          <Ionicons name="gift-outline" size={22} color={colors.textSecondary} />
-        </TouchableOpacity>
+        {!chatInfo?.is_group && !chatInfo?.is_channel && (
+          <TouchableOpacity onPress={() => { loadGifts(); setShowGiftPicker(true); }} style={st.headerAction} hitSlop={8}>
+            <Ionicons name="gift-outline" size={22} color={colors.textSecondary} />
+          </TouchableOpacity>
+        )}
         <TouchableOpacity onPress={() => setShowRedEnvelope(true)} style={st.headerAction} hitSlop={8}>
           <Text style={{ fontSize: 20 }}>🧧</Text>
         </TouchableOpacity>
@@ -1633,7 +1637,7 @@ export default function ChatScreen() {
             )}
             <View style={[st.inputBar, { paddingBottom: Math.max(insets.bottom, 4) }]}>
               <View style={[st.inputPill, { backgroundColor: colors.inputBg }]}>
-                <TouchableOpacity hitSlop={8} style={st.pillIcon}>
+                <TouchableOpacity hitSlop={8} style={st.pillIcon} onPress={() => setShowEmojiPicker(true)}>
                   <Ionicons name="happy-outline" size={24} color={colors.textMuted} />
                 </TouchableOpacity>
                 <TextInput
@@ -1647,9 +1651,11 @@ export default function ChatScreen() {
                 />
                 {!input.trim() && (
                   <>
-                    <TouchableOpacity onPress={() => setShowAttachMenu(true)} hitSlop={8} style={st.pillIcon}>
-                      <Ionicons name="gift-outline" size={22} color={colors.textMuted} />
-                    </TouchableOpacity>
+                    {!chatInfo?.is_group && !chatInfo?.is_channel && (
+                      <TouchableOpacity onPress={() => { loadGifts(); setShowGiftPicker(true); }} hitSlop={8} style={st.pillIcon}>
+                        <Ionicons name="gift-outline" size={22} color={colors.textMuted} />
+                      </TouchableOpacity>
+                    )}
                     <TouchableOpacity onPress={() => setShowAttachMenu(true)} hitSlop={8} style={st.pillIcon}>
                       <Ionicons name="attach" size={22} color={colors.textMuted} style={{ transform: [{ rotate: "-45deg" }] }} />
                     </TouchableOpacity>
@@ -1968,6 +1974,23 @@ export default function ChatScreen() {
           )}
         </View>
       </BottomSheet>
+      <EmojiPicker
+        onEmojiSelected={(emojiObject: { emoji: string }) => {
+          setInput((prev) => prev + emojiObject.emoji);
+        }}
+        open={showEmojiPicker}
+        onClose={() => setShowEmojiPicker(false)}
+        theme={{
+          backdrop: "#00000070",
+          knob: colors.textMuted,
+          container: colors.surface,
+          header: colors.text,
+          skinTonesContainer: colors.surface,
+          category: { icon: colors.textMuted, iconActive: BRAND, container: colors.surface, containerActive: colors.inputBg },
+          search: { text: colors.text, placeholder: colors.textMuted, icon: colors.textMuted, background: colors.inputBg },
+          emoji: { selected: colors.inputBg },
+        }}
+      />
       <ImageViewer
         images={imgViewer.images}
         initialIndex={imgViewer.index}
