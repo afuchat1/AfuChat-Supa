@@ -1566,9 +1566,11 @@ export default function ChatScreen() {
             })()}
           </View>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowRedEnvelope(true)} style={st.headerAction} hitSlop={8}>
-          <Text style={{ fontSize: 20 }}>🧧</Text>
-        </TouchableOpacity>
+        {(chatInfo?.is_group || chatInfo?.is_channel) && (
+          <TouchableOpacity onPress={() => setShowRedEnvelope(true)} style={st.headerAction} hitSlop={8}>
+            <Text style={{ fontSize: 20 }}>🧧</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}>
@@ -1679,104 +1681,104 @@ export default function ChatScreen() {
         )}
       </KeyboardAvoidingView>
 
-      <BottomSheet visible={!!showReactions} onClose={() => { setShowReactions(null); setAiResult(null); setAiResultType(null); setAiReplies([]); }}>
-        <View style={st.reactionPicker}>
-          {REACTION_EMOJIS.map((emoji) => (
-            <TouchableOpacity
-              key={emoji}
-              style={[st.reactionOption, { backgroundColor: colors.inputBg }]}
-              onPress={() => showReactions && addReaction(showReactions, emoji)}
-            >
-              <Text style={st.reactionOptionEmoji}>{emoji}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        <TouchableOpacity style={st.sheetActionRow} onPress={() => { if (showReactions) { setReplyTo(showReactions); setShowReactions(null); } }}>
-          <Ionicons name="arrow-undo" size={20} color={colors.text} />
-          <Text style={[st.sheetActionText, { color: colors.text }]}>Reply</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={st.sheetActionRow}
-          onPress={() => {
-            if (showReactions) {
-              openForward(showReactions);
-              setShowReactions(null);
-            }
-          }}
-        >
-          <Ionicons name="arrow-redo" size={20} color={colors.text} />
-          <Text style={[st.sheetActionText, { color: colors.text }]}>Forward</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={st.sheetActionRow}
-          onPress={() => { if (showReactions) openTranslatePicker(showReactions); }}
-        >
-          <Ionicons name="language-outline" size={20} color={colors.text} />
-          <Text style={[st.sheetActionText, { color: colors.text }]}>Translate</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: "auto" }} />
-        </TouchableOpacity>
-
-        {(chatInfo?.is_group || chatInfo?.is_channel) && (
-          <>
-            <View style={{ height: 1, backgroundColor: colors.border + "50", marginHorizontal: 16, marginVertical: 6 }} />
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 2 }}>
-              <Ionicons name="sparkles" size={12} color={Colors.brand} />
-              <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: Colors.brand, textTransform: "uppercase", letterSpacing: 0.5 }}>AI Features</Text>
+      <Modal visible={!!showReactions} transparent animationType="fade" onRequestClose={() => { setShowReactions(null); setAiResult(null); setAiResultType(null); setAiReplies([]); }}>
+        <View style={st.reactModalOverlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => { setShowReactions(null); setAiResult(null); setAiResultType(null); setAiReplies([]); }} />
+          <View style={[st.reactModalContainer, { backgroundColor: colors.surface }]}>
+            <View style={st.reactModalEmojiRow}>
+              {REACTION_EMOJIS.map((emoji) => (
+                <TouchableOpacity
+                  key={emoji}
+                  style={[st.reactModalEmojiBtn, { backgroundColor: colors.inputBg }]}
+                  onPress={() => showReactions && addReaction(showReactions, emoji)}
+                >
+                  <Text style={st.reactModalEmojiText}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
-            {showReactions && showReactions.encrypted_content.length >= 500 && (
-              <TouchableOpacity
-                style={[st.sheetActionRow, { opacity: aiLoading && aiResultType === "summary" ? 0.5 : 1 }]}
-                disabled={aiLoading}
-                onPress={() => { if (showReactions) handleAiSummarize(showReactions); }}
-              >
-                <Ionicons name="document-text-outline" size={20} color={Colors.brand} />
-                <Text style={[st.sheetActionText, { color: colors.text }]}>Summarize Message</Text>
-                {aiLoading && aiResultType === "summary" && <ActivityIndicator color={Colors.brand} size="small" style={{ marginLeft: "auto" }} />}
-              </TouchableOpacity>
-            )}
+            <View style={[st.reactModalDivider, { backgroundColor: colors.border }]} />
+            <TouchableOpacity style={st.reactModalAction} onPress={() => { if (showReactions) { setReplyTo(showReactions); setShowReactions(null); } }}>
+              <Ionicons name="arrow-undo" size={20} color={colors.text} />
+              <Text style={[st.reactModalActionText, { color: colors.text }]}>Reply</Text>
+            </TouchableOpacity>
             <TouchableOpacity
-              style={[st.sheetActionRow, { opacity: aiLoading && aiResultType === "replies" ? 0.5 : 1 }]}
-              disabled={aiLoading}
-              onPress={handleAiSuggestReply}
+              style={st.reactModalAction}
+              onPress={() => { if (showReactions) { openForward(showReactions); setShowReactions(null); } }}
             >
-              <Ionicons name="chatbubbles-outline" size={20} color="#D4A853" />
-              <Text style={[st.sheetActionText, { color: colors.text }]}>Smart Replies</Text>
-              {aiLoading && aiResultType === "replies" && <ActivityIndicator color="#D4A853" size="small" style={{ marginLeft: "auto" }} />}
+              <Ionicons name="arrow-redo" size={20} color={colors.text} />
+              <Text style={[st.reactModalActionText, { color: colors.text }]}>Forward</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={st.reactModalAction}
+              onPress={() => { if (showReactions) openTranslatePicker(showReactions); }}
+            >
+              <Ionicons name="language-outline" size={20} color={colors.text} />
+              <Text style={[st.reactModalActionText, { color: colors.text }]}>Translate</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: "auto" }} />
             </TouchableOpacity>
 
-            {aiResult && aiResultType === "summary" && (
-              <View style={{ marginHorizontal: 16, marginTop: 6, marginBottom: 8, backgroundColor: Colors.brand + "0A", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.brand + "18" }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+            {(chatInfo?.is_group || chatInfo?.is_channel) && (
+              <>
+                <View style={[st.reactModalDivider, { backgroundColor: colors.border }]} />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 }}>
                   <Ionicons name="sparkles" size={12} color={Colors.brand} />
-                  <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: Colors.brand, textTransform: "uppercase", letterSpacing: 0.5 }}>Summary</Text>
+                  <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: Colors.brand, textTransform: "uppercase", letterSpacing: 0.5 }}>AI Features</Text>
                 </View>
-                <Text style={{ fontSize: 14, color: colors.text, fontFamily: "Inter_400Regular", lineHeight: 20 }}>{aiResult}</Text>
-              </View>
-            )}
-
-            {aiReplies.length > 0 && aiResultType === "replies" && (
-              <View style={{ marginHorizontal: 16, marginTop: 6, marginBottom: 8, gap: 6 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                  <Ionicons name="flash" size={12} color="#D4A853" />
-                  <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#D4A853", textTransform: "uppercase", letterSpacing: 0.5 }}>Tap to use</Text>
-                </View>
-                {aiReplies.map((reply, i) => (
+                {showReactions && showReactions.encrypted_content.length >= 500 && (
                   <TouchableOpacity
-                    key={i}
-                    onPress={() => { setInput(reply); setShowReactions(null); setAiResult(null); setAiResultType(null); setAiReplies([]); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-                    style={{ backgroundColor: colors.inputBg, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: "#D4A853" + "25", flexDirection: "row", alignItems: "center", gap: 8 }}
-                    activeOpacity={0.6}
+                    style={[st.reactModalAction, { opacity: aiLoading && aiResultType === "summary" ? 0.5 : 1 }]}
+                    disabled={aiLoading}
+                    onPress={() => { if (showReactions) handleAiSummarize(showReactions); }}
                   >
-                    <Text style={{ flex: 1, fontSize: 14, color: colors.text, fontFamily: "Inter_400Regular", lineHeight: 19 }}>{reply}</Text>
-                    <Ionicons name="arrow-forward-circle" size={16} color="#D4A853" style={{ opacity: 0.5 }} />
+                    <Ionicons name="document-text-outline" size={20} color={Colors.brand} />
+                    <Text style={[st.reactModalActionText, { color: colors.text }]}>Summarize Message</Text>
+                    {aiLoading && aiResultType === "summary" && <ActivityIndicator color={Colors.brand} size="small" style={{ marginLeft: "auto" }} />}
                   </TouchableOpacity>
-                ))}
-              </View>
+                )}
+                <TouchableOpacity
+                  style={[st.reactModalAction, { opacity: aiLoading && aiResultType === "replies" ? 0.5 : 1 }]}
+                  disabled={aiLoading}
+                  onPress={handleAiSuggestReply}
+                >
+                  <Ionicons name="chatbubbles-outline" size={20} color="#D4A853" />
+                  <Text style={[st.reactModalActionText, { color: colors.text }]}>Smart Replies</Text>
+                  {aiLoading && aiResultType === "replies" && <ActivityIndicator color="#D4A853" size="small" style={{ marginLeft: "auto" }} />}
+                </TouchableOpacity>
+
+                {aiResult && aiResultType === "summary" && (
+                  <View style={{ marginTop: 6, backgroundColor: Colors.brand + "0A", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.brand + "18" }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                      <Ionicons name="sparkles" size={12} color={Colors.brand} />
+                      <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: Colors.brand, textTransform: "uppercase", letterSpacing: 0.5 }}>Summary</Text>
+                    </View>
+                    <Text style={{ fontSize: 14, color: colors.text, fontFamily: "Inter_400Regular", lineHeight: 20 }}>{aiResult}</Text>
+                  </View>
+                )}
+
+                {aiReplies.length > 0 && aiResultType === "replies" && (
+                  <View style={{ marginTop: 6, gap: 6 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                      <Ionicons name="flash" size={12} color="#D4A853" />
+                      <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#D4A853", textTransform: "uppercase", letterSpacing: 0.5 }}>Tap to use</Text>
+                    </View>
+                    {aiReplies.map((reply, i) => (
+                      <TouchableOpacity
+                        key={i}
+                        onPress={() => { setInput(reply); setShowReactions(null); setAiResult(null); setAiResultType(null); setAiReplies([]); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                        style={{ backgroundColor: colors.inputBg, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: "#D4A853" + "25", flexDirection: "row", alignItems: "center", gap: 8 }}
+                        activeOpacity={0.6}
+                      >
+                        <Text style={{ flex: 1, fontSize: 14, color: colors.text, fontFamily: "Inter_400Regular", lineHeight: 19 }}>{reply}</Text>
+                        <Ionicons name="arrow-forward-circle" size={16} color="#D4A853" style={{ opacity: 0.5 }} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </>
             )}
-          </>
-        )}
-      </BottomSheet>
+          </View>
+        </View>
+      </Modal>
 
       <BottomSheet visible={showLangPicker} onClose={() => { setShowLangPicker(false); setTranslateMsg(null); setAiResult(null); setAiResultType(null); }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
@@ -2232,6 +2234,14 @@ const st = StyleSheet.create({
   sheetTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   sheetInput: { borderRadius: 12, padding: 14, fontSize: 15, fontFamily: "Inter_400Regular" },
 
+  reactModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 20 },
+  reactModalContainer: { width: "100%", borderRadius: 20, padding: 20, elevation: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 20, maxHeight: "85%" },
+  reactModalEmojiRow: { flexDirection: "row", justifyContent: "center", gap: 8, marginBottom: 12 },
+  reactModalEmojiBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  reactModalEmojiText: { fontSize: 24 },
+  reactModalDivider: { height: 1, marginVertical: 8 },
+  reactModalAction: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, paddingHorizontal: 4 },
+  reactModalActionText: { fontSize: 15, fontFamily: "Inter_500Medium" },
   reactionPicker: { flexDirection: "row", justifyContent: "center", paddingVertical: 8, gap: 6 },
   reactionOption: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   reactionOptionEmoji: { fontSize: 24 },
