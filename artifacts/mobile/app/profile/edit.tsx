@@ -23,6 +23,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { aiGenerateBio } from "@/lib/aiHelper";
 
 export default function EditProfileScreen() {
   const { colors } = useTheme();
@@ -37,6 +38,7 @@ export default function EditProfileScreen() {
   const [loading, setLoading] = useState(false);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [aiGenerating, setAiGenerating] = useState(false);
 
   async function pickAvatar() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -181,6 +183,36 @@ export default function EditProfileScreen() {
             placeholder="Tell people about yourself (max 150)"
             multiline
           />
+          <View style={styles.aiBioRow}>
+            <TouchableOpacity
+              style={[styles.aiBioBtn, { backgroundColor: Colors.brand + "12", borderColor: Colors.brand + "30" }]}
+              onPress={async () => {
+                setAiGenerating(true);
+                try {
+                  const generated = await aiGenerateBio(
+                    displayName || "User",
+                    profile?.interests,
+                    country || undefined,
+                  );
+                  setBio(generated.slice(0, 150));
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                } catch {
+                  showAlert("AI Error", "Could not generate bio. Try again.");
+                }
+                setAiGenerating(false);
+              }}
+              disabled={aiGenerating}
+            >
+              {aiGenerating ? (
+                <ActivityIndicator size="small" color={Colors.brand} />
+              ) : (
+                <Ionicons name="sparkles" size={14} color={Colors.brand} />
+              )}
+              <Text style={[styles.aiBioBtnText, { color: Colors.brand }]}>
+                {aiGenerating ? "Generating..." : "AI Generate Bio"}
+              </Text>
+            </TouchableOpacity>
+          </View>
           <FieldItem
             label="Website"
             value={website}
@@ -286,4 +318,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   fieldInputMulti: { minHeight: 60 },
+  aiBioRow: { paddingHorizontal: 16, paddingBottom: 8 },
+  aiBioBtn: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  aiBioBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
 });

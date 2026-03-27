@@ -51,6 +51,7 @@ import { syncPendingMessages } from "@/lib/offlineSync";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { translateText, LANG_LABELS } from "@/lib/translate";
 import { useLanguage } from "@/context/LanguageContext";
+import { aiSummarizeChat, aiSuggestReply } from "@/lib/aiHelper";
 
 type Gift = {
   id: string;
@@ -646,6 +647,11 @@ export default function ChatScreen() {
   const [forwardMsg, setForwardMsg] = useState<Message | null>(null);
   const [forwardChats, setForwardChats] = useState<{ id: string; name: string; avatar: string | null }[]>([]);
   const [forwardSending, setForwardSending] = useState(false);
+  const [showAiSummary, setShowAiSummary] = useState(false);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiSummarizing, setAiSummarizing] = useState(false);
+  const [aiReplies, setAiReplies] = useState<string[]>([]);
+  const [aiReplyLoading, setAiReplyLoading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const typingTimeout = useRef<any>(null);
   const draftSaveTimer = useRef<any>(null);
@@ -929,6 +935,46 @@ export default function ChatScreen() {
   function handleSmartReply(text: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     sendMessage(text);
+  }
+
+  async function handleAiSummarize() {
+    if (aiSummarizing || messages.length < 3) return;
+    setAiSummarizing(true);
+    setAiSummary(null);
+    try {
+      const recent = messages.slice(0, 30).reverse();
+      const formatted = recent.map((m) => ({
+        sender: m.sender_id === user?.id ? "Me" : chatInfo?.other_name || "Them",
+        content: m.encrypted_content,
+      }));
+      const result = await aiSummarizeChat(formatted);
+      setAiSummary(result);
+    } catch {
+      setAiSummary("Could not generate summary. Please try again.");
+    } finally {
+      setAiSummarizing(false);
+    }
+  }
+
+  async function handleAiSuggestReply() {
+    if (aiReplyLoading || messages.length < 1) return;
+    setAiReplyLoading(true);
+    setAiReplies([]);
+    try {
+      const recent = messages.slice(0, 10).reverse();
+      const formatted = recent.map((m) => ({
+        sender: m.sender_id === user?.id ? "Me" : chatInfo?.other_name || "Them",
+        content: m.encrypted_content,
+        isMe: m.sender_id === user?.id,
+      }));
+      const myName = user?.user_metadata?.display_name || "Me";
+      const result = await aiSuggestReply(formatted, myName);
+      setAiReplies(result);
+    } catch {
+      setAiReplies(["Could not generate replies. Tap to try again."]);
+    } finally {
+      setAiReplyLoading(false);
+    }
   }
 
   async function openForward(msg: Message) {
@@ -1495,6 +1541,13 @@ export default function ChatScreen() {
         <TouchableOpacity onPress={() => setShowRedEnvelope(true)} style={st.headerAction} hitSlop={8}>
           <Text style={{ fontSize: 20 }}>🧧</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => { setAiSummary(null); setAiReplies([]); setShowAiSummary(true); }}
+          style={st.headerAction}
+          hitSlop={8}
+        >
+          <Ionicons name="sparkles" size={20} color={Colors.brand} />
+        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={0}>
@@ -1774,6 +1827,84 @@ export default function ChatScreen() {
         visible={imgViewer.visible}
         onClose={imgViewer.closeViewer}
       />
+
+      <Modal
+        visible={showAiSummary}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAiSummary(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
+          <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowAiSummary(false)} />
+          <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 34, maxHeight: "70%" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 18, paddingTop: 18, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Ionicons name="sparkles" size={20} color={Colors.brand} />
+                <Text style={{ fontSize: 17, fontFamily: "Inter_600SemiBold", color: colors.text }}>AI Assistant</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowAiSummary(false)} hitSlop={12}>
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ paddingHorizontal: 18, paddingTop: 14 }} showsVerticalScrollIndicator={false}>
+              <TouchableOpacity
+                onPress={handleAiSummarize}
+                disabled={aiSummarizing || messages.length < 3}
+                style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, opacity: messages.length < 3 ? 0.4 : 1 }}
+                activeOpacity={0.7}
+              >
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.brand + "20", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="document-text-outline" size={18} color={Colors.brand} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.text }}>Summarize Conversation</Text>
+                  <Text style={{ fontSize: 12, color: colors.textMuted, fontFamily: "Inter_400Regular" }}>Get a quick AI summary of recent messages</Text>
+                </View>
+                {aiSummarizing && <ActivityIndicator color={Colors.brand} size="small" />}
+              </TouchableOpacity>
+
+              {aiSummary && (
+                <View style={{ backgroundColor: Colors.brand + "10", borderRadius: 12, padding: 14, marginTop: 6, marginBottom: 10, borderLeftWidth: 3, borderLeftColor: Colors.brand }}>
+                  <Text style={{ fontSize: 14, color: colors.text, fontFamily: "Inter_400Regular", lineHeight: 20 }}>{aiSummary}</Text>
+                </View>
+              )}
+
+              <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 4 }} />
+
+              <TouchableOpacity
+                onPress={handleAiSuggestReply}
+                disabled={aiReplyLoading || messages.length < 1}
+                style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, opacity: messages.length < 1 ? 0.4 : 1 }}
+                activeOpacity={0.7}
+              >
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#D4A853" + "20", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="chatbubbles-outline" size={18} color="#D4A853" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.text }}>AI Smart Replies</Text>
+                  <Text style={{ fontSize: 12, color: colors.textMuted, fontFamily: "Inter_400Regular" }}>Generate context-aware reply suggestions</Text>
+                </View>
+                {aiReplyLoading && <ActivityIndicator color="#D4A853" size="small" />}
+              </TouchableOpacity>
+
+              {aiReplies.length > 0 && (
+                <View style={{ marginTop: 6, marginBottom: 14, gap: 8 }}>
+                  {aiReplies.map((reply, i) => (
+                    <TouchableOpacity
+                      key={i}
+                      onPress={() => { setInput(reply); setShowAiSummary(false); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                      style={{ backgroundColor: colors.inputBg, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: "#D4A853" + "40" }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={{ fontSize: 14, color: colors.text, fontFamily: "Inter_400Regular" }}>{reply}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {forwardMsg && (
         <Modal

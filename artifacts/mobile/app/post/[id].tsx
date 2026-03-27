@@ -27,6 +27,7 @@ import { showAlert } from "@/lib/alert";
 import { notifyPostLike, notifyPostReply } from "@/lib/notifyUser";
 import { useAutoTranslate } from "@/context/LanguageContext";
 import { LANG_LABELS } from "@/lib/translate";
+import { aiSummarizeThread } from "@/lib/aiHelper";
 
 type Reply = {
   id: string;
@@ -92,6 +93,8 @@ export default function PostDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiSummarizing, setAiSummarizing] = useState(false);
   const imgViewer = useImageViewer();
   const { displayText: postDisplayText, isTranslated: postIsTranslated, lang: postLang } = useAutoTranslate(post?.content);
 
@@ -338,6 +341,45 @@ export default function PostDetailScreen() {
               </TouchableOpacity>
             </View>
 
+            {replies.length >= 2 && (
+              <TouchableOpacity
+                style={[styles.aiSummaryBtn, { backgroundColor: Colors.brand + "12", borderColor: Colors.brand + "30" }]}
+                onPress={async () => {
+                  setAiSummarizing(true);
+                  setAiSummary(null);
+                  try {
+                    const summary = await aiSummarizeThread(
+                      post.content,
+                      replies.map(r => ({ author: r.author.display_name, content: r.content })),
+                    );
+                    setAiSummary(summary);
+                  } catch { showAlert("AI Error", "Could not summarize. Try again."); }
+                  setAiSummarizing(false);
+                }}
+                disabled={aiSummarizing}
+              >
+                {aiSummarizing ? (
+                  <ActivityIndicator size="small" color={Colors.brand} />
+                ) : (
+                  <Ionicons name="sparkles" size={14} color={Colors.brand} />
+                )}
+                <Text style={[styles.aiSummaryBtnText, { color: Colors.brand }]}>
+                  {aiSummarizing ? "Summarizing..." : "AI Summarize Thread"}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {aiSummary && (
+              <View style={[styles.aiSummaryCard, { backgroundColor: Colors.brand + "10", borderColor: Colors.brand + "25" }]}>
+                <View style={styles.aiSummaryHeader}>
+                  <Ionicons name="sparkles" size={14} color={Colors.brand} />
+                  <Text style={[styles.aiSummaryTitle, { color: Colors.brand }]}>AI Summary</Text>
+                  <TouchableOpacity onPress={() => setAiSummary(null)} hitSlop={8} style={{ marginLeft: "auto" }}>
+                    <Ionicons name="close" size={16} color={colors.textMuted} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={[styles.aiSummaryText, { color: colors.text }]}>{aiSummary}</Text>
+              </View>
+            )}
             {replies.length > 0 && (
               <Text style={[styles.repliesLabel, { color: colors.textMuted }]}>Replies</Text>
             )}
@@ -413,4 +455,10 @@ const styles = StyleSheet.create({
   replyContent: { fontSize: 15, fontFamily: "Inter_400Regular", marginTop: 2, lineHeight: 21 },
   replyBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, gap: 10 },
   replyInput: { flex: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, fontFamily: "Inter_400Regular", maxHeight: 80 },
+  aiSummaryBtn: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  aiSummaryBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  aiSummaryCard: { borderRadius: 12, padding: 14, borderWidth: 1 },
+  aiSummaryHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
+  aiSummaryTitle: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  aiSummaryText: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 22 },
 });

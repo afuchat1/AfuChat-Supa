@@ -22,6 +22,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { aiEnhancePost, aiGenerateHashtags, aiGenerateCaption } from "@/lib/aiHelper";
 
 export default function CreatePostScreen() {
   const { colors } = useTheme();
@@ -30,6 +31,7 @@ export default function CreatePostScreen() {
   const [content, setContent] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [aiLoading, setAiLoading] = useState<string | null>(null);
 
   async function pickImage() {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -164,6 +166,71 @@ export default function CreatePostScreen() {
           </View>
         )}
 
+        {aiLoading && (
+          <View style={[styles.aiLoadingBar, { backgroundColor: Colors.brand + "15" }]}>
+            <ActivityIndicator size="small" color={Colors.brand} />
+            <Text style={[styles.aiLoadingText, { color: Colors.brand }]}>
+              {aiLoading === "enhance" ? "Enhancing post..." : aiLoading === "hashtags" ? "Generating hashtags..." : "Writing caption..."}
+            </Text>
+          </View>
+        )}
+
+        <View style={[styles.aiToolbar, { borderTopColor: colors.border }]}>
+          <TouchableOpacity
+            style={[styles.aiBtn, { backgroundColor: Colors.brand + "12", borderColor: Colors.brand + "30" }]}
+            onPress={async () => {
+              if (!content.trim()) { showAlert("Write first", "Write something first, then let AI enhance it."); return; }
+              setAiLoading("enhance");
+              try {
+                const enhanced = await aiEnhancePost(content);
+                setContent(enhanced.slice(0, 280));
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              } catch { showAlert("AI Error", "Could not enhance your post. Try again."); }
+              setAiLoading(null);
+            }}
+            disabled={!!aiLoading}
+          >
+            <Ionicons name="sparkles" size={16} color={Colors.brand} />
+            <Text style={[styles.aiBtnText, { color: Colors.brand }]}>Enhance</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.aiBtn, { backgroundColor: Colors.brand + "12", borderColor: Colors.brand + "30" }]}
+            onPress={async () => {
+              if (!content.trim()) { showAlert("Write first", "Write something first to get hashtag suggestions."); return; }
+              setAiLoading("hashtags");
+              try {
+                const tags = await aiGenerateHashtags(content);
+                if (tags.length > 0) {
+                  const newContent = (content.trim() + "\n" + tags.join(" ")).slice(0, 280);
+                  setContent(newContent);
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                }
+              } catch { showAlert("AI Error", "Could not generate hashtags. Try again."); }
+              setAiLoading(null);
+            }}
+            disabled={!!aiLoading}
+          >
+            <Ionicons name="pricetag" size={16} color={Colors.brand} />
+            <Text style={[styles.aiBtnText, { color: Colors.brand }]}>Hashtags</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.aiBtn, { backgroundColor: Colors.brand + "12", borderColor: Colors.brand + "30" }]}
+            onPress={async () => {
+              setAiLoading("caption");
+              try {
+                const caption = await aiGenerateCaption();
+                setContent(caption.slice(0, 280));
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              } catch { showAlert("AI Error", "Could not generate caption. Try again."); }
+              setAiLoading(null);
+            }}
+            disabled={!!aiLoading}
+          >
+            <Ionicons name="bulb" size={16} color={Colors.brand} />
+            <Text style={[styles.aiBtnText, { color: Colors.brand }]}>Caption</Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={[styles.toolbar, { borderTopColor: colors.border }]}>
           <TouchableOpacity style={styles.toolBtn} onPress={pickImage}>
             <Ionicons name="image-outline" size={22} color={colors.textSecondary} />
@@ -252,4 +319,9 @@ const styles = StyleSheet.create({
   },
   toolBtn: { alignItems: "center", gap: 4 },
   toolLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  aiToolbar: { flexDirection: "row", gap: 8, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12 },
+  aiBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, flex: 1, justifyContent: "center" },
+  aiBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  aiLoadingBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
+  aiLoadingText: { fontSize: 13, fontFamily: "Inter_500Medium" },
 });
