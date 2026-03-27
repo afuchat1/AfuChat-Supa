@@ -668,13 +668,20 @@ When suggesting actions, include ACTION buttons in your response using the forma
   const executeExecAction = useCallback(async (action: ExecAction): Promise<{ success: boolean; message: string; invoice?: InvoiceData }> => {
     if (!user || !profile) return { success: false, message: "Not logged in" };
 
+    const freshProfile = async () => {
+      const { data } = await supabase.from("profiles").select("xp, acoin, handle").eq("id", user.id).single();
+      return data as { xp: number; acoin: number; handle: string } | null;
+    };
+
     switch (action.actionType) {
       case "send_nexa": {
         const { handle, amount, message: msg } = action.params;
         if (!handle || !amount) return { success: false, message: "Missing handle or amount" };
         const amt = parseInt(amount);
         if (isNaN(amt) || amt <= 0) return { success: false, message: "Invalid amount" };
-        if (amt > (profile.xp || 0)) return { success: false, message: `Insufficient Nexa. You have ${profile.xp || 0}` };
+        const live = await freshProfile();
+        if (!live) return { success: false, message: "Could not verify balance" };
+        if (amt > (live.xp || 0)) return { success: false, message: `Insufficient Nexa. You have ${live.xp || 0}` };
         const { data: recipient } = await supabase.from("profiles").select("id, display_name").eq("handle", handle.toLowerCase()).single();
         if (!recipient) return { success: false, message: `User @${handle} not found` };
         if (recipient.id === user.id) return { success: false, message: "Cannot send to yourself" };
@@ -682,8 +689,8 @@ When suggesting actions, include ACTION buttons in your response using the forma
         if (error) return { success: false, message: error.message };
         return {
           success: true,
-          message: `Sent ${amt} Nexa to ${recipient.display_name}`,
-          invoice: { type: "Nexa Transfer", date: new Date().toISOString(), from: `@${profile.handle}`, to: `@${handle}`, amount: amt, currency: "Nexa", reference: `NXA-${Date.now().toString(36).toUpperCase()}`, status: "Completed" },
+          message: `Sent ${amt} Nexa to ${(recipient as { id: string; display_name: string }).display_name}`,
+          invoice: { type: "Nexa Transfer", date: new Date().toISOString(), from: `@${live.handle}`, to: `@${handle}`, amount: amt, currency: "Nexa", reference: `NXA-${Date.now().toString(36).toUpperCase()}`, status: "Completed" },
         };
       }
       case "send_acoin": {
@@ -691,21 +698,28 @@ When suggesting actions, include ACTION buttons in your response using the forma
         if (!handle || !amount) return { success: false, message: "Missing handle or amount" };
         const acoinAmt = parseInt(amount);
         if (isNaN(acoinAmt) || acoinAmt <= 0) return { success: false, message: "Invalid amount" };
-        if (acoinAmt > (profile.acoin || 0)) return { success: false, message: `Insufficient ACoin. You have ${profile.acoin || 0}` };
+        const live = await freshProfile();
+        if (!live) return { success: false, message: "Could not verify balance" };
+        if (acoinAmt > (live.acoin || 0)) return { success: false, message: `Insufficient ACoin. You have ${live.acoin || 0}` };
         const { data: acoinRecipient } = await supabase.from("profiles").select("id, display_name").eq("handle", handle.toLowerCase()).single();
         if (!acoinRecipient) return { success: false, message: `User @${handle} not found` };
-        if (acoinRecipient.id === user.id) return { success: false, message: "Cannot send to yourself" };
-        const { data: deductedAcoin, error: deductAcoinErr } = await supabase.from("profiles").update({ acoin: (profile.acoin || 0) - acoinAmt }).eq("id", profile.id).gte("acoin", acoinAmt).select("id").maybeSingle();
+        if ((acoinRecipient as { id: string }).id === user.id) return { success: false, message: "Cannot send to yourself" };
+        const { data: deductedAcoin, error: deductAcoinErr } = await supabase.from("profiles").update({ acoin: (live.acoin || 0) - acoinAmt }).eq("id", user.id).gte("acoin", acoinAmt).select("id").maybeSingle();
         if (deductAcoinErr || !deductedAcoin) return { success: false, message: "Could not deduct ACoin — balance may have changed" };
-        await supabase.rpc("credit_acoin", { p_user_id: acoinRecipient.id, p_amount: acoinAmt });
-        await supabase.from("acoin_transactions").insert([
-          { user_id: user.id, amount: -acoinAmt, transaction_type: "acoin_transfer_sent", metadata: { to_user_id: acoinRecipient.id, to_handle: handle, message: msg || null } },
-          { user_id: acoinRecipient.id, amount: acoinAmt, transaction_type: "acoin_transfer_received", metadata: { from_user_id: user.id, from_handle: profile.handle, message: msg || null } },
+        const { error: creditErr } = await supabase.rpc("credit_acoin", { p_user_id: (acoinRecipient as { id: string }).id, p_amount: acoinAmt });
+        if (creditErr) {
+          await supabase.from("profiles").update({ acoin: live.acoin }).eq("id", user.id);
+          return { success: false, message: "Could not credit recipient. Your ACoin has been refunded." };
+        }
+        const { error: txErr } = await supabase.from("acoin_transactions").insert([
+          { user_id: user.id, amount: -acoinAmt, transaction_type: "acoin_transfer_sent", metadata: { to_user_id: (acoinRecipient as { id: string }).id, to_handle: handle, message: msg || null } },
+          { user_id: (acoinRecipient as { id: string }).id, amount: acoinAmt, transaction_type: "acoin_transfer_received", metadata: { from_user_id: user.id, from_handle: live.handle, message: msg || null } },
         ]);
+        if (txErr) console.warn("ACoin transfer succeeded but transaction log failed:", txErr.message);
         return {
           success: true,
-          message: `Sent ${acoinAmt} ACoin to ${acoinRecipient.display_name}`,
-          invoice: { type: "ACoin Transfer", date: new Date().toISOString(), from: `@${profile.handle}`, to: `@${handle}`, amount: acoinAmt, currency: "ACoin", reference: `ACN-${Date.now().toString(36).toUpperCase()}`, status: "Completed" },
+          message: `Sent ${acoinAmt} ACoin to ${(acoinRecipient as { id: string; display_name: string }).display_name}`,
+          invoice: { type: "ACoin Transfer", date: new Date().toISOString(), from: `@${live.handle}`, to: `@${handle}`, amount: acoinAmt, currency: "ACoin", reference: `ACN-${Date.now().toString(36).toUpperCase()}`, status: "Completed" },
         };
       }
       case "follow": {
@@ -733,23 +747,27 @@ When suggesting actions, include ACTION buttons in your response using the forma
       case "subscribe": {
         const { tier } = action.params;
         if (!tier) return { success: false, message: "Missing tier" };
-        const { data: plan } = await supabase.from("subscription_plans").select("*").eq("tier", tier.toLowerCase()).eq("is_active", true).single();
+        const { data: plan } = await supabase.from("subscription_plans").select("id, name, tier, acoin_price, duration_days").eq("tier", tier.toLowerCase()).eq("is_active", true).single();
         if (!plan) return { success: false, message: `Plan '${tier}' not found` };
-        if ((profile.acoin || 0) < plan.acoin_price) return { success: false, message: `Insufficient ACoin. Need ${plan.acoin_price} but you have ${profile.acoin || 0}` };
-        const { data: deductData, error: deductErr } = await supabase.from("profiles").update({ acoin: (profile.acoin || 0) - plan.acoin_price }).eq("id", profile.id).gte("acoin", plan.acoin_price).select("id").maybeSingle();
+        const liveSub = await freshProfile();
+        if (!liveSub) return { success: false, message: "Could not verify balance" };
+        const planData = plan as { id: string; name: string; tier: string; acoin_price: number; duration_days: number };
+        if ((liveSub.acoin || 0) < planData.acoin_price) return { success: false, message: `Insufficient ACoin. Need ${planData.acoin_price} but you have ${liveSub.acoin || 0}` };
+        const { data: deductData, error: deductErr } = await supabase.from("profiles").update({ acoin: (liveSub.acoin || 0) - planData.acoin_price }).eq("id", user.id).gte("acoin", planData.acoin_price).select("id").maybeSingle();
         if (deductErr || !deductData) return { success: false, message: "Could not deduct ACoin — balance may have changed" };
         const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + plan.duration_days);
-        const { error: subErr } = await supabase.from("user_subscriptions").upsert({ user_id: profile.id, plan_id: plan.id, started_at: new Date().toISOString(), expires_at: expiresAt.toISOString(), is_active: true, acoin_paid: plan.acoin_price }, { onConflict: "user_id" });
+        expiresAt.setDate(expiresAt.getDate() + planData.duration_days);
+        const { error: subErr } = await supabase.from("user_subscriptions").upsert({ user_id: user.id, plan_id: planData.id, started_at: new Date().toISOString(), expires_at: expiresAt.toISOString(), is_active: true, acoin_paid: planData.acoin_price }, { onConflict: "user_id" });
         if (subErr) {
-          await supabase.from("profiles").update({ acoin: profile.acoin || 0 }).eq("id", profile.id);
+          await supabase.from("profiles").update({ acoin: liveSub.acoin || 0 }).eq("id", user.id);
           return { success: false, message: "Could not activate subscription. ACoin refunded." };
         }
-        await supabase.from("acoin_transactions").insert({ user_id: profile.id, amount: -plan.acoin_price, transaction_type: "subscription", metadata: { plan_name: plan.name, plan_tier: plan.tier, duration_days: plan.duration_days } });
+        const { error: subTxErr } = await supabase.from("acoin_transactions").insert({ user_id: user.id, amount: -planData.acoin_price, transaction_type: "subscription", metadata: { plan_name: planData.name, plan_tier: planData.tier, duration_days: planData.duration_days } });
+        if (subTxErr) console.warn("Subscription succeeded but transaction log failed:", subTxErr.message);
         return {
           success: true,
-          message: `Subscribed to ${plan.name}! Active for ${plan.duration_days} days.`,
-          invoice: { type: "Premium Subscription", date: new Date().toISOString(), amount: plan.acoin_price, currency: "ACoin", reference: `SUB-${Date.now().toString(36).toUpperCase()}`, status: "Completed", description: `${plan.name} — ${plan.duration_days} days` },
+          message: `Subscribed to ${planData.name}! Active for ${planData.duration_days} days.`,
+          invoice: { type: "Premium Subscription", date: new Date().toISOString(), amount: planData.acoin_price, currency: "ACoin", reference: `SUB-${Date.now().toString(36).toUpperCase()}`, status: "Completed", description: `${planData.name} — ${planData.duration_days} days` },
         };
       }
       case "cancel_subscription": {
@@ -762,20 +780,24 @@ When suggesting actions, include ACTION buttons in your response using the forma
         const { amount } = action.params;
         const nexaAmt = parseInt(amount);
         if (isNaN(nexaAmt) || nexaAmt <= 0) return { success: false, message: "Invalid amount" };
-        if (nexaAmt > (profile.xp || 0)) return { success: false, message: `Insufficient Nexa. You have ${profile.xp || 0}` };
+        const liveConv = await freshProfile();
+        if (!liveConv) return { success: false, message: "Could not verify balance" };
+        if (nexaAmt > (liveConv.xp || 0)) return { success: false, message: `Insufficient Nexa. You have ${liveConv.xp || 0}` };
         const { data: settings } = await supabase.from("currency_settings").select("nexa_to_acoin_rate, conversion_fee_percent").limit(1).single();
         if (!settings) return { success: false, message: "Currency settings not available" };
-        const rawAcoin = nexaAmt / (settings as any).nexa_to_acoin_rate;
-        const fee = Math.ceil(rawAcoin * ((settings as any).conversion_fee_percent / 100));
+        const currSettings = settings as { nexa_to_acoin_rate: number; conversion_fee_percent: number };
+        const rawAcoin = nexaAmt / currSettings.nexa_to_acoin_rate;
+        const fee = Math.ceil(rawAcoin * (currSettings.conversion_fee_percent / 100));
         const netAcoin = Math.floor(rawAcoin - fee);
         if (netAcoin <= 0) return { success: false, message: "Amount too small after fees" };
-        const { data: convData, error } = await supabase.from("profiles").update({ xp: (profile.xp || 0) - nexaAmt, acoin: (profile.acoin || 0) + netAcoin }).eq("id", profile.id).gte("xp", nexaAmt).select("id").maybeSingle();
+        const { data: convData, error } = await supabase.from("profiles").update({ xp: (liveConv.xp || 0) - nexaAmt, acoin: (liveConv.acoin || 0) + netAcoin }).eq("id", user.id).gte("xp", nexaAmt).select("id").maybeSingle();
         if (error || !convData) return { success: false, message: "Could not convert — balance may have changed" };
-        await supabase.from("acoin_transactions").insert({ user_id: profile.id, amount: netAcoin, transaction_type: "conversion", nexa_spent: nexaAmt, fee_charged: fee, metadata: { rate: (settings as any).nexa_to_acoin_rate, fee_percent: (settings as any).conversion_fee_percent } });
+        const { error: convTxErr } = await supabase.from("acoin_transactions").insert({ user_id: user.id, amount: netAcoin, transaction_type: "conversion", nexa_spent: nexaAmt, fee_charged: fee, metadata: { rate: currSettings.nexa_to_acoin_rate, fee_percent: currSettings.conversion_fee_percent } });
+        if (convTxErr) console.warn("Conversion succeeded but transaction log failed:", convTxErr.message);
         return {
           success: true,
           message: `Converted ${nexaAmt} Nexa → ${netAcoin} ACoin`,
-          invoice: { type: "Currency Conversion", date: new Date().toISOString(), amount: nexaAmt, currency: "Nexa", fee, net: netAcoin, reference: `CNV-${Date.now().toString(36).toUpperCase()}`, status: "Completed", description: `Rate: ${(settings as any).nexa_to_acoin_rate} Nexa = 1 ACoin, Fee: ${(settings as any).conversion_fee_percent}%` },
+          invoice: { type: "Currency Conversion", date: new Date().toISOString(), amount: nexaAmt, currency: "Nexa", fee, net: netAcoin, reference: `CNV-${Date.now().toString(36).toUpperCase()}`, status: "Completed", description: `Rate: ${currSettings.nexa_to_acoin_rate} Nexa = 1 ACoin, Fee: ${currSettings.conversion_fee_percent}%` },
         };
       }
       default:
