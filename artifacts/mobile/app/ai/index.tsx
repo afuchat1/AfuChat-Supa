@@ -405,6 +405,6 @@ const s = StyleSheet.create({
   inputBar: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingTop: 8 },
   inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 4 },
   inputWrap: { flex: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
-  input: { flex: 1, fontSize: 15, maxHeight: 100, lineHeight: 20, borderWidth: 0, outlineStyle: "none" as any, paddingVertical: 2, minHeight: 22 },
+  input: { flex: 1, fontSize: 15, lineHeight: 20, borderWidth: 0, outlineStyle: "none" as any, paddingVertical: 2, minHeight: 22, maxHeight: 120 },
   sendBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: "center", alignItems: "center" },
 });

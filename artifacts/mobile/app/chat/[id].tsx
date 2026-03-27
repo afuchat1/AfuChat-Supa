@@ -2165,8 +2165,8 @@ const st = StyleSheet.create({
     gap: 4,
   },
   inputAction: { paddingBottom: 6 },
-  inputField: { flex: 1, flexDirection: "row", alignItems: "flex-end", borderRadius: 20, paddingLeft: 12, paddingRight: 8, paddingVertical: 4, maxHeight: 100, borderWidth: 0 },
-  input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 20, borderWidth: 0, outlineStyle: "none" as any, paddingVertical: 2, minHeight: 22 },
+  inputField: { flex: 1, flexDirection: "row", alignItems: "flex-end", borderRadius: 20, paddingLeft: 12, paddingRight: 8, paddingVertical: 4, borderWidth: 0 },
+  input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 20, borderWidth: 0, outlineStyle: "none" as any, paddingVertical: 2, minHeight: 22, maxHeight: 120 },
   sendBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
 
   sheetOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
