@@ -5,15 +5,57 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SYSTEM_PROMPT = `You are AfuAi, the intelligent AI assistant built into the AfuChat social platform. You can help users with:
-- General questions and conversations
-- Writing messages, posts, and stories
-- Translation between languages
-- Summarizing content
-- Creative writing and brainstorming
-- Advice and recommendations
+async function callOpenAI(apiKey: string, messages: any[]): Promise<string> {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages,
+      max_tokens: 1024,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`OpenAI error ${res.status}: ${err}`);
+  }
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content ?? "Sorry, I couldn't generate a response.";
+}
 
-Keep your responses concise and conversational. Use a warm, friendly tone. You can use emojis occasionally to be expressive. Always identify yourself as AfuAi when asked.`;
+async function callGemini(apiKey: string, messages: any[]): Promise<string> {
+  const systemMsg = messages.find((m: any) => m.role === "system");
+  const chatMsgs = messages.filter((m: any) => m.role !== "system");
+
+  const contents = chatMsgs.map((m: any) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
+
+  const body: any = { contents };
+  if (systemMsg) {
+    body.system_instruction = { parts: [{ text: systemMsg.content }] };
+  }
+  body.generationConfig = { maxOutputTokens: 1024 };
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Gemini error ${res.status}: ${err}`);
+  }
+  const data = await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "Sorry, I couldn't generate a response.";
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -21,59 +63,37 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
+
+    if (!OPENAI_API_KEY && !GOOGLE_API_KEY) {
+      return new Response(
+        JSON.stringify({ error: "No AI API key configured. Add OPENAI_API_KEY or GOOGLE_API_KEY to Supabase edge function secrets." }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const { messages } = await req.json();
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new Response(
         JSON.stringify({ error: "messages array is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          ...messages.slice(-10).map((m: { role: string; content: string }) => ({
-            role: m.role,
-            content: m.content,
-          })),
-        ],
-        max_completion_tokens: 1024,
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("Lovable gateway error:", response.status, errText);
-      return new Response(
-        JSON.stringify({ error: "Failed to get AI response" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    const data = await response.json();
-    const reply = data.choices?.[0]?.message?.content || "Sorry, I couldn't generate a response.";
+    const reply = OPENAI_API_KEY
+      ? await callOpenAI(OPENAI_API_KEY, messages)
+      : await callGemini(GOOGLE_API_KEY!, messages);
 
     return new Response(
       JSON.stringify({ reply }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("AI chat error:", error);
     return new Response(
-      JSON.stringify({ error: "Failed to get AI response" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      JSON.stringify({ error: "Failed to get AI response", detail: error instanceof Error ? error.message : String(error) }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
