@@ -49,6 +49,7 @@ import {
 import { uploadChatMedia } from "@/lib/mediaUpload";
 import { syncPendingMessages } from "@/lib/offlineSync";
 import OfflineBanner from "@/components/ui/OfflineBanner";
+import { translateText, LANG_LABELS } from "@/lib/translate";
 
 type Gift = {
   id: string;
@@ -337,7 +338,7 @@ function BottomSheet({ visible, onClose, children }: { visible: boolean; onClose
   );
 }
 
-function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, replyPreview, onTapEnvelope, onTapGift, onImageTap, isPremiumSender }: {
+function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, replyPreview, onTapEnvelope, onTapGift, onImageTap, isPremiumSender, translationEnabled, translationLanguage }: {
   msg: Message;
   isMe: boolean;
   showTail: boolean;
@@ -349,8 +350,27 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   onTapGift?: (msg: Message) => void;
   onImageTap?: (images: string[], index: number) => void;
   isPremiumSender?: boolean;
+  translationEnabled?: boolean;
+  translationLanguage?: string;
 }) {
   const { colors } = useTheme();
+  const [translated, setTranslated] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
+  const [showTranslated, setShowTranslated] = useState(false);
+
+  async function handleTranslate() {
+    if (showTranslated) { setShowTranslated(false); return; }
+    if (translated) { setShowTranslated(true); return; }
+    setTranslating(true);
+    const result = await translateText(msg.encrypted_content, translationLanguage || "en");
+    setTranslated(result);
+    setShowTranslated(true);
+    setTranslating(false);
+  }
+
+  const displayText = showTranslated && translated ? translated : msg.encrypted_content;
+  const canTranslate = translationEnabled && !isMe && msg.encrypted_content && !msg.encrypted_content.startsWith("🧧") && !msg.encrypted_content.startsWith("🎁") && !["📷 Photo", "🎥 Video", "GIF"].includes(msg.encrypted_content);
+
   const isRedEnvelope = msg.encrypted_content.startsWith("🧧");
   const isGiftMsg = msg.encrypted_content.startsWith("🎁");
   const meBubbleColor = BRAND;
@@ -458,7 +478,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
             >
               <Image source={{ uri: msg.attachment_url! }} style={st.attachImage} resizeMode="cover" />
               {hasTextContent && (
-                <RichText style={[st.bubbleText, { color: textColor, marginTop: 6 }]} linkColor={isMe ? "#FFFFFF" : "#00C2CB"}>{msg.encrypted_content}</RichText>
+                <RichText style={[st.bubbleText, { color: textColor, marginTop: 6 }]} linkColor={isMe ? "#FFFFFF" : "#00C2CB"}>{displayText}</RichText>
               )}
             </TouchableOpacity>
           ) : hasVideo ? (
@@ -486,13 +506,31 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
                 <Ionicons name="document-text" size={22} color={textColor} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[st.fileName, { color: textColor }]} numberOfLines={2}>{msg.encrypted_content}</Text>
+                <Text style={[st.fileName, { color: textColor }]} numberOfLines={2}>{displayText}</Text>
                 <Text style={[st.fileMeta, { color: isMe ? "rgba(255,255,255,0.6)" : colors.textMuted }]}>Document</Text>
               </View>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
-              <RichText style={[st.bubbleText, { color: textColor }]} linkColor={isMe ? "#FFFFFF" : "#00C2CB"}>{msg.encrypted_content}</RichText>
+              <RichText style={[st.bubbleText, { color: textColor }]} linkColor={isMe ? "#FFFFFF" : "#00C2CB"}>{displayText}</RichText>
+            </TouchableOpacity>
+          )}
+
+          {/* Translate chip — shown on incoming messages when translation is enabled */}
+          {canTranslate && (
+            <TouchableOpacity
+              onPress={handleTranslate}
+              style={[st.translateChip, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.06)" }]}
+              hitSlop={8}
+            >
+              {translating ? (
+                <ActivityIndicator size={10} color={colors.textMuted} style={{ marginRight: 3 }} />
+              ) : (
+                <Ionicons name="language" size={11} color={showTranslated ? BRAND : colors.textMuted} style={{ marginRight: 3 }} />
+              )}
+              <Text style={[st.translateChipText, { color: showTranslated ? BRAND : colors.textMuted }]}>
+                {translating ? "Translating…" : showTranslated ? `Original · ${LANG_LABELS[translationLanguage || "en"] || translationLanguage}` : `Translate to ${LANG_LABELS[translationLanguage || "en"] || translationLanguage}`}
+              </Text>
             </TouchableOpacity>
           )}
 
@@ -582,6 +620,8 @@ export default function ChatScreen() {
   const [forwardMsg, setForwardMsg] = useState<Message | null>(null);
   const [forwardChats, setForwardChats] = useState<{ id: string; name: string; avatar: string | null }[]>([]);
   const [forwardSending, setForwardSending] = useState(false);
+  const [translationEnabled, setTranslationEnabled] = useState(false);
+  const [translationLanguage, setTranslationLanguage] = useState("en");
   const flatListRef = useRef<FlatList>(null);
   const typingTimeout = useRef<any>(null);
   const draftSaveTimer = useRef<any>(null);
@@ -759,6 +799,22 @@ export default function ChatScreen() {
   useEffect(() => {
     checkMessageGating();
   }, [checkMessageGating, messages.length]);
+
+  // Load user's translation preferences from Advanced Features settings
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("advanced_feature_settings")
+      .select("message_translation, translation_language")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setTranslationEnabled(!!data.message_translation);
+          if (data.translation_language) setTranslationLanguage(data.translation_language);
+        }
+      });
+  }, [user]);
 
   useEffect(() => {
     if (isDraft) return;
@@ -1362,6 +1418,8 @@ export default function ChatScreen() {
           onTapGift={handleTapGift}
           onImageTap={imgViewer.openViewer}
           isPremiumSender={isMe && isPremium}
+          translationEnabled={translationEnabled}
+          translationLanguage={translationLanguage}
         />
       </View>
     );
@@ -1836,6 +1894,13 @@ const st = StyleSheet.create({
   },
   reactionEmoji: { fontSize: 14 },
   reactionCount: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+
+  translateChip: {
+    flexDirection: "row", alignItems: "center", marginTop: 4,
+    alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: 10,
+  },
+  translateChipText: { fontSize: 10, fontFamily: "Inter_500Medium" },
 
   attachImage: { width: 220, height: 180, borderRadius: 10 },
   attachVideo: { width: 220, height: 180, borderRadius: 10, overflow: "hidden", backgroundColor: "#0D0D0D" },
