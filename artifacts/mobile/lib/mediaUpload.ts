@@ -127,7 +127,7 @@ export async function uploadAvatar(
 }
 
 export async function uploadChatMedia(
-  _bucket: string,
+  bucket: string,
   chatId: string,
   userId: string,
   fileUri: string,
@@ -137,5 +137,5 @@ export async function uploadChatMedia(
   const fileName = originalName || `${Date.now()}.${ext}`;
   const filePath = `${chatId}/${userId}/${fileName}`;
 
-  return uploadToStorage("chat-attachments", filePath, fileUri);
+  return uploadToStorage(bucket, filePath, fileUri);
 }
