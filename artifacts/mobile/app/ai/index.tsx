@@ -401,7 +401,7 @@ const s = StyleSheet.create({
   quickBtn: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
   quickBtnText: { fontSize: 14, fontWeight: "500" },
   inputBar: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingTop: 8 },
-  inputWrap: { flexDirection: "row", alignItems: "flex-end", borderRadius: 24, paddingLeft: 16, paddingRight: 6, paddingVertical: 6, gap: 8 },
-  input: { flex: 1, fontSize: 15, maxHeight: 100, lineHeight: 20, borderWidth: 0, outlineStyle: "none" as any },
+  inputWrap: { flexDirection: "row", alignItems: "center", borderRadius: 24, paddingLeft: 16, paddingRight: 4, paddingVertical: 4, gap: 6 },
+  input: { flex: 1, fontSize: 15, maxHeight: 100, lineHeight: 20, borderWidth: 0, outlineStyle: "none" as any, paddingVertical: 0, minHeight: 20 },
   sendBtn: { width: 36, height: 36, borderRadius: 18, justifyContent: "center", alignItems: "center" },
 });
