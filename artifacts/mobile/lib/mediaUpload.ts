@@ -90,7 +90,9 @@ export async function uploadChatMedia(
 ): Promise<{ publicUrl: string | null; error: string | null }> {
   const ext = fileUri.split(".").pop()?.split("?")[0] || "file";
   const fileName = originalName || `${Date.now()}.${ext}`;
-  const filePath = `${userId}/${chatId}/${fileName}`;
+  const filePath = bucket === "voice-messages"
+    ? `${userId}/${fileName}`
+    : `${userId}/${chatId}/${fileName}`;
 
   return uploadToStorage(bucket, filePath, fileUri);
 }
