@@ -1509,6 +1509,7 @@ export default function ChatScreen() {
 
       setSending(true);
       const ext = Platform.OS === "web" ? "webm" : "m4a";
+      console.log("[Voice] Starting upload, URI:", uri, "ext:", ext);
       const { publicUrl, error: uploadErr } = await uploadChatMedia(
         "chat-media",
         activeChatId,
@@ -1516,6 +1517,7 @@ export default function ChatScreen() {
         uri,
         `voice_${Date.now()}.${ext}`,
       );
+      console.log("[Voice] Upload done. publicUrl:", publicUrl, "error:", uploadErr);
 
       await supabase.from("messages").insert({
         chat_id: activeChatId,

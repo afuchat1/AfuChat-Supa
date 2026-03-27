@@ -59,13 +59,19 @@ export async function uploadToStorage(
     const ext = fileUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "bin";
     const mime = contentType || getMime(ext);
 
+    console.log("[Upload] bucket:", bucket, "path:", filePath, "mime:", mime, "platform:", Platform.OS);
+
     if (Platform.OS === "web") {
       const response = await fetch(fileUri);
       const blob = await response.blob();
+      console.log("[Upload] Web blob size:", blob.size);
       const { error } = await supabase.storage
         .from(bucket)
         .upload(filePath, blob, { contentType: mime, upsert: true });
-      if (error) return { publicUrl: null, error: error.message };
+      if (error) {
+        console.warn("[Upload] Supabase error:", error.message);
+        return { publicUrl: null, error: error.message };
+      }
     } else {
       let FileSystem: any;
       try {
