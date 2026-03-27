@@ -62,6 +62,16 @@ export default function FileManagerScreen() {
   const [totalSize, setTotalSize] = useState("—");
   const [pinning, setPinning] = useState<string | null>(null);
 
+  // Maps tab key → attachment_type values used in the messages table
+  const ATTACH_TYPES: Record<MediaType, string[]> = {
+    images: ["image", "photo"],
+    videos: ["video"],
+    documents: ["document", "file", "pdf"],
+    links: ["link", "url"],
+    voice: ["audio", "voice"],
+    pinned: [],
+  };
+
   const loadMedia = useCallback(async () => {
     if (!user) return;
     setLoading(true);
@@ -76,29 +86,70 @@ export default function FileManagerScreen() {
 
       setItems((data || []).map((d: any) => ({
         id: d.id, url: d.url, type: d.media_type, name: d.name || "File",
-        size: d.file_size, date: d.created_at, sender_name: d.sender_name || "You",
+        size: d.file_size ? `${Math.round(Number(d.file_size) / 1024)}KB` : undefined,
+        date: d.created_at, sender_name: d.sender_name || "You",
         chat_id: d.chat_id, is_pinned: true,
       })));
     } else {
-      const mediaTypeMap: Record<MediaType, string> = {
-        images: "image", videos: "video", documents: "document", links: "link", voice: "voice", pinned: "image",
-      };
-      const mType = mediaTypeMap[activeTab];
+      const attachTypes = ATTACH_TYPES[activeTab];
 
-      const { data } = await supabase
-        .from("chat_media")
-        .select("id, url, media_type, file_name, file_size, created_at, sender_id, chat_id, profiles!chat_media_sender_id_fkey(display_name)")
-        .eq("receiver_id", user.id)
-        .eq("media_type", mType)
-        .order("created_at", { ascending: false })
-        .limit(60);
+      // Pull from both chat_media AND messages.attachment_url (the real attachment store)
+      const [chatMediaRes, messagesRes] = await Promise.all([
+        supabase
+          .from("chat_media")
+          .select("id, url, media_type, file_name, file_size, created_at, sender_id, chat_id")
+          .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+          .in("media_type", attachTypes.length ? attachTypes : ["image"])
+          .order("created_at", { ascending: false })
+          .limit(40),
 
-      setItems((data || []).map((d: any) => ({
-        id: d.id, url: d.url, type: d.media_type, name: d.file_name || d.url?.split("/").pop() || "File",
-        size: d.file_size ? `${Math.round(d.file_size / 1024)}KB` : undefined,
-        date: d.created_at, sender_name: d.profiles?.display_name || "User",
-        chat_id: d.chat_id, is_pinned: false,
-      })));
+        supabase
+          .from("messages")
+          .select("id, attachment_url, attachment_type, attachment_name, attachment_size, sent_at, sender_id, chat_id, profiles!messages_sender_id_fkey(display_name)")
+          .eq("sender_id", user.id)
+          .not("attachment_url", "is", null)
+          .in("attachment_type", attachTypes.length ? attachTypes : ["image"])
+          .order("sent_at", { ascending: false })
+          .limit(40),
+      ]);
+
+      const chatItems: MediaItem[] = (chatMediaRes.data || []).map((d: any) => ({
+        id: `cm_${d.id}`, url: d.url, type: d.media_type,
+        name: d.file_name || d.url?.split("/").pop() || "File",
+        size: d.file_size ? `${Math.round(Number(d.file_size) / 1024)}KB` : undefined,
+        date: d.created_at, sender_name: "You", chat_id: d.chat_id, is_pinned: false,
+      }));
+
+      const msgItems: MediaItem[] = (messagesRes.data || [])
+        .filter((m: any) => m.attachment_url)
+        .map((m: any) => {
+          const rawType = (m.attachment_type || "document").toLowerCase();
+          const mappedType: MediaItem["type"] =
+            rawType.includes("image") || rawType.includes("photo") ? "image"
+            : rawType.includes("video") ? "video"
+            : rawType.includes("audio") || rawType.includes("voice") ? "voice"
+            : rawType.includes("link") || rawType.includes("url") ? "link"
+            : "document";
+          return {
+            id: `msg_${m.id}`, url: m.attachment_url, type: mappedType,
+            name: m.attachment_name || m.attachment_url?.split("/").pop() || "Attachment",
+            size: m.attachment_size ? `${Math.round(Number(m.attachment_size) / 1024)}KB` : undefined,
+            date: m.sent_at, sender_name: m.profiles?.display_name || "You",
+            chat_id: m.chat_id, is_pinned: false,
+          };
+        });
+
+      // Merge and deduplicate by URL
+      const seen = new Set<string>();
+      const merged = [...chatItems, ...msgItems].filter((item) => {
+        if (seen.has(item.url)) return false;
+        seen.add(item.url);
+        return true;
+      });
+
+      // Sort combined by date desc
+      merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setItems(merged.slice(0, 80));
     }
 
     setLoading(false);

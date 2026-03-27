@@ -78,21 +78,46 @@ export default function MonetizeScreen() {
 
   const loadEarnings = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase
+
+    // Pull monetize ACoin transactions
+    const { data: txData } = await supabase
       .from("acoin_transactions")
       .select("transaction_type, amount")
       .eq("user_id", user.id)
       .gt("amount", 0);
 
+    // Pull creator engagement earnings (from posts, views, likes)
+    const { data: creatorData } = await supabase
+      .from("creator_earnings")
+      .select("amount_ugx, views_count, likes_count, engagement_score, earned_date")
+      .eq("user_id", user.id)
+      .order("earned_date", { ascending: false })
+      .limit(30);
+
     let total = 0;
     const byType: Record<string, number> = {};
-    for (const tx of (data || [])) {
+
+    // Count monetize_ ACoin earnings
+    for (const tx of (txData || [])) {
       if (tx.transaction_type?.startsWith("monetize_")) {
         total += tx.amount;
         const key = tx.transaction_type.replace("monetize_", "");
         byType[key] = (byType[key] || 0) + tx.amount;
       }
     }
+
+    // Convert creator UGX earnings to an ACoin equivalent (100 UGX ≈ 1 ACoin)
+    const creatorAcoin = (creatorData || []).reduce((sum: number, row: any) => sum + Math.floor((row.amount_ugx || 0) / 100), 0);
+    const totalViews = (creatorData || []).reduce((sum: number, row: any) => sum + (row.views_count || 0), 0);
+    const totalLikes = (creatorData || []).reduce((sum: number, row: any) => sum + (row.likes_count || 0), 0);
+
+    if (creatorAcoin > 0) {
+      byType["post_engagement"] = (byType["post_engagement"] || 0) + creatorAcoin;
+      total += creatorAcoin;
+    }
+    if (totalViews > 0) byType["views"] = totalViews;
+    if (totalLikes > 0) byType["likes"] = totalLikes;
+
     setTotalEarned(total);
     setEarningsByType(byType);
   }, [user]);
@@ -175,6 +200,28 @@ export default function MonetizeScreen() {
             <Text style={[styles.rowAmount, { color: Colors.gold }]}>+{earningsByType[f.id]} 🪙</Text>
           </View>
         ))}
+        {/* Creator earnings from post engagement */}
+        {earningsByType["post_engagement"] > 0 && (
+          <View style={[styles.earningRow, { backgroundColor: colors.surface }]}>
+            <Text style={styles.rowEmoji}>📊</Text>
+            <Text style={[styles.rowTitle, { color: colors.text, flex: 1 }]}>Post Engagement</Text>
+            <Text style={[styles.rowAmount, { color: Colors.gold }]}>+{earningsByType["post_engagement"]} 🪙</Text>
+          </View>
+        )}
+        {earningsByType["views"] > 0 && (
+          <View style={[styles.earningRow, { backgroundColor: colors.surface }]}>
+            <Text style={styles.rowEmoji}>👁️</Text>
+            <Text style={[styles.rowTitle, { color: colors.text, flex: 1 }]}>Total Post Views</Text>
+            <Text style={[styles.rowAmount, { color: colors.textMuted }]}>{earningsByType["views"].toLocaleString()}</Text>
+          </View>
+        )}
+        {earningsByType["likes"] > 0 && (
+          <View style={[styles.earningRow, { backgroundColor: colors.surface }]}>
+            <Text style={styles.rowEmoji}>❤️</Text>
+            <Text style={[styles.rowTitle, { color: colors.text, flex: 1 }]}>Total Post Likes</Text>
+            <Text style={[styles.rowAmount, { color: colors.textMuted }]}>{earningsByType["likes"].toLocaleString()}</Text>
+          </View>
+        )}
         {Object.values(earningsByType).length === 0 && (
           <View style={styles.emptyBox}>
             <Text style={styles.emptyEmoji}>💸</Text>

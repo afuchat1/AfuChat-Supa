@@ -138,6 +138,26 @@ export default function AdvancedFeaturesScreen() {
     setPrefs((p) => ({ ...p, [key]: value }));
     setSaving(true);
     await supabase.from("advanced_feature_settings").upsert({ user_id: user!.id, [key]: value }, { onConflict: "user_id" });
+
+    // Wire activity_status → profiles.show_online_status + last_seen
+    if (key === "activity_status") {
+      const status = value as FeatureSettings["activity_status"];
+      const showOnline = status === "online" || status === "busy" || status === "focus";
+      const profileUpdate: Record<string, any> = { show_online_status: showOnline };
+      if (status === "offline" || status === "last_seen") {
+        profileUpdate.last_seen = new Date().toISOString();
+      }
+      await supabase.from("profiles").update(profileUpdate).eq("id", user!.id);
+    }
+
+    // Wire focus_mode → busy status on profile
+    if (key === "focus_mode") {
+      const inFocus = value as boolean;
+      if (inFocus) {
+        await supabase.from("profiles").update({ show_online_status: true, last_seen: new Date().toISOString() }).eq("id", user!.id);
+      }
+    }
+
     setSaving(false);
   }
 
@@ -146,6 +166,16 @@ export default function AdvancedFeaturesScreen() {
     setPrefs(merged);
     setSaving(true);
     await supabase.from("advanced_feature_settings").upsert({ user_id: user!.id, ...merged }, { onConflict: "user_id" });
+
+    // Sync activity_status on bulk saves too
+    if (updates.activity_status !== undefined) {
+      const status = updates.activity_status;
+      const showOnline = status === "online" || status === "busy" || status === "focus";
+      const profileUpdate: Record<string, any> = { show_online_status: showOnline };
+      if (status === "offline" || status === "last_seen") profileUpdate.last_seen = new Date().toISOString();
+      await supabase.from("profiles").update(profileUpdate).eq("id", user!.id);
+    }
+
     setSaving(false);
   }
 

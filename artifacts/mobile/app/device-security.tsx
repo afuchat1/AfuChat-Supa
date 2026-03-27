@@ -73,9 +73,51 @@ export default function DeviceSecurityScreen() {
   const [revoking, setRevoking] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"devices" | "security">("devices");
 
+  const registerCurrentDevice = useCallback(async () => {
+    if (!user) return;
+    const deviceName = Device.deviceName || Device.modelName || "This Device";
+    const deviceType = Device.deviceType === Device.DeviceType.TABLET ? "Tablet" : "Phone";
+    const platform = Platform.OS;
+
+    // Mark all existing "current" sessions as no longer current
+    await supabase
+      .from("device_sessions")
+      .update({ is_current: false })
+      .eq("user_id", user.id)
+      .eq("is_current", true);
+
+    // Upsert this device as current (match by device_name + platform)
+    const { data: existing } = await supabase
+      .from("device_sessions")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("device_name", deviceName)
+      .eq("platform", platform)
+      .maybeSingle();
+
+    if (existing?.id) {
+      await supabase
+        .from("device_sessions")
+        .update({ is_current: true, last_seen: new Date().toISOString() })
+        .eq("id", existing.id);
+    } else {
+      await supabase.from("device_sessions").insert({
+        user_id: user.id,
+        device_name: deviceName,
+        device_type: deviceType,
+        platform,
+        is_current: true,
+        last_seen: new Date().toISOString(),
+      });
+    }
+  }, [user]);
+
   const loadSessions = useCallback(async () => {
     if (!user) return;
     setLoading(true);
+
+    // Ensure current device is always registered in DB
+    await registerCurrentDevice();
 
     // Load security preferences
     const { data: prefData } = await supabase
@@ -90,25 +132,12 @@ export default function DeviceSecurityScreen() {
       .from("device_sessions")
       .select("id, device_name, device_type, platform, last_seen, ip_address, is_current, location")
       .eq("user_id", user.id)
+      .order("is_current", { ascending: false })
       .order("last_seen", { ascending: false });
 
-    if (sessionData && sessionData.length > 0) {
-      setSessions(sessionData);
-    } else {
-      // Synthesize current device session
-      const currentSession: DeviceSession = {
-        id: "current",
-        device_name: Device.deviceName || "This Device",
-        device_type: Device.deviceType === Device.DeviceType.PHONE ? "Phone" : "Tablet",
-        platform: Platform.OS,
-        last_seen: new Date().toISOString(),
-        ip_address: "—",
-        is_current: true,
-      };
-      setSessions([currentSession]);
-    }
+    setSessions(sessionData || []);
     setLoading(false);
-  }, [user]);
+  }, [user, registerCurrentDevice]);
 
   useEffect(() => { loadSessions(); }, [loadSessions]);
 
