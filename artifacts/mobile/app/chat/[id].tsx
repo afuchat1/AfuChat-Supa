@@ -1481,10 +1481,29 @@ export default function ChatScreen() {
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
       });
-      const { recording } = await Audio.Recording.createAsync({
-        ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
-        isMeteringEnabled: true,
-      });
+      const { recording } = await Audio.Recording.createAsync(
+        Platform.OS === "ios"
+          ? {
+              isMeteringEnabled: true,
+              ios: {
+                extension: ".wav",
+                outputFormat: Audio.IOSOutputFormat.LINEARPCM,
+                audioQuality: Audio.IOSAudioQuality.MEDIUM,
+                sampleRate: 16000,
+                numberOfChannels: 1,
+                bitRate: 128000,
+                linearPCMBitDepth: 16,
+                linearPCMIsBigEndian: false,
+                linearPCMIsFloat: false,
+              },
+              android: Audio.RecordingOptionsPresets.HIGH_QUALITY.android,
+              web: Audio.RecordingOptionsPresets.HIGH_QUALITY.web,
+            }
+          : {
+              ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
+              isMeteringEnabled: true,
+            },
+      );
       recordingRef.current = recording;
       setIsRecording(true);
       setRecordingDuration(0);
@@ -1549,7 +1568,7 @@ export default function ChatScreen() {
       if (!activeChatId) return;
 
       setSending(true);
-      const ext = Platform.OS === "web" ? "webm" : "m4a";
+      const ext = Platform.OS === "web" ? "webm" : Platform.OS === "ios" ? "wav" : "m4a";
       const { publicUrl, error: uploadErr } = await uploadChatMedia(
         "voice-messages",
         activeChatId,

@@ -257,8 +257,19 @@ serve(async (req) => {
       const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
       const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
       const AIMLAPI_KEY = Deno.env.get("AIMLAPI_KEY");
+      const audioExt = (body.audioUrl.split("?")[0].split(".").pop() || "m4a").toLowerCase();
+      const aimlCompatible = ["wav", "mp3"].includes(audioExt);
       const errors: string[] = [];
-      if (AIMLAPI_KEY) {
+      if (GEMINI_API_KEY) {
+        try {
+          const text = await transcribeWithGemini(body.audioUrl, GEMINI_API_KEY);
+          return new Response(JSON.stringify({ text }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        } catch (e) {
+          errors.push(`Gemini: ${e instanceof Error ? e.message : String(e)}`);
+          console.error("Gemini transcription failed:", e);
+        }
+      }
+      if (AIMLAPI_KEY && aimlCompatible) {
         try {
           const text = await transcribeWithAIML(body.audioUrl, AIMLAPI_KEY);
           return new Response(JSON.stringify({ text }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -274,15 +285,6 @@ serve(async (req) => {
         } catch (e) {
           errors.push(`Whisper: ${e instanceof Error ? e.message : String(e)}`);
           console.error("Whisper transcription failed:", e);
-        }
-      }
-      if (GEMINI_API_KEY) {
-        try {
-          const text = await transcribeWithGemini(body.audioUrl, GEMINI_API_KEY);
-          return new Response(JSON.stringify({ text }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        } catch (e) {
-          errors.push(`Gemini: ${e instanceof Error ? e.message : String(e)}`);
-          console.error("Gemini transcription failed:", e);
         }
       }
       if (LOVABLE_API_KEY) {
