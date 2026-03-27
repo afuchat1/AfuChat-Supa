@@ -1543,7 +1543,7 @@ export default function ChatScreen() {
             </View>
             {(input.trim() || attachmentPreview) ? (
               <TouchableOpacity
-                onPress={attachmentPreview ? sendAttachment : sendMessage}
+                onPress={attachmentPreview ? sendAttachment : () => sendMessage()}
                 disabled={sending}
                 style={[st.sendBtn, { backgroundColor: BRAND }]}
               >
