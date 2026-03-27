@@ -413,20 +413,10 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   }, []);
 
   if (isRedEnvelope) {
-    const displayMsg = msg.encrypted_content.replace(/🧧 Red Envelope \[[a-f0-9-]+\] - /, "").replace("🧧 Red Envelope - ", "");
     return (
       <View style={[st.msgRow, isMe ? st.msgRowMe : st.msgRowOther]}>
-        <TouchableOpacity style={st.redEnvBubble} onPress={() => onTapEnvelope?.(msg)} activeOpacity={0.8}>
-          <View style={st.redEnvTop}>
-            <Text style={st.redEnvEmoji}>🧧</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={st.redEnvTitle}>{displayMsg}</Text>
-              <Text style={st.redEnvSub}>Tap to open</Text>
-            </View>
-          </View>
-          <View style={st.redEnvBottom}>
-            <Text style={st.redEnvLabel}>AfuChat Red Envelope</Text>
-          </View>
+        <TouchableOpacity onPress={() => onTapEnvelope?.(msg)} activeOpacity={0.7} style={st.specialMsgTap}>
+          <Text style={st.specialMsgEmoji}>🧧</Text>
         </TouchableOpacity>
       </View>
     );
@@ -439,21 +429,8 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
 
     return (
       <View style={[st.msgRow, isMe ? st.msgRowMe : st.msgRowOther]}>
-        <TouchableOpacity style={st.giftBoxBubble} onPress={() => onTapGift?.(msg)} activeOpacity={0.8}>
-          <View style={st.giftBoxTop}>
-            <Text style={st.giftBoxEmoji}>{giftEmoji}</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={st.giftBoxTitle}>
-                {isMe ? "You sent a gift" : `${msg.sender?.display_name || "Someone"} sent you a gift`}
-              </Text>
-              <Text style={st.giftBoxSub}>
-                {isMe ? "Gift sent" : "Tap to open"}
-              </Text>
-            </View>
-          </View>
-          <View style={st.giftBoxBottom}>
-            <Text style={st.giftBoxOpen}>{isMe ? "View Gift" : "Open Gift 🎁"}</Text>
-          </View>
+        <TouchableOpacity onPress={() => onTapGift?.(msg)} activeOpacity={0.7} style={st.specialMsgTap}>
+          <Text style={st.specialMsgEmoji}>{giftEmoji}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -1975,27 +1952,32 @@ export default function ChatScreen() {
         </ScrollView>
       </BottomSheet>
 
-      <BottomSheet visible={!!giftReveal} onClose={() => setGiftReveal(null)}>
-        <View style={st.giftRevealContent}>
-          <Text style={st.giftRevealEmoji}>🎁</Text>
-          <Text style={[st.giftRevealTitle, { color: colors.text }]}>
-            {giftReveal?.isReceiver ? "Gift Received!" : "Gift Sent!"}
-          </Text>
-          <Text style={[st.giftRevealDetail, { color: colors.textSecondary }]}>{giftReveal?.content}</Text>
-          {giftReveal?.isReceiver && (
-            <Text style={[st.giftRevealNote, { color: colors.textMuted }]}>This gift has been added to your Gift Gallery</Text>
-          )}
-          {giftReveal?.isReceiver ? (
-            <TouchableOpacity style={st.giftRevealBtn} onPress={() => { setGiftReveal(null); router.push("/gifts"); }}>
-              <Text style={st.giftRevealBtnText}>View Gift Gallery</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={st.giftRevealBtn} onPress={() => setGiftReveal(null)}>
-              <Text style={st.giftRevealBtnText}>Awesome!</Text>
-            </TouchableOpacity>
-          )}
+      <Modal visible={!!giftReveal} transparent animationType="fade" onRequestClose={() => setGiftReveal(null)}>
+        <View style={st.giftRevealOverlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setGiftReveal(null)} />
+          <View style={[st.giftRevealContainer, { backgroundColor: colors.surface }]}>
+            <View style={st.giftRevealContent}>
+              <Text style={st.giftRevealEmoji}>🎁</Text>
+              <Text style={[st.giftRevealTitle, { color: colors.text }]}>
+                {giftReveal?.isReceiver ? "Gift Received!" : "Gift Sent!"}
+              </Text>
+              <Text style={[st.giftRevealDetail, { color: colors.textSecondary }]}>{giftReveal?.content}</Text>
+              {giftReveal?.isReceiver && (
+                <Text style={[st.giftRevealNote, { color: colors.textMuted }]}>This gift has been added to your Gift Gallery</Text>
+              )}
+              {giftReveal?.isReceiver ? (
+                <TouchableOpacity style={st.giftRevealBtn} onPress={() => { setGiftReveal(null); router.push("/gifts"); }}>
+                  <Text style={st.giftRevealBtnText}>View Gift Gallery</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={st.giftRevealBtn} onPress={() => setGiftReveal(null)}>
+                  <Text style={st.giftRevealBtnText}>Awesome!</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
         </View>
-      </BottomSheet>
+      </Modal>
       <EmojiPicker
         onEmojiSelected={(emojiObject: { emoji: string }) => {
           setInput((prev) => prev + emojiObject.emoji);
@@ -2249,23 +2231,13 @@ const st = StyleSheet.create({
   sheetActionRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, paddingHorizontal: 4 },
   sheetActionText: { fontSize: 16, fontFamily: "Inter_500Medium" },
 
-  redEnvBubble: { width: 240, borderRadius: 12, overflow: "hidden" },
-  redEnvTop: { backgroundColor: "#FF3B30", flexDirection: "row", padding: 14, gap: 10, alignItems: "center" },
-  redEnvEmoji: { fontSize: 32 },
-  redEnvTitle: { color: "#fff", fontSize: 15, fontFamily: "Inter_500Medium" },
-  redEnvSub: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  redEnvBottom: { backgroundColor: "#E63329", paddingHorizontal: 14, paddingVertical: 6 },
-  redEnvLabel: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontFamily: "Inter_400Regular" },
+  specialMsgTap: { padding: 4 },
+  specialMsgEmoji: { fontSize: 56 },
   redEnvBtn: { backgroundColor: "#FF3B30", borderRadius: 14, paddingVertical: 14, alignItems: "center" },
   redEnvBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
 
-  giftBoxBubble: { width: 240, borderRadius: 12, overflow: "hidden" },
-  giftBoxTop: { backgroundColor: BRAND, flexDirection: "row", padding: 14, gap: 10, alignItems: "center" },
-  giftBoxEmoji: { fontSize: 32 },
-  giftBoxTitle: { color: "#fff", fontSize: 14, fontFamily: "Inter_500Medium" },
-  giftBoxSub: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  giftBoxBottom: { backgroundColor: Colors.brandDark, paddingHorizontal: 14, paddingVertical: 8, alignItems: "center" },
-  giftBoxOpen: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
+  giftRevealOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 },
+  giftRevealContainer: { width: "100%", borderRadius: 20, padding: 24, elevation: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 20 },
 
   giftModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 },
   giftModalContainer: { width: "100%", maxHeight: "80%", borderRadius: 20, padding: 20, elevation: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 20 },
