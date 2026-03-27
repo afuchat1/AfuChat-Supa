@@ -1,5 +1,5 @@
 import { Platform } from "react-native";
-import { supabase, supabaseUrl as SUPABASE_URL, supabaseAnonKey as SUPABASE_ANON_KEY } from "./supabase";
+import { supabase } from "./supabase";
 
 const MIME_MAP: Record<string, string> = {
   jpg: "image/jpeg",
@@ -24,6 +24,29 @@ const MIME_MAP: Record<string, string> = {
 
 function getMime(ext: string): string {
   return MIME_MAP[ext.toLowerCase()] || "application/octet-stream";
+}
+
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const lookup = new Uint8Array(256);
+  for (let i = 0; i < chars.length; i++) lookup[chars.charCodeAt(i)] = i;
+
+  let bufferLength = base64.length * 0.75;
+  if (base64[base64.length - 1] === "=") bufferLength--;
+  if (base64[base64.length - 2] === "=") bufferLength--;
+
+  const bytes = new Uint8Array(bufferLength);
+  let p = 0;
+  for (let i = 0; i < base64.length; i += 4) {
+    const e1 = lookup[base64.charCodeAt(i)];
+    const e2 = lookup[base64.charCodeAt(i + 1)];
+    const e3 = lookup[base64.charCodeAt(i + 2)];
+    const e4 = lookup[base64.charCodeAt(i + 3)];
+    bytes[p++] = (e1 << 2) | (e2 >> 4);
+    bytes[p++] = ((e2 & 15) << 4) | (e3 >> 2);
+    bytes[p++] = ((e3 & 3) << 6) | e4;
+  }
+  return bytes.buffer;
 }
 
 export async function uploadToStorage(
@@ -51,29 +74,15 @@ export async function uploadToStorage(
         FileSystem = require("expo-file-system");
       }
 
-      const session = (await supabase.auth.getSession()).data.session;
-      if (!session) return { publicUrl: null, error: "Not authenticated" };
-
-      const storageUrl = `${SUPABASE_URL}/storage/v1/object/${bucket}/${filePath}`;
-      const uploadResult = await FileSystem.uploadAsync(storageUrl, fileUri, {
-        httpMethod: "POST",
-        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-        headers: {
-          "Content-Type": mime,
-          Authorization: `Bearer ${session.access_token}`,
-          apikey: SUPABASE_ANON_KEY,
-          "x-upsert": "true",
-        },
+      const b64 = await FileSystem.readAsStringAsync(fileUri, {
+        encoding: FileSystem.EncodingType.Base64,
       });
+      const arrayBuffer = base64ToArrayBuffer(b64);
 
-      if (uploadResult.status >= 400) {
-        let errorMsg = `Upload failed (${uploadResult.status})`;
-        try {
-          const body = JSON.parse(uploadResult.body);
-          errorMsg = body.message || body.error || errorMsg;
-        } catch {}
-        return { publicUrl: null, error: errorMsg };
-      }
+      const { error } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, arrayBuffer, { contentType: mime, upsert: true });
+      if (error) return { publicUrl: null, error: error.message };
     }
 
     const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
@@ -83,6 +92,7 @@ export async function uploadToStorage(
     const cacheBustedUrl = `${url}?t=${Date.now()}`;
     return { publicUrl: cacheBustedUrl, error: null };
   } catch (e: any) {
+    console.warn("[Upload] Error:", e?.message || e);
     return { publicUrl: null, error: e?.message || "Upload failed" };
   }
 }
