@@ -339,7 +339,7 @@ RESPONSE GUIDELINES:
         }
       />
 
-      <View style={[s.inputRow, { marginHorizontal: 12, marginTop: 8, marginBottom: insets.bottom + 8 }]}>
+      <View style={[s.inputRow, { marginHorizontal: 6, marginTop: 2, marginBottom: insets.bottom + 4 }]}>
         <View style={[s.inputWrap, { backgroundColor: colors.surface }]}>
           <TextInput
             style={[s.input, { color: colors.text }]}
@@ -403,8 +403,8 @@ const s = StyleSheet.create({
   quickBtn: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
   quickBtnText: { fontSize: 14, fontWeight: "500" },
   inputBar: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingTop: 8 },
-  inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 6 },
-  inputWrap: { flex: 1, borderRadius: 22, paddingHorizontal: 14, paddingVertical: 6 },
-  input: { flex: 1, fontSize: 15, maxHeight: 100, lineHeight: 20, borderWidth: 0, outlineStyle: "none" as any, paddingVertical: 0, minHeight: 20 },
-  sendBtn: { width: 34, height: 34, borderRadius: 17, justifyContent: "center", alignItems: "center", marginBottom: 1 },
+  inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 4 },
+  inputWrap: { flex: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
+  input: { flex: 1, fontSize: 15, maxHeight: 100, lineHeight: 20, borderWidth: 0, outlineStyle: "none" as any, paddingVertical: 2, minHeight: 22 },
+  sendBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: "center", alignItems: "center" },
 });
