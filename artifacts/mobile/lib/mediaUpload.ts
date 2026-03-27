@@ -90,7 +90,7 @@ export async function uploadChatMedia(
 ): Promise<{ publicUrl: string | null; error: string | null }> {
   const ext = fileUri.split(".").pop()?.split("?")[0] || "file";
   const fileName = originalName || `${Date.now()}.${ext}`;
-  const filePath = `${chatId}/${userId}/${fileName}`;
+  const filePath = `${userId}/${chatId}/${fileName}`;
 
   return uploadToStorage(bucket, filePath, fileUri);
 }
