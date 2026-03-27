@@ -1517,6 +1517,10 @@ export default function ChatScreen() {
         `voice_${Date.now()}.${ext}`,
       );
 
+      if (uploadErr) {
+        showAlert("Voice Upload Debug", uploadErr);
+      }
+
       await supabase.from("messages").insert({
         chat_id: activeChatId,
         sender_id: user.id,
