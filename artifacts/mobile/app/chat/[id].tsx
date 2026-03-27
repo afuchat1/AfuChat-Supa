@@ -1519,8 +1519,14 @@ export default function ChatScreen() {
       if (!activeChatId) return;
 
       setSending(true);
-      const publicUrl = await uploadChatMedia(uri, "audio");
-      if (publicUrl) {
+      const { publicUrl, error: uploadErr } = await uploadChatMedia(
+        "chat-media",
+        activeChatId,
+        user.id,
+        uri,
+        `voice_${Date.now()}.m4a`,
+      );
+      if (publicUrl && !uploadErr) {
         await supabase.from("messages").insert({
           chat_id: activeChatId,
           sender_id: user.id,
@@ -1559,6 +1565,12 @@ export default function ChatScreen() {
 
   const micLongPressTimer = useRef<any>(null);
   const micIsHeld = useRef(false);
+  const startRecRef = useRef(startVoiceRecording);
+  const stopRecRef = useRef(stopVoiceRecording);
+  const cancelRecRef = useRef(cancelVoiceRecording);
+  startRecRef.current = startVoiceRecording;
+  stopRecRef.current = stopVoiceRecording;
+  cancelRecRef.current = cancelVoiceRecording;
 
   const micPanResponder = useRef(
     PanResponder.create({
@@ -1571,7 +1583,7 @@ export default function ChatScreen() {
         micIsHeld.current = true;
         micLongPressTimer.current = setTimeout(() => {
           if (micIsHeld.current) {
-            startVoiceRecording();
+            startRecRef.current();
           }
         }, 200);
       },
@@ -1595,7 +1607,7 @@ export default function ChatScreen() {
 
         if (dx > cancelSlideThreshold) {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          cancelVoiceRecording();
+          cancelRecRef.current();
           slideOffset.setValue(0);
         }
       },
@@ -1603,7 +1615,7 @@ export default function ChatScreen() {
         micIsHeld.current = false;
         clearTimeout(micLongPressTimer.current);
         if (recordingRef.current && !recordingLockedRef.current) {
-          stopVoiceRecording();
+          stopRecRef.current();
         }
         slideOffset.setValue(0);
       },
@@ -1611,7 +1623,7 @@ export default function ChatScreen() {
         micIsHeld.current = false;
         clearTimeout(micLongPressTimer.current);
         if (recordingRef.current && !recordingLockedRef.current) {
-          stopVoiceRecording();
+          stopRecRef.current();
         }
         slideOffset.setValue(0);
       },
