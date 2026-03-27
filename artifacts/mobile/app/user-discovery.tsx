@@ -55,7 +55,7 @@ export default function UserDiscoveryScreen() {
 
     let query = supabase
       .from("profiles")
-      .select("id, display_name, handle, avatar_url, bio, is_verified, country, interests, follower_count")
+      .select("id, display_name, handle, avatar_url, bio, is_verified, country, interests")
       .neq("id", user?.id || "")
       .eq("onboarding_completed", true)
       .limit(30);
@@ -84,7 +84,7 @@ export default function UserDiscoveryScreen() {
       id: u.id, display_name: u.display_name || `@${u.handle}`,
       handle: u.handle, avatar_url: u.avatar_url, bio: u.bio,
       is_verified: u.is_verified, country: u.country,
-      interests: u.interests || [], follower_count: u.follower_count || 0,
+      interests: u.interests || [], follower_count: 0,
       is_following: followSet.has(u.id), mutual_count: 0,
     })));
     setLoading(false);
