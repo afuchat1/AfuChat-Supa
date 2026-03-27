@@ -1,47 +1,50 @@
 /**
- * Real message translation using the MyMemory free API.
- * No API key required. Supports 50+ languages. Free up to 5000 chars/day.
- * Language codes: "en", "zh", "es", "fr", "ar", "hi", "pt", "ru", "ja", "de", etc.
+ * Real message translation using Google Translate's public endpoint.
+ * No API key required. Auto-detects source language.
+ * Supports 100+ languages with full accuracy.
  */
 
-const BASE_URL = "https://api.mymemory.translated.net/get";
 const CACHE = new Map<string, string>();
 
 function cacheKey(text: string, targetLang: string): string {
-  return `${targetLang}:${text.slice(0, 80)}`;
+  return `${targetLang}:${text.slice(0, 120)}`;
 }
 
 export async function translateText(text: string, targetLang: string): Promise<string> {
   if (!text?.trim() || text.trim().length < 2) return text;
 
-  // Skip translation for emoji-only or special messages
-  const stripped = text.replace(/[\p{Emoji}]/gu, "").trim();
+  const stripped = text.replace(/[\p{Emoji}\s]/gu, "");
   if (!stripped) return text;
 
   const key = cacheKey(text, targetLang);
   if (CACHE.has(key)) return CACHE.get(key)!;
 
   try {
-    // Detect source language auto, translate to target
-    const langpair = `auto|${targetLang}`;
-    const url = `${BASE_URL}?q=${encodeURIComponent(text)}&langpair=${encodeURIComponent(langpair)}&de=afuchat@app.com`;
+    const url =
+      `https://translate.googleapis.com/translate_a/single` +
+      `?client=gtx&sl=auto&tl=${encodeURIComponent(targetLang)}&dt=t` +
+      `&q=${encodeURIComponent(text)}`;
 
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     const json = await res.json();
 
-    if (json.responseStatus === 200 && json.responseData?.translatedText) {
-      const translated = json.responseData.translatedText as string;
-      CACHE.set(key, translated);
-      return translated;
-    }
+    if (Array.isArray(json?.[0])) {
+      const translated = (json[0] as any[])
+        .map((seg: any) => (Array.isArray(seg) ? seg[0] ?? "" : ""))
+        .join("")
+        .trim();
 
-    // Fallback: try first match
-    if (json.matches?.[0]?.translation) {
-      const translated = json.matches[0].translation as string;
-      CACHE.set(key, translated);
-      return translated;
+      if (translated && translated !== text) {
+        CACHE.set(key, translated);
+        return translated;
+      }
     }
 
     return text;
@@ -51,7 +54,18 @@ export async function translateText(text: string, targetLang: string): Promise<s
 }
 
 export const LANG_LABELS: Record<string, string> = {
-  en: "English", zh: "Chinese", es: "Spanish", fr: "French",
-  ar: "Arabic", hi: "Hindi", pt: "Portuguese", ru: "Russian",
-  ja: "Japanese", de: "German",
+  en: "English",
+  zh: "Chinese",
+  es: "Spanish",
+  fr: "French",
+  ar: "Arabic",
+  hi: "Hindi",
+  pt: "Portuguese",
+  ru: "Russian",
+  ja: "Japanese",
+  de: "German",
+  sw: "Swahili",
+  ko: "Korean",
+  it: "Italian",
+  tr: "Turkish",
 };
