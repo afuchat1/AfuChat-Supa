@@ -152,7 +152,7 @@ function RichInlineText({ text, colors, isUser }: { text: string; colors: any; i
 
 function RichMessageContent({ content, colors, isUser }: { content: string; colors: any; isUser?: boolean }) {
   if (isUser) {
-    return <Text style={[s.bubbleText, { color: "#fff" }]}>{content}</Text>;
+    return <Text style={[s.bubbleText, { color: "#fff" }]}>{stripLeftoverMarkdown(content)}</Text>;
   }
 
   const segments = parseRichText(content);
@@ -494,9 +494,9 @@ RESPONSE GUIDELINES:
     if (item.role === "user") {
       return (
         <View style={[s.msgRow, s.msgRowUser]}>
-          <View style={{ alignItems: "flex-end" }}>
+          <View style={{ alignItems: "flex-end", maxWidth: "80%" }}>
             <View style={[s.bubble, s.userBubble]}>
-              <Text style={[s.bubbleText, { color: "#fff" }]}>{item.content}</Text>
+              <RichMessageContent content={item.content} colors={colors} isUser />
             </View>
             {item.timestamp && (
               <Text style={[s.timestamp, { color: colors.textMuted }]}>{formatTime(item.timestamp)}</Text>
