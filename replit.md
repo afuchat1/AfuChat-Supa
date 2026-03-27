@@ -201,7 +201,7 @@ The AfuChat app is cross-platform — same codebase runs on mobile (iOS/Android 
 - `send-push-notification` — Expo Push API for mobile push notifications (JWT auth, batch support, channel routing)
 - `send-password-reset` — Custom email hook for ALL Supabase auth emails (recovery, signup, magic link, email change, reauthentication, invite). Sends via Resend from `noreply@afuchat.com` with branded templates + AfuChat Technologies Ltd footer. Deployed with `--no-verify-jwt` (uses webhook signature instead).
 - `send-marketing-email` — Admin-only marketing/notification email system. Templates: welcome, inactive_reminder, new_feature, weekly_digest, special_offer, custom. Supports `toAll` or targeted `userIds`. Batched 50/batch with 1s delays. Paginated user fetching.
-- `ai-chat` — AI assistant powered by Lovable gateway (Gemini 2.5 Flash)
+- `ai-chat` — AI assistant powered by OpenAI (GPT-4o Mini) or Gemini, using Supabase edge function secrets (OPENAI_API_KEY / GEMINI_API_KEY)
 - `generate-ai-image` — AI image generation
 
 ## TypeScript & Composite Projects

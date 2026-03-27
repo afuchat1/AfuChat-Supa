@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseUrl as SUPABASE_URL, supabaseAnonKey as SUPABASE_ANON_KEY } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 
 type AiMessage = {
@@ -32,9 +32,6 @@ type ActionButton = {
   action: string;
   params?: Record<string, any>;
 };
-
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 const QUICK_PROMPTS = [
   { label: "My Balance", icon: "wallet-outline" as const, prompt: "What's my current balance?" },

@@ -64,11 +64,11 @@ serve(async (req) => {
 
   try {
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_API_KEY");
 
-    if (!OPENAI_API_KEY && !GOOGLE_API_KEY) {
+    if (!OPENAI_API_KEY && !GEMINI_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "No AI API key configured. Add OPENAI_API_KEY or GOOGLE_API_KEY to Supabase edge function secrets." }),
+        JSON.stringify({ error: "No AI API key configured. Add OPENAI_API_KEY or GEMINI_API_KEY to Supabase edge function secrets." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -83,7 +83,7 @@ serve(async (req) => {
 
     const reply = OPENAI_API_KEY
       ? await callOpenAI(OPENAI_API_KEY, messages)
-      : await callGemini(GOOGLE_API_KEY!, messages);
+      : await callGemini(GEMINI_API_KEY!, messages);
 
     return new Response(
       JSON.stringify({ reply }),

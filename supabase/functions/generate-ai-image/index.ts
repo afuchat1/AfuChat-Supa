@@ -63,11 +63,11 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_API_KEY");
 
-    if (!OPENAI_API_KEY && !GOOGLE_API_KEY) {
+    if (!OPENAI_API_KEY && !GEMINI_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "No AI API key configured. Add OPENAI_API_KEY or GOOGLE_API_KEY to Supabase edge function secrets." }),
+        JSON.stringify({ error: "No AI API key configured. Add OPENAI_API_KEY or GEMINI_API_KEY to Supabase edge function secrets." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -124,7 +124,7 @@ serve(async (req) => {
     if (OPENAI_API_KEY) {
       imageUrls = await generateWithOpenAI(OPENAI_API_KEY, prompt);
     } else {
-      const result = await generateWithGemini(GOOGLE_API_KEY!, prompt);
+      const result = await generateWithGemini(GEMINI_API_KEY!, prompt);
       replyText = result.text || replyText;
       const uploaded: string[] = [];
       for (let i = 0; i < result.base64Images.length; i++) {
