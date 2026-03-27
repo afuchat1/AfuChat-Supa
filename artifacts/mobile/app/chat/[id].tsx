@@ -2162,8 +2162,8 @@ const st = StyleSheet.create({
     gap: 4,
   },
   inputAction: { paddingBottom: 4, paddingHorizontal: 4 },
-  inputField: { flex: 1, borderRadius: 24, paddingLeft: 16, paddingRight: 6, paddingVertical: 6, maxHeight: 100 },
-  input: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 20 },
+  inputField: { flex: 1, borderRadius: 24, paddingLeft: 16, paddingRight: 6, paddingVertical: 6, maxHeight: 100, borderWidth: 0 },
+  input: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 20, borderWidth: 0, outlineStyle: "none" as any },
   sendBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
 
   sheetOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },

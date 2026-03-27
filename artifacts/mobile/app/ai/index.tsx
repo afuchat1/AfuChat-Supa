@@ -339,7 +339,7 @@ RESPONSE GUIDELINES:
         }
       />
 
-      <View style={[s.inputWrap, { backgroundColor: colors.surface, borderColor: colors.border, marginHorizontal: 12, marginTop: 8, marginBottom: insets.bottom + 8 }]}>
+      <View style={[s.inputWrap, { backgroundColor: colors.surface, marginHorizontal: 12, marginTop: 8, marginBottom: insets.bottom + 8 }]}>
         <TextInput
           style={[s.input, { color: colors.text }]}
           placeholder="Ask AfuAi anything..."
@@ -401,7 +401,7 @@ const s = StyleSheet.create({
   quickBtn: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
   quickBtnText: { fontSize: 14, fontWeight: "500" },
   inputBar: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingTop: 8 },
-  inputWrap: { flexDirection: "row", alignItems: "flex-end", borderRadius: 24, borderWidth: 1, paddingLeft: 16, paddingRight: 6, paddingVertical: 6, gap: 8 },
-  input: { flex: 1, fontSize: 15, maxHeight: 100, lineHeight: 20 },
+  inputWrap: { flexDirection: "row", alignItems: "flex-end", borderRadius: 24, paddingLeft: 16, paddingRight: 6, paddingVertical: 6, gap: 8 },
+  input: { flex: 1, fontSize: 15, maxHeight: 100, lineHeight: 20, borderWidth: 0, outlineStyle: "none" as any },
   sendBtn: { width: 36, height: 36, borderRadius: 18, justifyContent: "center", alignItems: "center" },
 });
