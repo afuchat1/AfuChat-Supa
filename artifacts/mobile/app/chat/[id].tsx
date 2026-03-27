@@ -1713,7 +1713,7 @@ export default function ChatScreen() {
               <Ionicons name="sparkles" size={12} color={Colors.brand} />
               <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: Colors.brand, textTransform: "uppercase", letterSpacing: 0.5 }}>AI Features</Text>
             </View>
-            {showReactions && showReactions.encrypted_content.length >= 100 && (
+            {showReactions && showReactions.encrypted_content.length >= 500 && (
               <TouchableOpacity
                 style={[st.sheetActionRow, { opacity: aiLoading && aiResultType === "summary" ? 0.5 : 1 }]}
                 disabled={aiLoading}
