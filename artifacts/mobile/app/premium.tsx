@@ -275,7 +275,24 @@ export default function PremiumScreen() {
           style: "destructive",
           onPress: async () => {
             setCancelling(true);
-            await supabase.from("user_subscriptions").update({ is_active: false }).eq("user_id", user.id);
+            // Use upsert (INSERT ON CONFLICT UPDATE) so the RLS insert policy
+            // handles this — a plain UPDATE can be blocked by a missing UPDATE policy.
+            const { error } = await supabase.from("user_subscriptions").upsert({
+              id: subscription.id,
+              user_id: user.id,
+              plan_id: subscription.plan_id,
+              started_at: subscription.started_at,
+              expires_at: subscription.expires_at,
+              is_active: false,
+              acoin_paid: subscription.acoin_paid,
+            }, { onConflict: "user_id" });
+
+            if (error) {
+              showAlert("Error", "Could not cancel subscription. Please try again.");
+              setCancelling(false);
+              return;
+            }
+
             await supabase.from("acoin_transactions").insert({
               user_id: user.id,
               amount: 0,

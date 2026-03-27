@@ -119,7 +119,7 @@ const SECTIONS: Section[] = [
 
 export default function AdvancedFeaturesScreen() {
   const { colors } = useTheme();
-  const { user, subscription } = useAuth();
+  const { user, subscription, isPremium } = useAuth();
   const insets = useSafeAreaInsets();
   const [prefs, setPrefs] = useState<FeatureSettings>(defaults);
   const [loading, setLoading] = useState(true);
@@ -219,6 +219,7 @@ export default function AdvancedFeaturesScreen() {
   }
 
   function hasTier(required: "silver" | "gold" | "platinum") {
+    if (!isPremium) return false;
     const userTier = (subscription?.plan_tier || "free").toLowerCase();
     return (TIER_ORDER[userTier] ?? 0) >= TIER_ORDER[required];
   }
