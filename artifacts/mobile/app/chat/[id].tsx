@@ -1627,11 +1627,11 @@ export default function ChatScreen() {
             </Text>
           </View>
         ) : (
-          <View style={{ backgroundColor: colors.surface }}>
+          <>
             {(chatInfo?.is_group || chatInfo?.is_channel) && (
               <SmartReplyBar messages={messages} myId={user?.id || ""} input={input} onSend={handleSmartReply} colors={colors} />
             )}
-            <View style={[st.inputBar, { borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 8) }]}>
+            <View style={[st.inputBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
             <TouchableOpacity onPress={() => setShowAttachMenu(true)} style={st.inputAction} hitSlop={6}>
               <Ionicons name="add-circle" size={28} color={colors.textMuted} />
             </TouchableOpacity>
@@ -1664,7 +1664,7 @@ export default function ChatScreen() {
               </TouchableOpacity>
             )}
             </View>
-          </View>
+          </>
         )}
       </KeyboardAvoidingView>
 
@@ -2159,7 +2159,6 @@ const st = StyleSheet.create({
     alignItems: "flex-end",
     paddingHorizontal: 6,
     paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
     gap: 4,
   },
   inputAction: { paddingBottom: 6, paddingHorizontal: 4 },
