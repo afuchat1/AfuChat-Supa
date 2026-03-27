@@ -225,6 +225,18 @@ export default function BrowseScreen() {
           showsVerticalScrollIndicator={false}
           onEndReached={() => { setPage((p) => { fetchPosts(p + 1); return p + 1; }); }}
           onEndReachedThreshold={0.4}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyEmoji}>🌐</Text>
+              <Text style={styles.emptyTitle}>The community is growing</Text>
+              <Text style={styles.emptySub}>Be among the first to post when you join!</Text>
+            </View>
+          }
+          ListFooterComponent={
+            <TouchableOpacity style={styles.loadMoreBtn} onPress={() => { setPage((p) => { fetchPosts(p + 1); return p + 1; }); }}>
+              <Text style={styles.loadMoreText}>Load more posts</Text>
+            </TouchableOpacity>
+          }
         />
       )}
 
@@ -290,4 +302,11 @@ const styles = StyleSheet.create({
   nudgeBtn: { paddingHorizontal: 20, paddingVertical: 11, borderRadius: 22, overflow: "hidden" },
   nudgeBtnText: { fontSize: 14, fontFamily: "Inter_700Bold", color: "#fff" },
 
+  emptyState: { alignItems: "center", paddingVertical: 60, gap: 10 },
+  emptyEmoji: { fontSize: 48 },
+  emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold", color: "#fff" },
+  emptySub: { fontSize: 14, fontFamily: "Inter_400Regular", color: "#6B7A8D", textAlign: "center" },
+
+  loadMoreBtn: { paddingVertical: 16, alignItems: "center" },
+  loadMoreText: { fontSize: 14, fontFamily: "Inter_500Medium", color: Colors.brand },
 });
