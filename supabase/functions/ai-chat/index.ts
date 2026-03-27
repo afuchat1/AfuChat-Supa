@@ -52,7 +52,7 @@ function buildProviders(): AiProvider[] {
           body.system_instruction = { parts: [{ text: systemMsg.content }] };
         }
         const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
           { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
         );
         if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
@@ -107,7 +107,7 @@ function buildProviders(): AiProvider[] {
         const res = await fetch("https://api.aimlapi.com/v1/chat/completions", {
           method: "POST",
           headers: { "Authorization": `Bearer ${AIMLAPI_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ model: "mistralai/Mistral-7B-Instruct-v0.2", messages, max_tokens: maxTokens, temperature: 0.7 }),
+          body: JSON.stringify({ model: "gpt-4o-mini", messages, max_tokens: maxTokens, temperature: 0.7 }),
         });
         if (!res.ok) throw new Error(`AIML ${res.status}: ${await res.text()}`);
         const data = await res.json();
@@ -181,7 +181,7 @@ async function transcribeWithGemini(audioUrl: string, apiKey: string): Promise<s
     generationConfig: { maxOutputTokens: 1024, temperature: 0 },
   };
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
   );
   if (!res.ok) throw new Error(`Gemini transcription ${res.status}: ${await res.text()}`);
