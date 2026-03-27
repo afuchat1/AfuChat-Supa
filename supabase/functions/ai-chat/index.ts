@@ -13,11 +13,29 @@ interface AiProvider {
 function buildProviders(): AiProvider[] {
   const providers: AiProvider[] = [];
 
-  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
   const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   const AIMLAPI_KEY = Deno.env.get("AIMLAPI_KEY");
+
+  if (LOVABLE_API_KEY) {
+    providers.push({
+      name: "Lovable AI",
+      call: async (messages, maxTokens) => {
+        const res = await fetch("https://api.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "gemini-2.5-flash", messages, max_tokens: maxTokens, temperature: 0.7 }),
+        });
+        if (!res.ok) throw new Error(`Lovable ${res.status}: ${await res.text()}`);
+        const data = await res.json();
+        const text = data.choices?.[0]?.message?.content ?? "";
+        if (!text) throw new Error("Lovable returned empty response");
+        return text;
+      },
+    });
+  }
 
   if (GEMINI_API_KEY) {
     providers.push({
@@ -41,24 +59,6 @@ function buildProviders(): AiProvider[] {
         const data = await res.json();
         const text = data.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "";
         if (!text) throw new Error("Gemini returned empty response");
-        return text;
-      },
-    });
-  }
-
-  if (LOVABLE_API_KEY) {
-    providers.push({
-      name: "Lovable AI",
-      call: async (messages, maxTokens) => {
-        const res = await fetch("https://api.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ model: "gemini-2.5-flash", messages, max_tokens: maxTokens, temperature: 0.7 }),
-        });
-        if (!res.ok) throw new Error(`Lovable ${res.status}: ${await res.text()}`);
-        const data = await res.json();
-        const text = data.choices?.[0]?.message?.content ?? "";
-        if (!text) throw new Error("Lovable returned empty response");
         return text;
       },
     });
