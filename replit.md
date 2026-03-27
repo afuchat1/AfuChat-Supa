@@ -95,7 +95,9 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 ### Key Files
 
 - `lib/supabase.ts` — Supabase client config (exports `supabaseUrl` and `supabaseAnonKey` constants)
-- `lib/mediaUpload.ts` — Centralized media upload utility. Handles web (fetch→blob) and native (FileSystem.uploadAsync) with proper auth headers. Exports `uploadToStorage()`, `uploadAvatar()`, `uploadChatMedia()`. Adds cache-busting `?t=` to URLs. Used by profile/edit, onboarding, chat, and channel/create.
+- `lib/mediaUpload.ts` — Centralized media upload utility. Uses `fetch(uri)→blob` + Supabase JS client `.upload()` on all platforms (web+native). Exports `uploadToStorage()`, `uploadAvatar()`, `uploadChatMedia()`. Adds cache-busting `?t=` to URLs. Used by profile/edit, onboarding, chat, stories, moments, and channel/create.
+- **Supabase Storage Buckets**: `avatars` (profile photos), `voice-messages` (audio, path: `{userId}/{file}`), `chat-attachments` (images/docs in chat, path: `{userId}/{chatId}/{file}`), `post-images` (moments/posts, path: `{userId}/{file}`), `stories` (story media, path: `{userId}/{file}`), `group-avatars` (channel/group avatars, path: `{userId}/{file}`), `profile-banners`, `ai-generated-images`, `ai-chat-attachments`, `service-images`, `event-images`, `product-images`, `listing-images`, `developer-showcase`, `mini-programs`, `mini-app-apks`, `verification-documents`, `afumail-attachments`, `restaurant-images`. All upload paths start with `{userId}/` for RLS compliance.
+- `components/AudioPlayer.tsx` — Custom audio player using `expo-audio` (useAudioPlayer + useAudioPlayerStatus). Shows play/pause, waveform bars with progress fill, and duration/position. Used for voice messages in chat bubbles.
 - `context/AuthContext.tsx` — Auth provider with profile + subscription loading. Premium status from `user_subscriptions` table.
 - `context/ThemeContext.tsx` — Theme provider with explicit light/dark/system toggle, persisted to AsyncStorage
 - `constants/colors.ts` — Brand colors + light/dark theme + gold badge color

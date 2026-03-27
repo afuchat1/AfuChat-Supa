@@ -67,7 +67,7 @@ export default function CreateChannelScreen() {
     if (avatarUri) {
       const ext = avatarUri.split(".").pop()?.split("?")[0]?.toLowerCase() ?? "jpg";
       const fileName = `channel-${user.id}-${Date.now()}.${ext}`;
-      const { publicUrl } = await uploadToStorage("avatars", fileName, avatarUri, `image/${ext === "png" ? "png" : "jpeg"}`);
+      const { publicUrl } = await uploadToStorage("group-avatars", `${user.id}/${fileName}`, avatarUri, `image/${ext === "png" ? "png" : "jpeg"}`);
       avatarUrl = publicUrl;
     }
 

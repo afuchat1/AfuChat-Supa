@@ -19,6 +19,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { uploadToStorage } from "@/lib/mediaUpload";
 
 export default function CreateStoryScreen() {
   const { colors } = useTheme();
@@ -45,10 +46,21 @@ export default function CreateStoryScreen() {
     setLoading(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+    const ext = mediaUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
+    const fileName = `${user.id}/${Date.now()}.${ext}`;
+    const mime = mediaType === "video" ? `video/${ext === "mov" ? "quicktime" : "mp4"}` : `image/${ext === "jpg" ? "jpeg" : ext}`;
+    const { publicUrl, error: uploadErr } = await uploadToStorage("stories", fileName, mediaUri, mime);
+
+    if (uploadErr || !publicUrl) {
+      setLoading(false);
+      showAlert("Upload failed", uploadErr || "Could not upload media.");
+      return;
+    }
+
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const { error } = await supabase.from("stories").insert({
       user_id: user.id,
-      media_url: mediaUri,
+      media_url: publicUrl,
       media_type: mediaType,
       caption: caption.trim() || null,
       expires_at: expiresAt,

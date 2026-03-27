@@ -22,6 +22,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { uploadToStorage } from "@/lib/mediaUpload";
 import { aiEnhancePost, aiGenerateHashtags, aiGenerateCaption } from "@/lib/aiHelper";
 
 export default function CreatePostScreen() {
@@ -58,7 +59,15 @@ export default function CreatePostScreen() {
     setLoading(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    const firstImage = images.length > 0 ? images[0] : null;
+    let uploadedUrls: string[] = [];
+    for (const uri of images) {
+      const ext = uri.split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
+      const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { publicUrl } = await uploadToStorage("post-images", fileName, uri);
+      if (publicUrl) uploadedUrls.push(publicUrl);
+    }
+
+    const firstImage = uploadedUrls.length > 0 ? uploadedUrls[0] : null;
     const { data: post, error } = await supabase
       .from("posts")
       .insert({
@@ -75,10 +84,10 @@ export default function CreatePostScreen() {
       return;
     }
 
-    if (images.length > 0) {
-      const imageRows = images.map((uri, i) => ({
+    if (uploadedUrls.length > 0) {
+      const imageRows = uploadedUrls.map((url, i) => ({
         post_id: post.id,
-        image_url: uri,
+        image_url: url,
         display_order: i,
       }));
       await supabase.from("post_images").insert(imageRows);
