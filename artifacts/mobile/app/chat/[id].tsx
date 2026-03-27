@@ -25,6 +25,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import { Video, ResizeMode, Audio } from "expo-av";
+import AudioPlayer from "@/components/AudioPlayer";
 import Svg, { Path } from "react-native-svg";
 import { ChatLoadingSkeleton } from "@/components/ui/Skeleton";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -495,12 +496,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
               </View>
             </TouchableOpacity>
           ) : hasAudio ? (
-            <View style={st.audioRow}>
-              <Ionicons name="musical-note" size={20} color={textColor} />
-              <View style={{ flex: 1 }}>
-                <Video source={{ uri: msg.attachment_url! }} style={{ height: 36 }} useNativeControls />
-              </View>
-            </View>
+            <AudioPlayer uri={msg.attachment_url!} tintColor={textColor} waveColor={isMe ? "#FFFFFF" : "#00C2CB"} />
           ) : hasFile ? (
             <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9} style={st.fileRow}>
               <View style={[st.fileIconBg, { backgroundColor: isMe ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.06)" }]}>
@@ -1516,10 +1512,6 @@ export default function ChatScreen() {
         uri,
         `voice_${Date.now()}.${ext}`,
       );
-
-      if (uploadErr) {
-        showAlert("Voice Upload Debug", uploadErr);
-      }
 
       await supabase.from("messages").insert({
         chat_id: activeChatId,
