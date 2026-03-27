@@ -121,6 +121,42 @@ function buildProviders(): AiProvider[] {
   return providers;
 }
 
+async function transcribeWithLovable(audioUrl: string, apiKey: string): Promise<string> {
+  const audioResp = await fetch(audioUrl);
+  if (!audioResp.ok) throw new Error("Failed to download audio");
+  const audioBuffer = await audioResp.arrayBuffer();
+  const bytes = new Uint8Array(audioBuffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  const base64 = btoa(binary);
+  const ext = (audioUrl.split("?")[0].split(".").pop() || "m4a").toLowerCase();
+  const fmtMap: Record<string, string> = {
+    m4a: "mp4", mp3: "mp3", wav: "wav", ogg: "ogg", webm: "webm", aac: "aac",
+  };
+  const format = fmtMap[ext] || "mp4";
+  const res = await fetch("https://api.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "gemini-2.5-flash",
+      messages: [{
+        role: "user",
+        content: [
+          { type: "input_audio", input_audio: { data: base64, format } },
+          { type: "text", text: "Transcribe this audio accurately. Return only the spoken words, nothing else." },
+        ],
+      }],
+      max_tokens: 1024,
+      temperature: 0,
+    }),
+  });
+  if (!res.ok) throw new Error(`Lovable transcription ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  const text = data.choices?.[0]?.message?.content ?? "";
+  if (!text) throw new Error("Lovable returned empty transcription");
+  return text;
+}
+
 async function transcribeWithGemini(audioUrl: string, apiKey: string): Promise<string> {
   const audioResp = await fetch(audioUrl);
   if (!audioResp.ok) throw new Error("Failed to download audio");
@@ -181,22 +217,40 @@ serve(async (req) => {
 
     // Audio transcription route
     if (body.audioUrl) {
+      const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
       const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
       const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-      let text = "";
+      const errors: string[] = [];
+      if (LOVABLE_API_KEY) {
+        try {
+          const text = await transcribeWithLovable(body.audioUrl, LOVABLE_API_KEY);
+          return new Response(JSON.stringify({ text }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        } catch (e) {
+          errors.push(`Lovable: ${e instanceof Error ? e.message : String(e)}`);
+          console.error("Lovable transcription failed:", e);
+        }
+      }
       if (GEMINI_API_KEY) {
-        text = await transcribeWithGemini(body.audioUrl, GEMINI_API_KEY);
-      } else if (OPENAI_API_KEY) {
-        text = await transcribeWithWhisper(body.audioUrl, OPENAI_API_KEY);
-      } else {
-        return new Response(
-          JSON.stringify({ error: "No transcription API key configured" }),
-          { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        try {
+          const text = await transcribeWithGemini(body.audioUrl, GEMINI_API_KEY);
+          return new Response(JSON.stringify({ text }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        } catch (e) {
+          errors.push(`Gemini: ${e instanceof Error ? e.message : String(e)}`);
+          console.error("Gemini transcription failed:", e);
+        }
+      }
+      if (OPENAI_API_KEY) {
+        try {
+          const text = await transcribeWithWhisper(body.audioUrl, OPENAI_API_KEY);
+          return new Response(JSON.stringify({ text }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        } catch (e) {
+          errors.push(`Whisper: ${e instanceof Error ? e.message : String(e)}`);
+          console.error("Whisper transcription failed:", e);
+        }
       }
       return new Response(
-        JSON.stringify({ text }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: errors.length ? errors.join("; ") : "No transcription API key configured" }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
