@@ -68,6 +68,7 @@ type ActionButton = {
 
 const EXEC_LABELS: Record<string, string> = {
   send_nexa: "Send Nexa",
+  send_acoin: "Send ACoin",
   follow: "Follow User",
   unfollow: "Unfollow User",
   subscribe: "Subscribe to Plan",
@@ -78,6 +79,7 @@ const EXEC_LABELS: Record<string, string> = {
 function buildExecDescription(actionType: string, params: Record<string, any>): string {
   switch (actionType) {
     case "send_nexa": return `Send ${params.amount || "?"} Nexa to @${params.handle || "?"}${params.message ? ` — "${params.message}"` : ""}`;
+    case "send_acoin": return `Send ${params.amount || "?"} ACoin to @${params.handle || "?"}${params.message ? ` — "${params.message}"` : ""}`;
     case "follow": return `Follow @${params.handle || "?"}`;
     case "unfollow": return `Unfollow @${params.handle || "?"}`;
     case "subscribe": {
@@ -490,6 +492,8 @@ export default function AiChatScreen() {
       { data: recentAcoinTx },
       { data: recentNexaSent },
       { data: recentNexaRecv },
+      { data: recentGiftsSent },
+      { data: recentGiftsRecv },
     ] = await Promise.all([
       supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", user.id),
       supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", user.id),
@@ -499,6 +503,8 @@ export default function AiChatScreen() {
       supabase.from("acoin_transactions").select("amount, transaction_type, created_at, nexa_spent, fee_charged, metadata").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
       supabase.from("xp_transfers").select("amount, created_at, status").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(5),
       supabase.from("xp_transfers").select("amount, created_at, status").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(5),
+      supabase.from("gift_transactions").select("xp_cost, created_at, message, gifts(name, rarity)").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(5),
+      supabase.from("gift_transactions").select("xp_cost, created_at, message, gifts(name, rarity)").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(5),
     ]);
 
     const gifts = (giftData || []).map((g: any) => `${g.gifts?.name} (${g.gifts?.rarity})`).join(", ");
@@ -517,6 +523,14 @@ export default function AiChatScreen() {
     (recentNexaRecv || []).forEach((t: any) => {
       const date = new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
       txLines.push(`  - ${date}: Received ${t.amount} Nexa`);
+    });
+    (recentGiftsSent || []).forEach((t: any) => {
+      const date = new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      txLines.push(`  - ${date}: Sent gift "${(t as any).gifts?.name || "?"}" (${(t as any).gifts?.rarity || "?"}) for ${t.xp_cost} Nexa`);
+    });
+    (recentGiftsRecv || []).forEach((t: any) => {
+      const date = new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      txLines.push(`  - ${date}: Received gift "${(t as any).gifts?.name || "?"}" (${(t as any).gifts?.rarity || "?"})`);
     });
 
     return `
@@ -672,6 +686,28 @@ When suggesting actions, include ACTION buttons in your response using the forma
           invoice: { type: "Nexa Transfer", date: new Date().toISOString(), from: `@${profile.handle}`, to: `@${handle}`, amount: amt, currency: "Nexa", reference: `NXA-${Date.now().toString(36).toUpperCase()}`, status: "Completed" },
         };
       }
+      case "send_acoin": {
+        const { handle, amount, message: msg } = action.params;
+        if (!handle || !amount) return { success: false, message: "Missing handle or amount" };
+        const acoinAmt = parseInt(amount);
+        if (isNaN(acoinAmt) || acoinAmt <= 0) return { success: false, message: "Invalid amount" };
+        if (acoinAmt > (profile.acoin || 0)) return { success: false, message: `Insufficient ACoin. You have ${profile.acoin || 0}` };
+        const { data: acoinRecipient } = await supabase.from("profiles").select("id, display_name").eq("handle", handle.toLowerCase()).single();
+        if (!acoinRecipient) return { success: false, message: `User @${handle} not found` };
+        if (acoinRecipient.id === user.id) return { success: false, message: "Cannot send to yourself" };
+        const { data: deductedAcoin, error: deductAcoinErr } = await supabase.from("profiles").update({ acoin: (profile.acoin || 0) - acoinAmt }).eq("id", profile.id).gte("acoin", acoinAmt).select("id").maybeSingle();
+        if (deductAcoinErr || !deductedAcoin) return { success: false, message: "Could not deduct ACoin — balance may have changed" };
+        await supabase.rpc("credit_acoin", { p_user_id: acoinRecipient.id, p_amount: acoinAmt });
+        await supabase.from("acoin_transactions").insert([
+          { user_id: user.id, amount: -acoinAmt, transaction_type: "acoin_transfer_sent", metadata: { to_user_id: acoinRecipient.id, to_handle: handle, message: msg || null } },
+          { user_id: acoinRecipient.id, amount: acoinAmt, transaction_type: "acoin_transfer_received", metadata: { from_user_id: user.id, from_handle: profile.handle, message: msg || null } },
+        ]);
+        return {
+          success: true,
+          message: `Sent ${acoinAmt} ACoin to ${acoinRecipient.display_name}`,
+          invoice: { type: "ACoin Transfer", date: new Date().toISOString(), from: `@${profile.handle}`, to: `@${handle}`, amount: acoinAmt, currency: "ACoin", reference: `ACN-${Date.now().toString(36).toUpperCase()}`, status: "Completed" },
+        };
+      }
       case "follow": {
         const { handle } = action.params;
         if (!handle) return { success: false, message: "Missing handle" };
@@ -801,6 +837,7 @@ RESPONSE GUIDELINES:
 EXECUTABLE ACTIONS:
 When the user asks you to perform an action, include ONE [EXEC:action_type:{"param":"value"}] tag. The app will show a confirmation card before executing. Only use EXEC when the user clearly asks you to do something. Available actions:
 - [EXEC:send_nexa:{"handle":"username","amount":100,"message":"optional"}] — Send Nexa to a user
+- [EXEC:send_acoin:{"handle":"username","amount":50,"message":"optional"}] — Send ACoin to a user
 - [EXEC:follow:{"handle":"username"}] — Follow a user
 - [EXEC:unfollow:{"handle":"username"}] — Unfollow a user
 - [EXEC:subscribe:{"tier":"silver"}] — Subscribe to a plan (silver, gold, or platinum)
