@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from "react";
-import { View, TouchableOpacity, Text, StyleSheet, Platform } from "react-native";
+import React, { useEffect, useRef, useState, useCallback } from "react";
+import { View, TouchableOpacity, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { Audio } from "expo-av";
 
 interface AudioPlayerProps {
   uri: string;
@@ -17,33 +17,72 @@ function formatTime(ms: number): string {
 }
 
 export default function AudioPlayer({ uri, tintColor = "#FFFFFF", waveColor }: AudioPlayerProps) {
-  const player = useAudioPlayer(uri);
-  const status = useAudioPlayerStatus(player);
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [position, setPosition] = useState(0);
   const [error, setError] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const barColor = waveColor || tintColor;
 
-  const isPlaying = status.playing;
-  const duration = status.duration || 0;
-  const position = status.currentTime || 0;
   const progress = duration > 0 ? position / duration : 0;
-
   const bars = 20;
 
   useEffect(() => {
-    if (status.error) setError(true);
-  }, [status.error]);
+    let mounted = true;
 
-  function togglePlay() {
-    if (error) return;
+    async function loadSound() {
+      try {
+        const { sound, status } = await Audio.Sound.createAsync(
+          { uri },
+          { shouldPlay: false },
+          (s) => {
+            if (!mounted) return;
+            if (s.isLoaded) {
+              setPosition(s.positionMillis || 0);
+              setDuration(s.durationMillis || 0);
+              setIsPlaying(s.isPlaying);
+              if (s.didJustFinish) {
+                setIsPlaying(false);
+                setPosition(0);
+              }
+            }
+          }
+        );
+        if (!mounted) {
+          sound.unloadAsync();
+          return;
+        }
+        soundRef.current = sound;
+        if (status.isLoaded) {
+          setDuration(status.durationMillis || 0);
+          setLoaded(true);
+        }
+      } catch {
+        if (mounted) setError(true);
+      }
+    }
+
+    loadSound();
+
+    return () => {
+      mounted = false;
+      soundRef.current?.unloadAsync();
+      soundRef.current = null;
+    };
+  }, [uri]);
+
+  const togglePlay = useCallback(async () => {
+    if (!soundRef.current || error) return;
     if (isPlaying) {
-      player.pause();
+      await soundRef.current.pauseAsync();
     } else {
       if (position >= duration && duration > 0) {
-        player.seekTo(0);
+        await soundRef.current.setPositionAsync(0);
       }
-      player.play();
+      await soundRef.current.playAsync();
     }
-  }
+  }, [isPlaying, position, duration, error]);
 
   if (error) {
     return (
