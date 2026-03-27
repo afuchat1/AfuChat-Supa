@@ -1508,13 +1508,15 @@ export default function ChatScreen() {
       if (!activeChatId) return;
 
       setSending(true);
+      const ext = Platform.OS === "web" ? "webm" : "m4a";
       const { publicUrl, error: uploadErr } = await uploadChatMedia(
         "chat-media",
         activeChatId,
         user.id,
         uri,
-        `voice_${Date.now()}.m4a`,
+        `voice_${Date.now()}.${ext}`,
       );
+
       if (publicUrl && !uploadErr) {
         await supabase.from("messages").insert({
           chat_id: activeChatId,
@@ -1523,9 +1525,15 @@ export default function ChatScreen() {
           attachment_url: publicUrl,
           attachment_type: "audio",
         });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        loadMessages();
+      } else {
+        await supabase.from("messages").insert({
+          chat_id: activeChatId,
+          sender_id: user.id,
+          encrypted_content: "🎤 Voice message",
+        });
       }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      loadMessages();
       setSending(false);
     } catch (err) {
       recordingRef.current = null;
