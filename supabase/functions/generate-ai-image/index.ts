@@ -29,29 +29,28 @@ async function generateWithOpenAI(apiKey: string, prompt: string): Promise<strin
   return (data.data || []).map((img: any) => img.url).filter(Boolean);
 }
 
-async function generateWithGemini(apiKey: string, prompt: string): Promise<{ text: string; base64Images: string[] }> {
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
-      }),
-    }
-  );
+async function generateWithRunware(apiKey: string, prompt: string): Promise<string[]> {
+  const res = await fetch("https://api.runware.ai/v1/images/generations", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      positivePrompt: prompt,
+      model: "runware:100@1",
+      numberResults: 1,
+      outputFormat: "WEBP",
+      width: 1024,
+      height: 1024,
+    }),
+  });
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Gemini image error ${res.status}: ${err}`);
+    throw new Error(`Runware error ${res.status}: ${err}`);
   }
   const data = await res.json();
-  const parts = data.candidates?.[0]?.content?.parts || [];
-  const text = parts.find((p: any) => p.text)?.text || "";
-  const base64Images = parts
-    .filter((p: any) => p.inlineData?.mimeType?.startsWith("image/"))
-    .map((p: any) => `data:${p.inlineData.mimeType};base64,${p.inlineData.data}`);
-  return { text, base64Images };
+  return (data.data || []).map((img: any) => img.imageURL).filter(Boolean);
 }
 
 serve(async (req) => {
@@ -63,11 +62,11 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_API_KEY");
+    const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY");
 
-    if (!OPENAI_API_KEY && !GEMINI_API_KEY) {
+    if (!OPENAI_API_KEY && !RUNWARE_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "No AI API key configured. Add OPENAI_API_KEY or GEMINI_API_KEY to Supabase edge function secrets." }),
+        JSON.stringify({ error: "No image generation API key configured. Add OPENAI_API_KEY or RUNWARE_API_KEY to Supabase edge function secrets." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -80,22 +79,23 @@ serve(async (req) => {
       );
     }
 
-    const jwt = authHeader.replace("Bearer ", "");
-    const payload = JSON.parse(atob(jwt.split(".")[1]));
-    const userId = payload.sub;
+    const token = authHeader.replace("Bearer ", "");
 
-    if (!userId) {
+    const supabaseAuth = createClient(supabaseUrl!, supabaseServiceKey!, {
+      auth: { persistSession: false },
+    });
+
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
+    if (authError || !user) {
       return new Response(
-        JSON.stringify({ error: "User ID not found" }),
+        JSON.stringify({ error: "Invalid or expired authentication token" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const supabaseAdmin = createClient(supabaseUrl!, supabaseServiceKey!, {
-      auth: { persistSession: false },
-    });
+    const userId = user.id;
 
-    const { data: subscription } = await supabaseAdmin
+    const { data: subscription } = await supabaseAuth
       .from("user_subscriptions")
       .select("is_active, expires_at")
       .eq("user_id", userId)
@@ -119,32 +119,11 @@ serve(async (req) => {
     }
 
     let imageUrls: string[] = [];
-    let replyText = "Here is your generated image!";
 
     if (OPENAI_API_KEY) {
       imageUrls = await generateWithOpenAI(OPENAI_API_KEY, prompt);
-    } else {
-      const result = await generateWithGemini(GEMINI_API_KEY!, prompt);
-      replyText = result.text || replyText;
-      const uploaded: string[] = [];
-      for (let i = 0; i < result.base64Images.length; i++) {
-        const dataUrl = result.base64Images[i];
-        const match = dataUrl.match(/^data:image\/(\w+);base64,(.+)$/);
-        if (!match) { uploaded.push(dataUrl); continue; }
-        const [, imageType, base64Data] = match;
-        const imageBuffer = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
-        const fileName = `${userId}/${Date.now()}-${i}-afuai.${imageType}`;
-        const { error: uploadError } = await supabaseAdmin.storage
-          .from("ai-generated-images")
-          .upload(fileName, imageBuffer, { contentType: `image/${imageType}`, upsert: false });
-        if (uploadError) {
-          uploaded.push(dataUrl);
-        } else {
-          const { data: { publicUrl } } = supabaseAdmin.storage.from("ai-generated-images").getPublicUrl(fileName);
-          uploaded.push(publicUrl);
-        }
-      }
-      imageUrls = uploaded;
+    } else if (RUNWARE_API_KEY) {
+      imageUrls = await generateWithRunware(RUNWARE_API_KEY, prompt);
     }
 
     if (imageUrls.length === 0) {
@@ -154,7 +133,7 @@ serve(async (req) => {
       );
     }
 
-    await supabaseAdmin.rpc("award_xp", {
+    await supabaseAuth.rpc("award_xp", {
       p_user_id: userId,
       p_action_type: "use_ai",
       p_xp_amount: 10,
@@ -162,7 +141,7 @@ serve(async (req) => {
     }).catch(() => {});
 
     return new Response(
-      JSON.stringify({ reply: replyText, images: imageUrls }),
+      JSON.stringify({ reply: "Here is your generated image!", images: imageUrls }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
