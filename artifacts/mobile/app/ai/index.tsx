@@ -84,7 +84,7 @@ function parseRichText(raw: string): RichSegment[] {
 
     const headingMatch = line.match(/^(#{1,3})\s+(.+)$/);
     if (headingMatch) {
-      segments.push({ type: "heading", text: headingMatch[2], level: headingMatch[1].length });
+      segments.push({ type: "heading", text: headingMatch[2].replace(/^#+\s*/, ""), level: headingMatch[1].length });
       continue;
     }
 
@@ -111,6 +111,10 @@ function parseRichText(raw: string): RichSegment[] {
   return segments;
 }
 
+function stripLeftoverMarkdown(str: string): string {
+  return str.replace(/\*{1,3}/g, "").replace(/^#{1,3}\s*/gm, "").replace(/`/g, "");
+}
+
 function RichInlineText({ text, colors, isUser }: { text: string; colors: any; isUser?: boolean }) {
   const textColor = isUser ? "#fff" : colors.text;
   const parts: React.ReactNode[] = [];
@@ -121,7 +125,8 @@ function RichInlineText({ text, colors, isUser }: { text: string; colors: any; i
 
   while ((match = regex.exec(text)) !== null) {
     if (match.index > lastIdx) {
-      parts.push(<Text key={key++} style={{ color: textColor }}>{text.slice(lastIdx, match.index)}</Text>);
+      const raw = text.slice(lastIdx, match.index);
+      parts.push(<Text key={key++} style={{ color: textColor }}>{stripLeftoverMarkdown(raw)}</Text>);
     }
     if (match[2]) {
       parts.push(<Text key={key++} style={{ color: textColor, fontWeight: "700", fontStyle: "italic" }}>{match[2]}</Text>);
@@ -139,7 +144,8 @@ function RichInlineText({ text, colors, isUser }: { text: string; colors: any; i
     lastIdx = match.index + match[0].length;
   }
   if (lastIdx < text.length) {
-    parts.push(<Text key={key++} style={{ color: textColor }}>{text.slice(lastIdx)}</Text>);
+    const raw = text.slice(lastIdx);
+    parts.push(<Text key={key++} style={{ color: textColor }}>{stripLeftoverMarkdown(raw)}</Text>);
   }
   return <>{parts}</>;
 }
