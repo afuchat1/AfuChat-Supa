@@ -605,21 +605,6 @@ export default function DiscoverScreen() {
               </View>
             ) : null
           }
-          ListEmptyComponent={
-            <View style={styles.center}>
-              <Ionicons name="newspaper-outline" size={64} color={colors.textMuted} />
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>No posts yet</Text>
-              <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
-                {user ? "Share what's on your mind" : "Sign in to start posting"}
-              </Text>
-              <TouchableOpacity
-                style={styles.createBtn}
-                onPress={() => user ? router.push("/moments/create") : router.push("/(auth)/login")}
-              >
-                <Text style={styles.createBtnText}>{user ? "Create Post" : "Sign In"}</Text>
-              </TouchableOpacity>
-            </View>
-          }
         />
       )}
       <ImageViewer
