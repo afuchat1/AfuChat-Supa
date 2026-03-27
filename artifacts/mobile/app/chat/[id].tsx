@@ -51,7 +51,7 @@ import { syncPendingMessages } from "@/lib/offlineSync";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { translateText, LANG_LABELS } from "@/lib/translate";
 import { useLanguage } from "@/context/LanguageContext";
-import { aiSummarizeChat, aiSuggestReply } from "@/lib/aiHelper";
+import { askAi, aiSuggestReply } from "@/lib/aiHelper";
 
 type Gift = {
   id: string;
@@ -939,19 +939,18 @@ export default function ChatScreen() {
     sendMessage(text);
   }
 
-  async function handleAiSummarize() {
-    if (aiLoading || messages.length < 3) return;
+  async function handleAiSummarize(msg: Message) {
+    if (aiLoading) return;
     setAiLoading(true);
     setAiResult(null);
     setAiResultType("summary");
     setAiReplies([]);
     try {
-      const recent = messages.slice(0, 30).reverse();
-      const formatted = recent.map((m) => ({
-        sender: m.sender_id === user?.id ? "Me" : chatInfo?.other_name || "Them",
-        content: m.encrypted_content,
-      }));
-      const result = await aiSummarizeChat(formatted);
+      const result = await askAi(
+        `Summarize this message in 1-2 concise sentences. Keep the key points:\n\n${msg.encrypted_content}`,
+        "You are a message summarizer. Return ONLY a brief summary. No quotes, no prefixes.",
+        { fast: true, maxTokens: 150 }
+      );
       setAiResult(result);
     } catch {
       setAiResult("Could not generate summary. Please try again.");
@@ -1714,15 +1713,17 @@ export default function ChatScreen() {
               <Ionicons name="sparkles" size={12} color={Colors.brand} />
               <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: Colors.brand, textTransform: "uppercase", letterSpacing: 0.5 }}>AI Features</Text>
             </View>
-            <TouchableOpacity
-              style={[st.sheetActionRow, { opacity: aiLoading && aiResultType === "summary" ? 0.5 : 1 }]}
-              disabled={aiLoading || messages.length < 3}
-              onPress={handleAiSummarize}
-            >
-              <Ionicons name="document-text-outline" size={20} color={Colors.brand} />
-              <Text style={[st.sheetActionText, { color: colors.text }]}>Summarize Chat</Text>
-              {aiLoading && aiResultType === "summary" && <ActivityIndicator color={Colors.brand} size="small" style={{ marginLeft: "auto" }} />}
-            </TouchableOpacity>
+            {showReactions && showReactions.encrypted_content.length >= 100 && (
+              <TouchableOpacity
+                style={[st.sheetActionRow, { opacity: aiLoading && aiResultType === "summary" ? 0.5 : 1 }]}
+                disabled={aiLoading}
+                onPress={() => { if (showReactions) handleAiSummarize(showReactions); }}
+              >
+                <Ionicons name="document-text-outline" size={20} color={Colors.brand} />
+                <Text style={[st.sheetActionText, { color: colors.text }]}>Summarize Message</Text>
+                {aiLoading && aiResultType === "summary" && <ActivityIndicator color={Colors.brand} size="small" style={{ marginLeft: "auto" }} />}
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[st.sheetActionRow, { opacity: aiLoading && aiResultType === "replies" ? 0.5 : 1 }]}
               disabled={aiLoading}
