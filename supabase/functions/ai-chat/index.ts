@@ -96,12 +96,12 @@ serve(async (req) => {
       const reply = await chatWithAIML(messages, tokenLimit, AIMLAPI_KEY);
       console.log("AIML chat succeeded");
       return json({ reply });
-    } catch (e) {
-      console.error("AIML chat failed:", e);
+    } catch (e: any) {
+      console.error("AIML chat failed:", e?.message || e);
       return json({ reply: "I'm having trouble connecting to my AI systems right now. Please try again in a moment." });
     }
-  } catch (error) {
-    console.error("ai-chat function error:", error);
+  } catch (error: any) {
+    console.error("ai-chat function error:", error?.message || error);
     return json({ reply: "I'm having trouble connecting to my AI systems right now. Please try again in a moment." });
   }
 });
