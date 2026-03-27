@@ -58,6 +58,7 @@ function ThemeSyncManager() {
     supabase
       .from("advanced_feature_settings")
       .upsert({ user_id: user.id, theme_mode: themeMode }, { onConflict: "user_id" })
+      .then(() => {})
       .catch(() => {});
   }, [themeMode]);
 

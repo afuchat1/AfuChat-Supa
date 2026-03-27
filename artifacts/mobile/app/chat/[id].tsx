@@ -904,11 +904,11 @@ export default function ChatScreen() {
         if (text.trim()) {
           supabase.from("chat_drafts")
             .upsert({ user_id: user.id, chat_id: id, content: text, updated_at: new Date().toISOString() }, { onConflict: "user_id,chat_id" })
-            .catch(() => AsyncStorage.setItem(`chat_draft_${id}`, text).catch(() => {}));
+            .then(({ error }) => { if (error) AsyncStorage.setItem(`chat_draft_${id}`, text).catch(() => {}); });
         } else {
           supabase.from("chat_drafts")
             .delete().eq("user_id", user.id).eq("chat_id", id)
-            .catch(() => AsyncStorage.removeItem(`chat_draft_${id}`).catch(() => {}));
+            .then(({ error }) => { if (error) AsyncStorage.removeItem(`chat_draft_${id}`).catch(() => {}); });
         }
       } else if (id) {
         const key = `chat_draft_${id}`;
@@ -1092,7 +1092,7 @@ export default function ChatScreen() {
     if (!directText) setInput("");
     if (id) {
       AsyncStorage.removeItem(`chat_draft_${id}`).catch(() => {});
-      if (user) { supabase.from("chat_drafts").delete().eq("user_id", user.id).eq("chat_id", id).catch(() => {}); }
+      if (user) { supabase.from("chat_drafts").delete().eq("user_id", user.id).eq("chat_id", id).then(() => {}); }
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 

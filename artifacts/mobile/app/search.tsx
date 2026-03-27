@@ -85,7 +85,7 @@ export default function UniversalSearchScreen() {
     if (user) {
       supabase.from("advanced_feature_settings")
         .upsert({ user_id: user.id, recent_searches: updated }, { onConflict: "user_id" })
-        .catch(() => {});
+        .then(() => {});
     } else {
       AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated)).catch(() => {});
     }
