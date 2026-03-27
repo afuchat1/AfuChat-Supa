@@ -278,7 +278,6 @@ export default function PremiumScreen() {
             // Use upsert (INSERT ON CONFLICT UPDATE) so the RLS insert policy
             // handles this — a plain UPDATE can be blocked by a missing UPDATE policy.
             const { error } = await supabase.from("user_subscriptions").upsert({
-              id: subscription.id,
               user_id: user.id,
               plan_id: subscription.plan_id,
               started_at: subscription.started_at,
