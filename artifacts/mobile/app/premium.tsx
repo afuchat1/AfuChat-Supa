@@ -275,19 +275,12 @@ export default function PremiumScreen() {
           style: "destructive",
           onPress: async () => {
             setCancelling(true);
-            // Use upsert (INSERT ON CONFLICT UPDATE) so the RLS insert policy
-            // handles this — a plain UPDATE can be blocked by a missing UPDATE policy.
-            const { error } = await supabase.from("user_subscriptions").upsert({
-              user_id: user.id,
-              plan_id: subscription.plan_id,
-              started_at: subscription.started_at,
-              expires_at: subscription.expires_at,
-              is_active: false,
-              acoin_paid: subscription.acoin_paid,
-            }, { onConflict: "user_id" });
+            // Call the SECURITY DEFINER RPC — bypasses RLS entirely.
+            // Requires running the cancel_my_subscription() SQL in Supabase dashboard.
+            const { error } = await supabase.rpc("cancel_my_subscription");
 
             if (error) {
-              showAlert("Error", "Could not cancel subscription. Please try again.");
+              showAlert("Cancel Error", `Code: ${error.code}\n${error.message}`);
               setCancelling(false);
               return;
             }
