@@ -617,6 +617,18 @@ export default function ChatScreen() {
   const [giftSending, setGiftSending] = useState(false);
   const [giftMsg, setGiftMsg] = useState("");
   const [giftReveal, setGiftReveal] = useState<{ content: string; isReceiver: boolean } | null>(null);
+  const [envReveal, setEnvReveal] = useState<{
+    amount: number | null;
+    message: string;
+    senderName: string;
+    isSender: boolean;
+    alreadyClaimed: boolean;
+    allGone: boolean;
+    claimedCount: number;
+    totalCount: number;
+    totalAmount: number;
+  } | null>(null);
+  const [envClaiming, setEnvClaiming] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [gifSearch, setGifSearch] = useState("");
@@ -1432,23 +1444,136 @@ export default function ChatScreen() {
   }
 
   async function handleTapEnvelope(msg: Message) {
+    if (envClaiming) return;
+    setEnvClaiming(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    let envelopeId: string | null = null;
     const match = msg.encrypted_content.match(/\[([a-f0-9-]+)\]/);
     if (match) {
-      router.push({ pathname: "/red-envelope/[id]", params: { id: match[1] } });
+      envelopeId = match[1];
+    } else {
+      const { data } = await supabase
+        .from("red_envelopes")
+        .select("id")
+        .eq("chat_id", id)
+        .eq("sender_id", msg.sender_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      envelopeId = data?.id || null;
+    }
+
+    if (!envelopeId) {
+      showAlert("Error", "Could not find this red envelope.");
+      setEnvClaiming(false);
       return;
     }
-    const { data } = await supabase
+
+    const { data: env } = await supabase
       .from("red_envelopes")
-      .select("id")
-      .eq("chat_id", id)
-      .eq("sender_id", msg.sender_id)
-      .order("created_at", { ascending: false })
-      .limit(1)
+      .select("id, sender_id, total_amount, recipient_count, claimed_count, message, is_expired, profiles!red_envelopes_sender_id_fkey(display_name)")
+      .eq("id", envelopeId)
+      .single();
+
+    if (!env) {
+      showAlert("Error", "Red envelope not found.");
+      setEnvClaiming(false);
+      return;
+    }
+
+    const senderName = (env as any).profiles?.display_name || "Someone";
+    const isSender = env.sender_id === user?.id;
+
+    const { data: existingClaim } = await supabase
+      .from("red_envelope_claims")
+      .select("amount")
+      .eq("red_envelope_id", envelopeId)
+      .eq("claimer_id", user?.id || "")
       .maybeSingle();
 
-    if (data) {
-      router.push({ pathname: "/red-envelope/[id]", params: { id: data.id } });
+    if (existingClaim) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setEnvReveal({
+        amount: existingClaim.amount,
+        message: env.message,
+        senderName,
+        isSender,
+        alreadyClaimed: true,
+        allGone: false,
+        claimedCount: env.claimed_count,
+        totalCount: env.recipient_count,
+        totalAmount: env.total_amount,
+      });
+      setEnvClaiming(false);
+      return;
     }
+
+    if (isSender) {
+      setEnvReveal({
+        amount: null,
+        message: env.message,
+        senderName,
+        isSender: true,
+        alreadyClaimed: false,
+        allGone: env.claimed_count >= env.recipient_count || env.is_expired,
+        claimedCount: env.claimed_count,
+        totalCount: env.recipient_count,
+        totalAmount: env.total_amount,
+      });
+      setEnvClaiming(false);
+      return;
+    }
+
+    if (env.claimed_count >= env.recipient_count || env.is_expired) {
+      setEnvReveal({
+        amount: null,
+        message: env.message,
+        senderName,
+        isSender: false,
+        alreadyClaimed: false,
+        allGone: true,
+        claimedCount: env.claimed_count,
+        totalCount: env.recipient_count,
+        totalAmount: env.total_amount,
+      });
+      setEnvClaiming(false);
+      return;
+    }
+
+    const { data: claimResult, error: claimErr } = await supabase.rpc("claim_red_envelope", {
+      p_envelope_id: envelopeId,
+    });
+
+    if (claimErr || !claimResult?.success) {
+      showAlert("Error", claimResult?.message || claimErr?.message || "Failed to claim.");
+      setEnvClaiming(false);
+      return;
+    }
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("red_envelope_claimed"); } catch (_) {}
+    if (!isSender) {
+      notifyGiftReceived({
+        recipientId: env.sender_id,
+        senderName: profile?.display_name || "Someone",
+        senderUserId: user?.id || "",
+        giftName: `opened your red envelope (${claimResult.amount} ACoin)`,
+      });
+    }
+
+    setEnvReveal({
+      amount: claimResult.amount,
+      message: env.message,
+      senderName,
+      isSender: false,
+      alreadyClaimed: false,
+      allGone: false,
+      claimedCount: env.claimed_count + 1,
+      totalCount: env.recipient_count,
+      totalAmount: env.total_amount,
+    });
+    setEnvClaiming(false);
   }
 
   function getReplyPreview(msgId: string | null | undefined): string | null {
@@ -1952,6 +2077,47 @@ export default function ChatScreen() {
         </ScrollView>
       </BottomSheet>
 
+      <Modal visible={!!envReveal} transparent animationType="fade" onRequestClose={() => setEnvReveal(null)}>
+        <View style={st.envRevealOverlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setEnvReveal(null)} />
+          <View style={[st.envRevealCard, { backgroundColor: colors.surface }]}>
+            <View style={st.envRevealTop}>
+              <Text style={st.envRevealBigEmoji}>🧧</Text>
+              {envReveal?.amount !== null ? (
+                <>
+                  <Text style={st.envRevealAmountLabel}>
+                    {envReveal?.alreadyClaimed ? "You already received" : "You received"}
+                  </Text>
+                  <Text style={st.envRevealAmount}>{envReveal?.amount} <Text style={st.envRevealCurrency}>ACoin</Text></Text>
+                </>
+              ) : envReveal?.isSender ? (
+                <>
+                  <Text style={st.envRevealAmountLabel}>Your Red Envelope</Text>
+                  <Text style={[st.envRevealStatus, { color: colors.textSecondary }]}>
+                    {envReveal?.totalAmount} ACoin · {envReveal?.claimedCount}/{envReveal?.totalCount} claimed
+                  </Text>
+                </>
+              ) : (
+                <Text style={st.envRevealAmountLabel}>All envelopes have been claimed</Text>
+              )}
+            </View>
+            <View style={[st.envRevealDivider, { backgroundColor: colors.border }]} />
+            <View style={st.envRevealBottom}>
+              <Text style={[st.envRevealFrom, { color: colors.textMuted }]}>From {envReveal?.senderName}</Text>
+              <Text style={[st.envRevealMsg, { color: colors.text }]}>"{envReveal?.message}"</Text>
+              <Text style={[st.envRevealStats, { color: colors.textMuted }]}>
+                {envReveal?.claimedCount}/{envReveal?.totalCount} opened
+              </Text>
+            </View>
+            <TouchableOpacity style={st.envRevealBtn} onPress={() => setEnvReveal(null)}>
+              <Text style={st.envRevealBtnText}>
+                {envReveal?.amount !== null ? "Awesome!" : "Got it"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={!!giftReveal} transparent animationType="fade" onRequestClose={() => setGiftReveal(null)}>
         <View style={st.giftRevealOverlay}>
           <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setGiftReveal(null)} />
@@ -2235,6 +2401,22 @@ const st = StyleSheet.create({
   specialMsgEmoji: { fontSize: 56 },
   redEnvBtn: { backgroundColor: "#FF3B30", borderRadius: 14, paddingVertical: 14, alignItems: "center" },
   redEnvBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+
+  envRevealOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center", padding: 24 },
+  envRevealCard: { width: "100%", borderRadius: 20, overflow: "hidden", elevation: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 20 },
+  envRevealTop: { alignItems: "center", paddingTop: 28, paddingBottom: 20, paddingHorizontal: 24, backgroundColor: "#FF3B30" },
+  envRevealBigEmoji: { fontSize: 64, marginBottom: 8 },
+  envRevealAmountLabel: { fontSize: 16, fontFamily: "Inter_500Medium", color: "rgba(255,255,255,0.85)", marginBottom: 4 },
+  envRevealAmount: { fontSize: 36, fontFamily: "Inter_700Bold", color: "#FFD700" },
+  envRevealCurrency: { fontSize: 18, fontFamily: "Inter_500Medium", color: "#FFD700" },
+  envRevealStatus: { fontSize: 14, fontFamily: "Inter_500Medium", marginTop: 4 },
+  envRevealDivider: { height: 1 },
+  envRevealBottom: { alignItems: "center", paddingVertical: 16, paddingHorizontal: 24, gap: 4 },
+  envRevealFrom: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  envRevealMsg: { fontSize: 16, fontFamily: "Inter_500Medium", textAlign: "center", fontStyle: "italic" },
+  envRevealStats: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 4 },
+  envRevealBtn: { backgroundColor: "#FF3B30", marginHorizontal: 24, marginBottom: 20, paddingVertical: 14, borderRadius: 14, alignItems: "center" },
+  envRevealBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
 
   giftRevealOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 },
   giftRevealContainer: { width: "100%", borderRadius: 20, padding: 24, elevation: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 20 },
