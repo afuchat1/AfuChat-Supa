@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -18,6 +19,10 @@ import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+
+const TIER_ORDER: Record<string, number> = { free: 0, silver: 1, gold: 2, platinum: 3 };
+const TIER_COLORS: Record<string, string> = { silver: "#8E9BAD", gold: "#F5A623", platinum: "#BF5AF2" };
+const TIER_LABELS: Record<string, string> = { silver: "Silver", gold: "Gold", platinum: "Platinum" };
 
 type FeatureSettings = {
   // Chat intelligence
@@ -114,7 +119,7 @@ const SECTIONS: Section[] = [
 
 export default function AdvancedFeaturesScreen() {
   const { colors } = useTheme();
-  const { user } = useAuth();
+  const { user, subscription } = useAuth();
   const insets = useSafeAreaInsets();
   const [prefs, setPrefs] = useState<FeatureSettings>(defaults);
   const [loading, setLoading] = useState(true);
@@ -213,6 +218,40 @@ export default function AdvancedFeaturesScreen() {
     );
   }
 
+  function hasTier(required: "silver" | "gold" | "platinum") {
+    const userTier = (subscription?.plan_tier || "free").toLowerCase();
+    return (TIER_ORDER[userTier] ?? 0) >= TIER_ORDER[required];
+  }
+
+  function LockedRow({ label, desc, tier }: { label: string; desc?: string; tier: "silver" | "gold" | "platinum" }) {
+    const tierColor = TIER_COLORS[tier];
+    return (
+      <TouchableOpacity style={[styles.prefRow, { borderBottomColor: colors.border }]} onPress={() => router.push("/premium")}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.prefLabel, { color: colors.textMuted }]}>{label}</Text>
+          {desc && <Text style={[styles.prefDesc, { color: colors.textMuted }]}>{desc}</Text>}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 3 }}>
+            <Ionicons name="lock-closed" size={10} color={tierColor} />
+            <Text style={{ fontSize: 11, color: tierColor, fontWeight: "600" }}>{TIER_LABELS[tier]}+ required</Text>
+          </View>
+        </View>
+        <View style={{ backgroundColor: tierColor + "22", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
+          <Text style={{ color: tierColor, fontSize: 12, fontWeight: "700" }}>Upgrade</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+
+  function LockedToggle({ label, desc, field, tier, note }: { label: string; desc?: string; field: keyof FeatureSettings; tier: "silver" | "gold" | "platinum"; note?: string }) {
+    if (hasTier(tier)) return <Toggle label={label} desc={desc} field={field} note={note} />;
+    return <LockedRow label={label} desc={desc} tier={tier} />;
+  }
+
+  function LockedLink({ label, desc, value, tier, onPress }: { label: string; desc?: string; value?: string; tier: "silver" | "gold" | "platinum"; onPress: () => void }) {
+    if (hasTier(tier)) return <Link label={label} desc={desc} value={value} onPress={onPress} />;
+    return <LockedRow label={label} desc={desc} tier={tier} />;
+  }
+
   const currentStatus = STATUS_OPTIONS.find((s) => s.value === prefs.activity_status);
   const currentLang = LANGUAGE_OPTIONS.find((l) => l.code === prefs.translation_language);
 
@@ -220,22 +259,22 @@ export default function AdvancedFeaturesScreen() {
     switch (key) {
       case "ai": return (
         <>
-          <Toggle label="Message Translation" desc="Instantly translate messages to your language" field="message_translation" note="AI" />
-          {prefs.message_translation && (
+          <LockedToggle label="Message Translation" desc="Instantly translate messages to your language" field="message_translation" tier="silver" note="AI" />
+          {prefs.message_translation && hasTier("silver") && (
             <Link label="Translate to" desc="Choose your preferred language" value={currentLang?.label} onPress={() => setShowLangPicker(true)} />
           )}
-          <Toggle label="Voice to Text" desc="Convert voice notes into readable text automatically" field="voice_to_text" note="AI" />
-          <Toggle label="Text to Speech" desc="Tap any message to have it read aloud" field="text_to_speech" note="AI" />
-          <Toggle label="Chat Summary" desc="Summarize long conversations into key points" field="chat_summary" note="AI" />
-          <Toggle label="Smart Notifications" desc="AI filters important vs non-important notifications" field="smart_notifications" note="AI" />
+          <LockedToggle label="Voice to Text" desc="Convert voice notes into readable text automatically" field="voice_to_text" tier="silver" note="AI" />
+          <Toggle label="Text to Speech" desc="Tap any message to have it read aloud" field="text_to_speech" />
+          <LockedToggle label="Chat Summary" desc="Summarize long conversations into key points" field="chat_summary" tier="gold" note="AI" />
+          <LockedToggle label="Smart Notifications" desc="AI filters important vs non-important notifications" field="smart_notifications" tier="silver" note="AI" />
         </>
       );
       case "chat": return (
         <>
-          <Toggle label="Smart Chat Folders" desc="Auto-organize chats into Work, Friends, Business, Spam" field="chat_folders" />
+          <LockedToggle label="Smart Chat Folders" desc="Auto-organize chats into Work, Friends, Business, Spam" field="chat_folders" tier="silver" />
           <Toggle label="Offline Drafts" desc="Write messages offline and send when connected" field="offline_drafts" />
-          <Toggle label="Temporary Chat Mode" desc="Chats that auto-delete after a set time" field="temp_chat_enabled" />
-          {prefs.temp_chat_enabled && (
+          <LockedToggle label="Temporary Chat Mode" desc="Chats that auto-delete after a set time" field="temp_chat_enabled" tier="silver" />
+          {prefs.temp_chat_enabled && hasTier("silver") && (
             <Link label="Auto-delete after" value={`${prefs.temp_chat_default_minutes} min`} onPress={() => {
               const options = [5, 15, 30, 60, 360, 1440];
               showAlert("Auto-delete timer", "Choose how long before messages disappear", options.map((m) => ({
@@ -244,19 +283,19 @@ export default function AdvancedFeaturesScreen() {
               })));
             }} />
           )}
-          <Toggle label="Auto-Reply Mode" desc="Set automatic replies when you're busy" field="auto_reply_enabled" />
-          {prefs.auto_reply_enabled && (
+          <LockedToggle label="Auto-Reply Mode" desc="Set automatic replies when you're busy" field="auto_reply_enabled" tier="silver" />
+          {prefs.auto_reply_enabled && hasTier("silver") && (
             <Link label="Auto-reply message" value={`"${prefs.auto_reply_message.slice(0, 30)}…"`} onPress={() => { setTempAutoReply(prefs.auto_reply_message); setShowAutoReplyEditor(true); }} />
           )}
-          <Toggle label="Focus Mode" desc="Mute distractions and prioritize selected chats" field="focus_mode" />
-          {prefs.focus_mode && (
-            <Toggle label="Scheduled Focus" desc="Automatically enable focus during set hours" field="focus_mode_schedule" />
+          <LockedToggle label="Focus Mode" desc="Mute distractions and prioritize selected chats" field="focus_mode" tier="silver" />
+          {prefs.focus_mode && hasTier("silver") && (
+            <LockedToggle label="Scheduled Focus" desc="Automatically enable focus during set hours" field="focus_mode_schedule" tier="gold" />
           )}
         </>
       );
       case "presence": return (
         <>
-          <Link label="Activity Status" desc="Control what others see about your availability" value={`${currentStatus?.emoji} ${currentStatus?.label}`} onPress={() => setShowStatusPicker(true)} />
+          <LockedLink label="Activity Status" desc="Control what others see about your availability" value={`${currentStatus?.emoji} ${currentStatus?.label}`} tier="silver" onPress={() => setShowStatusPicker(true)} />
           <Toggle label="Mini Profile Popup" desc="Tap a username to see quick profile preview in chat" field="mini_profile_popup" />
           <Toggle label="Typing Indicator" desc="Show when you're typing to others" field="show_typing_indicator" />
         </>
@@ -264,24 +303,24 @@ export default function AdvancedFeaturesScreen() {
       case "content": return (
         <>
           <Toggle label="Interactive Link Preview" desc="Links expand into rich previews with actions" field="interactive_link_preview" />
-          <Toggle label="Link → Mini App" desc="Convert shared links into interactive mini apps" field="link_to_mini_app" note="Beta" />
-          <Toggle label="Auto Media Organization" desc="Group images, videos, and docs by type and date" field="auto_media_organization" />
-          <Toggle label="Advanced Emoji Reactions" desc="Extended reactions with counters and trending emojis" field="emoji_reactions_advanced" />
-          <Toggle label="Content Filter" desc="Filter what appears in your feed by topic" field="content_filter_topics" />
-          {prefs.content_filter_topics && (
+          <LockedToggle label="Link → Mini App" desc="Convert shared links into interactive mini apps" field="link_to_mini_app" tier="gold" note="Beta" />
+          <LockedToggle label="Auto Media Organization" desc="Group images, videos, and docs by type and date" field="auto_media_organization" tier="silver" />
+          <LockedToggle label="Advanced Emoji Reactions" desc="Extended reactions with counters and trending emojis" field="emoji_reactions_advanced" tier="silver" />
+          <LockedToggle label="Content Filter" desc="Filter what appears in your feed by topic" field="content_filter_topics" tier="silver" />
+          {prefs.content_filter_topics && hasTier("silver") && (
             <Link label="Filtered keywords" desc="Topics you don't want to see" value={prefs.content_filter_keywords || "None set"} onPress={() => { setTempKeywords(prefs.content_filter_keywords); setShowKeywordEditor(true); }} />
           )}
         </>
       );
       case "productivity": return (
         <>
-          <Toggle label="Message Reminders" desc="Set reminders on specific messages" field="message_reminders" />
-          <Toggle label="Keyword Alerts" desc="Get notified when specific words are mentioned" field="keyword_alerts" />
-          {prefs.keyword_alerts && (
+          <LockedToggle label="Message Reminders" desc="Set reminders on specific messages" field="message_reminders" tier="silver" />
+          <LockedToggle label="Keyword Alerts" desc="Get notified when specific words are mentioned" field="keyword_alerts" tier="gold" />
+          {prefs.keyword_alerts && hasTier("gold") && (
             <Link label="Alert keywords" desc="Words that trigger a notification" value={prefs.keyword_alerts_list || "None set"} onPress={() => { setTempKeywords(prefs.keyword_alerts_list); setShowKeywordEditor(true); }} />
           )}
-          <Toggle label="Chat → Post" desc="Convert any message into a public post" field="chat_to_post" />
-          <Link label="Chat export format" value={prefs.chat_export_format.toUpperCase()} onPress={() => {
+          <LockedToggle label="Chat → Post" desc="Convert any message into a public post" field="chat_to_post" tier="silver" />
+          <LockedLink label="Chat export format" value={prefs.chat_export_format.toUpperCase()} tier="gold" onPress={() => {
             showAlert("Export format", "Choose format for exported chats", [
               { text: "PDF", onPress: () => setPref("chat_export_format", "pdf") },
               { text: "Plain Text", onPress: () => setPref("chat_export_format", "txt") },
@@ -294,13 +333,19 @@ export default function AdvancedFeaturesScreen() {
         <>
           <Toggle label="Quick Action Menu" desc="Long-press anywhere for fast actions (reply, save, share)" field="quick_action_menu" />
           <Toggle label="User Tagging" desc="Tag users with @ in chats, posts, and comments" field="user_tagging" />
-          <Toggle label="Message Edit History" desc="View all previous versions of edited messages" field="message_edit_history" />
+          <LockedToggle label="Message Edit History" desc="View all previous versions of edited messages" field="message_edit_history" tier="silver" />
           <Toggle label="In-App Browser" desc="Browse websites without leaving AfuChat" field="in_app_browser" />
-          <Toggle label="Drag & Drop Upload" desc="Upload files with drag-and-drop on web" field="drag_drop_upload" />
-          <Toggle label="Cross-Device Sync" desc="Instant sync across mobile, web, and desktop" field="cross_device_sync" />
-          <Toggle label="Split Screen Mode" desc="Use chat and browser side by side" field="split_screen_mode" note="Beta" />
-          <Toggle label="Screen Share in Chat" desc="Share your screen during a conversation" field="screen_share" note="Beta" />
-          <Toggle label="Group Roles System" desc="Advanced permissions for admins, mods, and members" field="group_roles_system" />
+          {Platform.OS === "web" && (
+            <Toggle label="Drag & Drop Upload" desc="Upload files with drag-and-drop on web" field="drag_drop_upload" />
+          )}
+          <LockedToggle label="Cross-Device Sync" desc="Instant sync across mobile, web, and desktop" field="cross_device_sync" tier="gold" />
+          {Platform.OS === "web" && (
+            <LockedToggle label="Split Screen Mode" desc="Use chat and browser side by side" field="split_screen_mode" tier="gold" note="Beta" />
+          )}
+          {Platform.OS === "web" && (
+            <LockedToggle label="Screen Share in Chat" desc="Share your screen during a conversation" field="screen_share" tier="gold" note="Beta" />
+          )}
+          <LockedToggle label="Group Roles System" desc="Advanced permissions for admins, mods, and members" field="group_roles_system" tier="gold" />
         </>
       );
       default: return null;

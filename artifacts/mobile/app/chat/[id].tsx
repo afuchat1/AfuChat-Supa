@@ -2283,12 +2283,14 @@ export default function ChatScreen() {
       <BottomSheet visible={showAttachMenu} onClose={() => setShowAttachMenu(false)}>
         <Text style={[st.sheetTitle, { color: colors.text }]}>Share</Text>
         <View style={st.attachGrid}>
-          <TouchableOpacity style={[st.attachOption, { backgroundColor: colors.inputBg }]} onPress={pickFromCamera}>
-            <View style={[st.attachIconBg, { backgroundColor: "#FF6B35" }]}>
-              <Ionicons name="camera" size={24} color="#fff" />
-            </View>
-            <Text style={[st.attachLabel, { color: colors.text }]}>Camera</Text>
-          </TouchableOpacity>
+          {Platform.OS !== "web" && (
+            <TouchableOpacity style={[st.attachOption, { backgroundColor: colors.inputBg }]} onPress={pickFromCamera}>
+              <View style={[st.attachIconBg, { backgroundColor: "#FF6B35" }]}>
+                <Ionicons name="camera" size={24} color="#fff" />
+              </View>
+              <Text style={[st.attachLabel, { color: colors.text }]}>Camera</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={[st.attachOption, { backgroundColor: colors.inputBg }]} onPress={pickFromGallery}>
             <View style={[st.attachIconBg, { backgroundColor: "#8B5CF6" }]}>
               <Ionicons name="images" size={24} color="#fff" />

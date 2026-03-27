@@ -174,6 +174,16 @@ The AfuChat app is cross-platform — same codebase runs on mobile (iOS/Android 
 - Keyboard handling: `KeyboardAwareScrollViewCompat` switches to standard `ScrollView` on web
 - Offline detection: Uses `navigator.onLine` + `window.addEventListener` on web, NetInfo on native
 - Alerts: Web fallback uses `window.alert`/`window.confirm`/`window.prompt`
+- Camera button in chat attach menu: Hidden on web (`Platform.OS !== 'web'`); gallery/file/GIF still available
+- Advanced Features — web-only toggles (Drag & Drop Upload, Split Screen, Screen Share): Only rendered when `Platform.OS === 'web'`
+
+### Premium Tier Gating (Advanced Features)
+The `app/advanced-features.tsx` screen uses a `LockedToggle`/`LockedLink` component system. Features that require a paid tier show a lock icon, tier badge (Silver/Gold colour-coded), and an "Upgrade" button that routes to `/premium` instead of rendering a usable switch. Free users can still toggle free-tier features normally.
+
+Tier thresholds (`TIER_ORDER`: free=0, silver=1, gold=2, platinum=3):
+- **Silver+**: Message Translation (AI), Voice to Text (AI), Smart Notifications (AI), Smart Chat Folders, Temporary Chat Mode, Auto-Reply Mode, Focus Mode, Activity Status, Auto Media Organization, Advanced Emoji Reactions, Content Filter, Message Reminders, Chat→Post, Message Edit History
+- **Gold+**: Chat Summary (AI), Scheduled Focus, Link→Mini App, Keyword Alerts, Chat Export Format, Cross-Device Sync, Split Screen Mode, Screen Share in Chat, Group Roles System
+- **Free**: Text to Speech (device-native, no API cost), Offline Drafts, Interactive Link Preview, Quick Action Menu, User Tagging, In-App Browser
 
 ## Auth & Onboarding Flow
 
