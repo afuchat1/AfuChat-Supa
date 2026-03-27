@@ -339,8 +339,11 @@ RESPONSE GUIDELINES:
         }
       />
 
-      <View style={[s.inputRow, { marginHorizontal: 6, marginTop: 2, marginBottom: insets.bottom + 4 }]}>
+      <View style={[s.inputRow, { marginHorizontal: 4, marginTop: 2, marginBottom: insets.bottom + 4 }]}>
         <View style={[s.inputWrap, { backgroundColor: colors.surface }]}>
+          <TouchableOpacity hitSlop={8} style={s.inputIconBtn}>
+            <Ionicons name="happy-outline" size={22} color={colors.textMuted} />
+          </TouchableOpacity>
           <TextInput
             style={[s.input, { color: colors.text }]}
             placeholder="Ask AfuAi anything..."
@@ -357,7 +360,7 @@ RESPONSE GUIDELINES:
           onPress={() => sendMessage()}
           disabled={!input.trim() || loading}
         >
-          <Ionicons name="send" size={16} color={input.trim() && !loading ? "#fff" : colors.textMuted} />
+          <Ionicons name="send" size={18} color={input.trim() && !loading ? "#fff" : colors.textMuted} />
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -404,7 +407,8 @@ const s = StyleSheet.create({
   quickBtnText: { fontSize: 14, fontWeight: "500" },
   inputBar: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingTop: 8 },
   inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 4 },
-  inputWrap: { flex: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
-  input: { flex: 1, fontSize: 15, lineHeight: 20, borderWidth: 0, outlineStyle: "none" as any, paddingVertical: 2, minHeight: 22, maxHeight: 120 },
-  sendBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: "center", alignItems: "center" },
+  inputWrap: { flex: 1, flexDirection: "row", alignItems: "flex-end", borderRadius: 20, paddingHorizontal: 4, paddingVertical: 6 },
+  inputIconBtn: { paddingHorizontal: 4, paddingBottom: 2 },
+  input: { flex: 1, fontSize: 16, lineHeight: 20, borderWidth: 0, outlineStyle: "none" as any, paddingVertical: 0, minHeight: 22, maxHeight: 120 },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: "center", alignItems: "center" },
 });

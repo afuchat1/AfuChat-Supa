@@ -392,8 +392,11 @@ export default function PostDetailScreen() {
 
       {user ? (
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
-          <View style={[styles.replyBar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 8 }]}>
+          <View style={[styles.replyBar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 4 }]}>
             <View style={[styles.replyInputWrap, { backgroundColor: colors.inputBg }]}>
+              <TouchableOpacity hitSlop={8} style={styles.replyIconBtn}>
+                <Ionicons name="happy-outline" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
               <TextInput
                 style={[styles.replyInput, { color: colors.text }]}
                 placeholder="Write a reply..."
@@ -410,7 +413,7 @@ export default function PostDetailScreen() {
               style={[styles.replySendBtn, { backgroundColor: replyText.trim() && !sending ? Colors.brand : colors.border }]}
             >
               {sending ? <ActivityIndicator color="#fff" size="small" /> : (
-                <Ionicons name="send" size={16} color={replyText.trim() ? "#fff" : colors.textMuted} />
+                <Ionicons name="send" size={18} color={replyText.trim() ? "#fff" : colors.textMuted} />
               )}
             </TouchableOpacity>
           </View>
@@ -459,10 +462,11 @@ const styles = StyleSheet.create({
   replyName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   replyTime: { fontSize: 12, fontFamily: "Inter_400Regular" },
   replyContent: { fontSize: 15, fontFamily: "Inter_400Regular", marginTop: 2, lineHeight: 21 },
-  replyBar: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 6, paddingTop: 2, gap: 4 },
-  replyInputWrap: { flex: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, borderWidth: 0 },
-  replyInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 20, borderWidth: 0, outlineStyle: "none" as any, paddingVertical: 2, minHeight: 22, maxHeight: 120 },
-  replySendBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  replyBar: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 4, paddingTop: 2, gap: 4 },
+  replyInputWrap: { flex: 1, flexDirection: "row", alignItems: "flex-end", borderRadius: 20, paddingHorizontal: 4, paddingVertical: 6, borderWidth: 0 },
+  replyIconBtn: { paddingHorizontal: 4, paddingBottom: 2 },
+  replyInput: { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 20, borderWidth: 0, outlineStyle: "none" as any, paddingVertical: 0, minHeight: 22, maxHeight: 120 },
+  replySendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   aiSummaryBtn: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
   aiSummaryBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   aiSummaryCard: { borderRadius: 12, padding: 14, borderWidth: 1 },

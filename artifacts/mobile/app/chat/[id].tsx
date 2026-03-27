@@ -1632,40 +1632,47 @@ export default function ChatScreen() {
               <SmartReplyBar messages={messages} myId={user?.id || ""} input={input} onSend={handleSmartReply} colors={colors} />
             )}
             <View style={[st.inputBar, { paddingBottom: Math.max(insets.bottom, 4) }]}>
-            <TouchableOpacity onPress={() => setShowAttachMenu(true)} style={st.inputAction} hitSlop={8}>
-              <Ionicons name="happy-outline" size={22} color={colors.textMuted} />
-            </TouchableOpacity>
-            <View style={[st.inputField, { backgroundColor: colors.inputBg }]}>
-              <TextInput
-                style={[st.input, { color: colors.text }]}
-                placeholder="Message"
-                placeholderTextColor={colors.textMuted}
-                value={input}
-                onChangeText={(t) => { setInput(t); handleTyping(); saveDraft(t); }}
-                multiline
-                maxLength={4000}
-              />
-              <TouchableOpacity onPress={() => setShowAttachMenu(true)} hitSlop={8} style={{ paddingHorizontal: 4 }}>
-                <Ionicons name="attach" size={20} color={colors.textMuted} style={{ transform: [{ rotate: "-45deg" }] }} />
-              </TouchableOpacity>
-            </View>
-            {(input.trim() || attachmentPreview) ? (
-              <TouchableOpacity
-                onPress={attachmentPreview ? sendAttachment : () => sendMessage()}
-                disabled={sending}
-                style={[st.sendBtn, { backgroundColor: BRAND }]}
-              >
-                {sending ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Ionicons name="send" size={16} color="#fff" />
+              <View style={[st.inputField, { backgroundColor: colors.inputBg }]}>
+                <TouchableOpacity hitSlop={8} style={st.inputIconBtn}>
+                  <Ionicons name="happy-outline" size={22} color={colors.textMuted} />
+                </TouchableOpacity>
+                <TextInput
+                  style={[st.input, { color: colors.text }]}
+                  placeholder="Message"
+                  placeholderTextColor={colors.textMuted}
+                  value={input}
+                  onChangeText={(t) => { setInput(t); handleTyping(); saveDraft(t); }}
+                  multiline
+                  maxLength={4000}
+                />
+                {!input.trim() && (
+                  <>
+                    <TouchableOpacity onPress={() => setShowAttachMenu(true)} hitSlop={8} style={st.inputIconBtn}>
+                      <Ionicons name="gift-outline" size={20} color={colors.textMuted} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setShowAttachMenu(true)} hitSlop={8} style={st.inputIconBtn}>
+                      <Ionicons name="attach" size={20} color={colors.textMuted} style={{ transform: [{ rotate: "-45deg" }] }} />
+                    </TouchableOpacity>
+                  </>
                 )}
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity onPress={() => {}} style={[st.sendBtn, { backgroundColor: BRAND }]} hitSlop={8}>
-                <Ionicons name="mic" size={18} color="#fff" />
-              </TouchableOpacity>
-            )}
+              </View>
+              {(input.trim() || attachmentPreview) ? (
+                <TouchableOpacity
+                  onPress={attachmentPreview ? sendAttachment : () => sendMessage()}
+                  disabled={sending}
+                  style={[st.sendBtn, { backgroundColor: BRAND }]}
+                >
+                  {sending ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Ionicons name="send" size={18} color="#fff" />
+                  )}
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity onPress={() => {}} style={[st.sendBtn, { backgroundColor: BRAND }]} hitSlop={8}>
+                  <Ionicons name="mic" size={20} color="#fff" />
+                </TouchableOpacity>
+              )}
             </View>
           </>
         )}
@@ -2160,14 +2167,14 @@ const st = StyleSheet.create({
   inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
     paddingTop: 2,
     gap: 4,
   },
-  inputAction: { paddingBottom: 6 },
-  inputField: { flex: 1, flexDirection: "row", alignItems: "flex-end", borderRadius: 20, paddingLeft: 12, paddingRight: 8, paddingVertical: 4, borderWidth: 0 },
-  input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 20, borderWidth: 0, outlineStyle: "none" as any, paddingVertical: 2, minHeight: 22, maxHeight: 120 },
-  sendBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  inputField: { flex: 1, flexDirection: "row", alignItems: "flex-end", borderRadius: 20, paddingHorizontal: 4, paddingVertical: 6, borderWidth: 0 },
+  inputIconBtn: { paddingHorizontal: 4, paddingBottom: 2 },
+  input: { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 20, borderWidth: 0, outlineStyle: "none" as any, paddingVertical: 0, minHeight: 22, maxHeight: 120 },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
 
   sheetOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
   sheetContent: { position: "absolute", bottom: 0, left: 0, right: 0, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 14, maxHeight: SCREEN_HEIGHT * 0.7 },
