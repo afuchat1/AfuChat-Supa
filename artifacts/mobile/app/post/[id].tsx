@@ -392,28 +392,34 @@ export default function PostDetailScreen() {
 
       {user ? (
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
-          <View style={[styles.replyBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
-            <TextInput
-              style={[styles.replyInput, { color: colors.text, backgroundColor: colors.inputBg }]}
-              placeholder="Write a reply..."
-              placeholderTextColor={colors.textMuted}
-              value={replyText}
-              onChangeText={setReplyText}
-              maxLength={280}
-              multiline
-            />
-            <TouchableOpacity onPress={sendReply} disabled={!replyText.trim() || sending}>
-              {sending ? <ActivityIndicator color={Colors.brand} /> : (
-                <Ionicons name="send" size={22} color={replyText.trim() ? Colors.brand : colors.textMuted} />
-              )}
-            </TouchableOpacity>
+          <View style={[styles.replyBar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 8 }]}>
+            <View style={[styles.replyInputWrap, { backgroundColor: colors.inputBg }]}>
+              <TextInput
+                style={[styles.replyInput, { color: colors.text }]}
+                placeholder="Write a reply..."
+                placeholderTextColor={colors.textMuted}
+                value={replyText}
+                onChangeText={setReplyText}
+                maxLength={280}
+                multiline
+              />
+              <TouchableOpacity
+                onPress={sendReply}
+                disabled={!replyText.trim() || sending}
+                style={[styles.replySendBtn, { backgroundColor: replyText.trim() && !sending ? Colors.brand : colors.border }]}
+              >
+                {sending ? <ActivityIndicator color="#fff" size="small" /> : (
+                  <Ionicons name="send" size={16} color={replyText.trim() ? "#fff" : colors.textMuted} />
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </KeyboardAvoidingView>
       ) : (
-        <View style={[styles.replyBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
+        <View style={[styles.replyBar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 8 }]}>
           <TouchableOpacity
             onPress={() => router.push("/(auth)/login")}
-            style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.brand, paddingVertical: 10, borderRadius: 20 }}
+            style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.brand, paddingVertical: 10, borderRadius: 24 }}
           >
             <Ionicons name="log-in-outline" size={18} color="#fff" />
             <Text style={{ color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" }}>Sign in to reply</Text>
@@ -453,8 +459,10 @@ const styles = StyleSheet.create({
   replyName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   replyTime: { fontSize: 12, fontFamily: "Inter_400Regular" },
   replyContent: { fontSize: 15, fontFamily: "Inter_400Regular", marginTop: 2, lineHeight: 21 },
-  replyBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, gap: 10 },
-  replyInput: { flex: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, fontFamily: "Inter_400Regular", maxHeight: 80 },
+  replyBar: { paddingHorizontal: 12, paddingTop: 8 },
+  replyInputWrap: { flexDirection: "row", alignItems: "flex-end", borderRadius: 24, paddingLeft: 16, paddingRight: 6, paddingVertical: 6, gap: 8 },
+  replyInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 20, maxHeight: 100 },
+  replySendBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   aiSummaryBtn: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
   aiSummaryBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   aiSummaryCard: { borderRadius: 12, padding: 14, borderWidth: 1 },
