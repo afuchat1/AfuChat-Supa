@@ -339,26 +339,24 @@ RESPONSE GUIDELINES:
         }
       />
 
-      <View style={[s.inputBar, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom + 8 }]}>
-        <View style={[s.inputWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <TextInput
-            style={[s.input, { color: colors.text }]}
-            placeholder="Ask AfuAi anything..."
-            placeholderTextColor={colors.textMuted}
-            value={input}
-            onChangeText={setInput}
-            multiline
-            maxLength={2000}
-            onSubmitEditing={() => sendMessage()}
-          />
-          <TouchableOpacity
-            style={[s.sendBtn, { backgroundColor: input.trim() && !loading ? Colors.brand : colors.border }]}
-            onPress={() => sendMessage()}
-            disabled={!input.trim() || loading}
-          >
-            <Ionicons name="send" size={16} color={input.trim() && !loading ? "#fff" : colors.textMuted} />
-          </TouchableOpacity>
-        </View>
+      <View style={[s.inputWrap, { backgroundColor: colors.surface, borderColor: colors.border, marginHorizontal: 12, marginTop: 8, marginBottom: insets.bottom + 8 }]}>
+        <TextInput
+          style={[s.input, { color: colors.text }]}
+          placeholder="Ask AfuAi anything..."
+          placeholderTextColor={colors.textMuted}
+          value={input}
+          onChangeText={setInput}
+          multiline
+          maxLength={2000}
+          onSubmitEditing={() => sendMessage()}
+        />
+        <TouchableOpacity
+          style={[s.sendBtn, { backgroundColor: input.trim() && !loading ? Colors.brand : colors.border }]}
+          onPress={() => sendMessage()}
+          disabled={!input.trim() || loading}
+        >
+          <Ionicons name="send" size={16} color={input.trim() && !loading ? "#fff" : colors.textMuted} />
+        </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   );
