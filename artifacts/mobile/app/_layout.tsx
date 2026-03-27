@@ -8,7 +8,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Linking, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -20,8 +20,9 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { PushNotificationManager } from "@/components/PushNotificationManager";
 import { IOSAlert, type IOSAlertButton } from "@/components/ui/IOSAlert";
-import { AuthProvider } from "@/context/AuthContext";
-import { ThemeProvider } from "@/context/ThemeContext";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { ThemeProvider, useThemeContext } from "@/context/ThemeContext";
+import { supabase } from "@/lib/supabase";
 import { registerAlertListener, unregisterAlertListener } from "@/lib/alert";
 import { setBaseUrl } from "@workspace/api-client-react";
 
@@ -30,6 +31,38 @@ try { setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`); } catch (_) {}
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
+
+function ThemeSyncManager() {
+  const { user } = useAuth();
+  const { themeMode, setThemeMode } = useThemeContext();
+  const initialLoadDone = useRef(false);
+
+  useEffect(() => {
+    if (!user) { initialLoadDone.current = false; return; }
+    supabase
+      .from("advanced_feature_settings")
+      .select("theme_mode")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.theme_mode && ["light", "dark", "system"].includes(data.theme_mode)) {
+          setThemeMode(data.theme_mode as any);
+        }
+        initialLoadDone.current = true;
+      })
+      .catch(() => { initialLoadDone.current = true; });
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user || !initialLoadDone.current) return;
+    supabase
+      .from("advanced_feature_settings")
+      .upsert({ user_id: user.id, theme_mode: themeMode }, { onConflict: "user_id" })
+      .catch(() => {});
+  }, [themeMode]);
+
+  return null;
+}
 
 function RootLayoutNav() {
   return (
@@ -161,6 +194,7 @@ export default function RootLayout() {
               <DesktopWrapper>
                 <ThemeProvider>
                   <AuthProvider>
+                    <ThemeSyncManager />
                     <LanguageProvider>
                       <PushNotificationManager />
                       <RootLayoutNav />

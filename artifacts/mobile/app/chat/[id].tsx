@@ -892,21 +892,39 @@ export default function ChatScreen() {
     if (!id) return;
     if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
     draftSaveTimer.current = setTimeout(() => {
-      const key = `chat_draft_${id}`;
-      if (text.trim()) {
-        AsyncStorage.setItem(key, text).catch(() => {});
-      } else {
-        AsyncStorage.removeItem(key).catch(() => {});
+      if (user && id) {
+        if (text.trim()) {
+          supabase.from("chat_drafts")
+            .upsert({ user_id: user.id, chat_id: id, content: text, updated_at: new Date().toISOString() }, { onConflict: "user_id,chat_id" })
+            .catch(() => AsyncStorage.setItem(`chat_draft_${id}`, text).catch(() => {}));
+        } else {
+          supabase.from("chat_drafts")
+            .delete().eq("user_id", user.id).eq("chat_id", id)
+            .catch(() => AsyncStorage.removeItem(`chat_draft_${id}`).catch(() => {}));
+        }
+      } else if (id) {
+        const key = `chat_draft_${id}`;
+        if (text.trim()) { AsyncStorage.setItem(key, text).catch(() => {}); }
+        else { AsyncStorage.removeItem(key).catch(() => {}); }
       }
     }, 800);
   }
 
   useEffect(() => {
     if (!id) return;
-    AsyncStorage.getItem(`chat_draft_${id}`).then((draft) => {
-      if (draft) setInput(draft);
-    }).catch(() => {});
-  }, [id]);
+    if (user) {
+      supabase.from("chat_drafts")
+        .select("content").eq("user_id", user.id).eq("chat_id", id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.content) { setInput(data.content); }
+          else { AsyncStorage.getItem(`chat_draft_${id}`).then((draft) => { if (draft) setInput(draft); }).catch(() => {}); }
+        })
+        .catch(() => { AsyncStorage.getItem(`chat_draft_${id}`).then((draft) => { if (draft) setInput(draft); }).catch(() => {}); });
+    } else {
+      AsyncStorage.getItem(`chat_draft_${id}`).then((draft) => { if (draft) setInput(draft); }).catch(() => {});
+    }
+  }, [id, user?.id]);
 
   function handleSmartReply(text: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -997,7 +1015,10 @@ export default function ChatScreen() {
     }
     setSending(true);
     if (!directText) setInput("");
-    if (id) AsyncStorage.removeItem(`chat_draft_${id}`).catch(() => {});
+    if (id) {
+      AsyncStorage.removeItem(`chat_draft_${id}`).catch(() => {});
+      if (user) { supabase.from("chat_drafts").delete().eq("user_id", user.id).eq("chat_id", id).catch(() => {}); }
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const activeChatId = await getOrCreateChatId();

@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import Colors from "@/constants/colors";
 
 type SearchScope = "all" | "users" | "posts" | "chats" | "files" | "links";
@@ -55,6 +56,40 @@ export default function UniversalSearchScreen() {
   const [results, setResults] = useState<Record<string, Result[]>>({});
   const [recents, setRecents] = useState<string[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      AsyncStorage.getItem(RECENT_SEARCHES_KEY).then((raw) => {
+        if (raw) { try { setRecents(JSON.parse(raw)); } catch {} }
+      }).catch(() => {});
+      return;
+    }
+    supabase
+      .from("advanced_feature_settings")
+      .select("recent_searches")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.recent_searches?.length) {
+          setRecents(data.recent_searches);
+        } else {
+          AsyncStorage.getItem(RECENT_SEARCHES_KEY).then((raw) => {
+            if (raw) { try { setRecents(JSON.parse(raw)); } catch {} }
+          }).catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }, [user?.id]);
+
+  function persistRecents(updated: string[]) {
+    if (user) {
+      supabase.from("advanced_feature_settings")
+        .upsert({ user_id: user.id, recent_searches: updated }, { onConflict: "user_id" })
+        .catch(() => {});
+    } else {
+      AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated)).catch(() => {});
+    }
+  }
 
   const search = useCallback(async (q: string, sc: SearchScope) => {
     if (!q.trim()) { setResults({}); setHasSearched(false); return; }
@@ -113,6 +148,7 @@ export default function UniversalSearchScreen() {
   function saveRecent(q: string) {
     setRecents((prev) => {
       const updated = [q, ...prev.filter((r) => r !== q)].slice(0, MAX_RECENT);
+      persistRecents(updated);
       return updated;
     });
   }
@@ -193,7 +229,7 @@ export default function UniversalSearchScreen() {
             <>
               <View style={styles.recentHeader}>
                 <Text style={[styles.sectionLabel, { color: colors.text }]}>Recent Searches</Text>
-                <TouchableOpacity onPress={() => setRecents([])}>
+                <TouchableOpacity onPress={() => { setRecents([]); persistRecents([]); }}>
                   <Text style={[styles.clearText, { color: Colors.brand }]}>Clear</Text>
                 </TouchableOpacity>
               </View>
@@ -201,7 +237,13 @@ export default function UniversalSearchScreen() {
                 <TouchableOpacity key={r} style={[styles.recentRow, { backgroundColor: colors.surface }]} onPress={() => tapRecent(r)}>
                   <Ionicons name="time-outline" size={18} color={colors.textMuted} />
                   <Text style={[styles.recentText, { color: colors.text }]}>{r}</Text>
-                  <TouchableOpacity onPress={() => setRecents((prev) => prev.filter((x) => x !== r))}>
+                  <TouchableOpacity onPress={() => {
+                    setRecents((prev) => {
+                      const updated = prev.filter((x) => x !== r);
+                      persistRecents(updated);
+                      return updated;
+                    });
+                  }}>
                     <Ionicons name="close" size={16} color={colors.textMuted} />
                   </TouchableOpacity>
                 </TouchableOpacity>
