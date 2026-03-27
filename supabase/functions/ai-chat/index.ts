@@ -121,14 +121,53 @@ function buildProviders(): AiProvider[] {
   return providers;
 }
 
+function toBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 8192;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + chunkSize, bytes.length)));
+  }
+  return btoa(binary);
+}
+
+async function transcribeWithAIML(audioUrl: string, apiKey: string): Promise<string> {
+  const audioResp = await fetch(audioUrl);
+  if (!audioResp.ok) throw new Error("Failed to download audio");
+  const audioBuffer = await audioResp.arrayBuffer();
+  const base64 = toBase64(audioBuffer);
+  const ext = (audioUrl.split("?")[0].split(".").pop() || "m4a").toLowerCase();
+  const fmtMap: Record<string, string> = {
+    m4a: "mp4", mp3: "mp3", wav: "wav", ogg: "ogg", webm: "webm", aac: "aac",
+  };
+  const format = fmtMap[ext] || "mp4";
+  const res = await fetch("https://api.aimlapi.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "gpt-4o-audio-preview",
+      modalities: ["text"],
+      messages: [{
+        role: "user",
+        content: [
+          { type: "input_audio", input_audio: { data: base64, format } },
+          { type: "text", text: "Transcribe this audio accurately. Return only the spoken words, nothing else." },
+        ],
+      }],
+      max_tokens: 1024,
+      temperature: 0,
+    }),
+  });
+  if (!res.ok) throw new Error(`AIML audio ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content ?? "";
+}
+
 async function transcribeWithLovable(audioUrl: string, apiKey: string): Promise<string> {
   const audioResp = await fetch(audioUrl);
   if (!audioResp.ok) throw new Error("Failed to download audio");
   const audioBuffer = await audioResp.arrayBuffer();
-  const bytes = new Uint8Array(audioBuffer);
-  let binary = "";
-  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-  const base64 = btoa(binary);
+  const base64 = toBase64(audioBuffer);
   const ext = (audioUrl.split("?")[0].split(".").pop() || "m4a").toLowerCase();
   const fmtMap: Record<string, string> = {
     m4a: "mp4", mp3: "mp3", wav: "wav", ogg: "ogg", webm: "webm", aac: "aac",
@@ -161,10 +200,7 @@ async function transcribeWithGemini(audioUrl: string, apiKey: string): Promise<s
   const audioResp = await fetch(audioUrl);
   if (!audioResp.ok) throw new Error("Failed to download audio");
   const audioBuffer = await audioResp.arrayBuffer();
-  const bytes = new Uint8Array(audioBuffer);
-  let binary = "";
-  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-  const base64 = btoa(binary);
+  const base64 = toBase64(audioBuffer);
   const ext = (audioUrl.split("?")[0].split(".").pop() || "m4a").toLowerCase();
   const mimeMap: Record<string, string> = {
     m4a: "audio/mp4", mp3: "audio/mpeg", wav: "audio/wav",
@@ -220,14 +256,24 @@ serve(async (req) => {
       const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
       const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
       const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+      const AIMLAPI_KEY = Deno.env.get("AIMLAPI_KEY");
       const errors: string[] = [];
-      if (LOVABLE_API_KEY) {
+      if (AIMLAPI_KEY) {
         try {
-          const text = await transcribeWithLovable(body.audioUrl, LOVABLE_API_KEY);
+          const text = await transcribeWithAIML(body.audioUrl, AIMLAPI_KEY);
           return new Response(JSON.stringify({ text }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         } catch (e) {
-          errors.push(`Lovable: ${e instanceof Error ? e.message : String(e)}`);
-          console.error("Lovable transcription failed:", e);
+          errors.push(`AIML: ${e instanceof Error ? e.message : String(e)}`);
+          console.error("AIML transcription failed:", e);
+        }
+      }
+      if (OPENAI_API_KEY) {
+        try {
+          const text = await transcribeWithWhisper(body.audioUrl, OPENAI_API_KEY);
+          return new Response(JSON.stringify({ text }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        } catch (e) {
+          errors.push(`Whisper: ${e instanceof Error ? e.message : String(e)}`);
+          console.error("Whisper transcription failed:", e);
         }
       }
       if (GEMINI_API_KEY) {
@@ -239,13 +285,13 @@ serve(async (req) => {
           console.error("Gemini transcription failed:", e);
         }
       }
-      if (OPENAI_API_KEY) {
+      if (LOVABLE_API_KEY) {
         try {
-          const text = await transcribeWithWhisper(body.audioUrl, OPENAI_API_KEY);
+          const text = await transcribeWithLovable(body.audioUrl, LOVABLE_API_KEY);
           return new Response(JSON.stringify({ text }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         } catch (e) {
-          errors.push(`Whisper: ${e instanceof Error ? e.message : String(e)}`);
-          console.error("Whisper transcription failed:", e);
+          errors.push(`Lovable: ${e instanceof Error ? e.message : String(e)}`);
+          console.error("Lovable transcription failed:", e);
         }
       }
       return new Response(
