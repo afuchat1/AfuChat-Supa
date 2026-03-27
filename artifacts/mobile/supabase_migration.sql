@@ -522,3 +522,67 @@ GRANT EXECUTE ON FUNCTION get_or_create_direct_chat TO authenticated;
 -- NEW:    advanced_feature_settings
 -- NEW:    get_or_create_direct_chat() RPC
 -- ────────────────────────────────────────────────────────────
+
+-- ============================================================
+-- Subscription plans seed (run in Supabase SQL editor)
+-- ============================================================
+-- Silver plan
+UPDATE subscription_plans SET
+  features = ARRAY[
+    'Verified Badge',
+    'Ad-free experience',
+    'Message Translation (AI)',
+    'Voice to Text (AI)',
+    'Smart Notifications (AI)',
+    'Smart Chat Folders',
+    'Temporary Chat Mode (auto-delete)',
+    'Auto-Reply Mode',
+    'Focus Mode',
+    'Activity Status Control',
+    'Auto Media Organisation',
+    'Advanced Emoji Reactions',
+    'Content Filter',
+    'Message Reminders',
+    'Message Edit History',
+    'Chat to Post',
+    'Pin 1 gift on profile',
+    '1 red envelope claim per day',
+    'Basic chat themes'
+  ]
+WHERE tier = 'silver';
+
+-- Gold plan
+UPDATE subscription_plans SET
+  features = ARRAY[
+    'All Silver features',
+    'Chat Summary (AI)',
+    'AI Post Analysis',
+    'Scheduled Focus Mode',
+    'Link to Mini App (Beta)',
+    'Keyword Alerts',
+    'Chat Export (PDF, TXT, JSON)',
+    'Cross-Device Sync',
+    'Split Screen Mode (Web)',
+    'Screen Share in Chat (Web)',
+    'Group Roles System',
+    'Create Stories & Groups',
+    'Pin 2 gifts on profile',
+    '5 red envelope claims per day',
+    'Custom chat themes'
+  ]
+WHERE tier = 'gold';
+
+-- Platinum plan
+UPDATE subscription_plans SET
+  features = ARRAY[
+    'All Gold features',
+    'AfuAI Chat Assistant (enhanced)',
+    'AI Chat Themes & Wallpapers',
+    'Create Channels',
+    'Create Red Envelopes',
+    'Gift Marketplace access',
+    'Unlimited red envelope claims',
+    'Leaderboard privacy',
+    'Priority support'
+  ]
+WHERE tier = 'platinum';
