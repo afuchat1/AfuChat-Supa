@@ -403,16 +403,16 @@ export default function PostDetailScreen() {
                 maxLength={280}
                 multiline
               />
-              <TouchableOpacity
-                onPress={sendReply}
-                disabled={!replyText.trim() || sending}
-                style={[styles.replySendBtn, { backgroundColor: replyText.trim() && !sending ? Colors.brand : colors.border }]}
-              >
-                {sending ? <ActivityIndicator color="#fff" size="small" /> : (
-                  <Ionicons name="send" size={16} color={replyText.trim() ? "#fff" : colors.textMuted} />
-                )}
-              </TouchableOpacity>
             </View>
+            <TouchableOpacity
+              onPress={sendReply}
+              disabled={!replyText.trim() || sending}
+              style={[styles.replySendBtn, { backgroundColor: replyText.trim() && !sending ? Colors.brand : colors.border }]}
+            >
+              {sending ? <ActivityIndicator color="#fff" size="small" /> : (
+                <Ionicons name="send" size={16} color={replyText.trim() ? "#fff" : colors.textMuted} />
+              )}
+            </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
       ) : (
@@ -459,8 +459,8 @@ const styles = StyleSheet.create({
   replyName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   replyTime: { fontSize: 12, fontFamily: "Inter_400Regular" },
   replyContent: { fontSize: 15, fontFamily: "Inter_400Regular", marginTop: 2, lineHeight: 21 },
-  replyBar: { paddingHorizontal: 12, paddingTop: 8 },
-  replyInputWrap: { flexDirection: "row", alignItems: "center", borderRadius: 24, paddingLeft: 16, paddingRight: 4, paddingVertical: 4, gap: 6, borderWidth: 0 },
+  replyBar: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 12, paddingTop: 8, gap: 8 },
+  replyInputWrap: { flex: 1, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 4, borderWidth: 0 },
   replyInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 20, maxHeight: 100, borderWidth: 0, outlineStyle: "none" as any, paddingVertical: 0, minHeight: 20 },
   replySendBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   aiSummaryBtn: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },

@@ -339,17 +339,19 @@ RESPONSE GUIDELINES:
         }
       />
 
-      <View style={[s.inputWrap, { backgroundColor: colors.surface, marginHorizontal: 12, marginTop: 8, marginBottom: insets.bottom + 8 }]}>
-        <TextInput
-          style={[s.input, { color: colors.text }]}
-          placeholder="Ask AfuAi anything..."
-          placeholderTextColor={colors.textMuted}
-          value={input}
-          onChangeText={setInput}
-          multiline
-          maxLength={2000}
-          onSubmitEditing={() => sendMessage()}
-        />
+      <View style={[s.inputRow, { marginHorizontal: 12, marginTop: 8, marginBottom: insets.bottom + 8 }]}>
+        <View style={[s.inputWrap, { backgroundColor: colors.surface }]}>
+          <TextInput
+            style={[s.input, { color: colors.text }]}
+            placeholder="Ask AfuAi anything..."
+            placeholderTextColor={colors.textMuted}
+            value={input}
+            onChangeText={setInput}
+            multiline
+            maxLength={2000}
+            onSubmitEditing={() => sendMessage()}
+          />
+        </View>
         <TouchableOpacity
           style={[s.sendBtn, { backgroundColor: input.trim() && !loading ? Colors.brand : colors.border }]}
           onPress={() => sendMessage()}
@@ -401,7 +403,8 @@ const s = StyleSheet.create({
   quickBtn: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
   quickBtnText: { fontSize: 14, fontWeight: "500" },
   inputBar: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingTop: 8 },
-  inputWrap: { flexDirection: "row", alignItems: "center", borderRadius: 24, paddingLeft: 16, paddingRight: 4, paddingVertical: 4, gap: 6 },
+  inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
+  inputWrap: { flex: 1, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 4 },
   input: { flex: 1, fontSize: 15, maxHeight: 100, lineHeight: 20, borderWidth: 0, outlineStyle: "none" as any, paddingVertical: 0, minHeight: 20 },
   sendBtn: { width: 36, height: 36, borderRadius: 18, justifyContent: "center", alignItems: "center" },
 });
