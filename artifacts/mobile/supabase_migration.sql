@@ -424,6 +424,7 @@ CREATE TABLE IF NOT EXISTS advanced_feature_settings (
   message_translation        BOOLEAN DEFAULT FALSE,
   translation_language       TEXT DEFAULT 'en',
   voice_to_text              BOOLEAN DEFAULT FALSE,
+  text_to_speech             BOOLEAN DEFAULT FALSE,
   chat_summary               BOOLEAN DEFAULT FALSE,
   smart_notifications        BOOLEAN DEFAULT TRUE,
   chat_folders               BOOLEAN DEFAULT FALSE,

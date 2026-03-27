@@ -24,6 +24,7 @@ type FeatureSettings = {
   message_translation: boolean;
   translation_language: string;
   voice_to_text: boolean;
+  text_to_speech: boolean;
   chat_summary: boolean;
   smart_notifications: boolean;
   // Chat behavior
@@ -66,7 +67,7 @@ type FeatureSettings = {
 
 const defaults: FeatureSettings = {
   message_translation: false, translation_language: "en",
-  voice_to_text: false, chat_summary: false, smart_notifications: true,
+  voice_to_text: false, text_to_speech: false, chat_summary: false, smart_notifications: true,
   chat_folders: false, offline_drafts: true,
   temp_chat_default_minutes: 60, temp_chat_enabled: false,
   auto_reply_enabled: false, auto_reply_message: "I'm currently unavailable. I'll reply soon!",
@@ -224,6 +225,7 @@ export default function AdvancedFeaturesScreen() {
             <Link label="Translate to" desc="Choose your preferred language" value={currentLang?.label} onPress={() => setShowLangPicker(true)} />
           )}
           <Toggle label="Voice to Text" desc="Convert voice notes into readable text automatically" field="voice_to_text" note="AI" />
+          <Toggle label="Text to Speech" desc="Tap any message to have it read aloud" field="text_to_speech" note="AI" />
           <Toggle label="Chat Summary" desc="Summarize long conversations into key points" field="chat_summary" note="AI" />
           <Toggle label="Smart Notifications" desc="AI filters important vs non-important notifications" field="smart_notifications" note="AI" />
         </>

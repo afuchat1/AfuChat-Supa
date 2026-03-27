@@ -13,6 +13,7 @@ type LanguageContextType = {
   setPreferredLang: (lang: string | null) => Promise<void>;
   autoTranslate: (text: string) => Promise<string>;
   voiceToText: boolean;
+  textToSpeech: boolean;
 };
 
 const LanguageContext = createContext<LanguageContextType>({
@@ -21,12 +22,14 @@ const LanguageContext = createContext<LanguageContextType>({
   setPreferredLang: async () => {},
   autoTranslate: async (t) => t,
   voiceToText: false,
+  textToSpeech: false,
 });
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [preferredLang, setPreferredLangState] = useState<string | null>(null);
   const [voiceToText, setVoiceToText] = useState(false);
+  const [textToSpeech, setTextToSpeech] = useState(false);
   const userRef = useRef(user);
   userRef.current = user;
 
@@ -39,7 +42,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   async function fetchSettings(uid: string) {
     const { data } = await supabase
       .from("advanced_feature_settings")
-      .select("message_translation, translation_language, voice_to_text")
+      .select("message_translation, translation_language, voice_to_text, text_to_speech")
       .eq("user_id", uid)
       .maybeSingle();
     if (!data) return;
@@ -50,6 +53,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     setPreferredLangState(lang);
     AsyncStorage.setItem(STORAGE_KEY, lang ?? "none");
     setVoiceToText(!!data.voice_to_text);
+    setTextToSpeech(!!data.text_to_speech);
   }
 
   useEffect(() => {
@@ -88,6 +92,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
           setPreferredLangState(lang);
           AsyncStorage.setItem(STORAGE_KEY, lang ?? "none");
           setVoiceToText(!!row.voice_to_text);
+          setTextToSpeech(!!row.text_to_speech);
         }
       )
       .subscribe();
@@ -120,7 +125,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <LanguageContext.Provider
-      value={{ preferredLang, langLabel, setPreferredLang, autoTranslate, voiceToText }}
+      value={{ preferredLang, langLabel, setPreferredLang, autoTranslate, voiceToText, textToSpeech }}
     >
       {children}
     </LanguageContext.Provider>

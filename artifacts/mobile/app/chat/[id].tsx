@@ -25,6 +25,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import { Video, ResizeMode, Audio } from "expo-av";
+import * as Speech from "expo-speech";
 import AudioPlayer from "@/components/AudioPlayer";
 import Svg, { Path } from "react-native-svg";
 import { ChatLoadingSkeleton } from "@/components/ui/Skeleton";
@@ -356,13 +357,14 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   isPremiumSender?: boolean;
 }) {
   const { colors } = useTheme();
-  const { preferredLang, voiceToText } = useLanguage();
+  const { preferredLang, voiceToText, textToSpeech } = useLanguage();
   const [translated, setTranslated] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
   const [showTranslated, setShowTranslated] = useState(false);
   const [transcript, setTranscript] = useState<string | null>(null);
   const [transcribing, setTranscribing] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   const isSpecial =
     msg.encrypted_content?.startsWith("🧧") ||
@@ -371,6 +373,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
 
   const canTranslate = !isMe && !!msg.encrypted_content && !isSpecial && !!preferredLang;
   const canTranscribe = !!msg.attachment_url && msg.attachment_type === "audio" && voiceToText;
+  const canSpeak = textToSpeech && !!msg.encrypted_content && !isSpecial && msg.attachment_type !== "audio";
 
   useEffect(() => {
     if (!canTranslate || !preferredLang) return;
@@ -416,6 +419,22 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
       setShowTranscript(true);
     }
     setTranscribing(false);
+  }
+
+  async function handleSpeak() {
+    const speaking = await Speech.isSpeakingAsync();
+    if (speaking) {
+      Speech.stop();
+      setIsSpeaking(false);
+      return;
+    }
+    const text = (showTranslated && translated ? translated : msg.encrypted_content) || "";
+    setIsSpeaking(true);
+    Speech.speak(text, {
+      onDone: () => setIsSpeaking(false),
+      onStopped: () => setIsSpeaking(false),
+      onError: () => setIsSpeaking(false),
+    });
   }
 
   const displayText = showTranslated && translated ? translated : msg.encrypted_content;
@@ -576,6 +595,25 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
                   : showTranslated
                   ? `Original · ${LANG_LABELS[preferredLang || "en"] ?? preferredLang}`
                   : `Translate · ${LANG_LABELS[preferredLang || "en"] ?? preferredLang}`}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Speak chip — shown when text-to-speech is enabled */}
+          {canSpeak && (
+            <TouchableOpacity
+              onPress={handleSpeak}
+              style={[st.translateChip, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.06)" }]}
+              hitSlop={8}
+            >
+              <Ionicons
+                name={isSpeaking ? "stop-circle-outline" : "volume-medium-outline"}
+                size={11}
+                color={isSpeaking ? BRAND : colors.textMuted}
+                style={{ marginRight: 3 }}
+              />
+              <Text style={[st.translateChipText, { color: isSpeaking ? BRAND : colors.textMuted }]}>
+                {isSpeaking ? "Stop" : "Speak"}
               </Text>
             </TouchableOpacity>
           )}
