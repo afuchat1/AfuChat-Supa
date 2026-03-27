@@ -638,9 +638,12 @@ export default function ChatScreen() {
   const recordingTimer = useRef<any>(null);
   const meterInterval = useRef<any>(null);
   const micPressY = useRef(0);
+  const micPressX = useRef(0);
   const recordingLockedRef = useRef(false);
   const lockThreshold = 60;
+  const cancelSlideThreshold = 100;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const slideOffset = useRef(new Animated.Value(0)).current;
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [gifSearch, setGifSearch] = useState("");
@@ -1455,6 +1458,7 @@ export default function ChatScreen() {
       setRecordingDuration(0);
       setRecordingTenths(0);
       setWaveformLevels([]);
+      slideOffset.setValue(0);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       Animated.loop(
         Animated.sequence([
@@ -1555,15 +1559,32 @@ export default function ChatScreen() {
 
   function handleMicPressIn(e: any) {
     micPressY.current = e.nativeEvent.pageY;
+    micPressX.current = e.nativeEvent.pageX;
+    slideOffset.setValue(0);
   }
 
   function handleMicMove(e: any) {
     if (!isRecording || recordingLockedRef.current) return;
     const dy = micPressY.current - e.nativeEvent.pageY;
-    if (dy > lockThreshold) {
+    const dx = micPressX.current - e.nativeEvent.pageX;
+
+    if (dy > lockThreshold && dx < 30) {
       recordingLockedRef.current = true;
       setRecordingLocked(true);
+      slideOffset.setValue(0);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      return;
+    }
+
+    if (dx > 0) {
+      const clamped = Math.min(dx, cancelSlideThreshold + 40);
+      slideOffset.setValue(-clamped);
+    }
+
+    if (dx > cancelSlideThreshold) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      cancelVoiceRecording();
+      slideOffset.setValue(0);
     }
   }
 
@@ -1571,6 +1592,7 @@ export default function ChatScreen() {
     if (isRecording && !recordingLockedRef.current) {
       stopVoiceRecording();
     }
+    slideOffset.setValue(0);
   }
 
   async function handleTapGift(msg: Message) {
@@ -1920,16 +1942,16 @@ export default function ChatScreen() {
               </View>
             ) : (
               <View style={[st.inputBar, { paddingBottom: Math.max(insets.bottom, 4) }]}>
-                <View style={st.recSlideBar}>
+                <Animated.View style={[st.recSlideBar, { transform: [{ translateX: slideOffset }] }]}>
                   <Animated.View style={[st.recordingDot, { opacity: pulseAnim }]} />
                   <Text style={[st.recTimerText, { color: colors.text }]}>
                     {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, "0")},{recordingTenths}
                   </Text>
-                  <View style={st.recSlideHint}>
+                  <Animated.View style={[st.recSlideHint, { opacity: slideOffset.interpolate({ inputRange: [-cancelSlideThreshold, 0], outputRange: [0, 1], extrapolate: "clamp" }) }]}>
                     <Ionicons name="chevron-back" size={16} color={colors.textMuted} />
                     <Text style={[st.recSlideText, { color: colors.textMuted }]}>Slide to cancel</Text>
-                  </View>
-                </View>
+                  </Animated.View>
+                </Animated.View>
                 <View style={st.recMicWrap}>
                   {!recordingLocked && (
                     <View style={st.recLockIndicator}>
