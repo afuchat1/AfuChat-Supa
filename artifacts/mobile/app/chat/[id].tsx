@@ -1557,43 +1557,66 @@ export default function ChatScreen() {
     recordingRef.current = null;
   }
 
-  function handleMicPressIn(e: any) {
-    micPressY.current = e.nativeEvent.pageY;
-    micPressX.current = e.nativeEvent.pageX;
-    slideOffset.setValue(0);
-  }
+  const micLongPressTimer = useRef<any>(null);
+  const micIsHeld = useRef(false);
 
-  function handleMicMove(e: any) {
-    if (!isRecording || recordingLockedRef.current) return;
-    const dy = micPressY.current - e.nativeEvent.pageY;
-    const dx = micPressX.current - e.nativeEvent.pageX;
+  const micPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (e) => {
+        micPressY.current = e.nativeEvent.pageY;
+        micPressX.current = e.nativeEvent.pageX;
+        slideOffset.setValue(0);
+        micIsHeld.current = true;
+        micLongPressTimer.current = setTimeout(() => {
+          if (micIsHeld.current) {
+            startVoiceRecording();
+          }
+        }, 200);
+      },
+      onPanResponderMove: (e, gestureState) => {
+        if (!recordingRef.current || recordingLockedRef.current) return;
+        const dy = -gestureState.dy;
+        const dx = -gestureState.dx;
 
-    if (dy > lockThreshold && dx < 30) {
-      recordingLockedRef.current = true;
-      setRecordingLocked(true);
-      slideOffset.setValue(0);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      return;
-    }
+        if (dy > lockThreshold && dx < 30) {
+          recordingLockedRef.current = true;
+          setRecordingLocked(true);
+          slideOffset.setValue(0);
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          return;
+        }
 
-    if (dx > 0) {
-      const clamped = Math.min(dx, cancelSlideThreshold + 40);
-      slideOffset.setValue(-clamped);
-    }
+        if (dx > 0) {
+          const clamped = Math.min(dx, cancelSlideThreshold + 40);
+          slideOffset.setValue(-clamped);
+        }
 
-    if (dx > cancelSlideThreshold) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      cancelVoiceRecording();
-      slideOffset.setValue(0);
-    }
-  }
-
-  function handleMicPressOut() {
-    if (isRecording && !recordingLockedRef.current) {
-      stopVoiceRecording();
-    }
-    slideOffset.setValue(0);
-  }
+        if (dx > cancelSlideThreshold) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          cancelVoiceRecording();
+          slideOffset.setValue(0);
+        }
+      },
+      onPanResponderRelease: () => {
+        micIsHeld.current = false;
+        clearTimeout(micLongPressTimer.current);
+        if (recordingRef.current && !recordingLockedRef.current) {
+          stopVoiceRecording();
+        }
+        slideOffset.setValue(0);
+      },
+      onPanResponderTerminate: () => {
+        micIsHeld.current = false;
+        clearTimeout(micLongPressTimer.current);
+        if (recordingRef.current && !recordingLockedRef.current) {
+          stopVoiceRecording();
+        }
+        slideOffset.setValue(0);
+      },
+    })
+  ).current;
 
   async function handleTapGift(msg: Message) {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -1959,18 +1982,9 @@ export default function ChatScreen() {
                       <Ionicons name="chevron-up" size={12} color={colors.textMuted} style={{ marginTop: -2 }} />
                     </View>
                   )}
-                  <TouchableOpacity
-                    onLongPress={() => {}}
-                    onPressIn={handleMicPressIn}
-                    onPressOut={handleMicPressOut}
-                    onResponderMove={handleMicMove}
-                    onStartShouldSetResponder={() => true}
-                    onMoveShouldSetResponder={() => true}
-                    style={st.recMicBtn}
-                    activeOpacity={0.8}
-                  >
+                  <Animated.View {...micPanResponder.panHandlers} style={st.recMicBtn}>
                     <Ionicons name="mic" size={26} color="#fff" />
-                  </TouchableOpacity>
+                  </Animated.View>
                 </View>
               </View>
             )}
@@ -2025,16 +2039,9 @@ export default function ChatScreen() {
                   )}
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity
-                  onLongPress={startVoiceRecording}
-                  onPressIn={handleMicPressIn}
-                  delayLongPress={200}
-                  style={[st.sendBtn, { backgroundColor: BRAND }]}
-                  hitSlop={8}
-                  activeOpacity={0.7}
-                >
+                <Animated.View {...micPanResponder.panHandlers} style={[st.sendBtn, { backgroundColor: BRAND }]}>
                   <Ionicons name="mic" size={20} color="#fff" />
-                </TouchableOpacity>
+                </Animated.View>
               )}
             </View>
           </>
