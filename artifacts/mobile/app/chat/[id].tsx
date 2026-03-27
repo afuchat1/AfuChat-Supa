@@ -632,6 +632,7 @@ export default function ChatScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingLocked, setRecordingLocked] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
+  const [recordingTenths, setRecordingTenths] = useState(0);
   const [waveformLevels, setWaveformLevels] = useState<number[]>([]);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const recordingTimer = useRef<any>(null);
@@ -639,6 +640,7 @@ export default function ChatScreen() {
   const micPressY = useRef(0);
   const recordingLockedRef = useRef(false);
   const lockThreshold = 60;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [gifSearch, setGifSearch] = useState("");
@@ -1451,11 +1453,24 @@ export default function ChatScreen() {
       setRecordingLocked(false);
       recordingLockedRef.current = false;
       setRecordingDuration(0);
+      setRecordingTenths(0);
       setWaveformLevels([]);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 0.3, duration: 600, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+        ])
+      ).start();
       recordingTimer.current = setInterval(() => {
-        setRecordingDuration((d) => d + 1);
-      }, 1000);
+        setRecordingTenths((t) => {
+          if (t >= 9) {
+            setRecordingDuration((d) => d + 1);
+            return 0;
+          }
+          return t + 1;
+        });
+      }, 100);
       meterInterval.current = setInterval(async () => {
         if (!recordingRef.current) return;
         try {
@@ -1480,9 +1495,12 @@ export default function ChatScreen() {
     if (!recordingRef.current) return;
     clearInterval(recordingTimer.current);
     clearInterval(meterInterval.current);
+    pulseAnim.stopAnimation();
+    pulseAnim.setValue(1);
     setIsRecording(false);
     setRecordingLocked(false);
     setRecordingDuration(0);
+    setRecordingTenths(0);
     setWaveformLevels([]);
 
     try {
@@ -1521,9 +1539,12 @@ export default function ChatScreen() {
     if (!recordingRef.current) return;
     clearInterval(recordingTimer.current);
     clearInterval(meterInterval.current);
+    pulseAnim.stopAnimation();
+    pulseAnim.setValue(1);
     setIsRecording(false);
     setRecordingLocked(false);
     setRecordingDuration(0);
+    setRecordingTenths(0);
     setWaveformLevels([]);
     try {
       await recordingRef.current.stopAndUnloadAsync();
@@ -1867,6 +1888,71 @@ export default function ChatScreen() {
               You can send more messages once {chatInfo?.other_name || "this user"} replies or follows you
             </Text>
           </View>
+        ) : isRecording ? (
+          <>
+            {recordingLocked ? (
+              <View style={[st.inputBar, { paddingBottom: Math.max(insets.bottom, 4) }]}>
+                <View style={[st.recLockedBar, { backgroundColor: colors.inputBg }]}>
+                  <TouchableOpacity onPress={cancelVoiceRecording} hitSlop={12} style={st.recLockedTrash}>
+                    <Ionicons name="trash" size={22} color="#FF3B30" />
+                  </TouchableOpacity>
+                  <View style={st.recLockedWaveWrap}>
+                    {waveformLevels.map((level, i) => (
+                      <View
+                        key={i}
+                        style={[
+                          st.waveformBar,
+                          { height: Math.max(3, level * 24), backgroundColor: BRAND, opacity: 0.5 + level * 0.5 },
+                        ]}
+                      />
+                    ))}
+                  </View>
+                  <View style={st.recLockedTime}>
+                    <Animated.View style={[st.recordingDot, { opacity: pulseAnim }]} />
+                    <Text style={[st.recordingText, { color: colors.text }]}>
+                      {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, "0")},{recordingTenths}
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity onPress={stopVoiceRecording} style={[st.sendBtn, { backgroundColor: BRAND }]}>
+                  <Ionicons name="send" size={18} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={[st.inputBar, { paddingBottom: Math.max(insets.bottom, 4) }]}>
+                <View style={st.recSlideBar}>
+                  <Animated.View style={[st.recordingDot, { opacity: pulseAnim }]} />
+                  <Text style={[st.recTimerText, { color: colors.text }]}>
+                    {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, "0")},{recordingTenths}
+                  </Text>
+                  <View style={st.recSlideHint}>
+                    <Ionicons name="chevron-back" size={16} color={colors.textMuted} />
+                    <Text style={[st.recSlideText, { color: colors.textMuted }]}>Slide to cancel</Text>
+                  </View>
+                </View>
+                <View style={st.recMicWrap}>
+                  {!recordingLocked && (
+                    <View style={st.recLockIndicator}>
+                      <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
+                      <Ionicons name="chevron-up" size={12} color={colors.textMuted} style={{ marginTop: -2 }} />
+                    </View>
+                  )}
+                  <TouchableOpacity
+                    onLongPress={() => {}}
+                    onPressIn={handleMicPressIn}
+                    onPressOut={handleMicPressOut}
+                    onResponderMove={handleMicMove}
+                    onStartShouldSetResponder={() => true}
+                    onMoveShouldSetResponder={() => true}
+                    style={st.recMicBtn}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="mic" size={26} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </>
         ) : (
           <>
             {(chatInfo?.is_group || chatInfo?.is_channel) && (
@@ -1920,57 +2006,15 @@ export default function ChatScreen() {
                 <TouchableOpacity
                   onLongPress={startVoiceRecording}
                   onPressIn={handleMicPressIn}
-                  onPressOut={handleMicPressOut}
-                  onResponderMove={handleMicMove}
-                  onStartShouldSetResponder={() => true}
-                  onMoveShouldSetResponder={() => true}
                   delayLongPress={200}
-                  style={[st.sendBtn, { backgroundColor: isRecording ? "#FF3B30" : BRAND }]}
+                  style={[st.sendBtn, { backgroundColor: BRAND }]}
                   hitSlop={8}
                   activeOpacity={0.7}
                 >
-                  {isRecording && !recordingLocked ? (
-                    <Ionicons name="lock-open-outline" size={18} color="#fff" />
-                  ) : (
-                    <Ionicons name={isRecording ? "stop" : "mic"} size={20} color="#fff" />
-                  )}
+                  <Ionicons name="mic" size={20} color="#fff" />
                 </TouchableOpacity>
               )}
             </View>
-            {isRecording && (
-              <View style={st.recordingBar}>
-                <TouchableOpacity onPress={cancelVoiceRecording} hitSlop={12} style={st.recordingCancelBtn}>
-                  <Ionicons name="trash-outline" size={20} color="#FF3B30" />
-                </TouchableOpacity>
-                <View style={st.waveformContainer}>
-                  {waveformLevels.map((level, i) => (
-                    <View
-                      key={i}
-                      style={[
-                        st.waveformBar,
-                        { height: Math.max(4, level * 28), backgroundColor: "#FF3B30", opacity: 0.4 + level * 0.6 },
-                      ]}
-                    />
-                  ))}
-                </View>
-                <View style={st.recordingTimeWrap}>
-                  <View style={st.recordingDot} />
-                  <Text style={st.recordingText}>
-                    {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, "0")}
-                  </Text>
-                </View>
-                {recordingLocked ? (
-                  <TouchableOpacity onPress={stopVoiceRecording} style={[st.sendBtn, { backgroundColor: BRAND }]}>
-                    <Ionicons name="send" size={18} color="#fff" />
-                  </TouchableOpacity>
-                ) : (
-                  <View style={st.lockHintWrap}>
-                    <Ionicons name="arrow-up" size={14} color="#999" />
-                    <Ionicons name="lock-closed" size={12} color="#999" />
-                  </View>
-                )}
-              </View>
-            )}
           </>
         )}
       </KeyboardAvoidingView>
@@ -2567,14 +2611,20 @@ const st = StyleSheet.create({
   pillIcon: { paddingHorizontal: 6 },
   input: { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 22, borderWidth: 0, outlineStyle: "none" as any, paddingTop: 10, paddingBottom: 10, minHeight: 28, maxHeight: 120 },
   sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  recordingBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 8, gap: 8 },
-  recordingCancelBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,59,48,0.1)", alignItems: "center", justifyContent: "center" },
-  waveformContainer: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 2, height: 32, overflow: "hidden" },
-  waveformBar: { width: 3, borderRadius: 1.5, minHeight: 4 },
-  recordingTimeWrap: { flexDirection: "row", alignItems: "center", gap: 4, minWidth: 50 },
+  recSlideBar: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, height: 48 },
+  recTimerText: { fontSize: 15, fontFamily: "Inter_600SemiBold", minWidth: 60 },
+  recSlideHint: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 },
+  recSlideText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  recMicWrap: { alignItems: "center", justifyContent: "flex-end" },
+  recMicBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: BRAND, alignItems: "center", justifyContent: "center", elevation: 4, shadowColor: BRAND, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 6 },
+  recLockIndicator: { alignItems: "center", marginBottom: 6 },
+  recLockedBar: { flex: 1, flexDirection: "row", alignItems: "center", borderRadius: 22, paddingHorizontal: 8, minHeight: 48, gap: 8 },
+  recLockedTrash: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,59,48,0.1)", alignItems: "center", justifyContent: "center" },
+  recLockedWaveWrap: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 2, height: 28, overflow: "hidden" },
+  recLockedTime: { flexDirection: "row", alignItems: "center", gap: 6, paddingRight: 4 },
+  waveformBar: { width: 3, borderRadius: 1.5, minHeight: 3 },
   recordingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#FF3B30" },
-  recordingText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#FF3B30" },
-  lockHintWrap: { alignItems: "center", justifyContent: "center", width: 24 },
+  recordingText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
 
   sheetOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
   sheetContent: { position: "absolute", bottom: 0, left: 0, right: 0, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 14, maxHeight: SCREEN_HEIGHT * 0.7 },
