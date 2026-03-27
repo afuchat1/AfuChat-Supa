@@ -7,29 +7,29 @@ const corsHeaders = {
 
 interface AiProvider {
   name: string;
-  call: (messages: any[]) => Promise<string>;
+  call: (messages: any[], maxTokens: number) => Promise<string>;
 }
 
 function buildProviders(): AiProvider[] {
   const providers: AiProvider[] = [];
 
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   const AIMLAPI_KEY = Deno.env.get("AIMLAPI_KEY");
 
   if (GEMINI_API_KEY) {
     providers.push({
       name: "Gemini 2.5 Flash",
-      call: async (messages) => {
+      call: async (messages, maxTokens) => {
         const systemMsg = messages.find((m: any) => m.role === "system");
         const chatMsgs = messages.filter((m: any) => m.role !== "system");
         const contents = chatMsgs.map((m: any) => ({
           role: m.role === "assistant" ? "model" : "user",
           parts: [{ text: m.content }],
         }));
-        const body: any = { contents, generationConfig: { maxOutputTokens: 2048 } };
+        const body: any = { contents, generationConfig: { maxOutputTokens: maxTokens, temperature: 0.7 } };
         if (systemMsg) {
           body.system_instruction = { parts: [{ text: systemMsg.content }] };
         }
@@ -49,11 +49,11 @@ function buildProviders(): AiProvider[] {
   if (LOVABLE_API_KEY) {
     providers.push({
       name: "Lovable AI",
-      call: async (messages) => {
+      call: async (messages, maxTokens) => {
         const res = await fetch("https://api.lovable.dev/v1/chat/completions", {
           method: "POST",
           headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ model: "gemini-2.5-flash", messages, max_tokens: 2048 }),
+          body: JSON.stringify({ model: "gemini-2.5-flash", messages, max_tokens: maxTokens, temperature: 0.7 }),
         });
         if (!res.ok) throw new Error(`Lovable ${res.status}: ${await res.text()}`);
         const data = await res.json();
@@ -67,11 +67,11 @@ function buildProviders(): AiProvider[] {
   if (DEEPSEEK_API_KEY) {
     providers.push({
       name: "DeepSeek",
-      call: async (messages) => {
+      call: async (messages, maxTokens) => {
         const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
           method: "POST",
           headers: { "Authorization": `Bearer ${DEEPSEEK_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ model: "deepseek-chat", messages, max_tokens: 2048 }),
+          body: JSON.stringify({ model: "deepseek-chat", messages, max_tokens: maxTokens, temperature: 0.7 }),
         });
         if (!res.ok) throw new Error(`DeepSeek ${res.status}: ${await res.text()}`);
         const data = await res.json();
@@ -85,11 +85,11 @@ function buildProviders(): AiProvider[] {
   if (OPENAI_API_KEY) {
     providers.push({
       name: "GPT-4o Mini",
-      call: async (messages) => {
+      call: async (messages, maxTokens) => {
         const res = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ model: "gpt-4o-mini", messages, max_tokens: 2048 }),
+          body: JSON.stringify({ model: "gpt-4o-mini", messages, max_tokens: maxTokens, temperature: 0.7 }),
         });
         if (!res.ok) throw new Error(`OpenAI ${res.status}: ${await res.text()}`);
         const data = await res.json();
@@ -103,11 +103,11 @@ function buildProviders(): AiProvider[] {
   if (AIMLAPI_KEY) {
     providers.push({
       name: "AIML API",
-      call: async (messages) => {
+      call: async (messages, maxTokens) => {
         const res = await fetch("https://api.aimlapi.com/v1/chat/completions", {
           method: "POST",
           headers: { "Authorization": `Bearer ${AIMLAPI_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ model: "mistralai/Mistral-7B-Instruct-v0.2", messages, max_tokens: 2048 }),
+          body: JSON.stringify({ model: "mistralai/Mistral-7B-Instruct-v0.2", messages, max_tokens: maxTokens, temperature: 0.7 }),
         });
         if (!res.ok) throw new Error(`AIML ${res.status}: ${await res.text()}`);
         const data = await res.json();
@@ -136,7 +136,7 @@ serve(async (req) => {
       );
     }
 
-    const { messages } = await req.json();
+    const { messages, max_tokens, fast } = await req.json();
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new Response(
         JSON.stringify({ error: "messages array is required" }),
@@ -144,15 +144,18 @@ serve(async (req) => {
       );
     }
 
+    const tokenLimit = max_tokens || (fast ? 300 : 2048);
+    const timeoutMs = fast ? 8000 : 15000;
+
     for (const provider of providers) {
       try {
-        console.log(`Trying provider: ${provider.name}`);
+        console.log(`Trying provider: ${provider.name} (tokens: ${tokenLimit}, timeout: ${timeoutMs}ms)`);
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000);
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
         const reply = await Promise.race([
-          provider.call(messages),
+          provider.call(messages, tokenLimit),
           new Promise<never>((_, reject) => {
-            controller.signal.addEventListener("abort", () => reject(new Error("Timeout after 15s")));
+            controller.signal.addEventListener("abort", () => reject(new Error(`Timeout after ${timeoutMs}ms`)));
           }),
         ]);
         clearTimeout(timeout);

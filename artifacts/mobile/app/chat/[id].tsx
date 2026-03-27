@@ -1831,72 +1831,121 @@ export default function ChatScreen() {
       <Modal
         visible={showAiSummary}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowAiSummary(false)}
       >
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
-          <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowAiSummary(false)} />
-          <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 34, maxHeight: "70%" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 18, paddingTop: 18, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <Ionicons name="sparkles" size={20} color={Colors.brand} />
-                <Text style={{ fontSize: 17, fontFamily: "Inter_600SemiBold", color: colors.text }}>AI Assistant</Text>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }}>
+          <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowAiSummary(false)} activeOpacity={1} />
+          <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40, maxHeight: "65%" }}>
+            <View style={{ alignItems: "center", paddingTop: 10, paddingBottom: 4 }}>
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border }} />
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 8, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.brand + "18", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="sparkles" size={16} color={Colors.brand} />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 16, fontFamily: "Inter_700Bold", color: colors.text, letterSpacing: -0.3 }}>AI Assistant</Text>
+                  <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.textMuted, marginTop: 1 }}>Powered by multi-model AI</Text>
+                </View>
               </View>
-              <TouchableOpacity onPress={() => setShowAiSummary(false)} hitSlop={12}>
-                <Ionicons name="close" size={22} color={colors.textMuted} />
+              <TouchableOpacity
+                onPress={() => setShowAiSummary(false)}
+                hitSlop={12}
+                style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.inputBg, alignItems: "center", justifyContent: "center" }}
+              >
+                <Ionicons name="close" size={16} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
-            <ScrollView style={{ paddingHorizontal: 18, paddingTop: 14 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ paddingHorizontal: 20, paddingTop: 16 }} showsVerticalScrollIndicator={false} bounces={false}>
               <TouchableOpacity
                 onPress={handleAiSummarize}
                 disabled={aiSummarizing || messages.length < 3}
-                style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, opacity: messages.length < 3 ? 0.4 : 1 }}
-                activeOpacity={0.7}
+                style={{
+                  flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, paddingHorizontal: 14,
+                  backgroundColor: aiSummarizing ? Colors.brand + "08" : "transparent",
+                  borderRadius: 14, opacity: messages.length < 3 ? 0.35 : 1,
+                }}
+                activeOpacity={0.6}
               >
-                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.brand + "20", alignItems: "center", justifyContent: "center" }}>
-                  <Ionicons name="document-text-outline" size={18} color={Colors.brand} />
+                <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.brand + "15", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="document-text-outline" size={20} color={Colors.brand} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.text }}>Summarize Conversation</Text>
-                  <Text style={{ fontSize: 12, color: colors.textMuted, fontFamily: "Inter_400Regular" }}>Get a quick AI summary of recent messages</Text>
+                  <Text style={{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.text, letterSpacing: -0.2 }}>Summarize Chat</Text>
+                  <Text style={{ fontSize: 12, color: colors.textMuted, fontFamily: "Inter_400Regular", marginTop: 2 }}>
+                    {aiSummarizing ? "Analyzing messages..." : "Quick overview of recent messages"}
+                  </Text>
                 </View>
-                {aiSummarizing && <ActivityIndicator color={Colors.brand} size="small" />}
+                {aiSummarizing ? (
+                  <ActivityIndicator color={Colors.brand} size="small" />
+                ) : (
+                  <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.brand + "12", alignItems: "center", justifyContent: "center" }}>
+                    <Ionicons name="chevron-forward" size={14} color={Colors.brand} />
+                  </View>
+                )}
               </TouchableOpacity>
 
               {aiSummary && (
-                <View style={{ backgroundColor: Colors.brand + "10", borderRadius: 12, padding: 14, marginTop: 6, marginBottom: 10, borderLeftWidth: 3, borderLeftColor: Colors.brand }}>
-                  <Text style={{ fontSize: 14, color: colors.text, fontFamily: "Inter_400Regular", lineHeight: 20 }}>{aiSummary}</Text>
+                <View style={{ backgroundColor: Colors.brand + "0A", borderRadius: 14, padding: 16, marginTop: 8, marginBottom: 6, borderWidth: 1, borderColor: Colors.brand + "18" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 }}>
+                    <Ionicons name="sparkles" size={12} color={Colors.brand} />
+                    <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: Colors.brand, textTransform: "uppercase", letterSpacing: 0.5 }}>Summary</Text>
+                  </View>
+                  <Text style={{ fontSize: 14, color: colors.text, fontFamily: "Inter_400Regular", lineHeight: 21 }}>{aiSummary}</Text>
                 </View>
               )}
 
-              <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 4 }} />
+              <View style={{ height: 1, backgroundColor: colors.border + "60", marginVertical: 6, marginHorizontal: 14 }} />
 
               <TouchableOpacity
                 onPress={handleAiSuggestReply}
                 disabled={aiReplyLoading || messages.length < 1}
-                style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, opacity: messages.length < 1 ? 0.4 : 1 }}
-                activeOpacity={0.7}
+                style={{
+                  flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, paddingHorizontal: 14,
+                  backgroundColor: aiReplyLoading ? "#D4A853" + "08" : "transparent",
+                  borderRadius: 14, opacity: messages.length < 1 ? 0.35 : 1,
+                }}
+                activeOpacity={0.6}
               >
-                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#D4A853" + "20", alignItems: "center", justifyContent: "center" }}>
-                  <Ionicons name="chatbubbles-outline" size={18} color="#D4A853" />
+                <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "#D4A853" + "15", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="chatbubbles-outline" size={20} color="#D4A853" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.text }}>AI Smart Replies</Text>
-                  <Text style={{ fontSize: 12, color: colors.textMuted, fontFamily: "Inter_400Regular" }}>Generate context-aware reply suggestions</Text>
+                  <Text style={{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.text, letterSpacing: -0.2 }}>Smart Replies</Text>
+                  <Text style={{ fontSize: 12, color: colors.textMuted, fontFamily: "Inter_400Regular", marginTop: 2 }}>
+                    {aiReplyLoading ? "Crafting suggestions..." : "AI-generated reply suggestions"}
+                  </Text>
                 </View>
-                {aiReplyLoading && <ActivityIndicator color="#D4A853" size="small" />}
+                {aiReplyLoading ? (
+                  <ActivityIndicator color="#D4A853" size="small" />
+                ) : (
+                  <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#D4A853" + "12", alignItems: "center", justifyContent: "center" }}>
+                    <Ionicons name="chevron-forward" size={14} color="#D4A853" />
+                  </View>
+                )}
               </TouchableOpacity>
 
               {aiReplies.length > 0 && (
-                <View style={{ marginTop: 6, marginBottom: 14, gap: 8 }}>
+                <View style={{ marginTop: 8, marginBottom: 16, gap: 6 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4, paddingHorizontal: 4 }}>
+                    <Ionicons name="flash" size={12} color="#D4A853" />
+                    <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#D4A853", textTransform: "uppercase", letterSpacing: 0.5 }}>Tap to use</Text>
+                  </View>
                   {aiReplies.map((reply, i) => (
                     <TouchableOpacity
                       key={i}
                       onPress={() => { setInput(reply); setShowAiSummary(false); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-                      style={{ backgroundColor: colors.inputBg, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: "#D4A853" + "40" }}
-                      activeOpacity={0.7}
+                      style={{
+                        backgroundColor: colors.inputBg, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12,
+                        borderWidth: 1, borderColor: "#D4A853" + "25",
+                        flexDirection: "row", alignItems: "center", gap: 10,
+                      }}
+                      activeOpacity={0.6}
                     >
-                      <Text style={{ fontSize: 14, color: colors.text, fontFamily: "Inter_400Regular" }}>{reply}</Text>
+                      <Text style={{ flex: 1, fontSize: 14, color: colors.text, fontFamily: "Inter_400Regular", lineHeight: 19 }}>{reply}</Text>
+                      <Ionicons name="arrow-forward-circle" size={18} color="#D4A853" style={{ opacity: 0.6 }} />
                     </TouchableOpacity>
                   ))}
                 </View>
