@@ -44,7 +44,12 @@ export async function uploadToStorage(
         .upload(filePath, blob, { contentType: mime, upsert: true });
       if (error) return { publicUrl: null, error: error.message };
     } else {
-      const FileSystem = require("expo-file-system");
+      let FileSystem: any;
+      try {
+        FileSystem = require("expo-file-system/legacy");
+      } catch {
+        FileSystem = require("expo-file-system");
+      }
 
       const session = (await supabase.auth.getSession()).data.session;
       if (!session) return { publicUrl: null, error: "Not authenticated" };
