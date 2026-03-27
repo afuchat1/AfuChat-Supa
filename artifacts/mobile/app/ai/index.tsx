@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   FlatList,
   KeyboardAvoidingView,
@@ -22,6 +23,31 @@ import Colors from "@/constants/colors";
 import EmojiPicker from "rn-emoji-keyboard";
 import * as Clipboard from "expo-clipboard";
 
+type InvoiceData = {
+  type: string;
+  date: string;
+  from?: string;
+  to?: string;
+  amount: number;
+  currency: string;
+  fee?: number;
+  net?: number;
+  reference: string;
+  status: string;
+  description?: string;
+};
+
+type ExecAction = {
+  id: string;
+  actionType: string;
+  params: Record<string, any>;
+  label: string;
+  description: string;
+  status: "pending" | "executing" | "success" | "failed";
+  result?: string;
+  invoice?: InvoiceData;
+};
+
 type AiMessage = {
   id: string;
   role: "user" | "assistant" | "thinking";
@@ -29,6 +55,8 @@ type AiMessage = {
   actions?: ActionButton[];
   suggestions?: string[];
   timestamp?: number;
+  invoices?: InvoiceData[];
+  execAction?: ExecAction;
 };
 
 type ActionButton = {
@@ -37,6 +65,30 @@ type ActionButton = {
   action: string;
   params?: Record<string, any>;
 };
+
+const EXEC_LABELS: Record<string, string> = {
+  send_nexa: "Send Nexa",
+  follow: "Follow User",
+  unfollow: "Unfollow User",
+  subscribe: "Subscribe to Plan",
+  cancel_subscription: "Cancel Subscription",
+  convert_nexa: "Convert Currency",
+};
+
+function buildExecDescription(actionType: string, params: Record<string, any>): string {
+  switch (actionType) {
+    case "send_nexa": return `Send ${params.amount || "?"} Nexa to @${params.handle || "?"}${params.message ? ` — "${params.message}"` : ""}`;
+    case "follow": return `Follow @${params.handle || "?"}`;
+    case "unfollow": return `Unfollow @${params.handle || "?"}`;
+    case "subscribe": {
+      const t = (params.tier || "?") as string;
+      return `Subscribe to ${t.charAt(0).toUpperCase() + t.slice(1)} plan`;
+    }
+    case "cancel_subscription": return "Cancel your current premium subscription";
+    case "convert_nexa": return `Convert ${params.amount || "?"} Nexa to ACoin`;
+    default: return `Execute ${actionType}`;
+  }
+}
 
 const QUICK_PROMPTS = [
   { label: "My Balance", icon: "wallet-outline" as const, prompt: "What's my current balance?" },
@@ -252,6 +304,147 @@ function ThinkingIndicator({ colors }: { colors: any }) {
   );
 }
 
+function InvoiceCard({ invoice, colors }: { invoice: InvoiceData; colors: any }) {
+  const handleCopy = async () => {
+    const text = [
+      `Invoice: ${invoice.type}`,
+      `Date: ${new Date(invoice.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`,
+      invoice.from ? `From: ${invoice.from}` : null,
+      invoice.to ? `To: ${invoice.to}` : null,
+      `Amount: ${invoice.amount} ${invoice.currency}`,
+      invoice.fee !== undefined ? `Fee: ${invoice.fee} ACoin` : null,
+      invoice.net !== undefined ? `Net: ${invoice.net} ACoin` : null,
+      `Status: ${invoice.status}`,
+      `Ref: ${invoice.reference}`,
+      invoice.description || null,
+    ].filter(Boolean).join("\n");
+    await Clipboard.setStringAsync(text);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const rows = [
+    { label: "Type", value: invoice.type },
+    { label: "Date", value: new Date(invoice.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) },
+    invoice.from ? { label: "From", value: invoice.from } : null,
+    invoice.to ? { label: "To", value: invoice.to } : null,
+    { label: "Amount", value: `${invoice.amount} ${invoice.currency}` },
+    invoice.fee !== undefined ? { label: "Fee", value: `${invoice.fee} ACoin` } : null,
+    invoice.net !== undefined ? { label: "Net", value: `${invoice.net} ACoin`, highlight: true } : null,
+  ].filter(Boolean) as { label: string; value: string; highlight?: boolean }[];
+
+  return (
+    <View style={[invS.card, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+      <View style={invS.cardHeader}>
+        <Ionicons name="receipt-outline" size={16} color={Colors.brand} />
+        <Text style={[invS.cardTitle, { color: colors.text }]}>Invoice</Text>
+        <TouchableOpacity onPress={handleCopy} hitSlop={8}>
+          <Ionicons name="copy-outline" size={14} color={colors.textMuted} />
+        </TouchableOpacity>
+      </View>
+      <View style={[invS.divider, { backgroundColor: colors.border }]} />
+      {rows.map((row, i) => (
+        <View key={i} style={invS.row}>
+          <Text style={[invS.rowLabel, { color: colors.textMuted }]}>{row.label}</Text>
+          <Text style={[invS.rowValue, { color: row.highlight ? Colors.brand : colors.text }]}>{row.value}</Text>
+        </View>
+      ))}
+      <View style={[invS.divider, { backgroundColor: colors.border }]} />
+      <View style={invS.row}>
+        <Text style={[invS.rowLabel, { color: colors.textMuted }]}>Status</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <Ionicons name={invoice.status === "Completed" ? "checkmark-circle" : "time"} size={14} color={invoice.status === "Completed" ? "#34C759" : "#FF9500"} />
+          <Text style={[invS.rowValue, { color: invoice.status === "Completed" ? "#34C759" : "#FF9500" }]}>{invoice.status}</Text>
+        </View>
+      </View>
+      <View style={invS.refRow}>
+        <Text style={[invS.refText, { color: colors.textMuted }]}>Ref: {invoice.reference}</Text>
+      </View>
+      {invoice.description && (
+        <Text style={[invS.desc, { color: colors.textSecondary }]}>{invoice.description}</Text>
+      )}
+    </View>
+  );
+}
+
+function ConfirmationCard({ execAction, colors, onConfirm, onCancel }: {
+  execAction: ExecAction;
+  colors: any;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const iconMap: Record<string, string> = {
+    send_nexa: "flash",
+    follow: "person-add",
+    unfollow: "person-remove",
+    subscribe: "diamond",
+    cancel_subscription: "close-circle",
+    convert_nexa: "swap-horizontal",
+  };
+
+  const colorMap: Record<string, string> = {
+    send_nexa: "#FF9500",
+    follow: Colors.brand,
+    unfollow: "#FF3B30",
+    subscribe: "#D4A853",
+    cancel_subscription: "#FF3B30",
+    convert_nexa: "#007AFF",
+  };
+
+  const icon = iconMap[execAction.actionType] || "flash";
+  const accentColor = colorMap[execAction.actionType] || Colors.brand;
+
+  if (execAction.status === "executing") {
+    return (
+      <View style={[cfmS.card, { backgroundColor: colors.inputBg, borderColor: accentColor + "40" }]}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, justifyContent: "center", paddingVertical: 8 }}>
+          <ActivityIndicator color={accentColor} size="small" />
+          <Text style={[cfmS.executingText, { color: colors.textMuted }]}>Executing...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (execAction.status === "success" || execAction.status === "failed") {
+    const isSuccess = execAction.status === "success";
+    return (
+      <View style={[cfmS.card, { backgroundColor: colors.inputBg, borderColor: (isSuccess ? "#34C759" : "#FF3B30") + "40" }]}>
+        <View style={cfmS.resultRow}>
+          <Ionicons name={isSuccess ? "checkmark-circle" : "close-circle"} size={20} color={isSuccess ? "#34C759" : "#FF3B30"} />
+          <Text style={[cfmS.resultText, { color: isSuccess ? "#34C759" : "#FF3B30" }]}>
+            {isSuccess ? "Success" : "Failed"}
+          </Text>
+        </View>
+        {execAction.result && (
+          <Text style={[cfmS.resultMsg, { color: colors.text }]}>{execAction.result}</Text>
+        )}
+        {execAction.invoice && <InvoiceCard invoice={execAction.invoice} colors={colors} />}
+      </View>
+    );
+  }
+
+  return (
+    <View style={[cfmS.card, { backgroundColor: colors.inputBg, borderColor: accentColor + "40" }]}>
+      <View style={cfmS.header}>
+        <View style={[cfmS.iconCircle, { backgroundColor: accentColor + "20" }]}>
+          <Ionicons name={icon as any} size={18} color={accentColor} />
+        </View>
+        <Text style={[cfmS.title, { color: colors.text }]}>{execAction.label}</Text>
+      </View>
+      <Text style={[cfmS.description, { color: colors.textSecondary }]}>{execAction.description}</Text>
+      <View style={cfmS.buttons}>
+        <TouchableOpacity style={[cfmS.confirmBtn, { backgroundColor: accentColor }]} onPress={onConfirm}>
+          <Ionicons name="checkmark" size={16} color="#fff" />
+          <Text style={cfmS.confirmBtnText}>Confirm</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[cfmS.cancelBtn, { borderColor: colors.border }]} onPress={onCancel}>
+          <Ionicons name="close" size={16} color={colors.textMuted} />
+          <Text style={[cfmS.cancelBtnText, { color: colors.textMuted }]}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 function formatTime(ts?: number): string {
   if (!ts) return "";
   const d = new Date(ts);
@@ -294,16 +487,37 @@ export default function AiChatScreen() {
       { count: postsCount },
       { data: giftData },
       { data: subData },
+      { data: recentAcoinTx },
+      { data: recentNexaSent },
+      { data: recentNexaRecv },
     ] = await Promise.all([
       supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", user.id),
       supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", user.id),
       supabase.from("posts").select("id", { count: "exact", head: true }).eq("author_id", user.id),
       supabase.from("user_gifts").select("id, gifts(name, rarity)").eq("user_id", user.id).limit(20),
       supabase.from("user_subscriptions").select("plan_id, is_active, expires_at, subscription_plans(name, tier)").eq("user_id", user.id).eq("is_active", true).maybeSingle(),
+      supabase.from("acoin_transactions").select("amount, transaction_type, created_at, nexa_spent, fee_charged, metadata").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
+      supabase.from("xp_transfers").select("amount, created_at, status").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(5),
+      supabase.from("xp_transfers").select("amount, created_at, status").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(5),
     ]);
 
     const gifts = (giftData || []).map((g: any) => `${g.gifts?.name} (${g.gifts?.rarity})`).join(", ");
     const premium = subData ? `${(subData as any).subscription_plans?.name} (${(subData as any).subscription_plans?.tier})` : "None";
+
+    const txLines: string[] = [];
+    (recentAcoinTx || []).forEach((t: any) => {
+      const date = new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      const meta = t.metadata || {};
+      txLines.push(`  - ${date}: ${t.transaction_type} ${t.amount > 0 ? "+" : ""}${t.amount} ACoin${meta.plan_name ? ` (${meta.plan_name})` : ""}${t.nexa_spent ? ` [${t.nexa_spent} Nexa spent]` : ""}${t.fee_charged ? ` [fee: ${t.fee_charged}]` : ""}`);
+    });
+    (recentNexaSent || []).forEach((t: any) => {
+      const date = new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      txLines.push(`  - ${date}: Sent ${t.amount} Nexa`);
+    });
+    (recentNexaRecv || []).forEach((t: any) => {
+      const date = new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      txLines.push(`  - ${date}: Received ${t.amount} Nexa`);
+    });
 
     return `
 USER CONTEXT (current user data):
@@ -321,6 +535,7 @@ USER CONTEXT (current user data):
 - Premium: ${premium}
 - Gifts owned: ${gifts || "None"}
 - Bio: ${profile.bio || "Not set"}
+${txLines.length > 0 ? `\nRECENT TRANSACTIONS:\n${txLines.join("\n")}` : ""}
 
 PLATFORM INFO:
 - AfuChat is a social messaging super app
@@ -345,9 +560,18 @@ CAPABILITIES: You can help users with:
 When suggesting actions, include ACTION buttons in your response using the format [ACTION:label:route] for navigation.`.trim();
   }, [user, profile]);
 
-  const parseActions = (content: string): { text: string; actions: ActionButton[]; suggestions: string[] } => {
+  const parseActions = (content: string): {
+    text: string;
+    actions: ActionButton[];
+    suggestions: string[];
+    invoices: InvoiceData[];
+    execAction?: { actionType: string; params: Record<string, any> };
+  } => {
     const actions: ActionButton[] = [];
     const suggestions: string[] = [];
+    const invoices: InvoiceData[] = [];
+    let execAction: { actionType: string; params: Record<string, any> } | undefined;
+
     let text = content.replace(/\[ACTION:([^:]+):([^\]]+)\]/g, (_, label, route) => {
       let icon = "arrow-forward";
       if (route.includes("wallet")) icon = "wallet";
@@ -367,7 +591,20 @@ When suggesting actions, include ACTION buttons in your response using the forma
       }
       return "";
     });
-    return { text: text.trim(), actions, suggestions };
+    text = text.replace(/\[INVOICE:(.*?)\]/gs, (_, jsonStr) => {
+      try {
+        invoices.push(JSON.parse(jsonStr.trim()));
+      } catch {}
+      return "";
+    });
+    text = text.replace(/\[EXEC:(\w+):(.*?)\]/gs, (_, actionType, jsonStr) => {
+      try {
+        const params = JSON.parse(jsonStr.trim());
+        execAction = { actionType, params };
+      } catch {}
+      return "";
+    });
+    return { text: text.trim(), actions, suggestions, invoices, execAction };
   };
 
   const ALLOWED_ROUTES = new Set([
@@ -414,6 +651,123 @@ When suggesting actions, include ACTION buttons in your response using the forma
     setLoading(false);
   }, []);
 
+  const executeExecAction = useCallback(async (action: ExecAction): Promise<{ success: boolean; message: string; invoice?: InvoiceData }> => {
+    if (!user || !profile) return { success: false, message: "Not logged in" };
+
+    switch (action.actionType) {
+      case "send_nexa": {
+        const { handle, amount, message: msg } = action.params;
+        if (!handle || !amount) return { success: false, message: "Missing handle or amount" };
+        const amt = parseInt(amount);
+        if (isNaN(amt) || amt <= 0) return { success: false, message: "Invalid amount" };
+        if (amt > (profile.xp || 0)) return { success: false, message: `Insufficient Nexa. You have ${profile.xp || 0}` };
+        const { data: recipient } = await supabase.from("profiles").select("id, display_name").eq("handle", handle.toLowerCase()).single();
+        if (!recipient) return { success: false, message: `User @${handle} not found` };
+        if (recipient.id === user.id) return { success: false, message: "Cannot send to yourself" };
+        const { error } = await supabase.from("xp_transfers").insert({ sender_id: user.id, receiver_id: recipient.id, amount: amt, message: msg || null });
+        if (error) return { success: false, message: error.message };
+        return {
+          success: true,
+          message: `Sent ${amt} Nexa to ${recipient.display_name}`,
+          invoice: { type: "Nexa Transfer", date: new Date().toISOString(), from: `@${profile.handle}`, to: `@${handle}`, amount: amt, currency: "Nexa", reference: `NXA-${Date.now().toString(36).toUpperCase()}`, status: "Completed" },
+        };
+      }
+      case "follow": {
+        const { handle } = action.params;
+        if (!handle) return { success: false, message: "Missing handle" };
+        const { data: target } = await supabase.from("profiles").select("id, display_name").eq("handle", handle.toLowerCase()).single();
+        if (!target) return { success: false, message: `User @${handle} not found` };
+        if (target.id === user.id) return { success: false, message: "Cannot follow yourself" };
+        const { data: existing } = await supabase.from("follows").select("id").eq("follower_id", user.id).eq("following_id", target.id).maybeSingle();
+        if (existing) return { success: false, message: `You already follow @${handle}` };
+        const { error } = await supabase.from("follows").insert({ follower_id: user.id, following_id: target.id });
+        if (error) return { success: false, message: error.message };
+        try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("follow_user"); } catch {}
+        return { success: true, message: `You now follow ${target.display_name} (@${handle})` };
+      }
+      case "unfollow": {
+        const { handle } = action.params;
+        if (!handle) return { success: false, message: "Missing handle" };
+        const { data: target } = await supabase.from("profiles").select("id, display_name").eq("handle", handle.toLowerCase()).single();
+        if (!target) return { success: false, message: `User @${handle} not found` };
+        const { error } = await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", target.id);
+        if (error) return { success: false, message: error.message };
+        return { success: true, message: `Unfollowed ${target.display_name} (@${handle})` };
+      }
+      case "subscribe": {
+        const { tier } = action.params;
+        if (!tier) return { success: false, message: "Missing tier" };
+        const { data: plan } = await supabase.from("subscription_plans").select("*").eq("tier", tier.toLowerCase()).eq("is_active", true).single();
+        if (!plan) return { success: false, message: `Plan '${tier}' not found` };
+        if ((profile.acoin || 0) < plan.acoin_price) return { success: false, message: `Insufficient ACoin. Need ${plan.acoin_price} but you have ${profile.acoin || 0}` };
+        const { data: deductData, error: deductErr } = await supabase.from("profiles").update({ acoin: (profile.acoin || 0) - plan.acoin_price }).eq("id", profile.id).gte("acoin", plan.acoin_price).select("id").maybeSingle();
+        if (deductErr || !deductData) return { success: false, message: "Could not deduct ACoin — balance may have changed" };
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + plan.duration_days);
+        const { error: subErr } = await supabase.from("user_subscriptions").upsert({ user_id: profile.id, plan_id: plan.id, started_at: new Date().toISOString(), expires_at: expiresAt.toISOString(), is_active: true, acoin_paid: plan.acoin_price }, { onConflict: "user_id" });
+        if (subErr) {
+          await supabase.from("profiles").update({ acoin: profile.acoin || 0 }).eq("id", profile.id);
+          return { success: false, message: "Could not activate subscription. ACoin refunded." };
+        }
+        await supabase.from("acoin_transactions").insert({ user_id: profile.id, amount: -plan.acoin_price, transaction_type: "subscription", metadata: { plan_name: plan.name, plan_tier: plan.tier, duration_days: plan.duration_days } });
+        return {
+          success: true,
+          message: `Subscribed to ${plan.name}! Active for ${plan.duration_days} days.`,
+          invoice: { type: "Premium Subscription", date: new Date().toISOString(), amount: plan.acoin_price, currency: "ACoin", reference: `SUB-${Date.now().toString(36).toUpperCase()}`, status: "Completed", description: `${plan.name} — ${plan.duration_days} days` },
+        };
+      }
+      case "cancel_subscription": {
+        const { error } = await supabase.rpc("cancel_my_subscription");
+        if (error) return { success: false, message: `Could not cancel: ${error.message}` };
+        await supabase.from("acoin_transactions").insert({ user_id: user.id, amount: 0, transaction_type: "subscription_cancelled", metadata: {} });
+        return { success: true, message: "Subscription cancelled. You're now on the free plan." };
+      }
+      case "convert_nexa": {
+        const { amount } = action.params;
+        const nexaAmt = parseInt(amount);
+        if (isNaN(nexaAmt) || nexaAmt <= 0) return { success: false, message: "Invalid amount" };
+        if (nexaAmt > (profile.xp || 0)) return { success: false, message: `Insufficient Nexa. You have ${profile.xp || 0}` };
+        const { data: settings } = await supabase.from("currency_settings").select("nexa_to_acoin_rate, conversion_fee_percent").limit(1).single();
+        if (!settings) return { success: false, message: "Currency settings not available" };
+        const rawAcoin = nexaAmt / (settings as any).nexa_to_acoin_rate;
+        const fee = Math.ceil(rawAcoin * ((settings as any).conversion_fee_percent / 100));
+        const netAcoin = Math.floor(rawAcoin - fee);
+        if (netAcoin <= 0) return { success: false, message: "Amount too small after fees" };
+        const { data: convData, error } = await supabase.from("profiles").update({ xp: (profile.xp || 0) - nexaAmt, acoin: (profile.acoin || 0) + netAcoin }).eq("id", profile.id).gte("xp", nexaAmt).select("id").maybeSingle();
+        if (error || !convData) return { success: false, message: "Could not convert — balance may have changed" };
+        await supabase.from("acoin_transactions").insert({ user_id: profile.id, amount: netAcoin, transaction_type: "conversion", nexa_spent: nexaAmt, fee_charged: fee, metadata: { rate: (settings as any).nexa_to_acoin_rate, fee_percent: (settings as any).conversion_fee_percent } });
+        return {
+          success: true,
+          message: `Converted ${nexaAmt} Nexa → ${netAcoin} ACoin`,
+          invoice: { type: "Currency Conversion", date: new Date().toISOString(), amount: nexaAmt, currency: "Nexa", fee, net: netAcoin, reference: `CNV-${Date.now().toString(36).toUpperCase()}`, status: "Completed", description: `Rate: ${(settings as any).nexa_to_acoin_rate} Nexa = 1 ACoin, Fee: ${(settings as any).conversion_fee_percent}%` },
+        };
+      }
+      default:
+        return { success: false, message: `Unknown action: ${action.actionType}` };
+    }
+  }, [user, profile]);
+
+  const handleConfirmExec = useCallback(async (msgId: string) => {
+    const msg = messages.find(m => m.id === msgId);
+    if (!msg?.execAction || msg.execAction.status !== "pending") return;
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, execAction: { ...m.execAction!, status: "executing" as const } } : m));
+    try {
+      const result = await executeExecAction(msg.execAction);
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, execAction: { ...m.execAction!, status: result.success ? "success" as const : "failed" as const, result: result.message, invoice: result.invoice } } : m));
+      if (result.success) {
+        refreshProfile();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (err: any) {
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, execAction: { ...m.execAction!, status: "failed" as const, result: err?.message || "Something went wrong" } } : m));
+    }
+  }, [messages, executeExecAction, refreshProfile]);
+
+  const handleCancelExec = useCallback((msgId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, execAction: { ...m.execAction!, status: "failed" as const, result: "Cancelled by user" } } : m));
+  }, []);
+
   const sendMessage = useCallback(async (text?: string) => {
     const content = (text || input).trim();
     if (!content || loading) return;
@@ -442,7 +796,20 @@ RESPONSE GUIDELINES:
 - Be enthusiastic about AfuChat features
 - Use rich formatting in your responses: **bold** for emphasis, *italic* for nuance, \`code\` for technical terms, bullet lists with - for multiple points, numbered lists with 1. 2. 3. for steps, and ### headings to organize longer answers
 - For code or technical content, use code blocks with triple backticks and language name
-- At the end of EVERY response, add exactly 2-3 short suggested follow-up replies the user might want to send next, using the format [SUGGEST:suggestion text]. Keep suggestions short (3-8 words), relevant to your response, and varied. Example: [SUGGEST:Tell me more][SUGGEST:How do I earn ACoin?][SUGGEST:Show my gifts]`;
+- At the end of EVERY response, add exactly 2-3 short suggested follow-up replies the user might want to send next, using the format [SUGGEST:suggestion text]. Keep suggestions short (3-8 words), relevant to your response, and varied. Example: [SUGGEST:Tell me more][SUGGEST:How do I earn ACoin?][SUGGEST:Show my gifts]
+
+EXECUTABLE ACTIONS:
+When the user asks you to perform an action, include ONE [EXEC:action_type:{"param":"value"}] tag. The app will show a confirmation card before executing. Only use EXEC when the user clearly asks you to do something. Available actions:
+- [EXEC:send_nexa:{"handle":"username","amount":100,"message":"optional"}] — Send Nexa to a user
+- [EXEC:follow:{"handle":"username"}] — Follow a user
+- [EXEC:unfollow:{"handle":"username"}] — Unfollow a user
+- [EXEC:subscribe:{"tier":"silver"}] — Subscribe to a plan (silver, gold, or platinum)
+- [EXEC:cancel_subscription:{}] — Cancel current subscription
+- [EXEC:convert_nexa:{"amount":500}] — Convert Nexa to ACoin
+Always include a brief explanation of what you're about to do before the EXEC tag. The handle must be WITHOUT the @ symbol. The JSON must be on a single line and valid.
+
+INVOICES:
+When the user asks for a receipt, invoice, or transaction details, generate an inline invoice card using [INVOICE:{"type":"...","date":"2026-03-27T12:00:00Z","amount":100,"currency":"Nexa","from":"@sender","to":"@receiver","fee":5,"net":95,"reference":"REF-XXX","status":"Completed","description":"optional note"}]. Use the RECENT TRANSACTIONS data to generate accurate invoices. The JSON must be on a single line.`;
 
       const conversationMessages = messages
         .filter(m => m.role !== "thinking")
@@ -467,7 +834,7 @@ RESPONSE GUIDELINES:
       if (requestIdRef.current !== currentRequestId) return;
 
       const rawReply = data.reply || "Sorry, I couldn't process that. Please try again.";
-      const { text: cleanText, actions, suggestions } = parseActions(rawReply);
+      const { text: cleanText, actions, suggestions, invoices, execAction } = parseActions(rawReply);
 
       const aiMsg: AiMessage = {
         id: `a_${Date.now()}`,
@@ -476,6 +843,15 @@ RESPONSE GUIDELINES:
         actions: actions.length > 0 ? actions : undefined,
         suggestions: suggestions.length > 0 ? suggestions : undefined,
         timestamp: Date.now(),
+        invoices: invoices.length > 0 ? invoices : undefined,
+        execAction: execAction ? {
+          id: `exec_${Date.now()}`,
+          actionType: execAction.actionType,
+          params: execAction.params,
+          label: EXEC_LABELS[execAction.actionType] || execAction.actionType,
+          description: buildExecDescription(execAction.actionType, execAction.params),
+          status: "pending",
+        } : undefined,
       };
       setMessages(prev => [...prev, aiMsg]);
     } catch {
@@ -518,6 +894,21 @@ RESPONSE GUIDELINES:
           <View style={[s.bubble, { backgroundColor: colors.surface }]}>
             <RichMessageContent content={item.content} colors={colors} />
           </View>
+          {item.invoices && item.invoices.length > 0 && (
+            <View style={{ gap: 8 }}>
+              {item.invoices.map((inv, i) => (
+                <InvoiceCard key={i} invoice={inv} colors={colors} />
+              ))}
+            </View>
+          )}
+          {item.execAction && (
+            <ConfirmationCard
+              execAction={item.execAction}
+              colors={colors}
+              onConfirm={() => handleConfirmExec(item.id)}
+              onCancel={() => handleCancelExec(item.id)}
+            />
+          )}
           <View style={s.msgMeta}>
             {item.timestamp && (
               <Text style={[s.timestamp, { color: colors.textMuted }]}>{formatTime(item.timestamp)}</Text>
@@ -736,4 +1127,34 @@ const s = StyleSheet.create({
   codeText: { fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", fontSize: 13, lineHeight: 20 },
   bulletRow: { flexDirection: "row", gap: 8, paddingRight: 8 },
   divider: { height: 1, marginVertical: 8 },
+});
+
+const invS = StyleSheet.create({
+  card: { borderRadius: 12, padding: 12, borderWidth: 1, marginTop: 8, gap: 6 },
+  cardHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  cardTitle: { flex: 1, fontSize: 14, fontWeight: "700" },
+  divider: { height: 1, marginVertical: 4 },
+  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 2 },
+  rowLabel: { fontSize: 12, fontWeight: "500" },
+  rowValue: { fontSize: 12, fontWeight: "600" },
+  refRow: { alignItems: "center", marginTop: 4 },
+  refText: { fontSize: 10, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" },
+  desc: { fontSize: 11, marginTop: 2, fontStyle: "italic" },
+});
+
+const cfmS = StyleSheet.create({
+  card: { borderRadius: 12, padding: 14, borderWidth: 1, marginTop: 8, gap: 10 },
+  header: { flexDirection: "row", alignItems: "center", gap: 10 },
+  iconCircle: { width: 36, height: 36, borderRadius: 18, justifyContent: "center", alignItems: "center" },
+  title: { fontSize: 15, fontWeight: "700" },
+  description: { fontSize: 13, lineHeight: 20 },
+  buttons: { flexDirection: "row", gap: 10, marginTop: 4 },
+  confirmBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10 },
+  confirmBtnText: { color: "#fff", fontSize: 14, fontWeight: "600" },
+  cancelBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
+  cancelBtnText: { fontSize: 14, fontWeight: "500" },
+  executingText: { fontSize: 13 },
+  resultRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  resultText: { fontSize: 15, fontWeight: "700" },
+  resultMsg: { fontSize: 13, lineHeight: 20 },
 });
