@@ -52,7 +52,7 @@ import { syncPendingMessages } from "@/lib/offlineSync";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { translateText, LANG_LABELS } from "@/lib/translate";
 import { useLanguage } from "@/context/LanguageContext";
-import { askAi, aiSuggestReply } from "@/lib/aiHelper";
+import { askAi, aiSuggestReply, transcribeAudio } from "@/lib/aiHelper";
 import EmojiPicker from "rn-emoji-keyboard";
 
 type Gift = {
@@ -356,10 +356,13 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   isPremiumSender?: boolean;
 }) {
   const { colors } = useTheme();
-  const { preferredLang } = useLanguage();
+  const { preferredLang, voiceToText } = useLanguage();
   const [translated, setTranslated] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
   const [showTranslated, setShowTranslated] = useState(false);
+  const [transcript, setTranscript] = useState<string | null>(null);
+  const [transcribing, setTranscribing] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(false);
 
   const isSpecial =
     msg.encrypted_content?.startsWith("🧧") ||
@@ -367,6 +370,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
     ["📷 Photo", "🎥 Video", "GIF"].includes(msg.encrypted_content ?? "");
 
   const canTranslate = !isMe && !!msg.encrypted_content && !isSpecial && !!preferredLang;
+  const canTranscribe = !!msg.attachment_url && msg.attachment_type === "audio" && voiceToText;
 
   useEffect(() => {
     if (!canTranslate || !preferredLang) return;
@@ -392,6 +396,22 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
       setShowTranslated(true);
     }
     setTranslating(false);
+  }
+
+  async function handleTranscribe() {
+    if (showTranscript) { setShowTranscript(false); return; }
+    if (transcript) { setShowTranscript(true); return; }
+    setTranscribing(true);
+    try {
+      const result = await transcribeAudio(msg.attachment_url!);
+      if (result) {
+        setTranscript(result);
+        setShowTranscript(true);
+      }
+    } catch {
+      // silently fail
+    }
+    setTranscribing(false);
   }
 
   const displayText = showTranslated && translated ? translated : msg.encrypted_content;
@@ -496,7 +516,28 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
               </View>
             </TouchableOpacity>
           ) : hasAudio ? (
-            <AudioPlayer uri={msg.attachment_url!} tintColor={textColor} waveColor={isMe ? "#FFFFFF" : "#00C2CB"} />
+            <View>
+              <AudioPlayer uri={msg.attachment_url!} tintColor={textColor} waveColor={isMe ? "#FFFFFF" : "#00C2CB"} />
+              {canTranscribe && (
+                <TouchableOpacity
+                  onPress={handleTranscribe}
+                  style={[st.translateChip, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.06)", marginTop: 6 }]}
+                  hitSlop={8}
+                >
+                  {transcribing ? (
+                    <ActivityIndicator size={10} color={colors.textMuted} style={{ marginRight: 3 }} />
+                  ) : (
+                    <Ionicons name="mic-outline" size={11} color={showTranscript ? BRAND : colors.textMuted} style={{ marginRight: 3 }} />
+                  )}
+                  <Text style={[st.translateChipText, { color: showTranscript ? BRAND : colors.textMuted }]}>
+                    {transcribing ? "Transcribing…" : showTranscript ? "Hide transcript" : "Transcribe"}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {showTranscript && transcript && (
+                <Text style={[st.bubbleText, { color: textColor, marginTop: 6, fontStyle: "italic" }]}>{transcript}</Text>
+              )}
+            </View>
           ) : hasFile ? (
             <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9} style={st.fileRow}>
               <View style={[st.fileIconBg, { backgroundColor: isMe ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.06)" }]}>

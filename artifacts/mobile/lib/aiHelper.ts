@@ -106,6 +106,22 @@ export async function aiSummarizeThread(post: string, replies: { author: string;
   );
 }
 
+export async function transcribeAudio(audioUrl: string): Promise<string> {
+  const res = await fetch(`${supabaseUrl}/functions/v1/transcribe-audio`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${supabaseAnonKey}`,
+      "apikey": supabaseAnonKey,
+    },
+    body: JSON.stringify({ audioUrl }),
+  });
+
+  if (!res.ok) throw new Error(`Transcription failed: ${res.status}`);
+  const data = await res.json();
+  return data.text || "";
+}
+
 export async function aiTranslateMessage(text: string, targetLang: string): Promise<string> {
   return askAi(
     `Translate to ${targetLang}. Return ONLY the translation:\n\n${text}`,

@@ -11,6 +11,7 @@ type LanguageContextType = {
   langLabel: string;
   setPreferredLang: (lang: string | null) => Promise<void>;
   autoTranslate: (text: string) => Promise<string>;
+  voiceToText: boolean;
 };
 
 const LanguageContext = createContext<LanguageContextType>({
@@ -18,11 +19,13 @@ const LanguageContext = createContext<LanguageContextType>({
   langLabel: "Off",
   setPreferredLang: async () => {},
   autoTranslate: async (t) => t,
+  voiceToText: false,
 });
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [preferredLang, setPreferredLangState] = useState<string | null>(null);
+  const [voiceToText, setVoiceToText] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((stored) => {
@@ -34,7 +37,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
     supabase
       .from("advanced_feature_settings")
-      .select("message_translation, translation_language")
+      .select("message_translation, translation_language, voice_to_text")
       .eq("user_id", user.id)
       .maybeSingle()
       .then(({ data }) => {
@@ -45,6 +48,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
             : null;
         setPreferredLangState(lang);
         AsyncStorage.setItem(STORAGE_KEY, lang ?? "none");
+        setVoiceToText(!!data.voice_to_text);
       });
   }, [user]);
 
@@ -69,6 +73,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
               : null;
           setPreferredLangState(lang);
           AsyncStorage.setItem(STORAGE_KEY, lang ?? "none");
+          setVoiceToText(!!row.voice_to_text);
         }
       )
       .subscribe();
@@ -101,7 +106,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <LanguageContext.Provider
-      value={{ preferredLang, langLabel, setPreferredLang, autoTranslate }}
+      value={{ preferredLang, langLabel, setPreferredLang, autoTranslate, voiceToText }}
     >
       {children}
     </LanguageContext.Provider>
