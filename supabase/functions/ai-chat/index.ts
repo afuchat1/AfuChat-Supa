@@ -5,17 +5,133 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+interface AiProvider {
+  name: string;
+  call: (messages: any[]) => Promise<string>;
+}
+
+function buildProviders(): AiProvider[] {
+  const providers: AiProvider[] = [];
+
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+  const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
+  const AIMLAPI_KEY = Deno.env.get("AIMLAPI_KEY");
+
+  if (GEMINI_API_KEY) {
+    providers.push({
+      name: "Gemini 2.5 Flash",
+      call: async (messages) => {
+        const systemMsg = messages.find((m: any) => m.role === "system");
+        const chatMsgs = messages.filter((m: any) => m.role !== "system");
+        const contents = chatMsgs.map((m: any) => ({
+          role: m.role === "assistant" ? "model" : "user",
+          parts: [{ text: m.content }],
+        }));
+        const body: any = { contents, generationConfig: { maxOutputTokens: 2048 } };
+        if (systemMsg) {
+          body.system_instruction = { parts: [{ text: systemMsg.content }] };
+        }
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`,
+          { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+        );
+        if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
+        const data = await res.json();
+        const text = data.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "";
+        if (!text) throw new Error("Gemini returned empty response");
+        return text;
+      },
+    });
+  }
+
+  if (LOVABLE_API_KEY) {
+    providers.push({
+      name: "Lovable AI",
+      call: async (messages) => {
+        const res = await fetch("https://api.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "gemini-2.5-flash", messages, max_tokens: 2048 }),
+        });
+        if (!res.ok) throw new Error(`Lovable ${res.status}: ${await res.text()}`);
+        const data = await res.json();
+        const text = data.choices?.[0]?.message?.content ?? "";
+        if (!text) throw new Error("Lovable returned empty response");
+        return text;
+      },
+    });
+  }
+
+  if (DEEPSEEK_API_KEY) {
+    providers.push({
+      name: "DeepSeek",
+      call: async (messages) => {
+        const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${DEEPSEEK_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "deepseek-chat", messages, max_tokens: 2048 }),
+        });
+        if (!res.ok) throw new Error(`DeepSeek ${res.status}: ${await res.text()}`);
+        const data = await res.json();
+        const text = data.choices?.[0]?.message?.content ?? "";
+        if (!text) throw new Error("DeepSeek returned empty response");
+        return text;
+      },
+    });
+  }
+
+  if (OPENAI_API_KEY) {
+    providers.push({
+      name: "GPT-4o Mini",
+      call: async (messages) => {
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "gpt-4o-mini", messages, max_tokens: 2048 }),
+        });
+        if (!res.ok) throw new Error(`OpenAI ${res.status}: ${await res.text()}`);
+        const data = await res.json();
+        const text = data.choices?.[0]?.message?.content ?? "";
+        if (!text) throw new Error("OpenAI returned empty response");
+        return text;
+      },
+    });
+  }
+
+  if (AIMLAPI_KEY) {
+    providers.push({
+      name: "AIML API",
+      call: async (messages) => {
+        const res = await fetch("https://api.aimlapi.com/v1/chat/completions", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${AIMLAPI_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "mistralai/Mistral-7B-Instruct-v0.2", messages, max_tokens: 2048 }),
+        });
+        if (!res.ok) throw new Error(`AIML ${res.status}: ${await res.text()}`);
+        const data = await res.json();
+        const text = data.choices?.[0]?.message?.content ?? "";
+        if (!text) throw new Error("AIML returned empty response");
+        return text;
+      },
+    });
+  }
+
+  return providers;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const providers = buildProviders();
 
-    if (!LOVABLE_API_KEY) {
+    if (providers.length === 0) {
       return new Response(
-        JSON.stringify({ error: "LOVABLE_API_KEY not configured in Supabase edge function secrets." }),
+        JSON.stringify({ error: "No AI API keys configured. Add at least one of: GEMINI_API_KEY, LOVABLE_API_KEY, DEEPSEEK_API_KEY, OPENAI_API_KEY, AIMLAPI_KEY to Supabase edge function secrets." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -28,30 +144,31 @@ serve(async (req) => {
       );
     }
 
-    const res = await fetch("https://api.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gemini-2.5-flash",
-        messages,
-        max_tokens: 1024,
-      }),
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Lovable AI error ${res.status}: ${err}`);
+    for (const provider of providers) {
+      try {
+        console.log(`Trying provider: ${provider.name}`);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        const reply = await Promise.race([
+          provider.call(messages),
+          new Promise<never>((_, reject) => {
+            controller.signal.addEventListener("abort", () => reject(new Error("Timeout after 15s")));
+          }),
+        ]);
+        clearTimeout(timeout);
+        console.log(`Success with: ${provider.name}`);
+        return new Response(
+          JSON.stringify({ reply, provider: provider.name }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (err) {
+        console.error(`Provider ${provider.name} failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
 
-    const data = await res.json();
-    const reply = data.choices?.[0]?.message?.content ?? "Sorry, I couldn't generate a response.";
-
     return new Response(
-      JSON.stringify({ reply }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ reply: "I'm having trouble connecting to my AI systems right now. Please try again in a moment." }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("AI chat error:", error);

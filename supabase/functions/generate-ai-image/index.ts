@@ -6,51 +6,84 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-async function generateWithOpenAI(apiKey: string, prompt: string): Promise<string[]> {
-  const res = await fetch("https://api.openai.com/v1/images/generations", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "dall-e-3",
-      prompt,
-      n: 1,
-      size: "1024x1024",
-      response_format: "url",
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`DALL-E error ${res.status}: ${err}`);
-  }
-  const data = await res.json();
-  return (data.data || []).map((img: any) => img.url).filter(Boolean);
+interface ImageProvider {
+  name: string;
+  generate: (prompt: string) => Promise<string[]>;
 }
 
-async function generateWithRunware(apiKey: string, prompt: string): Promise<string[]> {
-  const res = await fetch("https://api.runware.ai/v1/images/generations", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      positivePrompt: prompt,
-      model: "runware:100@1",
-      numberResults: 1,
-      outputFormat: "WEBP",
-      width: 1024,
-      height: 1024,
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Runware error ${res.status}: ${err}`);
+function buildImageProviders(): ImageProvider[] {
+  const providers: ImageProvider[] = [];
+
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY");
+  const AIMLAPI_KEY = Deno.env.get("AIMLAPI_KEY");
+  const FREEPIK_API_KEY = Deno.env.get("FREEPIK_API_KEY");
+
+  if (OPENAI_API_KEY) {
+    providers.push({
+      name: "DALL-E 3",
+      generate: async (prompt) => {
+        const res = await fetch("https://api.openai.com/v1/images/generations", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "dall-e-3", prompt, n: 1, size: "1024x1024", response_format: "url" }),
+        });
+        if (!res.ok) throw new Error(`DALL-E ${res.status}: ${await res.text()}`);
+        const data = await res.json();
+        return (data.data || []).map((img: any) => img.url).filter(Boolean);
+      },
+    });
   }
-  const data = await res.json();
-  return (data.data || []).map((img: any) => img.imageURL).filter(Boolean);
+
+  if (RUNWARE_API_KEY) {
+    providers.push({
+      name: "Runware",
+      generate: async (prompt) => {
+        const res = await fetch("https://api.runware.ai/v1/images/generations", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${RUNWARE_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ positivePrompt: prompt, model: "runware:100@1", numberResults: 1, outputFormat: "WEBP", width: 1024, height: 1024 }),
+        });
+        if (!res.ok) throw new Error(`Runware ${res.status}: ${await res.text()}`);
+        const data = await res.json();
+        return (data.data || []).map((img: any) => img.imageURL).filter(Boolean);
+      },
+    });
+  }
+
+  if (AIMLAPI_KEY) {
+    providers.push({
+      name: "AIML Flux",
+      generate: async (prompt) => {
+        const res = await fetch("https://api.aimlapi.com/v1/images/generations", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${AIMLAPI_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "flux/schnell", prompt, n: 1, image_size: { width: 1024, height: 1024 } }),
+        });
+        if (!res.ok) throw new Error(`AIML ${res.status}: ${await res.text()}`);
+        const data = await res.json();
+        return (data.data || []).map((img: any) => img.url).filter(Boolean);
+      },
+    });
+  }
+
+  if (FREEPIK_API_KEY) {
+    providers.push({
+      name: "Freepik AI",
+      generate: async (prompt) => {
+        const res = await fetch("https://api.freepik.com/v1/ai/text-to-image", {
+          method: "POST",
+          headers: { "x-freepik-api-key": FREEPIK_API_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, num_images: 1, image: { size: "square" } }),
+        });
+        if (!res.ok) throw new Error(`Freepik ${res.status}: ${await res.text()}`);
+        const data = await res.json();
+        return (data.data || []).map((img: any) => img.base64 ? `data:image/jpeg;base64,${img.base64}` : img.url).filter(Boolean);
+      },
+    });
+  }
+
+  return providers;
 }
 
 serve(async (req) => {
@@ -61,12 +94,12 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY");
 
-    if (!OPENAI_API_KEY && !RUNWARE_API_KEY) {
+    const imageProviders = buildImageProviders();
+
+    if (imageProviders.length === 0) {
       return new Response(
-        JSON.stringify({ error: "No image generation API key configured. Add OPENAI_API_KEY or RUNWARE_API_KEY to Supabase edge function secrets." }),
+        JSON.stringify({ error: "No image generation API keys configured. Add OPENAI_API_KEY, RUNWARE_API_KEY, AIMLAPI_KEY, or FREEPIK_API_KEY to Supabase edge function secrets." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -80,12 +113,11 @@ serve(async (req) => {
     }
 
     const token = authHeader.replace("Bearer ", "");
-
-    const supabaseAuth = createClient(supabaseUrl!, supabaseServiceKey!, {
+    const supabaseAdmin = createClient(supabaseUrl!, supabaseServiceKey!, {
       auth: { persistSession: false },
     });
 
-    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
     if (authError || !user) {
       return new Response(
         JSON.stringify({ error: "Invalid or expired authentication token" }),
@@ -95,7 +127,7 @@ serve(async (req) => {
 
     const userId = user.id;
 
-    const { data: subscription } = await supabaseAuth
+    const { data: subscription } = await supabaseAdmin
       .from("user_subscriptions")
       .select("is_active, expires_at")
       .eq("user_id", userId)
@@ -118,30 +150,37 @@ serve(async (req) => {
       );
     }
 
-    let imageUrls: string[] = [];
+    const errors: string[] = [];
 
-    if (OPENAI_API_KEY) {
-      imageUrls = await generateWithOpenAI(OPENAI_API_KEY, prompt);
-    } else if (RUNWARE_API_KEY) {
-      imageUrls = await generateWithRunware(RUNWARE_API_KEY, prompt);
+    for (const provider of imageProviders) {
+      try {
+        console.log(`Trying image provider: ${provider.name}`);
+        const imageUrls = await provider.generate(prompt);
+        if (imageUrls.length > 0) {
+          console.log(`Success with: ${provider.name}`);
+
+          await supabaseAdmin.rpc("award_xp", {
+            p_user_id: userId,
+            p_action_type: "use_ai",
+            p_xp_amount: 10,
+            p_metadata: { action: "generate_ai_image", provider: provider.name },
+          }).catch(() => {});
+
+          return new Response(
+            JSON.stringify({ reply: "Here is your generated image!", images: imageUrls, provider: provider.name }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        throw new Error(`${provider.name} returned no images`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`Image provider ${provider.name} failed: ${msg}`);
+        errors.push(`${provider.name}: ${msg}`);
+      }
     }
-
-    if (imageUrls.length === 0) {
-      return new Response(
-        JSON.stringify({ reply: "I was unable to generate an image. Please try a different prompt.", images: [] }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    await supabaseAuth.rpc("award_xp", {
-      p_user_id: userId,
-      p_action_type: "use_ai",
-      p_xp_amount: 10,
-      p_metadata: { action: "generate_ai_image" },
-    }).catch(() => {});
 
     return new Response(
-      JSON.stringify({ reply: "Here is your generated image!", images: imageUrls }),
+      JSON.stringify({ reply: "I was unable to generate an image. Please try a different prompt.", images: [], errors }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
