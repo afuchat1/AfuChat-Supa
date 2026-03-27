@@ -66,10 +66,10 @@ export default function UniversalSearchScreen() {
         ? supabase.from("profiles").select("id, display_name, handle, avatar_url, is_verified").ilike("handle", `%${q}%`).limit(8)
         : Promise.resolve({ data: [] }),
       (sc === "all" || sc === "posts")
-        ? supabase.from("posts").select("id, content, created_at, profiles!posts_user_id_fkey(handle)").ilike("content", `%${q}%`).limit(8)
+        ? supabase.from("posts").select("id, content, created_at, profiles!posts_author_id_fkey(handle)").ilike("content", `%${q}%`).limit(8)
         : Promise.resolve({ data: [] }),
       (sc === "all" || sc === "chats")
-        ? supabase.from("group_chats").select("id, name, description").ilike("name", `%${q}%`).limit(6)
+        ? supabase.from("chats").select("id, name, description, avatar_url, is_group").ilike("name", `%${q}%`).limit(6)
         : Promise.resolve({ data: [] }),
     ]);
 
