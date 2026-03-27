@@ -1497,9 +1497,9 @@ export default function ChatScreen() {
     setWaveformLevels([]);
 
     try {
+      const uri = recordingRef.current.getURI();
       await recordingRef.current.stopAndUnloadAsync();
       await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-      const uri = recordingRef.current.getURI();
       recordingRef.current = null;
 
       if (!uri || !user) return;
@@ -1508,12 +1508,34 @@ export default function ChatScreen() {
       if (!activeChatId) return;
 
       setSending(true);
+      let finalUri = uri;
       const ext = Platform.OS === "web" ? "webm" : "m4a";
+
+      if (Platform.OS !== "web") {
+        const FileSystem = require("expo-file-system");
+        const info = await FileSystem.getInfoAsync(uri);
+        if (!info.exists) {
+          console.warn("[Voice] File not found at URI:", uri);
+          await supabase.from("messages").insert({
+            chat_id: activeChatId,
+            sender_id: user.id,
+            encrypted_content: "🎤 Voice message",
+          });
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          loadMessages();
+          setSending(false);
+          return;
+        }
+        const destUri = `${FileSystem.cacheDirectory}voice_${Date.now()}.${ext}`;
+        await FileSystem.copyAsync({ from: uri, to: destUri });
+        finalUri = destUri;
+      }
+
       const { publicUrl, error: uploadErr } = await uploadChatMedia(
         "chat-media",
         activeChatId,
         user.id,
-        uri,
+        finalUri,
         `voice_${Date.now()}.${ext}`,
       );
 
@@ -1526,6 +1548,7 @@ export default function ChatScreen() {
           attachment_type: "audio",
         });
       } else {
+        console.warn("[Voice] Upload failed:", uploadErr);
         await supabase.from("messages").insert({
           chat_id: activeChatId,
           sender_id: user.id,
@@ -1535,7 +1558,8 @@ export default function ChatScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       loadMessages();
       setSending(false);
-    } catch (err) {
+    } catch (err: any) {
+      console.warn("[Voice] Error:", err?.message || err);
       recordingRef.current = null;
       setSending(false);
       showAlert("Error", "Failed to send voice message.");
