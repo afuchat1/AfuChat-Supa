@@ -1668,11 +1668,6 @@ export default function ChatScreen() {
             })()}
           </View>
         </TouchableOpacity>
-        {(chatInfo?.is_group || chatInfo?.is_channel) && (
-          <TouchableOpacity onPress={() => setShowRedEnvelope(true)} style={st.headerAction} hitSlop={8}>
-            <Text style={{ fontSize: 20 }}>🧧</Text>
-          </TouchableOpacity>
-        )}
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}>
@@ -1753,6 +1748,11 @@ export default function ChatScreen() {
                     {!chatInfo?.is_group && !chatInfo?.is_channel && (
                       <TouchableOpacity onPress={() => { loadGifts(); setShowGiftPicker(true); }} hitSlop={8} style={st.pillIcon}>
                         <Ionicons name="gift-outline" size={22} color={colors.textMuted} />
+                      </TouchableOpacity>
+                    )}
+                    {(chatInfo?.is_group || chatInfo?.is_channel) && (
+                      <TouchableOpacity onPress={() => setShowRedEnvelope(true)} hitSlop={8} style={st.pillIcon}>
+                        <Text style={{ fontSize: 20 }}>🧧</Text>
                       </TouchableOpacity>
                     )}
                     <TouchableOpacity onPress={() => setShowAttachMenu(true)} hitSlop={8} style={st.pillIcon}>
