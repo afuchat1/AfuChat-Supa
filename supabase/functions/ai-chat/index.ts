@@ -225,6 +225,24 @@ async function transcribeWithGemini(audioUrl: string, apiKey: string): Promise<s
   return data.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "";
 }
 
+async function transcribeWithGroq(audioUrl: string, apiKey: string): Promise<string> {
+  const audioResp = await fetch(audioUrl);
+  if (!audioResp.ok) throw new Error("Failed to download audio");
+  const audioBlob = await audioResp.blob();
+  const ext = (audioUrl.split("?")[0].split(".").pop() || "m4a").toLowerCase();
+  const form = new FormData();
+  form.append("file", audioBlob, `audio.${ext}`);
+  form.append("model", "whisper-large-v3");
+  const res = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${apiKey}` },
+    body: form,
+  });
+  if (!res.ok) throw new Error(`Groq ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return data.text || "";
+}
+
 async function transcribeWithWhisper(audioUrl: string, apiKey: string): Promise<string> {
   const audioResp = await fetch(audioUrl);
   if (!audioResp.ok) throw new Error("Failed to download audio");
@@ -257,9 +275,19 @@ serve(async (req) => {
       const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
       const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
       const AIMLAPI_KEY = Deno.env.get("AIMLAPI_KEY");
+      const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
       const audioExt = (body.audioUrl.split("?")[0].split(".").pop() || "m4a").toLowerCase();
       const aimlCompatible = ["wav", "mp3"].includes(audioExt);
       const errors: string[] = [];
+      if (GROQ_API_KEY) {
+        try {
+          const text = await transcribeWithGroq(body.audioUrl, GROQ_API_KEY);
+          return new Response(JSON.stringify({ text }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        } catch (e) {
+          errors.push(`Groq: ${e instanceof Error ? e.message : String(e)}`);
+          console.error("Groq transcription failed:", e);
+        }
+      }
       if (GEMINI_API_KEY) {
         try {
           const text = await transcribeWithGemini(body.audioUrl, GEMINI_API_KEY);
