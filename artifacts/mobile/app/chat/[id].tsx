@@ -24,7 +24,7 @@ import { ImageViewer, useImageViewer } from "@/components/ImageViewer";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
-import { Video, ResizeMode } from "expo-av";
+import { Video, ResizeMode, Audio } from "expo-av";
 import Svg, { Path } from "react-native-svg";
 import { ChatLoadingSkeleton } from "@/components/ui/Skeleton";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -629,6 +629,10 @@ export default function ChatScreen() {
     totalAmount: number;
   } | null>(null);
   const [envClaiming, setEnvClaiming] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recordingTimer = useRef<any>(null);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [gifSearch, setGifSearch] = useState("");
@@ -1409,6 +1413,82 @@ export default function ChatScreen() {
     loadMessages();
   }
 
+  async function startVoiceRecording() {
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== "granted") {
+        showAlert("Permission needed", "Microphone access is required to record voice messages.");
+        return;
+      }
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      recordingRef.current = recording;
+      setIsRecording(true);
+      setRecordingDuration(0);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      recordingTimer.current = setInterval(() => {
+        setRecordingDuration((d) => d + 1);
+      }, 1000);
+    } catch (err) {
+      showAlert("Error", "Could not start recording.");
+    }
+  }
+
+  async function stopVoiceRecording() {
+    if (!recordingRef.current) return;
+    clearInterval(recordingTimer.current);
+    setIsRecording(false);
+    setRecordingDuration(0);
+
+    try {
+      await recordingRef.current.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      const uri = recordingRef.current.getURI();
+      recordingRef.current = null;
+
+      if (!uri || !user) return;
+
+      const activeChatId = await getOrCreateChatId();
+      if (!activeChatId) return;
+
+      setSending(true);
+      const publicUrl = await uploadChatMedia(uri, "audio");
+      if (publicUrl) {
+        await supabase.from("messages").insert({
+          chat_id: activeChatId,
+          sender_id: user.id,
+          encrypted_content: "🎤 Voice message",
+          attachment_url: publicUrl,
+          attachment_type: "audio",
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        loadMessages();
+      }
+      setSending(false);
+    } catch (err) {
+      recordingRef.current = null;
+      setSending(false);
+      showAlert("Error", "Failed to send voice message.");
+    }
+  }
+
+  async function cancelVoiceRecording() {
+    if (!recordingRef.current) return;
+    clearInterval(recordingTimer.current);
+    setIsRecording(false);
+    setRecordingDuration(0);
+    try {
+      await recordingRef.current.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+    } catch (_) {}
+    recordingRef.current = null;
+  }
+
   async function handleTapGift(msg: Message) {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const raw = msg.encrypted_content.replace("🎁 ", "");
@@ -1774,11 +1854,30 @@ export default function ChatScreen() {
                   )}
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity onPress={() => {}} style={[st.sendBtn, { backgroundColor: BRAND }]} hitSlop={8}>
-                  <Ionicons name="mic" size={20} color="#fff" />
+                <TouchableOpacity
+                  onLongPress={startVoiceRecording}
+                  onPressOut={() => { if (isRecording) stopVoiceRecording(); }}
+                  delayLongPress={200}
+                  style={[st.sendBtn, { backgroundColor: isRecording ? "#FF3B30" : BRAND }]}
+                  hitSlop={8}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name={isRecording ? "stop" : "mic"} size={20} color="#fff" />
                 </TouchableOpacity>
               )}
             </View>
+            {isRecording && (
+              <View style={st.recordingBar}>
+                <View style={st.recordingDot} />
+                <Text style={st.recordingText}>
+                  {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, "0")}
+                </Text>
+                <Text style={st.recordingHint}>Release to send</Text>
+                <TouchableOpacity onPress={cancelVoiceRecording} hitSlop={12}>
+                  <Ionicons name="trash-outline" size={18} color="#FF3B30" />
+                </TouchableOpacity>
+              </View>
+            )}
           </>
         )}
       </KeyboardAvoidingView>
@@ -2375,6 +2474,10 @@ const st = StyleSheet.create({
   pillIcon: { paddingHorizontal: 6 },
   input: { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 22, borderWidth: 0, outlineStyle: "none" as any, paddingTop: 10, paddingBottom: 10, minHeight: 28, maxHeight: 120 },
   sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  recordingBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, gap: 8 },
+  recordingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#FF3B30" },
+  recordingText: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: "#FF3B30" },
+  recordingHint: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", color: "#999", textAlign: "center" },
 
   sheetOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
   sheetContent: { position: "absolute", bottom: 0, left: 0, right: 0, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 14, maxHeight: SCREEN_HEIGHT * 0.7 },
