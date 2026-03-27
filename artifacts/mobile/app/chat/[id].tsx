@@ -651,6 +651,9 @@ export default function ChatScreen() {
   const [aiResultType, setAiResultType] = useState<"summary" | "replies" | "translate" | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiReplies, setAiReplies] = useState<string[]>([]);
+  const [showLangPicker, setShowLangPicker] = useState(false);
+  const [translateMsg, setTranslateMsg] = useState<Message | null>(null);
+  const [translatingLang, setTranslatingLang] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const typingTimeout = useRef<any>(null);
   const draftSaveTimer = useRef<any>(null);
@@ -980,20 +983,27 @@ export default function ChatScreen() {
     }
   }
 
-  async function handleAiTranslate(msg: Message) {
-    if (aiLoading) return;
-    setAiLoading(true);
+  function openTranslatePicker(msg: Message) {
+    setTranslateMsg(msg);
+    setShowLangPicker(true);
+    setShowReactions(null);
     setAiResult(null);
-    setAiResultType("translate");
+    setAiResultType(null);
     setAiReplies([]);
+  }
+
+  async function handleTranslateToLang(langCode: string) {
+    if (!translateMsg || translatingLang) return;
+    setTranslatingLang(true);
+    setAiResultType("translate");
+    setAiResult(null);
     try {
-      const { aiTranslateMessage } = await import("@/lib/aiHelper");
-      const result = await aiTranslateMessage(msg.encrypted_content, "English");
+      const result = await translateText(translateMsg.encrypted_content, langCode);
       setAiResult(result);
     } catch {
-      setAiResult("Could not translate message. Please try again.");
+      setAiResult("Could not translate. Please try again.");
     } finally {
-      setAiLoading(false);
+      setTranslatingLang(false);
     }
   }
 
@@ -1688,6 +1698,15 @@ export default function ChatScreen() {
           <Text style={[st.sheetActionText, { color: colors.text }]}>Forward</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={st.sheetActionRow}
+          onPress={() => { if (showReactions) openTranslatePicker(showReactions); }}
+        >
+          <Ionicons name="language-outline" size={20} color={colors.text} />
+          <Text style={[st.sheetActionText, { color: colors.text }]}>Translate</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: "auto" }} />
+        </TouchableOpacity>
+
         {(chatInfo?.is_group || chatInfo?.is_channel) && (
           <>
             <View style={{ height: 1, backgroundColor: colors.border + "50", marginHorizontal: 16, marginVertical: 6 }} />
@@ -1695,15 +1714,6 @@ export default function ChatScreen() {
               <Ionicons name="sparkles" size={12} color={Colors.brand} />
               <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: Colors.brand, textTransform: "uppercase", letterSpacing: 0.5 }}>AI Features</Text>
             </View>
-            <TouchableOpacity
-              style={[st.sheetActionRow, { opacity: aiLoading && aiResultType === "translate" ? 0.5 : 1 }]}
-              disabled={aiLoading}
-              onPress={() => { if (showReactions) handleAiTranslate(showReactions); }}
-            >
-              <Ionicons name="language-outline" size={20} color={Colors.brand} />
-              <Text style={[st.sheetActionText, { color: colors.text }]}>Translate Message</Text>
-              {aiLoading && aiResultType === "translate" && <ActivityIndicator color={Colors.brand} size="small" style={{ marginLeft: "auto" }} />}
-            </TouchableOpacity>
             <TouchableOpacity
               style={[st.sheetActionRow, { opacity: aiLoading && aiResultType === "summary" ? 0.5 : 1 }]}
               disabled={aiLoading || messages.length < 3}
@@ -1723,13 +1733,11 @@ export default function ChatScreen() {
               {aiLoading && aiResultType === "replies" && <ActivityIndicator color="#D4A853" size="small" style={{ marginLeft: "auto" }} />}
             </TouchableOpacity>
 
-            {aiResult && (aiResultType === "summary" || aiResultType === "translate") && (
+            {aiResult && aiResultType === "summary" && (
               <View style={{ marginHorizontal: 16, marginTop: 6, marginBottom: 8, backgroundColor: Colors.brand + "0A", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.brand + "18" }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
                   <Ionicons name="sparkles" size={12} color={Colors.brand} />
-                  <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: Colors.brand, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                    {aiResultType === "summary" ? "Summary" : "Translation"}
-                  </Text>
+                  <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: Colors.brand, textTransform: "uppercase", letterSpacing: 0.5 }}>Summary</Text>
                 </View>
                 <Text style={{ fontSize: 14, color: colors.text, fontFamily: "Inter_400Regular", lineHeight: 20 }}>{aiResult}</Text>
               </View>
@@ -1756,6 +1764,50 @@ export default function ChatScreen() {
             )}
           </>
         )}
+      </BottomSheet>
+
+      <BottomSheet visible={showLangPicker} onClose={() => { setShowLangPicker(false); setTranslateMsg(null); setAiResult(null); setAiResultType(null); }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <TouchableOpacity onPress={() => { setShowLangPicker(false); setTranslateMsg(null); setAiResult(null); setAiResultType(null); }} hitSlop={12}>
+              <Ionicons name="chevron-back" size={22} color={colors.text} />
+            </TouchableOpacity>
+            <Ionicons name="language-outline" size={20} color={Colors.brand} />
+            <Text style={{ fontSize: 16, fontFamily: "Inter_700Bold", color: colors.text }}>Translate to</Text>
+          </View>
+          {translatingLang && <ActivityIndicator color={Colors.brand} size="small" />}
+        </View>
+        {translateMsg && (
+          <View style={{ marginHorizontal: 16, marginTop: 10, marginBottom: 6, backgroundColor: colors.inputBg, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
+            <Text style={{ fontSize: 13, color: colors.textMuted, fontFamily: "Inter_400Regular" }} numberOfLines={2}>{translateMsg.encrypted_content}</Text>
+          </View>
+        )}
+        {aiResult && aiResultType === "translate" && (
+          <View style={{ marginHorizontal: 16, marginTop: 6, marginBottom: 6, backgroundColor: Colors.brand + "0A", borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.brand + "18" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 6 }}>
+              <Ionicons name="checkmark-circle" size={14} color={Colors.brand} />
+              <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: Colors.brand, textTransform: "uppercase", letterSpacing: 0.4 }}>Translation</Text>
+            </View>
+            <Text style={{ fontSize: 14, color: colors.text, fontFamily: "Inter_400Regular", lineHeight: 20 }}>{aiResult}</Text>
+          </View>
+        )}
+        <ScrollView style={{ maxHeight: 320, marginTop: 4 }} showsVerticalScrollIndicator={false} bounces={false}>
+          {Object.entries(LANG_LABELS).map(([code, label]) => (
+            <TouchableOpacity
+              key={code}
+              style={{
+                flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12,
+                borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border + "40",
+              }}
+              onPress={() => handleTranslateToLang(code)}
+              disabled={translatingLang}
+              activeOpacity={0.6}
+            >
+              <Text style={{ flex: 1, fontSize: 15, color: colors.text, fontFamily: "Inter_500Medium" }}>{label}</Text>
+              <Text style={{ fontSize: 13, color: colors.textMuted, fontFamily: "Inter_400Regular" }}>{code.toUpperCase()}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </BottomSheet>
 
       <BottomSheet visible={showRedEnvelope} onClose={() => setShowRedEnvelope(false)}>
