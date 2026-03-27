@@ -339,22 +339,20 @@ RESPONSE GUIDELINES:
         }
       />
 
-      <View style={[s.inputRow, { marginHorizontal: 4, marginTop: 2, marginBottom: insets.bottom + 4 }]}>
-        <View style={[s.inputWrap, { backgroundColor: colors.surface }]}>
-          <TouchableOpacity hitSlop={8} style={s.inputIconBtn}>
-            <Ionicons name="happy-outline" size={22} color={colors.textMuted} />
-          </TouchableOpacity>
-          <TextInput
-            style={[s.input, { color: colors.text }]}
-            placeholder="Ask AfuAi anything..."
-            placeholderTextColor={colors.textMuted}
-            value={input}
-            onChangeText={setInput}
-            multiline
-            maxLength={2000}
-            onSubmitEditing={() => sendMessage()}
-          />
-        </View>
+      <View style={[s.inputRow, { borderTopColor: colors.border, marginBottom: insets.bottom + 4 }]}>
+        <TouchableOpacity hitSlop={10} style={s.barIcon}>
+          <Ionicons name="happy-outline" size={24} color={colors.textMuted} />
+        </TouchableOpacity>
+        <TextInput
+          style={[s.input, { color: colors.text }]}
+          placeholder="Ask AfuAi anything..."
+          placeholderTextColor={colors.textMuted}
+          value={input}
+          onChangeText={setInput}
+          multiline
+          maxLength={2000}
+          onSubmitEditing={() => sendMessage()}
+        />
         <TouchableOpacity
           style={[s.sendBtn, { backgroundColor: input.trim() && !loading ? Colors.brand : colors.border }]}
           onPress={() => sendMessage()}
@@ -406,9 +404,8 @@ const s = StyleSheet.create({
   quickBtn: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
   quickBtnText: { fontSize: 14, fontWeight: "500" },
   inputBar: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingTop: 8 },
-  inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 4 },
-  inputWrap: { flex: 1, flexDirection: "row", alignItems: "flex-end", borderRadius: 20, paddingHorizontal: 4, paddingVertical: 6 },
-  inputIconBtn: { paddingHorizontal: 4, paddingBottom: 2 },
-  input: { flex: 1, fontSize: 16, lineHeight: 20, borderWidth: 0, outlineStyle: "none" as any, paddingVertical: 0, minHeight: 22, maxHeight: 120 },
-  sendBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: "center", alignItems: "center" },
+  inputRow: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 6, paddingVertical: 6, borderTopWidth: StyleSheet.hairlineWidth, gap: 2 },
+  barIcon: { paddingHorizontal: 6, paddingBottom: 10 },
+  input: { flex: 1, fontSize: 16, lineHeight: 22, borderWidth: 0, outlineStyle: "none" as any, paddingVertical: 8, minHeight: 22, maxHeight: 120 },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: "center", alignItems: "center", marginBottom: 2 },
 });
