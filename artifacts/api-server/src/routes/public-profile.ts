@@ -7,7 +7,7 @@ const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
-const BRAND_COLOR = "#4ECDC4";
+const BRAND_COLOR = "#00BCD4";
 const SITE_NAME = "AfuChat";
 const SITE_URL = "https://afuchat.com";
 

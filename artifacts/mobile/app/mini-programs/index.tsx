@@ -46,7 +46,7 @@ const SECTIONS: SectionData[] = [
   {
     title: "Gaming",
     items: [
-      { icon: "skull-outline", label: "Snake", color: "#4ECDC4", route: "/games/snake" },
+      { icon: "skull-outline", label: "Snake", color: "#00BCD4", route: "/games/snake" },
       { icon: "grid-outline", label: "Tetris", color: "#00BCD4", route: "/games/tetris" },
       { icon: "apps-outline", label: "2048", color: "#EDC22E", route: "/games/game-2048" },
       { icon: "airplane-outline", label: "Flappy\nBird", color: "#70c5ce", route: "/games/flappy" },

@@ -77,8 +77,8 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 
 - **Auth**: Supabase Auth (email/password, Google OAuth, GitHub OAuth via WebBrowser + PKCE), AuthContext provider. App scheme `afuchat://` for OAuth deep links. OTP-based password reset (6-digit code, not link). Email confirmation required on registration (OTP verify). All auth emails sent from `noreply@afuchat.com` via Resend (edge function `send-password-reset` handles all email types with branded templates + AfuChat Technologies Ltd footer).
 - **Navigation**: Expo Router with tabs (AfuChat, Search, Discover, Me). Contacts tab exists but is hidden (`href: null`).
-- **Design**: AfuChat teal `#4ECDC4` brand color (Google Maps teal), gold business badge `#D4A853`, Inter font family, dark/light theme (dark theme uses Google-style warm greys: bg `#202124`, surface `#303134`, border `#3C4043`), branded afu-symbol logo used for app icon, splash screen (teal background), favicon, and notification icon
-- **Badge System**: `is_organization_verified=true` → gold badge (#D4A853) + "Verified Business" tag. `is_verified=true` (subscription) → teal badge (#4ECDC4), no business tag. Applied across me.tsx, discover.tsx, contacts.tsx, contact/[id].tsx, post/[id].tsx, admin/index.tsx.
+- **Design**: AfuChat blue-green `#00BCD4` brand color (Google Maps blue-green), gold business badge `#D4A853`, Inter font family, dark/light theme (dark theme uses Google-style warm greys: bg `#202124`, surface `#303134`, border `#3C4043`), branded afu-symbol logo used for app icon, splash screen (teal background), favicon, and notification icon
+- **Badge System**: `is_organization_verified=true` → gold badge (#D4A853) + "Verified Business" tag. `is_verified=true` (subscription) → blue-green badge (#00BCD4), no business tag. Applied across me.tsx, discover.tsx, contacts.tsx, contact/[id].tsx, post/[id].tsx, admin/index.tsx.
 - **Cross-platform Alerts**: `lib/alert.ts` exports `showAlert()` — Android uses native `Alert.alert()` for Material Design dialogs; iOS/web use `IOSAlert` custom modal registered in `_layout.tsx` via event listener pattern (`registerAlertListener`/`unregisterAlertListener`). Web fallback uses `window.confirm`/`window.prompt` if listener not registered. All screens use `showAlert()` instead of `Alert.alert` directly.
 - **Account Switching**: `lib/accountStore.ts` stores multiple Supabase sessions using `expo-secure-store` (native) / AsyncStorage (web). AuthContext exposes `addAccount(email, password)`, `switchAccount(userId)`, `removeAccount(userId)`. Users add accounts with email+password and switch instantly without logging out.
 - **Chat Attachments**: Messages support image, video, audio, file, and gif attachment types. Video uses `expo-av` Video component with native controls. Audio messages use expo-av playback.
@@ -217,7 +217,7 @@ Tier thresholds (`TIER_ORDER`: free=0, silver=1, gold=2, platinum=3):
 
 - **Input styling**: All TextInput fields/containers use `borderRadius: 12` (rounded corners). No `borderWidth` or `borderBottomWidth` on input containers. Search boxes, chat inputs, reply bars, form fields, modal inputs all follow this pattern.
 - **Keyboard handling**: All screens with TextInputs are wrapped in `KeyboardAvoidingView` with `behavior="padding"` on iOS and `"height"` on Android.
-- **Brand colors**: `#4ECDC4` teal (Google Maps teal), `#D4A853` gold. Dark theme uses warm greys (`#202124` bg, `#303134` surface).
+- **Brand colors**: `#00BCD4` blue-green (Google Maps style), `#D4A853` gold. Dark theme uses warm greys (`#202124` bg, `#303134` surface).
 
 ## Supabase Edge Functions
 

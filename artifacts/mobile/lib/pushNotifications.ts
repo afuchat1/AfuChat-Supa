@@ -62,7 +62,7 @@ export async function registerForPushNotifications(userId: string): Promise<stri
       name: "Default",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#4ECDC4",
+      lightColor: "#00BCD4",
       sound: "notification.wav",
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       showBadge: true,
@@ -80,7 +80,7 @@ export async function registerForPushNotifications(userId: string): Promise<stri
       showBadge: true,
       enableVibrate: true,
       enableLights: true,
-      lightColor: "#4ECDC4",
+      lightColor: "#00BCD4",
     });
 
     await Notifications.setNotificationChannelAsync("social", {

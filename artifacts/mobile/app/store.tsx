@@ -137,7 +137,7 @@ const STORE_ITEMS: StoreItem[] = [
     rarity: "common",
     price: 150,
     currency: "acoin",
-    colors: ["#006994", "#4ECDC4"],
+    colors: ["#006994", "#00BCD4"],
   },
   {
     id: "theme_sunset",
@@ -159,7 +159,7 @@ const STORE_ITEMS: StoreItem[] = [
     rarity: "epic",
     price: 400,
     currency: "acoin",
-    colors: ["#4ECDC4", "#007AFF"],
+    colors: ["#00BCD4", "#007AFF"],
     isHot: true,
   },
   {
@@ -206,7 +206,7 @@ const STORE_ITEMS: StoreItem[] = [
     rarity: "common",
     price: 80,
     currency: "acoin",
-    colors: ["#4ECDC4", "#40B5AE"],
+    colors: ["#00BCD4", "#00ACC1"],
   },
   {
     id: "emote_fire",
@@ -280,7 +280,7 @@ function SparkleEffect({ visible }: { visible: boolean }) {
       }
     }, [visible]);
 
-    const colors = ["#FF9500", "#AF52DE", "#4ECDC4", "#FF3B30", "#007AFF"];
+    const colors = ["#FF9500", "#AF52DE", "#00BCD4", "#FF3B30", "#007AFF"];
     const color = colors[i % colors.length];
 
     const style = useAnimatedStyle(() => ({
@@ -546,7 +546,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   coinBtnEmoji: { fontSize: 14 },
-  coinBtnText: { color: "#4ECDC4", fontSize: 13, fontFamily: "Inter_700Bold" },
+  coinBtnText: { color: "#00BCD4", fontSize: 13, fontFamily: "Inter_700Bold" },
   categoryRow: { paddingHorizontal: 16, gap: 8 },
   categoryChip: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
   categoryText: { fontSize: 13, fontFamily: "Inter_500Medium" },
@@ -586,7 +586,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   rarityText: { color: "#fff", fontSize: 8, fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
-  newBadge: { backgroundColor: "#4ECDC4", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  newBadge: { backgroundColor: "#00BCD4", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   newText: { color: "#fff", fontSize: 8, fontFamily: "Inter_700Bold" },
   hotBadge: { paddingHorizontal: 4, paddingVertical: 2, borderRadius: 6 },
   hotText: { fontSize: 10 },

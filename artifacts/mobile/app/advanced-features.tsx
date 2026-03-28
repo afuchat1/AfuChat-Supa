@@ -113,7 +113,7 @@ const SECTIONS: Section[] = [
   { key: "chat", title: "Chat Behavior", subtitle: "Folders, drafts, auto-reply, focus mode", icon: "chatbubbles", color: "#007AFF" },
   { key: "presence", title: "Activity & Presence", subtitle: "Status, profile popup, typing indicators", icon: "radio-button-on", color: "#34C759" },
   { key: "content", title: "Content & Media", subtitle: "Link previews, reactions, feed filters", icon: "images", color: "#FF9500" },
-  { key: "productivity", title: "Productivity", subtitle: "Reminders, keyword alerts, chat export", icon: "briefcase", color: "#4ECDC4" },
+  { key: "productivity", title: "Productivity", subtitle: "Reminders, keyword alerts, chat export", icon: "briefcase", color: "#00BCD4" },
   { key: "advanced", title: "Advanced", subtitle: "Split screen, tagging, edit history", icon: "construct", color: "#FF3B30" },
 ];
 

@@ -39,16 +39,16 @@ const FOOTER_HTML = `
 <tr><td style="padding:28px 28px 20px;border-top:1px solid #eee;">
 <table width="100%" cellpadding="0" cellspacing="0">
 <tr><td style="text-align:center;padding-bottom:16px;">
-<a href="https://afuchat.com" style="color:#4ECDC4;text-decoration:none;font-size:13px;font-weight:600;margin:0 8px;">Website</a>
+<a href="https://afuchat.com" style="color:#00BCD4;text-decoration:none;font-size:13px;font-weight:600;margin:0 8px;">Website</a>
 <span style="color:#ddd;">|</span>
-<a href="https://afuchat.com/help" style="color:#4ECDC4;text-decoration:none;font-size:13px;font-weight:600;margin:0 8px;">Help Center</a>
+<a href="https://afuchat.com/help" style="color:#00BCD4;text-decoration:none;font-size:13px;font-weight:600;margin:0 8px;">Help Center</a>
 <span style="color:#ddd;">|</span>
-<a href="https://afuchat.com/privacy" style="color:#4ECDC4;text-decoration:none;font-size:13px;font-weight:600;margin:0 8px;">Privacy</a>
+<a href="https://afuchat.com/privacy" style="color:#00BCD4;text-decoration:none;font-size:13px;font-weight:600;margin:0 8px;">Privacy</a>
 <span style="color:#ddd;">|</span>
-<a href="https://afuchat.com/terms" style="color:#4ECDC4;text-decoration:none;font-size:13px;font-weight:600;margin:0 8px;">Terms</a>
+<a href="https://afuchat.com/terms" style="color:#00BCD4;text-decoration:none;font-size:13px;font-weight:600;margin:0 8px;">Terms</a>
 </td></tr>
 <tr><td style="text-align:center;padding-bottom:6px;">
-<p style="color:#999;font-size:12px;margin:0;line-height:1.6;">Need help? Contact us at <a href="mailto:support@afuchat.com" style="color:#4ECDC4;text-decoration:none;">support@afuchat.com</a></p>
+<p style="color:#999;font-size:12px;margin:0;line-height:1.6;">Need help? Contact us at <a href="mailto:support@afuchat.com" style="color:#00BCD4;text-decoration:none;">support@afuchat.com</a></p>
 </td></tr>
 <tr><td style="text-align:center;padding-bottom:4px;">
 <p style="color:#bbb;font-size:11px;margin:0;line-height:1.6;">
@@ -76,7 +76,7 @@ function wrapEmail(subject: string, bodyContent: string): { subject: string; htm
 <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f4;padding:40px 20px;">
 <tr><td align="center">
 <table width="100%" style="max-width:480px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
-<tr><td style="background:linear-gradient(135deg,#4ECDC4 0%,#40B5AE 100%);padding:32px 24px;text-align:center;">
+<tr><td style="background:linear-gradient(135deg,#00BCD4 0%,#00ACC1 100%);padding:32px 24px;text-align:center;">
 <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700;letter-spacing:-0.3px;">AfuChat</h1>
 </td></tr>
 <tr><td style="padding:32px 28px;">
@@ -92,7 +92,7 @@ ${FOOTER_HTML}
 }
 
 function buildCodeBlock(token: string): string {
-  return `<div style="background:#f8f9fa;border:2px dashed #4ECDC4;border-radius:12px;padding:20px;text-align:center;margin:0 0 24px;">
+  return `<div style="background:#f8f9fa;border:2px dashed #00BCD4;border-radius:12px;padding:20px;text-align:center;margin:0 0 24px;">
 <span style="font-size:36px;font-weight:700;letter-spacing:10px;color:#1a1a1a;font-family:'Courier New',monospace;">${token}</span>
 </div>`;
 }

@@ -159,7 +159,7 @@ export default function SnakeGame() {
     <View style={[styles.root, { backgroundColor: "#1a1a2e" }]}>
       <View style={[styles.header, { paddingTop: insets.top + 8, borderBottomColor: "#333" }]}>
         <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color="#fff" /></TouchableOpacity>
-        <Text style={[styles.scoreDisplay, { color: "#4ECDC4" }]}>🏆 {score}</Text>
+        <Text style={[styles.scoreDisplay, { color: "#00BCD4" }]}>🏆 {score}</Text>
         <TouchableOpacity onPress={() => setPaused(!paused)}>
           <Ionicons name={paused ? "play" : "pause"} size={24} color="#fff" />
         </TouchableOpacity>
@@ -175,7 +175,7 @@ export default function SnakeGame() {
                 top: s.y * CELL,
                 width: CELL - 1,
                 height: CELL - 1,
-                backgroundColor: i === 0 ? "#4ECDC4" : "#45B7A0",
+                backgroundColor: i === 0 ? "#00BCD4" : "#45B7A0",
                 borderRadius: i === 0 ? 4 : 2,
               }]}
             />
@@ -239,7 +239,7 @@ export default function SnakeGame() {
       {paused && !gameOver && (
         <View style={styles.overlay}>
           <View style={styles.gameOverCard}>
-            <Ionicons name="pause" size={48} color="#4ECDC4" />
+            <Ionicons name="pause" size={48} color="#00BCD4" />
             <Text style={[styles.goTitle, { marginTop: 8 }]}>Paused</Text>
             <TouchableOpacity style={styles.retryBtn} onPress={() => setPaused(false)}>
               <Ionicons name="play" size={18} color="#fff" />
@@ -266,15 +266,15 @@ const styles = StyleSheet.create({
   controlSpacer: { width: 64, height: 64 },
   startScreen: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16, padding: 32 },
   startEmoji: { fontSize: 80 },
-  startTitle: { fontSize: 36, fontFamily: "Inter_700Bold", color: "#4ECDC4" },
+  startTitle: { fontSize: 36, fontFamily: "Inter_700Bold", color: "#00BCD4" },
   startDesc: { fontSize: 15, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.6)", textAlign: "center" },
   highScoreText: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: "#FFD700" },
-  playBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#4ECDC4", paddingHorizontal: 32, paddingVertical: 16, borderRadius: 20 },
+  playBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#00BCD4", paddingHorizontal: 32, paddingVertical: 16, borderRadius: 20 },
   playBtnText: { fontSize: 18, fontFamily: "Inter_700Bold", color: "#1a1a2e" },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.7)", alignItems: "center", justifyContent: "center" },
   gameOverCard: { backgroundColor: "#1a1a2e", borderRadius: 24, padding: 32, alignItems: "center", gap: 8, width: 280, borderWidth: 1, borderColor: "#333" },
   goTitle: { fontSize: 28, fontFamily: "Inter_700Bold", color: "#fff" },
-  goScore: { fontSize: 56, fontFamily: "Inter_700Bold", color: "#4ECDC4" },
+  goScore: { fontSize: 56, fontFamily: "Inter_700Bold", color: "#00BCD4" },
   goLabel: { fontSize: 14, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.5)" },
   coinBtn: { backgroundColor: "#FFD700", paddingHorizontal: 24, paddingVertical: 12, borderRadius: 16, marginTop: 8 },
   coinBtnText: { fontSize: 14, fontFamily: "Inter_700Bold", color: "#1a1a2e" },

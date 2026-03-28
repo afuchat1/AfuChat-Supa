@@ -112,7 +112,7 @@ function handlePress(segment: Segment) {
   }
 }
 
-export function RichText({ children, style, linkColor = "#4ECDC4", numberOfLines }: RichTextProps) {
+export function RichText({ children, style, linkColor = "#00BCD4", numberOfLines }: RichTextProps) {
   if (!children) return <Text style={style}>{""}</Text>;
   const segments = parseText(children);
 

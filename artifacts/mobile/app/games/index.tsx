@@ -29,7 +29,7 @@ type GameInfo = {
 };
 
 const FEATURED: GameInfo[] = [
-  { id: "snake", title: "Snake", subtitle: "Classic arcade", icon: "🐍", gradient: ["#1a1a2e", "#4ECDC4"], route: "/games/snake", tag: "Popular" },
+  { id: "snake", title: "Snake", subtitle: "Classic arcade", icon: "🐍", gradient: ["#1a1a2e", "#00BCD4"], route: "/games/snake", tag: "Popular" },
   { id: "tetris", title: "Tetris", subtitle: "Block stacking", icon: "🧱", gradient: ["#0a0a1a", "#00BCD4"], route: "/games/tetris", tag: "Classic" },
   { id: "flappy", title: "Flappy Bird", subtitle: "Tap to fly", icon: "🐤", gradient: ["#70c5ce", "#ded895"], route: "/games/flappy", tag: "Hot" },
 ];
