@@ -27,7 +27,6 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import QRCode from "react-native-qrcode-svg";
-import ViewShot from "react-native-view-shot";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { useAuth } from "@/context/AuthContext";
@@ -261,8 +260,9 @@ export default function DigitalIdScreen() {
   const grade = GradeInfo(profile?.current_grade || "explorer");
   const [qrPayload, setQrPayload] = useState(user?.id ? buildQrValue(user.id) : `afuchat://id/00000000`);
 
-  const cardRef = useRef<ViewShot>(null);
+  const cardRef = useRef<View>(null);
   const [saving, setSaving] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const flipProgress = useSharedValue(0);
   const isFlipped = useRef(false);
   const cardScale = useSharedValue(0.92);
@@ -314,26 +314,45 @@ export default function DigitalIdScreen() {
     } catch {}
   }, [profile]);
 
+  async function captureCardWeb(): Promise<string | null> {
+    if (typeof document === "undefined") return null;
+    let domNode: HTMLElement | null = document.querySelector('[data-testid="afu-card-capture"]');
+    if (!domNode) {
+      const ref = cardRef.current as any;
+      if (ref) {
+        domNode = (ref as any)._nativeTag ? null : (ref as any);
+      }
+    }
+    if (!domNode) return null;
+    try {
+      const { toPng } = await import("html-to-image");
+      return await toPng(domNode, { quality: 1, pixelRatio: 3, cacheBust: true, skipAutoScale: true });
+    } catch (e) {
+      console.warn("html-to-image failed:", e);
+      return null;
+    }
+  }
+
   const handleSaveCard = useCallback(async () => {
     if (saving) return;
     setSaving(true);
     try {
-      const ref = cardRef.current as any;
-      if (!ref?.capture) {
-        setSaving(false);
-        return;
-      }
-
       if (Platform.OS === "web") {
-        const dataUri = await ref.capture();
+        const dataUri = await captureCardWeb();
+        if (!dataUri) {
+          setSaving(false);
+          return;
+        }
         const link = document.createElement("a");
         link.href = dataUri;
         link.download = `AfuChat_ID_${toAfuId(profile?.id || "00000000")}.png`;
+        link.style.display = "none";
         document.body.appendChild(link);
         link.click();
-        document.body.removeChild(link);
+        setTimeout(() => document.body.removeChild(link), 100);
       } else {
-        const uri = await ref.capture();
+        const { captureRef } = await import("react-native-view-shot");
+        const uri = await captureRef(cardRef, { format: "png", quality: 1 });
         const cacheDir = FileSystem.cacheDirectory;
         if (!cacheDir) {
           await Share.share({ message: `AfuChat ID: ${formatAfuId(toAfuId(profile?.id || "00000000"))}` });
@@ -355,6 +374,31 @@ export default function DigitalIdScreen() {
     }
   }, [profile, saving]);
 
+  const handlePrintCard = useCallback(async () => {
+    if (printing) return;
+    setPrinting(true);
+    try {
+      if (Platform.OS === "web") {
+        const dataUri = await captureCardWeb();
+        if (!dataUri) {
+          setPrinting(false);
+          return;
+        }
+        const printWin = window.open("", "_blank");
+        if (printWin) {
+          printWin.document.write(`<!DOCTYPE html><html><head><title>AfuChat ID Card</title><style>@page{margin:0.5in}body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#fff;font-family:sans-serif}img{max-width:100%;width:420px;border-radius:20px;box-shadow:0 8px 32px rgba(0,0,0,0.18)}h2{margin:24px 0 4px;color:#00C2CB;font-size:14px;letter-spacing:2px}p{color:#888;font-size:11px;margin:0}</style></head><body><h2>AFUCHAT DIGITAL ID</h2><p>AFU ID: ${formatAfuId(toAfuId(profile?.id || "00000000"))}</p><br/><img src="${dataUri}" /><script>setTimeout(function(){window.print();},400);<\/script></body></html>`);
+          printWin.document.close();
+        }
+      } else {
+        await handleSaveCard();
+      }
+    } catch (e) {
+      console.warn("Failed to print card:", e);
+    } finally {
+      setPrinting(false);
+    }
+  }, [profile, printing, handleSaveCard]);
+
   return (
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -370,7 +414,7 @@ export default function DigitalIdScreen() {
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 32, flexGrow: 1, justifyContent: "center" }} showsVerticalScrollIndicator={false}>
         <View style={styles.cardContainer}>
           <Animated.View style={[styles.glowRing, glowStyle, { borderColor: grade.colors[0], shadowColor: grade.colors[0] }]} pointerEvents="none" />
-          <ViewShot ref={cardRef} options={{ format: "png", quality: 1, result: Platform.OS === "web" ? "data-uri" : "tmpfile" }} style={{ borderRadius: 20 }}>
+          <View ref={cardRef} style={{ borderRadius: 20, overflow: "hidden" }} testID="afu-card-capture">
             <TouchableOpacity onPress={flip} activeOpacity={1} style={{ width: CARD_W, height: CARD_H }}>
               <Animated.View style={[styles.card, frontStyle, { width: CARD_W, height: CARD_H }]}>
                 <CardFront profile={profile} grade={grade} isPremium={isPremium} />
@@ -379,7 +423,7 @@ export default function DigitalIdScreen() {
                 <CardBack profile={profile} grade={grade} isPremium={isPremium} qrValue={qrPayload} />
               </Animated.View>
             </TouchableOpacity>
-          </ViewShot>
+          </View>
           <View style={styles.tapHintRow}>
             <Ionicons name="sync-outline" size={13} color={colors.textMuted} />
             <Text style={[styles.tapHint, { color: colors.textMuted }]}>Tap card to flip</Text>
@@ -387,21 +431,39 @@ export default function DigitalIdScreen() {
         </View>
 
         <View style={styles.infoFooter}>
-          <TouchableOpacity
-            style={[styles.saveCardBtn, { opacity: saving ? 0.7 : 1 }]}
-            onPress={handleSaveCard}
-            disabled={saving}
-            activeOpacity={0.8}
-          >
-            <LinearGradient colors={[Colors.brand, "#00A5AD"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.saveCardGradient}>
-              {saving ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Ionicons name="download-outline" size={20} color="#fff" />
-              )}
-              <Text style={styles.saveCardText}>{saving ? "Preparing..." : "Save / Print Card"}</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={[styles.saveCardBtn, { flex: 1, opacity: saving ? 0.7 : 1 }]}
+              onPress={handleSaveCard}
+              disabled={saving || printing}
+              activeOpacity={0.8}
+            >
+              <LinearGradient colors={[Colors.brand, "#00A5AD"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.saveCardGradient}>
+                {saving ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Ionicons name="download-outline" size={20} color="#fff" />
+                )}
+                <Text style={styles.saveCardText}>{saving ? "Saving..." : "Save Card"}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.printCardBtn, { opacity: printing ? 0.7 : 1 }]}
+              onPress={handlePrintCard}
+              disabled={saving || printing}
+              activeOpacity={0.8}
+            >
+              <View style={styles.printCardInner}>
+                {printing ? (
+                  <ActivityIndicator size="small" color={Colors.brand} />
+                ) : (
+                  <Ionicons name="print-outline" size={20} color={Colors.brand} />
+                )}
+                <Text style={styles.printCardText}>{printing ? "..." : "Print"}</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
 
           <View style={[styles.securityCard, { backgroundColor: isDark ? "#0D1B2A" : `${Colors.brand}08`, borderColor: isDark ? "#1A3040" : `${Colors.brand}20`, borderWidth: 1 }]}>
             <Ionicons name="qr-code-outline" size={18} color={Colors.brand} />
@@ -479,9 +541,13 @@ const styles = StyleSheet.create({
   backBottomInfo: {},
   tapHintRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 14 },
   tapHint: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  actionRow: { flexDirection: "row", gap: 10 },
   saveCardBtn: { borderRadius: 16, overflow: "hidden" },
   saveCardGradient: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 15, borderRadius: 16 },
-  saveCardText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  saveCardText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  printCardBtn: { borderRadius: 16, overflow: "hidden", borderWidth: 2, borderColor: "#00C2CB" },
+  printCardInner: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 13, paddingHorizontal: 18 },
+  printCardText: { color: "#00C2CB", fontSize: 15, fontFamily: "Inter_600SemiBold" },
   infoFooter: { paddingHorizontal: 24, gap: 12, marginTop: 8 },
   securityCard: { flexDirection: "row", alignItems: "center", borderRadius: 14, padding: 14 },
   securityTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
