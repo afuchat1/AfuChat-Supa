@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  Dimensions,
   FlatList,
   Image,
   RefreshControl,
@@ -23,8 +22,6 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { useAutoTranslate } from "@/context/LanguageContext";
-
-const { width } = Dimensions.get("window");
 
 type PostItem = {
   id: string;

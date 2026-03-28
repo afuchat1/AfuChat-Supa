@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import {
-  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,8 +15,10 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 
-const { width: SCREEN_W } = Dimensions.get("window");
-const BADGE_SIZE = (SCREEN_W - 48 - 24) / 3;
+function useBadgeSize() {
+  const { width } = useWindowDimensions();
+  return (width - 48 - 24) / 3;
+}
 
 type Achievement = {
   id: string;
@@ -74,6 +76,7 @@ function buildAchievements(profile: any, isPremium: boolean): Achievement[] {
 
 function AchievementBadge({ achievement }: { achievement: Achievement }) {
   const { colors } = useTheme();
+  const BADGE_SIZE = useBadgeSize();
   const rarity = RARITY_COLORS[achievement.rarity];
   const glowColor = RARITY_GLOW[achievement.rarity];
   const progressPct = achievement.progress != null && achievement.total
@@ -81,9 +84,10 @@ function AchievementBadge({ achievement }: { achievement: Achievement }) {
     : achievement.unlocked ? 1 : 0;
 
   return (
-    <View style={[styles.badgeWrapper]}>
+    <View style={[styles.badgeWrapper, { width: BADGE_SIZE }]}>
       <View style={[
         styles.badgeContainer,
+        { width: BADGE_SIZE - 8, height: BADGE_SIZE - 8 },
         achievement.unlocked && { borderColor: `${glowColor}44`, borderWidth: 1.5 },
         !achievement.unlocked && { borderColor: colors.border, borderWidth: 1 },
       ]}>
@@ -109,7 +113,7 @@ function AchievementBadge({ achievement }: { achievement: Achievement }) {
       </Text>
 
       {achievement.progress != null && !achievement.unlocked && (
-        <View style={[styles.progressBar, { backgroundColor: colors.backgroundTertiary }]}>
+        <View style={[styles.progressBar, { width: BADGE_SIZE - 16, backgroundColor: colors.backgroundTertiary }]}>
           <View style={[styles.progressFill, { width: `${progressPct * 100}%`, backgroundColor: glowColor }]} />
         </View>
       )}
@@ -149,6 +153,7 @@ export default function AchievementsScreen() {
   const { profile, isPremium } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const BADGE_SIZE = useBadgeSize();
   const [selectedCategory, setSelectedCategory] = useState("All");
 
   const achievements = buildAchievements(profile, isPremium);
@@ -213,13 +218,13 @@ const styles = StyleSheet.create({
   categoryChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
   categoryText: { fontSize: 13, fontFamily: "Inter_500Medium" },
   badgeGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 16, gap: 8, justifyContent: "space-between" },
-  badgeWrapper: { width: BADGE_SIZE, alignItems: "center", marginBottom: 20 },
-  badgeContainer: { width: BADGE_SIZE - 8, height: BADGE_SIZE - 8, borderRadius: 18, overflow: "hidden", position: "relative" },
+  badgeWrapper: { alignItems: "center", marginBottom: 20 },
+  badgeContainer: { borderRadius: 18, overflow: "hidden", position: "relative" },
   badgeInner: { width: "100%", height: "100%", borderRadius: 16, alignItems: "center", justifyContent: "center" },
   unlockedDot: { position: "absolute", top: 4, right: 4, width: 8, height: 8, borderRadius: 4, backgroundColor: "#34C759", borderWidth: 1.5, borderColor: "#fff" },
   badgeTitle: { fontSize: 10, fontFamily: "Inter_500Medium", textAlign: "center", marginTop: 5, lineHeight: 14 },
   rarityLabel: { fontSize: 8, fontFamily: "Inter_700Bold", marginTop: 2, letterSpacing: 1 },
-  progressBar: { height: 2, width: BADGE_SIZE - 16, borderRadius: 1, marginTop: 3, overflow: "hidden" },
+  progressBar: { height: 2, borderRadius: 1, marginTop: 3, overflow: "hidden" },
   progressFill: { height: "100%", borderRadius: 1 },
   lockOverlay: { position: "absolute", bottom: 4, right: 4, backgroundColor: "rgba(0,0,0,0.35)", borderRadius: 5, padding: 2 },
 });

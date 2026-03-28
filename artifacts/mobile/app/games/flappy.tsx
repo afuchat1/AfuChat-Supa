@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Dimensions, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -7,7 +7,6 @@ import { useAuth } from "@/context/AuthContext";
 import * as Haptics from "@/lib/haptics";
 import { spendAcoin, GAME_PRICES } from "@/lib/gameCoins";
 
-const { width: SW, height: SH } = Dimensions.get("window");
 const BIRD_SIZE = 30;
 const GRAVITY = 0.6;
 const JUMP = -9;
@@ -21,6 +20,7 @@ type Pipe = { x: number; gapY: number; scored: boolean };
 export default function FlappyGame() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const { width: SW, height: SH } = useWindowDimensions();
   const gameAreaTop = insets.top + 56;
   const gameH = SH - gameAreaTop - insets.bottom - 80;
 

@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
-  Dimensions,
   FlatList,
   Image,
   RefreshControl,
@@ -11,6 +10,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -24,8 +24,6 @@ import { RichText } from "@/components/ui/RichText";
 import Colors from "@/constants/colors";
 import { useAutoTranslate } from "@/context/LanguageContext";
 import { LANG_LABELS } from "@/lib/translate";
-
-const { width } = Dimensions.get("window");
 
 type SavedPost = {
   id: string;
@@ -47,6 +45,7 @@ function formatRelative(iso: string): string {
 
 function SavedPostCard({ item, onUnsave, index }: { item: SavedPost; onUnsave: (id: string) => void; index: number }) {
   const { colors } = useTheme();
+  const { width } = useWindowDimensions();
   const { displayText, isTranslated, lang } = useAutoTranslate(item.content);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;

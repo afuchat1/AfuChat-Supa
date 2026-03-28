@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Dimensions, PanResponder, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { PanResponder, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -7,7 +7,6 @@ import { useAuth } from "@/context/AuthContext";
 import * as Haptics from "@/lib/haptics";
 import { spendAcoin, GAME_PRICES } from "@/lib/gameCoins";
 
-const { width: SW } = Dimensions.get("window");
 const SHIP_SIZE = 36;
 const BULLET_SPEED = 8;
 const ENEMY_SPEED = 2;
@@ -21,7 +20,8 @@ const ENEMY_EMOJIS = ["👾", "🛸", "👽", "🤖"];
 export default function SpaceShooterGame() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const gameH = Dimensions.get("window").height - insets.top - 56 - insets.bottom - 60;
+  const { width: SW, height: windowHeight } = useWindowDimensions();
+  const gameH = windowHeight - insets.top - 56 - insets.bottom - 60;
 
   const [shipX, setShipX] = useState(SW / 2 - SHIP_SIZE / 2);
   const [bullets, setBullets] = useState<Bullet[]>([]);

@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Dimensions,
   FlatList,
   Image,
   Modal,
@@ -9,6 +8,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -37,8 +37,10 @@ import { showAlert } from "@/lib/alert";
 import Colors from "@/constants/colors";
 import { supabase } from "@/lib/supabase";
 
-const { width: SCREEN_W } = Dimensions.get("window");
-const CARD_W = (SCREEN_W - 48 - 12) / 2;
+function useStoreCardWidth() {
+  const { width } = useWindowDimensions();
+  return (width - 48 - 12) / 2;
+}
 
 type StoreItem = {
   id: string;
@@ -297,6 +299,7 @@ function SparkleEffect({ visible }: { visible: boolean }) {
 function Item3DCard({ item, index }: { item: StoreItem; index: number }) {
   const { colors } = useTheme();
   const { profile } = useAuth();
+  const CARD_W = useStoreCardWidth();
   const [showSparkle, setShowSparkle] = useState(false);
   const [showModal, setShowModal] = useState(false);
 
@@ -568,12 +571,12 @@ const styles = StyleSheet.create({
     zIndex: -1,
   },
   itemIconBg: {
-    width: CARD_W - 28,
-    height: CARD_W - 28,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 10,
+    aspectRatio: 1,
+    alignSelf: "stretch",
   },
   itemEmoji: { fontSize: 44 },
   itemBadgeRow: { flexDirection: "row", gap: 4, marginBottom: 8, alignItems: "center" },

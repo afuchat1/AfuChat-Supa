@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Dimensions, PanResponder, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { PanResponder, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -7,7 +7,6 @@ import { useAuth } from "@/context/AuthContext";
 import * as Haptics from "@/lib/haptics";
 import { spendAcoin, GAME_PRICES } from "@/lib/gameCoins";
 
-const { width: SW } = Dimensions.get("window");
 const PADDLE_W = 80;
 const PADDLE_H = 14;
 const BALL_R = 8;
@@ -15,7 +14,6 @@ const BRICK_ROWS = 5;
 const BRICK_COLS = 7;
 const BRICK_H = 22;
 const BRICK_GAP = 4;
-const BRICK_W = Math.floor((SW - 32 - BRICK_GAP * (BRICK_COLS + 1)) / BRICK_COLS);
 const TICK = 16;
 
 const COLORS = ["#F44336", "#FF9800", "#FFEB3B", "#4CAF50", "#2196F3"];
@@ -23,7 +21,8 @@ const COLORS = ["#F44336", "#FF9800", "#FFEB3B", "#4CAF50", "#2196F3"];
 type Brick = { x: number; y: number; w: number; h: number; color: string; alive: boolean };
 type Ball = { x: number; y: number; dx: number; dy: number };
 
-function createBricks(): Brick[] {
+function createBricks(screenWidth: number): Brick[] {
+  const BRICK_W = Math.floor((screenWidth - 32 - BRICK_GAP * (BRICK_COLS + 1)) / BRICK_COLS);
   const bricks: Brick[] = [];
   const startX = 16 + BRICK_GAP;
   const startY = 80;
@@ -43,11 +42,12 @@ function createBricks(): Brick[] {
 export default function BrickBreakerGame() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const gameH = Dimensions.get("window").height - insets.top - 56 - insets.bottom - 20;
+  const { width: SW, height: windowHeight } = useWindowDimensions();
+  const gameH = windowHeight - insets.top - 56 - insets.bottom - 20;
 
   const [paddleX, setPaddleX] = useState(SW / 2 - PADDLE_W / 2);
   const [ball, setBall] = useState<Ball>({ x: SW / 2, y: gameH - 60, dx: 3, dy: -3 });
-  const [bricks, setBricks] = useState<Brick[]>(createBricks);
+  const [bricks, setBricks] = useState<Brick[]>(() => createBricks(SW));
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
   const [gameOver, setGameOver] = useState(false);
@@ -56,7 +56,7 @@ export default function BrickBreakerGame() {
 
   const paddleRef = useRef(SW / 2 - PADDLE_W / 2);
   const ballRef = useRef({ x: SW / 2, y: gameH - 60, dx: 3, dy: -3 });
-  const bricksRef = useRef(createBricks());
+  const bricksRef = useRef(createBricks(SW));
   const scoreRef = useRef(0);
   const livesRef = useRef(3);
   const overRef = useRef(false);
@@ -121,7 +121,7 @@ export default function BrickBreakerGame() {
 
     if (br.every((bk) => !bk.alive)) {
       setLevel((l) => l + 1);
-      const newBricks = createBricks();
+      const newBricks = createBricks(SW);
       bricksRef.current = newBricks;
       setBricks(newBricks);
       b.x = SW / 2; b.y = gameH - 60; b.dx = 3 + level * 0.5; b.dy = -(3 + level * 0.5);
@@ -144,7 +144,7 @@ export default function BrickBreakerGame() {
   }, [started, gameOver, tick]);
 
   const startGame = () => {
-    const newBricks = createBricks();
+    const newBricks = createBricks(SW);
     paddleRef.current = SW / 2 - PADDLE_W / 2;
     ballRef.current = { x: SW / 2, y: gameH - 60, dx: 3, dy: -3 };
     bricksRef.current = newBricks;

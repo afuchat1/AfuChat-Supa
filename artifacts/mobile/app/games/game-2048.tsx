@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { Dimensions, StyleSheet, Text, TouchableOpacity, View, PanResponder } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View, PanResponder, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,7 +9,6 @@ import * as Haptics from "@/lib/haptics";
 import { spendAcoin, GAME_PRICES } from "@/lib/gameCoins";
 
 const SIZE = 4;
-const TILE_SIZE = Math.floor((Dimensions.get("window").width - 64) / SIZE);
 
 type Grid = number[][];
 
@@ -109,6 +108,8 @@ export default function Game2048() {
   const { colors } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const TILE_SIZE = Math.floor((windowWidth - 64) / SIZE);
   const [grid, setGrid] = useState<Grid>(initGrid);
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(0);

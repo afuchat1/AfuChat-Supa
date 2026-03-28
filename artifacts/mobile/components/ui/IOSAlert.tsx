@@ -1,12 +1,12 @@
 import React, { useEffect, useRef } from "react";
 import {
   Animated,
-  Dimensions,
   Modal,
   Pressable,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
 
 export type IOSAlertButton = {
@@ -24,6 +24,8 @@ type Props = {
 };
 
 export function IOSAlert({ visible, title, message, buttons, onDismiss }: Props) {
+  const { width: windowWidth } = useWindowDimensions();
+  const cardWidth = Math.min(windowWidth - 48, 320);
   const scale = useRef(new Animated.Value(1.15)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -54,7 +56,7 @@ export function IOSAlert({ visible, title, message, buttons, onDismiss }: Props)
   return (
     <Modal transparent visible={visible} animationType="none" statusBarTranslucent>
       <View style={styles.overlay}>
-        <Animated.View style={[styles.card, { transform: [{ scale }], opacity }]}>
+        <Animated.View style={[styles.card, { transform: [{ scale }], opacity, width: cardWidth }]}>
           <View style={styles.content}>
             <Text style={styles.title}>{title}</Text>
             {message ? <Text style={styles.message}>{message}</Text> : null}
@@ -96,8 +98,6 @@ export function IOSAlert({ visible, title, message, buttons, onDismiss }: Props)
   );
 }
 
-const { width } = Dimensions.get("window");
-
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -106,7 +106,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   card: {
-    width: Math.min(width - 48, 320),
     backgroundColor: "#fff",
     borderRadius: 14,
     overflow: "hidden",

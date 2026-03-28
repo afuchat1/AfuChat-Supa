@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Dimensions,
   Image,
   Platform,
   ScrollView,
@@ -10,6 +9,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -44,7 +44,6 @@ import {
   type PinnedResult,
 } from "@/lib/searchStore";
 
-const { width: SCREEN_W } = Dimensions.get("window");
 const BRAND = "#00C2CB";
 const GOLD = "#D4A853";
 
@@ -158,6 +157,7 @@ export default function SearchScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { width: SCREEN_W } = useWindowDimensions();
   const inputRef = useRef<TextInput>(null);
 
   const [query, setQuery] = useState("");
@@ -661,7 +661,7 @@ export default function SearchScreen() {
     return (
       <Animated.View key={gift.id} entering={FadeIn.delay(index * 30).duration(250)}>
         <TouchableOpacity
-          style={[s.giftCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          style={[s.giftCard, { backgroundColor: colors.surface, borderColor: colors.border, width: (SCREEN_W - 56) / 4 }]}
           activeOpacity={0.7}
         >
           <Text style={{ fontSize: 28 }}>{gift.emoji}</Text>
@@ -934,7 +934,7 @@ export default function SearchScreen() {
               { label: "Wallet", icon: "wallet", color: GOLD, route: "/wallet" },
               { label: "Digital ID", icon: "card", color: "#8B5CF6", route: "/digital-id" },
             ].map((action) => (
-              <TouchableOpacity key={action.label} style={[s.quickAction, { backgroundColor: action.color + "08" }]} onPress={() => router.push(action.route as any)} activeOpacity={0.7}>
+              <TouchableOpacity key={action.label} style={[s.quickAction, { backgroundColor: action.color + "08", minWidth: (SCREEN_W - 64) / 2 - 5, maxWidth: (SCREEN_W - 64) / 2 - 5 }]} onPress={() => router.push(action.route as any)} activeOpacity={0.7}>
                 <View style={[s.quickActionIcon, { backgroundColor: action.color + "18" }]}>
                   <Ionicons name={action.icon as any} size={20} color={action.color} />
                 </View>
@@ -1191,7 +1191,7 @@ const s = StyleSheet.create({
   topUserCard: { width: 100, alignItems: "center", paddingVertical: 14, paddingHorizontal: 8, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, gap: 5 },
   quickActions: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
   quickAction: {
-    flex: 1, minWidth: (SCREEN_W - 64) / 2 - 5, maxWidth: (SCREEN_W - 64) / 2 - 5,
+    flex: 1,
     alignItems: "center", paddingVertical: 16, borderRadius: 14, gap: 8,
   },
   quickActionIcon: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
@@ -1220,7 +1220,7 @@ const s = StyleSheet.create({
   bioText: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 16, marginTop: 2 },
 
   giftCard: {
-    width: (SCREEN_W - 56) / 4, alignItems: "center", paddingVertical: 12,
+    alignItems: "center", paddingVertical: 12,
     borderRadius: 14, gap: 3, borderWidth: StyleSheet.hairlineWidth,
   },
   giftsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

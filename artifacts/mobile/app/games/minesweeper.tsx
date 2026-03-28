@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -75,8 +75,9 @@ export default function MinesweeperGame() {
   const [timer, setTimer] = useState(0);
   const [timerRef] = useState<{ iv: ReturnType<typeof setInterval> | null }>({ iv: null });
 
+  const { width: windowWidth } = useWindowDimensions();
   const d = DIFFICULTIES[diff];
-  const cellSize = Math.floor((Dimensions.get("window").width - 32) / d.cols);
+  const cellSize = Math.floor((windowWidth - 32) / d.cols);
 
   useEffect(() => {
     return () => {

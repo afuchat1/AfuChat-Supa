@@ -11,7 +11,6 @@ import {
   Switch,
   Modal,
   FlatList,
-  Dimensions,
 } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -25,8 +24,6 @@ import { AdminSkeleton } from "@/components/ui/Skeleton";
 
 const BRAND = "#00C2CB";
 const GOLD = "#D4A853";
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-
 type Stats = {
   totalUsers: number;
   totalPosts: number;

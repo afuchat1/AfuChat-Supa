@@ -1,11 +1,11 @@
 import React from "react";
 import {
-  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -13,7 +13,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 
-const CARD_W = (Dimensions.get("window").width - 48) / 2;
+function useGameCardWidth() {
+  const { width } = useWindowDimensions();
+  return (width - 48) / 2;
+}
 
 type GameInfo = {
   id: string;
@@ -42,6 +45,7 @@ const ALL_GAMES: GameInfo[] = [
 export default function GamesScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const CARD_W = useGameCardWidth();
 
   return (
     <View style={[styles.root, { backgroundColor: "#0a0a1a" }]}>
@@ -95,7 +99,7 @@ export default function GamesScreen() {
           {ALL_GAMES.map((game) => (
             <TouchableOpacity
               key={game.id}
-              style={[styles.gameCard, { backgroundColor: game.gradient[0] }]}
+              style={[styles.gameCard, { backgroundColor: game.gradient[0], width: CARD_W }]}
               activeOpacity={0.8}
               onPress={() => router.push(game.route as any)}
             >
@@ -134,7 +138,7 @@ const styles = StyleSheet.create({
   coinDesc: { fontSize: 12, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.5)", marginTop: 2 },
   coinIcon: { fontSize: 32 },
   grid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 16, gap: 12 },
-  gameCard: { width: CARD_W, borderRadius: 16, padding: 14, gap: 6 },
+  gameCard: { borderRadius: 16, padding: 14, gap: 6 },
   cardIcon: { fontSize: 32 },
   cardTitle: { fontSize: 15, fontFamily: "Inter_700Bold", color: "#fff" },
   cardSub: { fontSize: 11, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.5)" },

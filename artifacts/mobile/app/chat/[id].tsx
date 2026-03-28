@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
-  Dimensions,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -13,6 +12,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -94,7 +94,6 @@ type ChatInfo = {
 };
 
 const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
-const SCREEN_HEIGHT = Dimensions.get("window").height;
 const BRAND = Colors.brand;
 
 function formatLastSeen(ts: string | null | undefined): { text: string; isOnline: boolean } {
@@ -303,15 +302,16 @@ function TypingBubble({ names, colors }: { names: string[]; colors: any }) {
 
 function BottomSheet({ visible, onClose, children }: { visible: boolean; onClose: () => void; children: React.ReactNode }) {
   const { colors } = useTheme();
-  const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const { height: screenHeight } = useWindowDimensions();
+  const translateY = useRef(new Animated.Value(screenHeight)).current;
 
   useEffect(() => {
     if (visible) {
       Animated.spring(translateY, { toValue: 0, useNativeDriver: true, damping: 20 }).start();
     } else {
-      Animated.timing(translateY, { toValue: SCREEN_HEIGHT, duration: 250, useNativeDriver: true }).start();
+      Animated.timing(translateY, { toValue: screenHeight, duration: 250, useNativeDriver: true }).start();
     }
-  }, [visible]);
+  }, [visible, screenHeight]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -319,7 +319,7 @@ function BottomSheet({ visible, onClose, children }: { visible: boolean; onClose
       onPanResponderMove: (_, g) => { if (g.dy > 0) translateY.setValue(g.dy); },
       onPanResponderRelease: (_, g) => {
         if (g.dy > 100 || g.vy > 0.5) {
-          Animated.timing(translateY, { toValue: SCREEN_HEIGHT, duration: 200, useNativeDriver: true }).start(() => onClose());
+          Animated.timing(translateY, { toValue: screenHeight, duration: 200, useNativeDriver: true }).start(() => onClose());
         } else {
           Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
         }
@@ -333,7 +333,7 @@ function BottomSheet({ visible, onClose, children }: { visible: boolean; onClose
     <View style={StyleSheet.absoluteFill}>
       <TouchableOpacity style={st.sheetOverlay} activeOpacity={1} onPress={onClose} />
       <Animated.View
-        style={[st.sheetContent, { backgroundColor: colors.surface, transform: [{ translateY }] }]}
+        style={[st.sheetContent, { backgroundColor: colors.surface, transform: [{ translateY }], maxHeight: screenHeight * 0.7 }]}
         {...panResponder.panHandlers}
       >
         <View style={st.sheetHandle} />
@@ -2662,7 +2662,7 @@ const st = StyleSheet.create({
   recordingText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
 
   sheetOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
-  sheetContent: { position: "absolute", bottom: 0, left: 0, right: 0, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 14, maxHeight: SCREEN_HEIGHT * 0.7 },
+  sheetContent: { position: "absolute", bottom: 0, left: 0, right: 0, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 14 },
   sheetHandle: { width: 40, height: 5, borderRadius: 3, backgroundColor: "#CCC", alignSelf: "center", marginBottom: 8 },
   sheetTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   sheetInput: { borderRadius: 12, padding: 14, fontSize: 15, fontFamily: "Inter_400Regular" },

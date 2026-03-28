@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
-  Dimensions,
   FlatList,
   Image,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,7 +19,6 @@ import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { shareStory } from "@/lib/share";
 
-const { width, height } = Dimensions.get("window");
 const STORY_DURATION = 5000;
 
 type Story = {
@@ -151,6 +150,8 @@ export default function ViewStoryScreen() {
       setPaused(false);
     });
   }, [slideAnim]);
+
+  const { width, height } = useWindowDimensions();
 
   if (!story) return <View style={[styles.root, { backgroundColor: "#0D0D0D" }]} />;
 
@@ -320,7 +321,7 @@ export default function ViewStoryScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  media: { width, height, position: "absolute" },
+  media: { ...StyleSheet.absoluteFillObject },
   progressBar: { flexDirection: "row", gap: 3, paddingHorizontal: 8, position: "absolute", left: 0, right: 0 },
   progressSegment: { flex: 1, height: 3, borderRadius: 1.5, overflow: "hidden" },
   progressBg: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(255,255,255,0.3)", borderRadius: 1.5 },

@@ -157,6 +157,14 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `lib/share.ts` — Share utility (sharePost, shareProfile, shareStory, shareRedEnvelope) using React Native Share API. Generates afuchat.com deep links. Used across discover feed, post detail, my-posts, contact profile, stories, and red envelopes.
 - `components/PushNotificationManager.tsx` — Null component wired into root layout for notification setup
 
+## Responsive Layout Pattern
+
+All screens use `useWindowDimensions()` from React Native instead of static `Dimensions.get('window')`. This ensures layouts respond dynamically to window resizes (web/desktop) and orientation changes.
+
+- **Shared hooks**: `hooks/useResponsive.ts` provides `useResponsive()` with `scale`, `gridColumns`, `fontSize`, `spacing`, and breakpoints. `useGameCardWidth()`, `useStoreCardWidth()`, `useBadgeSize()` for specific grid calculations.
+- **Pattern**: Call `useWindowDimensions()` inside the component body, compute derived sizes (cell widths, card widths, etc.), and apply via inline styles where the static `StyleSheet.create` can't be used.
+- **Zero static Dimensions.get**: The entire `artifacts/mobile` codebase has been migrated — no `Dimensions.get('window')` calls remain.
+
 ## Web & Desktop Deployment (Vercel)
 
 The AfuChat app is cross-platform — same codebase runs on mobile (iOS/Android via Expo), web (afuchat.com), and desktop (desktop.afuchat.com).

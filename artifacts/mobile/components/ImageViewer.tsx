@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import {
-  Dimensions,
   Image,
   Modal,
   Platform,
@@ -10,6 +9,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -22,7 +22,7 @@ type Props = {
 
 export function ImageViewer({ images, initialIndex = 0, visible, onClose }: Props) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const { width, height } = Dimensions.get("window");
+  const { width, height } = useWindowDimensions();
 
   useEffect(() => {
     if (visible) {

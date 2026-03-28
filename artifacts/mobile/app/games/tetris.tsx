@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,7 +9,6 @@ import { spendAcoin, GAME_PRICES } from "@/lib/gameCoins";
 
 const COLS = 10;
 const ROWS = 20;
-const CELL = Math.floor((Dimensions.get("window").width - 48) / COLS);
 
 const PIECES = [
   { shape: [[1,1,1,1]], color: "#00BCD4" },
@@ -71,6 +70,8 @@ function clearLines(board: Board): { board: Board; lines: number } {
 export default function TetrisGame() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const CELL = Math.floor((windowWidth - 48) / COLS);
   const [board, setBoard] = useState<Board>(emptyBoard);
   const [piece, setPiece] = useState<Piece>(randomPiece);
   const [next, setNext] = useState<Piece>(randomPiece);

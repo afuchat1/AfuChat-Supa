@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,7 +10,6 @@ import * as Haptics from "@/lib/haptics";
 import { spendAcoin, GAME_PRICES } from "@/lib/gameCoins";
 
 const GRID = 20;
-const CELL = Math.floor((Dimensions.get("window").width - 32) / GRID);
 const INITIAL_SPEED = 150;
 
 type Pos = { x: number; y: number };
@@ -28,6 +27,8 @@ export default function SnakeGame() {
   const { colors } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const CELL = Math.floor((windowWidth - 32) / GRID);
   const [snake, setSnake] = useState<Pos[]>([{ x: 10, y: 10 }]);
   const [food, setFood] = useState<Pos>({ x: 15, y: 10 });
   const [dir, setDir] = useState<Dir>("RIGHT");

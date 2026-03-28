@@ -1,11 +1,11 @@
 import React from "react";
 import {
-  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -13,7 +13,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 
-const SCREEN_W = Dimensions.get("window").width;
 
 type ServiceItem = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -59,13 +58,13 @@ const SECTIONS: SectionData[] = [
   },
 ];
 
-const ITEM_SIZE = (SCREEN_W - 32 - 36) / 4;
-
 function ServiceIcon({ item }: { item: ServiceItem }) {
   const { colors } = useTheme();
+  const { width: screenW } = useWindowDimensions();
+  const ITEM_SIZE = (screenW - 32 - 36) / 4;
   return (
     <TouchableOpacity
-      style={styles.serviceItem}
+      style={[styles.serviceItem, { width: ITEM_SIZE }]}
       activeOpacity={0.6}
       onPress={() => router.push(item.route as any)}
     >
@@ -172,7 +171,6 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   serviceItem: {
-    width: ITEM_SIZE,
     alignItems: "center",
     marginBottom: 12,
     gap: 6,

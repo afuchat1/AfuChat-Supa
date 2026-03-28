@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
-  Dimensions,
   FlatList,
   Image,
   Platform,
@@ -11,6 +10,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -32,8 +32,6 @@ import { sharePost } from "@/lib/share";
 import { matchInterests, computeFeedScore, diversifyFeed, type FeedSignals } from "@/lib/feedAlgorithm";
 import { useLanguage } from "@/context/LanguageContext";
 import { translateText, LANG_LABELS } from "@/lib/translate";
-
-const { width } = Dimensions.get("window");
 
 type PostItem = {
   id: string;
@@ -82,11 +80,12 @@ function BookmarkButton({ bookmarked, onPress }: { bookmarked: boolean; onPress:
 function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress }: { item: PostItem; onToggleLike: (postId: string) => void; onToggleBookmark: (postId: string) => void; onImagePress?: (images: string[], index: number) => void }) {
   const { colors } = useTheme();
   const { preferredLang } = useLanguage();
+  const { width: screenW } = useWindowDimensions();
   const [displayContent, setDisplayContent] = useState(item.content);
   const [isTranslated, setIsTranslated] = useState(false);
 
   const allImages = item.images.length > 0 ? item.images : item.image_url ? [item.image_url] : [];
-  const imgW = allImages.length === 1 ? width - 48 : (width - 56) / 2;
+  const imgW = allImages.length === 1 ? screenW - 48 : (screenW - 56) / 2;
 
   useEffect(() => {
     if (!preferredLang || !item.content?.trim()) { setDisplayContent(item.content); setIsTranslated(false); return; }
