@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import * as FileSystem from "expo-file-system";
 import { supabase } from "./supabase";
 
 const MIME_MAP: Record<string, string> = {
@@ -26,6 +27,25 @@ function getMime(ext: string): string {
   return MIME_MAP[ext.toLowerCase()] || "application/octet-stream";
 }
 
+const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const cleaned = base64.replace(/[^A-Za-z0-9+/]/g, "");
+  const len = cleaned.length;
+  const outLen = (len * 3) >> 2;
+  const bytes = new Uint8Array(outLen);
+  let p = 0;
+  for (let i = 0; i < len; i += 4) {
+    const a = B64.indexOf(cleaned[i]);
+    const b = B64.indexOf(cleaned[i + 1]);
+    const c = B64.indexOf(cleaned[i + 2]);
+    const d = B64.indexOf(cleaned[i + 3]);
+    bytes[p++] = (a << 2) | (b >> 4);
+    if (c >= 0) bytes[p++] = ((b & 15) << 4) | (c >> 2);
+    if (d >= 0) bytes[p++] = ((c & 3) << 6) | d;
+  }
+  return bytes.buffer;
+}
+
 export async function uploadToStorage(
   bucket: string,
   filePath: string,
@@ -36,12 +56,21 @@ export async function uploadToStorage(
     const ext = fileUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "bin";
     const mime = contentType || getMime(ext);
 
-    const response = await fetch(fileUri);
-    const blob = await response.blob();
+    let uploadData: ArrayBuffer | Blob;
+
+    if (Platform.OS !== "web") {
+      const base64 = await FileSystem.readAsStringAsync(fileUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      uploadData = base64ToArrayBuffer(base64);
+    } else {
+      const response = await fetch(fileUri);
+      uploadData = await response.blob();
+    }
 
     const { error } = await supabase.storage
       .from(bucket)
-      .upload(filePath, blob, { contentType: mime, upsert: true });
+      .upload(filePath, uploadData, { contentType: mime, upsert: true });
 
     if (error) {
       return { publicUrl: null, error: error.message };
