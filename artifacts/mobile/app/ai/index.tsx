@@ -376,6 +376,7 @@ function ConfirmationCard({ execAction, colors, onConfirm, onCancel }: {
 }) {
   const iconMap: Record<string, string> = {
     send_nexa: "flash",
+    send_acoin: "cash",
     follow: "person-add",
     unfollow: "person-remove",
     subscribe: "diamond",
@@ -385,6 +386,7 @@ function ConfirmationCard({ execAction, colors, onConfirm, onCancel }: {
 
   const colorMap: Record<string, string> = {
     send_nexa: "#FF9500",
+    send_acoin: "#34C759",
     follow: Colors.brand,
     unfollow: "#FF3B30",
     subscribe: "#D4A853",
@@ -534,7 +536,7 @@ export default function AiChatScreen() {
     (recentGiftsRecv || []).forEach((t: any) => {
       const date = new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
       const sndr = t.sender;
-      txLines.push(`  - [ref:${t.id}] ${date}: Received gift "${t.gifts?.name || "?"}" (${t.gifts?.rarity || "?"}") from @${sndr?.handle || "unknown"}`);
+      txLines.push(`  - [ref:${t.id}] ${date}: Received gift "${t.gifts?.name || "?"}" (${t.gifts?.rarity || "?"}) from @${sndr?.handle || "unknown"}`);
     });
 
     return `
