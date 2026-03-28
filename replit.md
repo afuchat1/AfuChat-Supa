@@ -111,7 +111,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `lib/offlineStore.ts` — AsyncStorage-based caching for profile, conversations, contacts, moments, notifications, messages; pending message queue; NetInfo connectivity tracking
 - `lib/offlineSync.ts` — Auto-sync pending messages on reconnect
 - `app/(tabs)/index.tsx` — Chats list with stories bar
-- `app/(tabs)/search.tsx` — Global search engine (People, Posts, Chats, Channels, Gifts) with trending topics, top users, quick actions, debounced real-time search
+- `app/(tabs)/search.tsx` — Comprehensive omni-search engine with: 9 categories (All/People/Posts/Chats/Media/Links/Channels/Tags/Gifts), natural language parsing (`lib/searchParser.ts`), command system (@user/#tag//files//links//images//videos//voice), time range filters (today/yesterday/this week/last week/this month/last month), media type filters, person-based filtering, private search mode (no history), voice search (Web Speech API), smart auto-suggestions, saved searches, search pinning (long-press), search sharing, search history panel with management, trending topics, top verified users, quick actions, debounced real-time results with stale-request protection. Persistent storage via `lib/searchStore.ts` (AsyncStorage)
 - `app/(tabs)/contacts.tsx` — Contacts (follows) list (hidden from tab bar)
 - `app/(tabs)/discover.tsx` — Posts feed (tap to post detail)
 - `app/(tabs)/me.tsx` — Profile & settings hub (nav to all feature screens, premium banner, golden badge)
