@@ -24,7 +24,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ThemeProvider, useThemeContext } from "@/context/ThemeContext";
 import { supabase } from "@/lib/supabase";
 import { registerAlertListener, unregisterAlertListener } from "@/lib/alert";
-import { setBaseUrl } from "@workspace/api-client-react";
+import { setBaseUrl } from "@/lib/api-client-react/src";
 
 try { setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`); } catch (_) {}
 
