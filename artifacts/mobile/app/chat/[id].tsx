@@ -1408,10 +1408,10 @@ export default function ChatScreen() {
     setShowAttachMenu(false);
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") { showAlert("Permission needed", "Camera access is required to take photos."); return; }
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images", "videos"], quality: 0.8 });
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.8 });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
-      setAttachmentPreview({ uri: asset.uri, type: asset.type === "video" ? "video" : "image" });
+      setAttachmentPreview({ uri: asset.uri, type: "image" });
     }
   }
 
@@ -1419,10 +1419,10 @@ export default function ChatScreen() {
     setShowAttachMenu(false);
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") { showAlert("Permission needed", "Gallery access is required."); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images", "videos"], quality: 0.8, allowsMultipleSelection: false });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8, allowsMultipleSelection: false });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
-      setAttachmentPreview({ uri: asset.uri, type: asset.type === "video" ? "video" : "image" });
+      setAttachmentPreview({ uri: asset.uri, type: "image" });
     }
   }
 
@@ -1452,7 +1452,7 @@ export default function ChatScreen() {
     if (!activeChatId) { setSending(false); return; }
 
     try {
-      const label = attachmentPreview.type === "image" ? "📷 Photo" : attachmentPreview.type === "video" ? "🎥 Video" : `📎 ${attachmentPreview.name || "File"}`;
+      const label = attachmentPreview.type === "image" ? "📷 Photo" : `📎 ${attachmentPreview.name || "File"}`;
 
       const { publicUrl, error: uploadErr } = await uploadChatMedia(
         "chat-attachments",
@@ -1944,7 +1944,7 @@ export default function ChatScreen() {
 
         {attachmentPreview && (
           <View style={[st.attachPreviewBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-            {(attachmentPreview.type === "image" || attachmentPreview.type === "video") ? (
+            {attachmentPreview.type === "image" ? (
               <Image source={{ uri: attachmentPreview.uri }} style={st.attachPreviewImg} />
             ) : (
               <View style={[st.attachPreviewFile, { backgroundColor: colors.inputBg }]}>
