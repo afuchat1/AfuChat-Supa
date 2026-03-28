@@ -1,0 +1,238 @@
+
+Organization plan has exceeded its quota
+
+·
+You have been given a grace period until 23 Apr, 2026. Review usage
+Supabase
+afuchat.new
+Free
+
+afuchat.new
+
+main
+Production
+
+
+Connect
+Feedback
+
+Search...
+
+K
+
+
+
+
+
+
+Storage
+Manage
+Files
+
+Analytics
+
+Vectors
+
+Configuration
+S3
+
+Files
+General file storage for most types of digital content
+Docs
+Buckets
+Settings
+Policies
+Search for a bucket
+
+Sorted by created at
+
+New bucket
+Icon	Name	Policies	File size limit	Allowed MIME types	Actions
+afumail-attachments
+
+2
+
+10 MB
+
+Any
+
+Go to bucket details
+ai-generated-images
+
+Public
+3
+
+10 MB
+
+image/png, image/jpeg, image/webp, image/gif
+
+Go to bucket details
+ai-chat-attachments
+
+Public
+3
+
+10 MB
+
+image/jpeg, image/png, image/gif, image/webp, application/pdf, text/plain, application/msword, application/vnd.openxmlformats-officedocument.wordprocessingml.document
+
+Go to bucket details
+developer-showcase
+
+Public
+3
+
+Unset (50 MB)
+
+Any
+
+Go to bucket details
+mini-app-apks
+
+Public
+4
+
+50 MB
+
+application/vnd.android.package-archive, application/octet-stream
+
+Go to bucket details
+mini-programs
+
+Public
+3
+
+Unset (50 MB)
+
+Any
+
+Go to bucket details
+listing-images
+
+Public
+3
+
+Unset (50 MB)
+
+Any
+
+Go to bucket details
+group-avatars
+
+Public
+4
+
+Unset (50 MB)
+
+Any
+
+Go to bucket details
+voice-messages
+
+Public
+6
+
+5 MB
+
+audio/webm, audio/mp4, audio/mpeg, audio/ogg, audio/wav
+
+Go to bucket details
+service-images
+
+Public
+4
+
+5 MB
+
+image/jpeg, image/jpg, image/png, image/webp
+
+Go to bucket details
+restaurant-images
+
+Public
+4
+
+5 MB
+
+image/jpeg, image/jpg, image/png, image/webp
+
+Go to bucket details
+event-images
+
+Public
+4
+
+5 MB
+
+image/jpeg, image/jpg, image/png, image/webp
+
+Go to bucket details
+product-images
+
+Public
+4
+
+5 MB
+
+image/jpeg, image/jpg, image/png, image/webp
+
+Go to bucket details
+verification-documents
+
+6
+
+Unset (50 MB)
+
+Any
+
+Go to bucket details
+profile-banners
+
+Public
+8
+
+Unset (50 MB)
+
+Any
+
+Go to bucket details
+chat-attachments
+
+7
+
+10 MB
+
+image/jpeg, image/jpg, image/png, image/gif, image/webp, application/pdf, application/msword, application/vnd.openxmlformats-officedocument.wordprocessingml.document, text/plain
+
+Go to bucket details
+stories
+
+Public
+3
+
+Unset (50 MB)
+
+Any
+
+Go to bucket details
+avatars
+
+Public
+8
+
+5 MB
+
+image/jpeg, image/png, image/webp, image/gif
+
+Go to bucket details
+post-images
+
+Public
+8
+
+5 MB
+
+image/jpeg, image/jpg, image/png, image/webp, image/gif
+
+Go to bucket details
+Files | Storage | afuchat.new | Supabase0%
