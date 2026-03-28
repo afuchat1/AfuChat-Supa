@@ -190,9 +190,9 @@ export default function SearchScreen() {
         promises.push(
           supabase
             .from("messages")
-            .select("id, encrypted_content, sender_id, chat_id, created_at")
+            .select("id, encrypted_content, sender_id, chat_id, sent_at")
             .ilike("encrypted_content", pattern)
-            .order("created_at", { ascending: false })
+            .order("sent_at", { ascending: false })
             .limit(20)
         );
       } else {
@@ -282,7 +282,7 @@ export default function SearchScreen() {
               other_user_name: other.display_name || "",
               other_user_avatar: other.avatar_url || null,
               last_message: msg?.encrypted_content || "",
-              updated_at: msg?.created_at || "",
+              updated_at: msg?.sent_at || "",
             };
           });
         }
@@ -293,20 +293,33 @@ export default function SearchScreen() {
 
       setResults({ people, posts, chats, channels, gifts });
 
-      if (trimmed.length >= 2 && !recentSearches.includes(trimmed)) {
-        setRecentSearches(prev => [trimmed, ...prev].slice(0, 8));
-      }
     } catch (e) {
       console.warn("Search error:", e);
     } finally {
       setLoading(false);
     }
-  }, [user, recentSearches]);
+  }, [user]);
+
+  function recordSearch(term: string) {
+    const trimmed = term.trim();
+    if (trimmed.length >= 2 && !recentSearches.includes(trimmed)) {
+      setRecentSearches(prev => [trimmed, ...prev].slice(0, 8));
+    }
+  }
 
   function onChangeText(text: string) {
     setQuery(text);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => performSearch(text, category), 400);
+  }
+
+  function onSubmitSearch() {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const trimmed = query.trim();
+    if (trimmed.length >= 2) {
+      recordSearch(trimmed);
+      performSearch(query, category);
+    }
   }
 
   function onCategoryPress(cat: SearchCategory) {
@@ -325,6 +338,7 @@ export default function SearchScreen() {
 
   function handleTagPress(tag: string) {
     setQuery(tag);
+    recordSearch(tag);
     performSearch(tag, category);
   }
 
@@ -688,7 +702,7 @@ export default function SearchScreen() {
             returnKeyType="search"
             autoCorrect={false}
             autoCapitalize="none"
-            onSubmitEditing={() => performSearch(query, category)}
+            onSubmitEditing={onSubmitSearch}
           />
           {query.length > 0 && (
             <TouchableOpacity onPress={clearSearch} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
