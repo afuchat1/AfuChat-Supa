@@ -301,8 +301,6 @@ export default function MeScreen() {
         <Separator indent={54} />
         <MenuItem icon="document-outline" iconBg="#5856D6" label="File Manager" onPress={() => router.push("/file-manager")} />
         <Separator indent={54} />
-        <MenuItem icon="people-outline" iconBg="#34C759" label="Contacts on AfuChat" onPress={() => router.push("/phone-contacts")} />
-        <Separator indent={54} />
         <MenuItem icon="person-add-outline" iconBg="#00C2CB" label="Find People" onPress={() => router.push("/user-discovery")} badge="NEW" />
         <Separator indent={54} />
         <MenuItem icon="images-outline" iconBg="#FF9500" label="Stories" onPress={() => router.push("/stories/create")} />
