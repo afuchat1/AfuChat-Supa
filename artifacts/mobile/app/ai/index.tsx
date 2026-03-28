@@ -500,11 +500,11 @@ export default function AiChatScreen() {
       supabase.from("posts").select("id", { count: "exact", head: true }).eq("author_id", user.id),
       supabase.from("user_gifts").select("id, gifts(name, rarity)").eq("user_id", user.id).limit(20),
       supabase.from("user_subscriptions").select("plan_id, is_active, expires_at, subscription_plans(name, tier)").eq("user_id", user.id).eq("is_active", true).maybeSingle(),
-      supabase.from("acoin_transactions").select("amount, transaction_type, created_at, nexa_spent, fee_charged, metadata").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
-      supabase.from("xp_transfers").select("amount, created_at, status").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(5),
-      supabase.from("xp_transfers").select("amount, created_at, status").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(5),
-      supabase.from("gift_transactions").select("xp_cost, created_at, message, gifts(name, rarity)").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(5),
-      supabase.from("gift_transactions").select("xp_cost, created_at, message, gifts(name, rarity)").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(5),
+      supabase.from("acoin_transactions").select("id, amount, transaction_type, created_at, nexa_spent, fee_charged, metadata").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
+      supabase.from("xp_transfers").select("id, amount, created_at, status, receiver:profiles!xp_transfers_receiver_id_fkey(handle, display_name)").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(5),
+      supabase.from("xp_transfers").select("id, amount, created_at, status, sender:profiles!xp_transfers_sender_id_fkey(handle, display_name)").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(5),
+      supabase.from("gift_transactions").select("id, xp_cost, created_at, message, gifts(name, rarity), receiver:profiles!gift_transactions_receiver_id_fkey(handle, display_name)").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(5),
+      supabase.from("gift_transactions").select("id, xp_cost, created_at, message, gifts(name, rarity), sender:profiles!gift_transactions_sender_id_fkey(handle, display_name)").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(5),
     ]);
 
     const gifts = (giftData || []).map((g: any) => `${g.gifts?.name} (${g.gifts?.rarity})`).join(", ");
@@ -514,23 +514,27 @@ export default function AiChatScreen() {
     (recentAcoinTx || []).forEach((t: any) => {
       const date = new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
       const meta = t.metadata || {};
-      txLines.push(`  - ${date}: ${t.transaction_type} ${t.amount > 0 ? "+" : ""}${t.amount} ACoin${meta.plan_name ? ` (${meta.plan_name})` : ""}${t.nexa_spent ? ` [${t.nexa_spent} Nexa spent]` : ""}${t.fee_charged ? ` [fee: ${t.fee_charged}]` : ""}`);
+      txLines.push(`  - [ref:${t.id}] ${date}: ${t.transaction_type} ${t.amount > 0 ? "+" : ""}${t.amount} ACoin${meta.plan_name ? ` (${meta.plan_name})` : ""}${meta.to_handle ? ` to @${meta.to_handle}` : ""}${meta.from_handle ? ` from @${meta.from_handle}` : ""}${t.nexa_spent ? ` [${t.nexa_spent} Nexa spent]` : ""}${t.fee_charged ? ` [fee: ${t.fee_charged}]` : ""}`);
     });
     (recentNexaSent || []).forEach((t: any) => {
       const date = new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      txLines.push(`  - ${date}: Sent ${t.amount} Nexa`);
+      const recv = t.receiver;
+      txLines.push(`  - [ref:${t.id}] ${date}: Sent ${t.amount} Nexa to @${recv?.handle || "unknown"} (${recv?.display_name || "unknown"})`);
     });
     (recentNexaRecv || []).forEach((t: any) => {
       const date = new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      txLines.push(`  - ${date}: Received ${t.amount} Nexa`);
+      const sndr = t.sender;
+      txLines.push(`  - [ref:${t.id}] ${date}: Received ${t.amount} Nexa from @${sndr?.handle || "unknown"} (${sndr?.display_name || "unknown"})`);
     });
     (recentGiftsSent || []).forEach((t: any) => {
       const date = new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      txLines.push(`  - ${date}: Sent gift "${(t as any).gifts?.name || "?"}" (${(t as any).gifts?.rarity || "?"}) for ${t.xp_cost} Nexa`);
+      const recv = t.receiver;
+      txLines.push(`  - [ref:${t.id}] ${date}: Sent gift "${t.gifts?.name || "?"}" (${t.gifts?.rarity || "?"}) to @${recv?.handle || "unknown"} for ${t.xp_cost} Nexa`);
     });
     (recentGiftsRecv || []).forEach((t: any) => {
       const date = new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      txLines.push(`  - ${date}: Received gift "${(t as any).gifts?.name || "?"}" (${(t as any).gifts?.rarity || "?"})`);
+      const sndr = t.sender;
+      txLines.push(`  - [ref:${t.id}] ${date}: Received gift "${t.gifts?.name || "?"}" (${t.gifts?.rarity || "?"}") from @${sndr?.handle || "unknown"}`);
     });
 
     return `
@@ -708,7 +712,7 @@ When suggesting actions, include ACTION buttons in your response using the forma
         if (deductAcoinErr || !deductedAcoin) return { success: false, message: "Could not deduct ACoin — balance may have changed" };
         const { error: creditErr } = await supabase.rpc("credit_acoin", { p_user_id: (acoinRecipient as { id: string }).id, p_amount: acoinAmt });
         if (creditErr) {
-          await supabase.from("profiles").update({ acoin: live.acoin }).eq("id", user.id);
+          await supabase.rpc("credit_acoin", { p_user_id: user.id, p_amount: acoinAmt });
           return { success: false, message: "Could not credit recipient. Your ACoin has been refunded." };
         }
         const { error: txErr } = await supabase.from("acoin_transactions").insert([
@@ -733,7 +737,8 @@ When suggesting actions, include ACTION buttons in your response using the forma
         const { error } = await supabase.from("follows").insert({ follower_id: user.id, following_id: target.id });
         if (error) return { success: false, message: error.message };
         try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("follow_user"); } catch {}
-        return { success: true, message: `You now follow ${target.display_name} (@${handle})` };
+        try { const { notifyNewFollow } = await import("../../lib/notifyUser"); notifyNewFollow({ targetUserId: (target as { id: string }).id, followerName: profile.display_name || "Someone", followerUserId: user.id }); } catch {}
+        return { success: true, message: `You now follow ${(target as { id: string; display_name: string }).display_name} (@${handle})` };
       }
       case "unfollow": {
         const { handle } = action.params;
@@ -759,7 +764,7 @@ When suggesting actions, include ACTION buttons in your response using the forma
         expiresAt.setDate(expiresAt.getDate() + planData.duration_days);
         const { error: subErr } = await supabase.from("user_subscriptions").upsert({ user_id: user.id, plan_id: planData.id, started_at: new Date().toISOString(), expires_at: expiresAt.toISOString(), is_active: true, acoin_paid: planData.acoin_price }, { onConflict: "user_id" });
         if (subErr) {
-          await supabase.from("profiles").update({ acoin: liveSub.acoin || 0 }).eq("id", user.id);
+          await supabase.rpc("credit_acoin", { p_user_id: user.id, p_amount: planData.acoin_price });
           return { success: false, message: "Could not activate subscription. ACoin refunded." };
         }
         const { error: subTxErr } = await supabase.from("acoin_transactions").insert({ user_id: user.id, amount: -planData.acoin_price, transaction_type: "subscription", metadata: { plan_name: planData.name, plan_tier: planData.tier, duration_days: planData.duration_days } });
@@ -868,7 +873,7 @@ When the user asks you to perform an action, include ONE [EXEC:action_type:{"par
 Always include a brief explanation of what you're about to do before the EXEC tag. The handle must be WITHOUT the @ symbol. The JSON must be on a single line and valid.
 
 INVOICES:
-When the user asks for a receipt, invoice, or transaction details, generate an inline invoice card using [INVOICE:{"type":"...","date":"2026-03-27T12:00:00Z","amount":100,"currency":"Nexa","from":"@sender","to":"@receiver","fee":5,"net":95,"reference":"REF-XXX","status":"Completed","description":"optional note"}]. Use the RECENT TRANSACTIONS data to generate accurate invoices. The JSON must be on a single line.`;
+When the user asks for a receipt, invoice, or transaction details, generate an inline invoice card using [INVOICE:{"type":"...","date":"2026-03-27T12:00:00Z","amount":100,"currency":"Nexa","from":"@sender","to":"@receiver","fee":5,"net":95,"reference":"REF-XXX","status":"Completed","description":"optional note"}]. Use the RECENT TRANSACTIONS data to generate accurate invoices — each transaction has a [ref:ID] tag you MUST use as the invoice reference field for accuracy. Match the from/to fields to the counterparty handles shown. The JSON must be on a single line.`;
 
       const conversationMessages = messages
         .filter(m => m.role !== "thinking")
