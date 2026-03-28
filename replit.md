@@ -1,17 +1,33 @@
-# Workspace
+# AfuChat — Workspace
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+AfuChat is a WeChat-style social chat super app. pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+
+## Replit Setup
+
+- **Status**: Fully migrated and running on Replit
+- **Mobile app** (Expo): port 5000 (webview)
+- **API server** (Express): port 3000 (console)
+- **Workflows**: "Start application" (mobile) + "API Server" (backend) — both run together via "Project"
+
+## Environment Variables
+
+- `EXPO_PUBLIC_SUPABASE_URL` — Supabase project URL (shared env var)
+- `EXPO_PUBLIC_SUPABASE_ANON_KEY` — Supabase anon key (shared env var, safe to expose)
+- `SUPABASE_SERVICE_ROLE_KEY` — **Secret** — add via Replit Secrets tab (needed for server-side admin operations)
+- `GROQ_API_KEY` — **Secret** — add via Replit Secrets tab (needed for AI chat/transcription)
+- `RESEND_API_KEY` — **Secret** — add via Replit Secrets tab (needed for email sending)
+- `ACCOUNT_PURGE_SECRET` — **Secret** — add via Replit Secrets tab (protects purge endpoint)
 
 ## Stack
 
 - **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
+- **Node.js version**: 20
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
 - **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
+- **Database**: PostgreSQL + Drizzle ORM (Replit DB provisioned; Supabase used for auth/app data)
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
