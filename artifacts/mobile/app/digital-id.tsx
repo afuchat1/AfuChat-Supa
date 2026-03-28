@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   Image,
+  Platform,
   ScrollView,
   Share,
   StyleSheet,
@@ -25,6 +27,9 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import QRCode from "react-native-qrcode-svg";
+import ViewShot from "react-native-view-shot";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
@@ -235,12 +240,12 @@ function CardBack({ profile, grade, isPremium, qrValue }: { profile: any; grade:
 
         <View style={styles.backBottomRow}>
           <View style={styles.qrBox}>
-            <QRCode value={qrValue} size={48} color={Colors.brand} backgroundColor="transparent" />
+            <QRCode value={qrValue} size={72} color="#0A1220" backgroundColor="#fff" quietZone={2} />
           </View>
           <View style={styles.backBottomInfo}>
             <Text style={styles.idLabel}>AFU ID</Text>
-            <Text style={[styles.idNumber, { fontSize: 14, letterSpacing: 2 }]}>{afuId}</Text>
-            <Text style={[styles.idLabel, { marginTop: 6 }]}>SCAN TO VERIFY</Text>
+            <Text style={[styles.idNumber, { fontSize: 15, letterSpacing: 2.5 }]}>{afuId}</Text>
+            <Text style={[styles.idLabel, { marginTop: 6 }]}>SCAN TO PAY</Text>
             <Text style={[styles.idNumber, { color: Colors.brand }]}>@{handle}</Text>
           </View>
         </View>
@@ -256,6 +261,8 @@ export default function DigitalIdScreen() {
   const grade = GradeInfo(profile?.current_grade || "explorer");
   const [qrPayload, setQrPayload] = useState(user?.id ? buildQrValue(user.id) : `afuchat://id/00000000`);
 
+  const cardRef = useRef<ViewShot>(null);
+  const [saving, setSaving] = useState(false);
   const flipProgress = useSharedValue(0);
   const isFlipped = useRef(false);
   const cardScale = useSharedValue(0.92);
@@ -307,6 +314,47 @@ export default function DigitalIdScreen() {
     } catch {}
   }, [profile]);
 
+  const handleSaveCard = useCallback(async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const ref = cardRef.current as any;
+      if (!ref?.capture) {
+        setSaving(false);
+        return;
+      }
+
+      if (Platform.OS === "web") {
+        const dataUri = await ref.capture();
+        const link = document.createElement("a");
+        link.href = dataUri;
+        link.download = `AfuChat_ID_${toAfuId(profile?.id || "00000000")}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        const uri = await ref.capture();
+        const cacheDir = FileSystem.cacheDirectory;
+        if (!cacheDir) {
+          await Share.share({ message: `AfuChat ID: ${formatAfuId(toAfuId(profile?.id || "00000000"))}` });
+          return;
+        }
+        const filename = `AfuChat_ID_${toAfuId(profile?.id || "00000000")}.png`;
+        const dest = `${cacheDir}${filename}`;
+        await FileSystem.copyAsync({ from: uri, to: dest });
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(dest, { mimeType: "image/png", dialogTitle: "Save your AfuChat ID Card" });
+        } else {
+          await Share.share({ url: dest });
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to save card:", e);
+    } finally {
+      setSaving(false);
+    }
+  }, [profile, saving]);
+
   return (
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -322,14 +370,16 @@ export default function DigitalIdScreen() {
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 32, flexGrow: 1, justifyContent: "center" }} showsVerticalScrollIndicator={false}>
         <View style={styles.cardContainer}>
           <Animated.View style={[styles.glowRing, glowStyle, { borderColor: grade.colors[0], shadowColor: grade.colors[0] }]} pointerEvents="none" />
-          <TouchableOpacity onPress={flip} activeOpacity={1} style={{ width: CARD_W, height: CARD_H }}>
-            <Animated.View style={[styles.card, frontStyle, { width: CARD_W, height: CARD_H }]}>
-              <CardFront profile={profile} grade={grade} isPremium={isPremium} />
-            </Animated.View>
-            <Animated.View style={[styles.card, backStyle, { width: CARD_W, height: CARD_H, position: "absolute", top: 0 }]}>
-              <CardBack profile={profile} grade={grade} isPremium={isPremium} qrValue={qrPayload} />
-            </Animated.View>
-          </TouchableOpacity>
+          <ViewShot ref={cardRef} options={{ format: "png", quality: 1, result: Platform.OS === "web" ? "data-uri" : "tmpfile" }} style={{ borderRadius: 20 }}>
+            <TouchableOpacity onPress={flip} activeOpacity={1} style={{ width: CARD_W, height: CARD_H }}>
+              <Animated.View style={[styles.card, frontStyle, { width: CARD_W, height: CARD_H }]}>
+                <CardFront profile={profile} grade={grade} isPremium={isPremium} />
+              </Animated.View>
+              <Animated.View style={[styles.card, backStyle, { width: CARD_W, height: CARD_H, position: "absolute", top: 0 }]}>
+                <CardBack profile={profile} grade={grade} isPremium={isPremium} qrValue={qrPayload} />
+              </Animated.View>
+            </TouchableOpacity>
+          </ViewShot>
           <View style={styles.tapHintRow}>
             <Ionicons name="sync-outline" size={13} color={colors.textMuted} />
             <Text style={[styles.tapHint, { color: colors.textMuted }]}>Tap card to flip</Text>
@@ -337,11 +387,27 @@ export default function DigitalIdScreen() {
         </View>
 
         <View style={styles.infoFooter}>
+          <TouchableOpacity
+            style={[styles.saveCardBtn, { opacity: saving ? 0.7 : 1 }]}
+            onPress={handleSaveCard}
+            disabled={saving}
+            activeOpacity={0.8}
+          >
+            <LinearGradient colors={[Colors.brand, "#00A5AD"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.saveCardGradient}>
+              {saving ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="download-outline" size={20} color="#fff" />
+              )}
+              <Text style={styles.saveCardText}>{saving ? "Preparing..." : "Save / Print Card"}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
           <View style={[styles.securityCard, { backgroundColor: isDark ? "#0D1B2A" : `${Colors.brand}08`, borderColor: isDark ? "#1A3040" : `${Colors.brand}20`, borderWidth: 1 }]}>
             <Ionicons name="qr-code-outline" size={18} color={Colors.brand} />
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={[styles.securityTitle, { color: colors.text }]}>Encoded Identity</Text>
-              <Text style={[styles.securitySub, { color: colors.textMuted }]}>Your full profile data is encoded in the QR code. Only visible when scanned by an authorized device.</Text>
+              <Text style={[styles.securityTitle, { color: colors.text }]}>Scannable QR Code</Text>
+              <Text style={[styles.securitySub, { color: colors.textMuted }]}>Flip the card to reveal your QR code. Others can scan it to send you ACoin instantly.</Text>
             </View>
           </View>
 
@@ -408,11 +474,14 @@ const styles = StyleSheet.create({
   statBox: { flex: 1, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 12, paddingVertical: 10, paddingHorizontal: 8, alignItems: "center", borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.06)" },
   statValue: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
   statLabel: { color: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: "Inter_600SemiBold", letterSpacing: 1.2, marginTop: 2 },
-  qrBox: { width: 64, height: 64, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.95)", alignItems: "center", justifyContent: "center", padding: 4 },
+  qrBox: { width: 88, height: 88, borderRadius: 14, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", padding: 4 },
   backBottomRow: { flexDirection: "row", alignItems: "center", gap: 14 },
   backBottomInfo: {},
   tapHintRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 14 },
   tapHint: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  saveCardBtn: { borderRadius: 16, overflow: "hidden" },
+  saveCardGradient: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 15, borderRadius: 16 },
+  saveCardText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
   infoFooter: { paddingHorizontal: 24, gap: 12, marginTop: 8 },
   securityCard: { flexDirection: "row", alignItems: "center", borderRadius: 14, padding: 14 },
   securityTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
