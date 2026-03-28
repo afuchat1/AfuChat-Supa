@@ -11,6 +11,7 @@ channel = "stable-25_05"
 [userenv.shared]
 PORT = "3000"
 NODE_ENV = "development"
+EXPO_TOKEN = "Elx7PuAPR_jkUD7Ua-gznYgRwXfcMdlZM0aBaNey"
 
 [workflows]
 runButton = "Project"
