@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS transaction_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   requester_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   owner_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  currency TEXT NOT NULL CHECK (currency IN ('nexa', 'acoin')),
+  currency TEXT NOT NULL DEFAULT 'acoin' CHECK (currency = 'acoin'),
   amount INTEGER NOT NULL CHECK (amount > 0),
   message TEXT,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined', 'expired', 'cancelled')),

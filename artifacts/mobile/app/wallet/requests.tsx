@@ -108,17 +108,15 @@ export default function RequestsScreen() {
   async function handleAccept(req: TransactionRequest) {
     if (!user || !profile) return;
 
-    const balance = req.currency === "nexa" ? (profile.xp || 0) : (profile.acoin || 0);
-    const label = req.currency === "nexa" ? "Nexa" : "ACoin";
-
+    const balance = profile.acoin || 0;
     if (balance < req.amount) {
-      showAlert("Insufficient Balance", `You need ${req.amount} ${label} but only have ${balance}.`);
+      showAlert("Insufficient ACoin", `You need ${req.amount} ACoin but only have ${balance}.`);
       return;
     }
 
     showAlert(
       "Accept Request",
-      `Send ${req.amount} ${label} to @${req.requester?.handle || "user"}?`,
+      `Send ${req.amount} ACoin to @${req.requester?.handle || "user"}?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -126,81 +124,44 @@ export default function RequestsScreen() {
           onPress: async () => {
             setProcessingId(req.id);
 
-            if (req.currency === "nexa") {
-              const { data: deducted, error: deductErr } = await supabase
-                .from("profiles")
-                .update({ xp: (profile.xp || 0) - req.amount })
-                .eq("id", user.id)
-                .gte("xp", req.amount)
-                .select("id")
-                .maybeSingle();
+            const { error: acoinErr } = await supabase.rpc("deduct_acoin", {
+              p_user_id: user.id,
+              p_amount: req.amount,
+            });
 
-              if (deductErr || !deducted) {
-                showAlert("Error", "Could not deduct Nexa — balance may have changed.");
-                setProcessingId(null);
-                return;
-              }
-
-              const { error: creditErr } = await supabase.rpc("award_xp", {
-                p_user_id: req.requester_id,
-                p_action_type: "nexa_transfer_received",
-                p_xp_amount: req.amount,
-                p_metadata: { from_user_id: user.id, request_id: req.id },
-              });
-
-              if (creditErr) {
-                await supabase.from("profiles").update({ xp: (profile.xp || 0) }).eq("id", user.id);
-                showAlert("Error", "Could not credit requester. Your Nexa has been refunded.");
-                setProcessingId(null);
-                return;
-              }
-
-              await supabase.from("xp_transfers").insert({
-                sender_id: user.id,
-                receiver_id: req.requester_id,
-                amount: req.amount,
-                message: req.message || `Payment request #${req.id.substring(0, 8)}`,
-              });
-            } else {
-              const { error: acoinErr } = await supabase.rpc("deduct_acoin", {
-                p_user_id: user.id,
-                p_amount: req.amount,
-              });
-
-              if (acoinErr) {
-                showAlert("Error", "Could not deduct ACoin — balance may have changed.");
-                setProcessingId(null);
-                return;
-              }
-
-              const { error: creditErr } = await supabase.rpc("credit_acoin", {
-                p_user_id: req.requester_id,
-                p_amount: req.amount,
-              });
-
-              if (creditErr) {
-                await supabase.rpc("credit_acoin", { p_user_id: user.id, p_amount: req.amount });
-                showAlert("Error", "Could not credit requester. Your ACoin has been refunded.");
-                setProcessingId(null);
-                return;
-              }
-
-              const { error: logErr } = await supabase.from("acoin_transactions").insert([
-                {
-                  user_id: user.id,
-                  amount: -req.amount,
-                  transaction_type: "acoin_transfer_sent",
-                  metadata: { to_handle: req.requester?.handle, request_id: req.id },
-                },
-                {
-                  user_id: req.requester_id,
-                  amount: req.amount,
-                  transaction_type: "acoin_transfer_received",
-                  metadata: { from_handle: profile.handle, request_id: req.id },
-                },
-              ]);
-              if (logErr) console.warn("ACoin transfer succeeded but log failed:", logErr.message);
+            if (acoinErr) {
+              showAlert("Error", "Could not deduct ACoin — balance may have changed.");
+              setProcessingId(null);
+              return;
             }
+
+            const { error: creditErr } = await supabase.rpc("credit_acoin", {
+              p_user_id: req.requester_id,
+              p_amount: req.amount,
+            });
+
+            if (creditErr) {
+              await supabase.rpc("credit_acoin", { p_user_id: user.id, p_amount: req.amount });
+              showAlert("Error", "Could not credit requester. Your ACoin has been refunded.");
+              setProcessingId(null);
+              return;
+            }
+
+            const { error: logErr } = await supabase.from("acoin_transactions").insert([
+              {
+                user_id: user.id,
+                amount: -req.amount,
+                transaction_type: "acoin_transfer_sent",
+                metadata: { to_handle: req.requester?.handle, request_id: req.id },
+              },
+              {
+                user_id: req.requester_id,
+                amount: req.amount,
+                transaction_type: "acoin_transfer_received",
+                metadata: { from_handle: profile.handle, request_id: req.id },
+              },
+            ]);
+            if (logErr) console.warn("ACoin transfer succeeded but log failed:", logErr.message);
 
             const { error: statusErr } = await supabase
               .from("transaction_requests")
@@ -213,7 +174,7 @@ export default function RequestsScreen() {
             }
 
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            showAlert("Sent!", `${req.amount} ${label} sent to @${req.requester?.handle}`);
+            showAlert("Sent!", `${req.amount} ACoin sent to @${req.requester?.handle}`);
             refreshProfile();
             loadRequests();
             setProcessingId(null);
@@ -226,7 +187,7 @@ export default function RequestsScreen() {
   async function handleDecline(req: TransactionRequest) {
     showAlert(
       "Decline Request",
-      `Decline the ${req.amount} ${req.currency === "nexa" ? "Nexa" : "ACoin"} request from @${req.requester?.handle || "user"}?`,
+      `Decline the ${req.amount} ACoin request from @${req.requester?.handle || "user"}?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -310,9 +271,6 @@ export default function RequestsScreen() {
             const person = tab === "incoming" ? item.requester : item.owner;
             const isPending = item.status === "pending";
             const isProcessing = processingId === item.id;
-            const currIcon = item.currency === "nexa" ? "flash" : "diamond";
-            const currColor = item.currency === "nexa" ? Colors.brand : Colors.gold;
-            const label = item.currency === "nexa" ? "Nexa" : "ACoin";
 
             return (
               <View style={[styles.reqCard, { backgroundColor: colors.surface }]}>
@@ -337,10 +295,10 @@ export default function RequestsScreen() {
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                      <Ionicons name={currIcon as any} size={14} color={currColor} />
+                      <Ionicons name="diamond" size={14} color={Colors.gold} />
                       <Text style={{ fontSize: 18, fontFamily: "Inter_700Bold", color: colors.text }}>{item.amount}</Text>
                     </View>
-                    <Text style={{ fontSize: 11, color: currColor }}>{label}</Text>
+                    <Text style={{ fontSize: 11, color: Colors.gold }}>ACoin</Text>
                   </View>
                 </View>
 

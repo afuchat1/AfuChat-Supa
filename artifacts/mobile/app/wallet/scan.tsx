@@ -61,15 +61,17 @@ type ScannedProfile = {
   userId?: string;
 };
 
+type ActionMode = "pay" | "request";
+
 export default function ScanScreen() {
   const { colors } = useTheme();
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [scannedProfile, setScannedProfile] = useState<ScannedProfile | null>(null);
-  const [showRequest, setShowRequest] = useState(false);
-  const [currency, setCurrency] = useState<"nexa" | "acoin">("nexa");
+  const [showModal, setShowModal] = useState(false);
+  const [actionMode, setActionMode] = useState<ActionMode>("pay");
   const [amount, setAmount] = useState("");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
@@ -150,6 +152,94 @@ export default function ScanScreen() {
     [user]
   );
 
+  function openAction(mode: ActionMode) {
+    setActionMode(mode);
+    setAmount("");
+    setMessage("");
+    setShowModal(true);
+  }
+
+  function resetScanner() {
+    setScannedProfile(null);
+    setResolvedUserId(null);
+    setScanned(false);
+    setShowModal(false);
+    setAmount("");
+    setMessage("");
+    processedRef.current = false;
+  }
+
+  async function submitPay() {
+    if (!resolvedUserId || !user || !profile || !amount.trim()) return;
+    const amt = parseInt(amount);
+    if (isNaN(amt) || amt <= 0) {
+      showAlert("Invalid", "Enter a valid amount.");
+      return;
+    }
+    if (amt > (profile.acoin || 0)) {
+      showAlert("Insufficient ACoin", `You only have ${profile.acoin || 0} ACoin.`);
+      return;
+    }
+
+    showAlert(
+      "Confirm Payment",
+      `Send ${amt} ACoin to @${scannedProfile?.handle}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Pay",
+          onPress: async () => {
+            setSending(true);
+
+            const { error: deductErr } = await supabase.rpc("deduct_acoin", {
+              p_user_id: user.id,
+              p_amount: amt,
+            });
+            if (deductErr) {
+              showAlert("Error", "Could not deduct ACoin — balance may have changed.");
+              setSending(false);
+              return;
+            }
+
+            const { error: creditErr } = await supabase.rpc("credit_acoin", {
+              p_user_id: resolvedUserId,
+              p_amount: amt,
+            });
+            if (creditErr) {
+              await supabase.rpc("credit_acoin", { p_user_id: user.id, p_amount: amt });
+              showAlert("Error", "Could not credit recipient. Your ACoin has been refunded.");
+              setSending(false);
+              return;
+            }
+
+            const { error: logErr } = await supabase.from("acoin_transactions").insert([
+              {
+                user_id: user.id,
+                amount: -amt,
+                transaction_type: "acoin_transfer_sent",
+                metadata: { to_handle: scannedProfile?.handle, via: "qr_scan", message: message.trim() || null },
+              },
+              {
+                user_id: resolvedUserId,
+                amount: amt,
+                transaction_type: "acoin_transfer_received",
+                metadata: { from_handle: profile.handle, via: "qr_scan", message: message.trim() || null },
+              },
+            ]);
+            if (logErr) console.warn("ACoin transfer succeeded but log failed:", logErr.message);
+
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            showAlert("Sent!", `${amt} ACoin sent to @${scannedProfile?.handle}`);
+            setSending(false);
+            refreshProfile();
+            resetScanner();
+            router.back();
+          },
+        },
+      ]
+    );
+  }
+
   async function submitRequest() {
     if (!resolvedUserId || !user || !amount.trim()) return;
     const amt = parseInt(amount);
@@ -162,7 +252,7 @@ export default function ScanScreen() {
     const { error } = await supabase.from("transaction_requests").insert({
       requester_id: user.id,
       owner_id: resolvedUserId,
-      currency,
+      currency: "acoin",
       amount: amt,
       message: message.trim() || null,
     });
@@ -174,12 +264,9 @@ export default function ScanScreen() {
     }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    showAlert("Request Sent!", `Requested ${amt} ${currency === "nexa" ? "Nexa" : "ACoin"} from @${scannedProfile?.handle}`);
+    showAlert("Request Sent!", `Requested ${amt} ACoin from @${scannedProfile?.handle}`);
     setSending(false);
-    setShowRequest(false);
-    setScannedProfile(null);
-    setScanned(false);
-    processedRef.current = false;
+    resetScanner();
     router.back();
   }
 
@@ -211,6 +298,12 @@ export default function ScanScreen() {
     );
   }
 
+  const isPay = actionMode === "pay";
+  const modalTitle = isPay ? "Pay ACoin" : "Request ACoin";
+  const modalLabel = isPay ? "To:" : "From:";
+  const modalBtnText = isPay ? "Pay" : "Send Request";
+  const modalBtnColor = isPay ? Colors.gold : Colors.brand;
+
   return (
     <View style={[styles.root, { backgroundColor: "#000" }]}>
       <CameraView
@@ -240,7 +333,7 @@ export default function ScanScreen() {
         </View>
       </View>
 
-      {scannedProfile && !showRequest && (
+      {scannedProfile && !showModal && (
         <View style={styles.resultOverlay}>
           <View style={[styles.resultCard, { backgroundColor: colors.surface }]}>
             <View style={styles.resultHeader}>
@@ -277,11 +370,18 @@ export default function ScanScreen() {
             {resolvedUserId ? (
               <View style={styles.resultActions}>
                 <TouchableOpacity
-                  style={[styles.resultActionBtn, { backgroundColor: Colors.brand }]}
-                  onPress={() => setShowRequest(true)}
+                  style={[styles.resultActionBtn, { backgroundColor: Colors.gold }]}
+                  onPress={() => openAction("pay")}
                 >
-                  <Ionicons name="cash-outline" size={18} color="#fff" />
-                  <Text style={styles.resultActionText}>Request Payment</Text>
+                  <Ionicons name="arrow-up-circle" size={20} color="#fff" />
+                  <Text style={styles.resultActionText}>Pay</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.resultActionBtn, { backgroundColor: Colors.brand }]}
+                  onPress={() => openAction("request")}
+                >
+                  <Ionicons name="arrow-down-circle" size={20} color="#fff" />
+                  <Text style={styles.resultActionText}>Request</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -290,15 +390,7 @@ export default function ScanScreen() {
               </Text>
             )}
 
-            <TouchableOpacity
-              style={styles.scanAgainBtn}
-              onPress={() => {
-                setScannedProfile(null);
-                setResolvedUserId(null);
-                setScanned(false);
-                processedRef.current = false;
-              }}
-            >
+            <TouchableOpacity style={styles.scanAgainBtn} onPress={resetScanner}>
               <Ionicons name="scan-outline" size={18} color={Colors.brand} />
               <Text style={{ color: Colors.brand, fontSize: 15, fontFamily: "Inter_600SemiBold" }}>Scan Again</Text>
             </TouchableOpacity>
@@ -306,45 +398,37 @@ export default function ScanScreen() {
         </View>
       )}
 
-      <Modal visible={showRequest} animationType="slide" transparent>
+      <Modal visible={showModal} animationType="slide" transparent>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <View style={styles.modalOverlay}>
             <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
               <View style={styles.dragHandle} />
               <View style={styles.modalHeader}>
-                <Text style={[styles.modalTitle, { color: colors.text }]}>Request Payment</Text>
-                <TouchableOpacity onPress={() => setShowRequest(false)}>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>{modalTitle}</Text>
+                <TouchableOpacity onPress={() => setShowModal(false)}>
                   <Ionicons name="close" size={24} color={colors.text} />
                 </TouchableOpacity>
               </View>
 
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                <Text style={{ color: colors.textSecondary, fontSize: 14 }}>From:</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 14 }}>{modalLabel}</Text>
                 <Text style={{ color: colors.text, fontSize: 15, fontFamily: "Inter_600SemiBold" }}>
                   @{scannedProfile?.handle}
                 </Text>
               </View>
 
-              <View style={styles.currencyToggle}>
-                <TouchableOpacity
-                  style={[styles.currencyBtn, currency === "nexa" && { backgroundColor: Colors.brand }]}
-                  onPress={() => setCurrency("nexa")}
-                >
-                  <Ionicons name="flash" size={14} color={currency === "nexa" ? "#fff" : colors.textMuted} />
-                  <Text style={[styles.currencyBtnText, currency === "nexa" && { color: "#fff" }]}>Nexa</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.currencyBtn, currency === "acoin" && { backgroundColor: Colors.gold }]}
-                  onPress={() => setCurrency("acoin")}
-                >
-                  <Ionicons name="diamond" size={14} color={currency === "acoin" ? "#fff" : colors.textMuted} />
-                  <Text style={[styles.currencyBtnText, currency === "acoin" && { color: "#fff" }]}>ACoin</Text>
-                </TouchableOpacity>
-              </View>
+              {isPay && (
+                <View style={[styles.balanceRow, { backgroundColor: colors.inputBg }]}>
+                  <Ionicons name="diamond" size={14} color={Colors.gold} />
+                  <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                    Your balance: {profile?.acoin || 0} ACoin
+                  </Text>
+                </View>
+              )}
 
               <TextInput
                 style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]}
-                placeholder="Amount"
+                placeholder="Amount (ACoin)"
                 placeholderTextColor={colors.textMuted}
                 value={amount}
                 onChangeText={setAmount}
@@ -359,14 +443,14 @@ export default function ScanScreen() {
               />
 
               <TouchableOpacity
-                style={[styles.sendBtn, sending && { opacity: 0.6 }]}
-                onPress={submitRequest}
+                style={[styles.sendBtn, { backgroundColor: modalBtnColor }, sending && { opacity: 0.6 }]}
+                onPress={isPay ? submitPay : submitRequest}
                 disabled={sending}
               >
                 {sending ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.sendBtnText}>Send Request</Text>
+                  <Text style={styles.sendBtnText}>{modalBtnText}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -404,8 +488,8 @@ const styles = StyleSheet.create({
   resultName: { fontSize: 18, fontFamily: "Inter_700Bold" },
   resultHandle: { fontSize: 14, fontFamily: "Inter_400Regular", marginTop: 2 },
   resultIdRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 12, borderRadius: 10 },
-  resultActions: { gap: 10 },
-  resultActionBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderRadius: 14 },
+  resultActions: { flexDirection: "row", gap: 10 },
+  resultActionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderRadius: 14 },
   resultActionText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
   scanAgainBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, marginTop: 4 },
   modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" },
@@ -413,10 +497,8 @@ const styles = StyleSheet.create({
   dragHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "#ccc", alignSelf: "center", marginBottom: 4 },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   modalTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
-  currencyToggle: { flexDirection: "row", gap: 10 },
-  currencyBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 12, backgroundColor: "rgba(128,128,128,0.1)" },
-  currencyBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#888" },
+  balanceRow: { flexDirection: "row", alignItems: "center", gap: 6, padding: 10, borderRadius: 10 },
   modalInput: { borderRadius: 12, padding: 14, fontSize: 15, fontFamily: "Inter_400Regular" },
-  sendBtn: { backgroundColor: Colors.brand, borderRadius: 14, paddingVertical: 14, alignItems: "center" },
+  sendBtn: { borderRadius: 14, paddingVertical: 14, alignItems: "center" },
   sendBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
 });
