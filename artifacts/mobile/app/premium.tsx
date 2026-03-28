@@ -128,8 +128,8 @@ const TIER_CONFIG: Record<string, {
     ],
   },
   platinum: {
-    color: "#00C2CB",
-    gradientFrom: "#00C2CB22",
+    color: "#34A853",
+    gradientFrom: "#34A85322",
     icon: "💎",
     badge: "PLATINUM",
     categories: [

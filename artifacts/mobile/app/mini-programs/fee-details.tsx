@@ -22,7 +22,7 @@ const FEE_COLOR_MAP: Record<string, string> = {
   bill_payment: "#4CD964",
   hotel_booking: "#FF3B30",
   event_ticket: "#AF52DE",
-  money_transfer: "#00C2CB",
+  money_transfer: "#34A853",
 };
 
 export default function FeeDetailsScreen() {

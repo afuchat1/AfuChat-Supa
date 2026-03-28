@@ -39,7 +39,7 @@ type CollectionItem = {
   added_at: string;
 };
 
-const PALETTE = ["#00C2CB", "#BF5AF2", "#FF9500", "#34C759", "#007AFF", "#FF3B30", "#D4A853", "#AF52DE"];
+const PALETTE = ["#34A853", "#BF5AF2", "#FF9500", "#34C759", "#007AFF", "#FF3B30", "#D4A853", "#AF52DE"];
 const EMOJIS = ["📁", "⭐", "💡", "📌", "🔖", "🎯", "🧠", "❤️", "🔥", "✨", "🎵", "📚"];
 
 export default function CollectionsScreen() {

@@ -10,7 +10,7 @@ export type MonetizeFeature = {
 };
 
 export const MONETIZE_FEATURES: MonetizeFeature[] = [
-  { id: "paid_chat", title: "Paid Chat Requests", emoji: "💬", description: "Charge others to start a conversation with you", color: "#00C2CB", category: "messaging" },
+  { id: "paid_chat", title: "Paid Chat Requests", emoji: "💬", description: "Charge others to start a conversation with you", color: "#34A853", category: "messaging" },
   { id: "pay_per_message", title: "Pay Per Message", emoji: "✉️", description: "Charge a fee for every message sent to you", color: "#007AFF", category: "messaging" },
   { id: "paid_voice_notes", title: "Paid Voice Notes", emoji: "🎙️", description: "Lock your voice messages behind a paywall", color: "#5856D6", category: "messaging" },
   { id: "paid_broadcast", title: "Paid Broadcasts", emoji: "📡", description: "Send premium messages followers pay to unlock", color: "#AF52DE", category: "messaging" },
@@ -20,7 +20,7 @@ export const MONETIZE_FEATURES: MonetizeFeature[] = [
   { id: "paid_live", title: "Paid Live Streams", emoji: "🎥", description: "Host live streams with paid entry and paid reactions", color: "#FF2D55", category: "content" },
   { id: "paid_link", title: "Paid Link Access", emoji: "🔗", description: "Share exclusive links locked behind a paywall", color: "#34C759", category: "content" },
   { id: "content_licensing", title: "Content Licensing", emoji: "📜", description: "Sell rights to use your posts and media", color: "#30B0C7", category: "content" },
-  { id: "ai_marketplace", title: "AI Tool Marketplace", emoji: "🤖", description: "Sell custom AI prompts and tools others pay to use", color: "#00C2CB", category: "marketplace" },
+  { id: "ai_marketplace", title: "AI Tool Marketplace", emoji: "🤖", description: "Sell custom AI prompts and tools others pay to use", color: "#34A853", category: "marketplace" },
   { id: "rewarded_polls", title: "Rewarded Polls", emoji: "📊", description: "Create polls where voters earn small rewards", color: "#FFD60A", category: "marketplace" },
   { id: "paid_communities", title: "Paid Communities", emoji: "🏰", description: "Private groups that require payment to join", color: "#BF5AF2", category: "community" },
   { id: "digital_events", title: "Digital Event Tickets", emoji: "🎫", description: "Create events and sell access tickets", color: "#FF6B35", category: "community" },

@@ -66,7 +66,7 @@ function GradeInfo(grade: string): { label: string; colors: [string, string]; ic
     bronze: { label: "Bronze", colors: ["#CD7F32", "#A0602A"], icon: "shield-outline", textColor: "#CD7F32" },
     silver: { label: "Silver", colors: ["#C0C0C0", "#909090"], icon: "shield-half-outline", textColor: "#808080" },
     gold: { label: "Gold", colors: ["#D4A853", "#B8860B"], icon: "shield", textColor: "#B8860B" },
-    platinum: { label: "Platinum", colors: ["#00C2CB", "#008B93"], icon: "star", textColor: "#008B93" },
+    platinum: { label: "Platinum", colors: ["#34A853", "#2E7D32"], icon: "star", textColor: "#2E7D32" },
     diamond: { label: "Diamond", colors: ["#B9F2FF", "#4FC3F7"], icon: "diamond-outline", textColor: "#0288D1" },
     legend: { label: "Legend", colors: ["#FF6B6B", "#E53E3E"], icon: "flame", textColor: "#E53E3E" },
   };
@@ -140,7 +140,7 @@ function CardFront({ profile, grade, isPremium, scale, cardW }: { profile: any; 
       <View style={[styles.cardContent, { padding: Math.max(12, 20 * s) }]}>
         <View style={styles.cardTopRow}>
           <View style={styles.brandRow}>
-            <Image source={afuSymbol} style={[styles.brandSymbol, { width: 26 * s, height: 26 * s, borderRadius: 7 * s, tintColor: "#00C2CB" }]} resizeMode="contain" />
+            <Image source={afuSymbol} style={[styles.brandSymbol, { width: 26 * s, height: 26 * s, borderRadius: 7 * s, tintColor: "#34A853" }]} resizeMode="contain" />
             <View>
               <Text style={[styles.cardAppName, { fontSize: Math.max(9, 12 * s) }]}>AFUCHAT</Text>
               <Text style={[styles.cardSubtitle, { fontSize: Math.max(6, 8 * s) }]}>DIGITAL IDENTITY</Text>
@@ -173,7 +173,7 @@ function CardFront({ profile, grade, isPremium, scale, cardW }: { profile: any; 
           </View>
           {(profile?.country || profile?.region) ? (
             <View style={styles.locationRow}>
-              <Ionicons name="location" size={Math.max(8, 10 * s)} color="#00C2CB" />
+              <Ionicons name="location" size={Math.max(8, 10 * s)} color="#34A853" />
               <Text style={[styles.locationText, { fontSize: Math.max(8, 10 * s) }]}>{[profile?.region, profile?.country].filter(Boolean).join(", ")}</Text>
             </View>
           ) : null}
@@ -229,7 +229,7 @@ function CardBack({ profile, grade, isPremium, qrValue, scale, cardW }: { profil
       <View style={[styles.cardContent, { padding: Math.max(12, 20 * s) }]}>
         <View style={styles.backTopRow}>
           <View style={styles.brandRow}>
-            <Image source={afuSymbol} style={[styles.brandSymbol, { width: 26 * s, height: 26 * s, borderRadius: 7 * s, tintColor: "#00C2CB" }]} resizeMode="contain" />
+            <Image source={afuSymbol} style={[styles.brandSymbol, { width: 26 * s, height: 26 * s, borderRadius: 7 * s, tintColor: "#34A853" }]} resizeMode="contain" />
             <Text style={[styles.cardAppName, { fontSize: Math.max(9, 12 * s) }]}>AFUCHAT</Text>
           </View>
           {isPremium && (
@@ -400,7 +400,7 @@ export default function DigitalIdScreen() {
         }
         const printWin = window.open("", "_blank");
         if (printWin) {
-          printWin.document.write(`<!DOCTYPE html><html><head><title>AfuChat ID Card</title><style>@page{margin:0.5in}body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#fff;font-family:sans-serif}img{max-width:100%;width:420px;border-radius:20px;box-shadow:0 8px 32px rgba(0,0,0,0.18)}h2{margin:24px 0 4px;color:#00C2CB;font-size:14px;letter-spacing:2px}p{color:#888;font-size:11px;margin:0}</style></head><body><h2>AFUCHAT DIGITAL ID</h2><p>AFU ID: ${formatAfuId(toAfuId(profile?.id || "00000000"))}</p><br/><img src="${dataUri}" /><script>setTimeout(function(){window.print();},400);<\/script></body></html>`);
+          printWin.document.write(`<!DOCTYPE html><html><head><title>AfuChat ID Card</title><style>@page{margin:0.5in}body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#fff;font-family:sans-serif}img{max-width:100%;width:420px;border-radius:20px;box-shadow:0 8px 32px rgba(0,0,0,0.18)}h2{margin:24px 0 4px;color:#34A853;font-size:14px;letter-spacing:2px}p{color:#888;font-size:11px;margin:0}</style></head><body><h2>AFUCHAT DIGITAL ID</h2><p>AFU ID: ${formatAfuId(toAfuId(profile?.id || "00000000"))}</p><br/><img src="${dataUri}" /><script>setTimeout(function(){window.print();},400);<\/script></body></html>`);
           printWin.document.close();
         }
       } else {
@@ -452,7 +452,7 @@ export default function DigitalIdScreen() {
               disabled={saving || printing}
               activeOpacity={0.8}
             >
-              <LinearGradient colors={[Colors.brand, "#00A5AD"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.saveCardGradient}>
+              <LinearGradient colors={[Colors.brand, "#2D9B4E"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.saveCardGradient}>
                 {saving ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
@@ -558,9 +558,9 @@ const styles = StyleSheet.create({
   saveCardBtn: { borderRadius: 16, overflow: "hidden" },
   saveCardGradient: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 15, borderRadius: 16 },
   saveCardText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  printCardBtn: { borderRadius: 16, overflow: "hidden", borderWidth: 2, borderColor: "#00C2CB" },
+  printCardBtn: { borderRadius: 16, overflow: "hidden", borderWidth: 2, borderColor: "#34A853" },
   printCardInner: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 13, paddingHorizontal: 18 },
-  printCardText: { color: "#00C2CB", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  printCardText: { color: "#34A853", fontSize: 15, fontFamily: "Inter_600SemiBold" },
   infoFooter: { paddingHorizontal: 24, gap: 12, marginTop: 8 },
   securityCard: { flexDirection: "row", alignItems: "center", borderRadius: 14, padding: 14 },
   securityTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold" },

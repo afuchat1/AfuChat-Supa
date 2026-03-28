@@ -44,7 +44,7 @@ import {
   type PinnedResult,
 } from "@/lib/searchStore";
 
-const BRAND = "#00C2CB";
+const BRAND = "#34A853";
 const GOLD = "#D4A853";
 
 type SearchCategory = "all" | "people" | "posts" | "channels" | "gifts" | "hashtags";
@@ -640,7 +640,7 @@ export default function SearchScreen() {
           {ch.avatar_url ? (
             <Image source={{ uri: ch.avatar_url }} style={[s.avatar44, { borderRadius: 12 }]} />
           ) : (
-            <LinearGradient colors={[BRAND, "#00A5AD"]} style={[s.avatar44, { borderRadius: 12, alignItems: "center", justifyContent: "center" }]}>
+            <LinearGradient colors={[BRAND, "#2D9B4E"]} style={[s.avatar44, { borderRadius: 12, alignItems: "center", justifyContent: "center" }]}>
               <Ionicons name="megaphone" size={18} color="#fff" />
             </LinearGradient>
           )}

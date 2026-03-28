@@ -10,13 +10,13 @@
     "newArchEnabled": true,
     "notification": {
       "icon": "./assets/images/afu-symbol.png",
-      "color": "#00C2CB",
+      "color": "#34A853",
       "iosDisplayInForeground": true
     },
     "splash": {
       "image": "./assets/images/afu-symbol.png",
       "resizeMode": "contain",
-      "backgroundColor": "#00C2CB"
+      "backgroundColor": "#34A853"
     },
     "ios": {
       "supportsTablet": false,
@@ -79,8 +79,8 @@
       "name": "AfuChat",
       "shortName": "AfuChat",
       "description": "Connect, Chat, Discover. Your all-in-one social platform.",
-      "themeColor": "#00C2CB",
-      "backgroundColor": "#00C2CB"
+      "themeColor": "#34A853",
+      "backgroundColor": "#34A853"
     },
     "plugins": [
       [
@@ -102,7 +102,7 @@
         "expo-notifications",
         {
           "icon": "./assets/images/afu-symbol.png",
-          "color": "#00C2CB",
+          "color": "#34A853",
           "defaultChannel": "default",
           "sounds": [
             "./assets/sounds/notification.wav"

@@ -1,5 +1,5 @@
-const BRAND = "#00C2CB";
-const BRAND_DARK = "#00A8B0";
+const BRAND = "#34A853";
+const BRAND_DARK = "#2E7D32";
 const BRAND_BLUE = "#1677FF";
 const GOLD = "#D4A853";
 
@@ -20,7 +20,7 @@ export default {
     tint: BRAND,
     tabIconDefault: "#A0A0A0",
     tabIconSelected: BRAND,
-    bubble: "#00C2CB",
+    bubble: "#34A853",
     bubbleText: "#FFFFFF",
     bubbleIncoming: "#F0EBE6",
     bubbleIncomingText: "#1A1A1A",
@@ -30,7 +30,7 @@ export default {
     badgeBg: "#FF3B30",
     badgeText: "#FFFFFF",
     avatar: "#E0DBD6",
-    online: "#00C2CB",
+    online: "#34A853",
     unread: BRAND,
   },
   dark: {
@@ -45,7 +45,7 @@ export default {
     tint: BRAND,
     tabIconDefault: "#5F6368",
     tabIconSelected: BRAND,
-    bubble: "#00C2CB",
+    bubble: "#34A853",
     bubbleText: "#FFFFFF",
     bubbleIncoming: "#303134",
     bubbleIncomingText: "#E8EAED",
@@ -55,7 +55,7 @@ export default {
     badgeBg: "#FF3B30",
     badgeText: "#FFFFFF",
     avatar: "#3C4043",
-    online: "#00C2CB",
+    online: "#34A853",
     unread: BRAND,
   },
 };
