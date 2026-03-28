@@ -87,6 +87,7 @@ type CurrencySettings = {
 
 const TABS = [
   { id: "overview", label: "Overview", icon: "stats-chart" as const },
+  { id: "lookup", label: "ID Lookup", icon: "finger-print" as const },
   { id: "users", label: "Users", icon: "people" as const },
   { id: "content", label: "Content", icon: "document-text" as const },
   { id: "referrals", label: "Referrals", icon: "git-network" as const },
@@ -135,6 +136,10 @@ export default function AdminDashboard() {
   const [userSearch, setUserSearch] = useState("");
   const [postSearch, setPostSearch] = useState("");
   const [balanceModal, setBalanceModal] = useState<UserRow | null>(null);
+  const [lookupId, setLookupId] = useState("");
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupResult, setLookupResult] = useState<any>(null);
+  const [lookupError, setLookupError] = useState("");
   const isAdmin = !!profile?.is_admin;
 
   const loadStats = useCallback(async () => {
@@ -314,6 +319,253 @@ export default function AdminDashboard() {
     if (!currencySettings) return;
     await supabase.from("currency_settings").update({ [field]: value }).eq("id", currencySettings.id);
     loadCurrency();
+  }
+
+  const PROFILE_COLS = "id, handle, display_name, avatar_url, bio, phone_number, xp, acoin, current_grade, is_verified, is_private, show_online_status, country, website_url, language, tipping_enabled, is_admin, is_organization_verified, gender, date_of_birth, region, interests, onboarding_completed, scheduled_deletion_at, created_at";
+
+  async function performLookup() {
+    let cleanId = lookupId.replace(/\s/g, "").trim();
+    if (cleanId.startsWith("@")) cleanId = cleanId.slice(1);
+    if (cleanId.length < 3) {
+      setLookupError("Enter a valid Afu ID (8 digits) or handle");
+      return;
+    }
+    setLookupLoading(true);
+    setLookupError("");
+    setLookupResult(null);
+    try {
+      let matchedProfile = null;
+
+      const isNumericId = /^\d{3,8}$/.test(cleanId);
+      if (isNumericId) {
+        const targetAfuId = cleanId.padStart(8, "0");
+        const { data: allProfiles } = await supabase.from("profiles").select(PROFILE_COLS);
+        for (const p of (allProfiles || [])) {
+          const hex = p.id.replace(/-/g, "").slice(0, 8);
+          const num = parseInt(hex, 16) % 100000000;
+          const pAfuId = num.toString().padStart(8, "0");
+          if (pAfuId === targetAfuId) {
+            matchedProfile = { ...p, afu_id: pAfuId };
+            break;
+          }
+        }
+      }
+
+      if (!matchedProfile) {
+        const { data: byHandle } = await supabase.from("profiles").select(PROFILE_COLS).or(`handle.eq.${cleanId},handle.ilike.${cleanId}`).limit(1);
+        if (byHandle && byHandle.length > 0) {
+          const p = byHandle[0];
+          const hex = p.id.replace(/-/g, "").slice(0, 8);
+          const num = parseInt(hex, 16) % 100000000;
+          matchedProfile = { ...p, afu_id: num.toString().padStart(8, "0") };
+        }
+      }
+
+      if (!matchedProfile) {
+        setLookupError("No user found with that ID or handle");
+        setLookupLoading(false);
+        return;
+      }
+
+      const userId = matchedProfile.id;
+      const [
+        { count: followers },
+        { count: following },
+        { count: posts },
+        { count: giftsSent },
+        { count: giftsReceived },
+        { count: nexaSent },
+        { count: nexaReceived },
+        { count: acoinTxCount },
+        { count: redSent },
+        { count: redReceived },
+        { data: subData },
+      ] = await Promise.all([
+        supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", userId),
+        supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", userId),
+        supabase.from("posts").select("id", { count: "exact", head: true }).eq("author_id", userId),
+        supabase.from("gift_transactions").select("id", { count: "exact", head: true }).eq("sender_id", userId),
+        supabase.from("gift_transactions").select("id", { count: "exact", head: true }).eq("receiver_id", userId),
+        supabase.from("xp_transfers").select("id", { count: "exact", head: true }).eq("sender_id", userId),
+        supabase.from("xp_transfers").select("id", { count: "exact", head: true }).eq("receiver_id", userId),
+        supabase.from("acoin_transactions").select("id", { count: "exact", head: true }).eq("user_id", userId),
+        supabase.from("red_envelopes").select("id", { count: "exact", head: true }).eq("sender_id", userId),
+        supabase.from("red_envelope_claims").select("id", { count: "exact", head: true }).eq("user_id", userId),
+        supabase.from("user_subscriptions").select("*, subscription_plans(name, tier)").eq("user_id", userId).eq("is_active", true).maybeSingle(),
+      ]);
+
+      const createdAt = matchedProfile.created_at ? new Date(matchedProfile.created_at) : new Date();
+      const daysOnPlatform = Math.max(1, Math.floor((Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24)));
+      const level = Math.floor(Math.sqrt((matchedProfile.xp || 0) / 100)) + 1;
+
+      setLookupResult({
+        ...matchedProfile,
+        level,
+        daysOnPlatform,
+        followers: followers || 0,
+        following: following || 0,
+        posts: posts || 0,
+        giftsSent: giftsSent || 0,
+        giftsReceived: giftsReceived || 0,
+        nexaSent: nexaSent || 0,
+        nexaReceived: nexaReceived || 0,
+        acoinTxCount: acoinTxCount || 0,
+        redSent: redSent || 0,
+        redReceived: redReceived || 0,
+        subscription: subData,
+      });
+    } catch (e) {
+      setLookupError("Failed to look up user");
+    } finally {
+      setLookupLoading(false);
+    }
+  }
+
+  function LookupRow({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
+    return (
+      <View style={[styles.lookupRow, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.lookupLabel, { color: colors.textMuted }]}>{label}</Text>
+        <Text style={[styles.lookupValue, { color: valueColor || colors.text }]} numberOfLines={2}>{value}</Text>
+      </View>
+    );
+  }
+
+  function renderLookup() {
+    const u = lookupResult;
+    const gradeMap: Record<string, string> = { bronze: "Bronze", silver: "Silver", gold: "Gold", platinum: "Platinum", diamond: "Diamond", legend: "Legend" };
+    return (
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>User ID Lookup</Text>
+        <Text style={[{ fontSize: 13, color: colors.textMuted, marginBottom: 8, fontFamily: "Inter_400Regular" }]}>
+          Enter an Afu ID number or handle to view complete user data
+        </Text>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <TextInput
+            style={[styles.searchInput, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border, flex: 1 }]}
+            placeholder="Afu ID (e.g. 1234 5678) or @handle"
+            placeholderTextColor={colors.textMuted}
+            value={lookupId}
+            onChangeText={setLookupId}
+            keyboardType="default"
+            autoCapitalize="none"
+            onSubmitEditing={performLookup}
+          />
+          <TouchableOpacity style={[styles.lookupBtn, { opacity: lookupLoading ? 0.5 : 1 }]} onPress={performLookup} disabled={lookupLoading}>
+            {lookupLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="search" size={20} color="#fff" />
+            )}
+          </TouchableOpacity>
+        </View>
+        {lookupError ? (
+          <View style={[styles.lookupErrorBox, { backgroundColor: "#FF3B3015" }]}>
+            <Ionicons name="alert-circle" size={16} color="#FF3B30" />
+            <Text style={{ color: "#FF3B30", fontSize: 13, fontFamily: "Inter_500Medium", flex: 1 }}>{lookupError}</Text>
+          </View>
+        ) : null}
+        {u ? (
+          <View style={{ marginTop: 16, gap: 12 }}>
+            <View style={[styles.lookupProfileHeader, { backgroundColor: colors.surface }]}>
+              <View style={[styles.lookupAvatar, { backgroundColor: BRAND }]}>
+                <Text style={styles.userAvatarText}>{(u.display_name || "?").charAt(0).toUpperCase()}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={[styles.userName, { color: colors.text }]}>{u.display_name}</Text>
+                  {u.is_verified && <Ionicons name="checkmark-circle" size={16} color={u.is_organization_verified ? GOLD : BRAND} />}
+                  {u.is_admin && <Ionicons name="shield-checkmark" size={16} color={BRAND} />}
+                </View>
+                <Text style={[styles.userHandle, { color: colors.textSecondary }]}>@{u.handle}</Text>
+              </View>
+              <View style={[styles.statusBadge, { backgroundColor: u.scheduled_deletion_at ? "#FF3B3020" : "#10B98120" }]}>
+                <Text style={{ color: u.scheduled_deletion_at ? "#FF3B30" : "#10B981", fontSize: 11, fontFamily: "Inter_600SemiBold" }}>
+                  {u.scheduled_deletion_at ? "Deleting" : "Active"}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.lookupQuickStats}>
+              {[
+                { label: "Followers", value: u.followers, color: BRAND },
+                { label: "Following", value: u.following, color: "#3B82F6" },
+                { label: "Posts", value: u.posts, color: "#8B5CF6" },
+                { label: "Days", value: u.daysOnPlatform, color: "#10B981" },
+              ].map((s) => (
+                <View key={s.label} style={[styles.lookupQuickStat, { backgroundColor: colors.surface }]}>
+                  <Text style={[styles.statValue, { color: s.color }]}>{s.value.toLocaleString()}</Text>
+                  <Text style={[styles.statLabel, { color: colors.textMuted }]}>{s.label}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={[styles.lookupCard, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Identity</Text>
+              <LookupRow label="Afu ID" value={u.afu_id.slice(0, 4) + " " + u.afu_id.slice(4)} />
+              <LookupRow label="User UUID" value={u.id} />
+              <LookupRow label="Name" value={u.display_name || "\u2014"} />
+              <LookupRow label="Handle" value={"@" + u.handle} valueColor={BRAND} />
+              <LookupRow label="Bio" value={u.bio || "\u2014"} />
+              <LookupRow label="Country" value={u.country || "\u2014"} />
+              <LookupRow label="Region" value={u.region || "\u2014"} />
+              <LookupRow label="Gender" value={u.gender ? u.gender.charAt(0).toUpperCase() + u.gender.slice(1) : "\u2014"} />
+              <LookupRow label="Language" value={(u.language || "\u2014").toUpperCase()} />
+              <LookupRow label="Website" value={u.website_url || "\u2014"} valueColor={u.website_url ? BRAND : undefined} />
+              <LookupRow label="Phone" value={u.phone_number || "\u2014"} />
+              <LookupRow label="Joined" value={u.created_at ? new Date(u.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "\u2014"} />
+              <LookupRow label="Date of Birth" value={u.date_of_birth || "\u2014"} />
+            </View>
+
+            <View style={[styles.lookupCard, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Rank & Economy</Text>
+              <LookupRow label="Grade" value={gradeMap[u.current_grade] || "Explorer"} valueColor={GOLD} />
+              <LookupRow label="Level" value={u.level.toString()} />
+              <LookupRow label="Nexa (XP)" value={(u.xp || 0).toLocaleString()} valueColor={BRAND} />
+              <LookupRow label="ACoin" value={(u.acoin || 0).toLocaleString()} valueColor={GOLD} />
+              <LookupRow label="Membership" value={u.subscription ? ((u.subscription as any).subscription_plans?.name || "Premium") : "Standard"} valueColor={u.subscription ? GOLD : undefined} />
+              {u.subscription ? <LookupRow label="Plan Tier" value={(u.subscription as any).subscription_plans?.tier || "\u2014"} /> : null}
+              <LookupRow label="Tipping" value={u.tipping_enabled ? "Enabled" : "Disabled"} valueColor={u.tipping_enabled ? "#10B981" : "#FF3B30"} />
+            </View>
+
+            <View style={[styles.lookupCard, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Activity</Text>
+              <LookupRow label="Posts" value={u.posts.toLocaleString()} />
+              <LookupRow label="Nexa Transfers Sent" value={u.nexaSent.toLocaleString()} />
+              <LookupRow label="Nexa Transfers Received" value={u.nexaReceived.toLocaleString()} />
+              <LookupRow label="ACoin Transactions" value={u.acoinTxCount.toLocaleString()} />
+              <LookupRow label="Gifts Sent" value={u.giftsSent.toLocaleString()} />
+              <LookupRow label="Gifts Received" value={u.giftsReceived.toLocaleString()} />
+              <LookupRow label="Red Envelopes Sent" value={u.redSent.toLocaleString()} />
+              <LookupRow label="Red Envelopes Claimed" value={u.redReceived.toLocaleString()} />
+            </View>
+
+            <View style={[styles.lookupCard, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Account Status</Text>
+              <LookupRow label="Verified" value={u.is_verified ? "Yes" : "No"} valueColor={u.is_verified ? "#10B981" : "#FF3B30"} />
+              <LookupRow label="Org Verified" value={u.is_organization_verified ? "Yes" : "No"} valueColor={u.is_organization_verified ? GOLD : colors.textMuted} />
+              <LookupRow label="Admin" value={u.is_admin ? "Yes" : "No"} valueColor={u.is_admin ? BRAND : colors.textMuted} />
+              <LookupRow label="Private" value={u.is_private ? "Yes" : "No"} />
+              <LookupRow label="Online Status" value={u.show_online_status ? "Visible" : "Hidden"} />
+              <LookupRow label="Onboarding" value={u.onboarding_completed ? "Completed" : "Incomplete"} valueColor={u.onboarding_completed ? "#10B981" : "#FF9500"} />
+              <LookupRow label="Deletion Scheduled" value={u.scheduled_deletion_at ? new Date(u.scheduled_deletion_at).toLocaleDateString() : "No"} valueColor={u.scheduled_deletion_at ? "#FF3B30" : "#10B981"} />
+            </View>
+
+            {u.interests && u.interests.length > 0 && (
+              <View style={[styles.lookupCard, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Interests</Text>
+                <View style={styles.lookupInterests}>
+                  {u.interests.map((interest: string, i: number) => (
+                    <View key={i} style={[styles.lookupInterestChip, { backgroundColor: BRAND + "15" }]}>
+                      <Text style={{ color: BRAND, fontSize: 12, fontFamily: "Inter_500Medium" }}>{interest}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+          </View>
+        ) : null}
+      </View>
+    );
   }
 
   function renderOverview() {
@@ -603,6 +855,7 @@ export default function AdminDashboard() {
 
   const tabContent: Record<string, () => React.ReactNode> = {
     overview: renderOverview,
+    lookup: renderLookup,
     users: renderUsers,
     content: renderContent,
     referrals: renderReferrals,
@@ -785,4 +1038,17 @@ const styles = StyleSheet.create({
   modalBtnRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   modalBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
   closeBtn: { alignItems: "center", paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
+  lookupBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: "#00C2CB", alignItems: "center", justifyContent: "center" },
+  lookupErrorBox: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 10, marginTop: 8 },
+  lookupProfileHeader: { flexDirection: "row", alignItems: "center", padding: 14, borderRadius: 14, gap: 12 },
+  lookupAvatar: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
+  lookupQuickStats: { flexDirection: "row", gap: 8 },
+  lookupQuickStat: { flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: "center", gap: 4 },
+  lookupCard: { borderRadius: 14, padding: 16, gap: 0 },
+  lookupCardTitle: { fontSize: 15, fontFamily: "Inter_700Bold", marginBottom: 8 },
+  lookupRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  lookupLabel: { fontSize: 13, fontFamily: "Inter_400Regular", flex: 1 },
+  lookupValue: { fontSize: 13, fontFamily: "Inter_600SemiBold", textAlign: "right", maxWidth: "55%" },
+  lookupInterests: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingTop: 4 },
+  lookupInterestChip: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16 },
 });

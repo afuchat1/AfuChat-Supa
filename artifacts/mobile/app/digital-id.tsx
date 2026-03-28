@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Dimensions,
   Image,
   ScrollView,
@@ -37,24 +36,6 @@ const { width: SCREEN_W } = Dimensions.get("window");
 const CARD_W = Math.min(SCREEN_W - 48, 380);
 const CARD_H = CARD_W * 0.6;
 
-type UserStats = {
-  followers: number;
-  following: number;
-  posts: number;
-  giftsSent: number;
-  giftsReceived: number;
-  nexaSent: number;
-  nexaReceived: number;
-  nexaTotalSent: number;
-  nexaTotalReceived: number;
-  acoinTransactions: number;
-  totalAcoinSpent: number;
-  totalAcoinEarned: number;
-  redEnvelopesSent: number;
-  redEnvelopesReceived: number;
-  daysOnPlatform: number;
-};
-
 function toAfuId(uuid: string): string {
   const hex = uuid.replace(/-/g, "").slice(0, 8);
   const num = parseInt(hex, 16) % 100000000;
@@ -63,6 +44,44 @@ function toAfuId(uuid: string): string {
 
 function formatAfuId(id: string): string {
   return `${id.slice(0, 4)} ${id.slice(4)}`;
+}
+
+function encodeCardPayload(profile: any, isPremium: boolean, stats: any): string {
+  const payload = {
+    v: 1,
+    t: "afuchat_id",
+    id: profile?.id || "",
+    afu_id: toAfuId(profile?.id || "00000000"),
+    handle: profile?.handle || "",
+    name: profile?.display_name || "",
+    bio: profile?.bio || "",
+    country: profile?.country || "",
+    region: profile?.region || "",
+    gender: profile?.gender || "",
+    lang: profile?.language || "",
+    website: profile?.website_url || "",
+    verified: profile?.is_verified || false,
+    premium: isPremium,
+    grade: profile?.current_grade || "explorer",
+    xp: profile?.xp || 0,
+    acoin: profile?.acoin || 0,
+    level: Math.floor(Math.sqrt((profile?.xp || 0) / 100)) + 1,
+    joined: profile?.created_at || "",
+    interests: profile?.interests || [],
+    tipping: profile?.tipping_enabled || false,
+    stats: stats || {},
+  };
+  const json = JSON.stringify(payload);
+  let encoded = "";
+  try {
+    const bytes = new TextEncoder().encode(json);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    encoded = btoa(binary);
+  } catch {
+    encoded = btoa(unescape(encodeURIComponent(json)));
+  }
+  return `afuchat://id/${encoded}`;
 }
 
 function GradeInfo(grade: string): { label: string; colors: [string, string]; icon: string; textColor: string } {
@@ -198,15 +217,14 @@ function CardFront({ profile, grade, isPremium }: { profile: any; grade: ReturnT
   );
 }
 
-function CardBack({ profile, grade, isPremium }: { profile: any; grade: ReturnType<typeof GradeInfo>; isPremium: boolean }) {
+function CardBack({ profile, grade, isPremium, qrValue }: { profile: any; grade: ReturnType<typeof GradeInfo>; isPremium: boolean; qrValue: string }) {
   const xp = profile?.xp || 0;
   const level = Math.floor(Math.sqrt(xp / 100)) + 1;
   const acoin = profile?.acoin || 0;
   const afuId = formatAfuId(toAfuId(profile?.id || "00000000"));
   const handle = profile?.handle || "user";
-  const qrValue = `afuchat://user/${handle}`;
 
-  const stats = [
+  const cardStats = [
     { label: "NEXA", value: xp.toLocaleString(), icon: "flash" as const, color: Colors.brand },
     { label: "LEVEL", value: level.toString(), icon: "trending-up" as const, color: "#FF9500" },
     { label: "ACOIN", value: acoin.toLocaleString(), icon: "diamond" as const, color: Colors.gold },
@@ -235,7 +253,7 @@ function CardBack({ profile, grade, isPremium }: { profile: any; grade: ReturnTy
         </View>
 
         <View style={styles.statsRow}>
-          {stats.map((s) => (
+          {cardStats.map((s) => (
             <View key={s.label} style={styles.statBox}>
               <Ionicons name={s.icon} size={14} color={s.color} style={{ marginBottom: 4 }} />
               <Text style={styles.statValue}>{s.value}</Text>
@@ -251,7 +269,7 @@ function CardBack({ profile, grade, isPremium }: { profile: any; grade: ReturnTy
           <View style={styles.backBottomInfo}>
             <Text style={styles.idLabel}>AFU ID</Text>
             <Text style={[styles.idNumber, { fontSize: 14, letterSpacing: 2 }]}>{afuId}</Text>
-            <Text style={[styles.idLabel, { marginTop: 6 }]}>SCAN TO ADD</Text>
+            <Text style={[styles.idLabel, { marginTop: 6 }]}>SCAN TO VERIFY</Text>
             <Text style={[styles.idNumber, { color: Colors.brand }]}>@{handle}</Text>
           </View>
         </View>
@@ -260,46 +278,12 @@ function CardBack({ profile, grade, isPremium }: { profile: any; grade: ReturnTy
   );
 }
 
-function InfoRow({ icon, label, value, valueColor, borderColor, labelColor, defaultValueColor }: { icon: string; label: string; value: string; valueColor?: string; borderColor: string; labelColor: string; defaultValueColor: string }) {
-  return (
-    <View style={[styles.infoRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: borderColor }]}>
-      <View style={styles.infoIcon}>
-        <Ionicons name={icon as any} size={16} color={Colors.brand} />
-      </View>
-      <Text style={[styles.infoLabel, { color: labelColor }]}>{label}</Text>
-      <Text style={[styles.infoValue, { color: valueColor || defaultValueColor }]}>{value}</Text>
-    </View>
-  );
-}
-
-function StatTile({ icon, label, value, color, colors }: { icon: string; label: string; value: string; color: string; colors: any }) {
-  return (
-    <View style={[styles.statTile, { backgroundColor: colors.inputBg }]}>
-      <View style={[styles.statTileIcon, { backgroundColor: color + "18" }]}>
-        <Ionicons name={icon as any} size={18} color={color} />
-      </View>
-      <Text style={[styles.statTileValue, { color: colors.text }]}>{value}</Text>
-      <Text style={[styles.statTileLabel, { color: colors.textMuted }]}>{label}</Text>
-    </View>
-  );
-}
-
-function SectionHeader({ title, icon, colors }: { title: string; icon: string; colors: any }) {
-  return (
-    <View style={styles.sectionHeader}>
-      <Ionicons name={icon as any} size={18} color={Colors.brand} />
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>{title}</Text>
-    </View>
-  );
-}
-
 export default function DigitalIdScreen() {
-  const { user, profile, isPremium, subscription } = useAuth();
+  const { user, profile, isPremium } = useAuth();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const grade = GradeInfo(profile?.current_grade || "explorer");
-  const [stats, setStats] = useState<UserStats | null>(null);
-  const [loadingStats, setLoadingStats] = useState(true);
+  const [qrPayload, setQrPayload] = useState(`afuchat://user/${profile?.handle || "user"}`);
 
   const flipProgress = useSharedValue(0);
   const isFlipped = useRef(false);
@@ -317,10 +301,7 @@ export default function DigitalIdScreen() {
   }, []);
 
   useEffect(() => {
-    if (!user) {
-      setLoadingStats(false);
-      return;
-    }
+    if (!user) return;
     let cancelled = false;
     (async () => {
       try {
@@ -332,53 +313,40 @@ export default function DigitalIdScreen() {
           supabase.from("gift_transactions").select("id", { count: "exact", head: true }).eq("receiver_id", user.id),
           supabase.from("xp_transfers").select("id", { count: "exact", head: true }).eq("sender_id", user.id),
           supabase.from("xp_transfers").select("id", { count: "exact", head: true }).eq("receiver_id", user.id),
-          supabase.from("xp_transfers").select("amount").eq("sender_id", user.id),
-          supabase.from("xp_transfers").select("amount").eq("receiver_id", user.id),
           supabase.from("acoin_transactions").select("id", { count: "exact", head: true }).eq("user_id", user.id),
-          supabase.from("acoin_transactions").select("amount").eq("user_id", user.id).lt("amount", 0),
-          supabase.from("acoin_transactions").select("amount").eq("user_id", user.id).gt("amount", 0),
           supabase.from("red_envelopes").select("id", { count: "exact", head: true }).eq("sender_id", user.id),
           supabase.from("red_envelope_claims").select("id", { count: "exact", head: true }).eq("user_id", user.id),
         ]);
 
         if (cancelled) return;
 
-        const safeCount = (r: { count: number | null; error: any }) => (r.error ? 0 : r.count || 0);
-        const safeData = (r: { data: any[] | null; error: any }) => (r.error ? [] : r.data || []);
-
-        const totalNexaSent = safeData(results[7]).reduce((s: number, r: { amount?: number }) => s + (r.amount || 0), 0);
-        const totalNexaReceived = safeData(results[8]).reduce((s: number, r: { amount?: number }) => s + (r.amount || 0), 0);
-        const totalAcoinSpent = Math.abs(safeData(results[10]).reduce((s: number, r: { amount?: number }) => s + (r.amount || 0), 0));
-        const totalAcoinEarned = safeData(results[11]).reduce((s: number, r: { amount?: number }) => s + (r.amount || 0), 0);
+        const sc = (r: { count: number | null; error: any }) => (r.error ? 0 : r.count || 0);
 
         const createdAt = profile?.created_at ? new Date(profile.created_at) : new Date();
         const daysOnPlatform = Math.max(1, Math.floor((Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24)));
 
-        setStats({
-          followers: safeCount(results[0]),
-          following: safeCount(results[1]),
-          posts: safeCount(results[2]),
-          giftsSent: safeCount(results[3]),
-          giftsReceived: safeCount(results[4]),
-          nexaSent: safeCount(results[5]),
-          nexaReceived: safeCount(results[6]),
-          nexaTotalSent: totalNexaSent,
-          nexaTotalReceived: totalNexaReceived,
-          acoinTransactions: safeCount(results[9]),
-          totalAcoinSpent: totalAcoinSpent,
-          totalAcoinEarned: totalAcoinEarned,
-          redEnvelopesSent: safeCount(results[12]),
-          redEnvelopesReceived: safeCount(results[13]),
-          daysOnPlatform,
-        });
+        const statsObj = {
+          followers: sc(results[0]),
+          following: sc(results[1]),
+          posts: sc(results[2]),
+          gifts_sent: sc(results[3]),
+          gifts_recv: sc(results[4]),
+          nexa_sent: sc(results[5]),
+          nexa_recv: sc(results[6]),
+          acoin_tx: sc(results[7]),
+          envelopes_sent: sc(results[8]),
+          envelopes_recv: sc(results[9]),
+          days: daysOnPlatform,
+        };
+
+        const encoded = encodeCardPayload(profile, isPremium, statsObj);
+        setQrPayload(encoded);
       } catch (e) {
-        console.warn("Failed to load stats:", e);
-      } finally {
-        if (!cancelled) setLoadingStats(false);
+        console.warn("Failed to build QR payload:", e);
       }
     })();
     return () => { cancelled = true; };
-  }, [user, profile?.created_at]);
+  }, [user, profile]);
 
   function flip() {
     isFlipped.current = !isFlipped.current;
@@ -406,15 +374,9 @@ export default function DigitalIdScreen() {
 
   const handleShare = useCallback(async () => {
     try {
-      await Share.share({ message: `Check out my AfuChat Digital ID! I'm @${profile?.handle} on AfuChat` });
+      await Share.share({ message: `Check out my AfuChat Digital ID! I'm @${profile?.handle} on AfuChat. Afu ID: ${formatAfuId(toAfuId(profile?.id || "00000000"))}` });
     } catch {}
   }, [profile]);
-
-  const xp = profile?.xp || 0;
-  const level = Math.floor(Math.sqrt(xp / 100)) + 1;
-  const joinDate = profile?.created_at ? new Date(profile.created_at) : null;
-  const joinStr = joinDate ? joinDate.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "\u2014";
-  const bdr = isDark ? "#1E2D3D" : colors.border;
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -428,7 +390,7 @@ export default function DigitalIdScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 32 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 32, flexGrow: 1, justifyContent: "center" }} showsVerticalScrollIndicator={false}>
         <View style={styles.cardContainer}>
           <Animated.View style={[styles.glowRing, glowStyle, { borderColor: grade.colors[0], shadowColor: grade.colors[0] }]} pointerEvents="none" />
           <TouchableOpacity onPress={flip} activeOpacity={1} style={{ width: CARD_W, height: CARD_H }}>
@@ -436,7 +398,7 @@ export default function DigitalIdScreen() {
               <CardFront profile={profile} grade={grade} isPremium={isPremium} />
             </Animated.View>
             <Animated.View style={[styles.card, backStyle, { width: CARD_W, height: CARD_H, position: "absolute", top: 0 }]}>
-              <CardBack profile={profile} grade={grade} isPremium={isPremium} />
+              <CardBack profile={profile} grade={grade} isPremium={isPremium} qrValue={qrPayload} />
             </Animated.View>
           </TouchableOpacity>
           <View style={styles.tapHintRow}>
@@ -445,113 +407,26 @@ export default function DigitalIdScreen() {
           </View>
         </View>
 
-        {loadingStats ? (
-          <ActivityIndicator size="small" color={Colors.brand} style={{ marginTop: 20 }} />
-        ) : stats && (
-          <>
-            <View style={styles.quickStatsRow}>
-              <View style={[styles.quickStat, { backgroundColor: isDark ? "#111827" : colors.surface, borderColor: bdr, borderWidth: isDark ? 0 : StyleSheet.hairlineWidth }]}>
-                <Text style={[styles.quickStatValue, { color: colors.text }]}>{stats.followers.toLocaleString()}</Text>
-                <Text style={[styles.quickStatLabel, { color: colors.textMuted }]}>Followers</Text>
-              </View>
-              <View style={[styles.quickStat, { backgroundColor: isDark ? "#111827" : colors.surface, borderColor: bdr, borderWidth: isDark ? 0 : StyleSheet.hairlineWidth }]}>
-                <Text style={[styles.quickStatValue, { color: colors.text }]}>{stats.following.toLocaleString()}</Text>
-                <Text style={[styles.quickStatLabel, { color: colors.textMuted }]}>Following</Text>
-              </View>
-              <View style={[styles.quickStat, { backgroundColor: isDark ? "#111827" : colors.surface, borderColor: bdr, borderWidth: isDark ? 0 : StyleSheet.hairlineWidth }]}>
-                <Text style={[styles.quickStatValue, { color: colors.text }]}>{stats.posts.toLocaleString()}</Text>
-                <Text style={[styles.quickStatLabel, { color: colors.textMuted }]}>Posts</Text>
-              </View>
-              <View style={[styles.quickStat, { backgroundColor: isDark ? "#111827" : colors.surface, borderColor: bdr, borderWidth: isDark ? 0 : StyleSheet.hairlineWidth }]}>
-                <Text style={[styles.quickStatValue, { color: colors.text }]}>{stats.daysOnPlatform.toLocaleString()}</Text>
-                <Text style={[styles.quickStatLabel, { color: colors.textMuted }]}>Days</Text>
-              </View>
+        <View style={styles.infoFooter}>
+          <View style={[styles.securityCard, { backgroundColor: isDark ? "#0D1B2A" : `${Colors.brand}08`, borderColor: isDark ? "#1A3040" : `${Colors.brand}20`, borderWidth: 1 }]}>
+            <Ionicons name="qr-code-outline" size={18} color={Colors.brand} />
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={[styles.securityTitle, { color: colors.text }]}>Encoded Identity</Text>
+              <Text style={[styles.securitySub, { color: colors.textMuted }]}>Your full profile data is encoded in the QR code. Only visible when scanned by an authorized device.</Text>
             </View>
+          </View>
 
-            <View style={styles.infoSection}>
-              <SectionHeader title="Identity" icon="person-circle-outline" colors={colors} />
-              <View style={[styles.infoCard, { backgroundColor: isDark ? "#111827" : colors.surface, borderColor: bdr, borderWidth: isDark ? 0 : StyleSheet.hairlineWidth }]}>
-                <InfoRow icon="person-outline" label="Name" value={profile?.display_name || "\u2014"} borderColor={bdr} labelColor={colors.textSecondary} defaultValueColor={colors.text} />
-                <InfoRow icon="at-outline" label="Handle" value={`@${profile?.handle || "\u2014"}`} valueColor={Colors.brand} borderColor={bdr} labelColor={colors.textSecondary} defaultValueColor={colors.text} />
-                <InfoRow icon="finger-print-outline" label="Afu ID" value={formatAfuId(toAfuId(profile?.id || "00000000"))} borderColor={bdr} labelColor={colors.textSecondary} defaultValueColor={colors.text} />
-                <InfoRow icon="calendar-outline" label="Joined" value={joinStr} borderColor={bdr} labelColor={colors.textSecondary} defaultValueColor={colors.text} />
-                {profile?.bio ? <InfoRow icon="document-text-outline" label="Bio" value={profile.bio} borderColor={bdr} labelColor={colors.textSecondary} defaultValueColor={colors.text} /> : null}
-                {profile?.country ? <InfoRow icon="globe-outline" label="Country" value={profile.country} borderColor={bdr} labelColor={colors.textSecondary} defaultValueColor={colors.text} /> : null}
-                {profile?.region ? <InfoRow icon="location-outline" label="Region" value={profile.region} borderColor={bdr} labelColor={colors.textSecondary} defaultValueColor={colors.text} /> : null}
-                {profile?.gender ? <InfoRow icon="male-female-outline" label="Gender" value={profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1)} borderColor={bdr} labelColor={colors.textSecondary} defaultValueColor={colors.text} /> : null}
-                {profile?.language ? <InfoRow icon="language-outline" label="Language" value={profile.language.toUpperCase()} borderColor={bdr} labelColor={colors.textSecondary} defaultValueColor={colors.text} /> : null}
-                {profile?.website_url ? <InfoRow icon="link-outline" label="Website" value={profile.website_url} valueColor={Colors.brand} borderColor={bdr} labelColor={colors.textSecondary} defaultValueColor={colors.text} /> : null}
-                <InfoRow icon="shield-checkmark-outline" label="Verified" value={profile?.is_verified ? "Yes" : "No"} valueColor={profile?.is_verified ? "#34C759" : colors.textMuted} borderColor="transparent" labelColor={colors.textSecondary} defaultValueColor={colors.text} />
-              </View>
+          <View style={[styles.idChip, { backgroundColor: isDark ? "#111827" : colors.surface, borderColor: isDark ? "#1E2D3D" : colors.border, borderWidth: isDark ? 0 : StyleSheet.hairlineWidth }]}>
+            <Ionicons name="finger-print" size={20} color={Colors.brand} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.idChipLabel, { color: colors.textMuted }]}>Your Afu ID</Text>
+              <Text style={[styles.idChipValue, { color: colors.text }]}>{formatAfuId(toAfuId(profile?.id || "00000000"))}</Text>
             </View>
-
-            <View style={styles.infoSection}>
-              <SectionHeader title="Rank & Membership" icon="trophy-outline" colors={colors} />
-              <View style={[styles.infoCard, { backgroundColor: isDark ? "#111827" : colors.surface, borderColor: bdr, borderWidth: isDark ? 0 : StyleSheet.hairlineWidth }]}>
-                <InfoRow icon="trophy-outline" label="Grade" value={grade.label} valueColor={grade.textColor} borderColor={bdr} labelColor={colors.textSecondary} defaultValueColor={colors.text} />
-                <InfoRow icon="trending-up-outline" label="Level" value={level.toString()} borderColor={bdr} labelColor={colors.textSecondary} defaultValueColor={colors.text} />
-                <InfoRow icon="flash-outline" label="Total Nexa (XP)" value={xp.toLocaleString()} valueColor={Colors.brand} borderColor={bdr} labelColor={colors.textSecondary} defaultValueColor={colors.text} />
-                <InfoRow icon="diamond-outline" label="ACoin Balance" value={(profile?.acoin || 0).toLocaleString()} valueColor={Colors.gold} borderColor={bdr} labelColor={colors.textSecondary} defaultValueColor={colors.text} />
-                {isPremium ? (
-                  <InfoRow icon="diamond" label="Membership" value={subscription?.plan_name || "Premium"} valueColor={Colors.gold} borderColor={bdr} labelColor={colors.textSecondary} defaultValueColor={colors.text} />
-                ) : (
-                  <InfoRow icon="shield-outline" label="Membership" value="Standard" borderColor={bdr} labelColor={colors.textSecondary} defaultValueColor={colors.text} />
-                )}
-                {isPremium && subscription?.expires_at ? (
-                  <InfoRow icon="time-outline" label="Premium Until" value={new Date(subscription.expires_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })} borderColor="transparent" labelColor={colors.textSecondary} defaultValueColor={colors.text} />
-                ) : null}
-                {!isPremium ? (
-                  <InfoRow icon="time-outline" label="Days Active" value={stats.daysOnPlatform.toLocaleString()} borderColor="transparent" labelColor={colors.textSecondary} defaultValueColor={colors.text} />
-                ) : null}
-              </View>
-            </View>
-
-            <View style={styles.infoSection}>
-              <SectionHeader title="Activity & Transfers" icon="analytics-outline" colors={colors} />
-              <View style={styles.statTileGrid}>
-                <StatTile icon="arrow-up-circle" label="Nexa Sent" value={stats.nexaTotalSent.toLocaleString()} color="#FF3B30" colors={colors} />
-                <StatTile icon="arrow-down-circle" label="Nexa Received" value={stats.nexaTotalReceived.toLocaleString()} color="#34C759" colors={colors} />
-                <StatTile icon="swap-horizontal" label="Transfers Out" value={stats.nexaSent.toLocaleString()} color="#FF9500" colors={colors} />
-                <StatTile icon="swap-vertical" label="Transfers In" value={stats.nexaReceived.toLocaleString()} color={Colors.brand} colors={colors} />
-                <StatTile icon="diamond-outline" label="ACoin Spent" value={stats.totalAcoinSpent.toLocaleString()} color={Colors.gold} colors={colors} />
-                <StatTile icon="diamond" label="ACoin Earned" value={stats.totalAcoinEarned.toLocaleString()} color="#34C759" colors={colors} />
-              </View>
-            </View>
-
-            <View style={styles.infoSection}>
-              <SectionHeader title="Gifts & Red Envelopes" icon="gift-outline" colors={colors} />
-              <View style={styles.statTileGrid}>
-                <StatTile icon="gift" label="Gifts Sent" value={stats.giftsSent.toLocaleString()} color="#FF3B30" colors={colors} />
-                <StatTile icon="gift-outline" label="Gifts Received" value={stats.giftsReceived.toLocaleString()} color="#AF52DE" colors={colors} />
-                <StatTile icon="mail" label="Envelopes Sent" value={stats.redEnvelopesSent.toLocaleString()} color="#FF3B30" colors={colors} />
-                <StatTile icon="mail-open" label="Envelopes Claimed" value={stats.redEnvelopesReceived.toLocaleString()} color="#FF9500" colors={colors} />
-              </View>
-            </View>
-
-            {profile?.interests && profile.interests.length > 0 && (
-              <View style={styles.infoSection}>
-                <SectionHeader title="Interests" icon="heart-outline" colors={colors} />
-                <View style={styles.interestRow}>
-                  {profile.interests.map((interest: string, i: number) => (
-                    <View key={i} style={[styles.interestChip, { backgroundColor: isDark ? "#111827" : colors.surface, borderColor: bdr, borderWidth: isDark ? 0 : StyleSheet.hairlineWidth }]}>
-                      <Text style={[styles.interestText, { color: colors.text }]}>{interest}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            <View style={styles.infoSection}>
-              <View style={[styles.securityCard, { backgroundColor: isDark ? "#0D1B2A" : `${Colors.brand}08`, borderColor: isDark ? "#1A3040" : `${Colors.brand}20`, borderWidth: 1 }]}>
-                <Ionicons name="shield-checkmark" size={18} color={Colors.brand} />
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={[styles.securityTitle, { color: colors.text }]}>Verified Identity</Text>
-                  <Text style={[styles.securitySub, { color: colors.textMuted }]}>This Digital ID is securely linked to your AfuChat account and reflects your complete activity since joining.</Text>
-                </View>
-              </View>
-            </View>
-          </>
-        )}
+            <TouchableOpacity onPress={handleShare}>
+              <Ionicons name="copy-outline" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        </View>
       </ScrollView>
     </View>
   );
@@ -607,27 +482,11 @@ const styles = StyleSheet.create({
   backBottomInfo: {},
   tapHintRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 14 },
   tapHint: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  quickStatsRow: { flexDirection: "row", paddingHorizontal: 24, gap: 8, marginBottom: 8 },
-  quickStat: { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: "center" },
-  quickStatValue: { fontSize: 20, fontFamily: "Inter_700Bold" },
-  quickStatLabel: { fontSize: 10, fontFamily: "Inter_500Medium", marginTop: 2 },
-  infoSection: { paddingHorizontal: 24, marginTop: 16 },
-  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
-  sectionTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  infoCard: { borderRadius: 16, overflow: "hidden" },
-  infoRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, gap: 12 },
-  infoIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: `${Colors.brand}12`, alignItems: "center", justifyContent: "center" },
-  infoLabel: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular" },
-  infoValue: { fontSize: 13, fontFamily: "Inter_600SemiBold", maxWidth: "50%", textAlign: "right" },
-  statTileGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 2 },
-  statTile: { width: (SCREEN_W - 48 - 10) / 2 - 1, borderRadius: 14, padding: 14, alignItems: "center", gap: 6 },
-  statTileIcon: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  statTileValue: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  statTileLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  interestRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  interestChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20 },
-  interestText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  infoFooter: { paddingHorizontal: 24, gap: 12, marginTop: 8 },
   securityCard: { flexDirection: "row", alignItems: "center", borderRadius: 14, padding: 14 },
   securityTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   securitySub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
+  idChip: { flexDirection: "row", alignItems: "center", borderRadius: 14, padding: 14, gap: 12 },
+  idChipLabel: { fontSize: 10, fontFamily: "Inter_400Regular" },
+  idChipValue: { fontSize: 18, fontFamily: "Inter_700Bold", letterSpacing: 3 },
 });
