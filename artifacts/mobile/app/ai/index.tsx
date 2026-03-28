@@ -717,8 +717,8 @@ When suggesting actions, include ACTION buttons in your response using the forma
         const { data: acoinRecipient } = await supabase.from("profiles").select("id, display_name").eq("handle", handle.toLowerCase()).single();
         if (!acoinRecipient) return { success: false, message: `User @${handle} not found` };
         if ((acoinRecipient as { id: string }).id === user.id) return { success: false, message: "Cannot send to yourself" };
-        const { data: deductedAcoin, error: deductAcoinErr } = await supabase.from("profiles").update({ acoin: (live.acoin || 0) - acoinAmt }).eq("id", user.id).gte("acoin", acoinAmt).select("id").maybeSingle();
-        if (deductAcoinErr || !deductedAcoin) return { success: false, message: "Could not deduct ACoin — balance may have changed" };
+        const { error: deductAcoinErr } = await supabase.rpc("deduct_acoin", { p_user_id: user.id, p_amount: acoinAmt }).maybeSingle();
+        if (deductAcoinErr) return { success: false, message: "Could not deduct ACoin — balance may have changed" };
         const { error: creditErr } = await supabase.rpc("credit_acoin", { p_user_id: (acoinRecipient as { id: string }).id, p_amount: acoinAmt });
         if (creditErr) {
           await supabase.rpc("credit_acoin", { p_user_id: user.id, p_amount: acoinAmt });
