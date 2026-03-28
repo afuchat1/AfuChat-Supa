@@ -167,6 +167,12 @@ The app connects to Supabase using the following variables (already configured i
 
 ---
 
+## Contributing
+
+We welcome contributions! Please read our [Contributing Guidelines](./CONTRIBUTING.md) for details on the process, coding standards, branch naming, and pull request expectations.
+
+---
+
 ## License
 
 [MIT](./LICENSE) © 2024 AfuChat Technologies Ltd
