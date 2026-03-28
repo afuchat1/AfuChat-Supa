@@ -25,7 +25,6 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import QRCode from "react-native-qrcode-svg";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
@@ -46,51 +45,8 @@ function formatAfuId(id: string): string {
   return `${id.slice(0, 4)} ${id.slice(4)}`;
 }
 
-function b64encode(obj: any): string {
-  const json = JSON.stringify(obj);
-  try {
-    const bytes = new TextEncoder().encode(json);
-    let binary = "";
-    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-    return btoa(binary);
-  } catch {
-    return btoa(unescape(encodeURIComponent(json)));
-  }
-}
-
-function encodeCardPayload(profile: any, isPremium: boolean, stats: any): string {
-  const pub = {
-    v: 1,
-    t: "afuchat_id",
-    afu_id: toAfuId(profile?.id || "00000000"),
-    handle: profile?.handle || "",
-    name: profile?.display_name || "",
-    avatar: profile?.avatar_url || "",
-    bio: profile?.bio || "",
-    country: profile?.country || "",
-    region: profile?.region || "",
-    verified: profile?.is_verified || false,
-    premium: isPremium,
-    grade: profile?.current_grade || "explorer",
-    level: Math.floor(Math.sqrt((profile?.xp || 0) / 100)) + 1,
-    joined: profile?.created_at || "",
-  };
-  const adm = {
-    id: profile?.id || "",
-    gender: profile?.gender || "",
-    lang: profile?.language || "",
-    website: profile?.website_url || "",
-    xp: profile?.xp || 0,
-    acoin: profile?.acoin || 0,
-    interests: profile?.interests || [],
-    tipping: profile?.tipping_enabled || false,
-    private: profile?.is_private || false,
-    org_verified: profile?.is_organization_verified || false,
-    is_admin: profile?.is_admin || false,
-    stats: stats || {},
-  };
-  const payload = { ...pub, _a: b64encode(adm) };
-  return `afuchat://id/${b64encode(payload)}`;
+function buildQrValue(uuid: string): string {
+  return `afuchat://id/${toAfuId(uuid)}`;
 }
 
 function GradeInfo(grade: string): { label: string; colors: [string, string]; icon: string; textColor: string } {
@@ -298,7 +254,7 @@ export default function DigitalIdScreen() {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const grade = GradeInfo(profile?.current_grade || "explorer");
-  const [qrPayload, setQrPayload] = useState(`afuchat://user/${profile?.handle || "user"}`);
+  const [qrPayload, setQrPayload] = useState(user?.id ? buildQrValue(user.id) : `afuchat://id/00000000`);
 
   const flipProgress = useSharedValue(0);
   const isFlipped = useRef(false);
@@ -316,52 +272,10 @@ export default function DigitalIdScreen() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const results = await Promise.all([
-          supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", user.id),
-          supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", user.id),
-          supabase.from("posts").select("id", { count: "exact", head: true }).eq("author_id", user.id),
-          supabase.from("gift_transactions").select("id", { count: "exact", head: true }).eq("sender_id", user.id),
-          supabase.from("gift_transactions").select("id", { count: "exact", head: true }).eq("receiver_id", user.id),
-          supabase.from("xp_transfers").select("id", { count: "exact", head: true }).eq("sender_id", user.id),
-          supabase.from("xp_transfers").select("id", { count: "exact", head: true }).eq("receiver_id", user.id),
-          supabase.from("acoin_transactions").select("id", { count: "exact", head: true }).eq("user_id", user.id),
-          supabase.from("red_envelopes").select("id", { count: "exact", head: true }).eq("sender_id", user.id),
-          supabase.from("red_envelope_claims").select("id", { count: "exact", head: true }).eq("user_id", user.id),
-        ]);
-
-        if (cancelled) return;
-
-        const sc = (r: { count: number | null; error: any }) => (r.error ? 0 : r.count || 0);
-
-        const createdAt = profile?.created_at ? new Date(profile.created_at) : new Date();
-        const daysOnPlatform = Math.max(1, Math.floor((Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24)));
-
-        const statsObj = {
-          followers: sc(results[0]),
-          following: sc(results[1]),
-          posts: sc(results[2]),
-          gifts_sent: sc(results[3]),
-          gifts_recv: sc(results[4]),
-          nexa_sent: sc(results[5]),
-          nexa_recv: sc(results[6]),
-          acoin_tx: sc(results[7]),
-          envelopes_sent: sc(results[8]),
-          envelopes_recv: sc(results[9]),
-          days: daysOnPlatform,
-        };
-
-        const encoded = encodeCardPayload(profile, isPremium, statsObj);
-        setQrPayload(encoded);
-      } catch (e) {
-        console.warn("Failed to build QR payload:", e);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [user, profile]);
+    if (user?.id) {
+      setQrPayload(buildQrValue(user.id));
+    }
+  }, [user]);
 
   function flip() {
     isFlipped.current = !isFlipped.current;

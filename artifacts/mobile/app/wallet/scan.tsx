@@ -29,36 +29,25 @@ import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
-function b64decode(str: string): any {
-  try {
-    const binary = atob(str);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const json = new TextDecoder().decode(bytes);
-    return JSON.parse(json);
-  } catch {
-    try {
-      return JSON.parse(decodeURIComponent(escape(atob(str))));
-    } catch {
-      return null;
-    }
-  }
+function toAfuId(uuid: string): string {
+  const hex = uuid.replace(/-/g, "").slice(0, 8);
+  const num = parseInt(hex, 16) % 100000000;
+  return num.toString().padStart(8, "0");
 }
 
 type ScannedProfile = {
+  userId: string;
   afu_id: string;
   handle: string;
   name: string;
-  avatar: string;
-  bio: string;
-  country: string;
-  region: string;
+  avatar: string | null;
+  bio: string | null;
+  country: string | null;
+  region: string | null;
   verified: boolean;
-  premium: boolean;
+  orgVerified: boolean;
   grade: string;
-  level: number;
-  joined: string;
-  userId?: string;
+  xp: number;
 };
 
 type ActionMode = "pay" | "request";
@@ -75,7 +64,7 @@ export default function ScanScreen() {
   const [amount, setAmount] = useState("");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
-  const [resolvedUserId, setResolvedUserId] = useState<string | null>(null);
+  const [lookingUp, setLookingUp] = useState(false);
   const processedRef = useRef(false);
 
   const scanLineY = useSharedValue(0);
@@ -96,58 +85,70 @@ export default function ScanScreen() {
       if (processedRef.current) return;
       processedRef.current = true;
       setScanned(true);
+      setLookingUp(true);
 
       if (!data.startsWith("afuchat://id/")) {
         showAlert("Invalid QR", "This is not a valid AfuChat ID card.");
         processedRef.current = false;
         setScanned(false);
+        setLookingUp(false);
         return;
       }
 
-      const b64 = data.replace("afuchat://id/", "");
-      const decoded = b64decode(b64);
-      if (!decoded || decoded.t !== "afuchat_id") {
-        showAlert("Invalid QR", "Could not read the card data.");
+      const scannedAfuId = data.replace("afuchat://id/", "").replace(/\s/g, "").padStart(8, "0");
+      if (!/^\d{8}$/.test(scannedAfuId)) {
+        showAlert("Invalid QR", "Invalid AfuChat ID format.");
         processedRef.current = false;
         setScanned(false);
+        setLookingUp(false);
         return;
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      const prof: ScannedProfile = {
-        afu_id: decoded.afu_id || "",
-        handle: decoded.handle || "",
-        name: decoded.name || "",
-        avatar: decoded.avatar || "",
-        bio: decoded.bio || "",
-        country: decoded.country || "",
-        region: decoded.region || "",
-        verified: decoded.verified || false,
-        premium: decoded.premium || false,
-        grade: decoded.grade || "explorer",
-        level: decoded.level || 1,
-        joined: decoded.joined || "",
-      };
-
-      const { data: foundUser } = await supabase
+      const { data: allProfiles } = await supabase
         .from("profiles")
-        .select("id")
-        .eq("handle", prof.handle)
-        .single();
+        .select("id, handle, display_name, avatar_url, bio, country, region, is_verified, is_organization_verified, current_grade, xp");
 
-      if (foundUser) {
-        if (foundUser.id === user?.id) {
-          showAlert("That's You!", "You scanned your own card.");
-          processedRef.current = false;
-          setScanned(false);
-          return;
+      let matchedProfile: any = null;
+      for (const p of allProfiles || []) {
+        if (toAfuId(p.id) === scannedAfuId) {
+          matchedProfile = p;
+          break;
         }
-        setResolvedUserId(foundUser.id);
-        prof.userId = foundUser.id;
       }
 
-      setScannedProfile(prof);
+      if (!matchedProfile) {
+        showAlert("Not Found", "No user found with this AfuChat ID.");
+        processedRef.current = false;
+        setScanned(false);
+        setLookingUp(false);
+        return;
+      }
+
+      if (matchedProfile.id === user?.id) {
+        showAlert("That's You!", "You scanned your own card.");
+        processedRef.current = false;
+        setScanned(false);
+        setLookingUp(false);
+        return;
+      }
+
+      setScannedProfile({
+        userId: matchedProfile.id,
+        afu_id: scannedAfuId,
+        handle: matchedProfile.handle || "",
+        name: matchedProfile.display_name || "",
+        avatar: matchedProfile.avatar_url,
+        bio: matchedProfile.bio,
+        country: matchedProfile.country,
+        region: matchedProfile.region,
+        verified: matchedProfile.is_verified || false,
+        orgVerified: matchedProfile.is_organization_verified || false,
+        grade: matchedProfile.current_grade || "explorer",
+        xp: matchedProfile.xp || 0,
+      });
+      setLookingUp(false);
     },
     [user]
   );
@@ -161,7 +162,6 @@ export default function ScanScreen() {
 
   function resetScanner() {
     setScannedProfile(null);
-    setResolvedUserId(null);
     setScanned(false);
     setShowModal(false);
     setAmount("");
@@ -170,7 +170,7 @@ export default function ScanScreen() {
   }
 
   async function submitPay() {
-    if (!resolvedUserId || !user || !profile || !amount.trim()) return;
+    if (!scannedProfile?.userId || !user || !profile || !amount.trim()) return;
     const amt = parseInt(amount);
     if (isNaN(amt) || amt <= 0) {
       showAlert("Invalid", "Enter a valid amount.");
@@ -202,7 +202,7 @@ export default function ScanScreen() {
             }
 
             const { error: creditErr } = await supabase.rpc("credit_acoin", {
-              p_user_id: resolvedUserId,
+              p_user_id: scannedProfile?.userId,
               p_amount: amt,
             });
             if (creditErr) {
@@ -220,7 +220,7 @@ export default function ScanScreen() {
                 metadata: { to_handle: scannedProfile?.handle, via: "qr_scan", message: message.trim() || null },
               },
               {
-                user_id: resolvedUserId,
+                user_id: scannedProfile?.userId,
                 amount: amt,
                 transaction_type: "acoin_transfer_received",
                 metadata: { from_handle: profile.handle, via: "qr_scan", message: message.trim() || null },
@@ -241,7 +241,7 @@ export default function ScanScreen() {
   }
 
   async function submitRequest() {
-    if (!resolvedUserId || !user || !amount.trim()) return;
+    if (!scannedProfile?.userId || !user || !amount.trim()) return;
     const amt = parseInt(amount);
     if (isNaN(amt) || amt <= 0) {
       showAlert("Invalid", "Enter a valid amount.");
@@ -251,7 +251,7 @@ export default function ScanScreen() {
 
     const { error } = await supabase.from("transaction_requests").insert({
       requester_id: user.id,
-      owner_id: resolvedUserId,
+      owner_id: scannedProfile.userId,
       currency: "acoin",
       amount: amt,
       message: message.trim() || null,
@@ -333,7 +333,16 @@ export default function ScanScreen() {
         </View>
       </View>
 
-      {scannedProfile && !showModal && (
+      {lookingUp && (
+        <View style={styles.resultOverlay}>
+          <View style={[styles.resultCard, { backgroundColor: colors.surface, alignItems: "center", paddingVertical: 40 }]}>
+            <ActivityIndicator size="large" color={Colors.brand} />
+            <Text style={{ color: colors.textSecondary, fontSize: 14, marginTop: 12 }}>Looking up user...</Text>
+          </View>
+        </View>
+      )}
+
+      {scannedProfile && !showModal && !lookingUp && (
         <View style={styles.resultOverlay}>
           <View style={[styles.resultCard, { backgroundColor: colors.surface }]}>
             <View style={styles.resultHeader}>
@@ -347,8 +356,9 @@ export default function ScanScreen() {
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <Text style={[styles.resultName, { color: colors.text }]} numberOfLines={1}>{scannedProfile.name}</Text>
-                  {scannedProfile.verified && <Ionicons name="checkmark-circle" size={16} color={Colors.brand} />}
-                  {scannedProfile.premium && <Ionicons name="diamond" size={14} color={Colors.gold} />}
+                  {scannedProfile.verified && (
+                    <Ionicons name="checkmark-circle" size={16} color={scannedProfile.orgVerified ? Colors.gold : Colors.brand} />
+                  )}
                 </View>
                 <Text style={[styles.resultHandle, { color: colors.textMuted }]}>@{scannedProfile.handle}</Text>
                 {(scannedProfile.region || scannedProfile.country) && (
@@ -362,33 +372,33 @@ export default function ScanScreen() {
               </View>
             </View>
 
+            {scannedProfile.bio ? (
+              <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }} numberOfLines={2}>{scannedProfile.bio}</Text>
+            ) : null}
+
             <View style={[styles.resultIdRow, { backgroundColor: colors.inputBg }]}>
               <Text style={{ color: colors.textMuted, fontSize: 12 }}>AFU ID</Text>
-              <Text style={{ color: colors.text, fontSize: 14, fontFamily: "Inter_600SemiBold" }}>{scannedProfile.afu_id}</Text>
+              <Text style={{ color: colors.text, fontSize: 14, fontFamily: "Inter_600SemiBold" }}>
+                {scannedProfile.afu_id.slice(0, 4)} {scannedProfile.afu_id.slice(4)}
+              </Text>
             </View>
 
-            {resolvedUserId ? (
-              <View style={styles.resultActions}>
-                <TouchableOpacity
-                  style={[styles.resultActionBtn, { backgroundColor: Colors.gold }]}
-                  onPress={() => openAction("pay")}
-                >
-                  <Ionicons name="arrow-up-circle" size={20} color="#fff" />
-                  <Text style={styles.resultActionText}>Pay</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.resultActionBtn, { backgroundColor: Colors.brand }]}
-                  onPress={() => openAction("request")}
-                >
-                  <Ionicons name="arrow-down-circle" size={20} color="#fff" />
-                  <Text style={styles.resultActionText}>Request</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: "center", marginTop: 12 }}>
-                User not found in the system
-              </Text>
-            )}
+            <View style={styles.resultActions}>
+              <TouchableOpacity
+                style={[styles.resultActionBtn, { backgroundColor: Colors.gold }]}
+                onPress={() => openAction("pay")}
+              >
+                <Ionicons name="arrow-up-circle" size={20} color="#fff" />
+                <Text style={styles.resultActionText}>Pay</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.resultActionBtn, { backgroundColor: Colors.brand }]}
+                onPress={() => openAction("request")}
+              >
+                <Ionicons name="arrow-down-circle" size={20} color="#fff" />
+                <Text style={styles.resultActionText}>Request</Text>
+              </TouchableOpacity>
+            </View>
 
             <TouchableOpacity style={styles.scanAgainBtn} onPress={resetScanner}>
               <Ionicons name="scan-outline" size={18} color={Colors.brand} />

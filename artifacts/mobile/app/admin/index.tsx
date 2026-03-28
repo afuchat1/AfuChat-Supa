@@ -380,6 +380,14 @@ export default function AdminDashboard() {
         { count: redSent },
         { count: redReceived },
         { data: subData },
+        { count: postLikeCount },
+        { count: chatCount },
+        { count: messageCount },
+        { data: followersList },
+        { data: followingList },
+        { data: recentPosts },
+        { data: recentChats },
+        { data: likedPosts },
       ] = await Promise.all([
         supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", userId),
         supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", userId),
@@ -392,7 +400,21 @@ export default function AdminDashboard() {
         supabase.from("red_envelopes").select("id", { count: "exact", head: true }).eq("sender_id", userId),
         supabase.from("red_envelope_claims").select("id", { count: "exact", head: true }).eq("user_id", userId),
         supabase.from("user_subscriptions").select("*, subscription_plans(name, tier)").eq("user_id", userId).eq("is_active", true).maybeSingle(),
+        supabase.from("post_likes").select("id", { count: "exact", head: true }).eq("user_id", userId),
+        supabase.from("chats").select("id", { count: "exact", head: true }).or(`user1_id.eq.${userId},user2_id.eq.${userId}`),
+        supabase.from("messages").select("id", { count: "exact", head: true }).eq("sender_id", userId),
+        supabase.from("follows").select("follower_id, profiles!follows_follower_id_fkey(handle, display_name, avatar_url)").eq("following_id", userId).order("created_at", { ascending: false }).limit(50),
+        supabase.from("follows").select("following_id, profiles!follows_following_id_fkey(handle, display_name, avatar_url)").eq("follower_id", userId).order("created_at", { ascending: false }).limit(50),
+        supabase.from("posts").select("id, content, view_count, created_at").eq("author_id", userId).order("created_at", { ascending: false }).limit(20),
+        supabase.from("chats").select("id, created_at, user1_id, user2_id").or(`user1_id.eq.${userId},user2_id.eq.${userId}`).order("created_at", { ascending: false }).limit(20),
+        supabase.from("post_likes").select("post_id, created_at, posts(content, author_id)").eq("user_id", userId).order("created_at", { ascending: false }).limit(20),
       ]);
+
+      let email = "\u2014";
+      try {
+        const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+        if (authUser?.user?.email) email = authUser.user.email;
+      } catch {}
 
       const createdAt = matchedProfile.created_at ? new Date(matchedProfile.created_at) : new Date();
       const daysOnPlatform = Math.max(1, Math.floor((Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24)));
@@ -400,6 +422,7 @@ export default function AdminDashboard() {
 
       setLookupResult({
         ...matchedProfile,
+        email,
         level,
         daysOnPlatform,
         followers: followers || 0,
@@ -413,6 +436,14 @@ export default function AdminDashboard() {
         redSent: redSent || 0,
         redReceived: redReceived || 0,
         subscription: subData,
+        postLikeCount: postLikeCount || 0,
+        chatCount: chatCount || 0,
+        messageCount: messageCount || 0,
+        followersList: followersList || [],
+        followingList: followingList || [],
+        recentPosts: recentPosts || [],
+        recentChats: recentChats || [],
+        likedPosts: likedPosts || [],
       });
     } catch (e) {
       setLookupError("Failed to look up user");
@@ -503,6 +534,7 @@ export default function AdminDashboard() {
               <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Identity</Text>
               <LookupRow label="Afu ID" value={u.afu_id.slice(0, 4) + " " + u.afu_id.slice(4)} />
               <LookupRow label="User UUID" value={u.id} />
+              <LookupRow label="Email" value={u.email || "\u2014"} valueColor={u.email && u.email !== "\u2014" ? BRAND : undefined} />
               <LookupRow label="Name" value={u.display_name || "\u2014"} />
               <LookupRow label="Handle" value={"@" + u.handle} valueColor={BRAND} />
               <LookupRow label="Bio" value={u.bio || "\u2014"} />
@@ -528,8 +560,11 @@ export default function AdminDashboard() {
             </View>
 
             <View style={[styles.lookupCard, { backgroundColor: colors.surface }]}>
-              <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Activity</Text>
-              <LookupRow label="Posts" value={u.posts.toLocaleString()} />
+              <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Activity Summary</Text>
+              <LookupRow label="Posts Created" value={u.posts.toLocaleString()} />
+              <LookupRow label="Posts Liked" value={(u.postLikeCount || 0).toLocaleString()} />
+              <LookupRow label="Chats" value={(u.chatCount || 0).toLocaleString()} />
+              <LookupRow label="Messages Sent" value={(u.messageCount || 0).toLocaleString()} />
               <LookupRow label="Nexa Transfers Sent" value={u.nexaSent.toLocaleString()} />
               <LookupRow label="Nexa Transfers Received" value={u.nexaReceived.toLocaleString()} />
               <LookupRow label="ACoin Transactions" value={u.acoinTxCount.toLocaleString()} />
@@ -538,6 +573,90 @@ export default function AdminDashboard() {
               <LookupRow label="Red Envelopes Sent" value={u.redSent.toLocaleString()} />
               <LookupRow label="Red Envelopes Claimed" value={u.redReceived.toLocaleString()} />
             </View>
+
+            {u.recentPosts && u.recentPosts.length > 0 && (
+              <View style={[styles.lookupCard, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Recent Posts ({u.posts})</Text>
+                {u.recentPosts.map((post: any, i: number) => (
+                  <View key={post.id} style={[styles.lookupListItem, i < u.recentPosts.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+                    <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_400Regular", flex: 1 }} numberOfLines={2}>{post.content || "\u2014"}</Text>
+                    <View style={{ alignItems: "flex-end", gap: 2 }}>
+                      <Text style={{ color: colors.textMuted, fontSize: 10 }}>{timeAgo(post.created_at)}</Text>
+                      <Text style={{ color: colors.textMuted, fontSize: 10 }}>{(post.view_count || 0)} views</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {u.likedPosts && u.likedPosts.length > 0 && (
+              <View style={[styles.lookupCard, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Posts Liked ({u.postLikeCount})</Text>
+                {u.likedPosts.map((like: any, i: number) => (
+                  <View key={like.post_id + i} style={[styles.lookupListItem, i < u.likedPosts.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+                    <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_400Regular", flex: 1 }} numberOfLines={2}>{like.posts?.content || "\u2014"}</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 10 }}>{timeAgo(like.created_at)}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {u.recentChats && u.recentChats.length > 0 && (
+              <View style={[styles.lookupCard, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Chats ({u.chatCount})</Text>
+                {u.recentChats.map((chat: any, i: number) => {
+                  const otherUserId = chat.user1_id === u.id ? chat.user2_id : chat.user1_id;
+                  return (
+                    <View key={chat.id} style={[styles.lookupListItem, i < u.recentChats.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: colors.text, fontSize: 12, fontFamily: "Inter_500Medium" }}>Chat with {otherUserId.slice(0, 8)}...</Text>
+                      </View>
+                      <Text style={{ color: colors.textMuted, fontSize: 10 }}>{timeAgo(chat.created_at)}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {u.followersList && u.followersList.length > 0 && (
+              <View style={[styles.lookupCard, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Followers ({u.followers})</Text>
+                {u.followersList.map((f: any, i: number) => {
+                  const p = f.profiles;
+                  return (
+                    <View key={f.follower_id} style={[styles.lookupListItem, i < u.followersList.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+                      <View style={[styles.lookupListAvatar, { backgroundColor: BRAND + "20" }]}>
+                        <Text style={{ color: BRAND, fontSize: 11, fontFamily: "Inter_600SemiBold" }}>{(p?.display_name || "?")[0].toUpperCase()}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_500Medium" }}>{p?.display_name || "\u2014"}</Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 11 }}>@{p?.handle || "\u2014"}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {u.followingList && u.followingList.length > 0 && (
+              <View style={[styles.lookupCard, { backgroundColor: colors.surface }]}>
+                <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Following ({u.following})</Text>
+                {u.followingList.map((f: any, i: number) => {
+                  const p = f.profiles;
+                  return (
+                    <View key={f.following_id} style={[styles.lookupListItem, i < u.followingList.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+                      <View style={[styles.lookupListAvatar, { backgroundColor: "#3B82F620" }]}>
+                        <Text style={{ color: "#3B82F6", fontSize: 11, fontFamily: "Inter_600SemiBold" }}>{(p?.display_name || "?")[0].toUpperCase()}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_500Medium" }}>{p?.display_name || "\u2014"}</Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 11 }}>@{p?.handle || "\u2014"}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
 
             <View style={[styles.lookupCard, { backgroundColor: colors.surface }]}>
               <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Account Status</Text>
@@ -1051,4 +1170,6 @@ const styles = StyleSheet.create({
   lookupValue: { fontSize: 13, fontFamily: "Inter_600SemiBold", textAlign: "right", maxWidth: "55%" },
   lookupInterests: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingTop: 4 },
   lookupInterestChip: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16 },
+  lookupListItem: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
+  lookupListAvatar: { width: 30, height: 30, borderRadius: 15, justifyContent: "center", alignItems: "center" },
 });
