@@ -29,6 +29,101 @@ import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
+function WebQRScanner({ onScanned, active }: { onScanned: (data: string) => void; active: boolean }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "environment",
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            focusMode: "continuous" as any,
+          },
+        });
+        if (!mounted) { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.setAttribute("playsinline", "true");
+          await videoRef.current.play();
+          setReady(true);
+        }
+      } catch (_) {}
+    }
+
+    startCamera();
+
+    return () => {
+      mounted = false;
+      if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+      streamRef.current?.getTracks().forEach(t => t.stop());
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!ready || !active) return;
+
+    let BarcodeDetectorClass: any = (window as any).BarcodeDetector;
+    let detector: any = null;
+    let fallbackModule: any = null;
+
+    async function setup() {
+      if (typeof BarcodeDetectorClass !== "undefined") {
+        detector = new BarcodeDetectorClass({ formats: ["qr_code"] });
+      } else {
+        try {
+          const mod = await import("https://cdn.jsdelivr.net/npm/barcode-detector@3/dist/es/pure.min.js" as any);
+          fallbackModule = mod;
+          detector = new mod.BarcodeDetector({ formats: ["qr_code"] });
+        } catch (_) {
+          return;
+        }
+      }
+      scanIntervalRef.current = setInterval(scanFrame, 350);
+    }
+
+    async function scanFrame() {
+      if (!videoRef.current || !detector) return;
+      const video = videoRef.current;
+      if (video.readyState < 2) return;
+      try {
+        const barcodes = await detector.detect(video);
+        if (barcodes.length > 0) {
+          onScanned(barcodes[0].rawValue);
+        }
+      } catch (_) {}
+    }
+
+    setup();
+
+    return () => {
+      if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+    };
+  }, [ready, active, onScanned]);
+
+  return (
+    <View style={StyleSheet.absoluteFillObject}>
+      <video
+        ref={videoRef as any}
+        style={{ width: "100%", height: "100%", objectFit: "cover" } as any}
+        autoPlay
+        playsInline
+        muted
+      />
+      <canvas ref={canvasRef as any} style={{ display: "none" } as any} />
+    </View>
+  );
+}
+
 function toAfuId(uuid: string): string {
   const hex = uuid.replace(/-/g, "").slice(0, 8);
   const num = parseInt(hex, 16) % 100000000;
@@ -304,13 +399,21 @@ export default function ScanScreen() {
   const modalBtnText = isPay ? "Pay" : "Send Request";
   const modalBtnColor = isPay ? Colors.gold : Colors.brand;
 
+  const handleWebScanned = useCallback((data: string) => {
+    handleBarCodeScanned({ data });
+  }, [handleBarCodeScanned]);
+
   return (
     <View style={[styles.root, { backgroundColor: "#000" }]}>
-      <CameraView
-        style={StyleSheet.absoluteFillObject}
-        barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-        onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-      />
+      {Platform.OS === "web" ? (
+        <WebQRScanner onScanned={handleWebScanned} active={!scanned} />
+      ) : (
+        <CameraView
+          style={StyleSheet.absoluteFillObject}
+          barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+        />
+      )}
 
       <View style={styles.overlay}>
         <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
