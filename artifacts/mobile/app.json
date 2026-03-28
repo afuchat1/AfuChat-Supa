@@ -7,7 +7,7 @@
     "icon": "./assets/images/logo.png",
     "scheme": "afuchat",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "notification": {
       "icon": "./assets/images/afu-symbol.png",
       "color": "#00C2CB",

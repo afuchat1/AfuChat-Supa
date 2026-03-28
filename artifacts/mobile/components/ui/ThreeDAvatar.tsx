@@ -1,7 +1,5 @@
-import React, { useCallback, useRef } from "react";
+import React from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
-import { GLView } from "expo-gl";
-import * as THREE from "three";
 
 const COLORS = [
   "#FF6B6B", "#FF8E53", "#FFC107", "#56CCF2",
@@ -20,13 +18,6 @@ function initials(name: string): string {
   return name.slice(0, 2).toUpperCase();
 }
 
-function hexToRgb(hex: string) {
-  const r = parseInt(hex.slice(1, 3), 16) / 255;
-  const g = parseInt(hex.slice(3, 5), 16) / 255;
-  const b = parseInt(hex.slice(5, 7), 16) / 255;
-  return { r, g, b };
-}
-
 type Props = {
   uri?: string | null;
   name: string;
@@ -36,100 +27,44 @@ type Props = {
 
 export function ThreeDAvatar({ uri, name, size = 48, premium = false }: Props) {
   const color = nameColor(name || "U");
-  const rafRef = useRef<number>(0);
-
-  const onContextCreate = useCallback((gl: any) => {
-    const w = gl.drawingBufferWidth;
-    const h = gl.drawingBufferHeight;
-
-    const renderer = new THREE.WebGLRenderer({
-      canvas: {
-        width: w,
-        height: h,
-        style: {},
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        clientHeight: h,
-        clientWidth: w,
-      } as any,
-      context: gl,
-      alpha: true,
-      antialias: true,
-    });
-    renderer.setSize(w, h);
-    renderer.setPixelRatio(1);
-    renderer.setClearColor(0x000000, 0);
-
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, w / h, 0.01, 100);
-    camera.position.set(0, 0, 3.2);
-
-    const geometry = new THREE.SphereGeometry(1, 64, 64);
-    const rgb = hexToRgb(color);
-    const material = new THREE.MeshPhongMaterial({
-      color: new THREE.Color(rgb.r * 0.15, rgb.g * 0.15, rgb.b * 0.15),
-      specular: new THREE.Color(1, 1, 1),
-      shininess: 180,
-      transparent: true,
-      opacity: uri ? 0.55 : 0.0,
-    });
-    const sphere = new THREE.Mesh(geometry, material);
-    scene.add(sphere);
-
-    const ambient = new THREE.AmbientLight(0xffffff, 0.3);
-    scene.add(ambient);
-
-    const keyLight = new THREE.DirectionalLight(0xffffff, 1.0);
-    keyLight.position.set(3, 4, 4);
-    scene.add(keyLight);
-
-    const rgb2 = hexToRgb("#00C2CB");
-    const rimLight = new THREE.DirectionalLight(
-      new THREE.Color(rgb2.r, rgb2.g, rgb2.b),
-      premium ? 0.7 : 0.3
-    );
-    rimLight.position.set(-3, -2, -2);
-    scene.add(rimLight);
-
-    const fillLight = new THREE.DirectionalLight(0xffffff, 0.2);
-    fillLight.position.set(-2, 2, 2);
-    scene.add(fillLight);
-
-    let angle = 0;
-    const animate = () => {
-      rafRef.current = requestAnimationFrame(animate);
-      angle += 0.006;
-      sphere.rotation.y = angle;
-      sphere.rotation.x = Math.sin(angle * 0.5) * 0.08;
-      renderer.render(scene, camera);
-      gl.endFrameEXP();
-    };
-    animate();
-
-    return () => {
-      cancelAnimationFrame(rafRef.current);
-      geometry.dispose();
-      material.dispose();
-    };
-  }, [color, uri, premium]);
+  const r = size / 2;
 
   return (
-    <View style={[styles.root, { width: size, height: size, borderRadius: size / 2 }]}>
+    <View style={[styles.root, { width: size, height: size, borderRadius: r }]}>
       {uri ? (
         <Image
           source={{ uri }}
-          style={[styles.photo, { width: size, height: size, borderRadius: size / 2 }]}
+          style={[styles.photo, { width: size, height: size, borderRadius: r }]}
           resizeMode="cover"
         />
       ) : (
-        <View style={[styles.fallback, { width: size, height: size, borderRadius: size / 2, backgroundColor: color }]}>
+        <View style={[styles.fallback, { width: size, height: size, borderRadius: r, backgroundColor: color }]}>
           <Text style={[styles.initial, { fontSize: size * 0.35 }]}>{initials(name || "U")}</Text>
         </View>
       )}
 
-      <GLView
-        style={[styles.glOverlay, { width: size, height: size, borderRadius: size / 2 }]}
-        onContextCreate={onContextCreate}
+      <View
+        style={[
+          styles.glassOverlay,
+          {
+            width: size,
+            height: size,
+            borderRadius: r,
+          },
+        ]}
+      />
+
+      <View
+        style={[
+          styles.highlightDot,
+          {
+            width: size * 0.22,
+            height: size * 0.22,
+            borderRadius: size * 0.11,
+            top: size * 0.12,
+            left: size * 0.18,
+          },
+        ]}
       />
 
       {premium && (
@@ -158,8 +93,15 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontFamily: "Inter_700Bold",
   },
-  glOverlay: {
+  glassOverlay: {
     position: "absolute",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 0.5,
+    borderColor: "rgba(255,255,255,0.15)",
+  },
+  highlightDot: {
+    position: "absolute",
+    backgroundColor: "rgba(255,255,255,0.25)",
   },
   premiumRing: {
     position: "absolute",
