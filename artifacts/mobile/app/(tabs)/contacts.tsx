@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   RefreshControl,
   SectionList,
@@ -107,7 +106,7 @@ function ContactRow({ item }: { item: Contact }) {
           @{item.handle}
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+      <Ionicons name="chatbubble-outline" size={18} color={Colors.brand} />
     </TouchableOpacity>
   );
 }
@@ -213,15 +212,15 @@ export default function ContactsScreen() {
       <View
         style={[
           styles.header,
-          { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border },
+          { paddingTop: insets.top + 8, backgroundColor: Colors.brand },
         ]}
       >
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Contacts</Text>
+        <Text style={styles.headerTitle}>New Message</Text>
         <TouchableOpacity
           onPress={() => setAdding(true)}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Ionicons name="person-add-outline" size={22} color={colors.text} />
+          <Ionicons name="person-add-outline" size={22} color="#fff" />
         </TouchableOpacity>
       </View>
 
@@ -288,52 +287,97 @@ export default function ContactsScreen() {
         </View>
       )}
 
-      {loading ? (
-        <View style={{ padding: 8 }}>{[1,2,3,4,5,6,7,8].map(i => <ContactRowSkeleton key={i} />)}</View>
-      ) : sections.length === 0 ? (
-        <View style={styles.center}>
-          <Ionicons name="people-outline" size={64} color={colors.textMuted} />
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>No contacts yet</Text>
-          <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-            Tap the + icon to find and follow people
-          </Text>
-        </View>
-      ) : (
-        <SectionList
-          sections={sections}
-          keyExtractor={(item) => item.id}
-          ListHeaderComponent={
-            <TouchableOpacity
-              style={[styles.phoneBanner, { backgroundColor: colors.surface }]}
-              onPress={() => router.push("/phone-contacts")}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="people" size={20} color={Colors.brand} />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.phoneBannerTitle, { color: colors.text }]}>Find contacts on AfuChat</Text>
-                <Text style={[styles.phoneBannerSub, { color: colors.textMuted }]}>See which friends are already here</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-            </TouchableOpacity>
-          }
-          renderItem={({ item }) => <ContactRow item={item} />}
-          renderSectionHeader={({ section: { title } }) => (
-            <View style={[styles.sectionHeader, { backgroundColor: colors.backgroundSecondary }]}>
-              <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{title}</Text>
+      <SectionList
+        sections={loading ? [] : sections}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={
+          <View>
+            <View style={[styles.actionGroup, { backgroundColor: colors.surface }]}>
+              <TouchableOpacity
+                style={styles.actionRow}
+                onPress={() => router.push("/group/create")}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.actionIcon, { backgroundColor: "#007AFF" }]}>
+                  <Ionicons name="people" size={20} color="#fff" />
+                </View>
+                <Text style={[styles.actionLabel, { color: colors.text }]}>New Group</Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: "auto" }} />
+              </TouchableOpacity>
+              <Separator indent={58} />
+              <TouchableOpacity
+                style={styles.actionRow}
+                onPress={() => router.push("/channel/intro" as any)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.actionIcon, { backgroundColor: "#34C759" }]}>
+                  <Ionicons name="megaphone" size={20} color="#fff" />
+                </View>
+                <Text style={[styles.actionLabel, { color: colors.text }]}>New Channel</Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: "auto" }} />
+              </TouchableOpacity>
+              <Separator indent={58} />
+              <TouchableOpacity
+                style={styles.actionRow}
+                onPress={() => router.push("/phone-contacts")}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.actionIcon, { backgroundColor: Colors.brand }]}>
+                  <Ionicons name="call" size={20} color="#fff" />
+                </View>
+                <Text style={[styles.actionLabel, { color: colors.text }]}>Find Contacts on AfuChat</Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: "auto" }} />
+              </TouchableOpacity>
             </View>
-          )}
-          ItemSeparatorComponent={() => <Separator indent={74} />}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => { setRefreshing(true); loadContacts(); }}
-              tintColor={Colors.brand}
-            />
-          }
-          contentContainerStyle={{ paddingBottom: 90 }}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+
+            {loading && (
+              <View style={{ padding: 8 }}>{[1,2,3,4,5,6,7,8].map(i => <ContactRowSkeleton key={i} />)}</View>
+            )}
+
+            {!loading && filtered.length > 0 && (
+              <View style={styles.sectionLabel}>
+                <Text style={[styles.sectionLabelText, { color: Colors.brand }]}>
+                  {filtered.length} {filtered.length === 1 ? "contact" : "contacts"}
+                </Text>
+              </View>
+            )}
+
+            {!loading && filtered.length === 0 && !search && (
+              <View style={styles.emptyCenter}>
+                <Ionicons name="people-outline" size={56} color={colors.textMuted} />
+                <Text style={[styles.emptyTitle, { color: colors.text }]}>No contacts yet</Text>
+                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                  Tap the + icon to find and follow people
+                </Text>
+              </View>
+            )}
+
+            {!loading && search && filtered.length === 0 && (
+              <View style={styles.emptySearch}>
+                <Text style={[styles.emptySearchText, { color: colors.textMuted }]}>
+                  No contacts found
+                </Text>
+              </View>
+            )}
+          </View>
+        }
+        renderItem={({ item }) => <ContactRow item={item} />}
+        renderSectionHeader={({ section: { title } }) => (
+          <View style={[styles.sectionHeader, { backgroundColor: colors.backgroundSecondary }]}>
+            <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{title}</Text>
+          </View>
+        )}
+        ItemSeparatorComponent={() => <Separator indent={74} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => { setRefreshing(true); loadContacts(); }}
+            tintColor={Colors.brand}
+          />
+        }
+        contentContainerStyle={{ paddingBottom: 90 }}
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   );
 }
@@ -345,20 +389,39 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingBottom: 14,
   },
-  headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
+  headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold", color: "#fff" },
   searchWrap: { paddingHorizontal: 12, paddingVertical: 8 },
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 12,
     paddingHorizontal: 10,
-    height: 36,
+    height: 40,
     gap: 6,
   },
-  searchInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 36 },
+  searchInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 40 },
+  actionGroup: { marginTop: 8, marginBottom: 4 },
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    gap: 14,
+  },
+  actionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionLabel: { fontSize: 16, fontFamily: "Inter_500Medium" },
+  sectionLabel: { paddingHorizontal: 16, paddingVertical: 8 },
+  sectionLabelText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  emptySearch: { paddingVertical: 40, alignItems: "center" },
+  emptySearchText: { fontSize: 14, fontFamily: "Inter_400Regular" },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -372,10 +435,7 @@ const styles = StyleSheet.create({
   handle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
   sectionHeader: { paddingHorizontal: 16, paddingVertical: 6 },
   sectionTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  phoneBanner: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14, marginHorizontal: 12, marginVertical: 8, borderRadius: 14 },
-  phoneBannerTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  phoneBannerSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  emptyCenter: { alignItems: "center", paddingVertical: 48, gap: 12 },
   emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   emptySubtitle: { fontSize: 14, fontFamily: "Inter_400Regular" },
   addModal: {

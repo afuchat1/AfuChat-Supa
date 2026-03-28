@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Animated,
   FlatList,
-  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -30,14 +29,6 @@ import OfflineBanner from "@/components/ui/OfflineBanner";
 import { cacheConversations, getCachedConversations, isOnline } from "@/lib/offlineStore";
 import { addOnlineListener } from "@/lib/offlineSync";
 
-type Contact = {
-  id: string;
-  display_name: string;
-  handle: string;
-  avatar_url: string | null;
-  is_verified: boolean;
-  is_organization_verified: boolean;
-};
 
 type StoryUser = {
   userId: string;
@@ -248,203 +239,6 @@ const storyBarStyles = StyleSheet.create({
   name: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 4, textAlign: "center" },
 });
 
-function ContactPickerModal({ visible, onClose, userId, colors }: { visible: boolean; onClose: () => void; userId: string; colors: any }) {
-  const insets = useSafeAreaInsets();
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState("");
-
-  useEffect(() => {
-    if (visible) {
-      setSearch("");
-      setContacts([]);
-      setLoading(true);
-      loadContacts();
-    }
-  }, [visible]);
-
-  async function loadContacts() {
-    const { data } = await supabase
-      .from("follows")
-      .select("following_id, profiles!follows_following_id_fkey(id, display_name, handle, avatar_url, is_verified, is_organization_verified)")
-      .eq("follower_id", userId);
-    const list = (data || [])
-      .map((f: any) => f.profiles)
-      .filter(Boolean)
-      .sort((a: Contact, b: Contact) => a.display_name.localeCompare(b.display_name));
-    setContacts(list);
-    setLoading(false);
-  }
-
-  async function selectContact(contact: Contact) {
-    Haptics.selectionAsync();
-    const { data: myChats } = await supabase
-      .from("chat_members")
-      .select("chat_id")
-      .eq("user_id", userId);
-    const myIds = (myChats || []).map((m: any) => m.chat_id);
-    if (myIds.length > 0) {
-      const { data: shared } = await supabase
-        .from("chat_members")
-        .select("chat_id, chats!inner(id, is_group, is_channel)")
-        .eq("user_id", contact.id)
-        .in("chat_id", myIds)
-        .eq("chats.is_group", false);
-      if (shared && shared.length > 0) {
-        const directChat = shared.find((s: any) => !s.chats?.is_channel);
-        if (directChat) {
-          onClose();
-          router.push({ pathname: "/chat/[id]", params: { id: directChat.chat_id } });
-          return;
-        }
-      }
-    }
-    onClose();
-    router.push({
-      pathname: "/chat/[id]",
-      params: {
-        id: "new",
-        contactId: contact.id,
-        contactName: contact.display_name,
-        contactAvatar: contact.avatar_url || "",
-      },
-    });
-  }
-
-  const filtered = search
-    ? contacts.filter(
-        (c) =>
-          c.display_name.toLowerCase().includes(search.toLowerCase()) ||
-          c.handle.toLowerCase().includes(search.toLowerCase())
-      )
-    : contacts;
-
-  return (
-    <Modal animationType="slide" visible={visible} onRequestClose={onClose} presentationStyle="fullScreen">
-      <View style={[pickerStyles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
-        <View style={[pickerStyles.pickerHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[pickerStyles.pickerTitle, { color: colors.text }]}>New Message</Text>
-          <View style={{ width: 24 }} />
-        </View>
-
-        <View style={[pickerStyles.searchWrap, { backgroundColor: colors.surface }]}>
-          <View style={[pickerStyles.searchBox, { backgroundColor: colors.inputBg }]}>
-            <Ionicons name="search-outline" size={16} color={colors.textMuted} />
-            <TextInput
-              style={[pickerStyles.searchInput, { color: colors.text }]}
-              placeholder="Search Contacts"
-              placeholderTextColor={colors.textMuted}
-              value={search}
-              onChangeText={setSearch}
-            />
-            {search.length > 0 && (
-              <Pressable onPress={() => setSearch("")}>
-                <Ionicons name="close-circle" size={16} color={colors.textMuted} />
-              </Pressable>
-            )}
-          </View>
-        </View>
-
-        <FlatList
-          data={filtered}
-          keyExtractor={(item) => item.id}
-          ListHeaderComponent={
-            <>
-              <View style={[pickerStyles.actionGroup, { backgroundColor: colors.surface }]}>
-                <TouchableOpacity
-                  style={pickerStyles.actionRow}
-                  onPress={() => { onClose(); router.push("/group/create"); }}
-                  activeOpacity={0.7}
-                >
-                  <View style={[pickerStyles.actionIcon, { backgroundColor: "#007AFF" }]}>
-                    <Ionicons name="people" size={20} color="#fff" />
-                  </View>
-                  <Text style={[pickerStyles.actionLabel, { color: colors.text }]}>New Group</Text>
-                </TouchableOpacity>
-                <Separator indent={58} />
-                <TouchableOpacity
-                  style={pickerStyles.actionRow}
-                  onPress={() => { onClose(); router.push("/channel/intro" as any); }}
-                  activeOpacity={0.7}
-                >
-                  <View style={[pickerStyles.actionIcon, { backgroundColor: "#34C759" }]}>
-                    <Ionicons name="megaphone" size={20} color="#fff" />
-                  </View>
-                  <Text style={[pickerStyles.actionLabel, { color: colors.text }]}>New Channel</Text>
-                </TouchableOpacity>
-              </View>
-
-              {!loading && filtered.length > 0 && (
-                <View style={pickerStyles.sectionLabel}>
-                  <Text style={[pickerStyles.sectionLabelText, { color: Colors.brand }]}>
-                    Sorted by name
-                  </Text>
-                </View>
-              )}
-
-              {loading && (
-                <View style={pickerStyles.center}>
-                  <ActivityIndicator color={Colors.brand} />
-                </View>
-              )}
-
-              {!loading && filtered.length === 0 && (
-                <View style={pickerStyles.center}>
-                  <Text style={[pickerStyles.emptyText, { color: colors.textMuted }]}>
-                    {search ? "No contacts found" : "No contacts yet"}
-                  </Text>
-                </View>
-              )}
-            </>
-          }
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[pickerStyles.contactRow, { backgroundColor: colors.surface }]}
-              onPress={() => selectContact(item)}
-              activeOpacity={0.7}
-            >
-              <Avatar uri={item.avatar_url} name={item.display_name} size={46} />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                  <Text style={[pickerStyles.contactName, { color: colors.text }]}>{item.display_name}</Text>
-                  <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={14} />
-                </View>
-                <Text style={[pickerStyles.contactHandle, { color: colors.textSecondary }]}>@{item.handle}</Text>
-              </View>
-            </TouchableOpacity>
-          )}
-          ItemSeparatorComponent={() => <Separator indent={70} />}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
-        />
-      </View>
-    </Modal>
-  );
-}
-
-const pickerStyles = StyleSheet.create({
-  root: { flex: 1 },
-  pickerHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  pickerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  searchWrap: { paddingHorizontal: 12, paddingVertical: 8 },
-  searchBox: { flexDirection: "row", alignItems: "center", borderRadius: 12, paddingHorizontal: 10, height: 40, gap: 6 },
-  searchInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 40 },
-  actionGroup: { marginTop: 8, marginBottom: 8 },
-  actionRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, gap: 14 },
-  actionIcon: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  actionLabel: { fontSize: 16, fontFamily: "Inter_500Medium" },
-  sectionLabel: { paddingHorizontal: 16, paddingVertical: 8 },
-  sectionLabelText: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  contactRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12 },
-  contactName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  contactHandle: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  center: { paddingVertical: 40, alignItems: "center", gap: 8 },
-  emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
-});
-
 export default function ChatsScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
@@ -454,7 +248,6 @@ export default function ChatsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
-  const [showContactPicker, setShowContactPicker] = useState(false);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
   const fetchUnreadCount = useCallback(() => {
@@ -748,20 +541,11 @@ export default function ChatsScreen() {
 
       <TouchableOpacity
         style={[styles.fab, { backgroundColor: Colors.brand, bottom: insets.bottom + 52 + 16 }]}
-        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowContactPicker(true); }}
+        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/contacts"); }}
         activeOpacity={0.85}
       >
         <Ionicons name="create-outline" size={24} color="#fff" />
       </TouchableOpacity>
-
-      {user && (
-        <ContactPickerModal
-          visible={showContactPicker}
-          onClose={() => setShowContactPicker(false)}
-          userId={user.id}
-          colors={colors}
-        />
-      )}
     </View>
   );
 }

@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 3.0.0",
-    "appVersionSource": "local"
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -13,6 +13,7 @@
         "buildType": "apk"
       },
       "distribution": "internal",
+      "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_EAS_PROJECT_ID": "b55c5d92-7a83-472f-b660-d1838efba5fe",
         "EXPO_PUBLIC_SUPABASE_URL": "https://rhnsjqqtdzlkvqazfcbg.supabase.co",
@@ -23,6 +24,7 @@
       "android": {
         "buildType": "app-bundle"
       },
+      "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_EAS_PROJECT_ID": "b55c5d92-7a83-472f-b660-d1838efba5fe",
         "EXPO_PUBLIC_SUPABASE_URL": "https://rhnsjqqtdzlkvqazfcbg.supabase.co",
