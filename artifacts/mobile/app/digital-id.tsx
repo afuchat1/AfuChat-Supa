@@ -46,42 +46,51 @@ function formatAfuId(id: string): string {
   return `${id.slice(0, 4)} ${id.slice(4)}`;
 }
 
-function encodeCardPayload(profile: any, isPremium: boolean, stats: any): string {
-  const payload = {
-    v: 1,
-    t: "afuchat_id",
-    id: profile?.id || "",
-    afu_id: toAfuId(profile?.id || "00000000"),
-    handle: profile?.handle || "",
-    name: profile?.display_name || "",
-    bio: profile?.bio || "",
-    country: profile?.country || "",
-    region: profile?.region || "",
-    gender: profile?.gender || "",
-    lang: profile?.language || "",
-    website: profile?.website_url || "",
-    verified: profile?.is_verified || false,
-    premium: isPremium,
-    grade: profile?.current_grade || "explorer",
-    xp: profile?.xp || 0,
-    acoin: profile?.acoin || 0,
-    level: Math.floor(Math.sqrt((profile?.xp || 0) / 100)) + 1,
-    joined: profile?.created_at || "",
-    interests: profile?.interests || [],
-    tipping: profile?.tipping_enabled || false,
-    stats: stats || {},
-  };
-  const json = JSON.stringify(payload);
-  let encoded = "";
+function b64encode(obj: any): string {
+  const json = JSON.stringify(obj);
   try {
     const bytes = new TextEncoder().encode(json);
     let binary = "";
     for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-    encoded = btoa(binary);
+    return btoa(binary);
   } catch {
-    encoded = btoa(unescape(encodeURIComponent(json)));
+    return btoa(unescape(encodeURIComponent(json)));
   }
-  return `afuchat://id/${encoded}`;
+}
+
+function encodeCardPayload(profile: any, isPremium: boolean, stats: any): string {
+  const pub = {
+    v: 1,
+    t: "afuchat_id",
+    afu_id: toAfuId(profile?.id || "00000000"),
+    handle: profile?.handle || "",
+    name: profile?.display_name || "",
+    avatar: profile?.avatar_url || "",
+    bio: profile?.bio || "",
+    country: profile?.country || "",
+    region: profile?.region || "",
+    verified: profile?.is_verified || false,
+    premium: isPremium,
+    grade: profile?.current_grade || "explorer",
+    level: Math.floor(Math.sqrt((profile?.xp || 0) / 100)) + 1,
+    joined: profile?.created_at || "",
+  };
+  const adm = {
+    id: profile?.id || "",
+    gender: profile?.gender || "",
+    lang: profile?.language || "",
+    website: profile?.website_url || "",
+    xp: profile?.xp || 0,
+    acoin: profile?.acoin || 0,
+    interests: profile?.interests || [],
+    tipping: profile?.tipping_enabled || false,
+    private: profile?.is_private || false,
+    org_verified: profile?.is_organization_verified || false,
+    is_admin: profile?.is_admin || false,
+    stats: stats || {},
+  };
+  const payload = { ...pub, _a: b64encode(adm) };
+  return `afuchat://id/${b64encode(payload)}`;
 }
 
 function GradeInfo(grade: string): { label: string; colors: [string, string]; icon: string; textColor: string } {
@@ -162,7 +171,7 @@ function CardFront({ profile, grade, isPremium }: { profile: any; grade: ReturnT
       <View style={styles.cardContent}>
         <View style={styles.cardTopRow}>
           <View style={styles.brandRow}>
-            <Image source={afuSymbol} style={styles.brandSymbol} resizeMode="contain" />
+            <Image source={afuSymbol} style={[styles.brandSymbol, { tintColor: "#00C2CB" }]} resizeMode="contain" />
             <View>
               <Text style={styles.cardAppName}>AFUCHAT</Text>
               <Text style={styles.cardSubtitle}>DIGITAL IDENTITY</Text>
@@ -193,6 +202,12 @@ function CardFront({ profile, grade, isPremium }: { profile: any; grade: ReturnT
               <Text style={styles.gradeText}>{grade.label}</Text>
             </LinearGradient>
           </View>
+          {(profile?.country || profile?.region) ? (
+            <View style={styles.locationRow}>
+              <Ionicons name="location" size={10} color="#00C2CB" />
+              <Text style={styles.locationText}>{[profile?.region, profile?.country].filter(Boolean).join(", ")}</Text>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.cardBottomRow}>
@@ -241,7 +256,7 @@ function CardBack({ profile, grade, isPremium, qrValue }: { profile: any; grade:
       <View style={styles.cardContent}>
         <View style={styles.backTopRow}>
           <View style={styles.brandRow}>
-            <Image source={afuSymbol} style={styles.brandSymbol} resizeMode="contain" />
+            <Image source={afuSymbol} style={[styles.brandSymbol, { tintColor: "#00C2CB" }]} resizeMode="contain" />
             <Text style={styles.cardAppName}>AFUCHAT</Text>
           </View>
           {isPremium && (
@@ -459,6 +474,8 @@ const styles = StyleSheet.create({
   displayName: { color: "#fff", fontSize: 19, fontFamily: "Inter_700Bold" },
   handleGradeRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 3 },
   handleText: { color: "rgba(255,255,255,0.5)", fontSize: 13, fontFamily: "Inter_400Regular" },
+  locationRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 3 },
+  locationText: { color: "rgba(255,255,255,0.5)", fontSize: 10, fontFamily: "Inter_500Medium" },
   cardBottomRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "rgba(255,255,255,0.08)", paddingTop: 10 },
   bottomCenter: { alignItems: "center" },
   statusRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
