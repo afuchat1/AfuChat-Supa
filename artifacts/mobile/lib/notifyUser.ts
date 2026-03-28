@@ -1,8 +1,5 @@
 import { supabase } from "@/lib/supabase";
 
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-
 async function callNotify(params: {
   userId: string;
   title: string;
@@ -13,19 +10,41 @@ async function callNotify(params: {
   postId?: string | null;
 }) {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token;
-    if (!token) return;
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("expo_push_token")
+      .eq("id", params.userId)
+      .single();
 
-    await fetch(`${SUPABASE_URL}/functions/v1/send-push-notification`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-        "apikey": SUPABASE_ANON_KEY || "",
-      },
-      body: JSON.stringify(params),
-    });
+    if (profile?.expo_push_token) {
+      const channelId =
+        params.data?.type === "message"
+          ? "messages"
+          : params.data?.type === "follow" ||
+              params.data?.type === "like" ||
+              params.data?.type === "reply"
+            ? "social"
+            : "default";
+
+      await fetch("https://exp.host/--/api/v2/push/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "Accept-Encoding": "gzip, deflate",
+        },
+        body: JSON.stringify({
+          to: profile.expo_push_token,
+          title: params.title,
+          body: params.body,
+          data: params.data || {},
+          sound: "default",
+          badge: 1,
+          priority: "high",
+          channelId,
+        }),
+      });
+    }
   } catch {}
 
   if (params.notificationType && params.actorId) {
