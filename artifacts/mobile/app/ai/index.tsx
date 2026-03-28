@@ -691,8 +691,15 @@ When suggesting actions, include ACTION buttons in your response using the forma
         const { data: recipient } = await supabase.from("profiles").select("id, display_name").eq("handle", handle.toLowerCase()).single();
         if (!recipient) return { success: false, message: `User @${handle} not found` };
         if (recipient.id === user.id) return { success: false, message: "Cannot send to yourself" };
-        const { error } = await supabase.from("xp_transfers").insert({ sender_id: user.id, receiver_id: recipient.id, amount: amt, message: msg || null });
-        if (error) return { success: false, message: error.message };
+        const { data: deducted, error: deductErr } = await supabase.from("profiles").update({ xp: (live.xp || 0) - amt }).eq("id", user.id).gte("xp", amt).select("id").maybeSingle();
+        if (deductErr || !deducted) return { success: false, message: "Could not deduct Nexa — balance may have changed" };
+        const { error: creditErr } = await supabase.rpc("award_xp", { p_user_id: (recipient as { id: string }).id, p_action_type: "nexa_transfer_received", p_xp_amount: amt, p_metadata: { from_user_id: user.id, from_handle: live.handle } });
+        if (creditErr) {
+          await supabase.from("profiles").update({ xp: (live.xp || 0) }).eq("id", user.id);
+          return { success: false, message: "Could not credit recipient. Your Nexa has been refunded." };
+        }
+        const { error } = await supabase.from("xp_transfers").insert({ sender_id: user.id, receiver_id: (recipient as { id: string }).id, amount: amt, message: msg || null });
+        if (error) console.warn("Nexa transfer succeeded but transfer log failed:", error.message);
         return {
           success: true,
           message: `Sent ${amt} Nexa to ${(recipient as { id: string; display_name: string }).display_name}`,

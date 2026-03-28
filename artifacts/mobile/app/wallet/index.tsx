@@ -128,18 +128,29 @@ export default function WalletScreen() {
 
     const { data: recipient } = await supabase.from("profiles").select("id, display_name").eq("handle", transferHandle.trim().toLowerCase()).single();
     if (!recipient) { showAlert("Not found", "User not found."); setSending(false); return; }
+    if (recipient.id === user.id) { showAlert("Error", "Cannot send to yourself."); setSending(false); return; }
+
+    const { data: deducted, error: deductErr } = await supabase.from("profiles").update({ xp: (profile?.xp || 0) - amt }).eq("id", user.id).gte("xp", amt).select("id").maybeSingle();
+    if (deductErr || !deducted) { showAlert("Error", "Could not deduct Nexa — balance may have changed."); setSending(false); return; }
+
+    const { error: creditErr } = await supabase.rpc("award_xp", { p_user_id: recipient.id, p_action_type: "nexa_transfer_received", p_xp_amount: amt, p_metadata: { from_user_id: user.id } });
+    if (creditErr) {
+      await supabase.from("profiles").update({ xp: (profile?.xp || 0) }).eq("id", user.id);
+      showAlert("Error", "Could not credit recipient. Your Nexa has been refunded.");
+      setSending(false);
+      return;
+    }
 
     const { error } = await supabase.from("xp_transfers").insert({ sender_id: user.id, receiver_id: recipient.id, amount: amt, message: transferMsg.trim() || null });
-    if (error) { showAlert("Error", error.message); } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showAlert("Sent!", `${amt} Nexa sent to ${recipient.display_name}`);
-      setShowTransfer(false);
-      setTransferHandle("");
-      setTransferAmount("");
-      setTransferMsg("");
-      refreshProfile();
-      loadData();
-    }
+    if (error) console.warn("Nexa transfer succeeded but transfer log failed:", error.message);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    showAlert("Sent!", `${amt} Nexa sent to ${recipient.display_name}`);
+    setShowTransfer(false);
+    setTransferHandle("");
+    setTransferAmount("");
+    setTransferMsg("");
+    refreshProfile();
+    loadData();
     setSending(false);
   }
 
