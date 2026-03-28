@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
   Image,
   Platform,
   ScrollView,
@@ -10,6 +9,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -35,9 +35,17 @@ import Colors from "@/constants/colors";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
-const { width: SCREEN_W } = Dimensions.get("window");
-const CARD_W = Math.min(SCREEN_W - 48, 380);
-const CARD_H = CARD_W * 0.6;
+function useCardDimensions() {
+  const { width, height } = useWindowDimensions();
+  const isSmall = width < 360;
+  const isTiny = width < 320;
+  const maxW = Math.min(width - (isTiny ? 32 : 48), 400);
+  const maxH = (height - 200) / 0.6;
+  const cardW = Math.max(200, Math.min(maxW, maxH));
+  const cardH = cardW * (isSmall ? 0.62 : 0.6);
+  const scale = Math.max(0.55, Math.min(cardW / 380, 1.15));
+  return { cardW, cardH, scale, isSmall, isTiny, screenW: width, screenH: height };
+}
 
 function toAfuId(uuid: string): string {
   const hex = uuid.replace(/-/g, "").slice(0, 8);
@@ -65,13 +73,13 @@ function GradeInfo(grade: string): { label: string; colors: [string, string]; ic
   return map[grade] || { label: "Explorer", colors: ["#8E8E93", "#636366"], icon: "compass-outline", textColor: "#636366" };
 }
 
-function HoloShimmer() {
+function HoloShimmer({ cardW }: { cardW: number }) {
   const shimmer = useSharedValue(0);
   useEffect(() => {
     shimmer.value = withRepeat(withTiming(1, { duration: 3200, easing: Easing.linear }), -1, false);
   }, []);
   const style = useAnimatedStyle(() => ({
-    transform: [{ translateX: interpolate(shimmer.value, [0, 1], [-CARD_W * 2, CARD_W * 2]) }],
+    transform: [{ translateX: interpolate(shimmer.value, [0, 1], [-cardW * 2, cardW * 2]) }],
   }));
   return (
     <Animated.View style={[StyleSheet.absoluteFill, { overflow: "hidden" }]} pointerEvents="none">
@@ -113,78 +121,79 @@ function MicroPattern() {
   );
 }
 
-function CardFront({ profile, grade, isPremium }: { profile: any; grade: ReturnType<typeof GradeInfo>; isPremium: boolean }) {
+function CardFront({ profile, grade, isPremium, scale, cardW }: { profile: any; grade: ReturnType<typeof GradeInfo>; isPremium: boolean; scale: number; cardW: number }) {
   const afuId = formatAfuId(toAfuId(profile?.id || "00000000"));
   const joinDate = profile?.created_at ? new Date(profile.created_at) : null;
   const joinStr = joinDate ? joinDate.toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "\u2014";
+  const s = scale;
 
   return (
     <View style={StyleSheet.absoluteFill}>
       <LinearGradient colors={["#080E18", "#0C1929", "#0A1220"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-      <FloatingOrb delay={0} x="8%" y="15%" size={90} color={Colors.brand} />
-      <FloatingOrb delay={600} x="70%" y="8%" size={55} color={grade.colors[0]} />
-      <FloatingOrb delay={1200} x="75%" y="65%" size={35} color={Colors.brand} />
+      <FloatingOrb delay={0} x="8%" y="15%" size={90 * s} color={Colors.brand} />
+      <FloatingOrb delay={600} x="70%" y="8%" size={55 * s} color={grade.colors[0]} />
+      <FloatingOrb delay={1200} x="75%" y="65%" size={35 * s} color={Colors.brand} />
       <MicroPattern />
-      <HoloShimmer />
+      <HoloShimmer cardW={cardW} />
       <LinearGradient colors={[`${grade.colors[0]}08`, `${grade.colors[0]}18`, `${grade.colors[1]}30`]} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 1 }} pointerEvents="none" />
 
-      <View style={styles.cardContent}>
+      <View style={[styles.cardContent, { padding: Math.max(12, 20 * s) }]}>
         <View style={styles.cardTopRow}>
           <View style={styles.brandRow}>
-            <Image source={afuSymbol} style={[styles.brandSymbol, { tintColor: "#00C2CB" }]} resizeMode="contain" />
+            <Image source={afuSymbol} style={[styles.brandSymbol, { width: 26 * s, height: 26 * s, borderRadius: 7 * s, tintColor: "#00C2CB" }]} resizeMode="contain" />
             <View>
-              <Text style={styles.cardAppName}>AFUCHAT</Text>
-              <Text style={styles.cardSubtitle}>DIGITAL IDENTITY</Text>
+              <Text style={[styles.cardAppName, { fontSize: Math.max(9, 12 * s) }]}>AFUCHAT</Text>
+              <Text style={[styles.cardSubtitle, { fontSize: Math.max(6, 8 * s) }]}>DIGITAL IDENTITY</Text>
             </View>
           </View>
           <View style={styles.avatarOuter}>
-            <LinearGradient colors={grade.colors} style={styles.avatarGradientRing}>
+            <LinearGradient colors={grade.colors} style={[styles.avatarGradientRing, { width: 50 * s, height: 50 * s, borderRadius: 25 * s, padding: 2 * s }]}>
               {profile?.avatar_url ? (
-                <Image source={{ uri: profile.avatar_url }} style={styles.cardAvatar} />
+                <Image source={{ uri: profile.avatar_url }} style={{ width: 46 * s, height: 46 * s, borderRadius: 23 * s }} />
               ) : (
-                <View style={[styles.cardAvatar, styles.cardAvatarFallback]}>
-                  <Text style={styles.avatarInitial}>{(profile?.display_name || "?")[0].toUpperCase()}</Text>
+                <View style={[{ width: 46 * s, height: 46 * s, borderRadius: 23 * s }, styles.cardAvatarFallback]}>
+                  <Text style={[styles.avatarInitial, { fontSize: 20 * s }]}>{(profile?.display_name || "?")[0].toUpperCase()}</Text>
                 </View>
               )}
             </LinearGradient>
             {isPremium && (
-              <View style={styles.premiumBadge}><Ionicons name="diamond" size={8} color="#fff" /></View>
+              <View style={[styles.premiumBadge, { width: 16 * s, height: 16 * s, borderRadius: 8 * s }]}><Ionicons name="diamond" size={Math.max(6, 8 * s)} color="#fff" /></View>
             )}
           </View>
         </View>
 
         <View style={styles.cardMidRow}>
-          <Text style={styles.displayName} numberOfLines={1}>{profile?.display_name || "AfuChat User"}</Text>
+          <Text style={[styles.displayName, { fontSize: Math.max(14, 19 * s) }]} numberOfLines={1}>{profile?.display_name || "AfuChat User"}</Text>
           <View style={styles.handleGradeRow}>
-            <Text style={styles.handleText}>@{profile?.handle || "user"}</Text>
-            <LinearGradient colors={grade.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.gradeBadge}>
-              <Ionicons name={grade.icon as any} size={9} color="#fff" />
-              <Text style={styles.gradeText}>{grade.label}</Text>
+            <Text style={[styles.handleText, { fontSize: Math.max(10, 13 * s) }]}>@{profile?.handle || "user"}</Text>
+            <LinearGradient colors={grade.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.gradeBadge, { paddingHorizontal: 7 * s, paddingVertical: 2 * s }]}>
+              <Ionicons name={grade.icon as any} size={Math.max(7, 9 * s)} color="#fff" />
+              <Text style={[styles.gradeText, { fontSize: Math.max(7, 9 * s) }]}>{grade.label}</Text>
             </LinearGradient>
           </View>
           {(profile?.country || profile?.region) ? (
             <View style={styles.locationRow}>
-              <Ionicons name="location" size={10} color="#00C2CB" />
-              <Text style={styles.locationText}>{[profile?.region, profile?.country].filter(Boolean).join(", ")}</Text>
+              <Ionicons name="location" size={Math.max(8, 10 * s)} color="#00C2CB" />
+              <Text style={[styles.locationText, { fontSize: Math.max(8, 10 * s) }]}>{[profile?.region, profile?.country].filter(Boolean).join(", ")}</Text>
             </View>
           ) : null}
         </View>
 
-        <View style={styles.cardBottomRow}>
+        <View style={[styles.cardBottomRow, { paddingTop: 8 * s }]}>
           <View>
-            <Text style={styles.idLabel}>AFU ID</Text>
-            <Text style={styles.idNumber}>{afuId}</Text>
+            <Text style={[styles.idLabel, { fontSize: Math.max(6, 8 * s) }]}>AFU ID</Text>
+            <Text style={[styles.idNumber, { fontSize: Math.max(10, 12 * s) }]}>{afuId}</Text>
           </View>
           <View style={styles.bottomCenter}>
-            <Text style={styles.idLabel}>STATUS</Text>
+            <Text style={[styles.idLabel, { fontSize: Math.max(6, 8 * s) }]}>STATUS</Text>
             <View style={styles.statusRow}>
-              <View style={styles.statusDot} />
-              <Text style={[styles.idNumber, { color: "#34C759" }]}>Active</Text>
+              <View style={[styles.statusDot, { width: 5 * s, height: 5 * s, borderRadius: 3 * s }]} />
+              <Text style={[styles.idNumber, { color: "#34C759", fontSize: Math.max(10, 12 * s) }]}>Active</Text>
             </View>
           </View>
           <View style={{ alignItems: "flex-end" }}>
-            <Text style={styles.idLabel}>SINCE</Text>
-            <Text style={styles.idNumber}>{joinStr}</Text>
+            <Text style={[styles.idLabel, { fontSize: Math.max(6, 8 * s) }]}>SINCE</Text>
+            <Text style={[styles.idNumber, { fontSize: Math.max(10, 12 * s) }]}>{joinStr}</Text>
           </View>
         </View>
       </View>
@@ -192,12 +201,16 @@ function CardFront({ profile, grade, isPremium }: { profile: any; grade: ReturnT
   );
 }
 
-function CardBack({ profile, grade, isPremium, qrValue }: { profile: any; grade: ReturnType<typeof GradeInfo>; isPremium: boolean; qrValue: string }) {
+function CardBack({ profile, grade, isPremium, qrValue, scale, cardW }: { profile: any; grade: ReturnType<typeof GradeInfo>; isPremium: boolean; qrValue: string; scale: number; cardW: number }) {
   const xp = profile?.xp || 0;
   const level = Math.floor(Math.sqrt(xp / 100)) + 1;
   const acoin = profile?.acoin || 0;
   const afuId = formatAfuId(toAfuId(profile?.id || "00000000"));
   const handle = profile?.handle || "user";
+  const s = scale;
+
+  const qrSize = Math.max(48, Math.round(72 * s));
+  const qrBoxSize = qrSize + 16;
 
   const cardStats = [
     { label: "NEXA", value: xp.toLocaleString(), icon: "flash" as const, color: Colors.brand },
@@ -208,44 +221,44 @@ function CardBack({ profile, grade, isPremium, qrValue }: { profile: any; grade:
   return (
     <View style={StyleSheet.absoluteFill}>
       <LinearGradient colors={["#0A1220", "#080E18", "#0F0A1E"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-      <FloatingOrb delay={300} x="5%" y="60%" size={50} color={grade.colors[0]} />
-      <FloatingOrb delay={900} x="80%" y="20%" size={40} color={Colors.brand} />
+      <FloatingOrb delay={300} x="5%" y="60%" size={50 * s} color={grade.colors[0]} />
+      <FloatingOrb delay={900} x="80%" y="20%" size={40 * s} color={Colors.brand} />
       <MicroPattern />
-      <HoloShimmer />
+      <HoloShimmer cardW={cardW} />
 
-      <View style={styles.cardContent}>
+      <View style={[styles.cardContent, { padding: Math.max(12, 20 * s) }]}>
         <View style={styles.backTopRow}>
           <View style={styles.brandRow}>
-            <Image source={afuSymbol} style={[styles.brandSymbol, { tintColor: "#00C2CB" }]} resizeMode="contain" />
-            <Text style={styles.cardAppName}>AFUCHAT</Text>
+            <Image source={afuSymbol} style={[styles.brandSymbol, { width: 26 * s, height: 26 * s, borderRadius: 7 * s, tintColor: "#00C2CB" }]} resizeMode="contain" />
+            <Text style={[styles.cardAppName, { fontSize: Math.max(9, 12 * s) }]}>AFUCHAT</Text>
           </View>
           {isPremium && (
-            <LinearGradient colors={[Colors.gold, "#B8860B"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.premiumTag}>
-              <Ionicons name="diamond" size={9} color="#fff" />
-              <Text style={styles.premiumTagText}>PREMIUM</Text>
+            <LinearGradient colors={[Colors.gold, "#B8860B"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.premiumTag, { paddingHorizontal: 8 * s, paddingVertical: 3 * s }]}>
+              <Ionicons name="diamond" size={Math.max(7, 9 * s)} color="#fff" />
+              <Text style={[styles.premiumTagText, { fontSize: Math.max(7, 9 * s) }]}>PREMIUM</Text>
             </LinearGradient>
           )}
         </View>
 
-        <View style={styles.statsRow}>
-          {cardStats.map((s) => (
-            <View key={s.label} style={styles.statBox}>
-              <Ionicons name={s.icon} size={14} color={s.color} style={{ marginBottom: 4 }} />
-              <Text style={styles.statValue}>{s.value}</Text>
-              <Text style={styles.statLabel}>{s.label}</Text>
+        <View style={[styles.statsRow, { gap: 6 * s }]}>
+          {cardStats.map((st) => (
+            <View key={st.label} style={[styles.statBox, { borderRadius: 10 * s, paddingVertical: 8 * s, paddingHorizontal: 6 * s }]}>
+              <Ionicons name={st.icon} size={Math.max(10, 14 * s)} color={st.color} style={{ marginBottom: 3 * s }} />
+              <Text style={[styles.statValue, { fontSize: Math.max(12, 16 * s) }]}>{st.value}</Text>
+              <Text style={[styles.statLabel, { fontSize: Math.max(6, 8 * s) }]}>{st.label}</Text>
             </View>
           ))}
         </View>
 
-        <View style={styles.backBottomRow}>
-          <View style={styles.qrBox}>
-            <QRCode value={qrValue} size={72} color="#0A1220" backgroundColor="#fff" quietZone={2} />
+        <View style={[styles.backBottomRow, { gap: 10 * s }]}>
+          <View style={[styles.qrBox, { width: qrBoxSize, height: qrBoxSize, borderRadius: 12 * s }]}>
+            <QRCode value={qrValue} size={qrSize} color="#0A1220" backgroundColor="#fff" quietZone={2} />
           </View>
           <View style={styles.backBottomInfo}>
-            <Text style={styles.idLabel}>AFU ID</Text>
-            <Text style={[styles.idNumber, { fontSize: 15, letterSpacing: 2.5 }]}>{afuId}</Text>
-            <Text style={[styles.idLabel, { marginTop: 6 }]}>SCAN TO PAY</Text>
-            <Text style={[styles.idNumber, { color: Colors.brand }]}>@{handle}</Text>
+            <Text style={[styles.idLabel, { fontSize: Math.max(6, 8 * s) }]}>AFU ID</Text>
+            <Text style={[styles.idNumber, { fontSize: Math.max(11, 15 * s), letterSpacing: 2 * s }]}>{afuId}</Text>
+            <Text style={[styles.idLabel, { marginTop: 4 * s, fontSize: Math.max(6, 8 * s) }]}>SCAN TO PAY</Text>
+            <Text style={[styles.idNumber, { color: Colors.brand, fontSize: Math.max(10, 12 * s) }]}>@{handle}</Text>
           </View>
         </View>
       </View>
@@ -257,6 +270,7 @@ export default function DigitalIdScreen() {
   const { user, profile, isPremium } = useAuth();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const { cardW, cardH, scale, isSmall, isTiny } = useCardDimensions();
   const grade = GradeInfo(profile?.current_grade || "explorer");
   const [qrPayload, setQrPayload] = useState(user?.id ? buildQrValue(user.id) : `afuchat://id/00000000`);
 
@@ -412,15 +426,15 @@ export default function DigitalIdScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 32, flexGrow: 1, justifyContent: "center" }} showsVerticalScrollIndicator={false}>
-        <View style={styles.cardContainer}>
-          <Animated.View style={[styles.glowRing, glowStyle, { borderColor: grade.colors[0], shadowColor: grade.colors[0] }]} pointerEvents="none" />
-          <View ref={cardRef} style={{ borderRadius: 20, overflow: "hidden" }} testID="afu-card-capture">
-            <TouchableOpacity onPress={flip} activeOpacity={1} style={{ width: CARD_W, height: CARD_H }}>
-              <Animated.View style={[styles.card, frontStyle, { width: CARD_W, height: CARD_H }]}>
-                <CardFront profile={profile} grade={grade} isPremium={isPremium} />
+        <View style={[styles.cardContainer, { paddingVertical: isSmall ? 16 : 24 }]}>
+          <Animated.View style={[styles.glowRing, glowStyle, { width: cardW + 28, height: cardH + 28, borderRadius: 26, top: (isSmall ? 16 : 24) - 14, borderColor: grade.colors[0], shadowColor: grade.colors[0] }]} pointerEvents="none" />
+          <View ref={cardRef} style={{ borderRadius: 18, overflow: "hidden" }} testID="afu-card-capture">
+            <TouchableOpacity onPress={flip} activeOpacity={1} style={{ width: cardW, height: cardH }}>
+              <Animated.View style={[styles.card, frontStyle, { width: cardW, height: cardH }]}>
+                <CardFront profile={profile} grade={grade} isPremium={isPremium} scale={scale} cardW={cardW} />
               </Animated.View>
-              <Animated.View style={[styles.card, backStyle, { width: CARD_W, height: CARD_H, position: "absolute", top: 0 }]}>
-                <CardBack profile={profile} grade={grade} isPremium={isPremium} qrValue={qrPayload} />
+              <Animated.View style={[styles.card, backStyle, { width: cardW, height: cardH, position: "absolute", top: 0 }]}>
+                <CardBack profile={profile} grade={grade} isPremium={isPremium} qrValue={qrPayload} scale={scale} cardW={cardW} />
               </Animated.View>
             </TouchableOpacity>
           </View>
@@ -430,7 +444,7 @@ export default function DigitalIdScreen() {
           </View>
         </View>
 
-        <View style={styles.infoFooter}>
+        <View style={[styles.infoFooter, { paddingHorizontal: isTiny ? 16 : 24 }]}>
           <View style={styles.actionRow}>
             <TouchableOpacity
               style={[styles.saveCardBtn, { flex: 1, opacity: saving ? 0.7 : 1 }]}
@@ -495,10 +509,10 @@ const styles = StyleSheet.create({
   backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   shareBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  cardContainer: { alignItems: "center", paddingVertical: 24 },
-  glowRing: { position: "absolute", width: CARD_W + 28, height: CARD_H + 28, borderRadius: 26, borderWidth: 1, top: 24 - 14, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 24 },
-  card: { borderRadius: 20, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.4, shadowRadius: 28, elevation: 14 },
-  cardContent: { flex: 1, padding: 20, justifyContent: "space-between" },
+  cardContainer: { alignItems: "center" },
+  glowRing: { position: "absolute", borderWidth: 1, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 24 },
+  card: { borderRadius: 18, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 14 },
+  cardContent: { flex: 1, justifyContent: "space-between" },
   cardTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   brandRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   brandSymbol: { width: 26, height: 26, borderRadius: 7 },
@@ -507,11 +521,10 @@ const styles = StyleSheet.create({
   gradeBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
   gradeText: { color: "#fff", fontSize: 9, fontFamily: "Inter_600SemiBold" },
   avatarOuter: { position: "relative" },
-  avatarGradientRing: { width: 50, height: 50, borderRadius: 25, padding: 2, alignItems: "center", justifyContent: "center" },
-  cardAvatar: { width: 46, height: 46, borderRadius: 23 },
+  avatarGradientRing: { alignItems: "center", justifyContent: "center" },
   cardAvatarFallback: { backgroundColor: "#1E3A5F", alignItems: "center", justifyContent: "center" },
-  avatarInitial: { color: "#fff", fontSize: 20, fontFamily: "Inter_700Bold" },
-  premiumBadge: { position: "absolute", bottom: -1, right: -1, width: 16, height: 16, borderRadius: 8, backgroundColor: Colors.gold, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#080E18" },
+  avatarInitial: { color: "#fff", fontFamily: "Inter_700Bold" },
+  premiumBadge: { position: "absolute", bottom: -1, right: -1, backgroundColor: Colors.gold, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#080E18" },
   cardMidRow: { marginTop: -2 },
   displayName: { color: "#fff", fontSize: 19, fontFamily: "Inter_700Bold" },
   handleGradeRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 3 },
@@ -536,7 +549,7 @@ const styles = StyleSheet.create({
   statBox: { flex: 1, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 12, paddingVertical: 10, paddingHorizontal: 8, alignItems: "center", borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.06)" },
   statValue: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
   statLabel: { color: "rgba(255,255,255,0.4)", fontSize: 8, fontFamily: "Inter_600SemiBold", letterSpacing: 1.2, marginTop: 2 },
-  qrBox: { width: 88, height: 88, borderRadius: 14, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", padding: 4 },
+  qrBox: { backgroundColor: "#fff", alignItems: "center", justifyContent: "center", padding: 4 },
   backBottomRow: { flexDirection: "row", alignItems: "center", gap: 14 },
   backBottomInfo: {},
   tapHintRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 14 },
