@@ -23,6 +23,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "message.fill", selected: "message.fill" }} />
         <Label>AfuChat</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="search">
+        <Icon sf={{ default: "magnifyingglass", selected: "magnifyingglass" }} />
+        <Label>Search</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="discover">
         <Icon sf={{ default: "compass", selected: "compass.fill" }} />
         <Label>Discover</Label>
@@ -84,6 +88,18 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
           tabBarIcon: ({ color }) => (
             <Image source={afuSymbol} style={{ width: 26, height: 26, tintColor: color }} resizeMode="contain" />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="search"
+        options={{
+          title: "Search",
+          tabBarIcon: ({ color, focused }) =>
+            isIOS ? (
+              <SymbolView name="magnifyingglass" tintColor={color} size={22} />
+            ) : (
+              <Ionicons name={focused ? "search" : "search-outline"} size={22} color={color} />
+            ),
         }}
       />
       <Tabs.Screen

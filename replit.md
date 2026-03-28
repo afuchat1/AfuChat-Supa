@@ -76,7 +76,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 ### App Architecture
 
 - **Auth**: Supabase Auth (email/password, Google OAuth, GitHub OAuth via WebBrowser + PKCE), AuthContext provider. App scheme `afuchat://` for OAuth deep links. OTP-based password reset (6-digit code, not link). Email confirmation required on registration (OTP verify). All auth emails sent from `noreply@afuchat.com` via Resend (edge function `send-password-reset` handles all email types with branded templates + AfuChat Technologies Ltd footer).
-- **Navigation**: Expo Router with tabs (Chats, Contacts, Discover, Me)
+- **Navigation**: Expo Router with tabs (AfuChat, Search, Discover, Me). Contacts tab exists but is hidden (`href: null`).
 - **Design**: AfuChat teal `#00C2CB` brand color, gold business badge `#D4A853`, Inter font family, dark/light theme, branded afu-symbol logo used for app icon, splash screen (teal background), favicon, and notification icon
 - **Badge System**: `is_organization_verified=true` → gold badge (#D4A853) + "Verified Business" tag. `is_verified=true` (subscription) → teal badge (#00C2CB), no business tag. Applied across me.tsx, discover.tsx, contacts.tsx, contact/[id].tsx, post/[id].tsx, admin/index.tsx.
 - **Cross-platform Alerts**: `lib/alert.ts` exports `showAlert()` — Android uses native `Alert.alert()` for Material Design dialogs; iOS/web use `IOSAlert` custom modal registered in `_layout.tsx` via event listener pattern (`registerAlertListener`/`unregisterAlertListener`). Web fallback uses `window.confirm`/`window.prompt` if listener not registered. All screens use `showAlert()` instead of `Alert.alert` directly.
@@ -111,7 +111,8 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `lib/offlineStore.ts` — AsyncStorage-based caching for profile, conversations, contacts, moments, notifications, messages; pending message queue; NetInfo connectivity tracking
 - `lib/offlineSync.ts` — Auto-sync pending messages on reconnect
 - `app/(tabs)/index.tsx` — Chats list with stories bar
-- `app/(tabs)/contacts.tsx` — Contacts (follows) list
+- `app/(tabs)/search.tsx` — Global search engine (People, Posts, Chats, Channels, Gifts) with trending topics, top users, quick actions, debounced real-time search
+- `app/(tabs)/contacts.tsx` — Contacts (follows) list (hidden from tab bar)
 - `app/(tabs)/discover.tsx` — Posts feed (tap to post detail)
 - `app/(tabs)/me.tsx` — Profile & settings hub (nav to all feature screens, premium banner, golden badge)
 - `app/chat/[id].tsx` — Chat with WhatsApp-style SVG bubble tails, long-press reaction picker, typing indicators, read receipts (blue double-check), gift box UI, red envelopes, offline message queue, cached messages, file uploads via FileSystem.uploadAsync (native) / fetch→blob (web), date headers, network status indicator
