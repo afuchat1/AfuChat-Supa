@@ -1,8 +1,7 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import {
   Dimensions,
   Image,
-  Platform,
   ScrollView,
   Share,
   StyleSheet,
@@ -25,9 +24,12 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import QRCode from "react-native-qrcode-svg";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
+
+const afuSymbol = require("@/assets/images/afu-symbol.png");
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const CARD_W = Math.min(SCREEN_W - 48, 380);
@@ -46,13 +48,13 @@ function formatAfuId(id: string): string {
 function GradeInfo(grade: string): { label: string; colors: [string, string]; icon: string; textColor: string } {
   const map: Record<string, { label: string; colors: [string, string]; icon: string; textColor: string }> = {
     bronze: { label: "Bronze", colors: ["#CD7F32", "#A0602A"], icon: "shield-outline", textColor: "#CD7F32" },
-    silver: { label: "Silver", colors: ["#C0C0C0", "#909090"], icon: "shield-half-outline", textColor: "#C0C0C0" },
-    gold: { label: "Gold", colors: ["#D4A853", "#B8860B"], icon: "shield", textColor: "#D4A853" },
-    platinum: { label: "Platinum", colors: ["#00C2CB", "#008B93"], icon: "star", textColor: "#00C2CB" },
-    diamond: { label: "Diamond", colors: ["#B9F2FF", "#4FC3F7"], icon: "diamond-outline", textColor: "#4FC3F7" },
-    legend: { label: "Legend", colors: ["#FF6B6B", "#E53E3E"], icon: "flame", textColor: "#FF6B6B" },
+    silver: { label: "Silver", colors: ["#C0C0C0", "#909090"], icon: "shield-half-outline", textColor: "#808080" },
+    gold: { label: "Gold", colors: ["#D4A853", "#B8860B"], icon: "shield", textColor: "#B8860B" },
+    platinum: { label: "Platinum", colors: ["#00C2CB", "#008B93"], icon: "star", textColor: "#008B93" },
+    diamond: { label: "Diamond", colors: ["#B9F2FF", "#4FC3F7"], icon: "diamond-outline", textColor: "#0288D1" },
+    legend: { label: "Legend", colors: ["#FF6B6B", "#E53E3E"], icon: "flame", textColor: "#E53E3E" },
   };
-  return map[grade] || { label: "Explorer", colors: ["#8E8E93", "#636366"], icon: "compass-outline", textColor: "#8E8E93" };
+  return map[grade] || { label: "Explorer", colors: ["#8E8E93", "#636366"], icon: "compass-outline", textColor: "#636366" };
 }
 
 function HoloShimmer() {
@@ -111,8 +113,10 @@ function MicroPattern() {
 
 function CardFront({ profile, grade, isPremium }: { profile: any; grade: ReturnType<typeof GradeInfo>; isPremium: boolean }) {
   const afuId = formatAfuId(toAfuId(profile?.id || "00000000"));
-  const joinDate = profile?.created_at ? new Date(profile.created_at) : new Date();
-  const joinStr = joinDate.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+  const joinDate = profile?.created_at ? new Date(profile.created_at) : null;
+  const joinStr = joinDate
+    ? joinDate.toLocaleDateString(undefined, { month: "short", year: "numeric" })
+    : "\u2014";
 
   return (
     <View style={StyleSheet.absoluteFill}>
@@ -139,9 +143,7 @@ function CardFront({ profile, grade, isPremium }: { profile: any; grade: ReturnT
       <View style={styles.cardContent}>
         <View style={styles.cardTopRow}>
           <View style={styles.brandRow}>
-            <View style={styles.brandIcon}>
-              <Text style={styles.brandIconText}>A</Text>
-            </View>
+            <Image source={afuSymbol} style={styles.brandSymbol} resizeMode="contain" />
             <View>
               <Text style={styles.cardAppName}>AFUCHAT</Text>
               <Text style={styles.cardSubtitle}>DIGITAL IDENTITY</Text>
@@ -207,6 +209,8 @@ function CardBack({ profile, grade, isPremium }: { profile: any; grade: ReturnTy
   const level = Math.floor(Math.sqrt(xp / 100)) + 1;
   const acoin = profile?.acoin || 0;
   const afuId = formatAfuId(toAfuId(profile?.id || "00000000"));
+  const handle = profile?.handle || "user";
+  const qrValue = `afuchat://user/${handle}`;
 
   const stats = [
     { label: "NEXA", value: xp.toLocaleString(), icon: "flash" as const, color: Colors.brand },
@@ -230,9 +234,7 @@ function CardBack({ profile, grade, isPremium }: { profile: any; grade: ReturnTy
       <View style={styles.cardContent}>
         <View style={styles.backTopRow}>
           <View style={styles.brandRow}>
-            <View style={styles.brandIcon}>
-              <Text style={styles.brandIconText}>A</Text>
-            </View>
+            <Image source={afuSymbol} style={styles.brandSymbol} resizeMode="contain" />
             <Text style={styles.cardAppName}>AFUCHAT</Text>
           </View>
           {isPremium && (
@@ -255,13 +257,18 @@ function CardBack({ profile, grade, isPremium }: { profile: any; grade: ReturnTy
 
         <View style={styles.backBottomRow}>
           <View style={styles.qrBox}>
-            <Ionicons name="qr-code-outline" size={40} color={Colors.brand} />
+            <QRCode
+              value={qrValue}
+              size={48}
+              color={Colors.brand}
+              backgroundColor="transparent"
+            />
           </View>
           <View style={styles.backBottomInfo}>
             <Text style={styles.idLabel}>AFU ID</Text>
             <Text style={[styles.idNumber, { fontSize: 14, letterSpacing: 2 }]}>{afuId}</Text>
-            <Text style={[styles.idLabel, { marginTop: 6 }]}>HANDLE</Text>
-            <Text style={[styles.idNumber, { color: Colors.brand }]}>@{profile?.handle || "user"}</Text>
+            <Text style={[styles.idLabel, { marginTop: 6 }]}>SCAN TO ADD</Text>
+            <Text style={[styles.idNumber, { color: Colors.brand }]}>@{handle}</Text>
           </View>
         </View>
       </View>
@@ -350,6 +357,10 @@ export default function DigitalIdScreen() {
 
   const xp = profile?.xp || 0;
   const level = Math.floor(Math.sqrt(xp / 100)) + 1;
+  const joinDate = profile?.created_at ? new Date(profile.created_at) : null;
+  const joinStr = joinDate
+    ? joinDate.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
+    : "\u2014";
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -398,10 +409,10 @@ export default function DigitalIdScreen() {
             <InfoItem icon="flash-outline" label="Nexa" value={xp.toLocaleString()} valueColor={Colors.brand} borderColor={isDark ? "#1E2D3D" : colors.border} labelColor={colors.textSecondary} defaultValueColor={colors.text} />
             <InfoItem icon="diamond-outline" label="ACoin" value={(profile?.acoin || 0).toLocaleString()} valueColor={Colors.gold} borderColor={isDark ? "#1E2D3D" : colors.border} labelColor={colors.textSecondary} defaultValueColor={colors.text} />
             <InfoItem icon="trending-up-outline" label="Level" value={level.toString()} borderColor={isDark ? "#1E2D3D" : colors.border} labelColor={colors.textSecondary} defaultValueColor={colors.text} />
-            {isPremium && (
+            <InfoItem icon="calendar-outline" label="Joined" value={joinStr} borderColor={isDark ? "#1E2D3D" : colors.border} labelColor={colors.textSecondary} defaultValueColor={colors.text} />
+            {isPremium ? (
               <InfoItem icon="diamond" label="Membership" value="Premium" valueColor={Colors.gold} borderColor="transparent" labelColor={colors.textSecondary} defaultValueColor={colors.text} />
-            )}
-            {!isPremium && (
+            ) : (
               <InfoItem icon="shield-checkmark-outline" label="Membership" value="Standard" borderColor="transparent" labelColor={colors.textSecondary} defaultValueColor={colors.text} />
             )}
           </View>
@@ -460,15 +471,11 @@ const styles = StyleSheet.create({
   cardContent: { flex: 1, padding: 20, justifyContent: "space-between" },
   cardTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   brandRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  brandIcon: {
+  brandSymbol: {
     width: 26,
     height: 26,
     borderRadius: 7,
-    backgroundColor: Colors.brand,
-    alignItems: "center",
-    justifyContent: "center",
   },
-  brandIconText: { color: "#fff", fontSize: 14, fontFamily: "Inter_700Bold" },
   cardAppName: { color: "#fff", fontSize: 12, fontFamily: "Inter_700Bold", letterSpacing: 2.5 },
   cardSubtitle: { color: "rgba(255,255,255,0.35)", fontSize: 8, fontFamily: "Inter_600SemiBold", letterSpacing: 2, marginTop: 1 },
   gradeBadge: {
@@ -560,11 +567,10 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 14,
-    backgroundColor: `${Colors.brand}0D`,
-    borderWidth: 1,
-    borderColor: `${Colors.brand}30`,
+    backgroundColor: "rgba(255,255,255,0.95)",
     alignItems: "center",
     justifyContent: "center",
+    padding: 4,
   },
   backBottomRow: { flexDirection: "row", alignItems: "center", gap: 14 },
   backBottomInfo: {},
@@ -582,8 +588,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  infoLabel: { flex: 1, color: "#6B90B4", fontSize: 13, fontFamily: "Inter_400Regular" },
-  infoValue: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  infoLabel: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular" },
+  infoValue: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   securitySection: { paddingHorizontal: 24, marginTop: 16 },
   securityCard: { flexDirection: "row", alignItems: "center", borderRadius: 14, padding: 14 },
   securityTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
