@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "AfuChat",
-    "slug": "mobile",
+    "slug": "afuchat",
     "version": "2.0.1.7",
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
@@ -109,9 +109,9 @@
     },
     "extra": {
       "eas": {
-        "projectId": "89fcac26-c3be-4941-af21-2c3743616316"
+        "projectId": "b55c5d92-7a83-472f-b660-d1838efba5fe"
       }
     },
-    "owner": "afuchat"
+    "owner": "amkaweesi1"
   }
 }
