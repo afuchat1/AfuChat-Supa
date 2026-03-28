@@ -41,7 +41,7 @@ const seoTags = `
       "author": { "@type": "Organization", "name": "AfuChat", "url": "https://afuchat.com" }
     })}</script>`;
 
-html = html.replace(/<meta name="theme-color" content="#34A853">\n?/g, '');
+html = html.replace(/<meta name="theme-color" content="#4ECDC4">\n?/g, '');
 html = html.replace(/<meta name="description" content="Connect, Chat, Discover\. Your all-in-one social platform\.">\n?/g, '');
 
 if (html.includes('<title>AfuChat</title>')) {

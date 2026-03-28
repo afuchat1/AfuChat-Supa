@@ -150,7 +150,7 @@ INSERT INTO prestige_tiers (name, min_acoin, color, emoji, description) VALUES
   ('Gold',     2000,   '#D4A853', '🥇', 'Dedicated community members'),
   ('Diamond',  10000,  '#B9F2FF', '💎', 'Elite community members'),
   ('Obsidian', 50000,  '#1C1C1E', '🔮', 'Legendary status achieved'),
-  ('Legend',   200000, '#34A853', '👑', 'The highest honor in AfuChat')
+  ('Legend',   200000, '#4ECDC4', '👑', 'The highest honor in AfuChat')
 ON CONFLICT (name) DO NOTHING;
 
 
@@ -309,7 +309,7 @@ CREATE TABLE IF NOT EXISTS collections (
   user_id     UUID REFERENCES profiles(id) ON DELETE CASCADE,
   name        TEXT NOT NULL,
   emoji       TEXT DEFAULT '📁',
-  color       TEXT DEFAULT '#34A853',
+  color       TEXT DEFAULT '#4ECDC4',
   is_private  BOOLEAN DEFAULT FALSE,
   item_count  INTEGER DEFAULT 0,
   created_at  TIMESTAMPTZ DEFAULT NOW()

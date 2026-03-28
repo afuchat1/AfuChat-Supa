@@ -20,16 +20,16 @@ const FOOTER_HTML = `
 <tr><td style="padding:28px 28px 20px;border-top:1px solid #eee;">
 <table width="100%" cellpadding="0" cellspacing="0">
 <tr><td style="text-align:center;padding-bottom:16px;">
-<a href="https://afuchat.com" style="color:#34A853;text-decoration:none;font-size:13px;font-weight:600;margin:0 8px;">Website</a>
+<a href="https://afuchat.com" style="color:#4ECDC4;text-decoration:none;font-size:13px;font-weight:600;margin:0 8px;">Website</a>
 <span style="color:#ddd;">|</span>
-<a href="https://afuchat.com/help" style="color:#34A853;text-decoration:none;font-size:13px;font-weight:600;margin:0 8px;">Help Center</a>
+<a href="https://afuchat.com/help" style="color:#4ECDC4;text-decoration:none;font-size:13px;font-weight:600;margin:0 8px;">Help Center</a>
 <span style="color:#ddd;">|</span>
-<a href="https://afuchat.com/privacy" style="color:#34A853;text-decoration:none;font-size:13px;font-weight:600;margin:0 8px;">Privacy</a>
+<a href="https://afuchat.com/privacy" style="color:#4ECDC4;text-decoration:none;font-size:13px;font-weight:600;margin:0 8px;">Privacy</a>
 <span style="color:#ddd;">|</span>
-<a href="https://afuchat.com/terms" style="color:#34A853;text-decoration:none;font-size:13px;font-weight:600;margin:0 8px;">Terms</a>
+<a href="https://afuchat.com/terms" style="color:#4ECDC4;text-decoration:none;font-size:13px;font-weight:600;margin:0 8px;">Terms</a>
 </td></tr>
 <tr><td style="text-align:center;padding-bottom:6px;">
-<p style="color:#999;font-size:12px;margin:0;line-height:1.6;">Need help? Contact us at <a href="mailto:support@afuchat.com" style="color:#34A853;text-decoration:none;">support@afuchat.com</a></p>
+<p style="color:#999;font-size:12px;margin:0;line-height:1.6;">Need help? Contact us at <a href="mailto:support@afuchat.com" style="color:#4ECDC4;text-decoration:none;">support@afuchat.com</a></p>
 </td></tr>
 <tr><td style="text-align:center;padding-bottom:4px;">
 <p style="color:#bbb;font-size:11px;margin:0;line-height:1.6;">
@@ -56,7 +56,7 @@ function wrapEmail(bodyContent: string): string {
 <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f4;padding:40px 20px;">
 <tr><td align="center">
 <table width="100%" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
-<tr><td style="background:linear-gradient(135deg,#34A853 0%,#2D9B4E 100%);padding:32px 24px;text-align:center;">
+<tr><td style="background:linear-gradient(135deg,#4ECDC4 0%,#40B5AE 100%);padding:32px 24px;text-align:center;">
 <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700;letter-spacing:-0.3px;">AfuChat</h1>
 </td></tr>
 <tr><td style="padding:32px 28px;">
@@ -82,19 +82,19 @@ function getTemplateContent(template: TemplateType, displayName: string, customD
 <p style="color:#666;font-size:15px;line-height:1.6;margin:0 0 20px;">We're thrilled to have you on AfuChat. Here are a few things to get you started:</p>
 <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
 <tr><td style="padding:12px 0;border-bottom:1px solid #f0f0f0;">
-<span style="color:#34A853;font-size:18px;font-weight:700;margin-right:12px;">1</span>
+<span style="color:#4ECDC4;font-size:18px;font-weight:700;margin-right:12px;">1</span>
 <span style="color:#444;font-size:14px;">Complete your profile with a photo and bio</span>
 </td></tr>
 <tr><td style="padding:12px 0;border-bottom:1px solid #f0f0f0;">
-<span style="color:#34A853;font-size:18px;font-weight:700;margin-right:12px;">2</span>
+<span style="color:#4ECDC4;font-size:18px;font-weight:700;margin-right:12px;">2</span>
 <span style="color:#444;font-size:14px;">Find and follow friends in Contacts</span>
 </td></tr>
 <tr><td style="padding:12px 0;border-bottom:1px solid #f0f0f0;">
-<span style="color:#34A853;font-size:18px;font-weight:700;margin-right:12px;">3</span>
+<span style="color:#4ECDC4;font-size:18px;font-weight:700;margin-right:12px;">3</span>
 <span style="color:#444;font-size:14px;">Share your first post on Discover</span>
 </td></tr>
 <tr><td style="padding:12px 0;">
-<span style="color:#34A853;font-size:18px;font-weight:700;margin-right:12px;">4</span>
+<span style="color:#4ECDC4;font-size:18px;font-weight:700;margin-right:12px;">4</span>
 <span style="color:#444;font-size:14px;">Try AfuAi \u2014 your personal AI assistant</span>
 </td></tr>
 </table>
@@ -112,7 +112,7 @@ function getTemplateContent(template: TemplateType, displayName: string, customD
 <p style="color:#666;font-size:14px;margin:0;line-height:1.6;">New messages, posts from your contacts, and updates from channels you follow.</p>
 </div>
 <div style="text-align:center;margin:0 0 24px;">
-<a href="https://afuchat.com" style="display:inline-block;background:#34A853;color:#fff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:15px;font-weight:600;">Open AfuChat</a>
+<a href="https://afuchat.com" style="display:inline-block;background:#4ECDC4;color:#fff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:15px;font-weight:600;">Open AfuChat</a>
 </div>
 <p style="color:#999;font-size:13px;line-height:1.5;margin:0;">We'll keep your chats and data safe until you're ready to return.</p>`),
       };
@@ -127,7 +127,7 @@ function getTemplateContent(template: TemplateType, displayName: string, customD
 <p style="color:#00897B;font-size:15px;margin:0;line-height:1.6;font-weight:500;">${customData?.body || "Check out the latest features and improvements we've made to enhance your experience."}</p>
 </div>
 <div style="text-align:center;margin:0 0 24px;">
-<a href="https://afuchat.com" style="display:inline-block;background:#34A853;color:#fff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:15px;font-weight:600;">See What's New</a>
+<a href="https://afuchat.com" style="display:inline-block;background:#4ECDC4;color:#fff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:15px;font-weight:600;">See What's New</a>
 </div>
 <p style="color:#999;font-size:13px;line-height:1.5;margin:0;">Update your app to get the latest version with all improvements.</p>`),
       };
@@ -142,7 +142,7 @@ function getTemplateContent(template: TemplateType, displayName: string, customD
 <p style="color:#444;font-size:14px;margin:0;line-height:1.8;">${customData?.body || "Your contacts have been active. Open AfuChat to catch up on messages and posts."}</p>
 </div>
 <div style="text-align:center;margin:0 0 24px;">
-<a href="https://afuchat.com" style="display:inline-block;background:#34A853;color:#fff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:15px;font-weight:600;">Open AfuChat</a>
+<a href="https://afuchat.com" style="display:inline-block;background:#4ECDC4;color:#fff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:15px;font-weight:600;">Open AfuChat</a>
 </div>`),
       };
 
@@ -169,7 +169,7 @@ function getTemplateContent(template: TemplateType, displayName: string, customD
 <p style="color:#666;font-size:15px;line-height:1.6;margin:0 0 20px;">Hi ${name},</p>
 <p style="color:#444;font-size:15px;line-height:1.7;margin:0 0 24px;">${customData?.body || ""}</p>
 ${customData?.ctaText && customData?.ctaUrl ? `<div style="text-align:center;margin:0 0 24px;">
-<a href="${customData.ctaUrl}" style="display:inline-block;background:#34A853;color:#fff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:15px;font-weight:600;">${customData.ctaText}</a>
+<a href="${customData.ctaUrl}" style="display:inline-block;background:#4ECDC4;color:#fff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:15px;font-weight:600;">${customData.ctaText}</a>
 </div>` : ""}`),
       };
 
@@ -180,7 +180,7 @@ ${customData?.ctaText && customData?.ctaUrl ? `<div style="text-align:center;mar
 <h2 style="color:#1a1a1a;font-size:20px;margin:0 0 16px;font-weight:600;">Hello, ${name}!</h2>
 <p style="color:#666;font-size:15px;line-height:1.6;margin:0 0 20px;">We have some updates for you on AfuChat.</p>
 <div style="text-align:center;margin:0 0 24px;">
-<a href="https://afuchat.com" style="display:inline-block;background:#34A853;color:#fff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:15px;font-weight:600;">Open AfuChat</a>
+<a href="https://afuchat.com" style="display:inline-block;background:#4ECDC4;color:#fff;text-decoration:none;padding:14px 32px;border-radius:12px;font-size:15px;font-weight:600;">Open AfuChat</a>
 </div>`),
       };
   }

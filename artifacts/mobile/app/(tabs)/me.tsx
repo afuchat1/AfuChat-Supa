@@ -157,7 +157,7 @@ function XpLevelBar({ xp }: { xp: number }) {
           <View style={[styles.xpTrack, { backgroundColor: colors.backgroundTertiary }]}>
             <Animated.View style={[styles.xpFill, fillStyle]}>
               <LinearGradient
-                colors={["#34A853", "#AF52DE"]}
+                colors={["#4ECDC4", "#AF52DE"]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={StyleSheet.absoluteFill}
@@ -291,7 +291,7 @@ export default function MeScreen() {
       </MenuGroup>
 
       <MenuGroup>
-        <MenuItem icon="sparkles-outline" iconBg="#34A853" label="AfuAi" onPress={() => router.push("/ai")} />
+        <MenuItem icon="sparkles-outline" iconBg="#4ECDC4" label="AfuAi" onPress={() => router.push("/ai")} />
         <Separator indent={54} />
         <MenuItem icon="newspaper-outline" iconBg="#FF9500" label="My Posts" onPress={() => router.push("/my-posts")} />
         <Separator indent={54} />
@@ -301,7 +301,7 @@ export default function MeScreen() {
         <Separator indent={54} />
         <MenuItem icon="document-outline" iconBg="#5856D6" label="File Manager" onPress={() => router.push("/file-manager")} />
         <Separator indent={54} />
-        <MenuItem icon="person-add-outline" iconBg="#34A853" label="Find People" onPress={() => router.push("/user-discovery")} badge="NEW" />
+        <MenuItem icon="person-add-outline" iconBg="#4ECDC4" label="Find People" onPress={() => router.push("/user-discovery")} badge="NEW" />
         <Separator indent={54} />
         <MenuItem icon="images-outline" iconBg="#FF9500" label="Stories" onPress={() => router.push("/stories/create")} />
         <Separator indent={54} />
@@ -309,7 +309,7 @@ export default function MeScreen() {
       </MenuGroup>
 
       <MenuGroup>
-        <MenuItem icon="wallet-outline" iconBg="#34A853" label="Wallet" onPress={() => router.push("/wallet")} />
+        <MenuItem icon="wallet-outline" iconBg="#4ECDC4" label="Wallet" onPress={() => router.push("/wallet")} />
         <Separator indent={54} />
         <MenuItem icon="gift-outline" iconBg="#FF3B30" label="Gifts" onPress={() => router.push("/gifts")} />
         <Separator indent={54} />

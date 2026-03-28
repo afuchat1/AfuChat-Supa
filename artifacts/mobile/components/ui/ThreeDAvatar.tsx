@@ -3,7 +3,7 @@ import { Image, StyleSheet, Text, View } from "react-native";
 
 const COLORS = [
   "#FF6B6B", "#FF8E53", "#FFC107", "#56CCF2",
-  "#34A853", "#6C63FF", "#AF52DE", "#34C759",
+  "#4ECDC4", "#6C63FF", "#AF52DE", "#34C759",
 ];
 
 function nameColor(name: string): string {

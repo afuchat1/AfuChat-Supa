@@ -523,7 +523,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
             >
               <Image source={{ uri: msg.attachment_url! }} style={st.attachImage} resizeMode="cover" />
               {hasTextContent && (
-                <RichText style={[st.bubbleText, { color: textColor, marginTop: 6 }]} linkColor={isMe ? "#FFFFFF" : "#34A853"}>{displayText}</RichText>
+                <RichText style={[st.bubbleText, { color: textColor, marginTop: 6 }]} linkColor={isMe ? "#FFFFFF" : "#4ECDC4"}>{displayText}</RichText>
               )}
             </TouchableOpacity>
           ) : hasVideo ? (
@@ -540,7 +540,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
             </TouchableOpacity>
           ) : hasAudio ? (
             <View>
-              <AudioPlayer uri={msg.attachment_url!} tintColor={textColor} waveColor={isMe ? "#FFFFFF" : "#34A853"} />
+              <AudioPlayer uri={msg.attachment_url!} tintColor={textColor} waveColor={isMe ? "#FFFFFF" : "#4ECDC4"} />
               {canTranscribe && (
                 <TouchableOpacity
                   onPress={handleTranscribe}
@@ -573,7 +573,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
             </TouchableOpacity>
           ) : (
             <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
-              <RichText style={[st.bubbleText, { color: textColor }]} linkColor={isMe ? "#FFFFFF" : "#34A853"}>{displayText}</RichText>
+              <RichText style={[st.bubbleText, { color: textColor }]} linkColor={isMe ? "#FFFFFF" : "#4ECDC4"}>{displayText}</RichText>
             </TouchableOpacity>
           )}
 
