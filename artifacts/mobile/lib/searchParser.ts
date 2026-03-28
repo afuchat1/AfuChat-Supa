@@ -1,4 +1,4 @@
-export type MediaFilter = "images" | "videos" | "documents" | "voice" | "links" | null;
+export type MediaFilter = "images" | "videos" | null;
 export type TimeFilter = "today" | "yesterday" | "this_week" | "last_week" | "this_month" | "last_month" | null;
 
 export interface ParsedQuery {
@@ -25,10 +25,7 @@ const TIME_PATTERNS: { pattern: RegExp; filter: TimeFilter }[] = [
 
 const MEDIA_PATTERNS: { pattern: RegExp; filter: MediaFilter }[] = [
   { pattern: /\b(?:photos?|images?|pictures?|pics?)\b/i, filter: "images" },
-  { pattern: /\b(?:videos?|clips?|recordings?)\b/i, filter: "videos" },
-  { pattern: /\b(?:documents?|docs?|files?|pdfs?)\b/i, filter: "documents" },
-  { pattern: /\b(?:voice\s*(?:notes?|messages?)?|audio|recordings?)\b/i, filter: "voice" },
-  { pattern: /\b(?:links?|urls?|websites?)\b/i, filter: "links" },
+  { pattern: /\b(?:videos?|clips?)\b/i, filter: "videos" },
 ];
 
 const PERSON_PATTERNS = [
@@ -41,19 +38,14 @@ const PERSON_PATTERNS = [
 const NOISE_WORDS = /\b(?:sent|shared|posted|from|by|in|the|a|an|about|with|that|this|last|my|me|i)\b/gi;
 
 const COMMANDS: Record<string, { category?: string; mediaFilter?: MediaFilter }> = {
-  "/files": { mediaFilter: "documents" },
-  "/links": { mediaFilter: "links" },
   "/images": { mediaFilter: "images" },
   "/photos": { mediaFilter: "images" },
   "/videos": { mediaFilter: "videos" },
-  "/voice": { mediaFilter: "voice" },
   "/people": { category: "people" },
   "/users": { category: "people" },
   "/posts": { category: "posts" },
-  "/chats": { category: "chats" },
   "/channels": { category: "channels" },
   "/gifts": { category: "gifts" },
-  "/media": { mediaFilter: "images" },
 };
 
 export function parseSearchQuery(raw: string): ParsedQuery {
@@ -177,19 +169,6 @@ export function getMediaFilterLabel(filter: MediaFilter): string {
   switch (filter) {
     case "images": return "Images";
     case "videos": return "Videos";
-    case "documents": return "Files";
-    case "voice": return "Voice";
-    case "links": return "Links";
     default: return "";
-  }
-}
-
-export function getMediaAttachmentType(filter: MediaFilter): string | null {
-  switch (filter) {
-    case "images": return "image";
-    case "videos": return "video";
-    case "documents": return "file";
-    case "voice": return "audio";
-    default: return null;
   }
 }

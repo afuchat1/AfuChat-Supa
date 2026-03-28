@@ -1,9 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   Dimensions,
   Image,
-  Linking,
   Platform,
   ScrollView,
   Share,
@@ -27,7 +25,6 @@ import {
   getTimeRange,
   getTimeFilterLabel,
   getMediaFilterLabel,
-  getMediaAttachmentType,
   type MediaFilter,
   type TimeFilter,
   type ParsedQuery,
@@ -51,15 +48,12 @@ const { width: SCREEN_W } = Dimensions.get("window");
 const BRAND = "#00C2CB";
 const GOLD = "#D4A853";
 
-type SearchCategory = "all" | "people" | "posts" | "chats" | "channels" | "gifts" | "media" | "links" | "hashtags";
+type SearchCategory = "all" | "people" | "posts" | "channels" | "gifts" | "hashtags";
 
 const CATEGORIES: { id: SearchCategory; label: string; icon: string }[] = [
   { id: "all", label: "All", icon: "apps" },
   { id: "people", label: "People", icon: "people" },
   { id: "posts", label: "Posts", icon: "document-text" },
-  { id: "chats", label: "Chats", icon: "chatbubbles" },
-  { id: "media", label: "Media", icon: "images" },
-  { id: "links", label: "Links", icon: "link" },
   { id: "channels", label: "Channels", icon: "megaphone" },
   { id: "hashtags", label: "Tags", icon: "pricetag" },
   { id: "gifts", label: "Gifts", icon: "gift" },
@@ -79,9 +73,6 @@ const MEDIA_OPTIONS: { id: MediaFilter; label: string; icon: string }[] = [
   { id: null, label: "All Types", icon: "grid" },
   { id: "images", label: "Images", icon: "image" },
   { id: "videos", label: "Videos", icon: "videocam" },
-  { id: "documents", label: "Files", icon: "document" },
-  { id: "voice", label: "Voice", icon: "mic" },
-  { id: "links", label: "Links", icon: "link" },
 ];
 
 const TRENDING_TAGS = [
@@ -93,11 +84,8 @@ const TRENDING_TAGS = [
 const COMMANDS_HELP = [
   { cmd: "@username", desc: "Search by person" },
   { cmd: "#hashtag", desc: "Search hashtags" },
-  { cmd: "/files", desc: "Find documents" },
-  { cmd: "/links", desc: "Find shared links" },
-  { cmd: "/images", desc: "Find images" },
-  { cmd: "/videos", desc: "Find videos" },
-  { cmd: "/voice", desc: "Find voice notes" },
+  { cmd: "/images", desc: "Find image posts" },
+  { cmd: "/videos", desc: "Find video posts" },
 ];
 
 type PersonResult = {
@@ -124,15 +112,6 @@ type PostResult = {
   created_at: string;
 };
 
-type ChatResult = {
-  id: string;
-  other_user_handle: string;
-  other_user_name: string;
-  other_user_avatar: string | null;
-  last_message: string;
-  updated_at: string;
-};
-
 type ChannelResult = {
   id: string;
   name: string;
@@ -149,39 +128,15 @@ type GiftResult = {
   rarity: string;
 };
 
-type MediaResult = {
-  id: string;
-  attachment_url: string;
-  attachment_type: string;
-  attachment_name: string | null;
-  sender_name: string;
-  sender_handle: string;
-  chat_id: string;
-  sent_at: string;
-};
-
-type LinkResult = {
-  id: string;
-  url: string;
-  context: string;
-  sender_name: string;
-  sender_handle: string;
-  chat_id: string;
-  sent_at: string;
-};
-
 type SearchResults = {
   people: PersonResult[];
   posts: PostResult[];
-  chats: ChatResult[];
   channels: ChannelResult[];
   gifts: GiftResult[];
-  media: MediaResult[];
-  links: LinkResult[];
 };
 
 const EMPTY_RESULTS: SearchResults = {
-  people: [], posts: [], chats: [], channels: [], gifts: [], media: [], links: [],
+  people: [], posts: [], channels: [], gifts: [],
 };
 
 function timeAgo(iso: string) {
@@ -195,11 +150,6 @@ function timeAgo(iso: string) {
   const days = Math.floor(hrs / 24);
   if (days < 30) return `${days}d`;
   return `${Math.floor(days / 30)}mo`;
-}
-
-function extractUrls(text: string): string[] {
-  const urlRegex = /(https?:\/\/[^\s]+)/gi;
-  return text.match(urlRegex) || [];
 }
 
 type ViewMode = "search" | "history" | "filters";
@@ -370,23 +320,6 @@ export default function SearchScreen() {
         promises.push(Promise.resolve({ data: [] }));
       }
 
-      if (searchAll || cat === "chats") {
-        if ((pattern || effectivePerson) && user) {
-          let q = supabase
-            .from("messages")
-            .select("id, encrypted_content, sender_id, chat_id, sent_at");
-          if (pattern) q = q.ilike("encrypted_content", pattern);
-          if (timeRange) {
-            q = q.gte("sent_at", timeRange.from).lte("sent_at", timeRange.to);
-          }
-          promises.push(q.order("sent_at", { ascending: false }).limit(20));
-        } else {
-          promises.push(Promise.resolve({ data: [] }));
-        }
-      } else {
-        promises.push(Promise.resolve({ data: [] }));
-      }
-
       if (searchAll || cat === "channels") {
         if (pattern) {
           promises.push(
@@ -421,41 +354,7 @@ export default function SearchScreen() {
         promises.push(Promise.resolve({ data: [] }));
       }
 
-      if (searchAll || cat === "media") {
-        if (user) {
-          let q = supabase
-            .from("messages")
-            .select("id, attachment_url, attachment_type, attachment_name, sender_id, chat_id, sent_at")
-            .not("attachment_url", "is", null);
-          const attType = getMediaAttachmentType(effectiveMedia);
-          if (attType) q = q.eq("attachment_type", attType);
-          if (pattern) q = q.ilike("encrypted_content", pattern);
-          if (timeRange) q = q.gte("sent_at", timeRange.from).lte("sent_at", timeRange.to);
-          promises.push(q.order("sent_at", { ascending: false }).limit(30));
-        } else {
-          promises.push(Promise.resolve({ data: [] }));
-        }
-      } else {
-        promises.push(Promise.resolve({ data: [] }));
-      }
-
-      if (searchAll || cat === "links") {
-        if (user) {
-          let q = supabase
-            .from("messages")
-            .select("id, encrypted_content, sender_id, chat_id, sent_at")
-            .or("encrypted_content.ilike.%http://%,encrypted_content.ilike.%https://%");
-          if (pattern) q = q.ilike("encrypted_content", pattern);
-          if (timeRange) q = q.gte("sent_at", timeRange.from).lte("sent_at", timeRange.to);
-          promises.push(q.order("sent_at", { ascending: false }).limit(20));
-        } else {
-          promises.push(Promise.resolve({ data: [] }));
-        }
-      } else {
-        promises.push(Promise.resolve({ data: [] }));
-      }
-
-      const [peopleRes, postsRes, chatsRes, channelsRes, giftsRes, mediaRes, linksRes] = await Promise.all(promises);
+      const [peopleRes, postsRes, channelsRes, giftsRes] = await Promise.all(promises);
 
       if (currentId !== searchIdRef.current) return;
 
@@ -480,66 +379,10 @@ export default function SearchScreen() {
         });
       }
 
-      let chats: ChatResult[] = [];
-      if (chatsRes.data && chatsRes.data.length > 0) {
-        const grouped = new Map<string, any>();
-        for (const msg of chatsRes.data as any[]) {
-          if (!grouped.has(msg.chat_id)) grouped.set(msg.chat_id, msg);
-        }
-        const chatIds = [...grouped.keys()];
-        const { data: chatData } = await supabase.from("chats").select("id, user1_id, user2_id").in("id", chatIds);
-        if (chatData) {
-          const otherUserIds = chatData.map((c: any) => c.user1_id === user?.id ? c.user2_id : c.user1_id);
-          const { data: otherUsers } = await supabase.from("profiles").select("id, handle, display_name, avatar_url").in("id", otherUserIds);
-          const userMap = new Map((otherUsers || []).map((u: any) => [u.id, u]));
-          chats = chatData.map((c: any) => {
-            const otherId = c.user1_id === user?.id ? c.user2_id : c.user1_id;
-            const other = userMap.get(otherId) || {} as any;
-            const msg = grouped.get(c.id);
-            return {
-              id: c.id, other_user_handle: other.handle || "", other_user_name: other.display_name || "",
-              other_user_avatar: other.avatar_url || null, last_message: msg?.encrypted_content || "",
-              updated_at: msg?.sent_at || "",
-            };
-          });
-        }
-      }
-
       const channels: ChannelResult[] = channelsRes.data || [];
       const gifts: GiftResult[] = giftsRes.data || [];
 
-      let media: MediaResult[] = [];
-      if (mediaRes.data && mediaRes.data.length > 0) {
-        const senderIds = [...new Set((mediaRes.data as any[]).map((m: any) => m.sender_id))];
-        const { data: senders } = await supabase.from("profiles").select("id, handle, display_name").in("id", senderIds);
-        const senderMap = new Map((senders || []).map((s: any) => [s.id, s]));
-        media = (mediaRes.data as any[]).filter((m: any) => m.attachment_url).map((m: any) => {
-          const sender = senderMap.get(m.sender_id) || {} as any;
-          return {
-            id: m.id, attachment_url: m.attachment_url, attachment_type: m.attachment_type || "file",
-            attachment_name: m.attachment_name || null, sender_name: sender.display_name || "",
-            sender_handle: sender.handle || "", chat_id: m.chat_id, sent_at: m.sent_at,
-          };
-        });
-      }
-
-      let links: LinkResult[] = [];
-      if (linksRes.data && linksRes.data.length > 0) {
-        const senderIds = [...new Set((linksRes.data as any[]).map((l: any) => l.sender_id))];
-        const { data: senders } = await supabase.from("profiles").select("id, handle, display_name").in("id", senderIds);
-        const senderMap = new Map((senders || []).map((s: any) => [s.id, s]));
-        links = (linksRes.data as any[]).flatMap((l: any) => {
-          const urls = extractUrls(l.encrypted_content || "");
-          const sender = senderMap.get(l.sender_id) || {} as any;
-          return urls.map((url: string) => ({
-            id: `${l.id}-${url.slice(0, 20)}`, url, context: (l.encrypted_content || "").slice(0, 120),
-            sender_name: sender.display_name || "", sender_handle: sender.handle || "",
-            chat_id: l.chat_id, sent_at: l.sent_at,
-          }));
-        });
-      }
-
-      setResults({ people, posts, chats, channels, gifts, media, links });
+      setResults({ people, posts, channels, gifts });
     } catch (e) {
       console.warn("Search error:", e);
     } finally {
@@ -576,7 +419,6 @@ export default function SearchScreen() {
 
   function onCategoryPress(cat: SearchCategory) {
     setCategory(cat);
-    if (cat === "media") setShowMediaFilter(true);
     if (query.trim().length >= 1) {
       performSearch(query, cat, timeFilter, mediaFilter, personFilter);
     }
@@ -698,8 +540,8 @@ export default function SearchScreen() {
   }, [query, savedSearches]);
 
   const totalResults =
-    results.people.length + results.posts.length + results.chats.length +
-    results.channels.length + results.gifts.length + results.media.length + results.links.length;
+    results.people.length + results.posts.length +
+    results.channels.length + results.gifts.length;
 
   function SectionHeader({ title, count, icon }: { title: string; count: number; icon: string }) {
     if (count === 0) return null;
@@ -788,31 +630,6 @@ export default function SearchScreen() {
     );
   }
 
-  function renderChatCard(chat: ChatResult, index: number) {
-    return (
-      <Animated.View key={chat.id} entering={FadeInRight.delay(index * 30).duration(250)}>
-        <TouchableOpacity
-          style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          activeOpacity={0.7}
-          onPress={() => router.push(`/chat/${chat.id}` as any)}
-        >
-          {chat.other_user_avatar ? (
-            <Image source={{ uri: chat.other_user_avatar }} style={s.avatar42} />
-          ) : (
-            <View style={[s.avatar42, { backgroundColor: BRAND + "15", justifyContent: "center", alignItems: "center" }]}>
-              <Ionicons name="chatbubble" size={16} color={BRAND} />
-            </View>
-          )}
-          <View style={{ flex: 1 }}>
-            <Text style={[s.nameText, { color: colors.text, fontSize: 14 }]}>{chat.other_user_name || `@${chat.other_user_handle}`}</Text>
-            <Text style={[s.subText, { color: colors.textSecondary }]} numberOfLines={1}>{chat.last_message}</Text>
-          </View>
-          <Text style={{ color: colors.textMuted, fontSize: 10 }}>{timeAgo(chat.updated_at)}</Text>
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  }
-
   function renderChannelCard(ch: ChannelResult, index: number) {
     return (
       <Animated.View key={ch.id} entering={FadeInDown.delay(index * 30).duration(250)}>
@@ -854,56 +671,6 @@ export default function SearchScreen() {
             <Text style={{ color: GOLD, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>{gift.base_xp_cost}</Text>
           </View>
           <Text style={{ color: colors.textMuted, fontSize: 9, textTransform: "capitalize" }}>{gift.rarity}</Text>
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  }
-
-  function renderMediaCard(m: MediaResult, index: number) {
-    const isImage = m.attachment_type === "image";
-    const isVideo = m.attachment_type === "video";
-    return (
-      <Animated.View key={m.id} entering={FadeIn.delay(index * 30).duration(250)}>
-        <TouchableOpacity
-          style={[s.mediaCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          activeOpacity={0.7}
-          onPress={() => router.push(`/chat/${m.chat_id}` as any)}
-        >
-          {isImage ? (
-            <Image source={{ uri: m.attachment_url }} style={s.mediaThumbnail} resizeMode="cover" />
-          ) : (
-            <View style={[s.mediaThumbnail, { backgroundColor: BRAND + "15", alignItems: "center", justifyContent: "center" }]}>
-              <Ionicons name={isVideo ? "videocam" : m.attachment_type === "audio" ? "mic" : "document"} size={22} color={BRAND} />
-            </View>
-          )}
-          <Text style={[{ color: colors.text, fontSize: 11, fontFamily: "Inter_500Medium" }]} numberOfLines={1}>
-            {m.attachment_name || m.attachment_type}
-          </Text>
-          <Text style={{ color: colors.textMuted, fontSize: 10 }}>{timeAgo(m.sent_at)}</Text>
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  }
-
-  function renderLinkCard(link: LinkResult, index: number) {
-    let domain = "";
-    try { domain = new URL(link.url).hostname.replace("www.", ""); } catch { domain = link.url.slice(0, 30); }
-    return (
-      <Animated.View key={link.id} entering={FadeInDown.delay(index * 30).duration(250)}>
-        <TouchableOpacity
-          style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          activeOpacity={0.7}
-          onPress={() => Linking.openURL(link.url)}
-        >
-          <View style={[s.avatar42, { backgroundColor: "#3B82F6" + "15", borderRadius: 12, alignItems: "center", justifyContent: "center" }]}>
-            <Ionicons name="link" size={18} color="#3B82F6" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[s.nameText, { color: "#3B82F6", fontSize: 13 }]} numberOfLines={1}>{domain}</Text>
-            <Text style={[s.subText, { color: colors.textSecondary }]} numberOfLines={1}>{link.url}</Text>
-            <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>via @{link.sender_handle} · {timeAgo(link.sent_at)}</Text>
-          </View>
-          <Ionicons name="open-outline" size={16} color={colors.textMuted} />
         </TouchableOpacity>
       </Animated.View>
     );
@@ -1223,11 +990,8 @@ export default function SearchScreen() {
   function renderResults() {
     const showPeople = (category === "all" || category === "people") && results.people.length > 0;
     const showPosts = (category === "all" || category === "posts" || category === "hashtags") && results.posts.length > 0;
-    const showChats = (category === "all" || category === "chats") && results.chats.length > 0;
     const showChannels = (category === "all" || category === "channels") && results.channels.length > 0;
     const showGifts = (category === "all" || category === "gifts") && results.gifts.length > 0;
-    const showMedia = (category === "all" || category === "media") && results.media.length > 0;
-    const showLinks = (category === "all" || category === "links") && results.links.length > 0;
 
     if (totalResults === 0 && !loading) {
       return (
@@ -1269,29 +1033,6 @@ export default function SearchScreen() {
           <View style={s.resultSection}>
             <SectionHeader title={category === "hashtags" ? "Tagged Posts" : "Posts"} count={results.posts.length} icon="document-text" />
             {(category === "all" ? results.posts.slice(0, 4) : results.posts).map(renderPostCard)}
-          </View>
-        )}
-
-        {showChats && (
-          <View style={s.resultSection}>
-            <SectionHeader title="Messages" count={results.chats.length} icon="chatbubbles" />
-            {(category === "all" ? results.chats.slice(0, 4) : results.chats).map(renderChatCard)}
-          </View>
-        )}
-
-        {showMedia && (
-          <View style={s.resultSection}>
-            <SectionHeader title="Media" count={results.media.length} icon="images" />
-            <View style={s.mediaGrid}>
-              {(category === "all" ? results.media.slice(0, 8) : results.media).map(renderMediaCard)}
-            </View>
-          </View>
-        )}
-
-        {showLinks && (
-          <View style={s.resultSection}>
-            <SectionHeader title="Links" count={results.links.length} icon="link" />
-            {(category === "all" ? results.links.slice(0, 4) : results.links).map(renderLinkCard)}
           </View>
         )}
 
@@ -1483,13 +1224,6 @@ const s = StyleSheet.create({
     borderRadius: 14, gap: 3, borderWidth: StyleSheet.hairlineWidth,
   },
   giftsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-
-  mediaGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  mediaCard: {
-    width: (SCREEN_W - 56) / 3, alignItems: "center", borderRadius: 12,
-    overflow: "hidden", borderWidth: StyleSheet.hairlineWidth, paddingBottom: 8, gap: 4,
-  },
-  mediaThumbnail: { width: "100%", height: 80, borderTopLeftRadius: 12, borderTopRightRadius: 12 },
 
   emptyState: { alignItems: "center", justifyContent: "center", paddingTop: 60, gap: 10 },
   emptyTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
