@@ -398,6 +398,16 @@ export default function WalletScreen() {
             <Text style={styles.actionBtnText}>Convert</Text>
           </TouchableOpacity>
         </View>
+        <View style={styles.btnRow}>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "rgba(0,194,203,0.12)" }]} onPress={() => router.push("/wallet/scan")}>
+            <Ionicons name="scan" size={16} color={Colors.brand} />
+            <Text style={styles.actionBtnText}>Scan QR</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "rgba(0,194,203,0.12)" }]} onPress={() => router.push("/wallet/requests")}>
+            <Ionicons name="receipt-outline" size={16} color={Colors.brand} />
+            <Text style={styles.actionBtnText}>Requests</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {currencySettings && (

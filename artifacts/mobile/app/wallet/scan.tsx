@@ -1,0 +1,422 @@
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import { router } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
+import * as Haptics from "@/lib/haptics";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
+import { useTheme } from "@/hooks/useTheme";
+import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
+
+function b64decode(str: string): any {
+  try {
+    const binary = atob(str);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const json = new TextDecoder().decode(bytes);
+    return JSON.parse(json);
+  } catch {
+    try {
+      return JSON.parse(decodeURIComponent(escape(atob(str))));
+    } catch {
+      return null;
+    }
+  }
+}
+
+type ScannedProfile = {
+  afu_id: string;
+  handle: string;
+  name: string;
+  avatar: string;
+  bio: string;
+  country: string;
+  region: string;
+  verified: boolean;
+  premium: boolean;
+  grade: string;
+  level: number;
+  joined: string;
+  userId?: string;
+};
+
+export default function ScanScreen() {
+  const { colors } = useTheme();
+  const { user, profile } = useAuth();
+  const insets = useSafeAreaInsets();
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanned, setScanned] = useState(false);
+  const [scannedProfile, setScannedProfile] = useState<ScannedProfile | null>(null);
+  const [showRequest, setShowRequest] = useState(false);
+  const [currency, setCurrency] = useState<"nexa" | "acoin">("nexa");
+  const [amount, setAmount] = useState("");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [resolvedUserId, setResolvedUserId] = useState<string | null>(null);
+  const processedRef = useRef(false);
+
+  const scanLineY = useSharedValue(0);
+  useEffect(() => {
+    scanLineY.value = withRepeat(
+      withTiming(1, { duration: 2200, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true
+    );
+  }, []);
+
+  const scanLineStyle = useAnimatedStyle(() => ({
+    top: `${scanLineY.value * 100}%`,
+  }));
+
+  const handleBarCodeScanned = useCallback(
+    async ({ data }: { data: string }) => {
+      if (processedRef.current) return;
+      processedRef.current = true;
+      setScanned(true);
+
+      if (!data.startsWith("afuchat://id/")) {
+        showAlert("Invalid QR", "This is not a valid AfuChat ID card.");
+        processedRef.current = false;
+        setScanned(false);
+        return;
+      }
+
+      const b64 = data.replace("afuchat://id/", "");
+      const decoded = b64decode(b64);
+      if (!decoded || decoded.t !== "afuchat_id") {
+        showAlert("Invalid QR", "Could not read the card data.");
+        processedRef.current = false;
+        setScanned(false);
+        return;
+      }
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      const prof: ScannedProfile = {
+        afu_id: decoded.afu_id || "",
+        handle: decoded.handle || "",
+        name: decoded.name || "",
+        avatar: decoded.avatar || "",
+        bio: decoded.bio || "",
+        country: decoded.country || "",
+        region: decoded.region || "",
+        verified: decoded.verified || false,
+        premium: decoded.premium || false,
+        grade: decoded.grade || "explorer",
+        level: decoded.level || 1,
+        joined: decoded.joined || "",
+      };
+
+      const { data: foundUser } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("handle", prof.handle)
+        .single();
+
+      if (foundUser) {
+        if (foundUser.id === user?.id) {
+          showAlert("That's You!", "You scanned your own card.");
+          processedRef.current = false;
+          setScanned(false);
+          return;
+        }
+        setResolvedUserId(foundUser.id);
+        prof.userId = foundUser.id;
+      }
+
+      setScannedProfile(prof);
+    },
+    [user]
+  );
+
+  async function submitRequest() {
+    if (!resolvedUserId || !user || !amount.trim()) return;
+    const amt = parseInt(amount);
+    if (isNaN(amt) || amt <= 0) {
+      showAlert("Invalid", "Enter a valid amount.");
+      return;
+    }
+    setSending(true);
+
+    const { error } = await supabase.from("transaction_requests").insert({
+      requester_id: user.id,
+      owner_id: resolvedUserId,
+      currency,
+      amount: amt,
+      message: message.trim() || null,
+    });
+
+    if (error) {
+      showAlert("Error", error.message);
+      setSending(false);
+      return;
+    }
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    showAlert("Request Sent!", `Requested ${amt} ${currency === "nexa" ? "Nexa" : "ACoin"} from @${scannedProfile?.handle}`);
+    setSending(false);
+    setShowRequest(false);
+    setScannedProfile(null);
+    setScanned(false);
+    processedRef.current = false;
+    router.back();
+  }
+
+  if (!permission) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={Colors.brand} />
+      </View>
+    );
+  }
+
+  if (!permission.granted) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <View style={[styles.permBox, { paddingTop: insets.top + 16 }]}>
+          <Ionicons name="camera-outline" size={64} color={colors.textMuted} />
+          <Text style={[styles.permTitle, { color: colors.text }]}>Camera Permission</Text>
+          <Text style={[styles.permSub, { color: colors.textSecondary }]}>
+            We need camera access to scan QR codes on Digital ID cards.
+          </Text>
+          <TouchableOpacity style={styles.permBtn} onPress={requestPermission}>
+            <Text style={styles.permBtnText}>Allow Camera</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 16 }}>
+            <Text style={{ color: colors.textMuted, fontSize: 15 }}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.root, { backgroundColor: "#000" }]}>
+      <CameraView
+        style={StyleSheet.absoluteFillObject}
+        barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+        onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+      />
+
+      <View style={styles.overlay}>
+        <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.topTitle}>Scan ID Card</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <View style={styles.scanArea}>
+          <View style={styles.scanFrame}>
+            <View style={[styles.corner, styles.tl]} />
+            <View style={[styles.corner, styles.tr]} />
+            <View style={[styles.corner, styles.bl]} />
+            <View style={[styles.corner, styles.br]} />
+            <Animated.View style={[styles.scanLine, scanLineStyle]} />
+          </View>
+          <Text style={styles.scanHint}>Point your camera at an AfuChat ID card QR code</Text>
+        </View>
+      </View>
+
+      {scannedProfile && !showRequest && (
+        <View style={styles.resultOverlay}>
+          <View style={[styles.resultCard, { backgroundColor: colors.surface }]}>
+            <View style={styles.resultHeader}>
+              {scannedProfile.avatar ? (
+                <Image source={{ uri: scannedProfile.avatar }} style={styles.resultAvatar} />
+              ) : (
+                <View style={[styles.resultAvatar, { backgroundColor: colors.inputBg, justifyContent: "center", alignItems: "center" }]}>
+                  <Text style={{ fontSize: 20, color: colors.text }}>{(scannedProfile.name || "?")[0].toUpperCase()}</Text>
+                </View>
+              )}
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Text style={[styles.resultName, { color: colors.text }]} numberOfLines={1}>{scannedProfile.name}</Text>
+                  {scannedProfile.verified && <Ionicons name="checkmark-circle" size={16} color={Colors.brand} />}
+                  {scannedProfile.premium && <Ionicons name="diamond" size={14} color={Colors.gold} />}
+                </View>
+                <Text style={[styles.resultHandle, { color: colors.textMuted }]}>@{scannedProfile.handle}</Text>
+                {(scannedProfile.region || scannedProfile.country) && (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 }}>
+                    <Ionicons name="location" size={10} color={Colors.brand} />
+                    <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+                      {[scannedProfile.region, scannedProfile.country].filter(Boolean).join(", ")}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            <View style={[styles.resultIdRow, { backgroundColor: colors.inputBg }]}>
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>AFU ID</Text>
+              <Text style={{ color: colors.text, fontSize: 14, fontFamily: "Inter_600SemiBold" }}>{scannedProfile.afu_id}</Text>
+            </View>
+
+            {resolvedUserId ? (
+              <View style={styles.resultActions}>
+                <TouchableOpacity
+                  style={[styles.resultActionBtn, { backgroundColor: Colors.brand }]}
+                  onPress={() => setShowRequest(true)}
+                >
+                  <Ionicons name="cash-outline" size={18} color="#fff" />
+                  <Text style={styles.resultActionText}>Request Payment</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: "center", marginTop: 12 }}>
+                User not found in the system
+              </Text>
+            )}
+
+            <TouchableOpacity
+              style={styles.scanAgainBtn}
+              onPress={() => {
+                setScannedProfile(null);
+                setResolvedUserId(null);
+                setScanned(false);
+                processedRef.current = false;
+              }}
+            >
+              <Ionicons name="scan-outline" size={18} color={Colors.brand} />
+              <Text style={{ color: Colors.brand, fontSize: 15, fontFamily: "Inter_600SemiBold" }}>Scan Again</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      <Modal visible={showRequest} animationType="slide" transparent>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+              <View style={styles.dragHandle} />
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Request Payment</Text>
+                <TouchableOpacity onPress={() => setShowRequest(false)}>
+                  <Ionicons name="close" size={24} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 }}>
+                <Text style={{ color: colors.textSecondary, fontSize: 14 }}>From:</Text>
+                <Text style={{ color: colors.text, fontSize: 15, fontFamily: "Inter_600SemiBold" }}>
+                  @{scannedProfile?.handle}
+                </Text>
+              </View>
+
+              <View style={styles.currencyToggle}>
+                <TouchableOpacity
+                  style={[styles.currencyBtn, currency === "nexa" && { backgroundColor: Colors.brand }]}
+                  onPress={() => setCurrency("nexa")}
+                >
+                  <Ionicons name="flash" size={14} color={currency === "nexa" ? "#fff" : colors.textMuted} />
+                  <Text style={[styles.currencyBtnText, currency === "nexa" && { color: "#fff" }]}>Nexa</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.currencyBtn, currency === "acoin" && { backgroundColor: Colors.gold }]}
+                  onPress={() => setCurrency("acoin")}
+                >
+                  <Ionicons name="diamond" size={14} color={currency === "acoin" ? "#fff" : colors.textMuted} />
+                  <Text style={[styles.currencyBtnText, currency === "acoin" && { color: "#fff" }]}>ACoin</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TextInput
+                style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]}
+                placeholder="Amount"
+                placeholderTextColor={colors.textMuted}
+                value={amount}
+                onChangeText={setAmount}
+                keyboardType="numeric"
+              />
+              <TextInput
+                style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]}
+                placeholder="Message (optional)"
+                placeholderTextColor={colors.textMuted}
+                value={message}
+                onChangeText={setMessage}
+              />
+
+              <TouchableOpacity
+                style={[styles.sendBtn, sending && { opacity: 0.6 }]}
+                onPress={submitRequest}
+                disabled={sending}
+              >
+                {sending ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.sendBtnText}>Send Request</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, justifyContent: "center", alignItems: "center" },
+  overlay: { ...StyleSheet.absoluteFillObject, justifyContent: "space-between" },
+  topBar: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12 },
+  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center" },
+  topTitle: { color: "#fff", fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  scanArea: { flex: 1, justifyContent: "center", alignItems: "center" },
+  scanFrame: { width: 250, height: 250, position: "relative" },
+  corner: { position: "absolute", width: 30, height: 30, borderColor: Colors.brand, borderWidth: 3 },
+  tl: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 12 },
+  tr: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 12 },
+  bl: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 12 },
+  br: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 12 },
+  scanLine: { position: "absolute", left: 4, right: 4, height: 2, backgroundColor: Colors.brand, borderRadius: 1 },
+  scanHint: { color: "rgba(255,255,255,0.7)", fontSize: 14, textAlign: "center", marginTop: 24, fontFamily: "Inter_400Regular", paddingHorizontal: 32 },
+  permBox: { flex: 1, justifyContent: "center", alignItems: "center", gap: 16, paddingHorizontal: 40 },
+  permTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
+  permSub: { fontSize: 15, textAlign: "center", lineHeight: 22, fontFamily: "Inter_400Regular" },
+  permBtn: { backgroundColor: Colors.brand, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 14, marginTop: 8 },
+  permBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  resultOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.6)" },
+  resultCard: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 12 },
+  resultHeader: { flexDirection: "row", alignItems: "center", gap: 14 },
+  resultAvatar: { width: 56, height: 56, borderRadius: 28 },
+  resultName: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  resultHandle: { fontSize: 14, fontFamily: "Inter_400Regular", marginTop: 2 },
+  resultIdRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 12, borderRadius: 10 },
+  resultActions: { gap: 10 },
+  resultActionBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderRadius: 14 },
+  resultActionText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  scanAgainBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, marginTop: 4 },
+  modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" },
+  modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 14 },
+  dragHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "#ccc", alignSelf: "center", marginBottom: 4 },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  modalTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
+  currencyToggle: { flexDirection: "row", gap: 10 },
+  currencyBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 12, backgroundColor: "rgba(128,128,128,0.1)" },
+  currencyBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#888" },
+  modalInput: { borderRadius: 12, padding: 14, fontSize: 15, fontFamily: "Inter_400Regular" },
+  sendBtn: { backgroundColor: Colors.brand, borderRadius: 14, paddingVertical: 14, alignItems: "center" },
+  sendBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+});

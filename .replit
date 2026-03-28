@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "web"]
+modules = ["nodejs-20", "web", "javascript"]
 [agent]
 expertMode = true
 integrations = ["javascript_database:1.0.0"]
