@@ -7,7 +7,7 @@
     "icon": "./assets/images/logo.png",
     "scheme": "afuchat",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "notification": {
       "icon": "./assets/images/afu-symbol.png",
       "color": "#00C2CB",
@@ -24,7 +24,11 @@
       "infoPlist": {
         "UIBackgroundModes": [
           "remote-notification"
-        ]
+        ],
+        "NSCameraUsageDescription": "AfuChat uses the camera to scan QR codes and take photos.",
+        "NSContactsUsageDescription": "AfuChat uses contacts to help you find friends.",
+        "NSPhotoLibraryUsageDescription": "AfuChat uses your photo library to share images.",
+        "NSMicrophoneUsageDescription": "AfuChat uses the microphone for voice messages."
       },
       "associatedDomains": [
         "applinks:afuchat.com",
@@ -40,8 +44,9 @@
         "POST_NOTIFICATIONS",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "CAMERA",
+        "READ_CONTACTS",
+        "RECORD_AUDIO"
       ],
       "intentFilters": [
         {
