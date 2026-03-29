@@ -11,7 +11,7 @@ type Item = { icon: React.ComponentProps<typeof Ionicons>["name"]; iconBg: strin
 
 const items: Item[] = [
   { icon: "id-card-outline", iconBg: "#1E3A5F", label: "Digital ID", sub: "Your 3D identity card", route: "/digital-id" },
-  { icon: "crown", iconBg: "#D4A853", label: "Prestige Status", sub: "Your rank and achievements", route: "/prestige" },
+  { icon: "trophy-outline", iconBg: "#D4A853", label: "Prestige Status", sub: "Your rank and achievements", route: "/prestige" },
   { icon: "diamond-outline", iconBg: "#FFD60A", label: "Premium", sub: "Manage your subscription", route: "/premium" },
   { icon: "swap-horizontal-outline", iconBg: "#AF52DE", label: "Switch Accounts", sub: "Manage linked accounts", route: "/linked-accounts" },
   { icon: "videocam-outline", iconBg: "#32D74B", label: "Creator Studio", sub: "Monetise your content", route: "/monetize", adminOnly: true },

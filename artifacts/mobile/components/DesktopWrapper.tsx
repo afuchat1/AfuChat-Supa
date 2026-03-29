@@ -24,15 +24,16 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
 
   const isLoggedIn = !!session;
 
-  const activeTab = segments.includes("search")
+  const segs = segments as string[];
+  const activeTab = segs.includes("search")
     ? "search"
-    : segments.includes("discover")
+    : segs.includes("discover")
       ? "discover"
-      : segments.includes("me")
+      : segs.includes("me")
         ? "me"
-        : segments.includes("notifications")
+        : segs.includes("notifications")
           ? "notifications"
-          : segments.includes("wallet")
+          : segs.includes("wallet")
             ? "wallet"
             : "index";
 

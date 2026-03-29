@@ -12,14 +12,14 @@ if (Platform.OS !== "web") {
     Notifications = require("expo-notifications");
     Device = require("expo-device");
 
-    Notifications.setNotificationHandler({
+    Notifications!.setNotificationHandler({
       handleNotification: async () => ({
         shouldShowAlert: true,
         shouldPlaySound: true,
         shouldSetBadge: true,
         shouldShowBanner: true,
         shouldShowList: true,
-        priority: Notifications.AndroidNotificationPriority.MAX,
+        priority: Notifications!.AndroidNotificationPriority.MAX,
       }),
     });
   } catch {
@@ -36,7 +36,6 @@ export async function setupNotificationChannels(): Promise<void> {
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: "#00BCD4",
-      sound: true,
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       showBadge: true,
       enableVibrate: true,
@@ -49,7 +48,6 @@ export async function setupNotificationChannels(): Promise<void> {
       description: "Chat messages from your contacts",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250],
-      sound: true,
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       showBadge: true,
       enableVibrate: true,
@@ -62,7 +60,6 @@ export async function setupNotificationChannels(): Promise<void> {
       name: "Social",
       description: "Likes, follows, and replies",
       importance: Notifications.AndroidImportance.HIGH,
-      sound: true,
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       showBadge: true,
       enableVibrate: true,
@@ -95,7 +92,6 @@ export async function registerForPushNotifications(userId: string): Promise<stri
         allowCriticalAlerts: false,
         provideAppNotificationSettings: false,
         allowProvisional: false,
-        allowAnnouncements: false,
       },
     });
     finalStatus = status;
@@ -141,11 +137,11 @@ export function setupNotificationListeners() {
     (response) => {
       const data = response.notification.request.content.data;
       if (data?.url) {
-        router.push(data.url as string);
+        router.push(data.url as any);
       } else if (data?.chatId) {
-        router.push(`/chat/${data.chatId}`);
+        router.push(`/chat/${data.chatId}` as any);
       } else if (data?.postId) {
-        router.push(`/post/${data.postId}`);
+        router.push(`/post/${data.postId}` as any);
       } else if (data?.type === "follow") {
         router.push("/notifications");
       }
