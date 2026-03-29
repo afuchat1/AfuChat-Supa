@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   StyleSheet,
   Text,
@@ -17,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { sharePost } from "@/lib/share";
+import { isUuid, isEncodedId, decodeId } from "@/lib/shortId";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { RichText } from "@/components/ui/RichText";
@@ -28,6 +30,7 @@ import { notifyPostLike, notifyPostReply } from "@/lib/notifyUser";
 import { useAutoTranslate } from "@/context/LanguageContext";
 import { LANG_LABELS } from "@/lib/translate";
 import { aiSummarizeThread } from "@/lib/aiHelper";
+import ViewShot from "react-native-view-shot";
 
 type Reply = {
   id: string;
@@ -84,7 +87,13 @@ function ReplyCard({ item, colors }: { item: Reply; colors: any }) {
 }
 
 export default function PostDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: rawId } = useLocalSearchParams<{ id: string }>();
+  const id = useMemo(() => {
+    if (!rawId) return rawId;
+    if (isUuid(rawId)) return rawId;
+    if (isEncodedId(rawId)) return decodeId(rawId);
+    return rawId;
+  }, [rawId]);
   const { user, profile: myProfile } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -95,8 +104,20 @@ export default function PostDetailScreen() {
   const [sending, setSending] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [aiSummarizing, setAiSummarizing] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editContent, setEditContent] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [reportVisible, setReportVisible] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportOtherText, setReportOtherText] = useState("");
+  const [reportSending, setReportSending] = useState(false);
+  const [capturing, setCapturing] = useState(false);
   const imgViewer = useImageViewer();
+  const cardRef = useRef<ViewShot>(null);
   const { displayText: postDisplayText, isTranslated: postIsTranslated, lang: postLang } = useAutoTranslate(post?.content);
+
+  const isOwner = user && post && post.author.id === user.id;
 
   const loadPost = useCallback(async () => {
     if (!id) return;
@@ -257,6 +278,89 @@ export default function PostDetailScreen() {
     setSending(false);
   }
 
+  async function handleEdit() {
+    if (!post || !user || editSaving) return;
+    if (!editContent.trim()) { showAlert("Error", "Post content cannot be empty."); return; }
+    setEditSaving(true);
+    const { error } = await supabase
+      .from("posts")
+      .update({ content: editContent.trim(), updated_at: new Date().toISOString() })
+      .eq("id", post.id)
+      .eq("author_id", user.id);
+    if (error) {
+      showAlert("Error", "Could not update post.");
+    } else {
+      setPost({ ...post, content: editContent.trim() });
+      setEditMode(false);
+      if (Platform.OS !== "web") { try { const H = require("expo-haptics"); H.notificationAsync(H.NotificationFeedbackType.Success); } catch {} }
+    }
+    setEditSaving(false);
+  }
+
+  async function handleDelete() {
+    if (!post || !user) return;
+    setMenuVisible(false);
+    showAlert("Delete Post", "Are you sure you want to delete this post? This cannot be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete", style: "destructive", onPress: async () => {
+          const { error } = await supabase.from("posts").delete().eq("id", post.id).eq("author_id", user.id);
+          if (error) { showAlert("Error", "Could not delete post."); }
+          else { router.back(); }
+        }
+      },
+    ]);
+  }
+
+  async function handleReport() {
+    if (!post || !user || reportSending) return;
+    const finalReason = reportReason === "Other" ? reportOtherText.trim() : reportReason.trim();
+    if (!finalReason) { showAlert("Required", "Please select or describe a reason."); return; }
+    setReportSending(true);
+    const { error } = await supabase.from("user_reports").insert({
+      reporter_id: user.id,
+      reported_user_id: post.author.id,
+      reason: `Post report (${post.id})`,
+      additional_info: finalReason,
+    });
+    setReportSending(false);
+    if (error) { showAlert("Error", "Could not submit report. Please try again."); return; }
+    setReportVisible(false);
+    setReportReason("");
+    setReportOtherText("");
+    if (Platform.OS !== "web") { try { const H = require("expo-haptics"); H.notificationAsync(H.NotificationFeedbackType.Success); } catch {} }
+    showAlert("Reported", "Thank you for your report. Our team will review it.");
+  }
+
+  async function capturePostImage() {
+    if (!cardRef.current) return;
+    setCapturing(true);
+    setMenuVisible(false);
+    try {
+      const capture = (cardRef.current as any).capture;
+      if (!capture) { showAlert("Error", "Capture not available."); setCapturing(false); return; }
+      const uri = await capture();
+      if (Platform.OS === "web") {
+        const link = document.createElement("a");
+        link.href = uri;
+        link.download = `afuchat-post-${Date.now()}.png`;
+        link.click();
+      } else {
+        const Sharing = require("expo-sharing");
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: "Save Post Image" });
+        } else {
+          showAlert("Not available", "Sharing is not available on this device.");
+        }
+      }
+    } catch (e: any) {
+      showAlert("Error", "Could not capture post image.");
+    }
+    setCapturing(false);
+  }
+
+  const REPORT_REASONS = ["Spam", "Harassment", "Hate speech", "Violence", "Misinformation", "Inappropriate content", "Other"];
+
   if (loading) return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
@@ -270,9 +374,6 @@ export default function PostDetailScreen() {
   if (!post) return <View style={[styles.center, { backgroundColor: colors.background }]}><Text style={{ color: colors.text }}>Post not found</Text></View>;
 
   const allImages = post.images.length > 0 ? post.images : post.image_url ? [post.image_url] : [];
-  const seoTitle = `${post.author.display_name} on AfuChat`;
-  const seoDesc = post.content.length > 160 ? post.content.slice(0, 157) + "..." : post.content;
-  const seoImage = allImages.length > 0 ? allImages[0] : post.author.avatar_url || undefined;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -281,109 +382,146 @@ export default function PostDetailScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Post</Text>
-        <View style={{ width: 24 }} />
+        <TouchableOpacity onPress={() => setMenuVisible(true)} hitSlop={8}>
+          <Ionicons name="ellipsis-horizontal" size={22} color={colors.text} />
+        </TouchableOpacity>
       </View>
 
       <FlatList
         data={replies}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={
-          <View style={[styles.postSection, { backgroundColor: colors.surface }]}>
-            <View style={styles.postHeader}>
-              <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: post.author.id } })}>
-                <Avatar uri={post.author.avatar_url} name={post.author.display_name} size={44} />
-              </TouchableOpacity>
-              <View style={{ flex: 1 }}>
-                <View style={styles.nameRow}>
-                  <Text style={[styles.authorName, { color: colors.text }]}>{post.author.display_name}</Text>
-                  {post.author.is_organization_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.gold} style={{ marginLeft: 4 }} />}
-                  {!post.author.is_organization_verified && post.author.is_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.brand} style={{ marginLeft: 4 }} />}
+          <ViewShot ref={cardRef} options={{ format: "png", quality: 1, result: "tmpfile" }}>
+            <View style={[styles.postSection, { backgroundColor: colors.surface }]}>
+              <View style={styles.postHeader}>
+                <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: post.author.id } })}>
+                  <Avatar uri={post.author.avatar_url} name={post.author.display_name} size={44} />
+                </TouchableOpacity>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.nameRow}>
+                    <Text style={[styles.authorName, { color: colors.text }]}>{post.author.display_name}</Text>
+                    {post.author.is_organization_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.gold} style={{ marginLeft: 4 }} />}
+                    {!post.author.is_organization_verified && post.author.is_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.brand} style={{ marginLeft: 4 }} />}
+                  </View>
+                  <Text style={[styles.authorHandle, { color: colors.textSecondary }]}>@{post.author.handle}</Text>
                 </View>
-                <Text style={[styles.authorHandle, { color: colors.textSecondary }]}>@{post.author.handle}</Text>
               </View>
-            </View>
 
-            <RichText style={[styles.postContent, { color: colors.text }]}>{postDisplayText || post.content}</RichText>
-            {postIsTranslated && (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 0, marginBottom: 6 }}>
-                <Ionicons name="language" size={11} color={colors.textMuted} />
-                <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.textMuted }}>
-                  {`Translated · ${LANG_LABELS[postLang || ""] ?? postLang}`}
-                </Text>
-              </View>
-            )}
-
-            {allImages.length > 0 && (
-              <View style={styles.imgWrap}>
-                {allImages.map((uri, i) => (
-                  <TouchableOpacity key={i} activeOpacity={0.9} onPress={() => imgViewer.openViewer(allImages, i)}>
-                    <Image source={{ uri }} style={styles.postImg} resizeMode="cover" />
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-
-            <Text style={[styles.postTime, { color: colors.textMuted }]}>
-              {new Date(post.created_at).toLocaleString()} · {post.view_count} views
-            </Text>
-
-            <View style={[styles.statsBar, { borderColor: colors.border }]}>
-              <TouchableOpacity style={styles.statBtn} onPress={toggleLike}>
-                <Ionicons name={post.liked ? "heart" : "heart-outline"} size={20} color={post.liked ? "#FF3B30" : colors.textSecondary} />
-                <Text style={[styles.statText, { color: colors.textSecondary }]}>{post.likeCount}</Text>
-              </TouchableOpacity>
-              <View style={styles.statBtn}>
-                <Ionicons name="chatbubble-outline" size={20} color={colors.textSecondary} />
-                <Text style={[styles.statText, { color: colors.textSecondary }]}>{post.replyCount}</Text>
-              </View>
-              <TouchableOpacity style={styles.statBtn} onPress={() => sharePost({ postId: post.id, authorName: post.author.display_name, content: post.content })}>
-                <Ionicons name="share-outline" size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            {replies.length >= 2 && (
-              <TouchableOpacity
-                style={[styles.aiSummaryBtn, { backgroundColor: Colors.brand + "12", borderColor: Colors.brand + "30" }]}
-                onPress={async () => {
-                  setAiSummarizing(true);
-                  setAiSummary(null);
-                  try {
-                    const summary = await aiSummarizeThread(
-                      post.content,
-                      replies.map(r => ({ author: r.author.display_name, content: r.content })),
-                    );
-                    setAiSummary(summary);
-                  } catch { showAlert("AI Error", "Could not summarize. Try again."); }
-                  setAiSummarizing(false);
-                }}
-                disabled={aiSummarizing}
-              >
-                {aiSummarizing ? (
-                  <ActivityIndicator size="small" color={Colors.brand} />
-                ) : (
-                  <Ionicons name="sparkles" size={14} color={Colors.brand} />
-                )}
-                <Text style={[styles.aiSummaryBtnText, { color: Colors.brand }]}>
-                  {aiSummarizing ? "Summarizing..." : "AI Summarize Thread"}
-                </Text>
-              </TouchableOpacity>
-            )}
-            {aiSummary && (
-              <View style={[styles.aiSummaryCard, { backgroundColor: Colors.brand + "10", borderColor: Colors.brand + "25" }]}>
-                <View style={styles.aiSummaryHeader}>
-                  <Ionicons name="sparkles" size={14} color={Colors.brand} />
-                  <Text style={[styles.aiSummaryTitle, { color: Colors.brand }]}>AI Summary</Text>
-                  <TouchableOpacity onPress={() => setAiSummary(null)} hitSlop={8} style={{ marginLeft: "auto" }}>
-                    <Ionicons name="close" size={16} color={colors.textMuted} />
-                  </TouchableOpacity>
+              {editMode ? (
+                <View style={{ gap: 10 }}>
+                  <TextInput
+                    style={[styles.editInput, { color: colors.text, backgroundColor: colors.inputBg, borderColor: colors.border }]}
+                    value={editContent}
+                    onChangeText={setEditContent}
+                    multiline
+                    autoFocus
+                    maxLength={2000}
+                  />
+                  <View style={{ flexDirection: "row", gap: 10 }}>
+                    <TouchableOpacity
+                      style={[styles.editBtn, { backgroundColor: colors.border }]}
+                      onPress={() => setEditMode(false)}
+                    >
+                      <Text style={[styles.editBtnText, { color: colors.text }]}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.editBtn, { backgroundColor: Colors.brand }]}
+                      onPress={handleEdit}
+                      disabled={editSaving}
+                    >
+                      {editSaving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={[styles.editBtnText, { color: "#fff" }]}>Save</Text>}
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <Text style={[styles.aiSummaryText, { color: colors.text }]}>{aiSummary}</Text>
+              ) : (
+                <>
+                  <RichText style={[styles.postContent, { color: colors.text }]}>{postDisplayText || post.content}</RichText>
+                  {postIsTranslated && (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 0, marginBottom: 6 }}>
+                      <Ionicons name="language" size={11} color={colors.textMuted} />
+                      <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.textMuted }}>
+                        {`Translated · ${LANG_LABELS[postLang || ""] ?? postLang}`}
+                      </Text>
+                    </View>
+                  )}
+                </>
+              )}
+
+              {allImages.length > 0 && (
+                <View style={styles.imgWrap}>
+                  {allImages.map((uri, i) => (
+                    <TouchableOpacity key={i} activeOpacity={0.9} onPress={() => imgViewer.openViewer(allImages, i)}>
+                      <Image source={{ uri }} style={styles.postImg} resizeMode="cover" />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              <Text style={[styles.postTime, { color: colors.textMuted }]}>
+                {new Date(post.created_at).toLocaleString()} · {post.view_count} views
+              </Text>
+
+              <View style={[styles.statsBar, { borderColor: colors.border }]}>
+                <TouchableOpacity style={styles.statBtn} onPress={toggleLike}>
+                  <Ionicons name={post.liked ? "heart" : "heart-outline"} size={20} color={post.liked ? "#FF3B30" : colors.textSecondary} />
+                  <Text style={[styles.statText, { color: colors.textSecondary }]}>{post.likeCount}</Text>
+                </TouchableOpacity>
+                <View style={styles.statBtn}>
+                  <Ionicons name="chatbubble-outline" size={20} color={colors.textSecondary} />
+                  <Text style={[styles.statText, { color: colors.textSecondary }]}>{post.replyCount}</Text>
+                </View>
+                <TouchableOpacity style={styles.statBtn} onPress={() => sharePost({ postId: post.id, authorName: post.author.display_name, content: post.content })}>
+                  <Ionicons name="share-outline" size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.statBtn} onPress={capturePostImage}>
+                  {capturing ? <ActivityIndicator size={18} color={colors.textSecondary} /> : <Ionicons name="camera-outline" size={20} color={colors.textSecondary} />}
+                </TouchableOpacity>
               </View>
-            )}
-            {replies.length > 0 && (
-              <Text style={[styles.repliesLabel, { color: colors.textMuted }]}>Replies</Text>
-            )}
-          </View>
+
+              {replies.length >= 2 && (
+                <TouchableOpacity
+                  style={[styles.aiSummaryBtn, { backgroundColor: Colors.brand + "12", borderColor: Colors.brand + "30" }]}
+                  onPress={async () => {
+                    setAiSummarizing(true);
+                    setAiSummary(null);
+                    try {
+                      const summary = await aiSummarizeThread(
+                        post.content,
+                        replies.map(r => ({ author: r.author.display_name, content: r.content })),
+                      );
+                      setAiSummary(summary);
+                    } catch { showAlert("AI Error", "Could not summarize. Try again."); }
+                    setAiSummarizing(false);
+                  }}
+                  disabled={aiSummarizing}
+                >
+                  {aiSummarizing ? (
+                    <ActivityIndicator size="small" color={Colors.brand} />
+                  ) : (
+                    <Ionicons name="sparkles" size={14} color={Colors.brand} />
+                  )}
+                  <Text style={[styles.aiSummaryBtnText, { color: Colors.brand }]}>
+                    {aiSummarizing ? "Summarizing..." : "AI Summarize Thread"}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {aiSummary && (
+                <View style={[styles.aiSummaryCard, { backgroundColor: Colors.brand + "10", borderColor: Colors.brand + "25" }]}>
+                  <View style={styles.aiSummaryHeader}>
+                    <Ionicons name="sparkles" size={14} color={Colors.brand} />
+                    <Text style={[styles.aiSummaryTitle, { color: Colors.brand }]}>AI Summary</Text>
+                    <TouchableOpacity onPress={() => setAiSummary(null)} hitSlop={8} style={{ marginLeft: "auto" }}>
+                      <Ionicons name="close" size={16} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={[styles.aiSummaryText, { color: colors.text }]}>{aiSummary}</Text>
+                </View>
+              )}
+              {replies.length > 0 && (
+                <Text style={[styles.repliesLabel, { color: colors.textMuted }]}>Replies</Text>
+              )}
+            </View>
+          </ViewShot>
         }
         renderItem={({ item }) => <ReplyCard item={item} colors={colors} />}
         contentContainerStyle={{ paddingBottom: 100 }}
@@ -429,6 +567,105 @@ export default function PostDetailScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
+        <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setMenuVisible(false)}>
+          <View style={[styles.menuSheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 12 }]}>
+            <View style={[styles.menuHandle, { backgroundColor: colors.border }]} />
+
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); sharePost({ postId: post.id, authorName: post.author.display_name, content: post.content }); }}>
+              <Ionicons name="share-outline" size={22} color={Colors.brand} />
+              <Text style={[styles.menuText, { color: colors.text }]}>Share Post</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={capturePostImage}>
+              <Ionicons name="image-outline" size={22} color={Colors.brand} />
+              <Text style={[styles.menuText, { color: colors.text }]}>Save as Image</Text>
+            </TouchableOpacity>
+
+            {isOwner && (
+              <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); setEditContent(post.content); setEditMode(true); }}>
+                <Ionicons name="create-outline" size={22} color={Colors.brand} />
+                <Text style={[styles.menuText, { color: colors.text }]}>Edit Post</Text>
+              </TouchableOpacity>
+            )}
+
+            {isOwner && (
+              <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
+                <Ionicons name="trash-outline" size={22} color="#FF3B30" />
+                <Text style={[styles.menuText, { color: "#FF3B30" }]}>Delete Post</Text>
+              </TouchableOpacity>
+            )}
+
+            {!isOwner && user && (
+              <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); setReportVisible(true); }}>
+                <Ionicons name="flag-outline" size={22} color="#FF9500" />
+                <Text style={[styles.menuText, { color: "#FF9500" }]}>Report Post</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.menuItem} onPress={() => setMenuVisible(false)}>
+              <Ionicons name="close-outline" size={22} color={colors.textMuted} />
+              <Text style={[styles.menuText, { color: colors.textMuted }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={reportVisible} transparent animationType="slide" onRequestClose={() => setReportVisible(false)}>
+        <View style={styles.menuOverlay}>
+          <View style={[styles.reportSheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 12 }]}>
+            <View style={[styles.menuHandle, { backgroundColor: colors.border }]} />
+            <Text style={[styles.reportTitle, { color: colors.text }]}>Report Post</Text>
+            <Text style={[styles.reportSubtitle, { color: colors.textMuted }]}>Why are you reporting this post?</Text>
+
+            <View style={styles.reportReasons}>
+              {REPORT_REASONS.map((r) => (
+                <TouchableOpacity
+                  key={r}
+                  style={[
+                    styles.reportChip,
+                    { borderColor: reportReason === r ? Colors.brand : colors.border,
+                      backgroundColor: reportReason === r ? Colors.brand + "15" : "transparent" }
+                  ]}
+                  onPress={() => setReportReason(r)}
+                >
+                  <Text style={[styles.reportChipText, { color: reportReason === r ? Colors.brand : colors.text }]}>{r}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {reportReason === "Other" && (
+              <TextInput
+                style={[styles.reportInput, { color: colors.text, backgroundColor: colors.inputBg, borderColor: colors.border }]}
+                placeholder="Describe the issue..."
+                placeholderTextColor={colors.textMuted}
+                value={reportOtherText}
+                onChangeText={setReportOtherText}
+                multiline
+                maxLength={500}
+              />
+            )}
+
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+              <TouchableOpacity
+                style={[styles.editBtn, { flex: 1, backgroundColor: colors.border }]}
+                onPress={() => { setReportVisible(false); setReportReason(""); setReportOtherText(""); }}
+              >
+                <Text style={[styles.editBtnText, { color: colors.text }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.editBtn, { flex: 1, backgroundColor: "#FF9500" }]}
+                onPress={handleReport}
+                disabled={reportSending || !reportReason.trim() || (reportReason === "Other" && !reportOtherText.trim())}
+              >
+                {reportSending ? <ActivityIndicator size="small" color="#fff" /> : <Text style={[styles.editBtnText, { color: "#fff" }]}>Submit Report</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <ImageViewer
         images={imgViewer.images}
         initialIndex={imgViewer.index}
@@ -473,4 +710,19 @@ const styles = StyleSheet.create({
   aiSummaryHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
   aiSummaryTitle: { fontSize: 13, fontFamily: "Inter_700Bold" },
   aiSummaryText: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 22 },
+  editInput: { borderWidth: 1, borderRadius: 12, padding: 14, fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 24, minHeight: 100, textAlignVertical: "top" },
+  editBtn: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 12, borderRadius: 12 },
+  editBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  menuOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  menuSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingHorizontal: 20 },
+  menuHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 16 },
+  menuItem: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 14 },
+  menuText: { fontSize: 16, fontFamily: "Inter_500Medium" },
+  reportSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingHorizontal: 20, maxHeight: "80%" },
+  reportTitle: { fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center", marginBottom: 4 },
+  reportSubtitle: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", marginBottom: 16 },
+  reportReasons: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
+  reportChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  reportChipText: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  reportInput: { borderWidth: 1, borderRadius: 12, padding: 12, fontSize: 14, fontFamily: "Inter_400Regular", minHeight: 80, textAlignVertical: "top" },
 });

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -19,6 +19,7 @@ import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { notifyGiftReceived } from "@/lib/notifyUser";
 import { shareRedEnvelope } from "@/lib/share";
+import { isUuid, isEncodedId, decodeId } from "@/lib/shortId";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { ListRowSkeleton } from "@/components/ui/Skeleton";
 
@@ -43,7 +44,13 @@ type Claim = {
 };
 
 export default function RedEnvelopeScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: rawId } = useLocalSearchParams<{ id: string }>();
+  const id = useMemo(() => {
+    if (!rawId) return rawId;
+    if (isUuid(rawId)) return rawId;
+    if (isEncodedId(rawId)) return decodeId(rawId);
+    return rawId;
+  }, [rawId]);
   const { user, profile } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();

@@ -122,7 +122,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `app/contact/[id].tsx` — Contact profile with golden badge, country, join date, verification details, bio, follow/block/report, user posts feed, SEO Head (OG tags)
 - `app/stories/create.tsx` — Create story (image + caption, 24h expiry)
 - `app/stories/view.tsx` — View stories with progress dots and view tracking
-- `app/post/[id].tsx` — Post detail with likes, replies, view count, SEO Head (OG tags for sharing)
+- `app/post/[id].tsx` — Post detail with likes, replies, view count, SEO Head. Features: Edit post (own posts), Delete post (own), Report post (others, via `user_reports` table), Share with short ID URLs, Capture post as image (Substack-style download via `react-native-view-shot` + `expo-sharing`). Three-dot menu with contextual actions. Inline edit mode with save/cancel.
 - `app/notifications.tsx` — Notifications list with mark read
 - `app/wallet/index.tsx` — Nexa/ACoin balance, send Nexa, Nexa→ACoin conversion (using currency_settings), filtered transaction history, Buy Nexa / Buy ACoin buttons
 - `app/wallet/topup.tsx` — Top up Nexa or ACoin via Pesapal (M-Pesa, Visa, Mastercard). Supports both currency types with dedicated packages and custom amounts.
@@ -154,7 +154,8 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `app/settings/blocked.tsx` — Blocked users management
 - `lib/pushNotifications.ts` — Push notification registration, permission, badge, tap navigation, token management. Web-safe: conditionally loads `expo-notifications` and `expo-device` only on native platforms via `require()` behind `Platform.OS !== 'web'` guard to prevent crashes in Expo web/Go.
 - `lib/notifyUser.ts` — Notification trigger helpers (messages, follows, likes, replies, gifts) via authenticated Supabase Edge Function calls
-- `lib/share.ts` — Share utility (sharePost, shareProfile, shareStory, shareRedEnvelope) using React Native Share API. Generates afuchat.com deep links. Used across discover feed, post detail, my-posts, contact profile, stories, and red envelopes.
+- `lib/shortId.ts` — Base62 encoder/decoder for UUIDs. Converts 36-char UUIDs into ~22-char short IDs for clean public URLs (e.g. `0a6c129b-3906-4db8-8812-c17c17e9b766` → `JfJNiqOg7jGpEWkpIxGNi`). Used in share URLs and API server routes. Exports `encodeId()`, `decodeId()`, `isEncodedId()`, `isUuid()`.
+- `lib/share.ts` — Share utility (sharePost, shareProfile, shareStory, shareRedEnvelope) using React Native Share API. Generates afuchat.com deep links with short IDs (no UUIDs exposed). Used across discover feed, post detail, my-posts, contact profile, stories, and red envelopes.
 - `components/PushNotificationManager.tsx` — Null component wired into root layout for notification setup
 
 ## Responsive Layout Pattern
@@ -252,9 +253,10 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 - **SEO & Link Previews**:
   - `src/routes/landing.ts` — Homepage with full OG/Twitter Card meta, JSON-LD (WebApplication schema), live user/post counts from Supabase, Google Play CTA
   - `src/routes/public-profile.ts` — `/@:handle` public profile pages with OG profile tags, Twitter Cards, JSON-LD Person schema, followers/following stats, post feed from `posts` table with images from `post_images`. Redirects `/:handle` → `/@:handle`
-  - `src/routes/public-post.ts` — `/post/:id` public post pages with full OG article tags, Twitter Cards (summary_large_image when post has images), JSON-LD SocialMediaPosting schema, author info, like/reply counts, post images. Only shows non-blocked posts from public authors
-  - `src/routes/seo.ts` — `robots.txt` (allows `/@*` and `/post/*`), dynamic `sitemap.xml` (profiles + posts filtered by public authors only), `.well-known/assetlinks.json` (Android App Links), `.well-known/apple-app-site-association` (iOS Universal Links)
+  - `src/routes/public-post.ts` — `/p/:shortId` public post pages with Base62-encoded short IDs (no UUIDs exposed). Old `/post/:uuid` redirects 301 → `/p/:shortId`. Full OG article tags, Twitter Cards (summary_large_image when post has images), JSON-LD SocialMediaPosting schema, author info, like/reply counts, post images. Only shows non-blocked posts from public authors
+  - `src/routes/seo.ts` — `robots.txt` (allows `/@*`, `/p/*`, `/post/*`), dynamic `sitemap.xml` (profiles + posts with short IDs, filtered by public authors only), `.well-known/assetlinks.json` (Android App Links), `.well-known/apple-app-site-association` (iOS Universal Links)
   - All routes use Supabase anon key only (public, read-only access via RLS)
+  - **Short ID system**: Base62 encoding of UUIDs (e.g. `0a6c129b...` → `JfJNiqOg7jGpEWkpIxGNi`). Same encoder in mobile app (`lib/shortId.ts`) and API server. Old UUID URLs 301-redirect to short URLs for SEO continuity
 - Depends on: `@workspace/db`, `@workspace/api-zod`
 - `pnpm --filter @workspace/api-server run dev` — run the dev server
 - `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)

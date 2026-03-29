@@ -1,10 +1,11 @@
 import { Share, Platform } from "react-native";
 import { showAlert } from "./alert";
+import { encodeId } from "./shortId";
 
 const APP_BASE_URL = "https://afuchat.com";
 
 export function getPostUrl(postId: string): string {
-  return `${APP_BASE_URL}/post/${postId}`;
+  return `${APP_BASE_URL}/p/${encodeId(postId)}`;
 }
 
 export function getProfileUrl(handle: string): string {
@@ -58,7 +59,7 @@ export async function shareStory(params: {
   userName: string;
   userId: string;
 }) {
-  const url = `${APP_BASE_URL}/stories/${params.userId}`;
+  const url = `${APP_BASE_URL}/stories/${encodeId(params.userId)}`;
   const message = `Check out ${params.userName}'s story on AfuChat`;
 
   try {
@@ -77,8 +78,8 @@ export async function shareRedEnvelope(params: {
   envelopeId: string;
   senderName: string;
 }) {
-  const url = `${APP_BASE_URL}/red-envelope/${params.envelopeId}`;
-  const message = `${params.senderName} sent you a Red Envelope on AfuChat! 🧧`;
+  const url = `${APP_BASE_URL}/red-envelope/${encodeId(params.envelopeId)}`;
+  const message = `${params.senderName} sent you a Red Envelope on AfuChat!`;
 
   try {
     await Share.share(

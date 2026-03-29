@@ -11,6 +11,17 @@ const BRAND_COLOR = "#00BCD4";
 const SITE_NAME = "AfuChat";
 const SITE_URL = "https://afuchat.com";
 
+const B62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+function encodeUuidToShort(uuid: string): string {
+  const hex = uuid.replace(/-/g, "");
+  let num = BigInt("0x" + hex);
+  if (num === 0n) return B62[0];
+  let r = "";
+  const base = BigInt(B62.length);
+  while (num > 0n) { r = B62[Number(num % base)] + r; num = num / base; }
+  return r;
+}
+
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, "&amp;")
@@ -39,7 +50,7 @@ function renderProfilePage(profile: any, posts: any[], isPrivate = false): strin
     const images = (p.images || []).map((img: string) =>
       `<img src="${escapeHtml(img)}" alt="Post image" style="max-width:100%;border-radius:12px;margin-top:8px;" loading="lazy" />`
     ).join("");
-    const postUrl = `${SITE_URL}/post/${p.id}`;
+    const postUrl = `${SITE_URL}/p/${encodeUuidToShort(p.id)}`;
     return `
       <a href="${postUrl}" style="text-decoration:none;color:inherit;display:block">
         <article class="post" itemscope itemtype="https://schema.org/SocialMediaPosting">

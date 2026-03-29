@@ -3,6 +3,17 @@ import { createClient } from "@supabase/supabase-js";
 
 const router = Router();
 
+const B62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+function encodeUuidToShort(uuid: string): string {
+  const hex = uuid.replace(/-/g, "");
+  let num = BigInt("0x" + hex);
+  if (num === 0n) return B62[0];
+  let r = "";
+  const base = BigInt(B62.length);
+  while (num > 0n) { r = B62[Number(num % base)] + r; num = num / base; }
+  return r;
+}
+
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "https://rhnsjqqtdzlkvqazfcbg.supabase.co";
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJobnNqcXF0ZHpsa3ZxYXpmY2JnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2NzA4NjksImV4cCI6MjA3NzI0Njg2OX0.j8zuszO1K6Apjn-jRiVUyZeqe3Re424xyOho9qDl_oY";
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -42,6 +53,7 @@ router.get("/robots.txt", (_req, res) => {
   res.type("text/plain").send(`User-agent: *
 Allow: /
 Allow: /@*
+Allow: /p/*
 Allow: /post/*
 Disallow: /api/
 Disallow: /admin/
@@ -74,7 +86,7 @@ router.get("/sitemap.xml", async (_req, res) => {
   const publicPosts = posts.filter((p) => !p.author?.is_private);
   const postUrls = publicPosts.map((p) => `
   <url>
-    <loc>${SITE_URL}/post/${p.id}</loc>
+    <loc>${SITE_URL}/p/${encodeUuidToShort(p.id)}</loc>
     <lastmod>${new Date(p.created_at || Date.now()).toISOString().split("T")[0]}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>

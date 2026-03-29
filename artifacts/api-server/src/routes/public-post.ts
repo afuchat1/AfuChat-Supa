@@ -7,6 +7,31 @@ const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJobnNqcXF0ZHpsa3ZxYXpmY2JnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2NzA4NjksImV4cCI6MjA3NzI0Njg2OX0.j8zuszO1K6Apjn-jRiVUyZeqe3Re424xyOho9qDl_oY";
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+const B62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+function decodeShortId(short: string): string {
+  try {
+    const base = BigInt(B62.length);
+    let num = 0n;
+    for (const ch of short) { const i = B62.indexOf(ch); if (i < 0) return short; num = num * base + BigInt(i); }
+    const hex = num.toString(16).padStart(32, "0");
+    return [hex.slice(0,8), hex.slice(8,12), hex.slice(12,16), hex.slice(16,20), hex.slice(20,32)].join("-");
+  } catch { return short; }
+}
+function encodeUuidToShort(uuid: string): string {
+  const hex = uuid.replace(/-/g, "");
+  let num = BigInt("0x" + hex);
+  if (num === 0n) return B62[0];
+  let r = "";
+  const base = BigInt(B62.length);
+  while (num > 0n) { r = B62[Number(num % base)] + r; num = num / base; }
+  return r;
+}
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function resolvePostId(param: string): string {
+  if (UUID_RE.test(param)) return param;
+  return decodeShortId(param);
+}
+
 const BRAND_COLOR = "#00BCD4";
 const BRAND_DARK = "#0097A7";
 const SITE_NAME = "AfuChat";
@@ -36,7 +61,7 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(months / 12)}y ago`;
 }
 
-function renderPostPage(post: any, author: any, images: string[], stats: { likes: number; replies: number }): string {
+function renderPostPage(post: any, author: any, images: string[], stats: { likes: number; replies: number }, shortId?: string): string {
   const displayName = escapeHtml(author.display_name || "User");
   const handle = escapeHtml(author.handle || "user");
   const avatarUrl = author.avatar_url || "";
@@ -44,7 +69,8 @@ function renderPostPage(post: any, author: any, images: string[], stats: { likes
   const contentEsc = escapeHtml(content);
   const ogDescription = truncate(content.replace(/\n+/g, " "), 200) || `Post by ${displayName} on ${SITE_NAME}`;
   const ogImage = images[0] || avatarUrl || DEFAULT_OG_IMAGE;
-  const postUrl = `${SITE_URL}/post/${post.id}`;
+  const slug = shortId || encodeUuidToShort(post.id);
+  const postUrl = `${SITE_URL}/p/${slug}`;
   const profileUrl = `${SITE_URL}/@${handle}`;
   const dateStr = new Date(post.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
   const isVerified = author.is_organization_verified || author.is_verified;
@@ -223,8 +249,8 @@ function render404(): string {
 </html>`;
 }
 
-router.get("/post/:id", async (req, res) => {
-  const postId = req.params.id;
+async function handlePostPage(param: string, res: any) {
+  const postId = resolvePostId(param);
   if (!postId) return res.status(404).send(render404());
 
   const { data: post } = await supabase
@@ -255,7 +281,21 @@ router.get("/post/:id", async (req, res) => {
   const likeCount = (likes as any)?.count || 0;
   const replyCount = (replies as any)?.count || 0;
 
-  res.send(renderPostPage(post, author, images, { likes: likeCount, replies: replyCount }));
+  const shortId = encodeUuidToShort(post.id);
+  res.send(renderPostPage(post, author, images, { likes: likeCount, replies: replyCount }, shortId));
+}
+
+router.get("/p/:shortId", async (req, res) => {
+  await handlePostPage(req.params.shortId, res);
+});
+
+router.get("/post/:id", async (req, res) => {
+  const postId = req.params.id;
+  if (UUID_RE.test(postId)) {
+    const shortId = encodeUuidToShort(postId);
+    return res.redirect(301, `/p/${shortId}`);
+  }
+  await handlePostPage(postId, res);
 });
 
 export default router;
