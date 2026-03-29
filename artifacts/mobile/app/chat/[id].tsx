@@ -343,6 +343,8 @@ function BottomSheet({ visible, onClose, children }: { visible: boolean; onClose
   );
 }
 
+const SWIPE_THRESHOLD = 60;
+
 function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, replyPreview, onTapEnvelope, onTapGift, onImageTap, isPremiumSender }: {
   msg: Message;
   isMe: boolean;
@@ -365,6 +367,32 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   const [transcribing, setTranscribing] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+
+  const swipeX = useRef(new Animated.Value(0)).current;
+  const swipeTriggered = useRef(false);
+  const swipePan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 10 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
+      onPanResponderMove: (_, gs) => {
+        const dx = isMe ? Math.min(0, gs.dx) : Math.max(0, gs.dx);
+        swipeX.setValue(dx);
+        if (Math.abs(dx) >= SWIPE_THRESHOLD && !swipeTriggered.current) {
+          swipeTriggered.current = true;
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        }
+      },
+      onPanResponderRelease: (_, gs) => {
+        const triggered = isMe ? gs.dx <= -SWIPE_THRESHOLD : gs.dx >= SWIPE_THRESHOLD;
+        Animated.spring(swipeX, { toValue: 0, tension: 120, friction: 14, useNativeDriver: true }).start();
+        if (triggered) onReply(msg);
+        swipeTriggered.current = false;
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(swipeX, { toValue: 0, tension: 120, friction: 14, useNativeDriver: true }).start();
+        swipeTriggered.current = false;
+      },
+    })
+  ).current;
 
   const isSpecial =
     msg.encrypted_content?.startsWith("🧧") ||
@@ -447,13 +475,9 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   const textColor = isMe ? "#FFFFFF" : colors.bubbleIncomingText;
   const isPending = msg._pending || msg.status === "sending";
 
-  const slideX = useRef(new Animated.Value(isMe ? 18 : -18)).current;
   const fadeIn = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.parallel([
-      Animated.spring(slideX, { toValue: 0, tension: 100, friction: 11, useNativeDriver: true }),
-      Animated.timing(fadeIn, { toValue: 1, duration: 180, useNativeDriver: true }),
-    ]).start();
+    Animated.timing(fadeIn, { toValue: 1, duration: 180, useNativeDriver: true }).start();
   }, []);
 
   if (isRedEnvelope) {
@@ -486,8 +510,20 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   const hasFile = msg.attachment_url && msg.attachment_type === "file";
   const hasTextContent = msg.encrypted_content && !["📷 Photo", "🎥 Video", "GIF"].includes(msg.encrypted_content);
 
+  const replyIconOpacity = swipeX.interpolate({
+    inputRange: isMe ? [-SWIPE_THRESHOLD, -10, 0] : [0, 10, SWIPE_THRESHOLD],
+    outputRange: isMe ? [1, 0.3, 0] : [0, 0.3, 1],
+    extrapolate: "clamp",
+  });
+
   return (
-    <Animated.View style={[st.msgRow, isMe ? st.msgRowMe : st.msgRowOther, { transform: [{ translateX: slideX }], opacity: fadeIn }]}>
+    <View {...swipePan.panHandlers} style={[st.msgRow, isMe ? st.msgRowMe : st.msgRowOther]}>
+      {!isMe && (
+        <Animated.View style={[st.swipeReplyIcon, { opacity: replyIconOpacity, left: 4 }]}>
+          <Ionicons name="arrow-undo" size={18} color={BRAND} />
+        </Animated.View>
+      )}
+      <Animated.View style={[{ flex: 1, flexDirection: "row", justifyContent: isMe ? "flex-end" : "flex-start" }, { transform: [{ translateX: swipeX }], opacity: fadeIn }]}>
       <View style={[st.bubbleContainer, isMe ? st.bubbleContainerMe : st.bubbleContainerOther]}>
         {showTail && <BubbleTail isMe={isMe} color={bubbleColor} />}
 
@@ -648,7 +684,13 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
           </View>
         )}
       </View>
-    </Animated.View>
+      </Animated.View>
+      {isMe && (
+        <Animated.View style={[st.swipeReplyIcon, { opacity: replyIconOpacity, right: 4 }]}>
+          <Ionicons name="arrow-undo" size={18} color={BRAND} />
+        </Animated.View>
+      )}
+    </View>
   );
 }
 
@@ -1078,6 +1120,33 @@ export default function ChatScreen() {
     setAiResult(null);
     setAiResultType(null);
     setAiReplies([]);
+  }
+
+  function handleReportMessage(msg: Message) {
+    setShowReactions(null);
+    setAiResult(null);
+    setAiResultType(null);
+    setAiReplies([]);
+    const REASONS = ["Spam", "Harassment", "Hate speech", "Inappropriate content"];
+    showAlert("Report Message", "Why are you reporting this message?", [
+      ...REASONS.map((r) => ({
+        text: r,
+        onPress: async () => {
+          const { error } = await supabase.from("message_reports").insert({
+            reporter_id: user?.id,
+            message_id: msg.id,
+            reason: r,
+            message_content: msg.encrypted_content?.slice(0, 500) || "",
+          });
+          if (error) showAlert("Error", "Could not submit report. Please try again.");
+          else {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            showAlert("Reported", "Thank you. Our team will review this message.");
+          }
+        },
+      })),
+      { text: "Cancel", style: "cancel" as const },
+    ]);
   }
 
   async function handleTranslateToLang(langCode: string) {
@@ -2087,6 +2156,15 @@ export default function ChatScreen() {
               <Text style={[st.reactModalActionText, { color: colors.text }]}>Translate</Text>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: "auto" }} />
             </TouchableOpacity>
+            {showReactions && showReactions.sender_id !== user?.id && (
+              <TouchableOpacity
+                style={st.reactModalAction}
+                onPress={() => { if (showReactions) handleReportMessage(showReactions); }}
+              >
+                <Ionicons name="flag-outline" size={20} color="#FF3B30" />
+                <Text style={[st.reactModalActionText, { color: "#FF3B30" }]}>Report Message</Text>
+              </TouchableOpacity>
+            )}
 
             {(chatInfo?.is_group || chatInfo?.is_channel) && (
               <>
@@ -2682,6 +2760,7 @@ const st = StyleSheet.create({
   sheetActionRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, paddingHorizontal: 4 },
   sheetActionText: { fontSize: 16, fontFamily: "Inter_500Medium" },
 
+  swipeReplyIcon: { position: "absolute", top: "50%", marginTop: -12, width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(0,188,212,0.12)", alignItems: "center", justifyContent: "center" },
   specialMsgTap: { padding: 4 },
   specialMsgEmoji: { fontSize: 56 },
   redEnvBtn: { backgroundColor: "#FF3B30", borderRadius: 14, paddingVertical: 14, alignItems: "center" },

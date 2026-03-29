@@ -115,11 +115,11 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `app/(tabs)/contacts.tsx` — Unified New Message + Contacts page (New Group, New Channel, Find Contacts actions at top + alphabetical contact list with chat start). Hidden from tab bar, reached via FAB from chats.
 - `app/(tabs)/discover.tsx` — Posts feed (tap to post detail)
 - `app/(tabs)/me.tsx` — Profile & settings hub (nav to all feature screens, premium banner, golden badge)
-- `app/chat/[id].tsx` — Chat with WhatsApp-style SVG bubble tails, long-press reaction picker, typing indicators, read receipts (blue double-check), gift box UI, red envelopes, offline message queue, cached messages, file uploads via FileSystem.uploadAsync (native) / fetch→blob (web), date headers, network status indicator
+- `app/chat/[id].tsx` — Chat with WhatsApp-style SVG bubble tails, swipe-to-reply gesture (PanResponder, directional swipe with haptic feedback and reply icon indicator), long-press reaction picker with Report Message option (inserts to `message_reports` table, only for other users' messages), typing indicators, read receipts (blue double-check), gift box UI, red envelopes, offline message queue, cached messages, file uploads via FileSystem.uploadAsync (native) / fetch→blob (web), date headers, network status indicator
 - `app/moments/create.tsx` — Create new post
 - `app/profile/edit.tsx` — Edit profile
 - `app/group/create.tsx` — Create group chat
-- `app/contact/[id].tsx` — Contact profile with golden badge, country, join date, verification details, bio, follow/block/report, user posts feed, SEO Head (OG tags)
+- `app/contact/[id].tsx` — Contact profile with golden badge, country, join date, verification details, bio, follow/block/report account (5 reasons: Spam, Harassment, Hate Speech, Impersonation, Inappropriate Content → `user_reports` table with `reported_user_id`), user posts feed, SEO Head (OG tags)
 - `app/stories/create.tsx` — Create story (image + caption, 24h expiry)
 - `app/stories/view.tsx` — View stories with progress dots and view tracking
 - `app/post/[id].tsx` — Post detail with likes, replies, view count, SEO Head. Features: Edit post (own posts), Delete post (own), Report post (others, via `user_reports` table), Share with short ID URLs, Capture post as image (Substack-style download via `react-native-view-shot` + `expo-sharing`). Three-dot menu with contextual actions. Inline edit mode with save/cancel.

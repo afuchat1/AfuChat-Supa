@@ -222,19 +222,21 @@ export default function ContactProfileScreen() {
 
   function reportUser() {
     if (!user || !id) return;
-    showAlert("Report User", "Why are you reporting this user?", [
-      { text: "Spam", onPress: () => submitReport("spam") },
-      { text: "Harassment", onPress: () => submitReport("harassment") },
-      { text: "Inappropriate Content", onPress: () => submitReport("inappropriate") },
+    showAlert("Report Account", "Why are you reporting this account?", [
+      { text: "Spam", onPress: () => submitReport("Spam") },
+      { text: "Harassment", onPress: () => submitReport("Harassment") },
+      { text: "Hate Speech", onPress: () => submitReport("Hate speech") },
+      { text: "Impersonation", onPress: () => submitReport("Impersonation") },
+      { text: "Inappropriate Content", onPress: () => submitReport("Inappropriate content") },
       { text: "Cancel", style: "cancel" },
     ]);
   }
 
   async function submitReport(reason: string) {
     if (!user || !id) return;
-    const { error } = await supabase.from("user_reports").insert({ reporter_id: user.id, reported_id: id, reason });
-    if (error) showAlert("Error", "Could not submit report.");
-    else showAlert("Reported", "Thank you for your report. We'll review it.");
+    const { error } = await supabase.from("user_reports").insert({ reporter_id: user.id, reported_user_id: id, reason });
+    if (error) showAlert("Error", "Could not submit report. Please try again.");
+    else showAlert("Reported", "Thank you for your report. Our team will review it.");
   }
 
   if (loading) {
