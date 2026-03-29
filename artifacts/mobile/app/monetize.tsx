@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
+  Image,
   Modal,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Switch,
@@ -11,8 +12,10 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import Animated, { useSharedValue, useAnimatedStyle, withDelay, withSpring } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -21,17 +24,78 @@ import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
-import { MONETIZE_FEATURES, formatAcoin } from "@/lib/monetize";
+import { MONETIZE_FEATURES, formatAcoin, transferAcoin } from "@/lib/monetize";
 
+const ACOIN_TO_UGX = 100;
+const GOLD = "#D4A853";
+
+type Tab = "dashboard" | "features" | "market";
 type CreatorSettings = Record<string, { enabled: boolean; price: number }>;
-type EarningsRow = { transaction_type: string; total: number };
 
-const CATEGORY_LABELS: Record<string, string> = {
-  messaging: "💬 Messaging",
-  profile: "👤 Profile",
-  content: "🎬 Content",
-  marketplace: "🛒 Marketplace",
-  community: "🏘️ Community",
+type DayEarning = { day: string; label: string; acoin: number };
+
+function formatUGX(n: number): string {
+  if (n >= 1000000) return `UGX ${(n / 1000000).toFixed(1)}M`;
+  if (n >= 1000) return `UGX ${(n / 1000).toFixed(1)}K`;
+  return `UGX ${n.toLocaleString()}`;
+}
+
+function getLastNDays(n: number): DayEarning[] {
+  return Array.from({ length: n }).map((_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (n - 1 - i));
+    return {
+      day: d.toISOString().split("T")[0],
+      label: d.toLocaleDateString("en-US", { weekday: "short" }),
+      acoin: 0,
+    };
+  });
+}
+
+function BarChart({ data, color }: { data: DayEarning[]; color: string }) {
+  const max = Math.max(...data.map((d) => d.acoin), 1);
+  const { width } = useWindowDimensions();
+  const barW = Math.floor((width - 60) / data.length) - 8;
+
+  return (
+    <View style={chartStyles.root}>
+      <View style={chartStyles.bars}>
+        {data.map((d, i) => {
+          const pct = d.acoin / max;
+          const h = useSharedValue(0);
+          useEffect(() => { h.value = withDelay(i * 60, withSpring(pct, { damping: 15, stiffness: 120 })); }, [pct]);
+          const animStyle = useAnimatedStyle(() => ({ height: `${Math.max(h.value * 100, 4)}%` as any }));
+          return (
+            <View key={d.day} style={[chartStyles.barCol, { width: barW }]}>
+              <Text style={chartStyles.barVal}>{d.acoin > 0 ? formatAcoin(d.acoin) : ""}</Text>
+              <View style={chartStyles.barTrack}>
+                <Animated.View style={[chartStyles.barFill, { backgroundColor: color }, animStyle]} />
+              </View>
+              <Text style={chartStyles.barLabel}>{d.label}</Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const chartStyles = StyleSheet.create({
+  root: { height: 120, paddingHorizontal: 4 },
+  bars: { flex: 1, flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" },
+  barCol: { alignItems: "center", gap: 4 },
+  barVal: { fontSize: 8, fontFamily: "Inter_500Medium", color: GOLD, height: 12 },
+  barTrack: { flex: 1, width: "100%", backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 4, overflow: "hidden", justifyContent: "flex-end" },
+  barFill: { borderRadius: 4, minHeight: 4 },
+  barLabel: { fontSize: 9, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.5)" },
+});
+
+const CATEGORY_LABELS: Record<string, { label: string; icon: string; color: string }> = {
+  messaging: { label: "Messaging", icon: "chatbubble-outline", color: "#00BCD4" },
+  profile: { label: "Profile", icon: "person-outline", color: "#FF9500" },
+  content: { label: "Content", icon: "play-circle-outline", color: "#FF2D55" },
+  marketplace: { label: "Marketplace", icon: "storefront-outline", color: "#FFD60A" },
+  community: { label: "Community", icon: "people-outline", color: "#BF5AF2" },
 };
 
 const FEATURE_ROUTES: Record<string, string> = {
@@ -45,17 +109,22 @@ export default function MonetizeScreen() {
   const { colors } = useTheme();
   const { user, profile, refreshProfile } = useAuth();
   const insets = useSafeAreaInsets();
-  const [activeTab, setActiveTab] = useState<"dashboard" | "settings" | "market">("dashboard");
+
+  const [tab, setTab] = useState<Tab>("dashboard");
   const [settings, setSettings] = useState<CreatorSettings>({});
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [totalEarned, setTotalEarned] = useState(0);
-  const [earningsByType, setEarningsByType] = useState<Record<string, number>>({});
+  const [earningsByFeature, setEarningsByFeature] = useState<Record<string, number>>({});
+  const [weekData, setWeekData] = useState<DayEarning[]>(getLastNDays(7));
+  const [totalViews, setTotalViews] = useState(0);
+  const [totalLikes, setTotalLikes] = useState(0);
+  const [marketListings, setMarketListings] = useState<any[]>([]);
+  const [loadingMarket, setLoadingMarket] = useState(false);
   const [editingFeature, setEditingFeature] = useState<string | null>(null);
   const [editPrice, setEditPrice] = useState("");
   const [editEnabled, setEditEnabled] = useState(false);
-  const [marketListings, setMarketListings] = useState<any[]>([]);
-  const [loadingMarket, setLoadingMarket] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const loadSettings = useCallback(async () => {
     if (!user) return;
@@ -66,71 +135,63 @@ export default function MonetizeScreen() {
       .eq("user_id", user.id);
 
     const map: CreatorSettings = {};
-    for (const f of MONETIZE_FEATURES) {
-      map[f.id] = { enabled: false, price: 50 };
-    }
-    for (const row of (data || [])) {
-      map[row.feature_id] = { enabled: row.enabled, price: row.price };
-    }
+    for (const f of MONETIZE_FEATURES) map[f.id] = { enabled: false, price: 50 };
+    for (const row of (data || [])) map[row.feature_id] = { enabled: row.enabled, price: row.price };
     setSettings(map);
     setLoadingSettings(false);
   }, [user]);
 
   const loadEarnings = useCallback(async () => {
     if (!user) return;
+    const [{ data: txData }, { data: creatorData }] = await Promise.all([
+      supabase.from("acoin_transactions").select("transaction_type, amount, created_at").eq("user_id", user.id).gt("amount", 0),
+      supabase.from("creator_earnings").select("amount_ugx, views_count, likes_count, earned_date").eq("user_id", user.id).order("earned_date", { ascending: false }).limit(30),
+    ]);
 
-    // Pull monetize ACoin transactions
-    const { data: txData } = await supabase
-      .from("acoin_transactions")
-      .select("transaction_type, amount")
-      .eq("user_id", user.id)
-      .gt("amount", 0);
+    const byFeature: Record<string, number> = {};
+    const days = getLastNDays(7);
 
-    // Pull creator engagement earnings (from posts, views, likes)
-    const { data: creatorData } = await supabase
-      .from("creator_earnings")
-      .select("amount_ugx, views_count, likes_count, engagement_score, earned_date")
-      .eq("user_id", user.id)
-      .order("earned_date", { ascending: false })
-      .limit(30);
-
-    let total = 0;
-    const byType: Record<string, number> = {};
-
-    // Count monetize_ ACoin earnings
     for (const tx of (txData || [])) {
       if (tx.transaction_type?.startsWith("monetize_")) {
-        total += tx.amount;
         const key = tx.transaction_type.replace("monetize_", "");
-        byType[key] = (byType[key] || 0) + tx.amount;
+        byFeature[key] = (byFeature[key] || 0) + tx.amount;
+        const txDay = tx.created_at?.split("T")[0];
+        const dayEntry = days.find((d) => d.day === txDay);
+        if (dayEntry) dayEntry.acoin += tx.amount;
       }
     }
 
-    // Convert creator UGX earnings to an ACoin equivalent (100 UGX ≈ 1 ACoin)
-    const creatorAcoin = (creatorData || []).reduce((sum: number, row: any) => sum + Math.floor((row.amount_ugx || 0) / 100), 0);
-    const totalViews = (creatorData || []).reduce((sum: number, row: any) => sum + (row.views_count || 0), 0);
-    const totalLikes = (creatorData || []).reduce((sum: number, row: any) => sum + (row.likes_count || 0), 0);
+    let total = Object.values(byFeature).reduce((a, b) => a + b, 0);
+    let views = 0, likes = 0;
 
-    if (creatorAcoin > 0) {
-      byType["post_engagement"] = (byType["post_engagement"] || 0) + creatorAcoin;
-      total += creatorAcoin;
+    for (const row of (creatorData || [])) {
+      const ac = Math.floor((row.amount_ugx || 0) / ACOIN_TO_UGX);
+      if (ac > 0) {
+        byFeature["post_engagement"] = (byFeature["post_engagement"] || 0) + ac;
+        total += ac;
+        const dayEntry = days.find((d) => d.day === row.earned_date);
+        if (dayEntry) dayEntry.acoin += ac;
+      }
+      views += row.views_count || 0;
+      likes += row.likes_count || 0;
     }
-    if (totalViews > 0) byType["views"] = totalViews;
-    if (totalLikes > 0) byType["likes"] = totalLikes;
 
     setTotalEarned(total);
-    setEarningsByType(byType);
+    setEarningsByFeature(byFeature);
+    setWeekData(days);
+    setTotalViews(views);
+    setTotalLikes(likes);
   }, [user]);
 
   const loadMarket = useCallback(async () => {
     setLoadingMarket(true);
     const { data } = await supabase
       .from("creator_monetize_settings")
-      .select("feature_id, price, user_id, profiles!creator_monetize_settings_user_id_fkey(display_name, handle, avatar_url)")
+      .select("feature_id, price, user_id, profiles!creator_monetize_settings_user_id_fkey(display_name, handle, avatar_url, is_verified)")
       .eq("enabled", true)
       .neq("user_id", user?.id || "")
       .order("price", { ascending: false })
-      .limit(40);
+      .limit(50);
     setMarketListings(data || []);
     setLoadingMarket(false);
   }, [user]);
@@ -138,17 +199,18 @@ export default function MonetizeScreen() {
   useEffect(() => {
     loadSettings();
     loadEarnings();
+    refreshProfile?.();
   }, [loadSettings, loadEarnings]);
 
   useEffect(() => {
-    if (activeTab === "market") loadMarket();
-  }, [activeTab, loadMarket]);
+    if (tab === "market") loadMarket();
+  }, [tab]);
 
   async function saveSetting(featureId: string, enabled: boolean, price: number) {
     if (!user) return;
     setSavingId(featureId);
     await supabase.from("creator_monetize_settings").upsert(
-      { user_id: user.id, feature_id: featureId, enabled, price },
+      { user_id: user.id, feature_id: featureId, enabled, price: Math.max(1, price) },
       { onConflict: "user_id,feature_id" }
     );
     setSettings((prev) => ({ ...prev, [featureId]: { enabled, price } }));
@@ -157,187 +219,288 @@ export default function MonetizeScreen() {
   }
 
   function openEdit(featureId: string) {
-    const current = settings[featureId] || { enabled: false, price: 50 };
+    const cur = settings[featureId] || { enabled: false, price: 50 };
     setEditingFeature(featureId);
-    setEditPrice(String(current.price));
-    setEditEnabled(current.enabled);
+    setEditPrice(String(cur.price));
+    setEditEnabled(cur.enabled);
   }
 
-  const categories = Array.from(new Set(MONETIZE_FEATURES.map((f) => f.category)));
+  async function onRefresh() {
+    setRefreshing(true);
+    await Promise.all([loadSettings(), loadEarnings(), refreshProfile?.()]);
+    if (tab === "market") await loadMarket();
+    setRefreshing(false);
+  }
 
-  const totalThisMonth = Object.values(earningsByType).reduce((a, b) => a + b, 0);
+  const activeFeatures = Object.values(settings).filter((s) => s.enabled).length;
+  const acoinBalance = profile?.acoin || 0;
+  const availableUGX = profile?.available_balance_ugx || 0;
+  const categories = Array.from(new Set(MONETIZE_FEATURES.map((f) => f.category)));
+  const hasEarnings = Object.keys(earningsByFeature).length > 0;
 
   function renderDashboard() {
     return (
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-        {/* Total earned */}
-        <LinearGradient colors={[Colors.brand + "33", Colors.gold + "11"]} style={[styles.earningsCard, { borderColor: Colors.brand + "44" }]}>
-          <Text style={styles.earningsLabel}>Total ACoin Earned</Text>
-          <Text style={[styles.earningsValue, { color: Colors.gold }]}>{formatAcoin(totalEarned)} 🪙</Text>
-          <Text style={[styles.earningsSub, { color: colors.textMuted }]}>Across all monetization features</Text>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 60 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={GOLD} />}
+      >
+        <LinearGradient
+          colors={["#1a1a2e", "#16213e", "#0f3460"]}
+          style={styles.heroCard}
+        >
+          <View style={styles.heroTop}>
+            <View>
+              <Text style={styles.heroLabel}>Total ACoin Earned</Text>
+              <Text style={styles.heroValue}>{formatAcoin(totalEarned)}</Text>
+              <Text style={styles.heroUGX}>{formatUGX(totalEarned * ACOIN_TO_UGX)}</Text>
+            </View>
+            <View style={styles.heroCoin}>
+              <Text style={{ fontSize: 40 }}>🪙</Text>
+            </View>
+          </View>
+
+          <BarChart data={weekData} color={GOLD} />
+
+          <View style={styles.heroStats}>
+            {[
+              { label: "Balance", value: `${formatAcoin(acoinBalance)} 🪙` },
+              { label: "Active", value: `${activeFeatures}/${MONETIZE_FEATURES.length}` },
+              { label: "Views", value: totalViews > 0 ? formatAcoin(totalViews) : "—" },
+            ].map((s) => (
+              <View key={s.label} style={styles.heroStat}>
+                <Text style={styles.heroStatVal}>{s.value}</Text>
+                <Text style={styles.heroStatLabel}>{s.label}</Text>
+              </View>
+            ))}
+          </View>
         </LinearGradient>
 
-        {/* Active features count */}
-        <View style={styles.statsRow}>
-          {[
-            { label: "Features On", value: Object.values(settings).filter((s) => s.enabled).length },
-            { label: "Balance", value: formatAcoin(profile?.acoin || 0) + " 🪙" },
-            { label: "Features", value: MONETIZE_FEATURES.length },
-          ].map((s) => (
-            <View key={s.label} style={[styles.statCard, { backgroundColor: colors.surface }]}>
-              <Text style={[styles.statValue, { color: colors.text }]}>{s.value}</Text>
-              <Text style={[styles.statLabel, { color: colors.textMuted }]}>{s.label}</Text>
+        {availableUGX > 0 && (
+          <View style={[styles.withdrawCard, { backgroundColor: colors.surface, borderColor: Colors.brand + "44" }]}>
+            <View style={[styles.withdrawIconWrap, { backgroundColor: Colors.brand + "18" }]}>
+              <Ionicons name="wallet-outline" size={22} color={Colors.brand} />
             </View>
-          ))}
-        </View>
-
-        {/* Earnings by feature */}
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Earnings by Feature</Text>
-        {MONETIZE_FEATURES.filter((f) => earningsByType[f.id] > 0).map((f) => (
-          <View key={f.id} style={[styles.earningRow, { backgroundColor: colors.surface }]}>
-            <Text style={styles.rowEmoji}>{f.emoji}</Text>
-            <Text style={[styles.rowTitle, { color: colors.text, flex: 1 }]}>{f.title}</Text>
-            <Text style={[styles.rowAmount, { color: Colors.gold }]}>+{earningsByType[f.id]} 🪙</Text>
-          </View>
-        ))}
-        {/* Creator earnings from post engagement */}
-        {earningsByType["post_engagement"] > 0 && (
-          <View style={[styles.earningRow, { backgroundColor: colors.surface }]}>
-            <Text style={styles.rowEmoji}>📊</Text>
-            <Text style={[styles.rowTitle, { color: colors.text, flex: 1 }]}>Post Engagement</Text>
-            <Text style={[styles.rowAmount, { color: Colors.gold }]}>+{earningsByType["post_engagement"]} 🪙</Text>
-          </View>
-        )}
-        {earningsByType["views"] > 0 && (
-          <View style={[styles.earningRow, { backgroundColor: colors.surface }]}>
-            <Text style={styles.rowEmoji}>👁️</Text>
-            <Text style={[styles.rowTitle, { color: colors.text, flex: 1 }]}>Total Post Views</Text>
-            <Text style={[styles.rowAmount, { color: colors.textMuted }]}>{earningsByType["views"].toLocaleString()}</Text>
-          </View>
-        )}
-        {earningsByType["likes"] > 0 && (
-          <View style={[styles.earningRow, { backgroundColor: colors.surface }]}>
-            <Text style={styles.rowEmoji}>❤️</Text>
-            <Text style={[styles.rowTitle, { color: colors.text, flex: 1 }]}>Total Post Likes</Text>
-            <Text style={[styles.rowAmount, { color: colors.textMuted }]}>{earningsByType["likes"].toLocaleString()}</Text>
-          </View>
-        )}
-        {Object.values(earningsByType).length === 0 && (
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyEmoji}>💸</Text>
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>No earnings yet</Text>
-            <Text style={[styles.emptySub, { color: colors.textMuted }]}>Enable features in Settings to start earning</Text>
-            <TouchableOpacity style={[styles.emptyBtn, { backgroundColor: Colors.brand }]} onPress={() => setActiveTab("settings")}>
-              <Text style={styles.emptyBtnText}>Set Up Monetization</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.withdrawTitle, { color: colors.text }]}>Available to Withdraw</Text>
+              <Text style={[styles.withdrawAmount, { color: Colors.brand }]}>{formatUGX(availableUGX)}</Text>
+            </View>
+            <TouchableOpacity style={[styles.withdrawBtn, { backgroundColor: Colors.brand }]} onPress={() => router.push("/wallet" as any)}>
+              <Text style={styles.withdrawBtnText}>Withdraw</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* Quick links to marketplaces */}
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Marketplace Screens</Text>
-        {[
-          { label: "Paid Communities", emoji: "🏰", route: "/paid-communities" },
-          { label: "Digital Events", emoji: "🎫", route: "/digital-events" },
-          { label: "Freelance Market", emoji: "💼", route: "/freelance" },
-          { label: "Username Market", emoji: "🏷️", route: "/username-market" },
-        ].map((item) => (
-          <TouchableOpacity key={item.route} style={[styles.marketLink, { backgroundColor: colors.surface }]} onPress={() => router.push(item.route as any)}>
-            <Text style={{ fontSize: 24 }}>{item.emoji}</Text>
-            <Text style={[styles.marketLinkText, { color: colors.text }]}>{item.label}</Text>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
-        ))}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Earnings Breakdown</Text>
+          {hasEarnings ? (
+            <>
+              {MONETIZE_FEATURES.filter((f) => earningsByFeature[f.id] > 0).map((f) => (
+                <View key={f.id} style={[styles.earningRow, { backgroundColor: colors.surface }]}>
+                  <View style={[styles.earningIcon, { backgroundColor: f.color + "20" }]}>
+                    <Text style={{ fontSize: 18 }}>{f.emoji}</Text>
+                  </View>
+                  <Text style={[styles.earningLabel, { color: colors.text, flex: 1 }]}>{f.title}</Text>
+                  <View>
+                    <Text style={[styles.earningAcoin, { color: GOLD }]}>+{formatAcoin(earningsByFeature[f.id])} 🪙</Text>
+                    <Text style={[styles.earningUGX, { color: colors.textMuted }]}>{formatUGX(earningsByFeature[f.id] * ACOIN_TO_UGX)}</Text>
+                  </View>
+                </View>
+              ))}
+              {earningsByFeature["post_engagement"] > 0 && !MONETIZE_FEATURES.find((f) => f.id === "post_engagement") && (
+                <View style={[styles.earningRow, { backgroundColor: colors.surface }]}>
+                  <View style={[styles.earningIcon, { backgroundColor: "#34C75920" }]}>
+                    <Text style={{ fontSize: 18 }}>📊</Text>
+                  </View>
+                  <Text style={[styles.earningLabel, { color: colors.text, flex: 1 }]}>Post Engagement</Text>
+                  <View>
+                    <Text style={[styles.earningAcoin, { color: GOLD }]}>+{formatAcoin(earningsByFeature["post_engagement"])} 🪙</Text>
+                    <Text style={[styles.earningUGX, { color: colors.textMuted }]}>{formatUGX(earningsByFeature["post_engagement"] * ACOIN_TO_UGX)}</Text>
+                  </View>
+                </View>
+              )}
+              {(totalViews > 0 || totalLikes > 0) && (
+                <View style={[styles.engagementRow, { backgroundColor: colors.surface }]}>
+                  {totalViews > 0 && (
+                    <View style={styles.engItem}>
+                      <Ionicons name="eye-outline" size={18} color={colors.textMuted} />
+                      <Text style={[styles.engVal, { color: colors.text }]}>{totalViews.toLocaleString()}</Text>
+                      <Text style={[styles.engLabel, { color: colors.textMuted }]}>Post Views</Text>
+                    </View>
+                  )}
+                  {totalViews > 0 && totalLikes > 0 && <View style={[styles.engDivider, { backgroundColor: colors.border }]} />}
+                  {totalLikes > 0 && (
+                    <View style={styles.engItem}>
+                      <Ionicons name="heart-outline" size={18} color="#FF2D55" />
+                      <Text style={[styles.engVal, { color: colors.text }]}>{totalLikes.toLocaleString()}</Text>
+                      <Text style={[styles.engLabel, { color: colors.textMuted }]}>Post Likes</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </>
+          ) : (
+            <View style={[styles.emptyBox, { backgroundColor: colors.surface }]}>
+              <Text style={{ fontSize: 40 }}>💸</Text>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>No earnings yet</Text>
+              <Text style={[styles.emptySub, { color: colors.textMuted }]}>Enable monetization features to start earning ACoin from your audience.</Text>
+              <TouchableOpacity style={[styles.emptyBtn, { backgroundColor: Colors.brand }]} onPress={() => setTab("features")}>
+                <Text style={styles.emptyBtnText}>Set Up Features</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Launch</Text>
+          {[
+            { label: "Paid Communities", emoji: "🏰", route: "/paid-communities" },
+            { label: "Digital Events", emoji: "🎫", route: "/digital-events" },
+            { label: "Freelance Market", emoji: "💼", route: "/freelance" },
+            { label: "Username Market", emoji: "🏷️", route: "/username-market" },
+          ].map((item) => (
+            <TouchableOpacity key={item.route} style={[styles.quickLink, { backgroundColor: colors.surface }]} onPress={() => router.push(item.route as any)}>
+              <Text style={{ fontSize: 22 }}>{item.emoji}</Text>
+              <Text style={[styles.quickLinkText, { color: colors.text }]}>{item.label}</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          ))}
+        </View>
       </ScrollView>
     );
   }
 
-  function renderSettings() {
+  function renderFeatures() {
     if (loadingSettings) return <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} />;
     return (
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-        <Text style={[styles.settingsBanner, { color: colors.textSecondary }]}>
-          Enable features and set your prices. All payments are in ACoin.
-        </Text>
-        {categories.map((cat) => (
-          <View key={cat}>
-            <Text style={[styles.catLabel, { color: colors.textMuted }]}>{CATEGORY_LABELS[cat]}</Text>
-            {MONETIZE_FEATURES.filter((f) => f.category === cat).map((feature) => {
-              const s = settings[feature.id] || { enabled: false, price: 50 };
-              const isMarket = !!FEATURE_ROUTES[feature.id];
-              return (
-                <TouchableOpacity
-                  key={feature.id}
-                  style={[styles.featureCard, { backgroundColor: colors.surface, borderColor: s.enabled ? feature.color + "44" : colors.border }]}
-                  onPress={() => isMarket ? router.push(FEATURE_ROUTES[feature.id] as any) : openEdit(feature.id)}
-                  activeOpacity={0.85}
-                >
-                  <View style={[styles.featureIconWrap, { backgroundColor: feature.color + "20" }]}>
-                    <Text style={styles.featureEmoji}>{feature.emoji}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.featureTitle, { color: colors.text }]}>{feature.title}</Text>
-                    <Text style={[styles.featureDesc, { color: colors.textMuted }]}>{feature.description}</Text>
-                    {s.enabled && !isMarket && (
-                      <View style={[styles.priceBadge, { backgroundColor: Colors.gold + "20" }]}>
-                        <Text style={[styles.priceText, { color: Colors.gold }]}>{s.price} ACoin</Text>
-                      </View>
-                    )}
-                  </View>
-                  {savingId === feature.id ? (
-                    <ActivityIndicator color={Colors.brand} size="small" />
-                  ) : isMarket ? (
-                    <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-                  ) : (
-                    <Switch
-                      value={s.enabled}
-                      onValueChange={(val) => saveSetting(feature.id, val, s.price)}
-                      trackColor={{ false: colors.backgroundTertiary, true: feature.color + "88" }}
-                      thumbColor={s.enabled ? feature.color : colors.textMuted}
-                    />
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        ))}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 60, paddingTop: 8 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.brand} />}
+      >
+        <View style={[styles.infoBanner, { backgroundColor: Colors.brand + "14" }]}>
+          <Ionicons name="information-circle-outline" size={16} color={Colors.brand} />
+          <Text style={[styles.infoBannerText, { color: Colors.brand }]}>
+            {activeFeatures} of {MONETIZE_FEATURES.length} features active · Payments are in ACoin (1 ACoin = UGX {ACOIN_TO_UGX})
+          </Text>
+        </View>
+
+        {categories.map((cat) => {
+          const catDef = CATEGORY_LABELS[cat];
+          const catFeatures = MONETIZE_FEATURES.filter((f) => f.category === cat);
+          return (
+            <View key={cat} style={styles.catSection}>
+              <View style={styles.catHeader}>
+                <View style={[styles.catIconWrap, { backgroundColor: catDef.color + "20" }]}>
+                  <Ionicons name={catDef.icon as any} size={14} color={catDef.color} />
+                </View>
+                <Text style={[styles.catTitle, { color: colors.textMuted }]}>{catDef.label.toUpperCase()}</Text>
+              </View>
+              <View style={[styles.catCard, { backgroundColor: colors.surface }]}>
+                {catFeatures.map((feature, fi) => {
+                  const s = settings[feature.id] || { enabled: false, price: 50 };
+                  const isMarket = !!FEATURE_ROUTES[feature.id];
+                  const earnings = earningsByFeature[feature.id] || 0;
+                  return (
+                    <View key={feature.id}>
+                      {fi > 0 && <View style={[styles.featureSep, { backgroundColor: colors.border }]} />}
+                      <TouchableOpacity
+                        style={styles.featureRow}
+                        onPress={() => isMarket ? router.push(FEATURE_ROUTES[feature.id] as any) : openEdit(feature.id)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={[styles.featureEmojiBg, { backgroundColor: feature.color + "18" }]}>
+                          <Text style={{ fontSize: 20 }}>{feature.emoji}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={styles.featureNameRow}>
+                            <Text style={[styles.featureName, { color: colors.text }]}>{feature.title}</Text>
+                            {earnings > 0 && (
+                              <View style={[styles.earningsMini, { backgroundColor: GOLD + "20" }]}>
+                                <Text style={[styles.earningsMiniText, { color: GOLD }]}>+{formatAcoin(earnings)} 🪙</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={[styles.featureDesc, { color: colors.textMuted }]}>{feature.description}</Text>
+                          {s.enabled && !isMarket && (
+                            <Text style={[styles.featurePrice, { color: feature.color }]}>{s.price} ACoin per interaction</Text>
+                          )}
+                        </View>
+                        {savingId === feature.id ? (
+                          <ActivityIndicator size="small" color={Colors.brand} />
+                        ) : isMarket ? (
+                          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                        ) : (
+                          <Switch
+                            value={s.enabled}
+                            onValueChange={(val) => val ? openEdit(feature.id) : saveSetting(feature.id, false, s.price)}
+                            trackColor={{ false: colors.backgroundTertiary, true: feature.color }}
+                            thumbColor="#fff"
+                          />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          );
+        })}
       </ScrollView>
     );
   }
 
   function renderMarket() {
     if (loadingMarket) return <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} />;
+    if (marketListings.length === 0) {
+      return (
+        <View style={styles.emptyFull}>
+          <Text style={{ fontSize: 48 }}>🛒</Text>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>Market is empty</Text>
+          <Text style={[styles.emptySub, { color: colors.textMuted }]}>Be the first creator to enable monetization features</Text>
+          <TouchableOpacity style={[styles.emptyBtn, { backgroundColor: Colors.brand }]} onPress={() => setTab("features")}>
+            <Text style={styles.emptyBtnText}>Enable Features</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
     return (
       <FlatList
         data={marketListings}
         keyExtractor={(item, i) => `${item.user_id}-${item.feature_id}-${i}`}
-        contentContainerStyle={{ paddingBottom: 40, gap: 8 }}
+        contentContainerStyle={{ padding: 14, gap: 10, paddingBottom: insets.bottom + 60 }}
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyEmoji}>🛒</Text>
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>Market is empty</Text>
-            <Text style={[styles.emptySub, { color: colors.textMuted }]}>Be the first creator to set up monetization</Text>
-          </View>
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.brand} />}
         renderItem={({ item }) => {
           const feature = MONETIZE_FEATURES.find((f) => f.id === item.feature_id);
           if (!feature) return null;
+          const p = item.profiles;
           return (
             <TouchableOpacity
               style={[styles.marketCard, { backgroundColor: colors.surface, borderColor: feature.color + "33" }]}
               onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.user_id } })}
+              activeOpacity={0.88}
             >
-              <View style={[styles.featureIconWrap, { backgroundColor: feature.color + "20" }]}>
-                <Text style={styles.featureEmoji}>{feature.emoji}</Text>
-              </View>
+              {p?.avatar_url ? (
+                <Image source={{ uri: p.avatar_url }} style={styles.marketAvatar} />
+              ) : (
+                <View style={[styles.marketAvatar, { backgroundColor: feature.color + "22", alignItems: "center", justifyContent: "center" }]}>
+                  <Text style={{ fontSize: 18 }}>{feature.emoji}</Text>
+                </View>
+              )}
               <View style={{ flex: 1 }}>
-                <Text style={[styles.featureTitle, { color: colors.text }]}>{feature.title}</Text>
-                <Text style={[styles.marketHandle, { color: colors.textMuted }]}>
-                  by @{item.profiles?.handle || "creator"}
+                <View style={styles.marketNameRow}>
+                  <Text style={[styles.marketName, { color: colors.text }]} numberOfLines={1}>
+                    {p?.display_name || `@${p?.handle || "creator"}`}
+                  </Text>
+                  {p?.is_verified && <Ionicons name="checkmark-circle" size={13} color={Colors.brand} />}
+                </View>
+                <Text style={[styles.marketFeature, { color: colors.textMuted }]}>
+                  {feature.emoji} {feature.title}
                 </Text>
               </View>
-              <View style={[styles.pricePill, { backgroundColor: feature.color + "22" }]}>
-                <Text style={[styles.priceText, { color: feature.color }]}>{item.price} 🪙</Text>
+              <View style={[styles.marketPricePill, { backgroundColor: feature.color + "20" }]}>
+                <Text style={[styles.marketPrice, { color: feature.color }]}>{item.price} 🪙</Text>
               </View>
             </TouchableOpacity>
           );
@@ -353,81 +516,101 @@ export default function MonetizeScreen() {
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Monetize</Text>
-          <Text style={[styles.headerSub, { color: colors.textMuted }]}>15 ways to earn with AfuChat</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Creator Studio</Text>
+          <Text style={[styles.headerSub, { color: colors.textMuted }]}>{MONETIZE_FEATURES.length} ways to earn with AfuChat</Text>
         </View>
+        <TouchableOpacity onPress={() => router.push("/wallet" as any)} hitSlop={10}>
+          <View style={[styles.balancePill, { backgroundColor: GOLD + "20" }]}>
+            <Text style={[styles.balancePillText, { color: GOLD }]}>{formatAcoin(acoinBalance)} 🪙</Text>
+          </View>
+        </TouchableOpacity>
       </View>
 
-      {/* Tab bar */}
       <View style={[styles.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        {(["dashboard", "settings", "market"] as const).map((tab) => (
+        {([
+          { key: "dashboard", label: "Dashboard", icon: "stats-chart-outline" },
+          { key: "features", label: "Features", icon: "toggle-outline" },
+          { key: "market", label: "Market", icon: "storefront-outline" },
+        ] as const).map((t) => (
           <TouchableOpacity
-            key={tab}
-            style={[styles.tab, activeTab === tab && { borderBottomColor: Colors.brand, borderBottomWidth: 2 }]}
-            onPress={() => setActiveTab(tab)}
+            key={t.key}
+            style={[styles.tab, tab === t.key && { borderBottomColor: Colors.brand, borderBottomWidth: 2 }]}
+            onPress={() => setTab(t.key)}
           >
-            <Text style={[styles.tabText, { color: activeTab === tab ? Colors.brand : colors.textMuted }]}>
-              {tab === "dashboard" ? "📊 Dashboard" : tab === "settings" ? "⚙️ Settings" : "🛒 Market"}
-            </Text>
+            <Ionicons name={t.icon} size={15} color={tab === t.key ? Colors.brand : colors.textMuted} />
+            <Text style={[styles.tabText, { color: tab === t.key ? Colors.brand : colors.textMuted }]}>{t.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <View style={{ flex: 1, paddingHorizontal: 14, paddingTop: 12 }}>
-        {activeTab === "dashboard" && renderDashboard()}
-        {activeTab === "settings" && renderSettings()}
-        {activeTab === "market" && renderMarket()}
+      <View style={{ flex: 1, paddingHorizontal: tab === "market" ? 0 : 14, paddingTop: tab === "market" ? 0 : 8 }}>
+        {tab === "dashboard" && renderDashboard()}
+        {tab === "features" && renderFeatures()}
+        {tab === "market" && renderMarket()}
       </View>
 
-      {/* Edit feature modal */}
-      <Modal visible={!!editingFeature} transparent animationType="slide">
+      <Modal visible={!!editingFeature} transparent animationType="slide" onRequestClose={() => setEditingFeature(null)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
+            <View style={styles.dragHandle} />
             {editingFeature && (() => {
               const feature = MONETIZE_FEATURES.find((f) => f.id === editingFeature)!;
+              if (!feature) return null;
               return (
                 <>
-                  <View style={styles.modalHeader}>
-                    <Text style={styles.modalEmoji}>{feature.emoji}</Text>
+                  <View style={styles.modalHead}>
+                    <View style={[styles.modalEmojiBg, { backgroundColor: feature.color + "20" }]}>
+                      <Text style={{ fontSize: 28 }}>{feature.emoji}</Text>
+                    </View>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.modalTitle, { color: colors.text }]}>{feature.title}</Text>
                       <Text style={[styles.modalDesc, { color: colors.textMuted }]}>{feature.description}</Text>
                     </View>
                   </View>
 
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Price (ACoin)</Text>
-                  <View style={[styles.priceInput, { backgroundColor: colors.backgroundTertiary }]}>
-                    <Ionicons name="wallet-outline" size={18} color={colors.textMuted} />
+                  <Text style={[styles.inputLabel, { color: colors.textMuted }]}>Price per interaction</Text>
+                  <View style={[styles.priceRow, { backgroundColor: colors.backgroundTertiary }]}>
+                    <TouchableOpacity onPress={() => setEditPrice((p) => String(Math.max(1, parseInt(p) - 10)))} hitSlop={10}>
+                      <Ionicons name="remove-circle-outline" size={28} color={feature.color} />
+                    </TouchableOpacity>
                     <TextInput
-                      style={[styles.priceInputText, { color: colors.text }]}
+                      style={[styles.priceInput, { color: colors.text }]}
                       value={editPrice}
                       onChangeText={setEditPrice}
                       keyboardType="number-pad"
-                      placeholder="Enter price in ACoin"
-                      placeholderTextColor={colors.textMuted}
+                      textAlign="center"
                     />
                     <Text style={[styles.priceUnit, { color: colors.textMuted }]}>ACoin</Text>
+                    <TouchableOpacity onPress={() => setEditPrice((p) => String(parseInt(p) + 10))} hitSlop={10}>
+                      <Ionicons name="add-circle-outline" size={28} color={feature.color} />
+                    </TouchableOpacity>
                   </View>
+                  <Text style={[styles.priceHint, { color: colors.textMuted }]}>
+                    = {formatUGX((parseInt(editPrice) || 0) * ACOIN_TO_UGX)} per interaction
+                  </Text>
 
-                  <View style={styles.enableRow}>
-                    <Text style={[styles.enableLabel, { color: colors.text }]}>Enable this feature</Text>
+                  <View style={[styles.enableRow, { borderColor: colors.border }]}>
+                    <View>
+                      <Text style={[styles.enableLabel, { color: colors.text }]}>Activate this feature</Text>
+                      <Text style={[styles.enableSub, { color: colors.textMuted }]}>Start charging your audience now</Text>
+                    </View>
                     <Switch
                       value={editEnabled}
                       onValueChange={setEditEnabled}
-                      trackColor={{ false: colors.backgroundTertiary, true: feature.color + "88" }}
-                      thumbColor={editEnabled ? feature.color : colors.textMuted}
+                      trackColor={{ false: colors.backgroundTertiary, true: feature.color }}
+                      thumbColor="#fff"
                     />
                   </View>
 
                   <View style={styles.modalBtns}>
-                    <TouchableOpacity style={[styles.modalCancel, { borderColor: colors.border }]} onPress={() => setEditingFeature(null)}>
-                      <Text style={[styles.modalCancelText, { color: colors.text }]}>Cancel</Text>
+                    <TouchableOpacity style={[styles.cancelBtn, { borderColor: colors.border }]} onPress={() => setEditingFeature(null)}>
+                      <Text style={[styles.cancelText, { color: colors.text }]}>Cancel</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.modalSave, { backgroundColor: Colors.brand }]}
+                      style={[styles.saveBtn, { backgroundColor: feature.color }]}
                       onPress={() => saveSetting(editingFeature, editEnabled, parseInt(editPrice) || 50)}
                     >
-                      <Text style={styles.modalSaveText}>Save Settings</Text>
+                      {savingId === editingFeature ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveBtnText}>Save</Text>}
                     </TouchableOpacity>
                   </View>
                 </>
@@ -445,57 +628,88 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   headerTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
   headerSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  balancePill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 },
+  balancePillText: { fontSize: 13, fontFamily: "Inter_700Bold" },
   tabBar: { flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth },
-  tab: { flex: 1, paddingVertical: 12, alignItems: "center" },
+  tab: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: "transparent" },
   tabText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  earningsCard: { borderRadius: 20, padding: 22, borderWidth: 1.5, alignItems: "center", marginBottom: 14 },
-  earningsLabel: { fontSize: 13, fontFamily: "Inter_500Medium", color: "#8E9BAD", marginBottom: 6 },
-  earningsValue: { fontSize: 38, fontFamily: "Inter_700Bold", marginBottom: 4 },
-  earningsSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  statsRow: { flexDirection: "row", gap: 8, marginBottom: 20 },
-  statCard: { flex: 1, borderRadius: 14, padding: 14, alignItems: "center" },
-  statValue: { fontSize: 18, fontFamily: "Inter_700Bold", marginBottom: 2 },
-  statLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  sectionTitle: { fontSize: 16, fontFamily: "Inter_700Bold", marginBottom: 10, marginTop: 8 },
-  earningRow: { flexDirection: "row", alignItems: "center", borderRadius: 12, padding: 14, marginBottom: 6, gap: 10 },
-  rowEmoji: { fontSize: 22 },
-  rowTitle: { fontSize: 14, fontFamily: "Inter_500Medium" },
-  rowAmount: { fontSize: 14, fontFamily: "Inter_700Bold" },
-  emptyBox: { alignItems: "center", paddingVertical: 40, gap: 8 },
-  emptyEmoji: { fontSize: 48 },
+  heroCard: { borderRadius: 20, padding: 20, marginBottom: 14, gap: 16 },
+  heroTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  heroLabel: { fontSize: 12, fontFamily: "Inter_500Medium", color: "rgba(255,255,255,0.5)", marginBottom: 4 },
+  heroValue: { fontSize: 36, fontFamily: "Inter_700Bold", color: GOLD },
+  heroUGX: { fontSize: 13, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.5)", marginTop: 2 },
+  heroCoin: { alignItems: "center", justifyContent: "center" },
+  heroStats: { flexDirection: "row", borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "rgba(255,255,255,0.1)", paddingTop: 14, gap: 0 },
+  heroStat: { flex: 1, alignItems: "center" },
+  heroStatVal: { fontSize: 15, fontFamily: "Inter_700Bold", color: "#fff", marginBottom: 2 },
+  heroStatLabel: { fontSize: 11, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.45)" },
+  withdrawCard: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 16, padding: 16, borderWidth: 1.5, marginBottom: 14 },
+  withdrawIconWrap: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  withdrawTitle: { fontSize: 13, fontFamily: "Inter_500Medium", marginBottom: 2 },
+  withdrawAmount: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  withdrawBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
+  withdrawBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_700Bold" },
+  section: { marginBottom: 20 },
+  sectionTitle: { fontSize: 16, fontFamily: "Inter_700Bold", marginBottom: 10 },
+  earningRow: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 14, padding: 14, marginBottom: 6 },
+  earningIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  earningLabel: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  earningAcoin: { fontSize: 14, fontFamily: "Inter_700Bold", textAlign: "right" },
+  earningUGX: { fontSize: 11, fontFamily: "Inter_400Regular", textAlign: "right", marginTop: 1 },
+  engagementRow: { flexDirection: "row", borderRadius: 14, padding: 16, marginBottom: 6 },
+  engItem: { flex: 1, alignItems: "center", gap: 4 },
+  engVal: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  engLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  engDivider: { width: StyleSheet.hairlineWidth, marginVertical: 8 },
+  emptyBox: { borderRadius: 16, padding: 28, alignItems: "center", gap: 10 },
+  emptyFull: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 40 },
   emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
-  emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
-  emptyBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24, marginTop: 8 },
+  emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
+  emptyBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24, marginTop: 4 },
   emptyBtnText: { color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 },
-  marketLink: { flexDirection: "row", alignItems: "center", borderRadius: 14, padding: 16, gap: 14, marginBottom: 8 },
-  marketLinkText: { flex: 1, fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  settingsBanner: { fontSize: 13, fontFamily: "Inter_400Regular", marginBottom: 16, lineHeight: 20 },
-  catLabel: { fontSize: 13, fontFamily: "Inter_700Bold", marginTop: 16, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 },
-  featureCard: { flexDirection: "row", alignItems: "center", borderRadius: 14, padding: 14, gap: 12, marginBottom: 8, borderWidth: 1 },
-  featureIconWrap: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  featureEmoji: { fontSize: 24 },
-  featureTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
-  featureDesc: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17 },
-  priceBadge: { alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginTop: 5 },
-  pricePill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 },
-  priceText: { fontSize: 12, fontFamily: "Inter_700Bold" },
-  marketCard: { flexDirection: "row", alignItems: "center", borderRadius: 14, padding: 14, gap: 12, borderWidth: 1 },
-  marketHandle: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  modalOverlay: { flex: 1, backgroundColor: "#000000AA", justifyContent: "flex-end" },
-  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
-  modalHeader: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 20 },
-  modalEmoji: { fontSize: 40 },
+  quickLink: { flexDirection: "row", alignItems: "center", borderRadius: 14, padding: 16, gap: 14, marginBottom: 8 },
+  quickLinkText: { flex: 1, fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  infoBanner: { flexDirection: "row", alignItems: "flex-start", gap: 8, padding: 12, borderRadius: 12, marginBottom: 14 },
+  infoBannerText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
+  catSection: { marginBottom: 16 },
+  catHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
+  catIconWrap: { width: 24, height: 24, borderRadius: 6, alignItems: "center", justifyContent: "center" },
+  catTitle: { fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
+  catCard: { borderRadius: 16, overflow: "hidden" },
+  featureRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
+  featureSep: { height: StyleSheet.hairlineWidth, marginLeft: 66 },
+  featureEmojiBg: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  featureNameRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 2 },
+  featureName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  earningsMini: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  earningsMiniText: { fontSize: 10, fontFamily: "Inter_700Bold" },
+  featureDesc: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 16 },
+  featurePrice: { fontSize: 11, fontFamily: "Inter_600SemiBold", marginTop: 3 },
+  marketCard: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 14, padding: 14, borderWidth: 1 },
+  marketAvatar: { width: 46, height: 46, borderRadius: 23 },
+  marketNameRow: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 3 },
+  marketName: { fontSize: 14, fontFamily: "Inter_700Bold", flex: 1 },
+  marketFeature: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  marketPricePill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
+  marketPrice: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" },
+  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 16 },
+  dragHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "#ccc", alignSelf: "center", marginBottom: 4 },
+  modalHead: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
+  modalEmojiBg: { width: 52, height: 52, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   modalTitle: { fontSize: 18, fontFamily: "Inter_700Bold", marginBottom: 3 },
   modalDesc: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
-  inputLabel: { fontSize: 13, fontFamily: "Inter_500Medium", marginBottom: 8 },
-  priceInput: { flexDirection: "row", alignItems: "center", borderRadius: 12, paddingHorizontal: 14, height: 52, gap: 10, marginBottom: 16 },
-  priceInputText: { flex: 1, fontSize: 20, fontFamily: "Inter_700Bold" },
+  inputLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", letterSpacing: 0.3 },
+  priceRow: { flexDirection: "row", alignItems: "center", borderRadius: 14, paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
+  priceInput: { flex: 1, fontSize: 28, fontFamily: "Inter_700Bold", padding: 0 },
   priceUnit: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  enableRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 24 },
-  enableLabel: { fontSize: 16, fontFamily: "Inter_500Medium" },
+  priceHint: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center" },
+  enableRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, padding: 14 },
+  enableLabel: { fontSize: 15, fontFamily: "Inter_500Medium", marginBottom: 2 },
+  enableSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
   modalBtns: { flexDirection: "row", gap: 12 },
-  modalCancel: { flex: 1, height: 50, borderRadius: 14, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
-  modalCancelText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  modalSave: { flex: 2, height: 50, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  modalSaveText: { color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold" },
+  cancelBtn: { flex: 1, borderRadius: 14, borderWidth: 1, paddingVertical: 14, alignItems: "center" },
+  cancelText: { fontSize: 15, fontFamily: "Inter_500Medium" },
+  saveBtn: { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: "center" },
+  saveBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold" },
 });
