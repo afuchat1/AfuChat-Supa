@@ -2,12 +2,14 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import * as Contacts from "expo-contacts";
+import { MobileOnlyView } from "@/components/ui/MobileOnlyView";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -128,6 +130,15 @@ export default function PhoneContactsScreen() {
       </TouchableOpacity>
     </TouchableOpacity>
   );
+
+  if (Platform.OS === "web") {
+    return (
+      <MobileOnlyView
+        title="Contacts on AfuChat"
+        description="Finding your phone contacts on AfuChat requires access to your native contacts list. This feature is only available on the AfuChat mobile app."
+      />
+    );
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>

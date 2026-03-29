@@ -26,6 +26,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { MobileOnlyView } from "@/components/ui/MobileOnlyView";
 import {
   clearPIN,
   hasPIN,
@@ -401,6 +402,10 @@ export default function DeviceSecurityScreen() {
   }
 
   const otherDeviceCount = sessions.filter((s) => !s.is_current).length;
+
+  if (Platform.OS === "web") {
+    return <MobileOnlyView title="Device Security" />;
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>

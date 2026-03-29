@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import {
   Image,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -391,13 +392,17 @@ export default function MeScreen() {
           onPress={() => router.push("/advanced-features")}
           badge="38"
         />
-        <Separator indent={54} />
-        <MenuItem
-          icon="shield-half-outline"
-          iconBg="#FF3B30"
-          label="Device Security"
-          onPress={() => router.push("/device-security")}
-        />
+        {Platform.OS !== "web" && (
+          <>
+            <Separator indent={54} />
+            <MenuItem
+              icon="shield-half-outline"
+              iconBg="#FF3B30"
+              label="Device Security"
+              onPress={() => router.push("/device-security")}
+            />
+          </>
+        )}
       </MenuGroup>
 
       {profile?.is_admin && (

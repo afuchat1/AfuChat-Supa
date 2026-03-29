@@ -1,21 +1,20 @@
 import React, { useEffect, useState } from "react";
-import { Platform, View, StyleSheet, useWindowDimensions } from "react-native";
+import { Platform, StyleSheet, View, useWindowDimensions } from "react-native";
 import { useSegments, router } from "expo-router";
 import { DesktopSidebar } from "./DesktopSidebar";
 import { DesktopDetailProvider } from "@/context/DesktopDetailContext";
+import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 
 const DESKTOP_BREAKPOINT = 768;
-const BRAND_BG = "#00897B";
-const HEADER_HEIGHT = 127;
-const TOP_VISIBLE = 19;
 
 type Props = {
   children: React.ReactNode;
 };
 
 export function DesktopWrapper({ children }: Props) {
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
+  const { colors, isDark } = useTheme();
   const segments = useSegments();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
@@ -38,32 +37,44 @@ export function DesktopWrapper({ children }: Props) {
     );
   }
 
-  const activeTab = segments.includes("discover")
-    ? "discover"
-    : segments.includes("me")
-      ? "me"
-      : "index";
+  const activeTab = segments.includes("search")
+    ? "search"
+    : segments.includes("discover")
+      ? "discover"
+      : segments.includes("me")
+        ? "me"
+        : segments.includes("notifications")
+          ? "notifications"
+          : "index";
 
   const handleTabPress = (tab: string) => {
     if (tab === "index") router.replace("/(tabs)");
+    else if (tab === "search") router.replace("/(tabs)/search");
     else if (tab === "discover") router.replace("/(tabs)/discover");
     else if (tab === "me") router.replace("/(tabs)/me");
+    else if (tab === "notifications") router.push("/notifications" as any);
   };
 
-  const appHeight = height - TOP_VISIBLE * 2;
+  const bg = isDark ? "#0d0d0d" : "#f2f3f5";
 
   return (
     <DesktopDetailProvider>
-      <View style={styles.root}>
-        <View style={styles.topBar} />
-        <View style={styles.contentArea}>
-          <View style={[styles.appShell, { height: appHeight }]}>
-            {isLoggedIn && (
-              <DesktopSidebar activeTab={activeTab} onTabPress={handleTabPress} />
-            )}
-            <View style={styles.mainContent}>
-              {children}
-            </View>
+      <View style={[styles.root, { backgroundColor: bg }]}>
+        <View style={[
+          styles.appShell,
+          {
+            backgroundColor: colors.background,
+            // @ts-ignore
+            boxShadow: isDark
+              ? "0 0 0 1px rgba(255,255,255,0.06), 0 8px 32px rgba(0,0,0,0.5)"
+              : "0 0 0 1px rgba(0,0,0,0.06), 0 4px 24px rgba(0,0,0,0.08)",
+          },
+        ]}>
+          {isLoggedIn && (
+            <DesktopSidebar activeTab={activeTab} onTabPress={handleTabPress} />
+          )}
+          <View style={[styles.mainContent, { backgroundColor: colors.background }]}>
+            {children}
           </View>
         </View>
       </View>
@@ -74,27 +85,18 @@ export function DesktopWrapper({ children }: Props) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#DAD3CC",
-  },
-  topBar: {
-    height: HEADER_HEIGHT,
-    backgroundColor: BRAND_BG,
-  },
-  contentArea: {
-    flex: 1,
     alignItems: "center",
-    marginTop: -(HEADER_HEIGHT - TOP_VISIBLE),
+    justifyContent: "stretch",
   },
   appShell: {
+    flex: 1,
     width: "100%",
-    maxWidth: 1400,
+    maxWidth: 1380,
     flexDirection: "row",
-    backgroundColor: "#fff",
     overflow: "hidden",
-    // @ts-ignore
-    boxShadow: "0 1px 1px 0 rgba(0,0,0,0.06), 0 2px 5px 0 rgba(0,0,0,0.2)",
   },
   mainContent: {
     flex: 1,
+    overflow: "hidden",
   },
 });
