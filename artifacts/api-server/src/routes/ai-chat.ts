@@ -1,7 +1,9 @@
 import { Router, type Request, type Response } from "express";
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "../lib/config";
 
 const router = Router();
+
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
 
 const requestCounts = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 20;
@@ -20,6 +22,11 @@ function checkRateLimit(ip: string): boolean {
 
 router.post("/ai/chat", async (req: Request, res: Response) => {
   try {
+    if (!supabaseUrl) {
+      res.status(503).json({ error: "AI service is not configured." });
+      return;
+    }
+
     const clientIp = req.ip || req.socket.remoteAddress || "unknown";
     if (!checkRateLimit(clientIp)) {
       res.status(429).json({ error: "Too many requests. Please wait a moment." });
@@ -32,11 +39,11 @@ router.post("/ai/chat", async (req: Request, res: Response) => {
       return;
     }
 
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/ai-chat`, {
+    const response = await fetch(`${supabaseUrl}/functions/v1/ai-chat`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+        "Authorization": `Bearer ${supabaseAnonKey}`,
       },
       body: JSON.stringify({ messages }),
     });
