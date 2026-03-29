@@ -46,7 +46,9 @@
         "ACCESS_COARSE_LOCATION",
         "CAMERA",
         "READ_CONTACTS",
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
       "intentFilters": [
         {
@@ -116,9 +118,9 @@
     },
     "extra": {
       "eas": {
-        "projectId": "b55c5d92-7a83-472f-b660-d1838efba5fe"
+        "projectId": "363a3c64-5a90-4aae-86b5-aa54014921ef"
       }
     },
-    "owner": "amkaweesi1"
+    "owner": "afume"
   }
 }
