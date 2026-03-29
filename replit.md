@@ -4,6 +4,15 @@
 
 pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
 
+## Replit Configuration
+
+- **Workflows**: Two workflows configured — "Start application" (Expo web on port 5000, webview) and "API Server" (Express on port 3000, console)
+- **Package manager**: pnpm (v10.26.1, already installed)
+- **Environment variables**: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `PORT=3000`, `NODE_ENV=development`
+- **Secrets needed**: `SUPABASE_SERVICE_ROLE_KEY` (for admin routes like chats/account-purge), `ACCOUNT_PURGE_SECRET` (for purge endpoint), optionally `GROQ_API_KEY` (AI chat via Supabase edge function)
+- **Backend**: Supabase (existing project `rhnsjqqtdzlkvqazfcbg.supabase.co`) — intentionally kept, do NOT migrate to Neon
+- **Start app**: `pnpm install` then both workflows auto-start
+
 ## Stack
 
 - **Monorepo tool**: pnpm workspaces
