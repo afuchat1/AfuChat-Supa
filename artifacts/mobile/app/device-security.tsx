@@ -384,6 +384,7 @@ export default function DeviceSecurityScreen() {
     return (
       <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
         <PinKeypad
+          key={pinFlow}
           title={
             pinFlow === "setup_enter" ? "Create a PIN" :
             pinFlow === "setup_confirm" ? "Confirm your PIN" :
@@ -391,7 +392,7 @@ export default function DeviceSecurityScreen() {
           }
           subtitle={
             pinFlow === "setup_enter" ? "Choose a 4-digit PIN to lock AfuChat" :
-            pinFlow === "setup_confirm" ? "Enter the same PIN again" :
+            pinFlow === "setup_confirm" ? "Re-enter your PIN to confirm" :
             "Verify your identity to disable the PIN"
           }
           onComplete={handlePinComplete}
