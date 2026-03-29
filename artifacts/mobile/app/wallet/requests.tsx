@@ -1,11 +1,14 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   Image,
+  Modal,
+  Platform,
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -18,6 +21,14 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { hasPIN, isBiometricEnabled, verifyPIN } from "@/lib/appLock";
+
+let LocalAuthentication: typeof import("expo-local-authentication") | null = null;
+if (Platform.OS !== "web") {
+  try {
+    LocalAuthentication = require("expo-local-authentication");
+  } catch {}
+}
 
 type TransactionRequest = {
   id: string;
@@ -45,6 +56,121 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+const PIN_LENGTH = 4;
+const PIN_KEYS = ["1","2","3","4","5","6","7","8","9","","0","⌫"];
+
+function PINVerifyModal({
+  visible,
+  onVerified,
+  onCancel,
+  colors,
+}: {
+  visible: boolean;
+  onVerified: () => void;
+  onCancel: () => void;
+  colors: any;
+}) {
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState(false);
+  const [shake, setShake] = useState(false);
+
+  useEffect(() => {
+    if (!visible) { setPin(""); setError(false); }
+  }, [visible]);
+
+  useEffect(() => {
+    if (pin.length === PIN_LENGTH) {
+      verifyPIN(pin).then((ok) => {
+        if (ok) {
+          onVerified();
+          setPin("");
+        } else {
+          setError(true);
+          setShake(true);
+          setTimeout(() => { setShake(false); setPin(""); setError(false); }, 600);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        }
+      });
+    }
+  }, [pin, onVerified]);
+
+  function pressKey(k: string) {
+    if (k === "⌫") {
+      setPin((p) => p.slice(0, -1));
+    } else if (k === "") {
+      // empty spacer
+    } else if (pin.length < PIN_LENGTH) {
+      setPin((p) => p + k);
+    }
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={pinStyles.overlay}>
+        <View style={[pinStyles.sheet, { backgroundColor: colors.surface }]}>
+          <View style={pinStyles.lockIcon}>
+            <Ionicons name="lock-closed" size={28} color={Colors.brand} />
+          </View>
+          <Text style={[pinStyles.title, { color: colors.text }]}>Security Verification</Text>
+          <Text style={[pinStyles.sub, { color: colors.textMuted }]}>Enter your PIN to confirm this transaction</Text>
+
+          <View style={pinStyles.dotsRow}>
+            {Array.from({ length: PIN_LENGTH }).map((_, i) => (
+              <View
+                key={i}
+                style={[
+                  pinStyles.dot,
+                  {
+                    backgroundColor: i < pin.length
+                      ? (error ? "#FF3B30" : Colors.brand)
+                      : colors.inputBg,
+                    borderColor: i < pin.length
+                      ? (error ? "#FF3B30" : Colors.brand)
+                      : colors.border,
+                    transform: shake ? [{ translateX: (i % 2 === 0 ? -4 : 4) }] : [],
+                  },
+                ]}
+              />
+            ))}
+          </View>
+
+          {error && (
+            <Text style={pinStyles.errorText}>Incorrect PIN. Try again.</Text>
+          )}
+
+          <View style={pinStyles.keypad}>
+            {PIN_KEYS.map((k, i) => (
+              <TouchableOpacity
+                key={i}
+                style={[
+                  pinStyles.key,
+                  { backgroundColor: k === "" ? "transparent" : colors.backgroundSecondary },
+                  k === "⌫" && { backgroundColor: "transparent" },
+                ]}
+                onPress={() => pressKey(k)}
+                disabled={k === ""}
+                activeOpacity={0.7}
+              >
+                <Text style={[
+                  pinStyles.keyText,
+                  { color: k === "⌫" ? colors.textSecondary : colors.text },
+                  k === "" && { color: "transparent" },
+                ]}>
+                  {k}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <TouchableOpacity style={pinStyles.cancelBtn} onPress={onCancel}>
+            <Text style={{ color: "#FF3B30", fontSize: 15, fontFamily: "Inter_600SemiBold" }}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export default function RequestsScreen() {
   const { colors } = useTheme();
   const { user, profile, refreshProfile } = useAuth();
@@ -55,6 +181,8 @@ export default function RequestsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [sentUpdated, setSentUpdated] = useState(false);
+  const [showPINModal, setShowPINModal] = useState(false);
+  const pendingAcceptRef = useRef<TransactionRequest | null>(null);
 
   const loadRequests = useCallback(async () => {
     if (!user) return;
@@ -111,6 +239,107 @@ export default function RequestsScreen() {
     return () => { supabase.removeChannel(channel); };
   }, [user, loadRequests]);
 
+  async function verifyIdentity(): Promise<boolean> {
+    if (Platform.OS === "web") return true;
+
+    const bioEnabled = await isBiometricEnabled();
+    if (bioEnabled && LocalAuthentication) {
+      try {
+        const hasHardware = await LocalAuthentication.hasHardwareAsync();
+        const enrolled = await LocalAuthentication.isEnrolledAsync();
+        if (hasHardware && enrolled) {
+          const result = await LocalAuthentication.authenticateAsync({
+            promptMessage: "Verify to confirm transaction",
+            cancelLabel: "Use PIN",
+            disableDeviceFallback: false,
+          });
+          if (result.success) return true;
+        }
+      } catch {}
+    }
+
+    const pinSet = await hasPIN();
+    if (pinSet) {
+      return new Promise((resolve) => {
+        pendingAcceptRef.current = pendingAcceptRef.current;
+        setShowPINModal(true);
+        (pendingAcceptRef as any)._pinResolve = resolve;
+      });
+    }
+
+    return true;
+  }
+
+  function onPINVerified() {
+    setShowPINModal(false);
+    const resolve = (pendingAcceptRef as any)._pinResolve;
+    if (resolve) { resolve(true); (pendingAcceptRef as any)._pinResolve = null; }
+  }
+
+  function onPINCancel() {
+    setShowPINModal(false);
+    const resolve = (pendingAcceptRef as any)._pinResolve;
+    if (resolve) { resolve(false); (pendingAcceptRef as any)._pinResolve = null; }
+  }
+
+  async function executeAccept(req: TransactionRequest) {
+    setProcessingId(req.id);
+
+    const { error: acoinErr } = await supabase.rpc("deduct_acoin", {
+      p_user_id: user!.id,
+      p_amount: req.amount,
+    });
+
+    if (acoinErr) {
+      showAlert("Error", "Could not deduct ACoin — balance may have changed.");
+      setProcessingId(null);
+      return;
+    }
+
+    const { error: creditErr } = await supabase.rpc("credit_acoin", {
+      p_user_id: req.requester_id,
+      p_amount: req.amount,
+    });
+
+    if (creditErr) {
+      await supabase.rpc("credit_acoin", { p_user_id: user!.id, p_amount: req.amount });
+      showAlert("Error", "Could not credit requester. Your ACoin has been refunded.");
+      setProcessingId(null);
+      return;
+    }
+
+    const { error: logErr } = await supabase.from("acoin_transactions").insert([
+      {
+        user_id: user!.id,
+        amount: -req.amount,
+        transaction_type: "acoin_transfer_sent",
+        metadata: { to_handle: req.requester?.handle, request_id: req.id },
+      },
+      {
+        user_id: req.requester_id,
+        amount: req.amount,
+        transaction_type: "acoin_transfer_received",
+        metadata: { from_handle: profile!.handle, request_id: req.id },
+      },
+    ]);
+    if (logErr) console.warn("ACoin transfer succeeded but log failed:", logErr.message);
+
+    const { error: statusErr } = await supabase
+      .from("transaction_requests")
+      .update({ status: "accepted", responded_at: new Date().toISOString() })
+      .eq("id", req.id)
+      .eq("status", "pending");
+
+    if (statusErr) {
+      showAlert("Warning", "Payment sent but request status could not be updated.");
+    }
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    refreshProfile();
+    loadRequests();
+    setProcessingId(null);
+  }
+
   async function handleAccept(req: TransactionRequest) {
     if (!user || !profile) return;
 
@@ -120,74 +349,11 @@ export default function RequestsScreen() {
       return;
     }
 
-    showAlert(
-      "Accept Request",
-      `Send ${req.amount} ACoin to @${req.requester?.handle || "user"}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Accept & Send",
-          onPress: async () => {
-            setProcessingId(req.id);
+    pendingAcceptRef.current = req;
+    const verified = await verifyIdentity();
+    if (!verified) return;
 
-            const { error: acoinErr } = await supabase.rpc("deduct_acoin", {
-              p_user_id: user.id,
-              p_amount: req.amount,
-            });
-
-            if (acoinErr) {
-              showAlert("Error", "Could not deduct ACoin — balance may have changed.");
-              setProcessingId(null);
-              return;
-            }
-
-            const { error: creditErr } = await supabase.rpc("credit_acoin", {
-              p_user_id: req.requester_id,
-              p_amount: req.amount,
-            });
-
-            if (creditErr) {
-              await supabase.rpc("credit_acoin", { p_user_id: user.id, p_amount: req.amount });
-              showAlert("Error", "Could not credit requester. Your ACoin has been refunded.");
-              setProcessingId(null);
-              return;
-            }
-
-            const { error: logErr } = await supabase.from("acoin_transactions").insert([
-              {
-                user_id: user.id,
-                amount: -req.amount,
-                transaction_type: "acoin_transfer_sent",
-                metadata: { to_handle: req.requester?.handle, request_id: req.id },
-              },
-              {
-                user_id: req.requester_id,
-                amount: req.amount,
-                transaction_type: "acoin_transfer_received",
-                metadata: { from_handle: profile.handle, request_id: req.id },
-              },
-            ]);
-            if (logErr) console.warn("ACoin transfer succeeded but log failed:", logErr.message);
-
-            const { error: statusErr } = await supabase
-              .from("transaction_requests")
-              .update({ status: "accepted" })
-              .eq("id", req.id)
-              .eq("status", "pending");
-
-            if (statusErr) {
-              showAlert("Warning", "Payment sent but request status could not be updated.");
-            }
-
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            showAlert("Sent!", `${req.amount} ACoin sent to @${req.requester?.handle}`);
-            refreshProfile();
-            loadRequests();
-            setProcessingId(null);
-          },
-        },
-      ]
-    );
+    await executeAccept(req);
   }
 
   async function handleDecline(req: TransactionRequest) {
@@ -203,7 +369,7 @@ export default function RequestsScreen() {
             setProcessingId(req.id);
             await supabase
               .from("transaction_requests")
-              .update({ status: "declined" })
+              .update({ status: "declined", responded_at: new Date().toISOString() })
               .eq("id", req.id);
 
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -225,6 +391,16 @@ export default function RequestsScreen() {
     setProcessingId(null);
   }
 
+  const statusLabel = (s: string) => {
+    switch (s) {
+      case "accepted": return "Completed";
+      case "declined": return "Declined";
+      case "cancelled": return "Cancelled";
+      case "expired": return "Expired";
+      default: return s;
+    }
+  };
+
   const statusColor = (s: string) => {
     switch (s) {
       case "pending": return "#FF9500";
@@ -236,10 +412,27 @@ export default function RequestsScreen() {
     }
   };
 
+  const statusIcon = (s: string): React.ComponentProps<typeof Ionicons>["name"] => {
+    switch (s) {
+      case "accepted": return "checkmark-circle";
+      case "declined": return "close-circle";
+      case "cancelled": return "remove-circle";
+      case "expired": return "time";
+      default: return "ellipse";
+    }
+  };
+
   const pendingCount = requests.filter((r) => r.status === "pending").length;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
+      <PINVerifyModal
+        visible={showPINModal}
+        onVerified={onPINVerified}
+        onCancel={onPINCancel}
+        colors={colors}
+      />
+
       <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
@@ -281,10 +474,15 @@ export default function RequestsScreen() {
           renderItem={({ item }) => {
             const person = tab === "incoming" ? item.requester : item.owner;
             const isPending = item.status === "pending";
+            const isAccepted = item.status === "accepted";
             const isProcessing = processingId === item.id;
 
             return (
-              <View style={[styles.reqCard, { backgroundColor: colors.surface }]}>
+              <View style={[
+                styles.reqCard,
+                { backgroundColor: colors.surface },
+                isAccepted && { borderLeftWidth: 3, borderLeftColor: "#34C759" },
+              ]}>
                 <View style={styles.reqHeader}>
                   {person?.avatar_url ? (
                     <Image source={{ uri: person.avatar_url }} style={styles.reqAvatar} />
@@ -351,15 +549,33 @@ export default function RequestsScreen() {
                 {isProcessing && (
                   <View style={{ paddingVertical: 8, alignItems: "center" }}>
                     <ActivityIndicator size="small" color={Colors.brand} />
+                    <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 4 }}>Processing…</Text>
                   </View>
                 )}
 
-                {!isPending && (
-                  <View style={[styles.statusBadge, { backgroundColor: statusColor(item.status) + "15" }]}>
-                    <View style={[styles.statusDot, { backgroundColor: statusColor(item.status) }]} />
-                    <Text style={{ color: statusColor(item.status), fontSize: 12, fontFamily: "Inter_600SemiBold", textTransform: "capitalize" }}>
-                      {item.status}
+                {!isPending && !isProcessing && (
+                  <View style={[
+                    styles.statusBadge,
+                    { backgroundColor: statusColor(item.status) + "18" },
+                    isAccepted && styles.completedBadge,
+                  ]}>
+                    <Ionicons
+                      name={statusIcon(item.status)}
+                      size={14}
+                      color={statusColor(item.status)}
+                    />
+                    <Text style={{
+                      color: statusColor(item.status),
+                      fontSize: 13,
+                      fontFamily: "Inter_700Bold",
+                    }}>
+                      {statusLabel(item.status)}
                     </Text>
+                    {isAccepted && item.responded_at && (
+                      <Text style={{ color: colors.textMuted, fontSize: 11, marginLeft: "auto" as any }}>
+                        {timeAgo(item.responded_at)}
+                      </Text>
+                    )}
                   </View>
                 )}
               </View>
@@ -389,20 +605,173 @@ export default function RequestsScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  tabRow: { flexDirection: "row", marginHorizontal: 16, marginTop: 12, marginBottom: 4, gap: 8 },
-  tab: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, backgroundColor: "transparent" },
-  tabText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#888" },
-  sentDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#FF3B30" },
-  center: { flex: 1, justifyContent: "center", alignItems: "center", paddingTop: 60 },
-  reqCard: { borderRadius: 16, padding: 16, gap: 12 },
-  reqHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
-  reqAvatar: { width: 42, height: 42, borderRadius: 21 },
-  reqName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  reqMsgBox: { borderRadius: 10, padding: 10 },
-  reqActions: { flexDirection: "row", gap: 10 },
-  reqActionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 12 },
-  statusBadge: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontFamily: "Inter_600SemiBold",
+  },
+  tabRow: {
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 20,
+    alignItems: "center",
+    backgroundColor: "rgba(142,142,147,0.12)",
+  },
+  tabText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: "#8E8E93",
+  },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingBottom: 60,
+  },
+  reqCard: {
+    borderRadius: 16,
+    padding: 14,
+    gap: 10,
+    overflow: "hidden",
+  },
+  reqHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  reqAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  reqName: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+  },
+  reqMsgBox: {
+    borderRadius: 10,
+    padding: 10,
+  },
+  reqActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  reqActionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  completedBadge: {
+    borderWidth: 1,
+    borderColor: "#34C75920",
+  },
+  sentDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "#FF3B30",
+  },
+});
+
+const pinStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 24,
+    paddingBottom: 40,
+    paddingHorizontal: 24,
+    alignItems: "center",
+  },
+  lockIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: Colors.brand + "18",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  title: {
+    fontSize: 18,
+    fontFamily: "Inter_700Bold",
+    marginBottom: 6,
+  },
+  sub: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  dotsRow: {
+    flexDirection: "row",
+    gap: 14,
+    marginBottom: 8,
+  },
+  dot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+  },
+  errorText: {
+    color: "#FF3B30",
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    marginBottom: 8,
+  },
+  keypad: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 12,
+    marginTop: 16,
+    width: "100%",
+    maxWidth: 280,
+  },
+  key: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  keyText: {
+    fontSize: 24,
+    fontFamily: "Inter_500Medium",
+  },
+  cancelBtn: {
+    marginTop: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+  },
 });

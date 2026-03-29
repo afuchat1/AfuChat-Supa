@@ -1,0 +1,192 @@
+PROJECT: AFUCHAT LANDING PAGE (FEED + AUTH SPLIT)
+
+GOAL:
+Design a high-conversion landing page where users can preview the AfuChat feed on the left while authentication (login/signup) is on the right. The experience should feel alive, social, and interactive even before login.
+
+LAYOUT:
+- Split screen (2 columns)
+  LEFT: Live Feed Preview (65%)
+  RIGHT: Auth Panel (35%)
+
+BACKGROUND:
+- Overall dark theme
+- Base color: #0F172A
+- Accent: #00C896 (AfuChat green)
+
+---------------------------------------------------------
+
+LEFT PANEL (LIVE FEED PREVIEW):
+
+PURPOSE:
+- Show real activity
+- Hook users instantly
+- Create FOMO (fear of missing out)
+
+STRUCTURE:
+
+TOP BAR:
+- AfuChat logo (top-left)
+- Tabs:
+  [ For You ] [ Trending ] [ Communities ]
+
+FEED LIST (SCROLLABLE / AUTO-MOVING):
+- Simulated or real posts
+- Smooth auto-scroll (slow, continuous)
+
+POST CARD DESIGN:
+- Container:
+  background: #1E293B
+  border-radius: 16px
+  padding: 16px
+  margin-bottom: 16px
+
+POST CONTENT:
+- Header:
+  Avatar + Username + time
+- Body:
+  Text content (short, engaging)
+- Optional:
+  Image / video preview
+- Footer actions:
+  Like • Comment • Share • Gift
+
+INTERACTIONS (LIMITED - PREVIEW MODE):
+- Hover = slight lift
+- Click = triggers auth focus (push user to sign in)
+
+SPECIAL ELEMENTS:
+
+1. LIVE BADGE:
+- Small green indicator:
+  "● Live Feed"
+- Pulsing animation
+
+2. ACTIVITY OVERLAY (floating):
+- "John just joined"
+- "3 new posts in #Kampala"
+- Appears and fades
+
+3. BLUR LOCK (BOTTOM):
+- Slight gradient blur at bottom of feed
+- Text overlay:
+  "Sign in to continue scrolling"
+
+ANIMATION:
+- Posts fade/slide in
+- Subtle parallax
+- Smooth infinite scroll illusion
+
+---------------------------------------------------------
+
+RIGHT PANEL (AUTH):
+
+CONTAINER:
+- Width: 420px
+- Center vertically
+- Background: rgba(255,255,255,0.05)
+- Backdrop blur: 20px
+- Border radius: 20px
+- Padding: 32px
+
+HEADER:
+- Title: "Welcome to AfuChat"
+- Subtitle:
+  "Join the conversation happening right now"
+
+AUTH TOGGLE:
+- Tabs:
+  [ Login ] [ Sign Up ]
+- Active:
+  green background (#00C896)
+- Animated slider
+
+LOGIN FORM:
+- Email / Username
+- Password
+- Forgot password (right aligned)
+
+SIGNUP FORM:
+- Username
+- Email
+- Password
+- Confirm password
+- Optional: Invite code
+
+INPUT STYLE:
+- Background: #0F172A
+- Border: #1E293B
+- Radius: 12px
+- Focus:
+  border glow (#00C896)
+
+PRIMARY BUTTON:
+- Text: "Continue"
+- Full width
+- Gradient:
+  #00C896 → #00E0B8
+- Hover:
+  glow + scale(1.02)
+
+DIVIDER:
+- "OR CONTINUE WITH"
+
+SOCIAL BUTTONS:
+- Google
+- GitHub
+
+FOOTER TEXT:
+- Login:
+  "New here? Create account"
+- Signup:
+  "Already have an account? Log in"
+
+SOCIAL PROOF:
+- Small text:
+  "Join 80+ users already on AfuChat"
+
+---------------------------------------------------------
+
+MICRO-INTERACTIONS:
+
+- Feed scroll = smooth auto motion
+- Hover post = lift effect
+- Click post = shake + highlight auth panel
+- Button hover = glow
+- Tab switch = sliding animation
+
+---------------------------------------------------------
+
+RESPONSIVE:
+
+DESKTOP:
+- Full split layout
+
+TABLET:
+- Feed reduced to 50%
+
+MOBILE:
+- Hide feed preview
+- Show auth full width
+- Optional:
+  show 1 preview post above form
+
+---------------------------------------------------------
+
+STYLE KEYWORDS:
+modern, social, immersive, real-time, glassmorphism, neon glow, smooth animations, minimal, premium
+
+---------------------------------------------------------
+
+PSYCHOLOGY (IMPORTANT):
+
+- User sees activity BEFORE signing in
+- Creates curiosity + urgency
+- Low friction entry
+- Visual proof that platform is active
+
+---------------------------------------------------------
+
+OUTPUT:
+- Clean UI structure
+- Ready for React / Next.js / Tailwind implementation
+- Optimized for engagement and conversion

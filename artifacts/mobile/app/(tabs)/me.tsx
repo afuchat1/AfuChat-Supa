@@ -294,24 +294,26 @@ export default function MeScreen() {
         <MenuItem icon="id-card-outline" iconBg="#1E3A5F" label="Digital ID" onPress={() => router.push("/digital-id")} badge="3D" />
         <MenuItem icon="crown" iconBg="#D4A853" label="Prestige Status" onPress={() => router.push("/prestige")} badge="NEW" />
         <Separator indent={54} />
-        <MenuItem
-          icon="videocam-outline"
-          iconBg="#32D74B"
-          label="Creator Studio"
-          onPress={isAdmin ? () => router.push("/monetize") : undefined}
-          badge={isAdmin ? "Admin" : undefined}
-          comingSoon={!isAdmin}
-        />
-        <Separator indent={54} />
-        <MenuItem
-          icon="bag-handle-outline"
-          iconBg="#FF6B35"
-          label="My Shop"
-          onPress={isAdmin ? () => router.push("/shop/manage" as any) : undefined}
-          badge={isAdmin ? "Admin" : undefined}
-          comingSoon={!isAdmin}
-        />
-        <Separator indent={54} />
+        {isAdmin && (
+          <>
+            <MenuItem
+              icon="videocam-outline"
+              iconBg="#32D74B"
+              label="Creator Studio"
+              onPress={() => router.push("/monetize")}
+              badge="Admin"
+            />
+            <Separator indent={54} />
+            <MenuItem
+              icon="bag-handle-outline"
+              iconBg="#FF6B35"
+              label="My Shop"
+              onPress={() => router.push("/shop/manage" as any)}
+              badge="Admin"
+            />
+            <Separator indent={54} />
+          </>
+        )}
         <MenuItem icon="storefront-outline" iconBg="#AF52DE" label="Virtual Shop" onPress={() => router.push("/store")} badge="NEW" />
       </MenuGroup>
 

@@ -24,14 +24,15 @@ type NavItem = {
   iconActive: React.ComponentProps<typeof Ionicons>["name"];
   label: string;
   badge?: number;
+  section?: string;
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { key: "index", icon: "chatbubbles-outline", iconActive: "chatbubbles", label: "Chats" },
-  { key: "search", icon: "search-outline", iconActive: "search", label: "Search" },
-  { key: "discover", icon: "compass-outline", iconActive: "compass", label: "Discover" },
-  { key: "notifications", icon: "notifications-outline", iconActive: "notifications", label: "Notifications" },
-  { key: "me", icon: "person-circle-outline", iconActive: "person-circle", label: "Profile" },
+  { key: "index", icon: "chatbubbles-outline", iconActive: "chatbubbles", label: "Chats", section: "main" },
+  { key: "discover", icon: "compass-outline", iconActive: "compass", label: "Discover", section: "main" },
+  { key: "search", icon: "search-outline", iconActive: "search", label: "Search", section: "main" },
+  { key: "notifications", icon: "notifications-outline", iconActive: "notifications", label: "Notifications", section: "main" },
+  { key: "wallet", icon: "wallet-outline", iconActive: "wallet", label: "Wallet", section: "finance" },
 ];
 
 function NavButton({
@@ -62,16 +63,21 @@ function NavButton({
       activeOpacity={0.8}
       style={[
         styles.navItem,
-        isActive && { backgroundColor: Colors.brand + "18" },
+        isActive && { backgroundColor: Colors.brand + "15" },
         !isActive && hovered && { backgroundColor: colors.backgroundSecondary },
       ]}
       {...hoverProps}
     >
-      <Ionicons
-        name={isActive ? item.iconActive : item.icon}
-        size={22}
-        color={isActive ? Colors.brand : colors.textSecondary}
-      />
+      <View style={[
+        styles.navIconWrap,
+        isActive && { backgroundColor: Colors.brand + "20" },
+      ]}>
+        <Ionicons
+          name={isActive ? item.iconActive : item.icon}
+          size={20}
+          color={isActive ? Colors.brand : colors.textSecondary}
+        />
+      </View>
       <Text
         style={[
           styles.navLabel,
@@ -86,7 +92,14 @@ function NavButton({
           <Text style={styles.badgeText}>{item.badge > 99 ? "99+" : item.badge}</Text>
         </View>
       )}
+      {isActive && <View style={styles.activeBar} />}
     </TouchableOpacity>
+  );
+}
+
+function SectionLabel({ label, colors }: { label: string; colors: any }) {
+  return (
+    <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>{label}</Text>
   );
 }
 
@@ -120,7 +133,7 @@ function UtilBtn({
       style={[styles.utilBtn, hovered && { backgroundColor: colors.backgroundSecondary }]}
       {...hoverProps}
     >
-      <Ionicons name={icon} size={18} color={color || colors.textSecondary} />
+      <Ionicons name={icon} size={17} color={color || colors.textSecondary} />
       <Text style={[styles.utilLabel, { color: color || colors.textMuted }]}>{label}</Text>
     </TouchableOpacity>
   );
@@ -133,7 +146,7 @@ type Props = {
 
 export function DesktopSidebar({ activeTab, onTabPress }: Props) {
   const { profile, signOut } = useAuth();
-  const { colors, themeMode, setThemeMode } = useTheme();
+  const { colors, isDark, themeMode, setThemeMode } = useTheme();
 
   function cycleTheme() {
     const next = themeMode === "system" ? "dark" : themeMode === "dark" ? "light" : "system";
@@ -162,18 +175,37 @@ export function DesktopSidebar({ activeTab, onTabPress }: Props) {
     ]);
   }
 
+  const mainItems = NAV_ITEMS.filter((i) => i.section === "main");
+  const financeItems = NAV_ITEMS.filter((i) => i.section === "finance");
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface, borderRightColor: colors.border }]}>
+    <View style={[styles.container, { backgroundColor: isDark ? "#0e0e10" : "#f9fafb", borderRightColor: colors.border }]}>
       <View style={styles.inner}>
+        {/* Logo */}
         <View style={styles.logoRow}>
-          <View style={styles.logoIconWrap}>
+          <View style={[styles.logoIconWrap, { backgroundColor: Colors.brand }]}>
             <Image source={afuSymbol} style={styles.logoIcon} resizeMode="contain" />
           </View>
-          <Text style={[styles.logoText, { color: colors.text }]}>AfuChat</Text>
+          <View>
+            <Text style={[styles.logoText, { color: colors.text }]}>AfuChat</Text>
+            <Text style={[styles.logoSub, { color: colors.textMuted }]}>Stay connected</Text>
+          </View>
         </View>
 
-        <View style={styles.navSection}>
-          {NAV_ITEMS.map((item) => (
+        {/* New Chat button */}
+        <TouchableOpacity
+          style={[styles.composeBtn, { backgroundColor: Colors.brand }]}
+          onPress={() => onTabPress("index")}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="create-outline" size={17} color="#fff" />
+          <Text style={styles.composeBtnText}>New Chat</Text>
+        </TouchableOpacity>
+
+        {/* Main nav */}
+        <View style={[styles.navSection, { marginTop: 20 }]}>
+          <SectionLabel label="NAVIGATION" colors={colors} />
+          {mainItems.map((item) => (
             <NavButton
               key={item.key}
               item={item}
@@ -184,43 +216,59 @@ export function DesktopSidebar({ activeTab, onTabPress }: Props) {
           ))}
         </View>
 
-        <TouchableOpacity
-          style={[styles.composeBtn, { backgroundColor: Colors.brand }]}
-          onPress={() => onTabPress("index")}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="create-outline" size={18} color="#fff" />
-          <Text style={styles.composeBtnText}>New Chat</Text>
-        </TouchableOpacity>
+        {/* Finance nav */}
+        <View style={[styles.navSection, { marginTop: 12 }]}>
+          <SectionLabel label="FINANCE" colors={colors} />
+          {financeItems.map((item) => (
+            <NavButton
+              key={item.key}
+              item={item}
+              isActive={activeTab === item.key}
+              onPress={() => onTabPress(item.key)}
+              colors={colors}
+            />
+          ))}
+        </View>
 
+        {/* Bottom section */}
         <View style={styles.bottomSection}>
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
+          {/* Profile card */}
           {profile && (
             <TouchableOpacity
-              style={[styles.profileCard, { backgroundColor: colors.backgroundSecondary }]}
+              style={[styles.profileCard, {
+                backgroundColor: activeTab === "me"
+                  ? Colors.brand + "12"
+                  : colors.backgroundSecondary,
+                borderColor: activeTab === "me" ? Colors.brand + "30" : "transparent",
+              }]}
               onPress={() => onTabPress("me")}
               activeOpacity={0.8}
             >
-              <Avatar uri={profile.avatar_url} name={profile.display_name} size={38} />
+              <Avatar uri={profile.avatar_url} name={profile.display_name} size={36} />
               <View style={styles.profileInfo}>
-                <Text style={[styles.profileName, { color: colors.text }]} numberOfLines={1}>
-                  {profile.display_name || "User"}
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Text style={[styles.profileName, { color: colors.text }]} numberOfLines={1}>
+                    {profile.display_name || "User"}
+                  </Text>
+                  {profile.is_verified && (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={13}
+                      color={profile.is_organization_verified ? Colors.gold : Colors.brand}
+                    />
+                  )}
+                </View>
                 <Text style={[styles.profileHandle, { color: colors.textMuted }]} numberOfLines={1}>
                   @{profile.handle || "handle"}
                 </Text>
               </View>
-              {profile.is_verified && (
-                <Ionicons
-                  name="checkmark-circle"
-                  size={16}
-                  color={profile.is_organization_verified ? Colors.gold : Colors.brand}
-                />
-              )}
+              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
             </TouchableOpacity>
           )}
 
+          {/* Util buttons */}
           <View style={styles.utilRow}>
             <UtilBtn icon={themeIcon} onPress={cycleTheme} label={themeLabel} colors={colors} />
             <UtilBtn
@@ -245,59 +293,103 @@ export function DesktopSidebar({ activeTab, onTabPress }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    width: 260,
+    width: 280,
     borderRightWidth: StyleSheet.hairlineWidth,
     flexShrink: 0,
   },
   inner: {
     flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 16,
+    paddingHorizontal: 14,
+    paddingTop: 20,
+    paddingBottom: 16,
   },
   logoRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 8,
-    paddingBottom: 20,
-    paddingTop: 4,
+    paddingHorizontal: 4,
+    paddingBottom: 18,
   },
   logoIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: Colors.brand + "18",
+    width: 38,
+    height: 38,
+    borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
   },
   logoIcon: {
     width: 22,
     height: 22,
-    tintColor: Colors.brand,
+    tintColor: "#fff",
   },
   logoText: {
-    fontSize: 20,
+    fontSize: 17,
     fontFamily: "Inter_700Bold",
     letterSpacing: -0.3,
+    lineHeight: 20,
+  },
+  logoSub: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+  },
+  composeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 24,
+    paddingVertical: 11,
+    marginHorizontal: 2,
+  },
+  composeBtnText: {
+    color: "#fff",
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
   },
   navSection: {
-    gap: 2,
+    gap: 1,
+  },
+  sectionLabel: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.8,
+    paddingHorizontal: 12,
+    paddingBottom: 6,
+    paddingTop: 4,
   },
   navItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 11,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
     borderRadius: 12,
-    gap: 12,
+    gap: 10,
+    position: "relative",
+    overflow: "hidden",
+  },
+  navIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
   },
   navLabel: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: "Inter_500Medium",
   },
   navLabelActive: {
     fontFamily: "Inter_600SemiBold",
+  },
+  activeBar: {
+    position: "absolute",
+    left: 0,
+    top: 8,
+    bottom: 8,
+    width: 3,
+    borderRadius: 2,
+    backgroundColor: Colors.brand,
   },
   badge: {
     backgroundColor: "#FF3B30",
@@ -312,21 +404,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 10,
     fontFamily: "Inter_700Bold",
-  },
-  composeBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderRadius: 28,
-    paddingVertical: 12,
-    marginTop: 16,
-    marginHorizontal: 4,
-  },
-  composeBtnText: {
-    color: "#fff",
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
   },
   bottomSection: {
     marginTop: "auto" as any,
@@ -343,18 +420,19 @@ const styles = StyleSheet.create({
     gap: 10,
     borderRadius: 12,
     padding: 10,
+    borderWidth: 1,
   },
   profileInfo: {
     flex: 1,
     minWidth: 0,
   },
   profileName: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: "Inter_600SemiBold",
-    lineHeight: 18,
+    lineHeight: 17,
   },
   profileHandle: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: "Inter_400Regular",
   },
   utilRow: {

@@ -8,9 +8,9 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 
 const DESKTOP_BREAKPOINT = 768;
-const SIDEBAR_WIDTH = 260;
-const CENTER_MIN = 340;
-const RIGHT_WIDTH = 360;
+const SIDEBAR_WIDTH = 280;
+const RIGHT_PANEL_WIDTH = 380;
+const RIGHT_PANEL_BREAKPOINT = 1280;
 
 type Props = {
   children: React.ReactNode;
@@ -32,7 +32,9 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
         ? "me"
         : segments.includes("notifications")
           ? "notifications"
-          : "index";
+          : segments.includes("wallet")
+            ? "wallet"
+            : "index";
 
   const handleTabPress = (tab: string) => {
     if (tab === "index") router.replace("/(tabs)");
@@ -40,10 +42,11 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
     else if (tab === "discover") router.replace("/(tabs)/discover");
     else if (tab === "me") router.replace("/(tabs)/me");
     else if (tab === "notifications") router.push("/notifications" as any);
+    else if (tab === "wallet") router.push("/wallet" as any);
   };
 
-  const bg = isDark ? "#0d0d0d" : "#f0f2f5";
-  const showRightPanel = isLoggedIn && width >= 1100;
+  const bg = isDark ? "#0a0a0a" : "#eef0f4";
+  const showRightPanel = isLoggedIn && width >= RIGHT_PANEL_BREAKPOINT;
 
   return (
     <View style={[styles.root, { backgroundColor: bg }]}>
@@ -51,11 +54,11 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
         style={[
           styles.appShell,
           {
-            backgroundColor: isDark ? "#161618" : "#ffffff",
+            backgroundColor: isDark ? "#111113" : "#ffffff",
             // @ts-ignore
             boxShadow: isDark
-              ? "0 0 0 1px rgba(255,255,255,0.06)"
-              : "0 0 0 1px rgba(0,0,0,0.08)",
+              ? "0 0 0 1px rgba(255,255,255,0.05), 0 4px 32px rgba(0,0,0,0.4)"
+              : "0 0 0 1px rgba(0,0,0,0.07), 0 4px 24px rgba(0,0,0,0.08)",
           },
         ]}
       >
@@ -63,18 +66,25 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
           <DesktopSidebar activeTab={activeTab} onTabPress={handleTabPress} />
         )}
 
-        <View style={[
-          styles.centerPanel,
-          {
-            borderRightWidth: showRightPanel ? StyleSheet.hairlineWidth : 0,
-            borderRightColor: colors.border,
-          },
-        ]}>
+        <View
+          style={[
+            styles.centerPanel,
+            {
+              borderRightWidth: showRightPanel ? StyleSheet.hairlineWidth : 0,
+              borderRightColor: colors.border,
+            },
+          ]}
+        >
           {children}
         </View>
 
         {showRightPanel && (
-          <View style={[styles.rightPanel, { backgroundColor: isDark ? "#0d0d0d" : "#f7f9fb" }]}>
+          <View
+            style={[
+              styles.rightPanel,
+              { backgroundColor: isDark ? "#0d0d10" : "#f5f7fa", borderLeftColor: colors.border },
+            ]}
+          >
             <DesktopRightPanel activeTab={activeTab} colors={colors} />
           </View>
         )}
@@ -111,18 +121,18 @@ const styles = StyleSheet.create({
   appShell: {
     flex: 1,
     width: "100%" as any,
-    maxWidth: 1380,
+    maxWidth: 1600,
     flexDirection: "row",
     overflow: "hidden",
   },
   centerPanel: {
     flex: 1,
-    minWidth: CENTER_MIN,
-    maxWidth: 680,
+    minWidth: 360,
     overflow: "hidden",
   },
   rightPanel: {
-    width: RIGHT_WIDTH,
+    width: RIGHT_PANEL_WIDTH,
     overflow: "hidden",
+    borderLeftWidth: StyleSheet.hairlineWidth,
   },
 });

@@ -83,7 +83,7 @@ function BookmarkButton({ bookmarked, onPress }: { bookmarked: boolean; onPress:
   );
 }
 
-function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress }: { item: PostItem; onToggleLike: (postId: string) => void; onToggleBookmark: (postId: string) => void; onImagePress?: (images: string[], index: number) => void }) {
+function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress, colWidth }: { item: PostItem; onToggleLike: (postId: string) => void; onToggleBookmark: (postId: string) => void; onImagePress?: (images: string[], index: number) => void; colWidth?: number }) {
   const { colors } = useTheme();
   const { preferredLang } = useLanguage();
   const { width: screenW } = useWindowDimensions();
@@ -97,7 +97,10 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress }: { item
   const cardRef = useRef<ViewShot>(null);
 
   const allImages = item.images.length > 0 ? item.images : item.image_url ? [item.image_url] : [];
-  const imgW = allImages.length === 1 ? screenW - 48 : (screenW - 56) / 2;
+  const effectiveW = colWidth ?? screenW;
+  const singleImgW = effectiveW - 48;
+  const multiImgW = (effectiveW - 56) / 2;
+  const imgW = allImages.length === 1 ? singleImgW : multiImgW;
 
   useEffect(() => {
     if (!preferredLang || !item.content?.trim()) { setDisplayContent(item.content); setIsTranslated(false); return; }
@@ -211,7 +214,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress }: { item
                 >
                   <Image
                     source={{ uri }}
-                    style={[styles.img, { width: allImages.length === 1 ? screenW - 48 : imgW, height: (allImages.length === 1 ? screenW - 48 : imgW) * 0.6 }]}
+                    style={[styles.img, { width: imgW, height: imgW * 0.6 }]}
                     resizeMode="cover"
                   />
                 </TouchableOpacity>
@@ -279,6 +282,12 @@ export default function DiscoverScreen() {
   const { colors } = useTheme();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  const isDesktop = useIsDesktop();
+  const SIDEBAR_W = 280;
+  const RIGHT_PANEL_W = screenWidth >= 1280 ? 380 : 0;
+  const centerW = isDesktop ? screenWidth - SIDEBAR_W - RIGHT_PANEL_W : screenWidth;
+  const desktopColWidth = isDesktop ? Math.floor((centerW - 32) / 2) : undefined;
   const [feedTab, setFeedTab] = useState<"for_you" | "following">("for_you");
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -682,10 +691,23 @@ export default function DiscoverScreen() {
         <View style={{ padding: 8, gap: 8 }}>{[1,2,3].map(i => <PostSkeleton key={i} />)}</View>
       ) : (
         <FlatList
+          key={isDesktop ? "desktop-2col" : "mobile-1col"}
           data={posts}
+          numColumns={isDesktop ? 2 : 1}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <PostCard item={item} onToggleLike={toggleLike} onToggleBookmark={toggleBookmark} onImagePress={imgViewer.openViewer} />}
-          contentContainerStyle={{ gap: 8, paddingVertical: 8, paddingBottom: 90 }}
+          renderItem={({ item }) => (
+            <View style={isDesktop ? { flex: 1, maxWidth: desktopColWidth } : undefined}>
+              <PostCard
+                item={item}
+                onToggleLike={toggleLike}
+                onToggleBookmark={toggleBookmark}
+                onImagePress={imgViewer.openViewer}
+                colWidth={desktopColWidth}
+              />
+            </View>
+          )}
+          columnWrapperStyle={isDesktop ? { gap: 0, paddingHorizontal: 8 } : undefined}
+          contentContainerStyle={{ gap: isDesktop ? 0 : 8, paddingVertical: 8, paddingBottom: 90 }}
           showsVerticalScrollIndicator={false}
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
