@@ -6,12 +6,39 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 ## Replit Configuration
 
-- **Workflows**: Two workflows configured — "Start application" (Expo web on port 5000, webview) and "API Server" (Express on port 3000, console)
+- **Workflows**: Two workflows — "Start application" (Expo web, port 5000, webview) and "API Server" (Express, port 3000, console)
 - **Package manager**: pnpm (v10.26.1, already installed)
-- **Environment variables**: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `PORT=3000`, `NODE_ENV=development`
-- **Secrets needed**: `SUPABASE_SERVICE_ROLE_KEY` (for admin routes like chats/account-purge), `ACCOUNT_PURGE_SECRET` (for purge endpoint), optionally `GROQ_API_KEY` (AI chat via Supabase edge function)
-- **Backend**: Supabase (existing project `rhnsjqqtdzlkvqazfcbg.supabase.co`) — intentionally kept, do NOT migrate to Neon
-- **Start app**: `pnpm install` then both workflows auto-start
+- **Replit env vars**: None for Supabase — all credentials are in source code (public keys) or Supabase secrets (private keys)
+- **Backend**: Supabase project `rhnsjqqtdzlkvqazfcbg.supabase.co` — intentionally kept, do NOT migrate to Neon
+
+## Secrets Architecture — All secrets stored in Supabase, zero in Replit
+
+- **Supabase URL + anon key**: Public keys — hardcoded directly in `artifacts/api-server/src/lib/config.ts` and `artifacts/mobile/lib/supabase.ts`. Safe to be in source code.
+- **`SUPABASE_SERVICE_ROLE_KEY`**: Private key — stored only as a Supabase edge function secret (auto-injected into every edge function by Supabase). Never in Replit, never in Express code.
+- **`ACCOUNT_PURGE_SECRET`**: Private — stored as a Supabase edge function secret. Set it via: Supabase Dashboard → Edge Functions → Secrets → `ACCOUNT_PURGE_SECRET`.
+- **`GROQ_API_KEY`**: Private — stored as a Supabase edge function secret. Used by `ai-chat` and `transcribe-audio` functions.
+- **`RESEND_API_KEY`**: Private — Supabase edge function secret. Used by `send-marketing-email` and `send-password-reset` functions.
+
+## Supabase Edge Functions
+
+| Function | Purpose | Secrets used |
+|---|---|---|
+| `ai-chat` | AI chat + audio transcription | `GROQ_API_KEY` |
+| `generate-ai-image` | AI image generation | (internal) |
+| `send-marketing-email` | Marketing emails | `RESEND_API_KEY` |
+| `send-password-reset` | Password reset emails | `RESEND_API_KEY` |
+| `send-push-notification` | Push notifications | (internal) |
+| `transcribe-audio` | Audio transcription | `GROQ_API_KEY` |
+| `create-chat` | Create private chat bypassing RLS | `SUPABASE_SERVICE_ROLE_KEY` (auto) |
+| `account-purge` | Purge scheduled-deletion accounts | `SUPABASE_SERVICE_ROLE_KEY` (auto), `ACCOUNT_PURGE_SECRET` |
+
+## Deploying Edge Functions
+
+Run from project root:
+```
+npx supabase functions deploy create-chat --project-ref rhnsjqqtdzlkvqazfcbg
+npx supabase functions deploy account-purge --project-ref rhnsjqqtdzlkvqazfcbg
+```
 
 ## Stack
 
