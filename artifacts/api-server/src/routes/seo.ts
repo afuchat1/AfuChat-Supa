@@ -3,9 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 
 const router = Router();
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "https://rhnsjqqtdzlkvqazfcbg.supabase.co";
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJobnNqcXF0ZHpsa3ZxYXpmY2JnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2NzA4NjksImV4cCI6MjA3NzI0Njg2OX0.j8zuszO1K6Apjn-jRiVUyZeqe3Re424xyOho9qDl_oY";
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const SITE_URL = "https://afuchat.com";
 
@@ -42,6 +42,7 @@ router.get("/robots.txt", (_req, res) => {
   res.type("text/plain").send(`User-agent: *
 Allow: /
 Allow: /@*
+Allow: /post/*
 Disallow: /api/
 Disallow: /admin/
 Disallow: /__mockup/
@@ -52,23 +53,31 @@ Sitemap: ${SITE_URL}/sitemap.xml
 
 router.get("/sitemap.xml", async (_req, res) => {
   const profiles: any[] = [];
+  const posts: any[] = [];
   if (supabase) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("handle, updated_at")
-      .eq("is_private", false)
-      .not("handle", "like", "deleted_%")
-      .order("updated_at", { ascending: false })
-      .limit(1000);
-    profiles.push(...(data || []));
+    const [profileResult, postResult] = await Promise.all([
+      supabase.from("profiles").select("handle, updated_at").eq("is_private", false).not("handle", "like", "deleted_%").order("updated_at", { ascending: false }).limit(1000),
+      supabase.from("posts").select("id, created_at, author:profiles!author_id(is_private)").eq("is_blocked", false).order("created_at", { ascending: false }).limit(2000),
+    ]);
+    profiles.push(...(profileResult.data || []));
+    posts.push(...(postResult.data || []));
   }
 
-  const urls = profiles.map((p) => `
+  const profileUrls = profiles.map((p) => `
   <url>
     <loc>${SITE_URL}/@${p.handle}</loc>
     <lastmod>${new Date(p.updated_at || Date.now()).toISOString().split("T")[0]}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
+  </url>`).join("");
+
+  const publicPosts = posts.filter((p) => !p.author?.is_private);
+  const postUrls = publicPosts.map((p) => `
+  <url>
+    <loc>${SITE_URL}/post/${p.id}</loc>
+    <lastmod>${new Date(p.created_at || Date.now()).toISOString().split("T")[0]}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
   </url>`).join("");
 
   res.type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>
@@ -87,7 +96,7 @@ router.get("/sitemap.xml", async (_req, res) => {
     <loc>${SITE_URL}/privacy</loc>
     <changefreq>monthly</changefreq>
     <priority>0.3</priority>
-  </url>${urls}
+  </url>${profileUrls}${postUrls}
 </urlset>`);
 });
 

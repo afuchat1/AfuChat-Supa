@@ -3,9 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 
 const router = Router();
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "https://rhnsjqqtdzlkvqazfcbg.supabase.co";
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJobnNqcXF0ZHpsa3ZxYXpmY2JnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2NzA4NjksImV4cCI6MjA3NzI0Njg2OX0.j8zuszO1K6Apjn-jRiVUyZeqe3Re424xyOho9qDl_oY";
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const BRAND_COLOR = "#00BCD4";
 const SITE_NAME = "AfuChat";
@@ -34,22 +34,25 @@ function renderProfilePage(profile: any, posts: any[], isPrivate = false): strin
 
   const postsHtml = posts.map((p) => {
     const content = escapeHtml(p.content || "");
+    const contentTrunc = content.length > 280 ? content.substring(0, 277) + "..." : content;
     const date = new Date(p.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
     const images = (p.images || []).map((img: string) =>
       `<img src="${escapeHtml(img)}" alt="Post image" style="max-width:100%;border-radius:12px;margin-top:8px;" loading="lazy" />`
     ).join("");
+    const postUrl = `${SITE_URL}/post/${p.id}`;
     return `
-      <article class="post" itemscope itemtype="https://schema.org/SocialMediaPosting">
-        <meta itemprop="author" content="${displayName}" />
-        <meta itemprop="datePublished" content="${p.created_at}" />
-        <p itemprop="articleBody">${content}</p>
-        ${images}
-        <div class="post-meta">
-          <span>${p.likes || 0} likes</span>
-          <span>${p.comments || 0} comments</span>
-          <time datetime="${p.created_at}">${date}</time>
-        </div>
-      </article>
+      <a href="${postUrl}" style="text-decoration:none;color:inherit;display:block">
+        <article class="post" itemscope itemtype="https://schema.org/SocialMediaPosting">
+          <meta itemprop="author" content="${displayName}" />
+          <meta itemprop="datePublished" content="${p.created_at}" />
+          <meta itemprop="url" content="${postUrl}" />
+          <p itemprop="articleBody">${contentTrunc}</p>
+          ${images}
+          <div class="post-meta">
+            <time datetime="${p.created_at}">${date}</time>
+          </div>
+        </article>
+      </a>
     `;
   }).join("");
 
@@ -83,9 +86,11 @@ function renderProfilePage(profile: any, posts: any[], isPrivate = false): strin
   <meta property="profile:username" content="${handle}" />
 
   <meta name="twitter:card" content="summary" />
+  <meta name="twitter:site" content="@afuchat" />
   <meta name="twitter:title" content="${displayName} (@${handle})" />
   <meta name="twitter:description" content="${bio || `${displayName} on ${SITE_NAME}`}" />
   ${avatarUrl ? `<meta name="twitter:image" content="${escapeHtml(avatarUrl)}" />` : ""}
+  <meta name="theme-color" content="${BRAND_COLOR}" />
 
   <script type="application/ld+json">${JSON.stringify(jsonLd).replace(/<\//g, "<\\/")}</script>
 
@@ -200,8 +205,12 @@ function renderProfilePage(profile: any, posts: any[], isPrivate = false): strin
           <div class="stat-label">Posts</div>
         </div>
         <div class="stat-item">
-          <div class="stat-value">${profile.xp || 0}</div>
-          <div class="stat-label">Nexa</div>
+          <div class="stat-value">${(profile.followers || 0).toLocaleString()}</div>
+          <div class="stat-label">Followers</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">${(profile.following || 0).toLocaleString()}</div>
+          <div class="stat-label">Following</div>
         </div>
       </div>
       <a href="${SITE_URL}?ref=${handle}" class="cta-btn">Join AfuChat</a>
@@ -259,7 +268,6 @@ function render404Page(): string {
 router.get("/@:handle", async (req, res) => {
   const handle = req.params.handle?.toLowerCase();
   if (!handle) return res.status(404).send(render404Page());
-  if (!supabase) return res.status(404).send(render404Page());
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -280,14 +288,30 @@ router.get("/@:handle", async (req, res) => {
     }, [], true));
   }
 
-  const { data: posts } = await supabase
-    .from("moments")
-    .select("*")
-    .eq("user_id", profile.id)
-    .order("created_at", { ascending: false })
-    .limit(20);
+  const [{ data: posts }, { data: postImages }, { data: followersData }, { data: followingData }] = await Promise.all([
+    supabase.from("posts").select("id, content, image_url, created_at, view_count").eq("author_id", profile.id).eq("is_blocked", false).order("created_at", { ascending: false }).limit(20),
+    supabase.from("post_images").select("post_id, image_url, display_order").in("post_id", (await supabase.from("posts").select("id").eq("author_id", profile.id).eq("is_blocked", false).order("created_at", { ascending: false }).limit(20)).data?.map((p: any) => p.id) || []).order("display_order", { ascending: true }),
+    supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", profile.id),
+    supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", profile.id),
+  ]);
 
-  return res.send(renderProfilePage(profile, posts || []));
+  const imageMap: Record<string, string[]> = {};
+  for (const pi of (postImages || [])) {
+    if (!imageMap[pi.post_id]) imageMap[pi.post_id] = [];
+    imageMap[pi.post_id].push(pi.image_url);
+  }
+
+  const enrichedPosts = (posts || []).map((p: any) => ({
+    ...p,
+    images: imageMap[p.id] || (p.image_url ? [p.image_url] : []),
+    likes: 0,
+    comments: 0,
+  }));
+
+  const followers = (followersData as any)?.count || 0;
+  const following = (followingData as any)?.count || 0;
+
+  return res.send(renderProfilePage({ ...profile, followers, following }, enrichedPosts));
 });
 
 router.get("/:handle", async (req, res, next) => {
@@ -295,7 +319,6 @@ router.get("/:handle", async (req, res, next) => {
   if (!handle || handle.includes(".") || handle === "api" || handle === "admin") {
     return next();
   }
-  if (!supabase) return next();
 
   const { data: profile } = await supabase
     .from("profiles")

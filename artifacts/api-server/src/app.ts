@@ -3,6 +3,8 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import publicProfileRouter from "./routes/public-profile";
+import publicPostRouter from "./routes/public-post";
+import landingRouter from "./routes/landing";
 import seoRouter from "./routes/seo";
 import { logger } from "./lib/logger";
 
@@ -32,7 +34,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use(seoRouter);
+app.use(publicPostRouter);
 app.use(publicProfileRouter);
+app.use(landingRouter);
 app.use("/api", router);
 
 export default app;

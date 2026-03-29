@@ -249,6 +249,12 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 - Entry: `src/index.ts` — reads `PORT`, starts Express
 - App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
 - Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health`; `src/routes/ai-chat.ts` exposes `POST /api/ai/chat` (proxies to Supabase Edge Function `ai-chat`)
+- **SEO & Link Previews**:
+  - `src/routes/landing.ts` — Homepage with full OG/Twitter Card meta, JSON-LD (WebApplication schema), live user/post counts from Supabase, Google Play CTA
+  - `src/routes/public-profile.ts` — `/@:handle` public profile pages with OG profile tags, Twitter Cards, JSON-LD Person schema, followers/following stats, post feed from `posts` table with images from `post_images`. Redirects `/:handle` → `/@:handle`
+  - `src/routes/public-post.ts` — `/post/:id` public post pages with full OG article tags, Twitter Cards (summary_large_image when post has images), JSON-LD SocialMediaPosting schema, author info, like/reply counts, post images. Only shows non-blocked posts from public authors
+  - `src/routes/seo.ts` — `robots.txt` (allows `/@*` and `/post/*`), dynamic `sitemap.xml` (profiles + posts filtered by public authors only), `.well-known/assetlinks.json` (Android App Links), `.well-known/apple-app-site-association` (iOS Universal Links)
+  - All routes use Supabase anon key only (public, read-only access via RLS)
 - Depends on: `@workspace/db`, `@workspace/api-zod`
 - `pnpm --filter @workspace/api-server run dev` — run the dev server
 - `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
