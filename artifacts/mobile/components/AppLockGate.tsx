@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   AppState,
   AppStateStatus,
+  Modal,
   Platform,
   StyleSheet,
   Text,
@@ -29,16 +30,16 @@ if (Platform.OS !== "web") {
   try { LocalAuthentication = require("expo-local-authentication"); } catch {}
 }
 
-type LockStatus = "checking" | "locked" | "unlocked";
-
-const DOTS = 4;
+const MIN_BACKGROUND_MS = 3000;
 
 export function AppLockGate({ children }: { children: React.ReactNode }) {
-  const [status, setStatus] = useState<LockStatus>("checking");
+  const [locked, setLocked] = useState(false);
+  const [ready, setReady] = useState(false);
   const [pinEnabled, setPinEnabled] = useState(false);
   const [bioEnabled, setBioEnabled] = useState(false);
+  const bioInProgress = useRef(false);
+  const backgroundAt = useRef<number | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
-  const wentToBackgroundRef = useRef(false);
 
   const checkConfig = useCallback(async (): Promise<{ pin: boolean; bio: boolean }> => {
     if (Platform.OS === "web") return { pin: false, bio: false };
@@ -48,46 +49,24 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
     return { pin, bio };
   }, []);
 
-  const lockIfConfigured = useCallback(async () => {
-    const { pin, bio } = await checkConfig();
-    if (pin || bio) {
-      setStatus("locked");
-    }
-  }, [checkConfig]);
-
   useEffect(() => {
     (async () => {
       if (Platform.OS === "web") {
-        setStatus("unlocked");
+        setReady(true);
         return;
       }
       await restoreScreenshotProtection();
       const { pin, bio } = await checkConfig();
       if (pin || bio) {
-        setStatus("locked");
-      } else {
-        setStatus("unlocked");
+        setLocked(true);
       }
+      setReady(true);
     })();
   }, [checkConfig]);
 
-  useEffect(() => {
-    const sub = AppState.addEventListener("change", (nextState: AppStateStatus) => {
-      const prevState = appStateRef.current;
-      appStateRef.current = nextState;
-
-      if (nextState === "background") {
-        wentToBackgroundRef.current = true;
-        lockIfConfigured();
-      } else if (nextState === "active" && wentToBackgroundRef.current) {
-        wentToBackgroundRef.current = false;
-      }
-    });
-    return () => sub.remove();
-  }, [lockIfConfigured]);
-
-  async function tryBiometric(): Promise<boolean> {
-    if (!LocalAuthentication) return false;
+  const tryBiometric = useCallback(async (): Promise<boolean> => {
+    if (!LocalAuthentication || bioInProgress.current) return false;
+    bioInProgress.current = true;
     try {
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage: "Unlock AfuChat",
@@ -96,33 +75,70 @@ export function AppLockGate({ children }: { children: React.ReactNode }) {
         disableDeviceFallback: false,
       });
       if (result.success) {
-        setStatus("unlocked");
+        setLocked(false);
         return true;
       }
     } catch {}
+    finally {
+      bioInProgress.current = false;
+    }
     return false;
-  }
+  }, []);
 
   useEffect(() => {
-    if (status === "locked" && bioEnabled) {
+    if (locked && bioEnabled) {
       tryBiometric();
     }
-  }, [status, bioEnabled]);
+  }, [locked, bioEnabled, tryBiometric]);
 
-  if (status === "checking") return null;
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", async (nextState: AppStateStatus) => {
+      const prevState = appStateRef.current;
+      appStateRef.current = nextState;
 
-  if (status === "locked") {
-    return (
-      <LockScreen
-        pinEnabled={pinEnabled}
-        bioEnabled={bioEnabled}
-        onBioPress={tryBiometric}
-        onUnlock={() => setStatus("unlocked")}
-      />
-    );
-  }
+      if (nextState === "background" || nextState === "inactive") {
+        if (backgroundAt.current === null) {
+          backgroundAt.current = Date.now();
+        }
+      } else if (nextState === "active") {
+        const wentBackgroundAt = backgroundAt.current;
+        backgroundAt.current = null;
 
-  return <>{children}</>;
+        if (wentBackgroundAt === null) return;
+        const elapsed = Date.now() - wentBackgroundAt;
+        if (elapsed < MIN_BACKGROUND_MS) return;
+
+        const { pin, bio } = await checkConfig();
+        if (pin || bio) {
+          setLocked(true);
+        }
+      }
+    });
+    return () => sub.remove();
+  }, [checkConfig]);
+
+  if (!ready) return null;
+
+  return (
+    <>
+      {children}
+      {locked && Platform.OS !== "web" && (
+        <Modal
+          visible={locked}
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={() => {}}
+        >
+          <LockScreen
+            pinEnabled={pinEnabled}
+            bioEnabled={bioEnabled}
+            onBioPress={tryBiometric}
+            onUnlock={() => setLocked(false)}
+          />
+        </Modal>
+      )}
+    </>
+  );
 }
 
 function LockScreen({
@@ -162,12 +178,11 @@ function LockScreen({
   }
 
   async function pressDigit(d: string) {
-    if (digits.length >= DOTS || error) return;
+    if (digits.length >= 4 || error) return;
     const next = [...digits, d];
     setDigits(next);
-    if (next.length === DOTS) {
-      const pin = next.join("");
-      const ok = await verifyPIN(pin);
+    if (next.length === 4) {
+      const ok = await verifyPIN(next.join(""));
       if (ok) {
         onUnlock();
       } else {
@@ -210,7 +225,7 @@ function LockScreen({
       {pinEnabled && (
         <>
           <Animated.View style={[styles.dotsRow, shakeStyle]}>
-            {Array.from({ length: DOTS }).map((_, i) => (
+            {Array.from({ length: 4 }).map((_, i) => (
               <View
                 key={i}
                 style={[
