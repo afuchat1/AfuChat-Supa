@@ -337,9 +337,8 @@ export default function PostDetailScreen() {
     setCapturing(true);
     setMenuVisible(false);
     try {
-      const capture = (cardRef.current as any).capture;
-      if (!capture) { showAlert("Error", "Capture not available."); setCapturing(false); return; }
-      const uri = await capture();
+      if (typeof cardRef.current.capture !== "function") { showAlert("Error", "Capture not available."); setCapturing(false); return; }
+      const uri = await cardRef.current.capture();
       if (Platform.OS === "web") {
         const link = document.createElement("a");
         link.href = uri;
