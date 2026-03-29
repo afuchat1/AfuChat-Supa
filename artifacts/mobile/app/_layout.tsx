@@ -26,6 +26,7 @@ import { ThemeProvider, useThemeContext } from "@/context/ThemeContext";
 import { supabase } from "@/lib/supabase";
 import { registerAlertListener, unregisterAlertListener } from "@/lib/alert";
 import { setBaseUrl } from "@/lib/api-client-react/src";
+import { AppLockGate } from "@/components/AppLockGate";
 
 try { setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`); } catch (_) {}
 
@@ -205,7 +206,9 @@ export default function RootLayout() {
                     <ThemeSyncManager />
                     <LanguageProvider>
                       <PushNotificationManager />
-                      <RootLayoutNav />
+                      <AppLockGate>
+                        <RootLayoutNav />
+                      </AppLockGate>
                       <IOSAlert
                         visible={alertState.visible}
                         title={alertState.title}

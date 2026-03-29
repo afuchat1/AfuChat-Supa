@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -8,8 +8,15 @@ import {
   Switch,
   Text,
   TouchableOpacity,
+  Vibration,
   View,
 } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,6 +26,19 @@ import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import {
+  clearPIN,
+  hasPIN,
+  isBiometricEnabled,
+  setBiometricEnabled,
+  storePIN,
+  verifyPIN,
+} from "@/lib/appLock";
+
+let LocalAuthentication: typeof import("expo-local-authentication") | null = null;
+if (Platform.OS !== "web") {
+  try { LocalAuthentication = require("expo-local-authentication"); } catch {}
+}
 
 type DeviceSession = {
   id: string;
@@ -49,13 +69,11 @@ const defaults: SecurityPref = {
 
 function formatLastSeen(iso: string): string {
   try {
-    const d = new Date(iso);
-    const now = new Date();
-    const diff = now.getTime() - d.getTime();
+    const diff = Date.now() - new Date(iso).getTime();
     if (diff < 60000) return "Just now";
     if (diff < 3600000) return `${Math.floor(diff / 60000)} min ago`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   } catch { return "Unknown"; }
 }
 
@@ -63,32 +81,110 @@ const PLATFORM_ICON: Record<string, string> = {
   ios: "logo-apple", android: "logo-android", web: "globe-outline", default: "phone-portrait-outline",
 };
 
+const DOTS = 4;
+
+function PinKeypad({
+  title,
+  subtitle,
+  onComplete,
+  onCancel,
+}: {
+  title: string;
+  subtitle: string;
+  onComplete: (pin: string) => void;
+  onCancel: () => void;
+}) {
+  const [digits, setDigits] = useState<string[]>([]);
+  const [error, setError] = useState(false);
+  const shakeX = useSharedValue(0);
+  const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shakeX.value }] }));
+
+  function shake() {
+    Vibration.vibrate(200);
+    shakeX.value = withSequence(
+      withTiming(-10, { duration: 50 }), withTiming(10, { duration: 50 }),
+      withTiming(-8, { duration: 50 }), withTiming(8, { duration: 50 }),
+      withTiming(0, { duration: 50 }),
+    );
+    setError(true);
+    setTimeout(() => { setError(false); setDigits([]); }, 800);
+  }
+
+  function pressDigit(d: string) {
+    if (digits.length >= DOTS || error) return;
+    const next = [...digits, d];
+    setDigits(next);
+    if (next.length === DOTS) onComplete(next.join(""));
+  }
+
+  function backspace() { setDigits((prev) => prev.slice(0, -1)); }
+
+  const ROWS = [["1","2","3"],["4","5","6"],["7","8","9"],["","0","del"]];
+
+  return (
+    <View style={pkStyles.root}>
+      <Text style={pkStyles.title}>{title}</Text>
+      <Text style={pkStyles.subtitle}>{subtitle}</Text>
+      <Animated.View style={[pkStyles.dotsRow, shakeStyle]}>
+        {Array.from({ length: DOTS }).map((_, i) => (
+          <View key={i} style={[pkStyles.dot, i < digits.length && pkStyles.dotFilled, error && pkStyles.dotError]} />
+        ))}
+      </Animated.View>
+      <View style={pkStyles.keypad}>
+        {ROWS.map((row, ri) => (
+          <View key={ri} style={pkStyles.row}>
+            {row.map((k, ki) => {
+              if (!k) return <View key={ki} style={pkStyles.keyBtn} />;
+              if (k === "del") return (
+                <TouchableOpacity key="del" style={pkStyles.keyBtn} onPress={backspace}>
+                  <Ionicons name="backspace-outline" size={22} color={Colors.brand} />
+                </TouchableOpacity>
+              );
+              return (
+                <TouchableOpacity key={k} style={[pkStyles.keyBtn, pkStyles.keyBtnFill]} onPress={() => pressDigit(k)}>
+                  <Text style={pkStyles.keyText}>{k}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ))}
+      </View>
+      <TouchableOpacity style={pkStyles.cancelBtn} onPress={onCancel}>
+        <Text style={pkStyles.cancelText}>Cancel</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+type PinFlow = "setup_enter" | "setup_confirm" | "disable_verify" | null;
+
 export default function DeviceSecurityScreen() {
   const { colors } = useTheme();
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const [sessions, setSessions] = useState<DeviceSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [prefs, setPrefs] = useState<SecurityPref>(defaults);
   const [revoking, setRevoking] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"devices" | "security">("devices");
+  const [bioSupported, setBioSupported] = useState(false);
+  const [bioEnrolled, setBioEnrolled] = useState(false);
+  const [pinFlow, setPinFlow] = useState<PinFlow>(null);
+  const [pinFirstEntry, setPinFirstEntry] = useState("");
+  const [savingPref, setSavingPref] = useState<string | null>(null);
 
   const registerCurrentDevice = useCallback(async () => {
     if (!user) return;
     const deviceName = Device.deviceName || Device.modelName || "This Device";
-    const deviceType = Device.deviceType === Device.DeviceType.TABLET ? "Tablet" : "Phone";
     const platform = Platform.OS;
+    const deviceType = Device.deviceType === Device.DeviceType.TABLET ? "Tablet" : "Phone";
 
-    // Mark all existing "current" sessions as no longer current
-    await supabase
-      .from("device_sessions")
+    await supabase.from("device_sessions")
       .update({ is_current: false })
       .eq("user_id", user.id)
       .eq("is_current", true);
 
-    // Upsert this device as current (match by device_name + platform)
-    const { data: existing } = await supabase
-      .from("device_sessions")
+    const { data: existing } = await supabase.from("device_sessions")
       .select("id")
       .eq("user_id", user.id)
       .eq("device_name", deviceName)
@@ -96,54 +192,162 @@ export default function DeviceSecurityScreen() {
       .maybeSingle();
 
     if (existing?.id) {
-      await supabase
-        .from("device_sessions")
+      await supabase.from("device_sessions")
         .update({ is_current: true, last_seen: new Date().toISOString() })
         .eq("id", existing.id);
     } else {
       await supabase.from("device_sessions").insert({
-        user_id: user.id,
-        device_name: deviceName,
-        device_type: deviceType,
-        platform,
-        is_current: true,
-        last_seen: new Date().toISOString(),
+        user_id: user.id, device_name: deviceName, device_type: deviceType,
+        platform, is_current: true, last_seen: new Date().toISOString(),
       });
     }
   }, [user]);
 
-  const loadSessions = useCallback(async () => {
+  const loadAll = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-
-    // Ensure current device is always registered in DB
     await registerCurrentDevice();
 
-    // Load security preferences
-    const { data: prefData } = await supabase
-      .from("security_preferences")
-      .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const [{ data: prefData }, { data: sessionData }] = await Promise.all([
+      supabase.from("security_preferences").select("*").eq("user_id", user.id).maybeSingle(),
+      supabase.from("device_sessions").select("*").eq("user_id", user.id)
+        .order("is_current", { ascending: false }).order("last_seen", { ascending: false }),
+    ]);
+
     if (prefData) setPrefs({ ...defaults, ...prefData });
 
-    // Load device sessions
-    const { data: sessionData } = await supabase
-      .from("device_sessions")
-      .select("id, device_name, device_type, platform, last_seen, ip_address, is_current, location")
-      .eq("user_id", user.id)
-      .order("is_current", { ascending: false })
-      .order("last_seen", { ascending: false });
+    const localPinSet = await hasPIN();
+    const localBioEnabled = await isBiometricEnabled();
+    setPrefs((p) => ({
+      ...p,
+      ...(prefData || {}),
+      require_pin: localPinSet,
+      biometric_lock: localBioEnabled,
+    }));
 
     setSessions(sessionData || []);
+
+    if (LocalAuthentication) {
+      const [supported, enrolled] = await Promise.all([
+        LocalAuthentication.hasHardwareAsync(),
+        LocalAuthentication.isEnrolledAsync(),
+      ]);
+      setBioSupported(supported);
+      setBioEnrolled(enrolled);
+    }
+
     setLoading(false);
   }, [user, registerCurrentDevice]);
 
-  useEffect(() => { loadSessions(); }, [loadSessions]);
+  useEffect(() => { loadAll(); }, [loadAll]);
+
+  async function authenticate(reason: string): Promise<boolean> {
+    if (!LocalAuthentication) return true;
+    try {
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: reason,
+        fallbackLabel: "Use PIN",
+        disableDeviceFallback: false,
+      });
+      return result.success;
+    } catch { return false; }
+  }
+
+  async function toggleBiometric() {
+    if (!bioSupported) {
+      showAlert("Not Supported", "Your device doesn't support biometric authentication.");
+      return;
+    }
+    if (!bioEnrolled) {
+      showAlert("Not Set Up", "Please enroll fingerprint or Face ID in your device Settings first.");
+      return;
+    }
+    setSavingPref("biometric_lock");
+    const enabling = !prefs.biometric_lock;
+
+    const ok = await authenticate(enabling ? "Confirm to enable biometric lock" : "Confirm your identity to disable biometric lock");
+    if (!ok) { setSavingPref(null); return; }
+
+    const next = enabling;
+    await setBiometricEnabled(next);
+    setPrefs((p) => ({ ...p, biometric_lock: next }));
+    await supabase.from("security_preferences").upsert({ user_id: user!.id, biometric_lock: next }, { onConflict: "user_id" });
+    setSavingPref(null);
+  }
+
+  async function toggleRequirePin() {
+    const enabling = !prefs.require_pin;
+    if (enabling) {
+      setPinFlow("setup_enter");
+    } else {
+      const pinExists = await hasPIN();
+      if (pinExists) {
+        setPinFlow("disable_verify");
+      } else {
+        await clearPIN();
+        setPrefs((p) => ({ ...p, require_pin: false }));
+        await supabase.from("security_preferences").upsert({ user_id: user!.id, require_pin: false }, { onConflict: "user_id" });
+      }
+    }
+  }
+
+  async function handlePinComplete(pin: string) {
+    if (pinFlow === "setup_enter") {
+      setPinFirstEntry(pin);
+      setPinFlow("setup_confirm");
+    } else if (pinFlow === "setup_confirm") {
+      if (pin === pinFirstEntry) {
+        await storePIN(pin);
+        setPrefs((p) => ({ ...p, require_pin: true }));
+        await supabase.from("security_preferences").upsert({ user_id: user!.id, require_pin: true }, { onConflict: "user_id" });
+        setPinFlow(null);
+        setPinFirstEntry("");
+        showAlert("PIN Set", "Your app PIN has been saved successfully.");
+      } else {
+        showAlert("Mismatch", "PINs didn't match. Please try again.");
+        setPinFlow("setup_enter");
+        setPinFirstEntry("");
+      }
+    } else if (pinFlow === "disable_verify") {
+      const ok = await verifyPIN(pin);
+      if (ok) {
+        await clearPIN();
+        setPrefs((p) => ({ ...p, require_pin: false }));
+        await supabase.from("security_preferences").upsert({ user_id: user!.id, require_pin: false }, { onConflict: "user_id" });
+        setPinFlow(null);
+        showAlert("PIN Removed", "App PIN has been disabled.");
+      } else {
+        showAlert("Wrong PIN", "Incorrect PIN. Try again.");
+      }
+    }
+  }
+
+  async function toggleLoginAlerts() {
+    const next = !prefs.login_alerts;
+    setPrefs((p) => ({ ...p, login_alerts: next }));
+    await supabase.from("security_preferences").upsert({ user_id: user!.id, login_alerts: next }, { onConflict: "user_id" });
+  }
+
+  async function toggleScreenshot() {
+    const next = !prefs.screenshot_protection;
+    setPrefs((p) => ({ ...p, screenshot_protection: next }));
+    await supabase.from("security_preferences").upsert({ user_id: user!.id, screenshot_protection: next }, { onConflict: "user_id" });
+    if (next) {
+      showAlert(
+        "Screenshot Protection",
+        Platform.OS === "android"
+          ? "Screenshot and screen recording are now blocked inside AfuChat."
+          : "iOS will show a blank screen when AfuChat is in the App Switcher."
+      );
+    }
+  }
 
   async function revokeSession(session: DeviceSession) {
-    if (session.is_current) { showAlert("Current device", "You can't revoke your current session. Sign out instead."); return; }
-    showAlert("Revoke Access?", `Remove ${session.device_name} from your account?`, [
+    if (session.is_current) {
+      showAlert("Current Device", "You can't revoke your current device. Use Sign Out in Settings instead.");
+      return;
+    }
+    showAlert("Revoke Access?", `Remove "${session.device_name}" from your account?`, [
       { text: "Cancel" },
       {
         text: "Revoke", style: "destructive",
@@ -158,42 +362,41 @@ export default function DeviceSecurityScreen() {
   }
 
   async function revokeAll() {
-    showAlert("Sign Out Everywhere?", "This will end all sessions except your current device.", [
+    showAlert("Sign Out Everywhere?", "This ends all sessions on other devices. They'll need to log in again.", [
       { text: "Cancel" },
       {
-        text: "Sign Out All", style: "destructive",
+        text: "Sign Out All Others", style: "destructive",
         onPress: async () => {
           await supabase.from("device_sessions").delete().eq("user_id", user!.id).eq("is_current", false);
           setSessions((prev) => prev.filter((s) => s.is_current));
-          showAlert("Done", "All other devices have been signed out");
+          showAlert("Done", "All other devices have been signed out.");
         },
       },
     ]);
   }
 
-  async function togglePref(key: keyof SecurityPref) {
-    if (!user) return;
-    const val = !prefs[key];
-    setPrefs((p) => ({ ...p, [key]: val }));
-    await supabase.from("security_preferences").upsert({ user_id: user.id, [key]: val }, { onConflict: "user_id" });
-  }
-
-  function PrefRow({ label, desc, field }: { label: string; desc?: string; field: keyof SecurityPref }) {
+  if (pinFlow) {
     return (
-      <View style={[styles.prefRow, { backgroundColor: colors.surface }]}>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.prefLabel, { color: colors.text }]}>{label}</Text>
-          {desc && <Text style={[styles.prefDesc, { color: colors.textMuted }]}>{desc}</Text>}
-        </View>
-        <Switch
-          value={prefs[field]}
-          onValueChange={() => togglePref(field)}
-          trackColor={{ true: Colors.brand, false: colors.backgroundTertiary }}
-          thumbColor="#fff"
+      <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
+        <PinKeypad
+          title={
+            pinFlow === "setup_enter" ? "Create a PIN" :
+            pinFlow === "setup_confirm" ? "Confirm your PIN" :
+            "Enter current PIN"
+          }
+          subtitle={
+            pinFlow === "setup_enter" ? "Choose a 4-digit PIN to lock AfuChat" :
+            pinFlow === "setup_confirm" ? "Enter the same PIN again" :
+            "Verify your identity to disable the PIN"
+          }
+          onComplete={handlePinComplete}
+          onCancel={() => { setPinFlow(null); setPinFirstEntry(""); }}
         />
       </View>
     );
   }
+
+  const otherDeviceCount = sessions.filter((s) => !s.is_current).length;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
@@ -203,95 +406,223 @@ export default function DeviceSecurityScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Device Security</Text>
-          <Text style={[styles.headerSub, { color: colors.textMuted }]}>Manage access and security settings</Text>
+          <Text style={[styles.headerSub, { color: colors.textMuted }]}>
+            {sessions.length} device{sessions.length !== 1 ? "s" : ""} · {otherDeviceCount > 0 ? `${otherDeviceCount} other` : "only this device"}
+          </Text>
         </View>
       </View>
 
       <View style={[styles.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         {(["devices", "security"] as const).map((t) => (
-          <TouchableOpacity key={t} style={[styles.tab, activeTab === t && { borderBottomColor: Colors.brand, borderBottomWidth: 2 }]} onPress={() => setActiveTab(t)}>
-            <Ionicons name={t === "devices" ? "phone-portrait-outline" : "shield-checkmark-outline"} size={16} color={activeTab === t ? Colors.brand : colors.textMuted} />
+          <TouchableOpacity
+            key={t}
+            style={[styles.tab, activeTab === t && { borderBottomColor: Colors.brand, borderBottomWidth: 2 }]}
+            onPress={() => setActiveTab(t)}
+          >
+            <Ionicons
+              name={t === "devices" ? "phone-portrait-outline" : "shield-checkmark-outline"}
+              size={16}
+              color={activeTab === t ? Colors.brand : colors.textMuted}
+            />
             <Text style={[styles.tabText, { color: activeTab === t ? Colors.brand : colors.textMuted }]}>
               {t === "devices" ? "Devices" : "Security"}
             </Text>
+            {t === "devices" && otherDeviceCount > 0 && (
+              <View style={[styles.tabBadge, { backgroundColor: "#FF3B30" }]}>
+                <Text style={styles.tabBadgeText}>{otherDeviceCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         ))}
       </View>
 
       {activeTab === "devices" ? (
-        <>
-          {loading ? (
-            <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} />
-          ) : (
-            <FlatList
-              data={sessions}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={{ padding: 14, gap: 8, paddingBottom: 40 }}
-              ListHeaderComponent={
-                sessions.filter((s) => !s.is_current).length > 0 ? (
-                  <TouchableOpacity style={[styles.revokeAll, { borderColor: "#FF3B30" }]} onPress={revokeAll}>
-                    <Ionicons name="log-out-outline" size={18} color="#FF3B30" />
-                    <Text style={styles.revokeAllText}>Sign Out All Other Devices</Text>
-                  </TouchableOpacity>
-                ) : null
-              }
-              renderItem={({ item }) => (
-                <View style={[styles.deviceCard, { backgroundColor: colors.surface, borderColor: item.is_current ? Colors.brand + "44" : colors.border }]}>
-                  <View style={[styles.platformIcon, { backgroundColor: item.is_current ? Colors.brand + "18" : colors.backgroundTertiary }]}>
-                    <Ionicons name={(PLATFORM_ICON[item.platform] || PLATFORM_ICON.default) as any} size={24} color={item.is_current ? Colors.brand : colors.textMuted} />
+        loading ? (
+          <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} />
+        ) : (
+          <FlatList
+            data={sessions}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ padding: 14, gap: 10, paddingBottom: 40 }}
+            ListHeaderComponent={
+              otherDeviceCount > 0 ? (
+                <TouchableOpacity style={[styles.revokeAllBtn, { borderColor: "#FF3B30" }]} onPress={revokeAll}>
+                  <Ionicons name="log-out-outline" size={18} color="#FF3B30" />
+                  <Text style={styles.revokeAllText}>Sign Out All Other Devices</Text>
+                </TouchableOpacity>
+              ) : null
+            }
+            renderItem={({ item }) => (
+              <View style={[styles.deviceCard, {
+                backgroundColor: colors.surface,
+                borderColor: item.is_current ? Colors.brand + "55" : colors.border,
+              }]}>
+                <View style={[styles.platformIconWrap, {
+                  backgroundColor: item.is_current ? Colors.brand + "18" : colors.backgroundTertiary,
+                }]}>
+                  <Ionicons
+                    name={(PLATFORM_ICON[item.platform] || PLATFORM_ICON.default) as any}
+                    size={24}
+                    color={item.is_current ? Colors.brand : colors.textMuted}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.deviceNameRow}>
+                    <Text style={[styles.deviceName, { color: colors.text }]}>{item.device_name}</Text>
+                    {item.is_current && (
+                      <View style={[styles.currentBadge, { backgroundColor: Colors.brand + "20" }]}>
+                        <Ionicons name="checkmark-circle" size={11} color={Colors.brand} />
+                        <Text style={[styles.currentBadgeText, { color: Colors.brand }]}>This device</Text>
+                      </View>
+                    )}
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.deviceNameRow}>
-                      <Text style={[styles.deviceName, { color: colors.text }]}>{item.device_name}</Text>
-                      {item.is_current && (
-                        <View style={[styles.currentBadge, { backgroundColor: Colors.brand + "20" }]}>
-                          <Text style={[styles.currentBadgeText, { color: Colors.brand }]}>Current</Text>
-                        </View>
-                      )}
-                    </View>
+                  <Text style={[styles.deviceMeta, { color: colors.textMuted }]}>
+                    {item.platform?.toUpperCase()} · {item.device_type || "Phone"}
+                    {item.ip_address ? ` · ${item.ip_address}` : ""}
+                  </Text>
+                  <View style={styles.deviceMetaRow}>
+                    <Ionicons name="time-outline" size={11} color={colors.textMuted} />
                     <Text style={[styles.deviceMeta, { color: colors.textMuted }]}>
-                      {item.platform?.toUpperCase()} · {item.device_type} · {item.ip_address}
-                    </Text>
-                    <Text style={[styles.deviceMeta, { color: colors.textMuted }]}>
-                      Last active: {formatLastSeen(item.last_seen)}
+                      {formatLastSeen(item.last_seen)}
                       {item.location ? ` · ${item.location}` : ""}
                     </Text>
                   </View>
-                  {!item.is_current && (
-                    <TouchableOpacity onPress={() => revokeSession(item)} disabled={revoking === item.id}>
-                      {revoking === item.id
-                        ? <ActivityIndicator size="small" color="#FF3B30" />
-                        : <Ionicons name="close-circle-outline" size={22} color="#FF3B30" />}
-                    </TouchableOpacity>
-                  )}
                 </View>
-              )}
-            />
-          )}
-        </>
+                {!item.is_current && (
+                  <TouchableOpacity onPress={() => revokeSession(item)} disabled={revoking === item.id} hitSlop={8}>
+                    {revoking === item.id
+                      ? <ActivityIndicator size="small" color="#FF3B30" />
+                      : <Ionicons name="close-circle-outline" size={24} color="#FF3B30" />}
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <Ionicons name="phone-portrait-outline" size={48} color={colors.textMuted} />
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>No devices found</Text>
+              </View>
+            }
+          />
+        )
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-          <Text style={[styles.secGroup, { color: colors.textMuted }]}>ACCOUNT SECURITY</Text>
-          <PrefRow label="Two-Factor Authentication" desc="Add an extra layer of sign-in security" field="two_factor_enabled" />
-          <PrefRow label="Login Alerts" desc="Get notified when a new device signs in" field="login_alerts" />
-
+        <ScrollView contentContainerStyle={{ paddingBottom: 60 }}>
           <Text style={[styles.secGroup, { color: colors.textMuted }]}>APP LOCK</Text>
-          <PrefRow label="Require PIN" desc="Lock the app with a PIN when backgrounded" field="require_pin" />
-          <PrefRow label="Biometric Lock" desc="Use Face ID or fingerprint to unlock" field="biometric_lock" />
-          <PrefRow label="Screenshot Protection" desc="Block screenshots inside AfuChat" field="screenshot_protection" />
 
-          <Text style={[styles.secGroup, { color: colors.textMuted }]}>DANGER ZONE</Text>
-          <TouchableOpacity
-            style={[styles.dangerBtn, { backgroundColor: "#FF3B3012" }]}
-            onPress={() => showAlert("Sign Out?", "You will be signed out of this device.", [
-              { text: "Cancel" }, { text: "Sign Out", style: "destructive", onPress: signOut }
-            ])}
-          >
-            <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
-            <Text style={styles.dangerBtnText}>Sign Out</Text>
-          </TouchableOpacity>
+          <View style={[styles.prefCard, { backgroundColor: colors.surface }]}>
+            <PrefRow
+              icon="finger-print-outline"
+              iconColor="#5856D6"
+              label="Biometric Lock"
+              desc={
+                !bioSupported ? "No biometric hardware detected"
+                : !bioEnrolled ? "Enroll fingerprint/Face ID in device Settings first"
+                : "Use fingerprint or Face ID to unlock"
+              }
+              value={prefs.biometric_lock}
+              onToggle={toggleBiometric}
+              disabled={!bioSupported || !bioEnrolled}
+              loading={savingPref === "biometric_lock"}
+              colors={colors}
+            />
+            <View style={[styles.sep, { backgroundColor: colors.border }]} />
+            <PrefRow
+              icon="keypad-outline"
+              iconColor="#FF9500"
+              label="Require PIN"
+              desc={prefs.require_pin ? "4-digit PIN is active" : "Set a 4-digit PIN to lock the app"}
+              value={prefs.require_pin}
+              onToggle={toggleRequirePin}
+              colors={colors}
+            />
+            <View style={[styles.sep, { backgroundColor: colors.border }]} />
+            <PrefRow
+              icon="camera-off-outline"
+              iconColor="#34C759"
+              label="Screenshot Protection"
+              desc={Platform.OS === "ios" ? "Hides app in App Switcher" : "Blocks screenshots and screen recording"}
+              value={prefs.screenshot_protection}
+              onToggle={toggleScreenshot}
+              colors={colors}
+            />
+          </View>
+
+          <Text style={[styles.secGroup, { color: colors.textMuted }]}>ALERTS & NOTIFICATIONS</Text>
+          <View style={[styles.prefCard, { backgroundColor: colors.surface }]}>
+            <PrefRow
+              icon="notifications-outline"
+              iconColor={Colors.brand}
+              label="Login Alerts"
+              desc="Get a push notification when a new device signs in to your account"
+              value={prefs.login_alerts}
+              onToggle={toggleLoginAlerts}
+              colors={colors}
+            />
+          </View>
+
+          <Text style={[styles.secGroup, { color: colors.textMuted }]}>ACCOUNT SECURITY</Text>
+          <View style={[styles.prefCard, { backgroundColor: colors.surface }]}>
+            <TouchableOpacity
+              style={styles.actionRow}
+              onPress={() => router.push("/settings/security" as any)}
+            >
+              <View style={[styles.actionIcon, { backgroundColor: "#007AFF" }]}>
+                <Ionicons name="key-outline" size={17} color="#fff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.actionLabel, { color: colors.text }]}>Change Password</Text>
+                <Text style={[styles.actionSub, { color: colors.textMuted }]}>Update your account password</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+            <View style={[styles.sep, { backgroundColor: colors.border }]} />
+            <View style={styles.actionRow}>
+              <View style={[styles.actionIcon, { backgroundColor: "#5856D6" }]}>
+                <Ionicons name="shield-outline" size={17} color="#fff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.actionLabel, { color: colors.text }]}>Two-Factor Authentication</Text>
+                <Text style={[styles.actionSub, { color: colors.textMuted }]}>
+                  {prefs.two_factor_enabled ? "Enabled — extra sign-in protection active" : "Coming soon — email OTP + authenticator app"}
+                </Text>
+              </View>
+              <View style={[styles.soonBadge, { backgroundColor: colors.backgroundTertiary }]}>
+                <Text style={[styles.soonText, { color: colors.textMuted }]}>SOON</Text>
+              </View>
+            </View>
+          </View>
         </ScrollView>
       )}
+    </View>
+  );
+}
+
+function PrefRow({
+  icon, iconColor, label, desc, value, onToggle, disabled, loading, colors,
+}: {
+  icon: string; iconColor: string; label: string; desc?: string;
+  value: boolean; onToggle: () => void;
+  disabled?: boolean; loading?: boolean;
+  colors: any;
+}) {
+  return (
+    <View style={[styles.prefRow, disabled && { opacity: 0.5 }]}>
+      <View style={[styles.prefIcon, { backgroundColor: iconColor + "22" }]}>
+        <Ionicons name={icon as any} size={18} color={iconColor} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.prefLabel, { color: colors.text }]}>{label}</Text>
+        {desc && <Text style={[styles.prefDesc, { color: colors.textMuted }]}>{desc}</Text>}
+      </View>
+      {loading
+        ? <ActivityIndicator size="small" color={Colors.brand} />
+        : <Switch
+            value={value}
+            onValueChange={onToggle}
+            disabled={disabled}
+            trackColor={{ true: Colors.brand, false: colors.backgroundTertiary }}
+            thumbColor="#fff"
+          />}
     </View>
   );
 }
@@ -300,23 +631,52 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   headerTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  headerSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  headerSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
   tabBar: { flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth },
-  tab: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12 },
+  tab: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 13, borderBottomWidth: 2, borderBottomColor: "transparent" },
   tabText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  revokeAll: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, borderWidth: 1, paddingVertical: 12, marginBottom: 8 },
+  tabBadge: { minWidth: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
+  tabBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
+  revokeAllBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 14, borderWidth: 1.5, paddingVertical: 13, marginBottom: 6 },
   revokeAllText: { color: "#FF3B30", fontSize: 14, fontFamily: "Inter_600SemiBold" },
   deviceCard: { borderRadius: 16, padding: 14, flexDirection: "row", alignItems: "flex-start", gap: 12, borderWidth: 1 },
-  platformIcon: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  platformIconWrap: { width: 46, height: 46, borderRadius: 13, alignItems: "center", justifyContent: "center" },
   deviceNameRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 3 },
-  deviceName: { fontSize: 15, fontFamily: "Inter_700Bold" },
-  currentBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  deviceName: { fontSize: 15, fontFamily: "Inter_700Bold", flex: 1 },
+  currentBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   currentBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  deviceMetaRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 },
   deviceMeta: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17 },
-  secGroup: { fontSize: 12, fontFamily: "Inter_700Bold", letterSpacing: 0.5, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 8 },
-  prefRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, marginBottom: StyleSheet.hairlineWidth },
+  empty: { alignItems: "center", paddingTop: 60, gap: 12 },
+  emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  secGroup: { fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.5, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 8 },
+  prefCard: { borderRadius: 14, overflow: "hidden", marginHorizontal: 14 },
+  prefRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 14 },
+  prefIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   prefLabel: { fontSize: 15, fontFamily: "Inter_500Medium", marginBottom: 2 },
-  prefDesc: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17 },
-  dangerBtn: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 16, borderRadius: 14, padding: 16, marginTop: 4 },
-  dangerBtnText: { color: "#FF3B30", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  prefDesc: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 16 },
+  sep: { height: StyleSheet.hairlineWidth, marginLeft: 62 },
+  actionRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 14 },
+  actionIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  actionLabel: { fontSize: 15, fontFamily: "Inter_500Medium" },
+  actionSub: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 16, marginTop: 1 },
+  soonBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  soonText: { fontSize: 10, fontFamily: "Inter_700Bold" },
+});
+
+const pkStyles = StyleSheet.create({
+  root: { flex: 1, alignItems: "center", justifyContent: "center", gap: 32 },
+  title: { fontSize: 22, fontFamily: "Inter_700Bold", color: Colors.brand },
+  subtitle: { fontSize: 14, fontFamily: "Inter_400Regular", color: "#888", textAlign: "center", paddingHorizontal: 40 },
+  dotsRow: { flexDirection: "row", gap: 20, marginTop: 8 },
+  dot: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: "#ccc" },
+  dotFilled: { backgroundColor: Colors.brand, borderColor: Colors.brand },
+  dotError: { backgroundColor: "#FF3B30", borderColor: "#FF3B30" },
+  keypad: { gap: 14 },
+  row: { flexDirection: "row", gap: 20 },
+  keyBtn: { width: 76, height: 76, borderRadius: 38, alignItems: "center", justifyContent: "center" },
+  keyBtnFill: { backgroundColor: Colors.brand + "15", borderWidth: 1, borderColor: Colors.brand + "30" },
+  keyText: { fontSize: 28, fontFamily: "Inter_400Regular", color: Colors.brand },
+  cancelBtn: { paddingVertical: 14 },
+  cancelText: { fontSize: 15, fontFamily: "Inter_500Medium", color: "#888" },
 });

@@ -204,15 +204,16 @@ export default function SecuritySettingsScreen() {
 
           <View style={[styles.sep, { backgroundColor: colors.border, marginLeft: 54 }]} />
 
-          <View style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push("/device-security" as any)}>
             <View style={[styles.menuIcon, { backgroundColor: "#34C759" }]}>
               <Ionicons name="shield-checkmark-outline" size={18} color="#fff" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.menuLabel, { color: colors.text }]}>Active Sessions</Text>
-              <Text style={[styles.menuSub, { color: colors.textMuted }]}>This device</Text>
+              <Text style={[styles.menuLabel, { color: colors.text }]}>Device Security</Text>
+              <Text style={[styles.menuSub, { color: colors.textMuted }]}>Manage devices, PIN lock, biometrics</Text>
             </View>
-          </View>
+            <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+          </TouchableOpacity>
         </View>
 
         <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>YOUR DATA</Text>
