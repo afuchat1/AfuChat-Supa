@@ -94,7 +94,6 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
         name="search"
         options={{
           title: "Search",
-          href: isLoggedIn ? undefined : null,
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
               <SymbolView name="magnifyingglass" tintColor={color} size={22} />
@@ -111,7 +110,6 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
         name="discover"
         options={{
           title: "Discover",
-          href: isLoggedIn ? undefined : null,
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
               <SymbolView name={focused ? "compass.fill" : "compass"} tintColor={color} size={22} />
@@ -143,10 +141,6 @@ export default function TabLayout() {
 
   useEffect(() => {
     if (loading) return;
-    if (!session) {
-      router.replace("/(auth)/login");
-      return;
-    }
     if (session && profile && !profile.onboarding_completed) {
       router.replace({ pathname: "/onboarding", params: { userId: session.user.id } });
     }

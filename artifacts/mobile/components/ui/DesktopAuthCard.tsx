@@ -18,18 +18,30 @@ export function DesktopAuthCard({ children }: Props) {
     return <>{children}</>;
   }
 
-  const webOnlyStyles: any = {
-    boxShadow: isDark
-      ? "0 0 0 1px rgba(255,255,255,0.07), 0 16px 48px rgba(0,0,0,0.5)"
-      : "0 0 0 1px rgba(0,0,0,0.06), 0 16px 48px rgba(0,0,0,0.1)",
-    maxHeight: "88vh",
-    overflowY: "auto",
-  };
-
   return (
-    <View style={[styles.root, { backgroundColor: isDark ? "#0d0d0d" : "#f0f2f5" }]}>
+    <View
+      style={[
+        styles.root,
+        { backgroundColor: isDark ? "#0d0d0d" : "#f0f2f5" },
+      ]}
+    >
       <View style={styles.centerWrap}>
-        <View style={[styles.card, { backgroundColor: colors.background }, webOnlyStyles]}>
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: colors.background,
+              // @ts-ignore
+              boxShadow: isDark
+                ? "0 0 0 1px rgba(255,255,255,0.07), 0 16px 48px rgba(0,0,0,0.5)"
+                : "0 0 0 1px rgba(0,0,0,0.06), 0 16px 48px rgba(0,0,0,0.1)",
+              // @ts-ignore
+              maxHeight: "88vh",
+              // @ts-ignore
+              overflowY: "auto",
+            },
+          ]}
+        >
           {children}
         </View>
       </View>

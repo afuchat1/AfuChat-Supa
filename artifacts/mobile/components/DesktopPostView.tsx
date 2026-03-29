@@ -155,7 +155,7 @@ export function DesktopPostView({ postId, onClose }: { postId: string; onClose: 
       await supabase.from("post_acknowledgments").insert({ post_id: post.id, user_id: user.id });
       setPost((p) => p ? { ...p, liked: true, likeCount: p.likeCount + 1 } : p);
       if (post.author.id !== user.id) {
-        notifyPostLike({ postId: post.id, postAuthorId: post.author.id, likerName: user.user_metadata?.display_name || "Someone", likerUserId: user.id }).catch(() => {});
+        notifyPostLike({ postId: post.id, postAuthorId: post.author.id, likerName: user.user_metadata?.display_name || "Someone" }).catch(() => {});
       }
     }
     setLiking(false);
@@ -174,7 +174,7 @@ export function DesktopPostView({ postId, onClose }: { postId: string; onClose: 
     } else {
       setReplyText("");
       if (post.author.id !== user.id) {
-        notifyPostReply({ postId: post.id, postAuthorId: post.author.id, replierName: user.user_metadata?.display_name || "Someone", replierUserId: user.id, replyPreview: replyText.trim() }).catch(() => {});
+        notifyPostReply({ postId: post.id, postAuthorId: post.author.id, replierName: user.user_metadata?.display_name || "Someone" }).catch(() => {});
       }
       setPost((p) => p ? { ...p, replyCount: p.replyCount + 1 } : p);
       loadReplies();
@@ -237,11 +237,10 @@ export function DesktopPostView({ postId, onClose }: { postId: string; onClose: 
             </TouchableOpacity>
 
             <RichText
+              text={post.content}
               style={[pv.postContent, { color: colors.text }]}
               linkColor={BRAND}
-            >
-              {post.content}
-            </RichText>
+            />
 
             {allImages.length > 0 && (
               <View style={pv.imageRow}>
