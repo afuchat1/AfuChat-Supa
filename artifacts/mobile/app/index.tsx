@@ -22,6 +22,10 @@ export default function IndexScreen() {
     }
   }, [session, profile, loading]);
 
+  if (Platform.OS === "web") {
+    return null;
+  }
+
   return (
     <View style={styles.container}>
       <Image source={afuLogo} style={styles.logo} resizeMode="contain" />

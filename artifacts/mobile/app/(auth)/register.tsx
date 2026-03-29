@@ -19,14 +19,28 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
+const desktopCardStyle = (isDark: boolean, colors: any) => ({
+  width: 460,
+  backgroundColor: colors.background,
+  borderRadius: 20,
+  paddingHorizontal: 40,
+  paddingVertical: 40,
+  // @ts-ignore
+  boxShadow: isDark
+    ? "0 0 0 1px rgba(255,255,255,0.07), 0 16px 48px rgba(0,0,0,0.5)"
+    : "0 0 0 1px rgba(0,0,0,0.06), 0 16px 48px rgba(0,0,0,0.1)",
+});
+
 export default function RegisterScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const isDesktop = useIsDesktop();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
@@ -127,15 +141,20 @@ export default function RegisterScreen() {
     return (
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={[styles.root, { backgroundColor: colors.background }]}
+        style={[
+          styles.root,
+          { backgroundColor: isDesktop ? (isDark ? "#0d0d0d" : "#f0f2f5") : colors.background },
+        ]}
       >
         <ScrollView
-          contentContainerStyle={[
-            styles.scroll,
-            { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 },
-          ]}
+          contentContainerStyle={
+            isDesktop
+              ? { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingVertical: 40, paddingHorizontal: 24 }
+              : { ...styles.scroll, paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 }
+          }
           keyboardShouldPersistTaps="handled"
         >
+          <View style={isDesktop ? desktopCardStyle(isDark, colors) : undefined}>
           <View style={styles.headerWrap}>
             <Image source={afuSymbol} style={{ width: 64, height: 64, marginBottom: 12, tintColor: Colors.brand }} resizeMode="contain" />
             <Text style={[styles.title, { color: colors.text, fontSize: 24 }]}>Verify Your Email</Text>
@@ -181,6 +200,7 @@ export default function RegisterScreen() {
               <Text style={[styles.backToFormText, { color: Colors.brand }]}>Back</Text>
             </TouchableOpacity>
           </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     );
@@ -189,15 +209,20 @@ export default function RegisterScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={[styles.root, { backgroundColor: colors.background }]}
+      style={[
+        styles.root,
+        { backgroundColor: isDesktop ? (isDark ? "#0d0d0d" : "#f0f2f5") : colors.background },
+      ]}
     >
       <ScrollView
-        contentContainerStyle={[
-          styles.scroll,
-          { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 },
-        ]}
+        contentContainerStyle={
+          isDesktop
+            ? { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingVertical: 40, paddingHorizontal: 24 }
+            : { ...styles.scroll, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }
+        }
         keyboardShouldPersistTaps="handled"
       >
+        <View style={isDesktop ? desktopCardStyle(isDark, colors) : undefined}>
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.backBtn}
@@ -301,6 +326,7 @@ export default function RegisterScreen() {
               </Text>
             </Text>
           </TouchableOpacity>
+        </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

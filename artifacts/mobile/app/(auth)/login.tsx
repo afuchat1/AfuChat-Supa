@@ -20,6 +20,7 @@ import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
@@ -28,8 +29,9 @@ const afuSymbol = require("@/assets/images/afu-symbol.png");
 WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const isDesktop = useIsDesktop();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
@@ -251,15 +253,29 @@ export default function LoginScreen() {
     return (
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={[styles.root, { backgroundColor: colors.background }]}
+        style={[
+          styles.root,
+          { backgroundColor: isDesktop ? (isDark ? "#0d0d0d" : "#f0f2f5") : colors.background },
+        ]}
       >
         <ScrollView
-          contentContainerStyle={[
-            styles.scroll,
-            { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 },
-          ]}
+          contentContainerStyle={
+            isDesktop
+              ? { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingVertical: 40, paddingHorizontal: 24 }
+              : { ...styles.scroll, paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 }
+          }
           keyboardShouldPersistTaps="handled"
         >
+          <View
+            style={isDesktop ? {
+              width: 440,
+              backgroundColor: colors.background,
+              borderRadius: 20,
+              padding: 40,
+              // @ts-ignore
+              boxShadow: isDark ? "0 0 0 1px rgba(255,255,255,0.07), 0 16px 48px rgba(0,0,0,0.5)" : "0 0 0 1px rgba(0,0,0,0.06), 0 16px 48px rgba(0,0,0,0.1)",
+            } : undefined}
+          >
           <View style={styles.logoWrap}>
             <Image source={afuSymbol} style={{ width: 64, height: 64, marginBottom: 12, tintColor: Colors.brand }} resizeMode="contain" />
             <Text style={[styles.appName, { color: colors.text, fontSize: 24 }]}>Reset Password</Text>
@@ -368,6 +384,7 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
           )}
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     );
@@ -376,15 +393,34 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={[styles.root, { backgroundColor: colors.background }]}
+      style={[
+        styles.root,
+        { backgroundColor: isDesktop ? (isDark ? "#0d0d0d" : "#f0f2f5") : colors.background },
+      ]}
     >
       <ScrollView
         contentContainerStyle={[
-          styles.scroll,
-          { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 },
+          isDesktop
+            ? { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingVertical: 40, paddingHorizontal: 24 }
+            : { ...styles.scroll, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 },
         ]}
         keyboardShouldPersistTaps="handled"
       >
+        <View
+          style={[
+            isDesktop && {
+              width: 440,
+              backgroundColor: colors.background,
+              borderRadius: 20,
+              paddingHorizontal: 40,
+              paddingVertical: 40,
+              // @ts-ignore
+              boxShadow: isDark
+                ? "0 0 0 1px rgba(255,255,255,0.07), 0 16px 48px rgba(0,0,0,0.5)"
+                : "0 0 0 1px rgba(0,0,0,0.06), 0 16px 48px rgba(0,0,0,0.1)",
+            },
+          ]}
+        >
         <View style={[styles.logoWrap, { marginTop: 20 }]}>
           <Image source={afuSymbol} style={{ width: 88, height: 88, marginBottom: 16, tintColor: Colors.brand }} resizeMode="contain" />
           <Text style={[styles.appName, { color: colors.text }]}>AfuChat</Text>
@@ -504,6 +540,7 @@ export default function LoginScreen() {
               Create new account
             </Text>
           </TouchableOpacity>
+        </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

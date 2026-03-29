@@ -72,14 +72,18 @@ function ThemeSyncManager() {
   return null;
 }
 
+const bottomSheetAnim = Platform.OS === "web"
+  ? { animation: "fade" as const }
+  : { animation: "slide_from_bottom" as const, gestureDirection: "vertical" as const };
+
 function RootLayoutNav() {
   return (
     <Stack
       screenOptions={{
         headerShown: false,
-        animation: "slide_from_right",
-        animationDuration: 250,
-        gestureEnabled: true,
+        animation: Platform.OS === "web" ? "fade" : "slide_from_right",
+        animationDuration: Platform.OS === "web" ? 150 : 250,
+        gestureEnabled: Platform.OS !== "web",
         gestureDirection: "horizontal",
       }}
     >
@@ -88,9 +92,9 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
       <Stack.Screen name="chat/[id]" />
       <Stack.Screen name="contact/[id]" />
-      <Stack.Screen name="moments/create" options={{ animation: "slide_from_bottom", gestureDirection: "vertical" }} />
-      <Stack.Screen name="profile/edit" options={{ animation: "slide_from_bottom", gestureDirection: "vertical" }} />
-      <Stack.Screen name="group/create" options={{ animation: "slide_from_bottom", gestureDirection: "vertical" }} />
+      <Stack.Screen name="moments/create" options={bottomSheetAnim} />
+      <Stack.Screen name="profile/edit" options={bottomSheetAnim} />
+      <Stack.Screen name="group/create" options={bottomSheetAnim} />
       <Stack.Screen name="group/[id]" />
       <Stack.Screen name="ai/index" />
       <Stack.Screen name="post/[id]" />
@@ -115,9 +119,9 @@ function RootLayoutNav() {
       <Stack.Screen name="mini-programs/transfer" />
       <Stack.Screen name="mini-programs/fee-details" />
       <Stack.Screen name="notifications" />
-      <Stack.Screen name="stories/create" options={{ animation: "slide_from_bottom", gestureDirection: "vertical" }} />
+      <Stack.Screen name="stories/create" options={bottomSheetAnim} />
       <Stack.Screen name="stories/view" options={{ animation: "fade" }} />
-      <Stack.Screen name="red-envelope/[id]" options={{ animation: "slide_from_bottom", gestureDirection: "vertical" }} />
+      <Stack.Screen name="red-envelope/[id]" options={bottomSheetAnim} />
       <Stack.Screen name="settings/privacy" />
       <Stack.Screen name="settings/notifications" />
       <Stack.Screen name="settings/chat" />
@@ -127,8 +131,8 @@ function RootLayoutNav() {
       <Stack.Screen name="referral" />
       <Stack.Screen name="language-settings" />
       <Stack.Screen name="linked-accounts" />
-      <Stack.Screen name="terms" options={{ animation: "slide_from_bottom", gestureDirection: "vertical" }} />
-      <Stack.Screen name="privacy" options={{ animation: "slide_from_bottom", gestureDirection: "vertical" }} />
+      <Stack.Screen name="terms" options={bottomSheetAnim} />
+      <Stack.Screen name="privacy" options={bottomSheetAnim} />
       <Stack.Screen name="[handle]" options={{ animation: "fade" }} />
     </Stack>
   );
@@ -199,11 +203,11 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
-              <DesktopWrapper>
-                <ThemeProvider>
-                  <StatusBarManager />
-                  <AuthProvider>
-                    <ThemeSyncManager />
+              <ThemeProvider>
+                <StatusBarManager />
+                <AuthProvider>
+                  <ThemeSyncManager />
+                  <DesktopWrapper>
                     <LanguageProvider>
                       <PushNotificationManager />
                       <AppLockGate>
@@ -217,9 +221,9 @@ export default function RootLayout() {
                         onDismiss={dismissAlert}
                       />
                     </LanguageProvider>
-                  </AuthProvider>
-                </ThemeProvider>
-              </DesktopWrapper>
+                  </DesktopWrapper>
+                </AuthProvider>
+              </ThemeProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>

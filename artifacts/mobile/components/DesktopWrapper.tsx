@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Platform, StyleSheet, View, useWindowDimensions } from "react-native";
 import { useSegments, router } from "expo-router";
 import { DesktopSidebar } from "./DesktopSidebar";
 import { DesktopDetailProvider } from "@/context/DesktopDetailContext";
 import { useTheme } from "@/hooks/useTheme";
-import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 
 const DESKTOP_BREAKPOINT = 768;
 
@@ -16,20 +16,12 @@ export function DesktopWrapper({ children }: Props) {
   const { width } = useWindowDimensions();
   const { colors, isDark } = useTheme();
   const segments = useSegments();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { session } = useAuth();
 
-  useEffect(() => {
-    if (Platform.OS !== "web") return;
-    supabase.auth.getSession().then(({ data }) => {
-      setIsLoggedIn(!!data.session);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsLoggedIn(!!session);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
+  const isDesktop = Platform.OS === "web" && width >= DESKTOP_BREAKPOINT;
+  const isLoggedIn = !!session;
 
-  if (Platform.OS !== "web" || width < DESKTOP_BREAKPOINT) {
+  if (!isDesktop) {
     return (
       <DesktopDetailProvider>
         {children}
@@ -60,16 +52,18 @@ export function DesktopWrapper({ children }: Props) {
   return (
     <DesktopDetailProvider>
       <View style={[styles.root, { backgroundColor: bg }]}>
-        <View style={[
-          styles.appShell,
-          {
-            backgroundColor: colors.background,
-            // @ts-ignore
-            boxShadow: isDark
-              ? "0 0 0 1px rgba(255,255,255,0.06), 0 8px 32px rgba(0,0,0,0.5)"
-              : "0 0 0 1px rgba(0,0,0,0.06), 0 4px 24px rgba(0,0,0,0.08)",
-          },
-        ]}>
+        <View
+          style={[
+            styles.appShell,
+            {
+              backgroundColor: colors.background,
+              // @ts-ignore
+              boxShadow: isDark
+                ? "0 0 0 1px rgba(255,255,255,0.06), 0 8px 32px rgba(0,0,0,0.5)"
+                : "0 0 0 1px rgba(0,0,0,0.06), 0 4px 24px rgba(0,0,0,0.08)",
+            },
+          ]}
+        >
           {isLoggedIn && (
             <DesktopSidebar activeTab={activeTab} onTabPress={handleTabPress} />
           )}
@@ -86,11 +80,10 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "stretch",
   },
   appShell: {
     flex: 1,
-    width: "100%",
+    width: "100%" as any,
     maxWidth: 1380,
     flexDirection: "row",
     overflow: "hidden",
