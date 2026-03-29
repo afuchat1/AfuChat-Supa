@@ -740,6 +740,7 @@ export default function ChatScreen() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showGiftPicker, setShowGiftPicker] = useState(false);
   const [gifts, setGifts] = useState<Gift[]>([]);
+  const [giftsLoading, setGiftsLoading] = useState(false);
   const [giftSending, setGiftSending] = useState(false);
   const [giftMsg, setGiftMsg] = useState("");
   const [giftReveal, setGiftReveal] = useState<{ content: string; isReceiver: boolean } | null>(null);
@@ -1426,12 +1427,17 @@ export default function ChatScreen() {
   }
 
   async function loadGifts() {
-    const { data } = await supabase.from("gifts").select("*").order("base_xp_cost", { ascending: true });
-    if (data) {
-      setGifts(data.map((g: any) => ({
-        ...g,
-        acoin_price: getDynamicPrice(g.id, g.base_xp_cost),
-      })));
+    setGiftsLoading(true);
+    try {
+      const { data, error } = await supabase.from("gifts").select("*").order("base_xp_cost", { ascending: true });
+      if (data && data.length > 0) {
+        setGifts(data.map((g: any) => ({
+          ...g,
+          acoin_price: getDynamicPrice(g.id, g.base_xp_cost),
+        })));
+      }
+    } finally {
+      setGiftsLoading(false);
     }
   }
 
@@ -2442,26 +2448,38 @@ export default function ChatScreen() {
             <Text style={[st.giftModalSectionLabel, { color: colors.textMuted }]}>
               To: {chatInfo?.other_name || "Friend"}
             </Text>
-            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-              <View style={st.giftGrid}>
-                {gifts.map((gift) => (
-                  <TouchableOpacity
-                    key={gift.id}
-                    style={[st.giftModalItem, { backgroundColor: colors.inputBg, borderColor: colors.border }]}
-                    onPress={() => sendGift(gift)}
-                    disabled={giftSending}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={st.giftModalEmoji}>{gift.emoji}</Text>
-                    <Text style={[st.giftModalName, { color: colors.text }]} numberOfLines={1}>{gift.name}</Text>
-                    <View style={st.giftModalPriceRow}>
-                      <Text style={[st.giftModalPrice, { color: Colors.gold }]}>{gift.acoin_price ?? gift.base_xp_cost}</Text>
-                      <Text style={[st.giftModalCurrency, { color: colors.textMuted }]}> ACoin</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
+            <View style={st.giftScrollContainer}>
+              {giftsLoading ? (
+                <View style={st.giftModalLoadingCenter}>
+                  <ActivityIndicator color={BRAND} size="large" />
+                  <Text style={[st.giftModalLoadingText, { color: colors.textMuted }]}>Loading gifts…</Text>
+                </View>
+              ) : gifts.length === 0 ? (
+                <View style={st.giftModalLoadingCenter}>
+                  <Text style={{ fontSize: 40 }}>🎁</Text>
+                  <Text style={[st.giftModalLoadingText, { color: colors.textMuted }]}>No gifts available</Text>
+                </View>
+              ) : (
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={st.giftGrid}>
+                  {gifts.map((gift) => (
+                    <TouchableOpacity
+                      key={gift.id}
+                      style={[st.giftModalItem, { backgroundColor: colors.inputBg, borderColor: colors.border }]}
+                      onPress={() => sendGift(gift)}
+                      disabled={giftSending}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={st.giftModalEmoji}>{gift.emoji}</Text>
+                      <Text style={[st.giftModalName, { color: colors.text }]} numberOfLines={1}>{gift.name}</Text>
+                      <View style={st.giftModalPriceRow}>
+                        <Text style={[st.giftModalPrice, { color: Colors.gold }]}>{gift.acoin_price ?? gift.base_xp_cost}</Text>
+                        <Text style={[st.giftModalCurrency, { color: colors.textMuted }]}> ACoin</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
             {giftSending && (
               <View style={st.giftModalLoading}>
                 <ActivityIndicator color={BRAND} size="small" />
@@ -2900,19 +2918,21 @@ const st = StyleSheet.create({
   giftRevealContainer: { width: "100%", borderRadius: 20, padding: 24, elevation: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 20 },
 
   giftModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 },
-  giftModalContainer: { width: "100%", maxHeight: "80%", borderRadius: 20, padding: 20, elevation: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 20 },
+  giftModalContainer: { width: "100%", height: "80%", borderRadius: 20, padding: 20, elevation: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 20 },
   giftModalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
   giftModalTitle: { fontSize: 20, fontFamily: "Inter_700Bold" },
   giftModalMsgRow: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 },
   giftModalMsgInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular" },
   giftModalSectionLabel: { fontSize: 13, fontFamily: "Inter_500Medium", marginBottom: 12 },
-  giftGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  giftScrollContainer: { flex: 1 },
+  giftGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, paddingBottom: 8 },
   giftModalItem: { width: "30%", borderRadius: 14, padding: 12, alignItems: "center", gap: 6, borderWidth: 1 },
   giftModalEmoji: { fontSize: 36 },
   giftModalName: { fontSize: 12, fontFamily: "Inter_600SemiBold", textAlign: "center" },
   giftModalPriceRow: { flexDirection: "row", alignItems: "center" },
   giftModalPrice: { fontSize: 13, fontFamily: "Inter_700Bold" },
   giftModalCurrency: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  giftModalLoadingCenter: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingVertical: 40 },
   giftModalLoading: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingTop: 12 },
   giftModalLoadingText: { fontSize: 13, fontFamily: "Inter_500Medium" },
   giftRevealContent: { alignItems: "center", paddingVertical: 20, gap: 12 },

@@ -17,6 +17,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { supabase } from "@/lib/supabase";
 import { DesktopChatView } from "./DesktopChatView";
+import { DesktopPostView } from "./DesktopPostView";
 
 type SuggestedUser = {
   id: string;
@@ -168,6 +169,10 @@ export function DesktopRightPanel({
 }) {
   const { detail, closeDetail } = useDesktopDetail();
   const { session } = useAuth();
+
+  if (detail?.type === "post") {
+    return <DesktopPostView postId={detail.id} onClose={closeDetail} />;
+  }
 
   if (activeTab === "index") {
     if (detail?.type === "chat") {

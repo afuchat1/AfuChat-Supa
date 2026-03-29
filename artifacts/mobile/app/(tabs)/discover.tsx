@@ -36,6 +36,8 @@ import { sharePost } from "@/lib/share";
 import { matchInterests, computeFeedScore, diversifyFeed, type FeedSignals } from "@/lib/feedAlgorithm";
 import { useLanguage } from "@/context/LanguageContext";
 import { translateText, LANG_LABELS } from "@/lib/translate";
+import { useDesktopDetail } from "@/context/DesktopDetailContext";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
 
 type PostItem = {
   id: string;
@@ -86,6 +88,8 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress }: { item
   const { preferredLang } = useLanguage();
   const { width: screenW } = useWindowDimensions();
   const cardInsets = useCardInsets();
+  const isDesktop = useIsDesktop();
+  const { openDetail } = useDesktopDetail();
   const [displayContent, setDisplayContent] = useState(item.content);
   const [isTranslated, setIsTranslated] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
@@ -110,7 +114,11 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress }: { item
   }, [preferredLang, item.content]);
 
   function openPost() {
-    router.push({ pathname: "/post/[id]", params: { id: item.id } });
+    if (isDesktop) {
+      openDetail({ type: "post", id: item.id });
+    } else {
+      router.push({ pathname: "/post/[id]", params: { id: item.id } });
+    }
   }
 
   async function capturePostImage() {
