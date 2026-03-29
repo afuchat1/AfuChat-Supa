@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { ActivityIndicator, Image, Platform, StyleSheet, View, Text } from "react-native";
 import { router } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
@@ -8,23 +8,38 @@ const afuLogo = require("@/assets/images/afu-symbol.png");
 
 export default function IndexScreen() {
   const { session, profile, loading } = useAuth();
+  const redirected = useRef(false);
 
-  useEffect(() => {
-    if (loading) return;
-    if (session) {
-      if (profile && !profile.onboarding_completed) {
-        router.replace({ pathname: "/onboarding", params: { userId: session.user.id } });
+  function doRedirect(hasSession: boolean, profileReady: boolean, profileOnboarded: boolean, userId?: string) {
+    if (redirected.current) return;
+    redirected.current = true;
+    if (hasSession) {
+      if (profileReady && !profileOnboarded && userId) {
+        router.replace({ pathname: "/onboarding", params: { userId } });
       } else {
         router.replace("/(tabs)");
       }
     } else {
       router.replace("/(tabs)/discover");
     }
+  }
+
+  useEffect(() => {
+    if (loading) return;
+    doRedirect(
+      !!session,
+      !!profile,
+      profile?.onboarding_completed ?? true,
+      session?.user?.id,
+    );
   }, [session, profile, loading]);
 
-  if (Platform.OS === "web") {
-    return null;
-  }
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      doRedirect(!!session, !!profile, profile?.onboarding_completed ?? true, session?.user?.id);
+    }, 6000);
+    return () => clearTimeout(timeout);
+  }, []);
 
   return (
     <View style={styles.container}>
