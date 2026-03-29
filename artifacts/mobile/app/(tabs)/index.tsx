@@ -19,6 +19,8 @@ import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
+import { useDesktopDetail } from "@/context/DesktopDetailContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { StoryRing } from "@/components/ui/StoryRing";
 import { Separator } from "@/components/ui/Separator";
@@ -70,7 +72,7 @@ function formatTime(iso: string): string {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-function ChatRow({ item }: { item: ChatItem }) {
+function ChatRow({ item, onPress }: { item: ChatItem; onPress: () => void }) {
   const { colors } = useTheme();
   const displayName = item.is_group || item.is_channel ? item.name : item.other_display_name;
   const avatar = item.is_group || item.is_channel ? item.avatar_url : item.other_avatar;
@@ -94,10 +96,7 @@ function ChatRow({ item }: { item: ChatItem }) {
   return (
     <TouchableOpacity
       style={[styles.row, { backgroundColor: colors.surface }]}
-      onPress={() => {
-        Haptics.selectionAsync();
-        router.push({ pathname: "/chat/[id]", params: { id: item.id } });
-      }}
+      onPress={onPress}
       activeOpacity={0.7}
     >
       <Avatar uri={avatar} name={displayName || "Chat"} size={50} />
@@ -242,6 +241,8 @@ const storyBarStyles = StyleSheet.create({
 export default function ChatsScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const isDesktop = useIsDesktop();
+  const { openDetail } = useDesktopDetail();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const [chats, setChats] = useState<ChatItem[]>([]);
@@ -545,7 +546,19 @@ export default function ChatsScreen() {
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <ChatRow item={item} />}
+          renderItem={({ item }) => (
+            <ChatRow
+              item={item}
+              onPress={() => {
+                Haptics.selectionAsync();
+                if (isDesktop) {
+                  openDetail({ type: "chat", id: item.id });
+                } else {
+                  router.push({ pathname: "/chat/[id]", params: { id: item.id } });
+                }
+              }}
+            />
+          )}
           ItemSeparatorComponent={() => <Separator indent={74} />}
           ListHeaderComponent={user ? <StoriesBar userId={user.id} colors={colors} /> : null}
           refreshControl={

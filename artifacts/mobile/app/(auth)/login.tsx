@@ -251,31 +251,27 @@ export default function LoginScreen() {
 
   if (resetStep !== "idle") {
     return (
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={[
-          styles.root,
-          { backgroundColor: isDesktop ? (isDark ? "#0d0d0d" : "#f0f2f5") : colors.background },
-        ]}
-      >
+      <View style={[styles.root, { flexDirection: isDesktop ? "row" : "column", backgroundColor: isDesktop ? (isDark ? "#0a0a0a" : "#ffffff") : colors.background }]}>
+        {isDesktop && (
+          <View style={[authSplit.brandPanel, { backgroundColor: Colors.brand }]}>
+            <Image source={afuSymbol} style={{ width: 80, height: 80, tintColor: "#fff", marginBottom: 28 }} resizeMode="contain" />
+            <Text style={authSplit.brandTitle}>AfuChat</Text>
+            <Text style={authSplit.brandTagline}>Connect with everyone, everywhere.</Text>
+          </View>
+        )}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1, backgroundColor: isDesktop ? (isDark ? "#111113" : "#ffffff") : colors.background }}
+        >
         <ScrollView
           contentContainerStyle={
             isDesktop
-              ? { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingVertical: 40, paddingHorizontal: 24 }
+              ? { flexGrow: 1, justifyContent: "center", paddingHorizontal: 60, paddingVertical: 48 }
               : { ...styles.scroll, paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 }
           }
           keyboardShouldPersistTaps="handled"
         >
-          <View
-            style={isDesktop ? {
-              width: 440,
-              backgroundColor: colors.background,
-              borderRadius: 20,
-              padding: 40,
-              // @ts-ignore
-              boxShadow: isDark ? "0 0 0 1px rgba(255,255,255,0.07), 0 16px 48px rgba(0,0,0,0.5)" : "0 0 0 1px rgba(0,0,0,0.06), 0 16px 48px rgba(0,0,0,0.1)",
-            } : undefined}
-          >
+          <View style={isDesktop ? { maxWidth: 400, width: "100%" as any, alignSelf: "center" } : undefined}>
           <View style={styles.logoWrap}>
             <Image source={afuSymbol} style={{ width: 64, height: 64, marginBottom: 12, tintColor: Colors.brand }} resizeMode="contain" />
             <Text style={[styles.appName, { color: colors.text, fontSize: 24 }]}>Reset Password</Text>
@@ -386,48 +382,58 @@ export default function LoginScreen() {
           )}
           </View>
         </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </View>
     );
   }
 
   return (
+    <View style={[styles.root, { flexDirection: isDesktop ? "row" : "column", backgroundColor: isDesktop ? (isDark ? "#0a0a0a" : "#ffffff") : colors.background }]}>
+      {isDesktop && (
+        <View style={[authSplit.brandPanel, { backgroundColor: Colors.brand }]}>
+          <Image source={afuSymbol} style={{ width: 80, height: 80, tintColor: "#fff", marginBottom: 28 }} resizeMode="contain" />
+          <Text style={authSplit.brandTitle}>AfuChat</Text>
+          <Text style={authSplit.brandTagline}>Connect with everyone, everywhere.</Text>
+          <View style={authSplit.featureList}>
+            {[
+              { icon: "chatbubbles", text: "Real-time messaging with end-to-end privacy" },
+              { icon: "compass", text: "Discover trending content and creators" },
+              { icon: "people", text: "Groups, channels, and communities" },
+              { icon: "gift", text: "Send gifts and red envelopes to friends" },
+            ].map((f) => (
+              <View key={f.text} style={authSplit.featureRow}>
+                <Ionicons name={f.icon as any} size={20} color="rgba(255,255,255,0.9)" />
+                <Text style={authSplit.featureText}>{f.text}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={[
-        styles.root,
-        { backgroundColor: isDesktop ? (isDark ? "#0d0d0d" : "#f0f2f5") : colors.background },
-      ]}
+      style={{ flex: 1, backgroundColor: isDesktop ? (isDark ? "#111113" : "#ffffff") : colors.background }}
     >
       <ScrollView
-        contentContainerStyle={[
+        contentContainerStyle={
           isDesktop
-            ? { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingVertical: 40, paddingHorizontal: 24 }
-            : { ...styles.scroll, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 },
-        ]}
+            ? { flexGrow: 1, justifyContent: "center", paddingHorizontal: 60, paddingVertical: 48 }
+            : { ...styles.scroll, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }
+        }
         keyboardShouldPersistTaps="handled"
       >
-        <View
-          style={[
-            isDesktop && {
-              width: 440,
-              backgroundColor: colors.background,
-              borderRadius: 20,
-              paddingHorizontal: 40,
-              paddingVertical: 40,
-              // @ts-ignore
-              boxShadow: isDark
-                ? "0 0 0 1px rgba(255,255,255,0.07), 0 16px 48px rgba(0,0,0,0.5)"
-                : "0 0 0 1px rgba(0,0,0,0.06), 0 16px 48px rgba(0,0,0,0.1)",
-            },
-          ]}
-        >
-        <View style={[styles.logoWrap, { marginTop: 20 }]}>
-          <Image source={afuSymbol} style={{ width: 88, height: 88, marginBottom: 16, tintColor: Colors.brand }} resizeMode="contain" />
-          <Text style={[styles.appName, { color: colors.text }]}>AfuChat</Text>
-          <Text style={[styles.tagline, { color: colors.textSecondary }]}>
-            Connect with everyone
-          </Text>
-        </View>
+        <View style={isDesktop ? { maxWidth: 400, width: "100%" as any, alignSelf: "center" } : undefined}>
+        {isDesktop ? (
+          <View style={{ marginBottom: 40 }}>
+            <Text style={[styles.appName, { color: colors.text, textAlign: "left", marginBottom: 8 }]}>Sign in to AfuChat</Text>
+            <Text style={[styles.tagline, { color: colors.textSecondary }]}>Welcome back. Enter your credentials below.</Text>
+          </View>
+        ) : (
+          <View style={[styles.logoWrap, { marginTop: 20 }]}>
+            <Image source={afuSymbol} style={{ width: 88, height: 88, marginBottom: 16, tintColor: Colors.brand }} resizeMode="contain" />
+            <Text style={[styles.appName, { color: colors.text }]}>AfuChat</Text>
+            <Text style={[styles.tagline, { color: colors.textSecondary }]}>Connect with everyone</Text>
+          </View>
+        )}
 
         <View style={styles.form}>
           <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
@@ -544,8 +550,43 @@ export default function LoginScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </View>
   );
 }
+
+const authSplit = StyleSheet.create({
+  brandPanel: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 60,
+    gap: 0,
+  },
+  brandTitle: {
+    fontSize: 52,
+    fontFamily: "Inter_700Bold",
+    color: "#fff",
+    marginBottom: 16,
+    letterSpacing: -1,
+  },
+  brandTagline: {
+    fontSize: 18,
+    fontFamily: "Inter_400Regular",
+    color: "rgba(255,255,255,0.85)",
+    textAlign: "center",
+    lineHeight: 28,
+    marginBottom: 48,
+  },
+  featureList: { gap: 20, width: "100%" as any, maxWidth: 380 },
+  featureRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  featureText: {
+    fontSize: 16,
+    fontFamily: "Inter_400Regular",
+    color: "rgba(255,255,255,0.9)",
+    flex: 1,
+    lineHeight: 22,
+  },
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1 },

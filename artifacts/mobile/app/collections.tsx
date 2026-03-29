@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +15,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
@@ -42,9 +43,132 @@ type CollectionItem = {
 const PALETTE = ["#00BCD4", "#BF5AF2", "#FF9500", "#34C759", "#007AFF", "#FF3B30", "#D4A853", "#AF52DE"];
 const EMOJIS = ["📁", "⭐", "💡", "📌", "🔖", "🎯", "🧠", "❤️", "🔥", "✨", "🎵", "📚"];
 
+const ITEM_TYPE_META: Record<string, { icon: string; label: string; bg: string }> = {
+  post: { icon: "newspaper-outline", label: "Post", bg: "#007AFF" },
+  link: { icon: "link-outline", label: "Link", bg: "#34C759" },
+  image: { icon: "image-outline", label: "Image", bg: "#FF9500" },
+  file: { icon: "document-outline", label: "File", bg: "#BF5AF2" },
+};
+
+function formatDate(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  const diff = now.getTime() - d.getTime();
+  if (diff < 86400000) return "Today";
+  if (diff < 172800000) return "Yesterday";
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+function CreateSheet({
+  colors,
+  isDark,
+  onClose,
+  onCreate,
+}: {
+  colors: any;
+  isDark: boolean;
+  onClose: () => void;
+  onCreate: (name: string, emoji: string, color: string, isPrivate: boolean) => void;
+}) {
+  const [name, setName] = useState("");
+  const [emoji, setEmoji] = useState("📁");
+  const [color, setColor] = useState(Colors.brand);
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  async function handleCreate() {
+    if (!name.trim()) { showAlert("Required", "Enter a collection name"); return; }
+    setCreating(true);
+    await onCreate(name.trim(), emoji, color, isPrivate);
+    setCreating(false);
+  }
+
+  return (
+    <View style={[sheet.overlay]}>
+      <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} />
+      <View style={[sheet.container, { backgroundColor: colors.surface }]}>
+        <View style={sheet.handleBar} />
+        <Text style={[sheet.title, { color: colors.text }]}>New Collection</Text>
+
+        <Text style={[sheet.label, { color: colors.textMuted }]}>ICON</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={sheet.emojiScroll} contentContainerStyle={{ gap: 8 }}>
+          {EMOJIS.map((e) => (
+            <TouchableOpacity
+              key={e}
+              style={[sheet.emojiBtn, { backgroundColor: emoji === e ? color + "28" : colors.backgroundTertiary }, emoji === e && { borderColor: color, borderWidth: 2 }]}
+              onPress={() => setEmoji(e)}
+            >
+              <Text style={{ fontSize: 22 }}>{e}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        <Text style={[sheet.label, { color: colors.textMuted }]}>NAME</Text>
+        <View style={[sheet.inputRow, { backgroundColor: colors.backgroundTertiary }]}>
+          <Text style={{ fontSize: 20 }}>{emoji}</Text>
+          <TextInput
+            style={[sheet.input, { color: colors.text }]}
+            placeholder="My collection"
+            placeholderTextColor={colors.textMuted}
+            value={name}
+            onChangeText={setName}
+            autoFocus
+          />
+        </View>
+
+        <Text style={[sheet.label, { color: colors.textMuted }]}>COLOR</Text>
+        <View style={sheet.colorRow}>
+          {PALETTE.map((c) => (
+            <TouchableOpacity
+              key={c}
+              style={[sheet.colorDot, { backgroundColor: c }, color === c && sheet.colorDotActive]}
+              onPress={() => setColor(c)}
+            >
+              {color === c && <Ionicons name="checkmark" size={14} color="#fff" />}
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <TouchableOpacity
+          style={[sheet.privacyRow, { backgroundColor: colors.backgroundTertiary }]}
+          onPress={() => setIsPrivate((p) => !p)}
+          activeOpacity={0.7}
+        >
+          <View style={[sheet.privacyIcon, { backgroundColor: isPrivate ? "#FF9500" + "22" : colors.backgroundSecondary }]}>
+            <Ionicons name={isPrivate ? "lock-closed" : "globe-outline"} size={18} color={isPrivate ? "#FF9500" : colors.textMuted} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[sheet.privacyTitle, { color: colors.text }]}>
+              {isPrivate ? "Private" : "Public"}
+            </Text>
+            <Text style={[sheet.privacySub, { color: colors.textMuted }]}>
+              {isPrivate ? "Only you can see this" : "Visible to everyone"}
+            </Text>
+          </View>
+          <View style={[sheet.toggle, { backgroundColor: isPrivate ? "#FF9500" : colors.backgroundSecondary }]}>
+            <View style={[sheet.toggleThumb, { transform: [{ translateX: isPrivate ? 20 : 2 }] }]} />
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[sheet.createBtn, { backgroundColor: color, opacity: creating ? 0.7 : 1 }]}
+          onPress={handleCreate}
+          disabled={creating}
+        >
+          {creating
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={sheet.createBtnText}>Create Collection</Text>
+          }
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 export default function CollectionsScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { user } = useAuth();
+  const isDesktop = useIsDesktop();
   const insets = useSafeAreaInsets();
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,11 +176,6 @@ export default function CollectionsScreen() {
   const [collectionItems, setCollectionItems] = useState<CollectionItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
-  const [createName, setCreateName] = useState("");
-  const [createEmoji, setCreateEmoji] = useState("📁");
-  const [createColor, setCreateColor] = useState(Colors.brand);
-  const [createPrivate, setCreatePrivate] = useState(false);
-  const [creating, setCreating] = useState(false);
 
   const loadCollections = useCallback(async () => {
     if (!user) return;
@@ -84,253 +203,413 @@ export default function CollectionsScreen() {
     setLoadingItems(false);
   }
 
-  async function createCollection() {
-    if (!user || !createName.trim()) { showAlert("Required", "Enter a collection name"); return; }
-    setCreating(true);
+  async function handleCreate(name: string, emoji: string, color: string, isPrivate: boolean) {
+    if (!user) return;
     const { data, error } = await supabase.from("collections").insert({
-      user_id: user.id, name: createName.trim(), emoji: createEmoji,
-      color: createColor, is_private: createPrivate, item_count: 0,
+      user_id: user.id, name, emoji, color, is_private: isPrivate, item_count: 0,
     }).select().single();
-    setCreating(false);
     if (error) { showAlert("Error", error.message); return; }
     setCollections((prev) => [data, ...prev]);
     setShowCreate(false);
-    setCreateName(""); setCreateEmoji("📁"); setCreateColor(Colors.brand); setCreatePrivate(false);
-    showAlert("Created!", `${createEmoji} ${createName} is ready`);
+    showAlert("Created!", `${emoji} ${name} is ready`);
   }
 
   async function deleteCollection(col: Collection) {
-    showAlert("Delete Collection?", `This will remove "${col.name}" and all its saved items.`, [
-      { text: "Cancel" },
+    showAlert("Delete Collection?", `This will permanently remove "${col.name}" and all saved items.`, [
+      { text: "Cancel", style: "cancel" },
       {
         text: "Delete", style: "destructive",
         onPress: async () => {
           await supabase.from("collection_items").delete().eq("collection_id", col.id);
           await supabase.from("collections").delete().eq("id", col.id);
           setCollections((prev) => prev.filter((c) => c.id !== col.id));
+          if (selectedCollection?.id === col.id) setSelectedCollection(null);
         },
       },
     ]);
   }
 
-  async function removeFromCollection(item: CollectionItem) {
+  async function removeItem(item: CollectionItem) {
     await supabase.from("collection_items").delete().eq("id", item.id);
     if (selectedCollection) {
-      await supabase.from("collections").update({ item_count: Math.max(0, selectedCollection.item_count - 1) }).eq("id", selectedCollection.id);
+      await supabase.from("collections")
+        .update({ item_count: Math.max(0, selectedCollection.item_count - 1) })
+        .eq("id", selectedCollection.id);
     }
     setCollectionItems((prev) => prev.filter((i) => i.id !== item.id));
   }
 
-  const itemTypeIcon = (type: string) => {
-    const m: Record<string, any> = { post: "newspaper-outline", link: "link-outline", image: "image-outline", file: "document-outline" };
-    return m[type] || "bookmark-outline";
-  };
+  const bg = isDark ? "#0d0d0d" : "#f7f9fb";
 
-  // Detail view
   if (selectedCollection) {
     return (
-      <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
-        <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => setSelectedCollection(null)} hitSlop={12}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+      <View style={[styles.root, { backgroundColor: bg, paddingTop: insets.top }]}>
+        <View style={[styles.detailHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={() => setSelectedCollection(null)} style={styles.backBtn} hitSlop={10}>
+            <Ionicons name="arrow-back" size={22} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.colHeaderEmoji}>{selectedCollection.emoji}</Text>
+          <View style={[styles.colIconBig, { backgroundColor: selectedCollection.color + "22" }]}>
+            <Text style={{ fontSize: 28 }}>{selectedCollection.emoji}</Text>
+          </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>{selectedCollection.name}</Text>
-            <Text style={[styles.headerSub, { color: colors.textMuted }]}>
-              {selectedCollection.item_count} items · {selectedCollection.is_private ? "🔒 Private" : "Public"}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text style={[styles.detailTitle, { color: colors.text }]}>{selectedCollection.name}</Text>
+              {selectedCollection.is_private && (
+                <Ionicons name="lock-closed" size={13} color={colors.textMuted} />
+              )}
+            </View>
+            <Text style={[styles.detailSub, { color: colors.textMuted }]}>
+              {selectedCollection.item_count} saved item{selectedCollection.item_count !== 1 ? "s" : ""}
             </Text>
           </View>
-          <TouchableOpacity onPress={() => deleteCollection(selectedCollection)} hitSlop={10}>
-            <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+          <TouchableOpacity
+            onPress={() => deleteCollection(selectedCollection)}
+            style={[styles.iconBtn, { backgroundColor: "#FF3B30" + "18" }]}
+            hitSlop={8}
+          >
+            <Ionicons name="trash-outline" size={18} color="#FF3B30" />
           </TouchableOpacity>
         </View>
 
         {loadingItems ? (
-          <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} />
+          <View style={styles.center}>
+            <ActivityIndicator color={Colors.brand} />
+          </View>
         ) : collectionItems.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={{ fontSize: 48 }}>{selectedCollection.emoji}</Text>
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>Collection is empty</Text>
-            <Text style={[styles.emptySub, { color: colors.textMuted }]}>Save posts, links, and media here from anywhere in the app</Text>
+          <View style={styles.center}>
+            <Text style={{ fontSize: 56 }}>{selectedCollection.emoji}</Text>
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>Empty collection</Text>
+            <Text style={[styles.emptySub, { color: colors.textMuted }]}>
+              Save posts, links, and media here from anywhere in the app
+            </Text>
           </View>
         ) : (
           <FlatList
             data={collectionItems}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={{ paddingBottom: 40 }}
-            renderItem={({ item }) => (
-              <View style={[styles.itemRow, { backgroundColor: colors.surface }]}>
-                <View style={[styles.itemIcon, { backgroundColor: selectedCollection.color + "18" }]}>
-                  <Ionicons name={itemTypeIcon(item.item_type)} size={20} color={selectedCollection.color} />
-                </View>
+            contentContainerStyle={{ paddingVertical: 12, gap: 1 }}
+            renderItem={({ item }) => {
+              const meta = ITEM_TYPE_META[item.item_type] || ITEM_TYPE_META.file;
+              return (
                 <TouchableOpacity
-                  style={{ flex: 1 }}
+                  style={[styles.itemCard, { backgroundColor: colors.surface }]}
                   onPress={() => item.url && router.push(item.url as any)}
+                  activeOpacity={0.75}
                 >
-                  <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={2}>{item.title || item.url || "Saved item"}</Text>
-                  <Text style={[styles.itemMeta, { color: colors.textMuted }]}>
-                    {item.item_type} · {new Date(item.added_at).toLocaleDateString()}
-                  </Text>
+                  <View style={[styles.itemTypeDot, { backgroundColor: meta.bg + "22" }]}>
+                    <Ionicons name={meta.icon as any} size={20} color={meta.bg} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={2}>
+                      {item.title || item.url || "Saved item"}
+                    </Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 }}>
+                      <View style={[styles.typePill, { backgroundColor: meta.bg + "18" }]}>
+                        <Text style={[styles.typePillText, { color: meta.bg }]}>{meta.label}</Text>
+                      </View>
+                      <Text style={[styles.itemDate, { color: colors.textMuted }]}>{formatDate(item.added_at)}</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity onPress={() => removeItem(item)} hitSlop={10} style={styles.removeBtn}>
+                    <Ionicons name="close-circle-outline" size={20} color={colors.textMuted} />
+                  </TouchableOpacity>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => removeFromCollection(item)} hitSlop={10}>
-                  <Ionicons name="close-circle" size={20} color={colors.textMuted} />
-                </TouchableOpacity>
-              </View>
-            )}
+              );
+            }}
           />
         )}
       </View>
     );
   }
 
-  // Main grid view
   return (
-    <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
+    <View style={[styles.root, { backgroundColor: bg, paddingTop: insets.top }]}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Collections</Text>
-          <Text style={[styles.headerSub, { color: colors.textMuted }]}>Save posts, links & media in folders</Text>
+          <Text style={[styles.headerSub, { color: colors.textMuted }]}>
+            {collections.length} collection{collections.length !== 1 ? "s" : ""}
+          </Text>
         </View>
         <TouchableOpacity
-          style={[styles.createBtn, { backgroundColor: Colors.brand }]}
+          style={[styles.newBtn, { backgroundColor: Colors.brand }]}
           onPress={() => setShowCreate(true)}
         >
-          <Ionicons name="add" size={20} color="#fff" />
+          <Ionicons name="add" size={18} color="#fff" />
+          <Text style={styles.newBtnText}>New</Text>
         </TouchableOpacity>
       </View>
 
       {loading ? (
-        <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} />
+        <View style={styles.center}>
+          <ActivityIndicator color={Colors.brand} />
+        </View>
       ) : collections.length === 0 ? (
-        <View style={styles.empty}>
-          <Ionicons name="folder-open-outline" size={56} color={colors.textMuted} />
+        <View style={styles.center}>
+          <View style={[styles.emptyIconWrap, { backgroundColor: Colors.brand + "18" }]}>
+            <Ionicons name="bookmark-outline" size={44} color={Colors.brand} />
+          </View>
           <Text style={[styles.emptyTitle, { color: colors.text }]}>No collections yet</Text>
-          <Text style={[styles.emptySub, { color: colors.textMuted }]}>Organize your saved content into folders</Text>
-          <TouchableOpacity style={[styles.emptyBtn, { backgroundColor: Colors.brand }]} onPress={() => setShowCreate(true)}>
-            <Text style={styles.emptyBtnText}>Create Collection</Text>
+          <Text style={[styles.emptySub, { color: colors.textMuted }]}>
+            Organize your saved posts, links, and media into themed folders
+          </Text>
+          <TouchableOpacity style={[styles.emptyAction, { backgroundColor: Colors.brand }]} onPress={() => setShowCreate(true)}>
+            <Ionicons name="add" size={18} color="#fff" />
+            <Text style={styles.emptyActionText}>Create your first collection</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <FlatList
           data={collections}
           keyExtractor={(item) => item.id}
-          numColumns={2}
-          contentContainerStyle={{ padding: 12, gap: 10, paddingBottom: 40 }}
-          columnWrapperStyle={{ gap: 10 }}
+          numColumns={isDesktop ? 3 : 2}
+          key={isDesktop ? "desktop" : "mobile"}
+          contentContainerStyle={{ padding: 14, gap: 12, paddingBottom: 40 }}
+          columnWrapperStyle={{ gap: 12 }}
           renderItem={({ item }) => (
             <TouchableOpacity
               style={[styles.colCard, { backgroundColor: colors.surface, flex: 1 }]}
               onPress={() => openCollection(item)}
               onLongPress={() => deleteCollection(item)}
+              activeOpacity={0.8}
             >
-              <View style={[styles.colCardTop, { backgroundColor: item.color + "18" }]}>
+              <View style={[styles.colCardHeader, { backgroundColor: item.color + "18" }]}>
                 <Text style={styles.colEmoji}>{item.emoji}</Text>
-                {item.is_private && <Ionicons name="lock-closed" size={12} color={item.color} style={{ position: "absolute", top: 8, right: 8 }} />}
+                {item.is_private && (
+                  <View style={[styles.privateBadge, { backgroundColor: colors.surface + "dd" }]}>
+                    <Ionicons name="lock-closed" size={10} color={colors.textMuted} />
+                  </View>
+                )}
               </View>
-              <View style={styles.colCardBottom}>
+              <View style={styles.colCardBody}>
                 <Text style={[styles.colName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
-                <Text style={[styles.colCount, { color: colors.textMuted }]}>{item.item_count} items</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Text style={[styles.colCount, { color: colors.textMuted }]}>
+                    {item.item_count} item{item.item_count !== 1 ? "s" : ""}
+                  </Text>
+                  <View style={[styles.colorDot, { backgroundColor: item.color }]} />
+                </View>
               </View>
             </TouchableOpacity>
           )}
         />
       )}
 
-      {/* Create collection modal */}
-      <Modal visible={showCreate} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>New Collection</Text>
-
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Emoji</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginBottom: 16 }}>
-              {EMOJIS.map((e) => (
-                <TouchableOpacity key={e} style={[styles.emojiBtn, createEmoji === e && { backgroundColor: Colors.brand + "33", borderColor: Colors.brand, borderWidth: 2 }]} onPress={() => setCreateEmoji(e)}>
-                  <Text style={{ fontSize: 22 }}>{e}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Name</Text>
-            <View style={[styles.inputField, { backgroundColor: colors.backgroundTertiary }]}>
-              <TextInput style={[styles.inputText, { color: colors.text }]} placeholder="Collection name" placeholderTextColor={colors.textMuted} value={createName} onChangeText={setCreateName} />
-            </View>
-
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Color</Text>
-            <View style={{ flexDirection: "row", gap: 10, marginBottom: 20 }}>
-              {PALETTE.map((c) => (
-                <TouchableOpacity key={c} style={[styles.colorDot, { backgroundColor: c }, createColor === c && styles.colorDotSelected]} onPress={() => setCreateColor(c)} />
-              ))}
-            </View>
-
-            <View style={styles.privateRow}>
-              <Ionicons name="lock-closed-outline" size={18} color={colors.textMuted} />
-              <Text style={[styles.privateLabel, { color: colors.text }]}>Private collection</Text>
-              <TouchableOpacity
-                style={[styles.toggle, { backgroundColor: createPrivate ? Colors.brand : colors.backgroundTertiary }]}
-                onPress={() => setCreatePrivate((p) => !p)}
-              >
-                <View style={[styles.toggleThumb, { transform: [{ translateX: createPrivate ? 20 : 2 }] }]} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalBtns}>
-              <TouchableOpacity style={[styles.cancelBtn, { borderColor: colors.border }]} onPress={() => setShowCreate(false)}>
-                <Text style={[styles.cancelBtnText, { color: colors.text }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: Colors.brand, opacity: creating ? 0.7 : 1 }]} onPress={createCollection} disabled={creating}>
-                {creating ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveBtnText}>Create</Text>}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {showCreate && (
+        <CreateSheet
+          colors={colors}
+          isDark={isDark}
+          onClose={() => setShowCreate(false)}
+          onCreate={handleCreate}
+        />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  headerSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  colHeaderEmoji: { fontSize: 26 },
-  createBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  empty: { alignItems: "center", paddingTop: 60, gap: 12, paddingHorizontal: 32 },
-  emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
-  emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 19 },
-  emptyBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24, marginTop: 8 },
-  emptyBtnText: { color: "#fff", fontFamily: "Inter_600SemiBold" },
-  colCard: { borderRadius: 16, overflow: "hidden" },
-  colCardTop: { aspectRatio: 1.4, alignItems: "center", justifyContent: "center", position: "relative" },
-  colEmoji: { fontSize: 40 },
-  colCardBottom: { padding: 12 },
-  colName: { fontSize: 14, fontFamily: "Inter_700Bold", marginBottom: 2 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  backBtn: { padding: 2 },
+  headerTitle: { fontSize: 20, fontFamily: "Inter_700Bold" },
+  headerSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
+  newBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  newBtnText: { color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingHorizontal: 36 },
+  emptyIconWrap: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  emptyTitle: { fontSize: 20, fontFamily: "Inter_700Bold", textAlign: "center" },
+  emptySub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 21 },
+  emptyAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    marginTop: 6,
+  },
+  emptyActionText: { color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  colCard: {
+    borderRadius: 18,
+    overflow: "hidden",
+  },
+  colCardHeader: {
+    aspectRatio: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  colEmoji: { fontSize: 44 },
+  privateBadge: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  colCardBody: { padding: 14, gap: 4 },
+  colName: { fontSize: 15, fontFamily: "Inter_700Bold" },
   colCount: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  itemRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#ffffff08" },
-  itemIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  itemTitle: { fontSize: 14, fontFamily: "Inter_500Medium", lineHeight: 19 },
-  itemMeta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  modalOverlay: { flex: 1, backgroundColor: "#000000AA", justifyContent: "flex-end" },
-  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
-  modalTitle: { fontSize: 20, fontFamily: "Inter_700Bold", marginBottom: 20 },
-  inputLabel: { fontSize: 13, fontFamily: "Inter_500Medium", marginBottom: 8 },
-  emojiBtn: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "#ffffff0a" },
-  inputField: { borderRadius: 12, paddingHorizontal: 14, height: 50, justifyContent: "center", marginBottom: 16 },
-  inputText: { fontSize: 15, fontFamily: "Inter_400Regular" },
-  colorDot: { width: 28, height: 28, borderRadius: 14 },
-  colorDotSelected: { borderWidth: 3, borderColor: "#fff" },
-  privateRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 24 },
-  privateLabel: { flex: 1, fontSize: 15, fontFamily: "Inter_500Medium" },
+  colorDot: { width: 10, height: 10, borderRadius: 5 },
+  detailHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  colIconBig: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  detailTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  detailSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  iconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  itemCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginHorizontal: 12,
+    marginVertical: 2,
+    borderRadius: 16,
+  },
+  itemTypeDot: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  itemTitle: { fontSize: 14, fontFamily: "Inter_500Medium", lineHeight: 20 },
+  typePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  typePillText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  itemDate: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  removeBtn: { padding: 4 },
+});
+
+const sheet = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+    zIndex: 100,
+  },
+  container: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    paddingBottom: Platform.OS === "ios" ? 40 : 28,
+    gap: 0,
+  },
+  handleBar: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(128,128,128,0.3)",
+    alignSelf: "center",
+    marginBottom: 20,
+  },
+  title: { fontSize: 22, fontFamily: "Inter_700Bold", marginBottom: 20 },
+  label: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.8, marginBottom: 10, marginTop: 16 },
+  emojiScroll: { marginBottom: 4 },
+  emojiBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 52,
+    marginBottom: 4,
+  },
+  input: { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular" },
+  colorRow: { flexDirection: "row", gap: 10, marginBottom: 4 },
+  colorDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  colorDotActive: {
+    borderWidth: 3,
+    borderColor: "rgba(255,255,255,0.8)",
+  },
+  privacyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  privacyIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  privacyTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  privacySub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   toggle: { width: 44, height: 24, borderRadius: 12, position: "relative", justifyContent: "center" },
   toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: "#fff", position: "absolute" },
-  modalBtns: { flexDirection: "row", gap: 12 },
-  cancelBtn: { flex: 1, height: 50, borderRadius: 14, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
-  cancelBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  saveBtn: { flex: 2, height: 50, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  saveBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold" },
+  createBtn: {
+    height: 54,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 20,
+  },
+  createBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
 });

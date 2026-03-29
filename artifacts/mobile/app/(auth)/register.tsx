@@ -139,22 +139,27 @@ export default function RegisterScreen() {
 
   if (verifyStep) {
     return (
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={[
-          styles.root,
-          { backgroundColor: isDesktop ? (isDark ? "#0d0d0d" : "#f0f2f5") : colors.background },
-        ]}
-      >
+      <View style={[styles.root, { flexDirection: isDesktop ? "row" : "column", backgroundColor: isDesktop ? (isDark ? "#0a0a0a" : "#ffffff") : colors.background }]}>
+        {isDesktop && (
+          <View style={[regSplit.brandPanel, { backgroundColor: Colors.brand }]}>
+            <Image source={afuSymbol} style={{ width: 80, height: 80, tintColor: "#fff", marginBottom: 28 }} resizeMode="contain" />
+            <Text style={regSplit.brandTitle}>AfuChat</Text>
+            <Text style={regSplit.brandTagline}>Join the community. Connect with everyone, everywhere.</Text>
+          </View>
+        )}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1, backgroundColor: isDesktop ? (isDark ? "#111113" : "#ffffff") : colors.background }}
+        >
         <ScrollView
           contentContainerStyle={
             isDesktop
-              ? { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingVertical: 40, paddingHorizontal: 24 }
+              ? { flexGrow: 1, justifyContent: "center", paddingHorizontal: 60, paddingVertical: 48 }
               : { ...styles.scroll, paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 }
           }
           keyboardShouldPersistTaps="handled"
         >
-          <View style={isDesktop ? desktopCardStyle(isDark, colors) : undefined}>
+          <View style={isDesktop ? { maxWidth: 400, width: "100%" as any, alignSelf: "center" } : undefined}>
           <View style={styles.headerWrap}>
             <Image source={afuSymbol} style={{ width: 64, height: 64, marginBottom: 12, tintColor: Colors.brand }} resizeMode="contain" />
             <Text style={[styles.title, { color: colors.text, fontSize: 24 }]}>Verify Your Email</Text>
@@ -202,27 +207,46 @@ export default function RegisterScreen() {
           </View>
           </View>
         </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={[
-        styles.root,
-        { backgroundColor: isDesktop ? (isDark ? "#0d0d0d" : "#f0f2f5") : colors.background },
-      ]}
-    >
+    <View style={[styles.root, { flexDirection: isDesktop ? "row" : "column", backgroundColor: isDesktop ? (isDark ? "#0a0a0a" : "#ffffff") : colors.background }]}>
+      {isDesktop && (
+        <View style={[regSplit.brandPanel, { backgroundColor: Colors.brand }]}>
+          <Image source={afuSymbol} style={{ width: 80, height: 80, tintColor: "#fff", marginBottom: 28 }} resizeMode="contain" />
+          <Text style={regSplit.brandTitle}>AfuChat</Text>
+          <Text style={regSplit.brandTagline}>Join the community. Connect with everyone, everywhere.</Text>
+          <View style={regSplit.featureList}>
+            {[
+              { icon: "chatbubbles", text: "Real-time messaging with end-to-end privacy" },
+              { icon: "compass", text: "Discover trending content and creators" },
+              { icon: "people", text: "Groups, channels, and communities" },
+              { icon: "gift", text: "Send gifts and red envelopes to friends" },
+            ].map((f) => (
+              <View key={f.text} style={regSplit.featureRow}>
+                <Ionicons name={f.icon as any} size={20} color="rgba(255,255,255,0.9)" />
+                <Text style={regSplit.featureText}>{f.text}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1, backgroundColor: isDesktop ? (isDark ? "#111113" : "#ffffff") : colors.background }}
+      >
       <ScrollView
         contentContainerStyle={
           isDesktop
-            ? { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingVertical: 40, paddingHorizontal: 24 }
+            ? { flexGrow: 1, justifyContent: "center", paddingHorizontal: 60, paddingVertical: 48 }
             : { ...styles.scroll, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }
         }
         keyboardShouldPersistTaps="handled"
       >
-        <View style={isDesktop ? desktopCardStyle(isDark, colors) : undefined}>
+        <View style={isDesktop ? { maxWidth: 400, width: "100%" as any, alignSelf: "center" } : undefined}>
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.backBtn}
@@ -329,9 +353,43 @@ export default function RegisterScreen() {
         </View>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
+
+const regSplit = StyleSheet.create({
+  brandPanel: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 60,
+  },
+  brandTitle: {
+    fontSize: 52,
+    fontFamily: "Inter_700Bold",
+    color: "#fff",
+    marginBottom: 16,
+    letterSpacing: -1,
+  },
+  brandTagline: {
+    fontSize: 18,
+    fontFamily: "Inter_400Regular",
+    color: "rgba(255,255,255,0.85)",
+    textAlign: "center",
+    lineHeight: 28,
+    marginBottom: 48,
+  },
+  featureList: { gap: 20, width: "100%" as any, maxWidth: 380 },
+  featureRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  featureText: {
+    fontSize: 16,
+    fontFamily: "Inter_400Regular",
+    color: "rgba(255,255,255,0.9)",
+    flex: 1,
+    lineHeight: 22,
+  },
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
