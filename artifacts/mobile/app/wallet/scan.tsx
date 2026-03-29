@@ -38,18 +38,12 @@ function WebQRScanner({ onScanned, active }: { onScanned: (data: string) => void
 
   useEffect(() => {
     let mounted = true;
-
     async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "environment",
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            focusMode: "continuous" as any,
-          },
+          video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
         });
-        if (!mounted) { stream.getTracks().forEach(t => t.stop()); return; }
+        if (!mounted) { stream.getTracks().forEach((t) => t.stop()); return; }
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -57,24 +51,20 @@ function WebQRScanner({ onScanned, active }: { onScanned: (data: string) => void
           await videoRef.current.play();
           setReady(true);
         }
-      } catch (_) {}
+      } catch {}
     }
-
     startCamera();
-
     return () => {
       mounted = false;
       if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
-      streamRef.current?.getTracks().forEach(t => t.stop());
+      streamRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, []);
 
   useEffect(() => {
     if (!ready || !active) return;
-
     let BarcodeDetectorClass: any = (window as any).BarcodeDetector;
     let detector: any = null;
-    let fallbackModule: any = null;
 
     async function setup() {
       if (typeof BarcodeDetectorClass !== "undefined") {
@@ -82,52 +72,29 @@ function WebQRScanner({ onScanned, active }: { onScanned: (data: string) => void
       } else {
         try {
           const mod = await import("https://cdn.jsdelivr.net/npm/barcode-detector@3/dist/es/pure.min.js" as any);
-          fallbackModule = mod;
           detector = new mod.BarcodeDetector({ formats: ["qr_code"] });
-        } catch (_) {
-          return;
-        }
+        } catch { return; }
       }
-      scanIntervalRef.current = setInterval(scanFrame, 350);
-    }
-
-    async function scanFrame() {
-      if (!videoRef.current || !detector) return;
-      const video = videoRef.current;
-      if (video.readyState < 2) return;
-      try {
-        const barcodes = await detector.detect(video);
-        if (barcodes.length > 0) {
-          onScanned(barcodes[0].rawValue);
-        }
-      } catch (_) {}
+      scanIntervalRef.current = setInterval(async () => {
+        if (!videoRef.current || !detector) return;
+        if (videoRef.current.readyState < 2) return;
+        try {
+          const barcodes = await detector.detect(videoRef.current);
+          if (barcodes.length > 0) onScanned(barcodes[0].rawValue);
+        } catch {}
+      }, 350);
     }
 
     setup();
-
-    return () => {
-      if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
-    };
+    return () => { if (scanIntervalRef.current) clearInterval(scanIntervalRef.current); };
   }, [ready, active, onScanned]);
 
   return (
     <View style={StyleSheet.absoluteFillObject}>
-      <video
-        ref={videoRef as any}
-        style={{ width: "100%", height: "100%", objectFit: "cover" } as any}
-        autoPlay
-        playsInline
-        muted
-      />
+      <video ref={videoRef as any} style={{ width: "100%", height: "100%", objectFit: "cover" } as any} autoPlay playsInline muted />
       <canvas ref={canvasRef as any} style={{ display: "none" } as any} />
     </View>
   );
-}
-
-function toAfuId(uuid: string): string {
-  const hex = uuid.replace(/-/g, "").slice(0, 8);
-  const num = parseInt(hex, 16) % 100000000;
-  return num.toString().padStart(8, "0");
 }
 
 type ScannedProfile = {
@@ -167,7 +134,7 @@ export default function ScanScreen() {
     scanLineY.value = withRepeat(
       withTiming(1, { duration: 2200, easing: Easing.inOut(Easing.ease) }),
       -1,
-      true
+      true,
     );
   }, []);
 
@@ -183,14 +150,16 @@ export default function ScanScreen() {
       setLookingUp(true);
 
       if (!data.startsWith("afuchat://id/")) {
-        showAlert("Invalid QR", "This is not a valid AfuChat ID card.");
+        showAlert("Invalid QR", "This is not a valid AfuChat ID card QR code.");
         processedRef.current = false;
         setScanned(false);
         setLookingUp(false);
         return;
       }
 
-      const scannedAfuId = data.replace("afuchat://id/", "").replace(/\s/g, "").padStart(8, "0");
+      const rawAfuId = data.replace("afuchat://id/", "").replace(/\s/g, "");
+      const scannedAfuId = rawAfuId.padStart(8, "0");
+
       if (!/^\d{8}$/.test(scannedAfuId)) {
         showAlert("Invalid QR", "Invalid AfuChat ID format.");
         processedRef.current = false;
@@ -201,19 +170,13 @@ export default function ScanScreen() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      const { data: allProfiles } = await supabase
-        .from("profiles")
-        .select("id, handle, display_name, avatar_url, bio, country, region, is_verified, is_organization_verified, current_grade, xp");
+      const { data: rows, error } = await supabase.rpc("lookup_profile_by_afu_id", {
+        p_afu_id: scannedAfuId,
+      });
 
-      let matchedProfile: any = null;
-      for (const p of allProfiles || []) {
-        if (toAfuId(p.id) === scannedAfuId) {
-          matchedProfile = p;
-          break;
-        }
-      }
+      const matchedProfile = rows?.[0] ?? null;
 
-      if (!matchedProfile) {
+      if (error || !matchedProfile) {
         showAlert("Not Found", "No user found with this AfuChat ID.");
         processedRef.current = false;
         setScanned(false);
@@ -222,7 +185,7 @@ export default function ScanScreen() {
       }
 
       if (matchedProfile.id === user?.id) {
-        showAlert("That's You!", "You scanned your own card.");
+        showAlert("That's You!", "You scanned your own AfuChat ID card.");
         processedRef.current = false;
         setScanned(false);
         setLookingUp(false);
@@ -245,7 +208,7 @@ export default function ScanScreen() {
       });
       setLookingUp(false);
     },
-    [user]
+    [user],
   );
 
   function openAction(mode: ActionMode) {
@@ -268,17 +231,17 @@ export default function ScanScreen() {
     if (!scannedProfile?.userId || !user || !profile || !amount.trim()) return;
     const amt = parseInt(amount);
     if (isNaN(amt) || amt <= 0) {
-      showAlert("Invalid", "Enter a valid amount.");
+      showAlert("Invalid Amount", "Please enter a valid ACoin amount.");
       return;
     }
     if (amt > (profile.acoin || 0)) {
-      showAlert("Insufficient ACoin", `You only have ${profile.acoin || 0} ACoin.`);
+      showAlert("Insufficient Balance", `You only have ${profile.acoin || 0} ACoin.`);
       return;
     }
 
     showAlert(
       "Confirm Payment",
-      `Send ${amt} ACoin to @${scannedProfile?.handle}?`,
+      `Send ${amt} ACoin to @${scannedProfile.handle}?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -297,7 +260,7 @@ export default function ScanScreen() {
             }
 
             const { error: creditErr } = await supabase.rpc("credit_acoin", {
-              p_user_id: scannedProfile?.userId,
+              p_user_id: scannedProfile.userId,
               p_amount: amt,
             });
             if (creditErr) {
@@ -307,31 +270,40 @@ export default function ScanScreen() {
               return;
             }
 
-            const { error: logErr } = await supabase.from("acoin_transactions").insert([
+            await supabase.from("acoin_transactions").insert([
               {
                 user_id: user.id,
                 amount: -amt,
                 transaction_type: "acoin_transfer_sent",
-                metadata: { to_handle: scannedProfile?.handle, via: "qr_scan", message: message.trim() || null },
+                metadata: {
+                  to_handle: scannedProfile.handle,
+                  to_user_id: scannedProfile.userId,
+                  via: "qr_scan",
+                  message: message.trim() || null,
+                },
               },
               {
-                user_id: scannedProfile?.userId,
+                user_id: scannedProfile.userId,
                 amount: amt,
                 transaction_type: "acoin_transfer_received",
-                metadata: { from_handle: profile.handle, via: "qr_scan", message: message.trim() || null },
+                metadata: {
+                  from_handle: profile.handle,
+                  from_user_id: user.id,
+                  via: "qr_scan",
+                  message: message.trim() || null,
+                },
               },
             ]);
-            if (logErr) console.warn("ACoin transfer succeeded but log failed:", logErr.message);
 
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            showAlert("Sent!", `${amt} ACoin sent to @${scannedProfile?.handle}`);
+            showAlert("Payment Sent!", `${amt} ACoin sent to @${scannedProfile.handle}`);
             setSending(false);
             refreshProfile();
             resetScanner();
             router.back();
           },
         },
-      ]
+      ],
     );
   }
 
@@ -339,7 +311,7 @@ export default function ScanScreen() {
     if (!scannedProfile?.userId || !user || !amount.trim()) return;
     const amt = parseInt(amount);
     if (isNaN(amt) || amt <= 0) {
-      showAlert("Invalid", "Enter a valid amount.");
+      showAlert("Invalid Amount", "Please enter a valid ACoin amount.");
       return;
     }
     setSending(true);
@@ -359,7 +331,7 @@ export default function ScanScreen() {
     }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    showAlert("Request Sent!", `Requested ${amt} ACoin from @${scannedProfile?.handle}`);
+    showAlert("Request Sent!", `Requested ${amt} ACoin from @${scannedProfile.handle}`);
     setSending(false);
     resetScanner();
     router.back();
@@ -367,7 +339,7 @@ export default function ScanScreen() {
 
   if (!permission) {
     return (
-      <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <View style={[styles.root, { backgroundColor: "#000" }]}>
         <ActivityIndicator size="large" color={Colors.brand} />
       </View>
     );
@@ -376,16 +348,19 @@ export default function ScanScreen() {
   if (!permission.granted) {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
-        <View style={[styles.permBox, { paddingTop: insets.top + 16 }]}>
-          <Ionicons name="camera-outline" size={64} color={colors.textMuted} />
-          <Text style={[styles.permTitle, { color: colors.text }]}>Camera Permission</Text>
+        <View style={[styles.permBox, { paddingTop: insets.top + 20 }]}>
+          <View style={styles.permIconCircle}>
+            <Ionicons name="camera-outline" size={48} color={Colors.brand} />
+          </View>
+          <Text style={[styles.permTitle, { color: colors.text }]}>Camera Access Required</Text>
           <Text style={[styles.permSub, { color: colors.textSecondary }]}>
-            We need camera access to scan QR codes on Digital ID cards.
+            We need camera permission to scan AfuChat ID card QR codes for payments.
           </Text>
           <TouchableOpacity style={styles.permBtn} onPress={requestPermission}>
+            <Ionicons name="camera" size={18} color="#fff" />
             <Text style={styles.permBtnText}>Allow Camera</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 16 }}>
+          <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 14 }}>
             <Text style={{ color: colors.textMuted, fontSize: 15 }}>Go Back</Text>
           </TouchableOpacity>
         </View>
@@ -394,19 +369,11 @@ export default function ScanScreen() {
   }
 
   const isPay = actionMode === "pay";
-  const modalTitle = isPay ? "Pay ACoin" : "Request ACoin";
-  const modalLabel = isPay ? "To:" : "From:";
-  const modalBtnText = isPay ? "Pay" : "Send Request";
-  const modalBtnColor = isPay ? Colors.gold : Colors.brand;
-
-  const handleWebScanned = useCallback((data: string) => {
-    handleBarCodeScanned({ data });
-  }, [handleBarCodeScanned]);
 
   return (
-    <View style={[styles.root, { backgroundColor: "#000" }]}>
+    <View style={styles.root}>
       {Platform.OS === "web" ? (
-        <WebQRScanner onScanned={handleWebScanned} active={!scanned} />
+        <WebQRScanner onScanned={(d) => handleBarCodeScanned({ data: d })} active={!scanned} />
       ) : (
         <CameraView
           style={StyleSheet.absoluteFillObject}
@@ -420,11 +387,12 @@ export default function ScanScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.topTitle}>Scan ID Card</Text>
-          <View style={{ width: 40 }} />
+          <Text style={styles.topTitle}>Scan to Pay</Text>
+          <View style={{ width: 44 }} />
         </View>
 
         <View style={styles.scanArea}>
+          <Text style={styles.scanLabel}>Point at an AfuChat ID card</Text>
           <View style={styles.scanFrame}>
             <View style={[styles.corner, styles.tl]} />
             <View style={[styles.corner, styles.tr]} />
@@ -432,15 +400,19 @@ export default function ScanScreen() {
             <View style={[styles.corner, styles.br]} />
             <Animated.View style={[styles.scanLine, scanLineStyle]} />
           </View>
-          <Text style={styles.scanHint}>Point your camera at an AfuChat ID card QR code</Text>
+          <Text style={styles.scanHint}>
+            Align the QR code within the frame
+          </Text>
         </View>
       </View>
 
       {lookingUp && (
         <View style={styles.resultOverlay}>
-          <View style={[styles.resultCard, { backgroundColor: colors.surface, alignItems: "center", paddingVertical: 40 }]}>
+          <View style={[styles.resultCard, { backgroundColor: colors.surface, alignItems: "center", paddingVertical: 48 }]}>
             <ActivityIndicator size="large" color={Colors.brand} />
-            <Text style={{ color: colors.textSecondary, fontSize: 14, marginTop: 12 }}>Looking up user...</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 14, marginTop: 14, fontFamily: "Inter_400Regular" }}>
+              Looking up user...
+            </Text>
           </View>
         </View>
       )}
@@ -452,12 +424,12 @@ export default function ScanScreen() {
               {scannedProfile.avatar ? (
                 <Image source={{ uri: scannedProfile.avatar }} style={styles.resultAvatar} />
               ) : (
-                <View style={[styles.resultAvatar, { backgroundColor: colors.inputBg, justifyContent: "center", alignItems: "center" }]}>
-                  <Text style={{ fontSize: 20, color: colors.text }}>{(scannedProfile.name || "?")[0].toUpperCase()}</Text>
+                <View style={[styles.resultAvatar, { backgroundColor: Colors.brand + "22", justifyContent: "center", alignItems: "center" }]}>
+                  <Text style={{ fontSize: 22, color: Colors.brand }}>{(scannedProfile.name || "?")[0].toUpperCase()}</Text>
                 </View>
               )}
               <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
                   <Text style={[styles.resultName, { color: colors.text }]} numberOfLines={1}>{scannedProfile.name}</Text>
                   {scannedProfile.verified && (
                     <Ionicons name="checkmark-circle" size={16} color={scannedProfile.orgVerified ? Colors.gold : Colors.brand} />
@@ -466,8 +438,8 @@ export default function ScanScreen() {
                 <Text style={[styles.resultHandle, { color: colors.textMuted }]}>@{scannedProfile.handle}</Text>
                 {(scannedProfile.region || scannedProfile.country) && (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 }}>
-                    <Ionicons name="location" size={10} color={Colors.brand} />
-                    <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+                    <Ionicons name="location-outline" size={11} color={Colors.brand} />
+                    <Text style={{ color: colors.textMuted, fontSize: 11, fontFamily: "Inter_400Regular" }}>
                       {[scannedProfile.region, scannedProfile.country].filter(Boolean).join(", ")}
                     </Text>
                   </View>
@@ -476,36 +448,39 @@ export default function ScanScreen() {
             </View>
 
             {scannedProfile.bio ? (
-              <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }} numberOfLines={2}>{scannedProfile.bio}</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18, fontFamily: "Inter_400Regular" }} numberOfLines={2}>
+                {scannedProfile.bio}
+              </Text>
             ) : null}
 
-            <View style={[styles.resultIdRow, { backgroundColor: colors.inputBg }]}>
-              <Text style={{ color: colors.textMuted, fontSize: 12 }}>AFU ID</Text>
-              <Text style={{ color: colors.text, fontSize: 14, fontFamily: "Inter_600SemiBold" }}>
+            <View style={[styles.idPill, { backgroundColor: colors.backgroundTertiary || colors.backgroundSecondary }]}>
+              <Ionicons name="card-outline" size={13} color={Colors.brand} />
+              <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_400Regular" }}>AFU ID</Text>
+              <Text style={{ color: colors.text, fontSize: 15, fontFamily: "Inter_700Bold", letterSpacing: 2 }}>
                 {scannedProfile.afu_id.slice(0, 4)} {scannedProfile.afu_id.slice(4)}
               </Text>
             </View>
 
-            <View style={styles.resultActions}>
+            <View style={styles.actionBtns}>
               <TouchableOpacity
-                style={[styles.resultActionBtn, { backgroundColor: Colors.gold }]}
+                style={[styles.actionBtn, { backgroundColor: Colors.gold || "#D4A853" }]}
                 onPress={() => openAction("pay")}
               >
                 <Ionicons name="arrow-up-circle" size={20} color="#fff" />
-                <Text style={styles.resultActionText}>Pay</Text>
+                <Text style={styles.actionBtnText}>Pay</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.resultActionBtn, { backgroundColor: Colors.brand }]}
+                style={[styles.actionBtn, { backgroundColor: Colors.brand }]}
                 onPress={() => openAction("request")}
               >
                 <Ionicons name="arrow-down-circle" size={20} color="#fff" />
-                <Text style={styles.resultActionText}>Request</Text>
+                <Text style={styles.actionBtnText}>Request</Text>
               </TouchableOpacity>
             </View>
 
             <TouchableOpacity style={styles.scanAgainBtn} onPress={resetScanner}>
-              <Ionicons name="scan-outline" size={18} color={Colors.brand} />
-              <Text style={{ color: Colors.brand, fontSize: 15, fontFamily: "Inter_600SemiBold" }}>Scan Again</Text>
+              <Ionicons name="scan-outline" size={16} color={Colors.brand} />
+              <Text style={{ color: Colors.brand, fontSize: 14, fontFamily: "Inter_600SemiBold" }}>Scan Again</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -517,38 +492,48 @@ export default function ScanScreen() {
             <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
               <View style={styles.dragHandle} />
               <View style={styles.modalHeader}>
-                <Text style={[styles.modalTitle, { color: colors.text }]}>{modalTitle}</Text>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>
+                  {isPay ? "Pay ACoin" : "Request ACoin"}
+                </Text>
                 <TouchableOpacity onPress={() => setShowModal(false)}>
                   <Ionicons name="close" size={24} color={colors.text} />
                 </TouchableOpacity>
               </View>
 
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                <Text style={{ color: colors.textSecondary, fontSize: 14 }}>{modalLabel}</Text>
-                <Text style={{ color: colors.text, fontSize: 15, fontFamily: "Inter_600SemiBold" }}>
-                  @{scannedProfile?.handle}
-                </Text>
+              <View style={styles.recipientRow}>
+                {scannedProfile?.avatar ? (
+                  <Image source={{ uri: scannedProfile.avatar }} style={styles.recipientAvatar} />
+                ) : (
+                  <View style={[styles.recipientAvatar, { backgroundColor: Colors.brand + "22", alignItems: "center", justifyContent: "center" }]}>
+                    <Text style={{ color: Colors.brand }}>{(scannedProfile?.name || "?")[0].toUpperCase()}</Text>
+                  </View>
+                )}
+                <View>
+                  <Text style={{ color: colors.text, fontSize: 15, fontFamily: "Inter_600SemiBold" }}>{scannedProfile?.name}</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12 }}>@{scannedProfile?.handle}</Text>
+                </View>
               </View>
 
               {isPay && (
-                <View style={[styles.balanceRow, { backgroundColor: colors.inputBg }]}>
-                  <Ionicons name="diamond" size={14} color={Colors.gold} />
-                  <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-                    Your balance: {profile?.acoin || 0} ACoin
+                <View style={[styles.balanceRow, { backgroundColor: colors.backgroundSecondary || colors.backgroundTertiary }]}>
+                  <Ionicons name="diamond" size={14} color={Colors.gold || "#D4A853"} />
+                  <Text style={{ color: colors.textSecondary, fontSize: 13, fontFamily: "Inter_400Regular" }}>
+                    Your balance: <Text style={{ fontFamily: "Inter_700Bold", color: colors.text }}>{profile?.acoin || 0} ACoin</Text>
                   </Text>
                 </View>
               )}
 
               <TextInput
-                style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]}
+                style={[styles.modalInput, { color: colors.text, backgroundColor: colors.backgroundSecondary || colors.inputBg, borderColor: colors.border }]}
                 placeholder="Amount (ACoin)"
                 placeholderTextColor={colors.textMuted}
                 value={amount}
                 onChangeText={setAmount}
                 keyboardType="numeric"
+                autoFocus
               />
               <TextInput
-                style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]}
+                style={[styles.modalInput, { color: colors.text, backgroundColor: colors.backgroundSecondary || colors.inputBg, borderColor: colors.border }]}
                 placeholder="Message (optional)"
                 placeholderTextColor={colors.textMuted}
                 value={message}
@@ -556,14 +541,21 @@ export default function ScanScreen() {
               />
 
               <TouchableOpacity
-                style={[styles.sendBtn, { backgroundColor: modalBtnColor }, sending && { opacity: 0.6 }]}
+                style={[
+                  styles.sendBtn,
+                  { backgroundColor: isPay ? Colors.gold || "#D4A853" : Colors.brand },
+                  (sending || !amount.trim()) && { opacity: 0.55 },
+                ]}
                 onPress={isPay ? submitPay : submitRequest}
-                disabled={sending}
+                disabled={sending || !amount.trim()}
               >
                 {sending ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.sendBtnText}>{modalBtnText}</Text>
+                  <>
+                    <Ionicons name={isPay ? "arrow-up-circle" : "arrow-down-circle"} size={18} color="#fff" />
+                    <Text style={styles.sendBtnText}>{isPay ? "Pay" : "Send Request"}</Text>
+                  </>
                 )}
               </TouchableOpacity>
             </View>
@@ -575,43 +567,76 @@ export default function ScanScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, justifyContent: "center", alignItems: "center" },
+  root: { flex: 1, backgroundColor: "#000" },
   overlay: { ...StyleSheet.absoluteFillObject, justifyContent: "space-between" },
-  topBar: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12 },
-  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center" },
+  topBar: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   topTitle: { color: "#fff", fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  scanArea: { flex: 1, justifyContent: "center", alignItems: "center" },
-  scanFrame: { width: 250, height: 250, position: "relative" },
-  corner: { position: "absolute", width: 30, height: 30, borderColor: Colors.brand, borderWidth: 3 },
-  tl: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 12 },
-  tr: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 12 },
-  bl: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 12 },
-  br: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 12 },
-  scanLine: { position: "absolute", left: 4, right: 4, height: 2, backgroundColor: Colors.brand, borderRadius: 1 },
-  scanHint: { color: "rgba(255,255,255,0.7)", fontSize: 14, textAlign: "center", marginTop: 24, fontFamily: "Inter_400Regular", paddingHorizontal: 32 },
+  scanArea: { flex: 1, alignItems: "center", justifyContent: "center", gap: 20 },
+  scanLabel: { color: "rgba(255,255,255,0.8)", fontSize: 13, fontFamily: "Inter_500Medium" },
+  scanFrame: { width: 256, height: 256, position: "relative" },
+  corner: { position: "absolute", width: 32, height: 32, borderColor: Colors.brand, borderWidth: 3.5 },
+  tl: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 14 },
+  tr: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 14 },
+  bl: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 14 },
+  br: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 14 },
+  scanLine: {
+    position: "absolute",
+    left: 6,
+    right: 6,
+    height: 2.5,
+    backgroundColor: Colors.brand,
+    borderRadius: 2,
+    shadowColor: Colors.brand,
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+  },
+  scanHint: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 13,
+    textAlign: "center",
+    fontFamily: "Inter_400Regular",
+    paddingHorizontal: 40,
+  },
   permBox: { flex: 1, justifyContent: "center", alignItems: "center", gap: 16, paddingHorizontal: 40 },
-  permTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
-  permSub: { fontSize: 15, textAlign: "center", lineHeight: 22, fontFamily: "Inter_400Regular" },
-  permBtn: { backgroundColor: Colors.brand, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 14, marginTop: 8 },
+  permIconCircle: { width: 100, height: 100, borderRadius: 50, backgroundColor: Colors.brand + "18", alignItems: "center", justifyContent: "center", marginBottom: 8 },
+  permTitle: { fontSize: 22, fontFamily: "Inter_700Bold", textAlign: "center" },
+  permSub: { fontSize: 15, textAlign: "center", lineHeight: 23, fontFamily: "Inter_400Regular" },
+  permBtn: { backgroundColor: Colors.brand, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 28, flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
   permBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  resultOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.6)" },
-  resultCard: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 12 },
+  resultOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.65)" },
+  resultCard: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, gap: 14 },
   resultHeader: { flexDirection: "row", alignItems: "center", gap: 14 },
   resultAvatar: { width: 56, height: 56, borderRadius: 28 },
   resultName: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  resultHandle: { fontSize: 14, fontFamily: "Inter_400Regular", marginTop: 2 },
-  resultIdRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 12, borderRadius: 10 },
-  resultActions: { flexDirection: "row", gap: 10 },
-  resultActionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderRadius: 14 },
-  resultActionText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  scanAgainBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, marginTop: 4 },
-  modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" },
-  modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 14 },
-  dragHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "#ccc", alignSelf: "center", marginBottom: 4 },
+  resultHandle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 1 },
+  idPill: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
+  actionBtns: { flexDirection: "row", gap: 12 },
+  actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 28, paddingVertical: 14 },
+  actionBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
+  scanAgainBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 8 },
+  modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.55)" },
+  modalContent: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, gap: 14 },
+  dragHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "rgba(0,0,0,0.15)", alignSelf: "center", marginBottom: 4 },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  modalTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
-  balanceRow: { flexDirection: "row", alignItems: "center", gap: 6, padding: 10, borderRadius: 10 },
-  modalInput: { borderRadius: 12, padding: 14, fontSize: 15, fontFamily: "Inter_400Regular" },
-  sendBtn: { borderRadius: 14, paddingVertical: 14, alignItems: "center" },
-  sendBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  modalTitle: { fontSize: 20, fontFamily: "Inter_700Bold" },
+  recipientRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  recipientAvatar: { width: 40, height: 40, borderRadius: 20 },
+  balanceRow: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  modalInput: { borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, fontFamily: "Inter_400Regular" },
+  sendBtn: { borderRadius: 28, paddingVertical: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  sendBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
 });

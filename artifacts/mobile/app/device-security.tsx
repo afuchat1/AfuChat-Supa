@@ -31,6 +31,7 @@ import {
   hasPIN,
   isBiometricEnabled,
   setBiometricEnabled,
+  setScreenshotProtectionEnabled,
   storePIN,
   verifyPIN,
 } from "@/lib/appLock";
@@ -331,15 +332,18 @@ export default function DeviceSecurityScreen() {
   async function toggleScreenshot() {
     const next = !prefs.screenshot_protection;
     setPrefs((p) => ({ ...p, screenshot_protection: next }));
-    await supabase.from("security_preferences").upsert({ user_id: user!.id, screenshot_protection: next }, { onConflict: "user_id" });
-    if (next) {
-      showAlert(
-        "Screenshot Protection",
-        Platform.OS === "android"
-          ? "Screenshot and screen recording are now blocked inside AfuChat."
-          : "iOS will show a blank screen when AfuChat is in the App Switcher."
-      );
-    }
+    await Promise.all([
+      setScreenshotProtectionEnabled(next),
+      supabase.from("security_preferences").upsert({ user_id: user!.id, screenshot_protection: next }, { onConflict: "user_id" }),
+    ]);
+    showAlert(
+      "Screenshot Protection",
+      next
+        ? Platform.OS === "android"
+          ? "Screenshots and screen recording are now blocked inside AfuChat."
+          : "AfuChat will be hidden in the App Switcher and screenshots will be blocked."
+        : "Screenshot protection has been disabled.",
+    );
   }
 
   async function revokeSession(session: DeviceSession) {

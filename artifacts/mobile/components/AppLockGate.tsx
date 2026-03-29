@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   AppState,
+  AppStateStatus,
   Platform,
   StyleSheet,
   Text,
@@ -15,7 +16,12 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
-import { hasPIN, isBiometricEnabled, verifyPIN } from "@/lib/appLock";
+import {
+  hasPIN,
+  isBiometricEnabled,
+  verifyPIN,
+  restoreScreenshotProtection,
+} from "@/lib/appLock";
 import Colors from "@/constants/colors";
 
 let LocalAuthentication: typeof import("expo-local-authentication") | null = null;
@@ -23,71 +29,100 @@ if (Platform.OS !== "web") {
   try { LocalAuthentication = require("expo-local-authentication"); } catch {}
 }
 
+type LockStatus = "checking" | "locked" | "unlocked";
+
 const DOTS = 4;
 
 export function AppLockGate({ children }: { children: React.ReactNode }) {
-  const [locked, setLocked] = useState(false);
+  const [status, setStatus] = useState<LockStatus>("checking");
   const [pinEnabled, setPinEnabled] = useState(false);
   const [bioEnabled, setBioEnabled] = useState(false);
-  const [checking, setChecking] = useState(true);
-  const bgRef = useRef(AppState.currentState);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const wentToBackgroundRef = useRef(false);
 
-  const checkLockConfig = useCallback(async () => {
-    if (Platform.OS === "web") { setChecking(false); return; }
+  const checkConfig = useCallback(async (): Promise<{ pin: boolean; bio: boolean }> => {
+    if (Platform.OS === "web") return { pin: false, bio: false };
     const [pin, bio] = await Promise.all([hasPIN(), isBiometricEnabled()]);
     setPinEnabled(pin);
     setBioEnabled(bio);
-    setChecking(false);
     return { pin, bio };
   }, []);
 
-  const triggerLock = useCallback(async () => {
-    const config = await checkLockConfig();
-    if (config?.pin || config?.bio) setLocked(true);
-  }, [checkLockConfig]);
+  const lockIfConfigured = useCallback(async () => {
+    const { pin, bio } = await checkConfig();
+    if (pin || bio) {
+      setStatus("locked");
+    }
+  }, [checkConfig]);
 
   useEffect(() => {
-    checkLockConfig();
-    const sub = AppState.addEventListener("change", (next) => {
-      if (bgRef.current === "active" && (next === "background" || next === "inactive")) {
-        triggerLock();
+    (async () => {
+      if (Platform.OS === "web") {
+        setStatus("unlocked");
+        return;
       }
-      bgRef.current = next;
+      await restoreScreenshotProtection();
+      const { pin, bio } = await checkConfig();
+      if (pin || bio) {
+        setStatus("locked");
+      } else {
+        setStatus("unlocked");
+      }
+    })();
+  }, [checkConfig]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (nextState: AppStateStatus) => {
+      const prevState = appStateRef.current;
+      appStateRef.current = nextState;
+
+      if (nextState === "background") {
+        wentToBackgroundRef.current = true;
+        lockIfConfigured();
+      } else if (nextState === "active" && wentToBackgroundRef.current) {
+        wentToBackgroundRef.current = false;
+      }
     });
     return () => sub.remove();
-  }, [checkLockConfig, triggerLock]);
+  }, [lockIfConfigured]);
 
-  async function tryBiometric() {
+  async function tryBiometric(): Promise<boolean> {
     if (!LocalAuthentication) return false;
     try {
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage: "Unlock AfuChat",
         fallbackLabel: "Use PIN",
+        cancelLabel: "Cancel",
         disableDeviceFallback: false,
       });
-      if (result.success) { setLocked(false); return true; }
+      if (result.success) {
+        setStatus("unlocked");
+        return true;
+      }
     } catch {}
     return false;
   }
 
   useEffect(() => {
-    if (locked && bioEnabled && !pinEnabled) {
-      tryBiometric();
-    } else if (locked && bioEnabled) {
+    if (status === "locked" && bioEnabled) {
       tryBiometric();
     }
-  }, [locked]);
+  }, [status, bioEnabled]);
 
-  if (checking || !locked) return <>{children}</>;
+  if (status === "checking") return null;
 
-  return (
-    <LockScreen
-      pinEnabled={pinEnabled}
-      bioEnabled={bioEnabled}
-      onBioPress={tryBiometric}
-      onUnlock={() => setLocked(false)}
-    />
-  );
+  if (status === "locked") {
+    return (
+      <LockScreen
+        pinEnabled={pinEnabled}
+        bioEnabled={bioEnabled}
+        onBioPress={tryBiometric}
+        onUnlock={() => setStatus("unlocked")}
+      />
+    );
+  }
+
+  return <>{children}</>;
 }
 
 function LockScreen({
@@ -103,6 +138,7 @@ function LockScreen({
 }) {
   const [digits, setDigits] = useState<string[]>([]);
   const [error, setError] = useState(false);
+  const [attempts, setAttempts] = useState(0);
   const shakeX = useSharedValue(0);
 
   const shakeStyle = useAnimatedStyle(() => ({
@@ -110,20 +146,23 @@ function LockScreen({
   }));
 
   function shake() {
-    Vibration.vibrate(200);
+    Vibration.vibrate(300);
     shakeX.value = withSequence(
-      withTiming(-10, { duration: 50 }),
-      withTiming(10, { duration: 50 }),
-      withTiming(-8, { duration: 50 }),
-      withTiming(8, { duration: 50 }),
-      withTiming(0, { duration: 50 }),
+      withTiming(-12, { duration: 60 }),
+      withTiming(12, { duration: 60 }),
+      withTiming(-10, { duration: 60 }),
+      withTiming(10, { duration: 60 }),
+      withTiming(-6, { duration: 60 }),
+      withTiming(6, { duration: 60 }),
+      withTiming(0, { duration: 60 }),
     );
     setError(true);
-    setTimeout(() => { setError(false); setDigits([]); }, 800);
+    setAttempts((a) => a + 1);
+    setTimeout(() => { setError(false); setDigits([]); }, 900);
   }
 
   async function pressDigit(d: string) {
-    if (digits.length >= DOTS) return;
+    if (digits.length >= DOTS || error) return;
     const next = [...digits, d];
     setDigits(next);
     if (next.length === DOTS) {
@@ -138,6 +177,7 @@ function LockScreen({
   }
 
   function backspace() {
+    if (error) return;
     setDigits((prev) => prev.slice(0, -1));
   }
 
@@ -152,12 +192,19 @@ function LockScreen({
     <View style={styles.root}>
       <View style={styles.logoArea}>
         <View style={styles.logoCircle}>
-          <Ionicons name="shield-checkmark" size={36} color={Colors.brand} />
+          <Ionicons name="shield-checkmark" size={38} color={Colors.brand} />
         </View>
         <Text style={styles.logoTitle}>AfuChat is locked</Text>
         <Text style={styles.logoSub}>
-          {pinEnabled ? "Enter your PIN to continue" : "Authenticate to continue"}
+          {pinEnabled
+            ? "Enter your 4-digit PIN to continue"
+            : "Use biometrics to continue"}
         </Text>
+        {attempts > 0 && (
+          <Text style={styles.attemptsText}>
+            {attempts} failed attempt{attempts !== 1 ? "s" : ""}
+          </Text>
+        )}
       </View>
 
       {pinEnabled && (
@@ -180,28 +227,28 @@ function LockScreen({
               <View key={ri} style={styles.keypadRow}>
                 {row.map((key) => {
                   if (key === "bio") {
+                    if (!bioEnabled) return <View key="bio" style={styles.keyBtn} />;
                     return (
                       <TouchableOpacity
                         key="bio"
-                        style={[styles.keyBtn, !bioEnabled && { opacity: 0 }]}
-                        onPress={bioEnabled ? onBioPress : undefined}
-                        disabled={!bioEnabled}
+                        style={styles.keyBtn}
+                        onPress={onBioPress}
                       >
-                        <Ionicons name="finger-print-outline" size={26} color="#fff" />
+                        <Ionicons name="finger-print-outline" size={28} color="rgba(255,255,255,0.8)" />
                       </TouchableOpacity>
                     );
                   }
                   if (key === "del") {
                     return (
                       <TouchableOpacity key="del" style={styles.keyBtn} onPress={backspace}>
-                        <Ionicons name="backspace-outline" size={24} color="#fff" />
+                        <Ionicons name="backspace-outline" size={26} color="rgba(255,255,255,0.8)" />
                       </TouchableOpacity>
                     );
                   }
                   return (
                     <TouchableOpacity
                       key={key}
-                      style={styles.keyBtn}
+                      style={[styles.keyBtn, styles.keyBtnFilled]}
                       onPress={() => pressDigit(key)}
                       activeOpacity={0.7}
                     >
@@ -216,9 +263,9 @@ function LockScreen({
       )}
 
       {!pinEnabled && bioEnabled && (
-        <TouchableOpacity style={styles.bioBtn} onPress={onBioPress}>
-          <Ionicons name="finger-print" size={56} color={Colors.brand} />
-          <Text style={styles.bioBtnText}>Tap to authenticate</Text>
+        <TouchableOpacity style={styles.bioOnlyBtn} onPress={onBioPress} activeOpacity={0.75}>
+          <Ionicons name="finger-print" size={72} color={Colors.brand} />
+          <Text style={styles.bioOnlyText}>Tap to authenticate</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -228,34 +275,49 @@ function LockScreen({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#000",
+    backgroundColor: "#050505",
     alignItems: "center",
     justifyContent: "center",
-    gap: 40,
+    gap: 44,
   },
-  logoArea: { alignItems: "center", gap: 12 },
+  logoArea: { alignItems: "center", gap: 10 },
   logoCircle: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: Colors.brand + "22",
-    alignItems: "center", justifyContent: "center",
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: Colors.brand + "1A",
+    borderWidth: 1.5,
+    borderColor: Colors.brand + "44",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
   },
   logoTitle: { fontSize: 22, fontFamily: "Inter_700Bold", color: "#fff" },
-  logoSub: { fontSize: 14, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.5)" },
-  dotsRow: { flexDirection: "row", gap: 20 },
+  logoSub: { fontSize: 14, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.45)", textAlign: "center", paddingHorizontal: 40 },
+  attemptsText: { fontSize: 12, fontFamily: "Inter_500Medium", color: "#FF3B30", marginTop: 4 },
+  dotsRow: { flexDirection: "row", gap: 22 },
   dot: {
-    width: 16, height: 16, borderRadius: 8,
-    borderWidth: 2, borderColor: "rgba(255,255,255,0.4)",
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.3)",
   },
   dotFilled: { backgroundColor: Colors.brand, borderColor: Colors.brand },
-  dotError: { borderColor: "#FF3B30", backgroundColor: "#FF3B30" },
-  keypad: { gap: 16 },
-  keypadRow: { flexDirection: "row", gap: 24 },
+  dotError: { backgroundColor: "#FF3B30", borderColor: "#FF3B30" },
+  keypad: { gap: 18 },
+  keypadRow: { flexDirection: "row", gap: 26 },
   keyBtn: {
-    width: 72, height: 72, borderRadius: 36,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    alignItems: "center", justifyContent: "center",
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  keyText: { fontSize: 26, fontFamily: "Inter_400Regular", color: "#fff" },
-  bioBtn: { alignItems: "center", gap: 16 },
-  bioBtnText: { fontSize: 16, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.6)" },
+  keyBtnFilled: {
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  keyText: { fontSize: 28, fontFamily: "Inter_400Regular", color: "#fff" },
+  bioOnlyBtn: { alignItems: "center", gap: 18, paddingVertical: 20 },
+  bioOnlyText: { fontSize: 16, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.55)" },
 });

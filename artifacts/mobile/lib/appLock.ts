@@ -5,6 +5,13 @@ const PIN_KEY = "afuchat_app_pin";
 const BIOMETRIC_KEY = "afuchat_biometric_enabled";
 const SCREENSHOT_KEY = "afuchat_screenshot_protection";
 
+let ScreenCapture: typeof import("expo-screen-capture") | null = null;
+if (Platform.OS !== "web") {
+  try {
+    ScreenCapture = require("expo-screen-capture");
+  } catch {}
+}
+
 function simpleHash(pin: string): string {
   let hash = 5381;
   for (let i = 0; i < pin.length; i++) {
@@ -51,10 +58,28 @@ export async function isBiometricEnabled(): Promise<boolean> {
 export async function setScreenshotProtectionEnabled(enabled: boolean): Promise<void> {
   if (Platform.OS === "web") return;
   await SecureStore.setItemAsync(SCREENSHOT_KEY, enabled ? "1" : "0");
+  await applyScreenshotProtection(enabled);
 }
 
 export async function isScreenshotProtectionEnabled(): Promise<boolean> {
   if (Platform.OS === "web") return false;
   const val = await SecureStore.getItemAsync(SCREENSHOT_KEY);
   return val === "1";
+}
+
+export async function applyScreenshotProtection(enabled: boolean): Promise<void> {
+  if (Platform.OS === "web" || !ScreenCapture) return;
+  try {
+    if (enabled) {
+      await ScreenCapture.preventScreenCaptureAsync();
+    } else {
+      await ScreenCapture.allowScreenCaptureAsync();
+    }
+  } catch {}
+}
+
+export async function restoreScreenshotProtection(): Promise<void> {
+  if (Platform.OS === "web") return;
+  const enabled = await isScreenshotProtectionEnabled();
+  await applyScreenshotProtection(enabled);
 }
