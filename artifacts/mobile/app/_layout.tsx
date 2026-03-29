@@ -7,6 +7,7 @@ import {
 } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Linking, Platform } from "react-native";
@@ -31,6 +32,11 @@ try { setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`); } catch (_) {}
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
+
+function StatusBarManager() {
+  const { isDark } = useThemeContext();
+  return <StatusBar style={isDark ? "light" : "dark"} translucent backgroundColor="transparent" />;
+}
 
 function ThemeSyncManager() {
   const { user } = useAuth();
@@ -194,6 +200,7 @@ export default function RootLayout() {
             <KeyboardProvider>
               <DesktopWrapper>
                 <ThemeProvider>
+                  <StatusBarManager />
                   <AuthProvider>
                     <ThemeSyncManager />
                     <LanguageProvider>
