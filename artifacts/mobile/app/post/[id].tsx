@@ -490,7 +490,6 @@ export default function PostDetailScreen() {
                 <Text style={[styles.repliesLabel, { color: colors.textMuted }]}>Replies</Text>
               )}
             </View>
-          </View>
         }
         renderItem={({ item }) => <ReplyCard item={item} colors={colors} />}
         contentContainerStyle={{ paddingBottom: 100 }}

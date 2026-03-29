@@ -146,30 +146,42 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress }: { item
   return (
     <>
       <ViewShot ref={cardRef} options={{ format: "png", quality: 1, result: "tmpfile" }}>
-        <TouchableOpacity style={[styles.card, { backgroundColor: colors.surface }]} onPress={openPost} activeOpacity={0.85}>
+        <TouchableOpacity
+          style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, shadowColor: colors.text }]}
+          onPress={openPost}
+          activeOpacity={0.92}
+        >
+          {/* ── Header ── */}
           <View style={styles.cardHeader}>
-            <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}>
-              <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={40} />
+            <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })} activeOpacity={0.8}>
+              <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={34} />
             </TouchableOpacity>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, gap: 1 }}>
               <View style={styles.nameRow}>
-                <Text style={[styles.cardName, { color: colors.text }]}>{item.profile.display_name}</Text>
-                <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={13} />
+                <Text style={[styles.cardName, { color: colors.text }]} numberOfLines={1}>{item.profile.display_name}</Text>
+                <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={12} />
               </View>
-              <Text style={[styles.cardTime, { color: colors.textMuted }]}>
+              <Text style={[styles.cardMeta, { color: colors.textMuted }]} numberOfLines={1}>
                 @{item.profile.handle} · {formatRelative(item.created_at)}
               </Text>
             </View>
-            <TouchableOpacity
-              onPress={() => { Haptics.impact?.(); setMenuVisible(true); }}
-              hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
-              style={styles.ellipsisBtn}
-            >
-              <Ionicons name="ellipsis-horizontal" size={18} color={colors.textMuted} />
-            </TouchableOpacity>
+            <View style={styles.headerRight}>
+              <View style={[styles.platformBadge, { borderColor: Colors.brand + "40", backgroundColor: Colors.brand + "12" }]}>
+                <Text style={[styles.platformBadgeText, { color: Colors.brand }]}>AfuChat</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => { Haptics.impact?.(); setMenuVisible(true); }}
+                hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+                style={styles.ellipsisBtn}
+              >
+                <Ionicons name="ellipsis-horizontal" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
           </View>
 
+          {/* ── Content ── */}
           <RichText style={[styles.cardContent, { color: colors.text }]}>{displayContent}</RichText>
+
           {isTranslated && (
             <View style={styles.translatedBadge}>
               <Ionicons name="language" size={10} color={colors.textMuted} />
@@ -179,6 +191,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress }: { item
             </View>
           )}
 
+          {/* ── Images — edge-to-edge inside card ── */}
           {allImages.length > 0 && (
             <View style={styles.images}>
               {allImages.map((uri, i) => (
@@ -186,10 +199,11 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress }: { item
                   key={i}
                   activeOpacity={0.9}
                   onPress={(e) => { e.stopPropagation(); onImagePress?.(allImages, i); }}
+                  style={{ flex: allImages.length === 1 ? undefined : 1 }}
                 >
                   <Image
                     source={{ uri }}
-                    style={[styles.img, { width: imgW, height: imgW * 0.75 }]}
+                    style={[styles.img, { width: allImages.length === 1 ? screenW - 48 : imgW, height: (allImages.length === 1 ? screenW - 48 : imgW) * 0.6 }]}
                     resizeMode="cover"
                   />
                 </TouchableOpacity>
@@ -197,23 +211,26 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress }: { item
             </View>
           )}
 
+          {/* ── Footer ── */}
           <View style={[styles.cardFooter, { borderTopColor: colors.separator }]}>
-            <TouchableOpacity
-              style={styles.action}
-              onPress={() => { onToggleLike(item.id); }}
-            >
-              <Ionicons name={item.liked ? "heart" : "heart-outline"} size={18} color={item.liked ? "#FF3B30" : colors.textMuted} />
-              {item.likeCount > 0 && <Text style={[styles.actionText, { color: item.liked ? "#FF3B30" : colors.textMuted }]}>{item.likeCount}</Text>}
+            <TouchableOpacity style={styles.action} onPress={() => onToggleLike(item.id)}>
+              <Ionicons name={item.liked ? "heart" : "heart-outline"} size={16} color={item.liked ? "#FF3B30" : colors.textMuted} />
+              {item.likeCount > 0 && (
+                <Text style={[styles.actionText, { color: item.liked ? "#FF3B30" : colors.textMuted }]}>{item.likeCount}</Text>
+              )}
             </TouchableOpacity>
             <TouchableOpacity style={styles.action} onPress={openPost}>
-              <Ionicons name="chatbubble-outline" size={18} color={colors.textMuted} />
-              {item.replyCount > 0 && <Text style={[styles.actionText, { color: colors.textMuted }]}>{item.replyCount}</Text>}
+              <Ionicons name="chatbubble-outline" size={16} color={colors.textMuted} />
+              {item.replyCount > 0 && (
+                <Text style={[styles.actionText, { color: colors.textMuted }]}>{item.replyCount}</Text>
+              )}
             </TouchableOpacity>
             <TouchableOpacity style={styles.action} onPress={() => sharePost({ postId: item.id, authorName: item.profile.display_name, content: item.content })}>
-              <Ionicons name="share-outline" size={18} color={colors.textMuted} />
+              <Ionicons name="arrow-redo-outline" size={16} color={colors.textMuted} />
             </TouchableOpacity>
+            <View style={{ flex: 1 }} />
             <View style={styles.viewCount}>
-              <Ionicons name="eye-outline" size={14} color={colors.textMuted} />
+              <Ionicons name="eye-outline" size={13} color={colors.textMuted} />
               <Text style={[styles.viewText, { color: colors.textMuted }]}>{item.view_count}</Text>
             </View>
             <BookmarkButton bookmarked={item.bookmarked} onPress={() => onToggleBookmark(item.id)} />
@@ -705,37 +722,71 @@ const styles = StyleSheet.create({
   tabPill: { flex: 1, paddingVertical: 7, borderRadius: 19, alignItems: "center" },
   tabPillText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   card: {
-    marginHorizontal: 8,
-    borderRadius: 16,
+    marginHorizontal: 14,
+    marginBottom: 10,
+    borderRadius: 10,
+    borderWidth: 1,
     overflow: "hidden",
-    paddingTop: 14,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.07,
+    shadowRadius: 4,
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
-    gap: 10,
-    marginBottom: 10,
+    paddingHorizontal: 13,
+    paddingTop: 13,
+    paddingBottom: 9,
+    gap: 9,
   },
-  nameRow: { flexDirection: "row", alignItems: "center" },
-  cardName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  cardTime: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  cardContent: { fontSize: 15, fontFamily: "Inter_400Regular", paddingHorizontal: 14, marginBottom: 4, lineHeight: 22 },
-  translatedBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 14, marginBottom: 8 },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  platformBadge: {
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  platformBadgeText: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.2,
+  },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 3 },
+  cardName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  cardMeta: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  cardContent: {
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    paddingHorizontal: 13,
+    paddingBottom: 10,
+    lineHeight: 23,
+    letterSpacing: 0.1,
+  },
+  translatedBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 13, marginBottom: 8 },
   translatedText: { fontSize: 10, fontFamily: "Inter_400Regular" },
-  images: { flexDirection: "row", flexWrap: "wrap", gap: 4, paddingHorizontal: 14, marginBottom: 2 },
-  img: { borderRadius: 8 },
+  images: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 3,
+    marginBottom: 0,
+  },
+  img: { borderRadius: 0 },
   cardFooter: {
     flexDirection: "row",
-    paddingHorizontal: 14,
+    alignItems: "center",
+    paddingHorizontal: 13,
     paddingVertical: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-    marginTop: 8,
-    gap: 20,
+    gap: 16,
   },
-  action: { flexDirection: "row", alignItems: "center", gap: 4 },
-  actionText: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  viewCount: { flexDirection: "row", alignItems: "center", gap: 3, marginLeft: "auto" },
+  action: { flexDirection: "row", alignItems: "center", gap: 5 },
+  actionText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  viewCount: { flexDirection: "row", alignItems: "center", gap: 3 },
   viewText: { fontSize: 12, fontFamily: "Inter_400Regular" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingTop: 80 },
   emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
