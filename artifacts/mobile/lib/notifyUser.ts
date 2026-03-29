@@ -26,7 +26,7 @@ async function callNotify(params: {
             ? "social"
             : "default";
 
-      await fetch("https://exp.host/--/api/v2/push/send", {
+      const res = await fetch("https://exp.host/--/api/v2/push/send", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -42,10 +42,18 @@ async function callNotify(params: {
           badge: 1,
           priority: "high",
           channelId,
+          ttl: 604800,
+          expiration: Math.floor(Date.now() / 1000) + 604800,
         }),
       });
+      const json = await res.json();
+      if (json?.data?.status === "error") {
+        console.warn("[Notify] Push error:", json.data.message, json.data.details);
+      }
     }
-  } catch {}
+  } catch (e) {
+    console.warn("[Notify] Failed:", e);
+  }
 
   if (params.notificationType && params.actorId) {
     try {

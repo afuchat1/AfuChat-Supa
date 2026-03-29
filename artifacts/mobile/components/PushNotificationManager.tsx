@@ -3,6 +3,7 @@ import { AppState, Platform } from "react-native";
 import { useAuth } from "@/context/AuthContext";
 import {
   registerForPushNotifications,
+  setupNotificationChannels,
   setupNotificationListeners,
   clearBadge,
 } from "@/lib/pushNotifications";
@@ -10,6 +11,11 @@ import {
 export function PushNotificationManager() {
   const { user } = useAuth();
   const registered = useRef(false);
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    setupNotificationChannels();
+  }, []);
 
   useEffect(() => {
     if (!user || registered.current || Platform.OS === "web") return;

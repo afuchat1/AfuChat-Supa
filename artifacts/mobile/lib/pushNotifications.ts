@@ -2,6 +2,8 @@ import { Platform } from "react-native";
 import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
 
+const EAS_PROJECT_ID = "b55c5d92-7a83-472f-b660-d1838efba5fe";
+
 let Notifications: typeof import("expo-notifications") | null = null;
 let Device: typeof import("expo-device") | null = null;
 
@@ -26,12 +28,59 @@ if (Platform.OS !== "web") {
   }
 }
 
+export async function setupNotificationChannels(): Promise<void> {
+  if (Platform.OS !== "android" || !Notifications) return;
+  try {
+    await Notifications.setNotificationChannelAsync("default", {
+      name: "Default",
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#00BCD4",
+      sound: true,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      showBadge: true,
+      enableVibrate: true,
+      enableLights: true,
+      bypassDnd: false,
+    });
+
+    await Notifications.setNotificationChannelAsync("messages", {
+      name: "Messages",
+      description: "Chat messages from your contacts",
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250],
+      sound: true,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      showBadge: true,
+      enableVibrate: true,
+      enableLights: true,
+      lightColor: "#00BCD4",
+      bypassDnd: false,
+    });
+
+    await Notifications.setNotificationChannelAsync("social", {
+      name: "Social",
+      description: "Likes, follows, and replies",
+      importance: Notifications.AndroidImportance.HIGH,
+      sound: true,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      showBadge: true,
+      enableVibrate: true,
+      bypassDnd: false,
+    });
+  } catch (e) {
+    console.warn("[PushNotif] Channel setup failed:", e);
+  }
+}
+
 export async function registerForPushNotifications(userId: string): Promise<string | null> {
   if (Platform.OS === "web" || !Notifications || !Device) return null;
   if (!Device.isDevice) {
-    console.log("Push notifications require a physical device");
+    console.log("[PushNotif] Physical device required");
     return null;
   }
+
+  await setupNotificationChannels();
 
   const { status: existing } = await Notifications.getPermissionsAsync();
   let finalStatus = existing;
@@ -53,55 +102,18 @@ export async function registerForPushNotifications(userId: string): Promise<stri
   }
 
   if (finalStatus !== "granted") {
-    console.log("Push notification permission not granted");
+    console.log("[PushNotif] Permission not granted:", finalStatus);
     return null;
-  }
-
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("default", {
-      name: "Default",
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#00BCD4",
-      sound: "notification.wav",
-      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-      showBadge: true,
-      enableVibrate: true,
-      enableLights: true,
-    });
-
-    await Notifications.setNotificationChannelAsync("messages", {
-      name: "Messages",
-      description: "Chat messages from your contacts",
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250],
-      sound: "notification.wav",
-      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-      showBadge: true,
-      enableVibrate: true,
-      enableLights: true,
-      lightColor: "#00BCD4",
-    });
-
-    await Notifications.setNotificationChannelAsync("social", {
-      name: "Social",
-      description: "Likes, follows, and replies",
-      importance: Notifications.AndroidImportance.HIGH,
-      sound: "notification.wav",
-      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-      showBadge: true,
-      enableVibrate: true,
-    });
   }
 
   try {
     const projectId =
-      process.env.EXPO_PUBLIC_EAS_PROJECT_ID ||
-      process.env.EXPO_PUBLIC_REPL_ID;
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: projectId || undefined,
-    });
+      process.env.EXPO_PUBLIC_EAS_PROJECT_ID || EAS_PROJECT_ID;
+
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData.data;
+
+    console.log("[PushNotif] Token registered:", token?.slice(0, 30));
 
     await supabase
       .from("profiles")
@@ -110,7 +122,7 @@ export async function registerForPushNotifications(userId: string): Promise<stri
 
     return token;
   } catch (error) {
-    console.error("Failed to get push token:", error);
+    console.error("[PushNotif] Token registration failed:", error);
     return null;
   }
 }
@@ -160,22 +172,42 @@ export async function sendPushNotification(params: {
 
     if (!profile?.expo_push_token) return;
 
-    await fetch("https://exp.host/--/api/v2/push/send", {
+    const channelId =
+      params.data?.type === "message"
+        ? "messages"
+        : params.data?.type === "follow" ||
+          params.data?.type === "like" ||
+          params.data?.type === "reply"
+        ? "social"
+        : "default";
+
+    const res = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "Accept-Encoding": "gzip, deflate",
+      },
       body: JSON.stringify({
         to: profile.expo_push_token,
         title: params.title,
         body: params.body,
         data: params.data || {},
-        sound: "notification.wav",
+        sound: "default",
         badge: 1,
         priority: "high",
-        channelId: params.data?.type === "message" ? "messages" : params.data?.type === "follow" || params.data?.type === "like" || params.data?.type === "reply" ? "social" : "default",
+        channelId,
+        ttl: 604800,
+        expiration: Math.floor(Date.now() / 1000) + 604800,
       }),
     });
+
+    const json = await res.json();
+    if (json?.data?.status === "error") {
+      console.warn("[PushNotif] Send error:", json.data.message, json.data.details);
+    }
   } catch (error) {
-    console.error("Failed to send push notification:", error);
+    console.error("[PushNotif] Send failed:", error);
   }
 }
 
