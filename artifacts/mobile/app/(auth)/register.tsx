@@ -17,6 +17,8 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import * as WebBrowser from "expo-web-browser";
+import { makeRedirectUri } from "expo-auth-session";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
@@ -25,17 +27,7 @@ import { showAlert } from "@/lib/alert";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
-const desktopCardStyle = (isDark: boolean, colors: any) => ({
-  width: 460,
-  backgroundColor: colors.background,
-  borderRadius: 20,
-  paddingHorizontal: 40,
-  paddingVertical: 40,
-  // @ts-ignore
-  boxShadow: isDark
-    ? "0 0 0 1px rgba(255,255,255,0.07), 0 16px 48px rgba(0,0,0,0.5)"
-    : "0 0 0 1px rgba(0,0,0,0.06), 0 16px 48px rgba(0,0,0,0.1)",
-});
+WebBrowser.maybeCompleteAuthSession();
 
 export default function RegisterScreen() {
   const { colors, isDark } = useTheme();
@@ -45,6 +37,7 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const [verifyStep, setVerifyStep] = useState(false);
@@ -137,6 +130,82 @@ export default function RegisterScreen() {
     }
   }
 
+  async function handleOAuth(provider: "google" | "github") {
+    try {
+      setOauthLoading(provider);
+
+      const redirectUrl = makeRedirectUri({
+        scheme: "afuchat",
+        path: "(auth)/register",
+      });
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) {
+        showAlert("Error", error.message);
+        setOauthLoading(null);
+        return;
+      }
+
+      if (data?.url) {
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, { showInRecents: false });
+
+        if (result.type === "success" && result.url) {
+          const url = new URL(result.url);
+
+          const code = url.searchParams.get("code");
+          if (code) {
+            const { error: codeError } = await supabase.auth.exchangeCodeForSession(code);
+            if (codeError) {
+              showAlert("Error", codeError.message);
+            } else {
+              router.replace("/(tabs)");
+              setOauthLoading(null);
+              return;
+            }
+          }
+
+          let accessToken: string | null = null;
+          let refreshToken: string | null = null;
+
+          if (url.hash) {
+            const hashParams = new URLSearchParams(url.hash.substring(1));
+            accessToken = hashParams.get("access_token");
+            refreshToken = hashParams.get("refresh_token");
+          }
+
+          if (!accessToken) {
+            accessToken = url.searchParams.get("access_token");
+            refreshToken = url.searchParams.get("refresh_token");
+          }
+
+          if (accessToken && refreshToken) {
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+
+            if (sessionError) {
+              showAlert("Error", sessionError.message);
+            } else {
+              router.replace("/(tabs)");
+            }
+          }
+        }
+      }
+      setOauthLoading(null);
+    } catch {
+      setOauthLoading(null);
+      showAlert("Error", "Could not complete sign up. Please try again.");
+    }
+  }
+
   if (verifyStep) {
     return (
       <View style={[styles.root, { flexDirection: isDesktop ? "row" : "column", backgroundColor: isDesktop ? (isDark ? "#0a0a0a" : "#ffffff") : colors.background }]}>
@@ -151,62 +220,62 @@ export default function RegisterScreen() {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={{ flex: 1, backgroundColor: isDesktop ? (isDark ? "#111113" : "#ffffff") : colors.background }}
         >
-        <ScrollView
-          contentContainerStyle={
-            isDesktop
-              ? { flexGrow: 1, justifyContent: "center", paddingHorizontal: 60, paddingVertical: 48 }
-              : { ...styles.scroll, paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 }
-          }
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={isDesktop ? { maxWidth: 400, width: "100%" as any, alignSelf: "center" } : undefined}>
-          <View style={styles.headerWrap}>
-            <Image source={afuSymbol} style={{ width: 64, height: 64, marginBottom: 12, tintColor: Colors.brand }} resizeMode="contain" />
-            <Text style={[styles.title, { color: colors.text, fontSize: 24 }]}>Verify Your Email</Text>
-          </View>
+          <ScrollView
+            contentContainerStyle={
+              isDesktop
+                ? { flexGrow: 1, justifyContent: "center", paddingHorizontal: 60, paddingVertical: 48 }
+                : { ...styles.scroll, paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 }
+            }
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={isDesktop ? { maxWidth: 400, width: "100%" as any, alignSelf: "center" } : undefined}>
+              <View style={styles.headerWrap}>
+                <Image source={afuSymbol} style={{ width: 64, height: 64, marginBottom: 12, tintColor: Colors.brand }} resizeMode="contain" />
+                <Text style={[styles.title, { color: colors.text, fontSize: 24 }]}>Verify Your Email</Text>
+              </View>
 
-          <View style={styles.form}>
-            <Text style={[styles.verifyDesc, { color: colors.textSecondary }]}>
-              We've sent a 6-digit verification code to{"\n"}
-              <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold" }}>{email}</Text>
-              {"\n"}Enter it below to continue.
-            </Text>
+              <View style={styles.form}>
+                <Text style={[styles.verifyDesc, { color: colors.textSecondary }]}>
+                  We've sent a 6-digit verification code to{"\n"}
+                  <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold" }}>{email}</Text>
+                  {"\n"}Enter it below to continue.
+                </Text>
 
-            <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
-              <Ionicons name="keypad-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
-              <TextInput
-                style={[styles.input, { color: colors.text, letterSpacing: 4, fontSize: 20, textAlign: "center" }]}
-                placeholder="000000"
-                placeholderTextColor={colors.textMuted}
-                value={otpCode}
-                onChangeText={setOtpCode}
-                keyboardType="number-pad"
-                maxLength={6}
-                autoFocus
-              />
+                <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
+                  <Ionicons name="keypad-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
+                  <TextInput
+                    style={[styles.input, { color: colors.text, letterSpacing: 4, fontSize: 20, textAlign: "center" }]}
+                    placeholder="000000"
+                    placeholderTextColor={colors.textMuted}
+                    value={otpCode}
+                    onChangeText={setOtpCode}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    autoFocus
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.primaryBtn, verifyLoading && { opacity: 0.6 }]}
+                  onPress={handleVerifyOtp}
+                  disabled={verifyLoading}
+                >
+                  {verifyLoading ? <ActivityIndicator color="#fff" /> : (
+                    <Text style={styles.primaryBtnText}>Verify & Continue</Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={handleResendCode} style={styles.resendBtn} disabled={verifyLoading}>
+                  <Text style={[styles.resendText, { color: Colors.brand }]}>Didn't get the code? Resend</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => { setVerifyStep(false); setOtpCode(""); }} style={styles.backToFormBtn}>
+                  <Ionicons name="arrow-back" size={18} color={Colors.brand} />
+                  <Text style={[styles.backToFormText, { color: Colors.brand }]}>Back</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-
-            <TouchableOpacity
-              style={[styles.primaryBtn, verifyLoading && { opacity: 0.6 }]}
-              onPress={handleVerifyOtp}
-              disabled={verifyLoading}
-            >
-              {verifyLoading ? <ActivityIndicator color="#fff" /> : (
-                <Text style={styles.primaryBtnText}>Verify & Continue</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={handleResendCode} style={styles.resendBtn} disabled={verifyLoading}>
-              <Text style={[styles.resendText, { color: Colors.brand }]}>Didn't get the code? Resend</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => { setVerifyStep(false); setOtpCode(""); }} style={styles.backToFormBtn}>
-              <Ionicons name="arrow-back" size={18} color={Colors.brand} />
-              <Text style={[styles.backToFormText, { color: Colors.brand }]}>Back</Text>
-            </TouchableOpacity>
-          </View>
-          </View>
-        </ScrollView>
+          </ScrollView>
         </KeyboardAvoidingView>
       </View>
     );
@@ -238,157 +307,145 @@ export default function RegisterScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1, backgroundColor: isDesktop ? (isDark ? "#111113" : "#ffffff") : colors.background }}
       >
-      <ScrollView
-        contentContainerStyle={
-          isDesktop
-            ? { flexGrow: 1, justifyContent: "center", paddingHorizontal: 60, paddingVertical: 48 }
-            : { ...styles.scroll, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }
-        }
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={isDesktop ? { maxWidth: 400, width: "100%" as any, alignSelf: "center" } : undefined}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        <ScrollView
+          contentContainerStyle={
+            isDesktop
+              ? { flexGrow: 1, justifyContent: "center", paddingHorizontal: 60, paddingVertical: 48 }
+              : { ...styles.scroll, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }
+          }
+          keyboardShouldPersistTaps="handled"
         >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+          <View style={isDesktop ? { maxWidth: 400, width: "100%" as any, alignSelf: "center" } : undefined}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <Ionicons name="arrow-back" size={24} color={colors.text} />
+            </TouchableOpacity>
 
-        <View style={styles.headerWrap}>
-          <Image source={afuSymbol} style={{ width: 72, height: 72, marginBottom: 20, tintColor: Colors.brand }} resizeMode="contain" />
-          <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Join AfuChat and start connecting
-          </Text>
-        </View>
-
-        <View style={styles.form}>
-          <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
-            <Ionicons name="mail-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
-            <TextInput
-              style={[styles.input, { color: colors.text }]}
-              placeholder="Email address"
-              placeholderTextColor={colors.textMuted}
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              autoFocus
-            />
-          </View>
-
-          <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
-            <Ionicons name="lock-closed-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
-            <TextInput
-              style={[styles.input, { color: colors.text, flex: 1 }]}
-              placeholder="Password (min. 6 characters)"
-              placeholderTextColor={colors.textMuted}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPwd}
-            />
-            <Pressable onPress={() => setShowPwd((v) => !v)} style={styles.eyeBtn}>
-              <Ionicons
-                name={showPwd ? "eye-off-outline" : "eye-outline"}
-                size={18}
-                color={colors.textMuted}
-              />
-            </Pressable>
-          </View>
-
-          <TouchableOpacity
-            style={styles.termsRow}
-            onPress={() => setAgreedToTerms((v) => !v)}
-            activeOpacity={0.7}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: agreedToTerms }}
-          >
-            <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
-              {agreedToTerms && <Ionicons name="checkmark" size={14} color="#fff" />}
+            <View style={styles.headerWrap}>
+              <Image source={afuSymbol} style={{ width: 72, height: 72, marginBottom: 20, tintColor: Colors.brand }} resizeMode="contain" />
+              <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
+              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+                Join AfuChat and start connecting
+              </Text>
             </View>
-            <Text style={[styles.termsText, { color: colors.textSecondary }]}>
-              I have read and agree to the{" "}
-              <Text
-                style={styles.termsLink}
-                onPress={() => router.push("/terms")}
-              >
-                Terms of Service
-              </Text>
-              {" "}and{" "}
-              <Text
-                style={styles.termsLink}
-                onPress={() => router.push("/privacy")}
-              >
-                Privacy Policy
-              </Text>
-            </Text>
-          </TouchableOpacity>
 
-          <Pressable
-            style={[styles.primaryBtn, { opacity: (loading || !agreedToTerms) ? 0.5 : 1 }]}
-            onPress={handleRegister}
-            disabled={loading || !agreedToTerms}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: loading || !agreedToTerms }}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.primaryBtnText}>Create Account</Text>
-            )}
-          </Pressable>
+            <View style={styles.form}>
+              <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
+                <Ionicons name="mail-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
+                <TextInput
+                  style={[styles.input, { color: colors.text }]}
+                  placeholder="Email address"
+                  placeholderTextColor={colors.textMuted}
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoFocus
+                />
+              </View>
 
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.loginLink}
-          >
-            <Text style={[styles.loginLinkText, { color: colors.textSecondary }]}>
-              Already have an account?{" "}
-              <Text style={{ color: Colors.brand, fontFamily: "Inter_600SemiBold" }}>
-                Log in
-              </Text>
-            </Text>
-          </TouchableOpacity>
-        </View>
-        </View>
-      </ScrollView>
+              <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
+                <Ionicons name="lock-closed-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
+                <TextInput
+                  style={[styles.input, { color: colors.text, flex: 1 }]}
+                  placeholder="Password (min. 6 characters)"
+                  placeholderTextColor={colors.textMuted}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPwd}
+                />
+                <Pressable onPress={() => setShowPwd((v) => !v)} style={styles.eyeBtn}>
+                  <Ionicons name={showPwd ? "eye-off-outline" : "eye-outline"} size={18} color={colors.textMuted} />
+                </Pressable>
+              </View>
+
+              <TouchableOpacity
+                style={styles.termsRow}
+                onPress={() => setAgreedToTerms((v) => !v)}
+                activeOpacity={0.7}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: agreedToTerms }}
+              >
+                <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
+                  {agreedToTerms && <Ionicons name="checkmark" size={14} color="#fff" />}
+                </View>
+                <Text style={[styles.termsText, { color: colors.textSecondary }]}>
+                  I agree to the{" "}
+                  <Text style={styles.termsLink} onPress={() => router.push("/terms")}>Terms of Service</Text>
+                  {" "}and{" "}
+                  <Text style={styles.termsLink} onPress={() => router.push("/privacy")}>Privacy Policy</Text>
+                </Text>
+              </TouchableOpacity>
+
+              <Pressable
+                style={[styles.primaryBtn, { opacity: (loading || !agreedToTerms) ? 0.5 : 1 }]}
+                onPress={handleRegister}
+                disabled={loading || !agreedToTerms}
+                accessibilityRole="button"
+              >
+                {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Create Account</Text>}
+              </Pressable>
+
+              <View style={styles.divider}>
+                <View style={[styles.line, { backgroundColor: colors.border }]} />
+                <Text style={[styles.orText, { color: colors.textMuted }]}>or sign up with</Text>
+                <View style={[styles.line, { backgroundColor: colors.border }]} />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.oauthBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+                onPress={() => handleOAuth("google")}
+                disabled={!!oauthLoading}
+                activeOpacity={0.7}
+              >
+                {oauthLoading === "google" ? (
+                  <ActivityIndicator color={Colors.brand} />
+                ) : (
+                  <>
+                    <View style={styles.googleIconWrap}>
+                      <Text style={styles.googleG}>G</Text>
+                    </View>
+                    <Text style={[styles.oauthBtnText, { color: colors.text }]}>Continue with Google</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.oauthBtn, { backgroundColor: "#24292e" }]}
+                onPress={() => handleOAuth("github")}
+                disabled={!!oauthLoading}
+                activeOpacity={0.7}
+              >
+                {oauthLoading === "github" ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="logo-github" size={20} color="#fff" />
+                    <Text style={[styles.oauthBtnText, { color: "#fff" }]}>Continue with GitHub</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => router.back()} style={styles.loginLink}>
+                <Text style={[styles.loginLinkText, { color: colors.textSecondary }]}>
+                  Already have an account?{" "}
+                  <Text style={{ color: Colors.brand, fontFamily: "Inter_600SemiBold" }}>Log in</Text>
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
 }
 
 const regSplit = StyleSheet.create({
-  brandPanel: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 60,
-  },
-  brandTitle: {
-    fontSize: 52,
-    fontFamily: "Inter_700Bold",
-    color: "#fff",
-    marginBottom: 16,
-    letterSpacing: -1,
-  },
-  brandTagline: {
-    fontSize: 18,
-    fontFamily: "Inter_400Regular",
-    color: "rgba(255,255,255,0.85)",
-    textAlign: "center",
-    lineHeight: 28,
-    marginBottom: 48,
-  },
+  brandPanel: { flex: 1, alignItems: "center", justifyContent: "center", padding: 60 },
+  brandTitle: { fontSize: 52, fontFamily: "Inter_700Bold", color: "#fff", marginBottom: 16, letterSpacing: -1 },
+  brandTagline: { fontSize: 18, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.85)", textAlign: "center", lineHeight: 28, marginBottom: 48 },
   featureList: { gap: 20, width: "100%" as any, maxWidth: 380 },
   featureRow: { flexDirection: "row", alignItems: "center", gap: 14 },
-  featureText: {
-    fontSize: 16,
-    fontFamily: "Inter_400Regular",
-    color: "rgba(255,255,255,0.9)",
-    flex: 1,
-    lineHeight: 22,
-  },
+  featureText: { fontSize: 16, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.9)", flex: 1, lineHeight: 22 },
 });
 
 const styles = StyleSheet.create({
@@ -399,75 +456,29 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontFamily: "Inter_700Bold", marginBottom: 8 },
   subtitle: { fontSize: 15, fontFamily: "Inter_400Regular" },
   form: { gap: 14 },
-  field: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    height: 52,
-  },
+  field: { flexDirection: "row", alignItems: "center", borderRadius: 12, paddingHorizontal: 14, height: 52 },
   fieldIcon: { marginRight: 10 },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    fontFamily: "Inter_400Regular",
-    height: 52,
-  },
+  input: { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular", height: 52 },
   eyeBtn: { padding: 4 },
-  verifyDesc: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 22,
-    textAlign: "center",
-    marginBottom: 8,
-  },
+  verifyDesc: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 22, textAlign: "center", marginBottom: 8 },
   resendBtn: { alignSelf: "center", marginTop: 4 },
   resendText: { fontSize: 14, fontFamily: "Inter_500Medium" },
   backToFormBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 8 },
   backToFormText: { fontSize: 15, fontFamily: "Inter_500Medium" },
-  termsRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    paddingVertical: 4,
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: "#CCC",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 1,
-  },
-  checkboxChecked: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
-  },
-  termsText: {
-    flex: 1,
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 20,
-  },
-  termsLink: {
-    color: Colors.brand,
-    fontFamily: "Inter_600SemiBold",
-  },
-  primaryBtn: {
-    backgroundColor: Colors.brand,
-    height: 52,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 4,
-  },
-  primaryBtnText: {
-    color: "#fff",
-    fontSize: 17,
-    fontFamily: "Inter_600SemiBold",
-  },
+  termsRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 4 },
+  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: "#CCC", alignItems: "center", justifyContent: "center", marginTop: 1 },
+  checkboxChecked: { backgroundColor: Colors.brand, borderColor: Colors.brand },
+  termsText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 20 },
+  termsLink: { color: Colors.brand, fontFamily: "Inter_600SemiBold" },
+  primaryBtn: { backgroundColor: Colors.brand, height: 52, borderRadius: 14, alignItems: "center", justifyContent: "center", marginTop: 4 },
+  primaryBtnText: { color: "#fff", fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  divider: { flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 2 },
+  line: { flex: 1, height: StyleSheet.hairlineWidth },
+  orText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  oauthBtn: { flexDirection: "row", height: 52, borderRadius: 14, borderWidth: 1.5, alignItems: "center", justifyContent: "center", gap: 10 },
+  oauthBtnText: { fontSize: 16, fontFamily: "Inter_500Medium" },
+  googleIconWrap: { width: 24, height: 24, borderRadius: 12, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#ddd" },
+  googleG: { fontSize: 16, fontWeight: "700", color: "#4285F4" },
   loginLink: { alignItems: "center", marginTop: 4 },
   loginLinkText: { fontSize: 14, fontFamily: "Inter_400Regular" },
 });

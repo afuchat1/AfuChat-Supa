@@ -20,7 +20,7 @@ export default function IndexScreen() {
         router.replace("/(tabs)");
       }
     } else {
-      router.replace("/(tabs)/discover");
+      router.replace("/(auth)/login");
     }
   }
 

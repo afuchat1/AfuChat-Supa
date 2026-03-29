@@ -438,14 +438,6 @@ export default function ContactProfileScreen() {
             </View>
             <Text style={[styles.actionLabel, { color: colors.text }]}>Gift</Text>
           </TouchableOpacity>
-          {(hasShop || profile?.is_business_mode || profile?.is_organization_verified) && (
-            <TouchableOpacity style={styles.actionBtn} onPress={() => router.push({ pathname: "/shop/[userId]", params: { userId: profile?.id || "" } })}>
-              <View style={[styles.actionIcon, { backgroundColor: "#FF9500" }]}>
-                <Ionicons name="storefront" size={22} color="#fff" />
-              </View>
-              <Text style={[styles.actionLabel, { color: colors.text }]}>Shop</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         <View style={[styles.postsSection, { backgroundColor: colors.surface }]}>
