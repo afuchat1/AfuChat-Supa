@@ -32,6 +32,7 @@ type Profile = {
   bio: string | null;
   is_verified: boolean;
   is_organization_verified: boolean;
+  is_business_mode: boolean;
   xp: number;
   current_grade: string;
   website_url: string | null;
@@ -81,18 +82,21 @@ export default function ContactProfileScreen() {
   const [posts, setPosts] = useState<UserPost[]>([]);
   const [postsLoading, setPostsLoading] = useState(true);
   const [showBadgeInfo, setShowBadgeInfo] = useState(false);
+  const [hasShop, setHasShop] = useState(false);
 
   useEffect(() => {
     if (!id) return;
     supabase
       .from("profiles")
-      .select("id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified, xp, current_grade, website_url, country, created_at, last_seen, show_online_status, acoin")
+      .select("id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified, is_business_mode, xp, current_grade, website_url, country, created_at, last_seen, show_online_status, acoin")
       .eq("id", id)
       .single()
       .then(({ data }) => {
         setProfile(data as Profile);
         setLoading(false);
       });
+
+    supabase.from("shops").select("id").eq("seller_id", id).eq("is_active", true).maybeSingle().then(({ data }) => setHasShop(!!data));
 
     if (user) {
       supabase.from("follows").select("id").eq("follower_id", user.id).eq("following_id", id).maybeSingle().then(({ data }) => setIsFollowing(!!data));
@@ -434,6 +438,14 @@ export default function ContactProfileScreen() {
             </View>
             <Text style={[styles.actionLabel, { color: colors.text }]}>Gift</Text>
           </TouchableOpacity>
+          {(hasShop || profile?.is_business_mode || profile?.is_organization_verified) && (
+            <TouchableOpacity style={styles.actionBtn} onPress={() => router.push({ pathname: "/shop/[userId]", params: { userId: profile?.id || "" } })}>
+              <View style={[styles.actionIcon, { backgroundColor: "#FF9500" }]}>
+                <Ionicons name="storefront" size={22} color="#fff" />
+              </View>
+              <Text style={[styles.actionLabel, { color: colors.text }]}>Shop</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={[styles.postsSection, { backgroundColor: colors.surface }]}>

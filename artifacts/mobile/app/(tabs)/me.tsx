@@ -287,6 +287,8 @@ export default function MeScreen() {
         <Separator indent={54} />
         <MenuItem icon="trophy-outline" iconBg="#FF9500" label="Achievements" onPress={() => router.push("/achievements")} />
         <Separator indent={54} />
+        <MenuItem icon="bag-handle-outline" iconBg="#FF6B35" label="My Shop" onPress={() => router.push("/shop/manage" as any)} badge="NEW" />
+        <Separator indent={54} />
         <MenuItem icon="storefront-outline" iconBg="#AF52DE" label="Virtual Shop" onPress={() => router.push("/store")} badge="NEW" />
       </MenuGroup>
 
