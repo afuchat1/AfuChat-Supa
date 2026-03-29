@@ -1,5 +1,4 @@
 import { Platform } from "react-native";
-import * as FileSystem from "expo-file-system";
 import { supabase, supabaseUrl, supabaseAnonKey } from "./supabase";
 
 const MIME_MAP: Record<string, string> = {
@@ -44,22 +43,27 @@ export async function uploadToStorage(
       const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
       const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucket}/${encodedPath}`;
 
-      const response = await FileSystem.uploadAsync(uploadUrl, fileUri, {
-        httpMethod: "POST",
-        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
-        fieldName: "file",
-        mimeType: mime,
+      const formData = new FormData();
+      formData.append("file", {
+        uri: fileUri,
+        name: filePath.split("/").pop() || "file",
+        type: mime,
+      } as any);
+
+      const response = await fetch(uploadUrl, {
+        method: "POST",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
           "x-upsert": "true",
           apikey: supabaseAnonKey,
         },
+        body: formData,
       });
 
-      if (response.status < 200 || response.status >= 300) {
+      if (!response.ok) {
         let errMsg = "Upload failed";
         try {
-          const parsed = JSON.parse(response.body);
+          const parsed = await response.json();
           errMsg = parsed.message || parsed.error || errMsg;
         } catch {}
         return { publicUrl: null, error: `${errMsg} (${response.status})` };
