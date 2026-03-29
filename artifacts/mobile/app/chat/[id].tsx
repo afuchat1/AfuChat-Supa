@@ -77,6 +77,7 @@ type Message = {
   status?: string;
   attachment_url?: string | null;
   attachment_type?: string | null;
+  edited_at?: string | null;
   _pending?: boolean;
 };
 
@@ -655,6 +656,9 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
           )}
 
           <View style={st.metaRow}>
+            {msg.edited_at && (
+              <Text style={[st.msgTime, { color: isMe ? "rgba(255,255,255,0.55)" : colors.textMuted, marginRight: 4 }]}>edited</Text>
+            )}
             <Text style={[st.msgTime, { color: isMe ? "rgba(255,255,255,0.55)" : colors.textMuted }]}>
               {formatMsgTime(msg.sent_at)}
             </Text>
@@ -727,6 +731,7 @@ export default function ChatScreen() {
   );
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [showReactions, setShowReactions] = useState<Message | null>(null);
   const [showRedEnvelope, setShowRedEnvelope] = useState(false);
   const [envelopeAmount, setEnvelopeAmount] = useState("");
@@ -819,7 +824,7 @@ export default function ChatScreen() {
 
     const { data } = await supabase
       .from("messages")
-      .select(`id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`)
+      .select(`id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`)
       .eq("chat_id", chatId)
       .order("sent_at", { ascending: false })
       .limit(50);
@@ -860,6 +865,7 @@ export default function ChatScreen() {
         reply_to_message_id: m.reply_to_message_id,
         attachment_url: m.attachment_url,
         attachment_type: m.attachment_type,
+        edited_at: m.edited_at,
         sender: m.profiles,
         reactions: reactionMap[m.id] || [],
         status: m.sender_id === user.id
@@ -1145,6 +1151,74 @@ export default function ChatScreen() {
           }
         },
       })),
+      { text: "Cancel", style: "cancel" as const },
+    ]);
+  }
+
+  function startEditMessage(msg: Message) {
+    setShowReactions(null);
+    setAiResult(null);
+    setAiResultType(null);
+    setAiReplies([]);
+    setEditingMessage(msg);
+    setInput(msg.encrypted_content);
+    setReplyTo(null);
+  }
+
+  async function saveEditMessage() {
+    if (!editingMessage || !user) return;
+    const text = input.trim();
+    if (!text) return;
+    if (text === editingMessage.encrypted_content) {
+      setEditingMessage(null);
+      setInput("");
+      return;
+    }
+    setSending(true);
+    const { error } = await supabase
+      .from("messages")
+      .update({ encrypted_content: text, edited_at: new Date().toISOString() })
+      .eq("id", editingMessage.id)
+      .eq("sender_id", user.id);
+
+    if (error) {
+      showAlert("Edit failed", error.message.includes("time") ? "Messages can only be edited within 15 minutes of sending." : "Could not edit message. Please try again.");
+    } else {
+      setMessages((prev) => prev.map((m) => m.id === editingMessage.id ? { ...m, encrypted_content: text, edited_at: new Date().toISOString() } : m));
+    }
+    setEditingMessage(null);
+    setInput("");
+    setSending(false);
+  }
+
+  function cancelEdit() {
+    setEditingMessage(null);
+    setInput("");
+  }
+
+  function handleDeleteMessage(msg: Message) {
+    setShowReactions(null);
+    setAiResult(null);
+    setAiResultType(null);
+    setAiReplies([]);
+    showAlert("Delete Message", "Are you sure you want to delete this message? This cannot be undone.", [
+      {
+        text: "Delete",
+        style: "destructive" as const,
+        onPress: async () => {
+          const { error } = await supabase
+            .from("messages")
+            .delete()
+            .eq("id", msg.id)
+            .eq("sender_id", user?.id);
+          if (error) {
+            showAlert("Error", "Could not delete message. Please try again.");
+          } else {
+            setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+        },
+      },
       { text: "Cancel", style: "cancel" as const },
     ]);
   }
@@ -2007,7 +2081,20 @@ export default function ChatScreen() {
           />
         )}
 
-        {replyTo && (
+        {editingMessage && (
+          <View style={[st.replyBanner, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+            <View style={[st.replyBarAccent, { backgroundColor: "#FF9500" }]} />
+            <View style={{ flex: 1 }}>
+              <Text style={[st.replyBannerName, { color: "#FF9500" }]}>Editing message</Text>
+              <Text style={[st.replyBannerText, { color: colors.textSecondary }]} numberOfLines={1}>{editingMessage.encrypted_content}</Text>
+            </View>
+            <TouchableOpacity onPress={cancelEdit} hitSlop={8}>
+              <Ionicons name="close" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {replyTo && !editingMessage && (
           <View style={[st.replyBanner, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
             <View style={[st.replyBarAccent, { backgroundColor: BRAND }]} />
             <View style={{ flex: 1 }}>
@@ -2110,14 +2197,14 @@ export default function ChatScreen() {
               </View>
               {(input.trim() || attachmentPreview) ? (
                 <TouchableOpacity
-                  onPress={attachmentPreview ? sendAttachment : () => sendMessage()}
+                  onPress={editingMessage ? saveEditMessage : attachmentPreview ? sendAttachment : () => sendMessage()}
                   disabled={sending}
-                  style={[st.sendBtn, { backgroundColor: BRAND }]}
+                  style={[st.sendBtn, { backgroundColor: editingMessage ? "#FF9500" : BRAND }]}
                 >
                   {sending ? (
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
-                    <Ionicons name="send" size={18} color="#fff" />
+                    <Ionicons name={editingMessage ? "checkmark" : "send"} size={18} color="#fff" />
                   )}
                 </TouchableOpacity>
               ) : (
@@ -2165,6 +2252,24 @@ export default function ChatScreen() {
               <Text style={[st.reactModalActionText, { color: colors.text }]}>Translate</Text>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: "auto" }} />
             </TouchableOpacity>
+            {showReactions && showReactions.sender_id === user?.id && !showReactions.attachment_url && !showReactions.encrypted_content.startsWith("🎁 ") && !showReactions.encrypted_content.startsWith("🧧") && !showReactions.encrypted_content.includes("|giftId:") && (
+              <TouchableOpacity
+                style={st.reactModalAction}
+                onPress={() => { if (showReactions) startEditMessage(showReactions); }}
+              >
+                <Ionicons name="pencil-outline" size={20} color={colors.text} />
+                <Text style={[st.reactModalActionText, { color: colors.text }]}>Edit</Text>
+              </TouchableOpacity>
+            )}
+            {showReactions && showReactions.sender_id === user?.id && (
+              <TouchableOpacity
+                style={st.reactModalAction}
+                onPress={() => { if (showReactions) handleDeleteMessage(showReactions); }}
+              >
+                <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                <Text style={[st.reactModalActionText, { color: "#FF3B30" }]}>Delete</Text>
+              </TouchableOpacity>
+            )}
             {showReactions && showReactions.sender_id !== user?.id && (
               <TouchableOpacity
                 style={st.reactModalAction}
