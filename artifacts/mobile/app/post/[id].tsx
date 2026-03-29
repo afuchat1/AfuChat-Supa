@@ -30,7 +30,7 @@ import { notifyPostLike, notifyPostReply } from "@/lib/notifyUser";
 import { useAutoTranslate } from "@/context/LanguageContext";
 import { LANG_LABELS } from "@/lib/translate";
 import { aiSummarizeThread } from "@/lib/aiHelper";
-import ViewShot from "react-native-view-shot";
+
 
 type Reply = {
   id: string;
@@ -112,9 +112,7 @@ export default function PostDetailScreen() {
   const [reportReason, setReportReason] = useState("");
   const [reportOtherText, setReportOtherText] = useState("");
   const [reportSending, setReportSending] = useState(false);
-  const [capturing, setCapturing] = useState(false);
   const imgViewer = useImageViewer();
-  const cardRef = useRef<ViewShot>(null);
   const { displayText: postDisplayText, isTranslated: postIsTranslated, lang: postLang } = useAutoTranslate(post?.content);
 
   const isOwner = user && post && post.author.id === user.id;
@@ -332,31 +330,6 @@ export default function PostDetailScreen() {
     showAlert("Reported", "Thank you for your report. Our team will review it.");
   }
 
-  async function capturePostImage() {
-    if (!cardRef.current) return;
-    setCapturing(true);
-    setMenuVisible(false);
-    try {
-      if (typeof cardRef.current.capture !== "function") { showAlert("Error", "Capture not available."); setCapturing(false); return; }
-      const uri = await cardRef.current.capture();
-      if (Platform.OS === "web") {
-        const link = document.createElement("a");
-        link.href = uri;
-        link.download = `afuchat-post-${Date.now()}.png`;
-        link.click();
-      } else {
-        const Sharing = require("expo-sharing");
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: "Save Post Image" });
-        } else {
-          showAlert("Not available", "Sharing is not available on this device.");
-        }
-      }
-    } catch (e: any) {
-      showAlert("Error", "Could not capture post image.");
-    }
-    setCapturing(false);
-  }
 
   const REPORT_REASONS = ["Spam", "Harassment", "Hate speech", "Violence", "Misinformation", "Inappropriate content", "Other"];
 
@@ -390,8 +363,7 @@ export default function PostDetailScreen() {
         data={replies}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={
-          <ViewShot ref={cardRef} options={{ format: "png", quality: 1, result: "tmpfile" }}>
-            <View style={[styles.postSection, { backgroundColor: colors.surface }]}>
+          <View style={[styles.postSection, { backgroundColor: colors.surface }]}>
               <View style={styles.postHeader}>
                 <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: post.author.id } })}>
                   <Avatar uri={post.author.avatar_url} name={post.author.display_name} size={44} />
@@ -472,9 +444,7 @@ export default function PostDetailScreen() {
                 <TouchableOpacity style={styles.statBtn} onPress={() => sharePost({ postId: post.id, authorName: post.author.display_name, content: post.content })}>
                   <Ionicons name="share-outline" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.statBtn} onPress={capturePostImage}>
-                  {capturing ? <ActivityIndicator size={18} color={colors.textSecondary} /> : <Ionicons name="camera-outline" size={20} color={colors.textSecondary} />}
-                </TouchableOpacity>
+
               </View>
 
               {replies.length >= 2 && (
@@ -520,7 +490,7 @@ export default function PostDetailScreen() {
                 <Text style={[styles.repliesLabel, { color: colors.textMuted }]}>Replies</Text>
               )}
             </View>
-          </ViewShot>
+          </View>
         }
         renderItem={({ item }) => <ReplyCard item={item} colors={colors} />}
         contentContainerStyle={{ paddingBottom: 100 }}
@@ -575,11 +545,6 @@ export default function PostDetailScreen() {
             <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); sharePost({ postId: post.id, authorName: post.author.display_name, content: post.content }); }}>
               <Ionicons name="share-outline" size={22} color={Colors.brand} />
               <Text style={[styles.menuText, { color: colors.text }]}>Share Post</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.menuItem} onPress={capturePostImage}>
-              <Ionicons name="image-outline" size={22} color={Colors.brand} />
-              <Text style={[styles.menuText, { color: colors.text }]}>Save as Image</Text>
             </TouchableOpacity>
 
             {isOwner && (

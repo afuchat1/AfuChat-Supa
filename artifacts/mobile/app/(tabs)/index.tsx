@@ -248,6 +248,7 @@ export default function ChatsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
   const fetchUnreadCount = useCallback(() => {
@@ -492,20 +493,40 @@ export default function ChatsScreen() {
       </View>
 
       <View style={[styles.searchWrap, { backgroundColor: colors.surface }]}>
-        <View style={[styles.searchBox, { backgroundColor: colors.inputBg }]}>
-          <Ionicons name="search-outline" size={16} color={colors.textMuted} />
+        <View style={[
+          styles.searchBox,
+          {
+            backgroundColor: colors.inputBg,
+            borderColor: searchFocused ? Colors.brand : colors.border,
+            shadowColor: searchFocused ? Colors.brand : "#000",
+            shadowOpacity: searchFocused ? 0.18 : 0.05,
+          },
+        ]}>
+          <Ionicons
+            name={searchFocused ? "search" : "search-outline"}
+            size={19}
+            color={searchFocused ? Colors.brand : colors.textMuted}
+          />
           <TextInput
             style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Search"
+            placeholder="Search conversations…"
             placeholderTextColor={colors.textMuted}
             value={search}
             onChangeText={setSearch}
             returnKeyType="search"
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
           />
-          {search.length > 0 && (
-            <Pressable onPress={() => setSearch("")}>
-              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+          {search.length > 0 ? (
+            <Pressable onPress={() => setSearch("")} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+              <View style={[styles.clearBtn, { backgroundColor: colors.textMuted + "28" }]}>
+                <Ionicons name="close" size={13} color={colors.textMuted} />
+              </View>
             </Pressable>
+          ) : (
+            <View style={[styles.kbdHint, { borderColor: colors.border }]}>
+              <Ionicons name="mic-outline" size={14} color={colors.textMuted} />
+            </View>
           )}
         </View>
       </View>
@@ -575,16 +596,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   notifBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
-  searchWrap: { paddingHorizontal: 12, paddingVertical: 8 },
+  searchWrap: { paddingHorizontal: 14, paddingVertical: 10 },
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    height: 36,
-    gap: 6,
+    borderRadius: 14,
+    paddingHorizontal: 13,
+    height: 44,
+    gap: 9,
+    borderWidth: 1.5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
   },
-  searchInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 36 },
+  searchInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 44, letterSpacing: 0.1 },
+  clearBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  kbdHint: {
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",

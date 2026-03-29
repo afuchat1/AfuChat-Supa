@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   FlatList,
   Image,
+  Modal,
   Platform,
   RefreshControl,
   StyleSheet,
@@ -12,6 +14,8 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import ViewShot from "react-native-view-shot";
+import { useSafeAreaInsets as useCardInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -81,8 +85,12 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress }: { item
   const { colors } = useTheme();
   const { preferredLang } = useLanguage();
   const { width: screenW } = useWindowDimensions();
+  const cardInsets = useCardInsets();
   const [displayContent, setDisplayContent] = useState(item.content);
   const [isTranslated, setIsTranslated] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [capturing, setCapturing] = useState(false);
+  const cardRef = useRef<ViewShot>(null);
 
   const allImages = item.images.length > 0 ? item.images : item.image_url ? [item.image_url] : [];
   const imgW = allImages.length === 1 ? screenW - 48 : (screenW - 56) / 2;
@@ -105,74 +113,140 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress }: { item
     router.push({ pathname: "/post/[id]", params: { id: item.id } });
   }
 
+  async function capturePostImage() {
+    if (!cardRef.current) return;
+    setMenuVisible(false);
+    setCapturing(true);
+    try {
+      if (typeof cardRef.current.capture !== "function") {
+        Alert.alert("Error", "Capture not available.");
+        setCapturing(false);
+        return;
+      }
+      const uri = await cardRef.current.capture();
+      if (Platform.OS === "web") {
+        const link = document.createElement("a");
+        link.href = uri;
+        link.download = `afuchat-post-${Date.now()}.png`;
+        link.click();
+      } else {
+        const Sharing = require("expo-sharing");
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: "Save Post Image" });
+        } else {
+          Alert.alert("Not available", "Sharing is not available on this device.");
+        }
+      }
+    } catch {
+      Alert.alert("Error", "Could not capture post image.");
+    }
+    setCapturing(false);
+  }
+
   return (
-    <TouchableOpacity style={[styles.card, { backgroundColor: colors.surface }]} onPress={openPost} activeOpacity={0.85}>
-      <View style={styles.cardHeader}>
-        <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}>
-          <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={40} />
-        </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <View style={styles.nameRow}>
-            <Text style={[styles.cardName, { color: colors.text }]}>{item.profile.display_name}</Text>
-            <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={13} />
-          </View>
-          <Text style={[styles.cardTime, { color: colors.textMuted }]}>
-            @{item.profile.handle} · {formatRelative(item.created_at)}
-          </Text>
-        </View>
-        <Ionicons name="ellipsis-horizontal" size={18} color={colors.textMuted} />
-      </View>
-
-      <RichText style={[styles.cardContent, { color: colors.text }]}>{displayContent}</RichText>
-      {isTranslated && (
-        <View style={styles.translatedBadge}>
-          <Ionicons name="language" size={10} color={colors.textMuted} />
-          <Text style={[styles.translatedText, { color: colors.textMuted }]}>
-            {`Translated · ${LANG_LABELS[preferredLang || ""] ?? preferredLang}`}
-          </Text>
-        </View>
-      )}
-
-      {allImages.length > 0 && (
-        <View style={styles.images}>
-          {allImages.map((uri, i) => (
-            <TouchableOpacity
-              key={i}
-              activeOpacity={0.9}
-              onPress={(e) => { e.stopPropagation(); onImagePress?.(allImages, i); }}
-            >
-              <Image
-                source={{ uri }}
-                style={[styles.img, { width: imgW, height: imgW * 0.75 }]}
-                resizeMode="cover"
-              />
+    <>
+      <ViewShot ref={cardRef} options={{ format: "png", quality: 1, result: "tmpfile" }}>
+        <TouchableOpacity style={[styles.card, { backgroundColor: colors.surface }]} onPress={openPost} activeOpacity={0.85}>
+          <View style={styles.cardHeader}>
+            <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}>
+              <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={40} />
             </TouchableOpacity>
-          ))}
-        </View>
-      )}
+            <View style={{ flex: 1 }}>
+              <View style={styles.nameRow}>
+                <Text style={[styles.cardName, { color: colors.text }]}>{item.profile.display_name}</Text>
+                <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={13} />
+              </View>
+              <Text style={[styles.cardTime, { color: colors.textMuted }]}>
+                @{item.profile.handle} · {formatRelative(item.created_at)}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => { Haptics.impact?.(); setMenuVisible(true); }}
+              hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+              style={styles.ellipsisBtn}
+            >
+              <Ionicons name="ellipsis-horizontal" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
 
-      <View style={[styles.cardFooter, { borderTopColor: colors.separator }]}>
-        <TouchableOpacity
-          style={styles.action}
-          onPress={() => { onToggleLike(item.id); }}
-        >
-          <Ionicons name={item.liked ? "heart" : "heart-outline"} size={18} color={item.liked ? "#FF3B30" : colors.textMuted} />
-          {item.likeCount > 0 && <Text style={[styles.actionText, { color: item.liked ? "#FF3B30" : colors.textMuted }]}>{item.likeCount}</Text>}
+          <RichText style={[styles.cardContent, { color: colors.text }]}>{displayContent}</RichText>
+          {isTranslated && (
+            <View style={styles.translatedBadge}>
+              <Ionicons name="language" size={10} color={colors.textMuted} />
+              <Text style={[styles.translatedText, { color: colors.textMuted }]}>
+                {`Translated · ${LANG_LABELS[preferredLang || ""] ?? preferredLang}`}
+              </Text>
+            </View>
+          )}
+
+          {allImages.length > 0 && (
+            <View style={styles.images}>
+              {allImages.map((uri, i) => (
+                <TouchableOpacity
+                  key={i}
+                  activeOpacity={0.9}
+                  onPress={(e) => { e.stopPropagation(); onImagePress?.(allImages, i); }}
+                >
+                  <Image
+                    source={{ uri }}
+                    style={[styles.img, { width: imgW, height: imgW * 0.75 }]}
+                    resizeMode="cover"
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          <View style={[styles.cardFooter, { borderTopColor: colors.separator }]}>
+            <TouchableOpacity
+              style={styles.action}
+              onPress={() => { onToggleLike(item.id); }}
+            >
+              <Ionicons name={item.liked ? "heart" : "heart-outline"} size={18} color={item.liked ? "#FF3B30" : colors.textMuted} />
+              {item.likeCount > 0 && <Text style={[styles.actionText, { color: item.liked ? "#FF3B30" : colors.textMuted }]}>{item.likeCount}</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.action} onPress={openPost}>
+              <Ionicons name="chatbubble-outline" size={18} color={colors.textMuted} />
+              {item.replyCount > 0 && <Text style={[styles.actionText, { color: colors.textMuted }]}>{item.replyCount}</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.action} onPress={() => sharePost({ postId: item.id, authorName: item.profile.display_name, content: item.content })}>
+              <Ionicons name="share-outline" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+            <View style={styles.viewCount}>
+              <Ionicons name="eye-outline" size={14} color={colors.textMuted} />
+              <Text style={[styles.viewText, { color: colors.textMuted }]}>{item.view_count}</Text>
+            </View>
+            <BookmarkButton bookmarked={item.bookmarked} onPress={() => onToggleBookmark(item.id)} />
+          </View>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.action} onPress={openPost}>
-          <Ionicons name="chatbubble-outline" size={18} color={colors.textMuted} />
-          {item.replyCount > 0 && <Text style={[styles.actionText, { color: colors.textMuted }]}>{item.replyCount}</Text>}
+      </ViewShot>
+
+      <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
+        <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setMenuVisible(false)}>
+          <View style={[styles.menuSheet, { backgroundColor: colors.surface, paddingBottom: cardInsets.bottom + 12 }]}>
+            <View style={[styles.menuHandle, { backgroundColor: colors.border }]} />
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => { setMenuVisible(false); sharePost({ postId: item.id, authorName: item.profile.display_name, content: item.content }); }}
+            >
+              <Ionicons name="share-outline" size={22} color={Colors.brand} />
+              <Text style={[styles.menuItemText, { color: colors.text }]}>Share Post</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={capturePostImage} disabled={capturing}>
+              {capturing
+                ? <ActivityIndicator size={22} color={Colors.brand} />
+                : <Ionicons name="image-outline" size={22} color={Colors.brand} />
+              }
+              <Text style={[styles.menuItemText, { color: colors.text }]}>Save as Image</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => setMenuVisible(false)}>
+              <Ionicons name="close-outline" size={22} color={colors.textMuted} />
+              <Text style={[styles.menuItemText, { color: colors.textMuted }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.action} onPress={() => sharePost({ postId: item.id, authorName: item.profile.display_name, content: item.content })}>
-          <Ionicons name="share-outline" size={18} color={colors.textMuted} />
-        </TouchableOpacity>
-        <View style={styles.viewCount}>
-          <Ionicons name="eye-outline" size={14} color={colors.textMuted} />
-          <Text style={[styles.viewText, { color: colors.textMuted }]}>{item.view_count}</Text>
-        </View>
-        <BookmarkButton bookmarked={item.bookmarked} onPress={() => onToggleBookmark(item.id)} />
-      </View>
-    </TouchableOpacity>
+      </Modal>
+    </>
   );
 }
 
@@ -668,4 +742,35 @@ const styles = StyleSheet.create({
   emptySub: { fontSize: 14, fontFamily: "Inter_400Regular" },
   createBtn: { backgroundColor: Colors.brand, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 },
   createBtnText: { color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  ellipsisBtn: { padding: 4 },
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+  },
+  menuSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 12,
+    paddingHorizontal: 8,
+  },
+  menuHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 12,
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 14,
+    borderRadius: 12,
+  },
+  menuItemText: {
+    fontSize: 16,
+    fontFamily: "Inter_500Medium",
+  },
 });
