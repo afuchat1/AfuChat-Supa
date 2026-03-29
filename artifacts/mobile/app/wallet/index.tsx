@@ -174,6 +174,7 @@ export default function WalletScreen() {
   const [currencySettings, setCurrencySettings] = useState<CurrencySettings | null>(null);
   const [activeTab, setActiveTab] = useState<"all" | "nexa" | "acoin" | "gifts">("all");
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+  const [pendingRequestCount, setPendingRequestCount] = useState(0);
 
   const loadData = useCallback(async () => {
     if (!user) return;
@@ -257,7 +258,28 @@ export default function WalletScreen() {
     setRefreshing(false);
   }, [user]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  const loadPendingCount = useCallback(async () => {
+    if (!user) return;
+    const { count } = await supabase
+      .from("transaction_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", user.id)
+      .eq("status", "pending");
+    setPendingRequestCount(count || 0);
+  }, [user]);
+
+  useEffect(() => { loadData(); loadPendingCount(); }, [loadData, loadPendingCount]);
+
+  useEffect(() => {
+    if (!user) return;
+    const ch = supabase
+      .channel(`wallet-realtime:${user.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "acoin_transactions", filter: `user_id=eq.${user.id}` }, () => { loadData(); refreshProfile(); })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "xp_transfers", filter: `receiver_id=eq.${user.id}` }, () => { loadData(); refreshProfile(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "transaction_requests", filter: `owner_id=eq.${user.id}` }, () => loadPendingCount())
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [user, loadData, loadPendingCount, refreshProfile]);
 
   const filteredTx = activeTab === "all" ? transactions : activeTab === "gifts"
     ? transactions.filter((t) => t.type === "gift_sent" || t.type === "gift_received" || t.type === "gift_conversion" || t.type === "marketplace_purchase" || t.type === "marketplace_sale")
@@ -399,13 +421,20 @@ export default function WalletScreen() {
           </TouchableOpacity>
         </View>
         <View style={styles.btnRow}>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "rgba(0,194,203,0.12)" }]} onPress={() => router.push("/wallet/scan")}>
-            <Ionicons name="scan" size={16} color={Colors.brand} />
-            <Text style={styles.actionBtnText}>Scan QR</Text>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "rgba(255,255,255,0.22)" }]} onPress={() => router.push("/wallet/scan")}>
+            <Ionicons name="scan" size={16} color="#fff" />
+            <Text style={[styles.actionBtnText, { color: "#fff" }]}>Scan QR</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "rgba(0,194,203,0.12)" }]} onPress={() => router.push("/wallet/requests")}>
-            <Ionicons name="receipt-outline" size={16} color={Colors.brand} />
-            <Text style={styles.actionBtnText}>Requests</Text>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "rgba(255,255,255,0.22)" }]} onPress={() => router.push("/wallet/requests")}>
+            <Ionicons name="receipt-outline" size={16} color="#fff" />
+            <Text style={[styles.actionBtnText, { color: "#fff" }]}>Requests</Text>
+            {pendingRequestCount > 0 && (
+              <View style={styles.requestBadge}>
+                <Text style={styles.requestBadgeText}>
+                  {pendingRequestCount > 9 ? "9+" : pendingRequestCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -545,6 +574,8 @@ const styles = StyleSheet.create({
   btnRow: { flexDirection: "row", gap: 10 },
   actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#fff", borderRadius: 14, paddingVertical: 10 },
   actionBtnText: { color: Colors.brand, fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  requestBadge: { backgroundColor: "#FF3B30", borderRadius: 10, minWidth: 18, height: 18, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
+  requestBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
   rateCard: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 16, marginBottom: 8, padding: 10, borderRadius: 10 },
   rateText: { fontSize: 12, fontFamily: "Inter_400Regular" },
   tabRow: { flexDirection: "row", marginHorizontal: 16, marginBottom: 8, gap: 8 },

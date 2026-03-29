@@ -54,6 +54,7 @@ export default function RequestsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [sentUpdated, setSentUpdated] = useState(false);
 
   const loadRequests = useCallback(async () => {
     if (!user) return;
@@ -97,8 +98,13 @@ export default function RequestsScreen() {
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "transaction_requests", filter: `requester_id=eq.${user.id}` },
-        () => loadRequests()
+        { event: "UPDATE", schema: "public", table: "transaction_requests", filter: `requester_id=eq.${user.id}` },
+        (payload: any) => {
+          loadRequests();
+          if (payload.new?.status && payload.new.status !== "pending") {
+            setSentUpdated(true);
+          }
+        }
       )
       .subscribe();
 
@@ -253,9 +259,14 @@ export default function RequestsScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, tab === "outgoing" && { backgroundColor: Colors.brand }]}
-          onPress={() => setTab("outgoing")}
+          onPress={() => { setTab("outgoing"); setSentUpdated(false); }}
         >
-          <Text style={[styles.tabText, tab === "outgoing" && { color: "#fff" }]}>Sent</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text style={[styles.tabText, tab === "outgoing" && { color: "#fff" }]}>Sent</Text>
+            {sentUpdated && tab !== "outgoing" && (
+              <View style={styles.sentDot} />
+            )}
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -383,6 +394,7 @@ const styles = StyleSheet.create({
   tabRow: { flexDirection: "row", marginHorizontal: 16, marginTop: 12, marginBottom: 4, gap: 8 },
   tab: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, backgroundColor: "transparent" },
   tabText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#888" },
+  sentDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#FF3B30" },
   center: { flex: 1, justifyContent: "center", alignItems: "center", paddingTop: 60 },
   reqCard: { borderRadius: 16, padding: 16, gap: 12 },
   reqHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
