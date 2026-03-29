@@ -1532,16 +1532,18 @@ export default function ChatScreen() {
       );
 
       if (uploadErr || !publicUrl) {
-        await supabase.from("messages").insert({ chat_id: activeChatId, sender_id: user.id, encrypted_content: label });
-      } else {
-        await supabase.from("messages").insert({
-          chat_id: activeChatId,
-          sender_id: user.id,
-          encrypted_content: label,
-          attachment_url: publicUrl,
-          attachment_type: attachmentPreview.type,
-        });
+        showAlert("Upload failed", uploadErr || "Could not upload file. Please try again.");
+        setSending(false);
+        return;
       }
+
+      await supabase.from("messages").insert({
+        chat_id: activeChatId,
+        sender_id: user.id,
+        encrypted_content: label,
+        attachment_url: publicUrl,
+        attachment_type: attachmentPreview.type,
+      });
 
       loadMessages();
     } catch (e: any) {
@@ -1684,11 +1686,18 @@ export default function ChatScreen() {
         `voice_${Date.now()}.${ext}`,
       );
 
+      if (uploadErr || !publicUrl) {
+        showAlert("Upload failed", uploadErr || "Could not upload voice message. Please try again.");
+        setSending(false);
+        return;
+      }
+
       await supabase.from("messages").insert({
         chat_id: activeChatId,
         sender_id: user.id,
         encrypted_content: "🎤 Voice message",
-        ...(publicUrl && !uploadErr ? { attachment_url: publicUrl, attachment_type: "audio" } : {}),
+        attachment_url: publicUrl,
+        attachment_type: "audio",
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       loadMessages();
