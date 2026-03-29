@@ -23,6 +23,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { showAlert } from "@/lib/alert";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { Separator } from "@/components/ui/Separator";
@@ -42,28 +43,40 @@ type MenuItemProps = {
   onPress?: () => void;
   danger?: boolean;
   badge?: string;
+  comingSoon?: boolean;
 };
 
-function MenuItem({ icon, iconBg, label, value, onPress, danger, badge }: MenuItemProps) {
+function MenuItem({ icon, iconBg, label, value, onPress, danger, badge, comingSoon }: MenuItemProps) {
   const { colors } = useTheme();
   return (
     <TouchableOpacity
-      style={[styles.menuItem, { backgroundColor: colors.surface }]}
-      onPress={() => { Haptics.selectionAsync(); onPress?.(); }}
+      style={[styles.menuItem, { backgroundColor: colors.surface, opacity: comingSoon ? 0.65 : 1 }]}
+      onPress={() => {
+        if (comingSoon) {
+          showAlert("Coming Soon", `${label} will be available soon. Stay tuned!`);
+          return;
+        }
+        Haptics.selectionAsync();
+        onPress?.();
+      }}
       activeOpacity={0.7}
     >
-      <View style={[styles.menuIcon, { backgroundColor: iconBg }]}>
-        <Ionicons name={icon} size={18} color="#fff" />
+      <View style={[styles.menuIcon, { backgroundColor: comingSoon ? "#8E8E93" : iconBg }]}>
+        <Ionicons name={comingSoon ? "time-outline" : icon} size={18} color="#fff" />
       </View>
       <Text style={[styles.menuLabel, { color: danger ? "#FF3B30" : colors.text }]}>{label}</Text>
       <View style={styles.menuRight}>
-        {badge ? (
+        {comingSoon ? (
+          <View style={[styles.premiumBadge, { backgroundColor: "#8E8E9330" }]}>
+            <Text style={[styles.premiumBadgeText, { color: "#8E8E93" }]}>Coming Soon</Text>
+          </View>
+        ) : badge ? (
           <View style={styles.premiumBadge}>
             <Text style={styles.premiumBadgeText}>{badge}</Text>
           </View>
         ) : null}
         {value ? <Text style={[styles.menuValue, { color: colors.textSecondary }]}>{value}</Text> : null}
-        {!danger && <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />}
+        {!danger && !comingSoon && <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />}
       </View>
     </TouchableOpacity>
   );
@@ -145,11 +158,7 @@ function XpLevelBar({ xp }: { xp: number }) {
   }));
 
   return (
-    <TouchableOpacity
-      onPress={() => router.push("/achievements")}
-      activeOpacity={0.8}
-      style={[styles.xpBar, { backgroundColor: colors.surface }]}
-    >
+    <View style={[styles.xpBar, { backgroundColor: colors.surface }]}>
       <View style={styles.xpRow}>
         <View style={styles.xpLevelBadge}>
           <Text style={styles.xpLevelText}>Lv.{level}</Text>
@@ -166,17 +175,18 @@ function XpLevelBar({ xp }: { xp: number }) {
             </Animated.View>
           </View>
           <Text style={[styles.xpSubLabel, { color: colors.textMuted }]}>
-            {xp.toLocaleString()} / {xpForNext.toLocaleString()} XP • Tap for Achievements
+            {xp.toLocaleString()} / {xpForNext.toLocaleString()} XP to Level {level + 1}
           </Text>
         </View>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 }
 
 export default function MeScreen() {
   const { colors, isDark, themeMode, setThemeMode } = useTheme();
   const { profile, isPremium, subscription } = useAuth();
+  const isAdmin = !!profile?.is_admin;
   const { langLabel } = useLanguage();
   const insets = useSafeAreaInsets();
 
@@ -284,11 +294,23 @@ export default function MeScreen() {
         <MenuItem icon="id-card-outline" iconBg="#1E3A5F" label="Digital ID" onPress={() => router.push("/digital-id")} badge="3D" />
         <MenuItem icon="crown" iconBg="#D4A853" label="Prestige Status" onPress={() => router.push("/prestige")} badge="NEW" />
         <Separator indent={54} />
-        <MenuItem icon="cash-outline" iconBg="#32D74B" label="Monetize" onPress={() => router.push("/monetize")} badge="15 ways" />
+        <MenuItem
+          icon="videocam-outline"
+          iconBg="#32D74B"
+          label="Creator Studio"
+          onPress={isAdmin ? () => router.push("/monetize") : undefined}
+          badge={isAdmin ? "Admin" : undefined}
+          comingSoon={!isAdmin}
+        />
         <Separator indent={54} />
-        <MenuItem icon="trophy-outline" iconBg="#FF9500" label="Achievements" onPress={() => router.push("/achievements")} />
-        <Separator indent={54} />
-        <MenuItem icon="bag-handle-outline" iconBg="#FF6B35" label="My Shop" onPress={() => router.push("/shop/manage" as any)} badge="NEW" />
+        <MenuItem
+          icon="bag-handle-outline"
+          iconBg="#FF6B35"
+          label="My Shop"
+          onPress={isAdmin ? () => router.push("/shop/manage" as any) : undefined}
+          badge={isAdmin ? "Admin" : undefined}
+          comingSoon={!isAdmin}
+        />
         <Separator indent={54} />
         <MenuItem icon="storefront-outline" iconBg="#AF52DE" label="Virtual Shop" onPress={() => router.push("/store")} badge="NEW" />
       </MenuGroup>
