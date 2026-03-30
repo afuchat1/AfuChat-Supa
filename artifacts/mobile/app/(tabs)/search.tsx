@@ -100,14 +100,14 @@ const PLATFORM_APPS = [
 ];
 
 const QUICK_CATEGORIES = [
-  { id: "people",   label: "People",   icon: "people",        color: BRAND,    route: null },
-  { id: "posts",    label: "Posts",    icon: "document-text", color: "#007AFF", route: null },
-  { id: "channels", label: "Channels", icon: "megaphone",     color: "#AF52DE", route: null },
-  { id: "events",   label: "Events",   icon: "calendar",      color: "#FF9500", route: "/digital-events" },
-  { id: "gifts",    label: "Gifts",    icon: "gift",          color: "#FF3B30", route: "/gifts" },
-  { id: "shops",    label: "Shop",     icon: "storefront",    color: "#34C759", route: "/store" },
-  { id: "match",    label: "AfuMatch", icon: "heart",         color: MATCH,     route: "/match" },
-  { id: "apps",     label: "All Apps", icon: "grid",          color: "#5856D6", route: "/apps" },
+  { id: "people",   label: "People",   icon: "people",        gradient: [BRAND, "#0097A7"],       route: null },
+  { id: "posts",    label: "Posts",    icon: "document-text", gradient: ["#007AFF", "#0A84FF"],   route: null },
+  { id: "channels", label: "Channels", icon: "megaphone",     gradient: ["#AF52DE", "#BF5AF2"],   route: null },
+  { id: "events",   label: "Events",   icon: "calendar",      gradient: ["#FF9500", "#FFCC00"],   route: "/digital-events" },
+  { id: "gifts",    label: "Gifts",    icon: "gift",          gradient: ["#FF3B30", "#FF453A"],   route: "/gifts" },
+  { id: "shops",    label: "Market",   icon: "storefront",    gradient: ["#34C759", "#30D158"],   route: "/store" },
+  { id: "match",    label: "AfuMatch", icon: "heart",         gradient: [MATCH, "#FF375F"],       route: "/match" },
+  { id: "apps",     label: "All Apps", icon: "grid",          gradient: ["#5856D6", "#6E6CD3"],   route: "/apps" },
 ];
 
 const TRENDING_TAGS = ["gaming","photography","music","travel","coding","fitness","cooking","art","fashion","tech","crypto","design","startup","afuchat","movies"];
@@ -181,7 +181,7 @@ function SkeletonBox({ w, h, r }: { w:number|string; h:number; r:number }) {
 function CardSkeleton() {
   const { colors } = useTheme();
   return (
-    <View style={[styles.card, { backgroundColor:colors.surface, borderColor:colors.border }]}>
+    <View style={[styles.card, { backgroundColor:colors.surface }]}>
       <SkeletonBox w={44} h={44} r={22} />
       <View style={{ flex:1, gap:6 }}>
         <SkeletonBox w="60%" h={13} r={6} />
@@ -489,15 +489,17 @@ export default function SearchScreen() {
   function SectionLabel({ icon, label, count, onSeeAll }: { icon: string; label: string; count: number; onSeeAll?: ()=>void }) {
     if (count === 0) return null;
     return (
-      <View style={styles.sectionLabel}>
-        <Ionicons name={icon as any} size={14} color={BRAND} />
+      <View style={[styles.sectionLabel, { marginTop: 4 }]}>
+        <View style={[styles.sectionIconWrap, { backgroundColor: BRAND + "18" }]}>
+          <Ionicons name={icon as any} size={13} color={BRAND} />
+        </View>
         <Text style={[styles.sectionLabelText, { color: colors.text }]}>{label}</Text>
         <View style={[styles.countPill, { backgroundColor: BRAND+"18" }]}>
-          <Text style={{ color: BRAND, fontSize:11, fontFamily:"Inter_600SemiBold" }}>{count}</Text>
+          <Text style={{ color: BRAND, fontSize:11, fontFamily:"Inter_700Bold" }}>{count}</Text>
         </View>
         {onSeeAll && (
           <TouchableOpacity style={styles.seeAllBtn} onPress={onSeeAll}>
-            <Text style={{ color: BRAND, fontSize:12, fontFamily:"Inter_600SemiBold" }}>See All</Text>
+            <Text style={{ color: BRAND, fontSize:12, fontFamily:"Inter_600SemiBold" }}>See all</Text>
             <Ionicons name="chevron-forward" size={12} color={BRAND} />
           </TouchableOpacity>
         )}
@@ -508,23 +510,25 @@ export default function SearchScreen() {
   function PersonCard({ p, i }: { p: PersonResult; i: number }) {
     return (
       <Animated.View entering={FadeInRight.delay(i*25).duration(220)}>
-        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface, borderColor:colors.border }]} onPress={() => router.push(`/contact/${p.id}` as any)} activeOpacity={0.72}>
-          {p.avatar_url
-            ? <Image source={{ uri: p.avatar_url }} style={styles.av48} />
-            : <AvatarPlaceholder name={p.display_name} size={48} color={BRAND} />}
+        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface }]} onPress={() => router.push(`/contact/${p.id}` as any)} activeOpacity={0.75}>
+          <View style={styles.av48Wrap}>
+            {p.avatar_url
+              ? <Image source={{ uri: p.avatar_url }} style={styles.av48} />
+              : <AvatarPlaceholder name={p.display_name} size={48} color={BRAND} />}
+            {p.is_organization_verified && (
+              <View style={styles.orgDotCard}><Ionicons name="checkmark-circle" size={14} color={BRAND} /></View>
+            )}
+          </View>
           <View style={{ flex:1, gap:2 }}>
             <View style={{ flexDirection:"row", alignItems:"center", gap:4 }}>
               <Text style={[styles.cardTitle, { color:colors.text }]} numberOfLines={1}>{highlightText(p.display_name, cleanQuery, colors.text, BRAND)}</Text>
-              <VerifiedBadge verified={p.is_verified} org={p.is_organization_verified} />
+              {p.is_verified && !p.is_organization_verified && <Ionicons name="checkmark-circle" size={13} color={BRAND} />}
             </View>
-            <Text style={[styles.cardSub, { color:colors.textMuted }]}>@{p.handle}</Text>
-            {p.bio ? <Text style={[styles.bioText, { color:colors.textSecondary }]} numberOfLines={2}>{p.bio}</Text> : null}
+            <Text style={[styles.cardSub, { color:colors.textMuted }]}>@{p.handle}{p.country ? ` · ${p.country}` : ""}</Text>
+            {p.bio ? <Text style={[styles.bioText, { color:colors.textSecondary }]} numberOfLines={1}>{p.bio}</Text> : null}
           </View>
-          <View style={{ alignItems:"flex-end", gap:4 }}>
-            {p.country ? <Text style={{ fontSize:11, color:colors.textMuted }}>{p.country}</Text> : null}
-            <TouchableOpacity style={[styles.followBtn, { borderColor:BRAND }]} onPress={() => router.push(`/contact/${p.id}` as any)}>
-              <Text style={{ color:BRAND, fontSize:11, fontFamily:"Inter_600SemiBold" }}>View</Text>
-            </TouchableOpacity>
+          <View style={[styles.viewBtn, { backgroundColor: BRAND + "18" }]}>
+            <Text style={{ color:BRAND, fontSize:12, fontFamily:"Inter_600SemiBold" }}>View</Text>
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -535,26 +539,30 @@ export default function SearchScreen() {
     const hasImage = !!p.image_url;
     return (
       <Animated.View entering={FadeInDown.delay(i*25).duration(220)}>
-        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface, borderColor:colors.border, flexDirection:"column", gap:10 }]} onPress={() => router.push(`/p/${p.id}` as any)} activeOpacity={0.72}>
+        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface, flexDirection:"column", gap:10 }]} onPress={() => router.push(`/p/${p.id}` as any)} activeOpacity={0.75}>
           <View style={{ flexDirection:"row", alignItems:"center", gap:10 }}>
             {p.author_avatar
-              ? <Image source={{ uri: p.author_avatar }} style={styles.av32} />
-              : <AvatarPlaceholder name={p.author_name} size={32} color="#007AFF" />}
+              ? <Image source={{ uri: p.author_avatar }} style={styles.av36} />
+              : <AvatarPlaceholder name={p.author_name} size={36} color="#007AFF" />}
             <View style={{ flex:1 }}>
               <Text style={[styles.cardTitle, { color:colors.text, fontSize:13 }]} numberOfLines={1}>{p.author_name}</Text>
               <Text style={[styles.cardSub, { color:colors.textMuted }]}>@{p.author_handle}</Text>
             </View>
-            <Text style={{ color:colors.textMuted, fontSize:11 }}>{timeAgo(p.created_at)}</Text>
+            <View style={[styles.timeChip, { backgroundColor: colors.backgroundSecondary }]}>
+              <Text style={{ color:colors.textMuted, fontSize:10, fontFamily:"Inter_500Medium" }}>{timeAgo(p.created_at)}</Text>
+            </View>
           </View>
-          <Text style={{ color:colors.text, fontSize:14, fontFamily:"Inter_400Regular", lineHeight:20 }} numberOfLines={hasImage ? 2 : 5}>
+          <Text style={{ color:colors.text, fontSize:14, fontFamily:"Inter_400Regular", lineHeight:22 }} numberOfLines={hasImage ? 2 : 4}>
             {p.content}
           </Text>
           {hasImage && (
-            <Image source={{ uri: p.image_url! }} style={{ width:"100%", height:140, borderRadius:10 }} resizeMode="cover" />
+            <Image source={{ uri: p.image_url! }} style={{ width:"100%", height:150, borderRadius:12 }} resizeMode="cover" />
           )}
-          <View style={{ flexDirection:"row", alignItems:"center", gap:3 }}>
-            <Ionicons name="eye-outline" size={13} color={colors.textMuted} />
-            <Text style={{ color:colors.textMuted, fontSize:11 }}>{p.view_count}</Text>
+          <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
+            <View style={{ flexDirection:"row", alignItems:"center", gap:3 }}>
+              <Ionicons name="eye-outline" size={12} color={colors.textMuted} />
+              <Text style={{ color:colors.textMuted, fontSize:11 }}>{p.view_count}</Text>
+            </View>
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -564,26 +572,24 @@ export default function SearchScreen() {
   function ChannelCard({ ch, i }: { ch: ChannelResult; i: number }) {
     return (
       <Animated.View entering={FadeInRight.delay(i*25).duration(220)}>
-        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface, borderColor:colors.border }]} activeOpacity={0.72}>
+        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface }]} activeOpacity={0.75}>
           {ch.avatar_url
-            ? <Image source={{ uri: ch.avatar_url }} style={[styles.av48, { borderRadius:12 }]} />
+            ? <Image source={{ uri: ch.avatar_url }} style={[styles.av52, { borderRadius:14 }]} />
             : (
-              <LinearGradient colors={[BRAND, "#00ACC1"]} style={[styles.av48, { borderRadius:12, alignItems:"center", justifyContent:"center" }]}>
-                <Ionicons name="megaphone" size={22} color="#fff" />
+              <LinearGradient colors={[BRAND, "#00ACC1"]} style={[styles.av52, { borderRadius:14, alignItems:"center", justifyContent:"center" }]}>
+                <Ionicons name="megaphone" size={24} color="#fff" />
               </LinearGradient>
             )}
           <View style={{ flex:1, gap:3 }}>
             <Text style={[styles.cardTitle, { color:colors.text }]} numberOfLines={1}>{ch.name}</Text>
             {ch.description ? <Text style={[styles.bioText, { color:colors.textSecondary }]} numberOfLines={2}>{ch.description}</Text> : null}
-          </View>
-          <View style={{ alignItems:"flex-end", gap:4 }}>
-            <View style={{ flexDirection:"row", alignItems:"center", gap:3 }}>
+            <View style={{ flexDirection:"row", alignItems:"center", gap:3, marginTop:2 }}>
               <Ionicons name="people" size={12} color={colors.textMuted} />
-              <Text style={{ color:colors.textMuted, fontSize:11 }}>{ch.subscriber_count || 0}</Text>
+              <Text style={{ color:colors.textMuted, fontSize:11 }}>{(ch.subscriber_count || 0).toLocaleString()} subscribers</Text>
             </View>
-            <TouchableOpacity style={[styles.followBtn, { borderColor:"#AF52DE" }]}>
-              <Text style={{ color:"#AF52DE", fontSize:11, fontFamily:"Inter_600SemiBold" }}>Subscribe</Text>
-            </TouchableOpacity>
+          </View>
+          <View style={[styles.subBtn, { backgroundColor: "#AF52DE"+"18" }]}>
+            <Text style={{ color:"#AF52DE", fontSize:12, fontFamily:"Inter_600SemiBold" }}>Join</Text>
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -595,12 +601,12 @@ export default function SearchScreen() {
     const pct = ev.capacity > 0 ? Math.min((ev.tickets_sold / ev.capacity) * 100, 100) : 0;
     return (
       <Animated.View entering={FadeInDown.delay(i*25).duration(220)}>
-        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface, borderColor:colors.border, flexDirection:"column", gap:10 }]} onPress={() => router.push("/digital-events" as any)} activeOpacity={0.72}>
+        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface, flexDirection:"column", gap:12 }]} onPress={() => router.push("/digital-events" as any)} activeOpacity={0.75}>
           <View style={{ flexDirection:"row", gap:12, alignItems:"flex-start" }}>
-            <View style={[styles.eventEmoji, { backgroundColor:"#FF9500"+"18" }]}>
+            <LinearGradient colors={["#FF9500", "#FFCC00"]} style={styles.eventEmoji}>
               <Text style={{ fontSize:26 }}>{ev.emoji}</Text>
-            </View>
-            <View style={{ flex:1, gap:3 }}>
+            </LinearGradient>
+            <View style={{ flex:1, gap:4 }}>
               <Text style={[styles.cardTitle, { color:colors.text }]} numberOfLines={2}>{ev.title}</Text>
               <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
                 <Ionicons name="calendar-outline" size={12} color={colors.textMuted} />
@@ -611,20 +617,25 @@ export default function SearchScreen() {
               </View>
               {ev.description ? <Text style={[styles.bioText, { color:colors.textSecondary }]} numberOfLines={1}>{ev.description}</Text> : null}
             </View>
-            <View style={{ alignItems:"flex-end", gap:4 }}>
+            <View style={{ alignItems:"flex-end", gap:4, paddingTop:2 }}>
               {ev.price === 0
-                ? <View style={[styles.freeBadge]}><Text style={styles.freeBadgeText}>FREE</Text></View>
-                : <View style={{ flexDirection:"row", alignItems:"center", gap:2 }}><Ionicons name="diamond" size={11} color={GOLD} /><Text style={{ color:GOLD, fontSize:12, fontFamily:"Inter_700Bold" }}>{ev.price}</Text></View>
+                ? <View style={styles.freeBadge}><Text style={styles.freeBadgeText}>FREE</Text></View>
+                : <View style={{ flexDirection:"row", alignItems:"center", gap:3, backgroundColor:GOLD+"18", paddingHorizontal:8, paddingVertical:3, borderRadius:8 }}>
+                    <Text style={{ color:GOLD, fontSize:13, fontFamily:"Inter_700Bold" }}>{ev.price} AC</Text>
+                  </View>
               }
             </View>
           </View>
           {ev.capacity > 0 && (
-            <View style={{ gap:4 }}>
+            <View style={{ gap:5 }}>
               <View style={{ flexDirection:"row", justifyContent:"space-between" }}>
-                <Text style={{ color:colors.textMuted, fontSize:10 }}>{ev.tickets_sold}/{ev.capacity} tickets</Text>
-                {isFull && <Text style={{ color:"#EF4444", fontSize:10, fontFamily:"Inter_600SemiBold" }}>SOLD OUT</Text>}
+                <Text style={{ color:colors.textMuted, fontSize:11 }}>{ev.tickets_sold.toLocaleString()}/{ev.capacity.toLocaleString()} tickets</Text>
+                {isFull
+                  ? <Text style={{ color:"#EF4444", fontSize:11, fontFamily:"Inter_600SemiBold" }}>SOLD OUT</Text>
+                  : <Text style={{ color:colors.textMuted, fontSize:11 }}>{Math.round(pct)}% filled</Text>
+                }
               </View>
-              <View style={[styles.progressBg, { backgroundColor:colors.inputBg }]}>
+              <View style={[styles.progressBg, { backgroundColor:colors.backgroundSecondary }]}>
                 <View style={[styles.progressFill, { width:`${pct}%` as any, backgroundColor: pct >= 90 ? "#EF4444" : "#FF9500" }]} />
               </View>
             </View>
@@ -660,33 +671,26 @@ export default function SearchScreen() {
   }
 
   function ShopCard({ s, i }: { s: ShopResult; i: number }) {
-    const kindIcon = s.kind === "product" ? "cube-outline" : s.kind === "freelance" ? "briefcase-outline" : "people-outline";
     const kindColor = s.kind === "product" ? "#AF52DE" : s.kind === "freelance" ? "#34C759" : "#007AFF";
+    const kindGrad: [string,string] = s.kind === "product" ? ["#AF52DE","#BF5AF2"] : s.kind === "freelance" ? ["#34C759","#30D158"] : ["#007AFF","#0A84FF"];
     return (
       <Animated.View entering={FadeInDown.delay(i*25).duration(220)}>
-        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface, borderColor:colors.border }]} onPress={() => router.push(s.route as any)} activeOpacity={0.72}>
+        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface }]} onPress={() => router.push(s.route as any)} activeOpacity={0.75}>
           {s.image_url
-            ? <Image source={{ uri: s.image_url }} style={[styles.av48, { borderRadius:10 }]} resizeMode="cover" />
+            ? <Image source={{ uri: s.image_url }} style={[styles.av52, { borderRadius:14 }]} resizeMode="cover" />
             : (
-              <View style={[styles.av48, { borderRadius:10, backgroundColor:kindColor+"18", alignItems:"center", justifyContent:"center" }]}>
-                <Text style={{ fontSize:24 }}>{s.emoji || "📦"}</Text>
-              </View>
+              <LinearGradient colors={kindGrad} style={[styles.av52, { borderRadius:14, alignItems:"center", justifyContent:"center" }]}>
+                <Text style={{ fontSize:26 }}>{s.emoji || "📦"}</Text>
+              </LinearGradient>
             )}
           <View style={{ flex:1, gap:3 }}>
-            <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
-              <Text style={[styles.cardTitle, { color:colors.text }]} numberOfLines={1}>{s.title}</Text>
-              <View style={[styles.catPill, { backgroundColor:kindColor+"18" }]}>
-                <Ionicons name={kindIcon as any} size={10} color={kindColor} />
-                <Text style={{ color:kindColor, fontSize:9, fontFamily:"Inter_600SemiBold", textTransform:"capitalize" }}>{s.kind}</Text>
-              </View>
-            </View>
+            <Text style={[styles.cardTitle, { color:colors.text }]} numberOfLines={1}>{s.title}</Text>
             {s.desc ? <Text style={[styles.bioText, { color:colors.textSecondary }]} numberOfLines={1}>{s.desc}</Text> : null}
             {s.seller_name ? <Text style={{ color:colors.textMuted, fontSize:11 }}>by {s.seller_name}</Text> : null}
           </View>
-          <View style={{ alignItems:"flex-end", gap:4 }}>
-            <View style={{ flexDirection:"row", alignItems:"center", gap:2 }}>
-              <Ionicons name="diamond" size={11} color={GOLD} />
-              <Text style={{ color:GOLD, fontSize:13, fontFamily:"Inter_700Bold" }}>{s.price}</Text>
+          <View style={{ alignItems:"flex-end", gap:5 }}>
+            <View style={{ backgroundColor:kindColor+"18", paddingHorizontal:8, paddingVertical:4, borderRadius:10 }}>
+              <Text style={{ color:kindColor, fontSize:13, fontFamily:"Inter_700Bold" }}>{s.price} AC</Text>
             </View>
             {s.badge ? <Text style={{ color:colors.textMuted, fontSize:10 }}>{s.badge}</Text> : null}
           </View>
@@ -698,11 +702,11 @@ export default function SearchScreen() {
   function AppCard({ a, i }: { a: AppResult; i: number }) {
     return (
       <Animated.View entering={FadeInRight.delay(i*25).duration(220)}>
-        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface, borderColor:colors.border }]} onPress={() => router.push(a.route as any)} activeOpacity={0.72}>
-          <LinearGradient colors={a.gradient} style={[styles.av48, { borderRadius:14, alignItems:"center", justifyContent:"center" }]}>
-            <Ionicons name={a.icon} size={22} color="#fff" />
+        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface }]} onPress={() => router.push(a.route as any)} activeOpacity={0.75}>
+          <LinearGradient colors={a.gradient} style={[styles.av52, { borderRadius:16, alignItems:"center", justifyContent:"center" }]}>
+            <Ionicons name={a.icon} size={24} color="#fff" />
           </LinearGradient>
-          <View style={{ flex:1, gap:3 }}>
+          <View style={{ flex:1, gap:4 }}>
             <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
               <Text style={[styles.cardTitle, { color:colors.text }]}>{a.label}</Text>
               <View style={[styles.catPill, { backgroundColor:a.gradient[0]+"22" }]}>
@@ -821,18 +825,28 @@ export default function SearchScreen() {
       <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom:scrollPB }}>
         {/* Quick categories */}
         <View style={{ paddingHorizontal:16, paddingTop:20 }}>
-          <Text style={[styles.idleHeading, { color:colors.text }]}>Browse Categories</Text>
+          <View style={[styles.idleSectionHeader, { marginBottom:0 }]}>
+            <View style={[styles.sectionIconWrap, { backgroundColor: BRAND+"18" }]}>
+              <Ionicons name="compass" size={13} color={BRAND} />
+            </View>
+            <Text style={[styles.idleHeading, { color:colors.text }]}>Browse Categories</Text>
+          </View>
           <View style={styles.quickGrid}>
             {QUICK_CATEGORIES.map((qc, i) => (
               <Animated.View key={qc.id} entering={FadeInDown.delay(i*30).duration(200)}>
                 <TouchableOpacity
-                  style={[styles.quickCard, { width:quickCardW, backgroundColor:colors.surface, borderColor:colors.border }]}
+                  style={[styles.quickCard, { width:quickCardW, backgroundColor:colors.surface }]}
                   onPress={() => qc.route ? router.push(qc.route as any) : (setTab(qc.id as SearchTab), inputRef.current?.focus())}
-                  activeOpacity={0.75}
+                  activeOpacity={0.78}
                 >
-                  <View style={[styles.quickIcon, { backgroundColor: qc.color+"18" }]}>
-                    <Ionicons name={qc.icon as any} size={22} color={qc.color} />
-                  </View>
+                  <LinearGradient
+                    colors={qc.gradient as [string, string]}
+                    style={styles.quickIcon}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <Ionicons name={qc.icon as any} size={24} color="#fff" />
+                  </LinearGradient>
                   <Text style={[styles.quickLabel, { color:colors.text }]}>{qc.label}</Text>
                 </TouchableOpacity>
               </Animated.View>
@@ -842,24 +856,26 @@ export default function SearchScreen() {
 
         {/* Trending People */}
         {trendingPeople.length > 0 && (
-          <View style={{ paddingTop:24 }}>
-            <View style={[styles.idleSectionHeader, { paddingHorizontal:16 }]}>
-              <Ionicons name="trending-up" size={16} color={BRAND} />
-              <Text style={[styles.idleHeading, { color:colors.text, marginBottom:0 }]}>Trending People</Text>
+          <View style={{ paddingTop:28 }}>
+            <View style={[styles.idleSectionHeader, { paddingHorizontal:16, marginBottom:12 }]}>
+              <View style={[styles.sectionIconWrap, { backgroundColor: BRAND+"18" }]}>
+                <Ionicons name="trending-up" size={13} color={BRAND} />
+              </View>
+              <Text style={[styles.idleHeading, { color:colors.text }]}>Trending People</Text>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap:10, paddingHorizontal:16, paddingTop:12, paddingBottom:4 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap:10, paddingHorizontal:16, paddingBottom:4 }}>
               {trendingPeople.map((p, i) => (
                 <Animated.View key={p.id} entering={FadeInRight.delay(i*30).duration(200)}>
-                  <TouchableOpacity style={[styles.personChip, { backgroundColor:colors.surface, borderColor:colors.border }]} onPress={() => router.push(`/contact/${p.id}` as any)} activeOpacity={0.75}>
-                    {p.avatar_url
-                      ? <Image source={{ uri: p.avatar_url }} style={styles.personChipAvatar} />
-                      : <AvatarPlaceholder name={p.display_name} size={40} color={BRAND} />}
-                    <View style={{ alignItems:"center", gap:2 }}>
-                      <View style={{ flexDirection:"row", alignItems:"center", gap:3 }}>
-                        <Text style={[styles.personChipName, { color:colors.text }]} numberOfLines={1}>{p.display_name}</Text>
-                        <VerifiedBadge verified={p.is_verified} org={p.is_organization_verified} />
-                      </View>
-                      <Text style={{ color:colors.textMuted, fontSize:10 }}>@{p.handle}</Text>
+                  <TouchableOpacity style={[styles.personChip, { backgroundColor:colors.surface }]} onPress={() => router.push(`/contact/${p.id}` as any)} activeOpacity={0.78}>
+                    <View style={styles.av48Wrap}>
+                      {p.avatar_url
+                        ? <Image source={{ uri: p.avatar_url }} style={styles.personChipAvatar} />
+                        : <AvatarPlaceholder name={p.display_name} size={44} color={BRAND} />}
+                      {p.is_verified && <View style={styles.orgDotCard}><Ionicons name="checkmark-circle" size={13} color={p.is_organization_verified ? GOLD : BRAND} /></View>}
+                    </View>
+                    <View style={{ alignItems:"center", gap:1 }}>
+                      <Text style={[styles.personChipName, { color:colors.text }]} numberOfLines={1}>{p.display_name}</Text>
+                      <Text style={{ color:colors.textMuted, fontSize:10, fontFamily:"Inter_400Regular" }}>@{p.handle}</Text>
                     </View>
                   </TouchableOpacity>
                 </Animated.View>
@@ -869,17 +885,23 @@ export default function SearchScreen() {
         )}
 
         {/* Trending Hashtags */}
-        <View style={{ paddingHorizontal:16, paddingTop:24 }}>
-          <View style={styles.idleSectionHeader}>
-            <Ionicons name="pricetag" size={16} color="#AF52DE" />
-            <Text style={[styles.idleHeading, { color:colors.text, marginBottom:0 }]}>Trending Topics</Text>
+        <View style={{ paddingHorizontal:16, paddingTop:28 }}>
+          <View style={[styles.idleSectionHeader, { marginBottom:14 }]}>
+            <View style={[styles.sectionIconWrap, { backgroundColor: "#AF52DE"+"18" }]}>
+              <Ionicons name="pricetag" size={13} color="#AF52DE" />
+            </View>
+            <Text style={[styles.idleHeading, { color:colors.text }]}>Trending Topics</Text>
           </View>
-          <View style={[styles.tagsWrap, { paddingTop:12 }]}>
+          <View style={styles.tagsWrap}>
             {TRENDING_TAGS.map((tag, i) => (
               <Animated.View key={tag} entering={FadeIn.delay(i*20).duration(180)}>
-                <TouchableOpacity style={[styles.tagChip, { backgroundColor:colors.surface, borderColor:colors.border }]} onPress={() => onTagPress(tag)} activeOpacity={0.75}>
-                  <Text style={{ color:"#AF52DE", fontSize:13, fontFamily:"Inter_500Medium" }}>#</Text>
-                  <Text style={{ color:colors.text, fontSize:13, fontFamily:"Inter_500Medium" }}>{tag}</Text>
+                <TouchableOpacity
+                  style={[styles.tagChip, { backgroundColor:"#AF52DE"+"12", borderColor:"#AF52DE"+"28" }]}
+                  onPress={() => onTagPress(tag)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={{ color:"#AF52DE", fontSize:13, fontFamily:"Inter_700Bold" }}>#</Text>
+                  <Text style={{ color:"#AF52DE", fontSize:13, fontFamily:"Inter_500Medium" }}>{tag}</Text>
                 </TouchableOpacity>
               </Animated.View>
             ))}
@@ -1048,52 +1070,58 @@ export default function SearchScreen() {
 
 const styles = StyleSheet.create({
   root:            { flex:1 },
-  header:          { borderBottomWidth:1, paddingBottom:0 },
+  header:          { borderBottomWidth:StyleSheet.hairlineWidth, paddingBottom:0 },
   headerTitle:     { fontSize:22, fontFamily:"Inter_700Bold", paddingHorizontal:16, marginBottom:10 },
   searchBar:       { flexDirection:"row", alignItems:"center", marginHorizontal:16, paddingHorizontal:12, paddingVertical:10, borderRadius:14, borderWidth:1.5, gap:8 },
   searchInput:     { flex:1, fontSize:15, fontFamily:"Inter_400Regular", padding:0 },
-  actionRow:       { paddingHorizontal:16, paddingVertical:10 },
-  filterPill:      { flexDirection:"row", alignItems:"center", gap:5, paddingHorizontal:11, paddingVertical:6, borderRadius:20, borderWidth:1, borderColor:"rgba(128,128,128,0.25)" },
+  actionRow:       { paddingHorizontal:16, paddingVertical:8 },
+  filterPill:      { flexDirection:"row", alignItems:"center", gap:5, paddingHorizontal:11, paddingVertical:6, borderRadius:20, borderWidth:1, borderColor:"rgba(128,128,128,0.2)" },
   tabsRow:         { paddingHorizontal:12, paddingTop:4, paddingBottom:10, gap:6 },
-  tabPill:         { flexDirection:"row", alignItems:"center", gap:5, paddingHorizontal:11, paddingVertical:7, borderRadius:20, backgroundColor:"transparent" },
+  tabPill:         { flexDirection:"row", alignItems:"center", gap:5, paddingHorizontal:12, paddingVertical:7, borderRadius:20, backgroundColor:"transparent" },
   tabBadge:        { borderRadius:8, paddingHorizontal:5, paddingVertical:1, minWidth:16, alignItems:"center" },
-  suggestBox:      { position:"absolute", top:"100%" as any, left:16, right:16, zIndex:100, borderRadius:14, borderWidth:1, shadowColor:"#000", shadowOpacity:0.15, shadowRadius:16, shadowOffset:{ width:0, height:6 }, elevation:16 },
+  suggestBox:      { position:"absolute", top:"100%" as any, left:16, right:16, zIndex:100, borderRadius:14, borderWidth:StyleSheet.hairlineWidth, shadowColor:"#000", shadowOpacity:0.15, shadowRadius:16, shadowOffset:{ width:0, height:6 }, elevation:16 },
   suggestRow:      { flexDirection:"row", alignItems:"center", gap:10, padding:12 },
-  resultsBanner:   { flexDirection:"row", alignItems:"center", gap:8, paddingHorizontal:16, paddingVertical:10, borderBottomWidth:1 },
-  sectionLabel:    { flexDirection:"row", alignItems:"center", gap:6, paddingHorizontal:16, paddingBottom:8 },
-  sectionLabelText:{ fontSize:14, fontFamily:"Inter_700Bold", flex:1 },
-  countPill:       { borderRadius:10, paddingHorizontal:7, paddingVertical:2 },
+  resultsBanner:   { flexDirection:"row", alignItems:"center", gap:8, paddingHorizontal:16, paddingVertical:10, borderBottomWidth:StyleSheet.hairlineWidth },
+  sectionLabel:    { flexDirection:"row", alignItems:"center", gap:8, paddingHorizontal:16, paddingBottom:10 },
+  sectionIconWrap: { width:26, height:26, borderRadius:8, alignItems:"center", justifyContent:"center" },
+  sectionLabelText:{ fontSize:15, fontFamily:"Inter_700Bold", flex:1 },
+  countPill:       { borderRadius:10, paddingHorizontal:8, paddingVertical:3 },
   seeAllBtn:       { flexDirection:"row", alignItems:"center", gap:2, marginLeft:"auto" as any },
-  card:            { flexDirection:"row", alignItems:"center", gap:12, marginHorizontal:16, marginBottom:8, padding:14, borderRadius:16, borderWidth:1 },
+  card:            { flexDirection:"row", alignItems:"center", gap:12, marginHorizontal:16, marginBottom:10, padding:14, borderRadius:18, shadowColor:"#000", shadowOffset:{width:0,height:2}, shadowOpacity:0.06, shadowRadius:8, elevation:3 },
   cardTitle:       { fontSize:15, fontFamily:"Inter_600SemiBold" },
   cardSub:         { fontSize:12, fontFamily:"Inter_400Regular" },
-  bioText:         { fontSize:12, fontFamily:"Inter_400Regular", lineHeight:16 },
+  bioText:         { fontSize:12, fontFamily:"Inter_400Regular", lineHeight:17 },
   av48:            { width:48, height:48, borderRadius:24 },
-  av32:            { width:32, height:32, borderRadius:16 },
+  av48Wrap:        { position:"relative" },
+  orgDotCard:      { position:"absolute", bottom:-1, right:-1, backgroundColor:"#fff", borderRadius:8 },
+  av36:            { width:36, height:36, borderRadius:18 },
+  av52:            { width:52, height:52 },
   av44:            { width:44, height:44, borderRadius:22 },
-  followBtn:       { paddingHorizontal:10, paddingVertical:4, borderRadius:8, borderWidth:1 },
-  giftCard:        { alignItems:"center", borderRadius:14, borderWidth:1, paddingVertical:12, paddingHorizontal:6, gap:4 },
-  rarityDot:       { width:6, height:6, borderRadius:3 },
-  eventEmoji:      { width:54, height:54, borderRadius:14, alignItems:"center", justifyContent:"center" },
-  catPill:         { flexDirection:"row", alignItems:"center", gap:3, paddingHorizontal:7, paddingVertical:3, borderRadius:8 },
+  viewBtn:         { paddingHorizontal:12, paddingVertical:6, borderRadius:10 },
+  subBtn:          { paddingHorizontal:12, paddingVertical:6, borderRadius:10 },
+  timeChip:        { paddingHorizontal:8, paddingVertical:3, borderRadius:8 },
+  giftCard:        { alignItems:"center", borderRadius:16, borderWidth:1, paddingVertical:12, paddingHorizontal:6, gap:4, shadowColor:"#000", shadowOffset:{width:0,height:1}, shadowOpacity:0.05, shadowRadius:4, elevation:2 },
+  rarityDot:       { width:7, height:7, borderRadius:3.5 },
+  eventEmoji:      { width:54, height:54, borderRadius:16, alignItems:"center", justifyContent:"center" },
+  catPill:         { flexDirection:"row", alignItems:"center", gap:3, paddingHorizontal:8, paddingVertical:3, borderRadius:8 },
   freeBadge:       { backgroundColor:SUCCESS+"22", paddingHorizontal:8, paddingVertical:3, borderRadius:8 },
   freeBadgeText:   { color:SUCCESS, fontSize:10, fontFamily:"Inter_700Bold" },
-  progressBg:      { height:4, borderRadius:2, overflow:"hidden" },
-  progressFill:    { height:4, borderRadius:2 },
-  emptyWrap:       { flex:1, alignItems:"center", paddingTop:60, paddingHorizontal:32, gap:8 },
+  progressBg:      { height:5, borderRadius:3, overflow:"hidden" },
+  progressFill:    { height:5, borderRadius:3 },
+  emptyWrap:       { flex:1, alignItems:"center", paddingTop:60, paddingHorizontal:32, gap:10 },
   emptyIcon:       { width:88, height:88, borderRadius:44, alignItems:"center", justifyContent:"center", marginBottom:8 },
   emptyTitle:      { fontSize:18, fontFamily:"Inter_600SemiBold", textAlign:"center" },
   emptySub:        { fontSize:14, fontFamily:"Inter_400Regular", textAlign:"center", lineHeight:20 },
   idleHeading:     { fontSize:16, fontFamily:"Inter_700Bold", marginBottom:0 },
   idleSectionHeader:{ flexDirection:"row", alignItems:"center", gap:8, marginBottom:4 },
-  quickGrid:       { flexDirection:"row", flexWrap:"wrap", gap:10, marginTop:12 },
-  quickCard:       { alignItems:"center", borderRadius:16, borderWidth:1, paddingVertical:14, paddingHorizontal:4, gap:8 },
-  quickIcon:       { width:44, height:44, borderRadius:14, alignItems:"center", justifyContent:"center" },
-  quickLabel:      { fontSize:11, fontFamily:"Inter_500Medium", textAlign:"center" },
-  personChip:      { alignItems:"center", borderRadius:16, borderWidth:1, paddingVertical:12, paddingHorizontal:14, gap:8, width:110 },
-  personChipAvatar:{ width:40, height:40, borderRadius:20 },
-  personChipName:  { fontSize:12, fontFamily:"Inter_600SemiBold", maxWidth:80 },
+  quickGrid:       { flexDirection:"row", flexWrap:"wrap", gap:10, marginTop:14 },
+  quickCard:       { alignItems:"center", borderRadius:18, paddingVertical:16, paddingHorizontal:6, gap:10, shadowColor:"#000", shadowOffset:{width:0,height:2}, shadowOpacity:0.06, shadowRadius:8, elevation:3 },
+  quickIcon:       { width:50, height:50, borderRadius:16, alignItems:"center", justifyContent:"center" },
+  quickLabel:      { fontSize:12, fontFamily:"Inter_600SemiBold", textAlign:"center" },
+  personChip:      { alignItems:"center", borderRadius:18, paddingVertical:14, paddingHorizontal:14, gap:8, width:110, shadowColor:"#000", shadowOffset:{width:0,height:1}, shadowOpacity:0.05, shadowRadius:6, elevation:2 },
+  personChipAvatar:{ width:44, height:44, borderRadius:22 },
+  personChipName:  { fontSize:12, fontFamily:"Inter_600SemiBold", maxWidth:82 },
   tagsWrap:        { flexDirection:"row", flexWrap:"wrap", gap:8 },
-  tagChip:         { flexDirection:"row", alignItems:"center", gap:1, paddingHorizontal:12, paddingVertical:7, borderRadius:20, borderWidth:1 },
-  histRow:         { flexDirection:"row", alignItems:"center", gap:10, padding:13, borderRadius:13, borderWidth:1, marginBottom:6 },
+  tagChip:         { flexDirection:"row", alignItems:"center", gap:2, paddingHorizontal:13, paddingVertical:7, borderRadius:20, borderWidth:1 },
+  histRow:         { flexDirection:"row", alignItems:"center", gap:10, padding:13, borderRadius:14, borderWidth:StyleSheet.hairlineWidth, marginBottom:6 },
 });
