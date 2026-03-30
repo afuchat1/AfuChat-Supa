@@ -47,7 +47,12 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 
 ### Key Supabase Tables Used
 
-- **profiles** — `id`, `handle`, `display_name`, `avatar_url`, `bio`, `xp` (Nexa), `acoin`, `current_grade`, `is_verified`, `is_organization_verified`, `is_admin`, `country`, `website_url`, `phone_number`, `banner_url`, `language`, `tipping_enabled`, `last_seen` (timestamptz), `show_online_status`, etc. NOTE: No `is_premium` field — premium status comes from `user_subscriptions`.
+- **profiles** — `id`, `handle`, `display_name`, `avatar_url`, `bio`, `xp` (Nexa), `acoin`, `current_grade`, `is_verified`, `is_organization_verified`, `is_admin`, `country`, `website_url`, `phone_number`, `banner_url`, `language`, `tipping_enabled`, `last_seen` (timestamptz), `show_online_status`, `is_private`, `show_last_seen`, `show_bio_publicly`, `message_privacy` (everyone/followers/nobody), `reactions_privacy` (everyone/followers/nobody), `hide_from_search`, `hide_posts_non_followers`, `allow_tagging` (everyone/followers/nobody), `data_personalization`, `data_analytics`, `date_of_birth`, `gender`, `match_visible`. NOTE: No `is_premium` field — premium status comes from `user_subscriptions`.
+- **match_swipes** — `id`, `swiper_id`, `swiped_id`, `direction` (like/nope/superlike), `created_at`. RLS: swipers own their rows.
+- **match_matches** — `id`, `user1_id`, `user2_id`, `matched_at`, `is_super_match`, `chat_id`. RLS: both users can see.
+- **match_preferences** — `user_id` (PK), `show_in_match`, `min_age`, `max_age`, `preferred_countries`, `interested_in` (men/women/everyone), `max_distance_km`, `updated_at`. RLS: user owns row.
+- **match_gifts** — `id`, `match_id`, `sender_id`, `receiver_id`, `gift_id`, `message`, `sent_at`. RLS: sender/receiver can see.
+- **check_mutual_match** — PL/pgSQL SECURITY DEFINER function: args `(p_swiper UUID, p_swiped UUID, p_direction TEXT)` → returns `UUID` (match_id if mutual, else NULL). Creates match_matches row on mutual like.
 - **subscription_plans** — `id`, `name`, `description`, `acoin_price`, `duration_days`, `features` (jsonb), `grants_verification`, `is_active`, `tier` (silver/gold/platinum)
 - **user_subscriptions** — `id`, `user_id` (UNIQUE), `plan_id`, `started_at`, `expires_at`, `is_active`, `acoin_paid`. Premium = active + not expired.
 - **currency_settings** — `nexa_to_acoin_rate`, `conversion_fee_percent`, `p2p_fee_percent`. Used for Nexa→ACoin conversion.

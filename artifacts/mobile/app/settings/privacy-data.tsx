@@ -18,10 +18,8 @@ import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
 type Settings = {
-  hide_followers_list: boolean;
-  hide_following_list: boolean;
-  hide_posts_non_followers: boolean;
-  hide_from_search: boolean;
+  data_personalization: boolean;
+  data_analytics: boolean;
 };
 
 function ToggleRow({ icon, iconBg, label, description, value, onToggle, saving }: {
@@ -43,21 +41,20 @@ function ToggleRow({ icon, iconBg, label, description, value, onToggle, saving }
   );
 }
 
-export default function PrivacyVisibilityScreen() {
+export default function PrivacyDataScreen() {
   const { colors } = useTheme();
-  const { user, refreshProfile } = useAuth();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const [settings, setSettings] = useState<Settings>({ hide_followers_list: false, hide_following_list: false, hide_posts_non_followers: false, hide_from_search: false });
+  const [settings, setSettings] = useState<Settings>({ data_personalization: true, data_analytics: true });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<keyof Settings | null>(null);
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("profiles").select("hide_followers_list, hide_following_list, hide_posts_non_followers, hide_from_search").eq("id", user.id).single()
-      .then(({ data }) => {
-        if (data) setSettings({ hide_followers_list: data.hide_followers_list ?? false, hide_following_list: data.hide_following_list ?? false, hide_posts_non_followers: data.hide_posts_non_followers ?? false, hide_from_search: data.hide_from_search ?? false });
-        setLoading(false);
-      });
+    supabase.from("profiles").select("data_personalization, data_analytics").eq("id", user.id).single().then(({ data }) => {
+      if (data) setSettings({ data_personalization: data.data_personalization !== false, data_analytics: data.data_analytics !== false });
+      setLoading(false);
+    });
   }, [user]);
 
   async function toggle(field: keyof Settings, value: boolean) {
@@ -65,7 +62,7 @@ export default function PrivacyVisibilityScreen() {
     setSaving(field);
     const { error } = await supabase.from("profiles").update({ [field]: value }).eq("id", user.id);
     if (error) showAlert("Error", "Failed to save setting.");
-    else { setSettings((prev) => ({ ...prev, [field]: value })); await refreshProfile(); }
+    else setSettings((p) => ({ ...p, [field]: value }));
     setSaving(null);
   }
 
@@ -75,24 +72,71 @@ export default function PrivacyVisibilityScreen() {
         <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Visibility</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Activity Data</Text>
         <View style={{ width: 24 }} />
       </View>
       {loading ? <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={Colors.brand} /></View> : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>CONNECTIONS</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>DATA USAGE</Text>
           <View style={styles.group}>
-            <ToggleRow icon="people" iconBg="#007AFF" label="Hide Followers List" description="Others cannot see who follows you" value={settings.hide_followers_list} onToggle={(v) => toggle("hide_followers_list", v)} saving={saving === "hide_followers_list"} />
+            <ToggleRow
+              icon="sparkles" iconBg="#BF5AF2"
+              label="Personalisation"
+              description="Use your activity to personalise your feed, suggestions, and AI responses"
+              value={settings.data_personalization}
+              onToggle={(v) => toggle("data_personalization", v)}
+              saving={saving === "data_personalization"}
+            />
             <View style={[styles.sep, { backgroundColor: colors.border, marginLeft: 62 }]} />
-            <ToggleRow icon="person-add" iconBg="#5856D6" label="Hide Following List" description="Others cannot see who you follow" value={settings.hide_following_list} onToggle={(v) => toggle("hide_following_list", v)} saving={saving === "hide_following_list"} />
+            <ToggleRow
+              icon="analytics" iconBg={Colors.brand}
+              label="Analytics"
+              description="Help improve AfuChat by sharing anonymous usage statistics"
+              value={settings.data_analytics}
+              onToggle={(v) => toggle("data_analytics", v)}
+              saving={saving === "data_analytics"}
+            />
           </View>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>DISCOVERABILITY</Text>
+
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>ACCOUNT DATA</Text>
           <View style={styles.group}>
-            <ToggleRow icon="document-text" iconBg="#FF9500" label="Limit Post Visibility" description="Only followers can see your posts in Discover" value={settings.hide_posts_non_followers} onToggle={(v) => toggle("hide_posts_non_followers", v)} saving={saving === "hide_posts_non_followers"} />
+            <TouchableOpacity
+              style={[styles.linkRow, { backgroundColor: colors.surface }]}
+              onPress={() => router.push("/settings/privacy-download" as any)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.linkIcon, { backgroundColor: "#007AFF" }]}>
+                <Ionicons name="cloud-download" size={18} color="#fff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.linkLabel, { color: colors.text }]}>Download My Data</Text>
+                <Text style={[styles.linkDesc, { color: colors.textMuted }]}>Request a copy of all your AfuChat data</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
             <View style={[styles.sep, { backgroundColor: colors.border, marginLeft: 62 }]} />
-            <ToggleRow icon="search" iconBg="#FF3B30" label="Hide From Search" description="Your profile won't appear in search results" value={settings.hide_from_search} onToggle={(v) => toggle("hide_from_search", v)} saving={saving === "hide_from_search"} />
+            <TouchableOpacity
+              style={[styles.linkRow, { backgroundColor: colors.surface }]}
+              onPress={() => showAlert("Clear History", "This will clear your search history and browsing activity. Continue?", [
+                { text: "Cancel", style: "cancel" },
+                { text: "Clear", style: "destructive", onPress: () => showAlert("Done", "Activity history cleared.") },
+              ])}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.linkIcon, { backgroundColor: "#FF3B30" }]}>
+                <Ionicons name="trash" size={18} color="#fff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.linkLabel, { color: "#FF3B30" }]}>Clear Activity History</Text>
+                <Text style={[styles.linkDesc, { color: colors.textMuted }]}>Delete your search and browsing history</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
           </View>
-          <Text style={[styles.hint, { color: colors.textMuted }]}>Hiding your lists does not affect who can follow or message you. All changes are applied instantly.</Text>
+
+          <Text style={[styles.hint, { color: colors.textMuted }]}>
+            AfuChat Technologies Ltd. never sells your personal data to third parties. Turning off personalisation may make your experience less relevant.
+          </Text>
         </ScrollView>
       )}
     </View>
@@ -111,5 +155,9 @@ const styles = StyleSheet.create({
   rowText: { flex: 1 },
   rowLabel: { fontSize: 16, fontFamily: "Inter_400Regular", marginBottom: 2 },
   rowDesc: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 16 },
+  linkRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 14, gap: 14 },
+  linkIcon: { width: 34, height: 34, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  linkLabel: { fontSize: 16, fontFamily: "Inter_400Regular", marginBottom: 2 },
+  linkDesc: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 16 },
   hint: { fontSize: 13, fontFamily: "Inter_400Regular", paddingHorizontal: 20, paddingTop: 14, lineHeight: 18 },
 });

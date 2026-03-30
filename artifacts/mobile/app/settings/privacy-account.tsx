@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Switch,
@@ -14,8 +15,32 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
 
-function ToggleRow({ icon, iconBg, label, description, value, onToggle }: { icon: React.ComponentProps<typeof Ionicons>["name"]; iconBg: string; label: string; description: string; value: boolean; onToggle: (v: boolean) => void; }) {
+type Settings = {
+  is_private: boolean;
+  show_online_status: boolean;
+  show_last_seen: boolean;
+  show_bio_publicly: boolean;
+};
+
+function ToggleRow({
+  icon,
+  iconBg,
+  label,
+  description,
+  value,
+  onToggle,
+  saving,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  iconBg: string;
+  label: string;
+  description: string;
+  value: boolean;
+  onToggle: (v: boolean) => void;
+  saving?: boolean;
+}) {
   const { colors } = useTheme();
   return (
     <View style={[styles.row, { backgroundColor: colors.surface }]}>
@@ -26,7 +51,15 @@ function ToggleRow({ icon, iconBg, label, description, value, onToggle }: { icon
         <Text style={[styles.rowLabel, { color: colors.text }]}>{label}</Text>
         <Text style={[styles.rowDesc, { color: colors.textMuted }]}>{description}</Text>
       </View>
-      <Switch value={value} onValueChange={onToggle} trackColor={{ true: Colors.brand, false: colors.border }} />
+      {saving ? (
+        <ActivityIndicator size="small" color={Colors.brand} />
+      ) : (
+        <Switch
+          value={value}
+          onValueChange={onToggle}
+          trackColor={{ true: Colors.brand, false: colors.border }}
+        />
+      )}
     </View>
   );
 }
@@ -35,25 +68,50 @@ export default function PrivacyAccountScreen() {
   const { colors } = useTheme();
   const { user, refreshProfile } = useAuth();
   const insets = useSafeAreaInsets();
-  const [isPrivate, setIsPrivate] = useState(false);
-  const [showOnline, setShowOnline] = useState(true);
-  const [showLastSeen, setShowLastSeen] = useState(true);
-  const [showBio, setShowBio] = useState(true);
+
+  const [settings, setSettings] = useState<Settings>({
+    is_private: false,
+    show_online_status: true,
+    show_last_seen: true,
+    show_bio_publicly: true,
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<keyof Settings | null>(null);
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("profiles").select("is_private, show_online_status").eq("id", user.id).single().then(({ data }) => {
-      if (data) {
-        setIsPrivate(data.is_private || false);
-        setShowOnline(data.show_online_status !== false);
-      }
-    });
+    supabase
+      .from("profiles")
+      .select("is_private, show_online_status, show_last_seen, show_bio_publicly")
+      .eq("id", user.id)
+      .single()
+      .then(({ data, error }) => {
+        if (data) {
+          setSettings({
+            is_private: data.is_private ?? false,
+            show_online_status: data.show_online_status !== false,
+            show_last_seen: data.show_last_seen !== false,
+            show_bio_publicly: data.show_bio_publicly !== false,
+          });
+        }
+        setLoading(false);
+      });
   }, [user]);
 
-  async function update(field: string, value: boolean) {
+  async function toggle(field: keyof Settings, value: boolean) {
     if (!user) return;
-    await supabase.from("profiles").update({ [field]: value }).eq("id", user.id);
-    refreshProfile();
+    setSaving(field);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ [field]: value })
+      .eq("id", user.id);
+    if (error) {
+      showAlert("Error", "Failed to save setting. Please try again.");
+    } else {
+      setSettings((prev) => ({ ...prev, [field]: value }));
+      await refreshProfile();
+    }
+    setSaving(null);
   }
 
   return (
@@ -65,49 +123,64 @@ export default function PrivacyAccountScreen() {
         <Text style={[styles.headerTitle, { color: colors.text }]}>Account Privacy</Text>
         <View style={{ width: 24 }} />
       </View>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>PROFILE</Text>
-        <View style={styles.group}>
-          <ToggleRow
-            icon="lock-closed"
-            iconBg="#007AFF"
-            label="Private Account"
-            description="Only approved followers can see your posts and stories"
-            value={isPrivate}
-            onToggle={(v) => { setIsPrivate(v); update("is_private", v); }}
-          />
-          <View style={[styles.sep, { backgroundColor: colors.border, marginLeft: 60 }]} />
-          <ToggleRow
-            icon="eye"
-            iconBg="#34C759"
-            label="Show Online Status"
-            description="Let others see when you were last active"
-            value={showOnline}
-            onToggle={(v) => { setShowOnline(v); update("show_online_status", v); }}
-          />
-          <View style={[styles.sep, { backgroundColor: colors.border, marginLeft: 60 }]} />
-          <ToggleRow
-            icon="time"
-            iconBg="#FF9500"
-            label="Show Last Seen"
-            description="Display when you were last online to contacts"
-            value={showLastSeen}
-            onToggle={setShowLastSeen}
-          />
-          <View style={[styles.sep, { backgroundColor: colors.border, marginLeft: 60 }]} />
-          <ToggleRow
-            icon="person-circle"
-            iconBg="#5856D6"
-            label="Public Bio"
-            description="Show your bio to everyone, not just followers"
-            value={showBio}
-            onToggle={setShowBio}
-          />
+
+      {loading ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator color={Colors.brand} />
         </View>
-        <Text style={[styles.hint, { color: colors.textMuted }]}>
-          When your account is private, only people you approve can follow you and see your content.
-        </Text>
-      </ScrollView>
+      ) : (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>PROFILE</Text>
+          <View style={styles.group}>
+            <ToggleRow
+              icon="lock-closed"
+              iconBg="#007AFF"
+              label="Private Account"
+              description="Only approved followers can see your posts and stories"
+              value={settings.is_private}
+              onToggle={(v) => toggle("is_private", v)}
+              saving={saving === "is_private"}
+            />
+            <View style={[styles.sep, { backgroundColor: colors.border, marginLeft: 62 }]} />
+            <ToggleRow
+              icon="person-circle"
+              iconBg="#5856D6"
+              label="Public Bio"
+              description="Show your bio to everyone, not just followers"
+              value={settings.show_bio_publicly}
+              onToggle={(v) => toggle("show_bio_publicly", v)}
+              saving={saving === "show_bio_publicly"}
+            />
+          </View>
+
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>ACTIVITY</Text>
+          <View style={styles.group}>
+            <ToggleRow
+              icon="radio-button-on"
+              iconBg="#34C759"
+              label="Show Online Status"
+              description="Let others see when you are currently active"
+              value={settings.show_online_status}
+              onToggle={(v) => toggle("show_online_status", v)}
+              saving={saving === "show_online_status"}
+            />
+            <View style={[styles.sep, { backgroundColor: colors.border, marginLeft: 62 }]} />
+            <ToggleRow
+              icon="time"
+              iconBg="#FF9500"
+              label="Show Last Seen"
+              description="Display when you were last active to your contacts"
+              value={settings.show_last_seen}
+              onToggle={(v) => toggle("show_last_seen", v)}
+              saving={saving === "show_last_seen"}
+            />
+          </View>
+
+          <Text style={[styles.hint, { color: colors.textMuted }]}>
+            When your account is private, only people you approve can follow you and see your content. Changes take effect immediately.
+          </Text>
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -123,6 +196,6 @@ const styles = StyleSheet.create({
   rowIcon: { width: 34, height: 34, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   rowText: { flex: 1 },
   rowLabel: { fontSize: 16, fontFamily: "Inter_400Regular", marginBottom: 2 },
-  rowDesc: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  hint: { fontSize: 13, fontFamily: "Inter_400Regular", paddingHorizontal: 20, paddingTop: 12, lineHeight: 18 },
+  rowDesc: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 16 },
+  hint: { fontSize: 13, fontFamily: "Inter_400Regular", paddingHorizontal: 20, paddingTop: 14, lineHeight: 18 },
 });
