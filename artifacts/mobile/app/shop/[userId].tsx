@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -18,18 +19,59 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
-import { Shop, ShopProduct, PRODUCT_CATEGORIES, addToCart, getOrCreateCart, formatShopAcoin, formatShopUGX } from "@/lib/shop";
+import { Shop, ShopProduct, PRODUCT_CATEGORIES, addToCart, getOrCreateCart, formatShopAcoin } from "@/lib/shop";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { Avatar } from "@/components/ui/Avatar";
 
-export default function ShopStorefront() {
+const CATS = ["All", "Fashion", "Electronics", "Beauty", "Home", "Food", "Digital", "Sports", "Art", "Books", "Services", "Other"];
+
+function ProductCard({ item, cardW, onPress, onAddCart, adding }: { item: ShopProduct; cardW: number; onPress: () => void; onAddCart: () => void; adding: boolean }) {
+  const { colors } = useTheme();
+  const img = item.images?.[0];
+  const imgH = cardW * 1.0;
+
+  return (
+    <TouchableOpacity style={[st.card, { width: cardW, backgroundColor: colors.background }]} onPress={onPress} activeOpacity={0.93}>
+      <View style={[st.imgWrap, { height: imgH }]}>
+        {img ? (
+          <Image source={{ uri: img }} style={st.cardImg} resizeMode="cover" />
+        ) : (
+          <View style={[st.imgPlaceholder, { backgroundColor: colors.backgroundSecondary }]}>
+            <Ionicons name="image-outline" size={28} color={colors.textMuted} />
+          </View>
+        )}
+        {!item.is_unlimited_stock && item.stock < 5 && item.stock > 0 && (
+          <View style={st.stockBadge}><Text style={st.stockBadgeText}>Only {item.stock} left</Text></View>
+        )}
+      </View>
+      <View style={st.cardInfo}>
+        <Text style={[st.cardName, { color: colors.text }]} numberOfLines={2}>{item.name}</Text>
+        <Text style={[st.cardPrice, { color: Colors.brand }]}>{formatShopAcoin(item.price_acoin)}</Text>
+        <TouchableOpacity
+          style={[st.addBtn, { backgroundColor: Colors.brand, opacity: adding ? 0.6 : 1 }]}
+          onPress={onAddCart}
+          disabled={adding || (!item.is_unlimited_stock && item.stock === 0)}
+        >
+          {adding ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={st.addBtnText}>{!item.is_unlimited_stock && item.stock === 0 ? "Sold Out" : "Add to Cart"}</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+export default function StoreStorefront() {
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const { colors } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
-  const [shop, setShop] = useState<Shop | null>(null);
+  const [shop, setShop] = useState<(Shop & { profiles?: any }) | null>(null);
   const [products, setProducts] = useState<ShopProduct[]>([]);
   const [cartCount, setCartCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -37,7 +79,7 @@ export default function ShopStorefront() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [addingId, setAddingId] = useState<string | null>(null);
 
-  const cardW = Math.floor((width - 36) / 2);
+  const cardW = Math.floor((width - 16 * 2 - 10) / 2);
 
   const load = useCallback(async () => {
     if (!userId) return;
@@ -49,11 +91,11 @@ export default function ShopStorefront() {
         .select("*")
         .eq("seller_id", userId)
         .eq("is_available", true)
-        .order("created_at", { ascending: false }),
+        .order("sales_count", { ascending: false }),
     ]);
-    setShop(shopRes.data as Shop);
+    setShop(shopRes.data as any);
     setProducts(productsRes.data || []);
-    setLoading(false);
+    setLoading(false); setRefreshing(false);
   }, [userId]);
 
   const loadCart = useCallback(async () => {
@@ -64,275 +106,231 @@ export default function ShopStorefront() {
 
   useEffect(() => { load(); loadCart(); }, [load, loadCart]);
 
+  const filteredProducts = activeCategory === "All" ? products : products.filter(p => {
+    const catMap: Record<string, string[]> = {
+      "Fashion": ["Fashion"], "Electronics": ["Electronics"], "Beauty": ["Beauty"],
+      "Home": ["Home & Garden"], "Food": ["Food & Drink"], "Digital": ["Digital Goods"],
+      "Sports": ["Sports"], "Art": ["Art & Crafts"], "Books": ["Books"], "Services": ["Services"],
+    };
+    return (catMap[activeCategory] || [activeCategory]).includes(p.category);
+  });
+
   async function handleAddToCart(product: ShopProduct) {
-    if (!user) { router.push("/(auth)/login" as any); return; }
-    if (product.seller_id === user.id) { showAlert("Oops", "You can't buy your own products."); return; }
-    const available = product.is_unlimited_stock || product.stock > 0;
-    if (!available) { showAlert("Out of Stock", "This product is currently unavailable."); return; }
+    if (!user) { router.push("/auth/login"); return; }
     setAddingId(product.id);
-    await addToCart(user.id, product.id);
-    setCartCount((c) => c + 1);
+    await addToCart(user.id, product.id, 1);
+    setCartCount(c => c + 1);
     setAddingId(null);
-    showAlert("Added to Cart", `${product.name} added to your cart`);
+    showAlert("Added", `${product.name} added to your cart.`);
   }
 
-  const categories = ["All", ...Array.from(new Set(products.map((p) => p.category || "Other")))];
-  const filtered = activeCategory === "All" ? products : products.filter((p) => p.category === activeCategory);
-
-  const renderProduct = ({ item }: { item: ShopProduct }) => {
-    const img = item.images?.[0];
-    const outOfStock = !item.is_unlimited_stock && item.stock <= 0;
-    return (
-      <TouchableOpacity
-        style={[styles.productCard, { width: cardW, backgroundColor: colors.surface }]}
-        onPress={() => router.push({ pathname: "/shop/product/[id]", params: { id: item.id } })}
-        activeOpacity={0.9}
-      >
-        <View style={styles.productImgWrap}>
-          {img ? (
-            <Image source={{ uri: img }} style={styles.productImg} resizeMode="cover" />
-          ) : (
-            <View style={[styles.productImg, { backgroundColor: Colors.brand + "18", alignItems: "center", justifyContent: "center" }]}>
-              <Ionicons name="cube-outline" size={36} color={Colors.brand} />
-            </View>
-          )}
-          {outOfStock && (
-            <View style={styles.outOfStockBadge}>
-              <Text style={styles.outOfStockText}>Out of Stock</Text>
-            </View>
-          )}
-          {item.sales_count > 0 && (
-            <View style={styles.soldBadge}>
-              <Text style={styles.soldBadgeText}>{item.sales_count}+ sold</Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.productInfo}>
-          <Text style={[styles.productName, { color: colors.text }]} numberOfLines={2}>{item.name}</Text>
-          <Text style={[styles.productPrice, { color: Colors.brand }]}>{formatShopAcoin(item.price_acoin)}</Text>
-          <Text style={[styles.productPriceUGX, { color: colors.textMuted }]}>{formatShopUGX(item.price_acoin)}</Text>
-          <TouchableOpacity
-            style={[styles.addCartBtn, { backgroundColor: outOfStock ? colors.backgroundTertiary : Colors.brand }]}
-            onPress={() => handleAddToCart(item)}
-            disabled={outOfStock || addingId === item.id}
-          >
-            {addingId === item.id
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <Ionicons name="cart-outline" size={16} color={outOfStock ? colors.textMuted : "#fff"} />}
-            <Text style={[styles.addCartBtnText, { color: outOfStock ? colors.textMuted : "#fff" }]}>
-              {outOfStock ? "Unavailable" : "Add to Cart"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
-  if (loading) {
-    return (
-      <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
-        <View style={[styles.header, { borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-        </View>
-        <ActivityIndicator color={Colors.brand} style={{ marginTop: 60 }} size="large" />
-      </View>
-    );
-  }
-
-  if (!shop) {
-    return (
-      <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
-        <View style={[styles.header, { borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.noShop}>
-          <Text style={{ fontSize: 64 }}>🏪</Text>
-          <Text style={[styles.noShopTitle, { color: colors.text }]}>No shop yet</Text>
-          <Text style={[styles.noShopSub, { color: colors.textMuted }]}>This user hasn't set up their shop</Text>
-          {userId === user?.id && (
-            <TouchableOpacity style={[styles.setupBtn, { backgroundColor: Colors.brand }]} onPress={() => router.push("/shop/manage" as any)}>
-              <Text style={styles.setupBtnText}>Set Up My Shop</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    );
-  }
+  const seller = shop?.profiles;
+  const headerH = 200;
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
-      <View style={[styles.header, { backgroundColor: "transparent", borderBottomColor: "transparent" }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={styles.headerBtn}>
-          <Ionicons name="arrow-back" size={22} color="#fff" />
+    <View style={[st.root, { backgroundColor: colors.background }]}>
+      {/* Floating back + cart */}
+      <View style={[st.floatBar, { paddingTop: insets.top + 4 }]}>
+        <TouchableOpacity style={[st.floatBtn, { backgroundColor: "rgba(0,0,0,0.35)" }]} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={20} color="#fff" />
         </TouchableOpacity>
-        <View style={{ flex: 1 }} />
-        {userId === user?.id && (
-          <TouchableOpacity onPress={() => router.push("/shop/manage" as any)} hitSlop={10} style={styles.headerBtn}>
-            <Ionicons name="settings-outline" size={22} color="#fff" />
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity onPress={() => router.push("/shop/cart" as any)} hitSlop={10} style={styles.headerBtn}>
-          <Ionicons name="cart-outline" size={22} color="#fff" />
+        <TouchableOpacity style={[st.floatBtn, { backgroundColor: "rgba(0,0,0,0.35)" }]} onPress={() => router.push("/shop/cart")}>
+          <Ionicons name="cart-outline" size={20} color="#fff" />
           {cartCount > 0 && (
-            <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>{cartCount > 99 ? "99+" : cartCount}</Text>
+            <View style={[st.cartBadge, { backgroundColor: Colors.brand }]}>
+              <Text style={st.cartBadgeText}>{cartCount > 9 ? "9+" : cartCount}</Text>
             </View>
           )}
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
-        renderItem={renderProduct}
-        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: insets.bottom + 80, gap: 0 }}
-        columnWrapperStyle={{ gap: 12, marginBottom: 12 }}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); await loadCart(); setRefreshing(false); }} tintColor={Colors.brand} />}
-        ListHeaderComponent={
-          <>
-            <View style={styles.heroBanner}>
-              {shop.banner_url ? (
-                <Image source={{ uri: shop.banner_url }} style={styles.bannerImg} resizeMode="cover" />
-              ) : (
-                <LinearGradient colors={[Colors.brand, Colors.brandDark || "#0097A7"]} style={styles.bannerImg} />
-              )}
-              <LinearGradient colors={["transparent", "rgba(0,0,0,0.7)"]} style={styles.bannerGradient} />
-              <View style={styles.bannerContent}>
-                {shop.logo_url || shop.profiles?.avatar_url ? (
-                  <Image source={{ uri: shop.logo_url || shop.profiles?.avatar_url }} style={styles.shopLogo} />
+      {loading ? (
+        <View style={st.loadingWrap}><ActivityIndicator color={Colors.brand} size="large" /></View>
+      ) : !shop ? (
+        <View style={st.loadingWrap}>
+          <Text style={[st.notFoundText, { color: colors.textMuted }]}>Store not found.</Text>
+          <TouchableOpacity onPress={() => router.back()} style={[st.backBtn, { backgroundColor: Colors.brand }]}>
+            <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold" }}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredProducts}
+          keyExtractor={(i) => i.id}
+          numColumns={2}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={Colors.brand} />}
+          renderItem={({ item, index }) => (
+            <View style={{ marginLeft: index % 2 === 0 ? 16 : 5, marginRight: index % 2 !== 0 ? 16 : 5, marginBottom: 10 }}>
+              <ProductCard
+                item={item}
+                cardW={cardW}
+                onPress={() => router.push({ pathname: "/shop/product/[id]", params: { id: item.id } })}
+                onAddCart={() => handleAddToCart(item)}
+                adding={addingId === item.id}
+              />
+            </View>
+          )}
+          ListHeaderComponent={
+            <View>
+              {/* Banner */}
+              <View style={[st.banner, { height: headerH }]}>
+                {shop.banner_url ? (
+                  <Image source={{ uri: shop.banner_url }} style={StyleSheet.absoluteFill} resizeMode="cover" />
                 ) : (
-                  <View style={[styles.shopLogo, { backgroundColor: Colors.brand, alignItems: "center", justifyContent: "center" }]}>
-                    <Text style={{ fontSize: 28 }}>🏪</Text>
-                  </View>
+                  <LinearGradient colors={["#00BCD4", "#0097A7"]} style={StyleSheet.absoluteFill} />
                 )}
-                <View style={{ flex: 1 }}>
-                  <View style={styles.shopNameRow}>
-                    <Text style={styles.shopName} numberOfLines={1}>{shop.name}</Text>
-                    {(shop.profiles?.is_organization_verified || shop.profiles?.is_verified) && (
-                      <Ionicons name="checkmark-circle" size={16} color={Colors.brand} />
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.25)" }]} />
+              </View>
+
+              {/* Store info card */}
+              <View style={[st.infoCard, { backgroundColor: colors.surface }]}>
+                <View style={st.infoRow}>
+                  <View style={[st.logoWrap, { borderColor: colors.background }]}>
+                    <Avatar uri={shop.logo_url || seller?.avatar_url} name={shop.name} size={64} />
+                  </View>
+                  <View style={{ flex: 1, paddingTop: 8 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <Text style={[st.shopName, { color: colors.text }]}>{shop.name}</Text>
+                      {seller?.is_organization_verified && (
+                        <View style={[st.orgBadge, { backgroundColor: Colors.brand + "18" }]}>
+                          <Ionicons name="checkmark-circle" size={12} color={Colors.brand} />
+                          <Text style={[st.orgBadgeText, { color: Colors.brand }]}>Verified Org</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={[st.shopCategory, { color: colors.textMuted }]}>{shop.category || "General Store"}</Text>
+                    {shop.rating > 0 && (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 4 }}>
+                        {[1,2,3,4,5].map(s => (
+                          <Ionicons key={s} name={s <= Math.round(shop.rating) ? "star" : "star-outline"} size={12} color="#FF9500" />
+                        ))}
+                        <Text style={[st.ratingText, { color: colors.textMuted }]}>{shop.rating.toFixed(1)}</Text>
+                      </View>
                     )}
                   </View>
-                  {shop.category && <Text style={styles.shopCategory}>{shop.category}</Text>}
                 </View>
-              </View>
-            </View>
 
-            <View style={[styles.shopStats, { backgroundColor: colors.surface }]}>
-              {[
-                { label: "Products", value: products.length },
-                { label: "Sales", value: shop.total_sales || 0 },
-                { label: "Rating", value: shop.review_count > 0 ? `${shop.rating.toFixed(1)}⭐` : "New" },
-              ].map((s, i) => (
-                <React.Fragment key={s.label}>
-                  {i > 0 && <View style={[styles.statDivider, { backgroundColor: colors.border }]} />}
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statVal, { color: colors.text }]}>{s.value}</Text>
-                    <Text style={[styles.statLabel, { color: colors.textMuted }]}>{s.label}</Text>
+                {/* Stats */}
+                <View style={[st.statsRow, { borderTopColor: colors.border }]}>
+                  {[
+                    { label: "Products", value: products.length.toString() },
+                    { label: "Sales", value: shop.total_sales.toString() },
+                    { label: "Reviews", value: shop.review_count.toString() },
+                  ].map((s) => (
+                    <View key={s.label} style={st.statItem}>
+                      <Text style={[st.statValue, { color: colors.text }]}>{s.value}</Text>
+                      <Text style={[st.statLabel, { color: colors.textMuted }]}>{s.label}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                {shop.description ? (
+                  <Text style={[st.shopDesc, { color: colors.textSecondary, borderTopColor: colors.border }]}>{shop.description}</Text>
+                ) : null}
+
+                {/* Address if available */}
+                {shop.address ? (
+                  <View style={[st.addressRow, { borderTopColor: colors.border }]}>
+                    <Ionicons name="location-outline" size={14} color={colors.textMuted} />
+                    <Text style={[st.addressText, { color: colors.textMuted }]}>{shop.address}</Text>
                   </View>
-                </React.Fragment>
-              ))}
+                ) : null}
+              </View>
+
+              {/* Category filter */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.catScroll}>
+                {CATS.map((cat) => {
+                  const active = activeCategory === cat;
+                  return (
+                    <TouchableOpacity
+                      key={cat}
+                      onPress={() => setActiveCategory(cat)}
+                      style={[st.catChip, {
+                        backgroundColor: active ? Colors.brand : colors.surface,
+                        borderColor: active ? Colors.brand : colors.border,
+                      }]}
+                    >
+                      <Text style={[st.catChipText, { color: active ? "#fff" : colors.textSecondary }]}>{cat}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              <View style={[st.productsHeader, { borderBottomColor: colors.border }]}>
+                <Text style={[st.productsTitle, { color: colors.text }]}>
+                  {activeCategory === "All" ? "All Products" : activeCategory}
+                </Text>
+                <Text style={[st.productsCount, { color: colors.textMuted }]}>{filteredProducts.length} items</Text>
+              </View>
+
+              {filteredProducts.length === 0 && (
+                <View style={st.emptyWrap}>
+                  <Text style={{ fontSize: 40 }}>🛒</Text>
+                  <Text style={[st.emptyText, { color: colors.textMuted }]}>No products in this category.</Text>
+                </View>
+              )}
             </View>
-
-            {shop.description ? (
-              <View style={[styles.descCard, { backgroundColor: colors.surface }]}>
-                <Text style={[styles.descText, { color: colors.textSecondary }]}>{shop.description}</Text>
-              </View>
-            ) : null}
-
-            {userId !== user?.id && (
-              <TouchableOpacity
-                style={[styles.msgSellerBtn, { borderColor: Colors.brand }]}
-                onPress={() => router.push({ pathname: "/contact/[id]", params: { id: userId } })}
-              >
-                <Ionicons name="chatbubble-outline" size={16} color={Colors.brand} />
-                <Text style={[styles.msgSellerText, { color: Colors.brand }]}>Message Seller</Text>
-              </TouchableOpacity>
-            )}
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 12, gap: 8, paddingHorizontal: 0 }}>
-              {categories.map((cat) => (
-                <TouchableOpacity
-                  key={cat}
-                  style={[styles.catChip, { backgroundColor: activeCategory === cat ? Colors.brand : colors.surface, borderColor: activeCategory === cat ? Colors.brand : colors.border }]}
-                  onPress={() => setActiveCategory(cat)}
-                >
-                  <Text style={[styles.catChipText, { color: activeCategory === cat ? "#fff" : colors.textMuted }]}>{cat}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            {filtered.length === 0 && (
-              <View style={styles.emptyProducts}>
-                <Ionicons name="cube-outline" size={48} color={colors.textMuted} />
-                <Text style={[styles.emptyTitle, { color: colors.text }]}>No products in this category</Text>
-              </View>
-            )}
-          </>
-        }
-      />
-
-      {cartCount > 0 && (
-        <TouchableOpacity style={[styles.cartFab, { backgroundColor: Colors.brand }]} onPress={() => router.push("/shop/cart" as any)}>
-          <Ionicons name="cart" size={22} color="#fff" />
-          <Text style={styles.cartFabText}>View Cart ({cartCount})</Text>
-          <Ionicons name="chevron-forward" size={18} color="#fff" />
-        </TouchableOpacity>
+          }
+          contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
+        />
       )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const st = StyleSheet.create({
   root: { flex: 1 },
-  header: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 12, gap: 10 },
-  headerBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(0,0,0,0.35)", alignItems: "center", justifyContent: "center" },
-  cartBadge: { position: "absolute", top: -4, right: -4, backgroundColor: "#FF3B30", borderRadius: 8, minWidth: 16, height: 16, alignItems: "center", justifyContent: "center", paddingHorizontal: 3 },
-  cartBadgeText: { color: "#fff", fontSize: 9, fontFamily: "Inter_700Bold" },
-  heroBanner: { height: 220, position: "relative", marginBottom: 0 },
-  bannerImg: { ...StyleSheet.absoluteFillObject },
-  bannerGradient: { ...StyleSheet.absoluteFillObject },
-  bannerContent: { position: "absolute", bottom: 16, left: 16, right: 16, flexDirection: "row", alignItems: "center", gap: 12 },
-  shopLogo: { width: 56, height: 56, borderRadius: 14, borderWidth: 2, borderColor: "#fff" },
-  shopNameRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 },
-  shopName: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#fff", flex: 1 },
-  shopCategory: { fontSize: 12, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.7)" },
-  shopStats: { flexDirection: "row", paddingVertical: 16, paddingHorizontal: 12 },
+  loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16 },
+  notFoundText: { fontSize: 16, fontFamily: "Inter_400Regular" },
+  backBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
+  floatBar: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    zIndex: 20,
+  },
+  floatBtn: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+  cartBadge: { position: "absolute", top: -3, right: -3, width: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  cartBadgeText: { fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" },
+  banner: { width: "100%", position: "relative" },
+  infoCard: { marginHorizontal: 16, marginTop: -24, borderRadius: 20, padding: 16, marginBottom: 12, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 },
+  infoRow: { flexDirection: "row", gap: 14, marginBottom: 14 },
+  logoWrap: { marginTop: -36, borderWidth: 3, borderRadius: 38, overflow: "hidden" },
+  shopName: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  shopCategory: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
+  orgBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10 },
+  orgBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  ratingText: { fontSize: 12, fontFamily: "Inter_400Regular", marginLeft: 2 },
+  statsRow: { flexDirection: "row", borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12, marginBottom: 8 },
   statItem: { flex: 1, alignItems: "center" },
-  statVal: { fontSize: 18, fontFamily: "Inter_700Bold", marginBottom: 2 },
-  statLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  statDivider: { width: StyleSheet.hairlineWidth, marginVertical: 8 },
-  descCard: { padding: 14, marginHorizontal: 12, marginTop: 10, borderRadius: 12 },
-  descText: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 20 },
-  msgSellerBtn: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 12, marginTop: 10, borderWidth: 1.5, borderRadius: 24, paddingVertical: 10, justifyContent: "center" },
-  msgSellerText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  catChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
-  catChipText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  productCard: { borderRadius: 16, overflow: "hidden", elevation: 1, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
-  productImgWrap: { position: "relative", width: "100%", aspectRatio: 1 },
-  productImg: { width: "100%", height: "100%" },
-  outOfStockBadge: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center" },
-  outOfStockText: { color: "#fff", fontSize: 12, fontFamily: "Inter_700Bold" },
-  soldBadge: { position: "absolute", bottom: 6, left: 6, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
-  soldBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Inter_500Medium" },
-  productInfo: { padding: 10, gap: 3 },
-  productName: { fontSize: 13, fontFamily: "Inter_600SemiBold", lineHeight: 18 },
-  productPrice: { fontSize: 15, fontFamily: "Inter_700Bold", marginTop: 2 },
-  productPriceUGX: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  addCartBtn: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8, borderRadius: 20, paddingVertical: 8, paddingHorizontal: 12, justifyContent: "center" },
-  addCartBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  emptyProducts: { alignItems: "center", paddingVertical: 40, gap: 10 },
-  emptyTitle: { fontSize: 15, fontFamily: "Inter_500Medium" },
-  noShop: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 40 },
-  noShopTitle: { fontSize: 20, fontFamily: "Inter_700Bold" },
-  noShopSub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center" },
-  setupBtn: { paddingHorizontal: 28, paddingVertical: 14, borderRadius: 24, marginTop: 8 },
-  setupBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold" },
-  cartFab: { position: "absolute", bottom: 24, left: 20, right: 20, borderRadius: 30, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, elevation: 6, shadowColor: Colors.brand, shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
-  cartFabText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold", flex: 1, textAlign: "center" },
+  statValue: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  statLabel: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
+  shopDesc: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 20, paddingTop: 10, marginTop: 2, borderTopWidth: StyleSheet.hairlineWidth },
+  addressRow: { flexDirection: "row", alignItems: "center", gap: 5, paddingTop: 10, marginTop: 8, borderTopWidth: StyleSheet.hairlineWidth },
+  addressText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  catScroll: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
+  catChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
+  catChipText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  productsHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth, marginBottom: 12 },
+  productsTitle: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  productsCount: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  emptyWrap: { alignItems: "center", paddingVertical: 40, gap: 10 },
+  emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  card: { borderRadius: 16, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 },
+  imgWrap: { width: "100%", position: "relative" },
+  cardImg: { width: "100%", height: "100%" },
+  imgPlaceholder: { flex: 1, alignItems: "center", justifyContent: "center" },
+  stockBadge: { position: "absolute", bottom: 6, left: 6, backgroundColor: "rgba(255,59,48,0.9)", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  stockBadgeText: { fontSize: 10, fontFamily: "Inter_600SemiBold", color: "#fff" },
+  cardInfo: { padding: 10, gap: 6 },
+  cardName: { fontSize: 13, fontFamily: "Inter_600SemiBold", lineHeight: 18 },
+  cardPrice: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  addBtn: { borderRadius: 10, paddingVertical: 8, alignItems: "center", justifyContent: "center" },
+  addBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#fff" },
 });

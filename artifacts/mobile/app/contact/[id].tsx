@@ -96,7 +96,7 @@ export default function ContactProfileScreen() {
         setLoading(false);
       });
 
-    supabase.from("shops").select("id").eq("seller_id", id).eq("is_active", true).maybeSingle().then(({ data }) => setHasShop(!!data));
+    supabase.from("shops").select("id, pin_to_profile").eq("seller_id", id).eq("is_active", true).eq("pin_to_profile", true).maybeSingle().then(({ data }) => setHasShop(!!data));
 
     if (user) {
       supabase.from("follows").select("id").eq("follower_id", user.id).eq("following_id", id).maybeSingle().then(({ data }) => setIsFollowing(!!data));
@@ -438,12 +438,12 @@ export default function ContactProfileScreen() {
             </View>
             <Text style={[styles.actionLabel, { color: colors.text }]}>Gift</Text>
           </TouchableOpacity>
-          {(hasShop || profile?.is_business_mode || profile?.is_organization_verified) && (
+          {hasShop && (
             <TouchableOpacity style={styles.actionBtn} onPress={() => router.push({ pathname: "/shop/[userId]", params: { userId: profile?.id || "" } })}>
               <View style={[styles.actionIcon, { backgroundColor: "#FF9500" }]}>
                 <Ionicons name="storefront" size={22} color="#fff" />
               </View>
-              <Text style={[styles.actionLabel, { color: colors.text }]}>Shop</Text>
+              <Text style={[styles.actionLabel, { color: colors.text }]}>Store</Text>
             </TouchableOpacity>
           )}
         </View>

@@ -198,6 +198,12 @@ export default function ShopManage() {
     setEditingProduct((prev) => ({ ...prev, images: [...(prev?.images || []), result.assets[0].uri] }));
   }
 
+  async function togglePinToProfile(value: boolean) {
+    if (!shop) return;
+    await supabase.from("shops").update({ pin_to_profile: value, updated_at: new Date().toISOString() }).eq("id", shop.id);
+    setShop((prev) => prev ? { ...prev, pin_to_profile: value } : prev);
+  }
+
   async function updateOrderStatus(orderId: string, status: string) {
     await supabase.from("shop_orders").update({ status, updated_at: new Date().toISOString() }).eq("id", orderId);
     setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: status as any } : o));
@@ -260,8 +266,34 @@ export default function ShopManage() {
 
             <TouchableOpacity style={[styles.viewShopBtn, { backgroundColor: Colors.brand }]} onPress={() => router.push({ pathname: "/shop/[userId]", params: { userId: user!.id } })}>
               <Ionicons name="eye-outline" size={16} color="#fff" />
-              <Text style={styles.viewShopBtnText}>Preview My Shop</Text>
+              <Text style={styles.viewShopBtnText}>Preview My Store</Text>
             </TouchableOpacity>
+
+            {/* ── Pin to Profile ── */}
+            <View style={[styles.quickActions, { backgroundColor: colors.surface, marginBottom: 0 }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>Pin Store to Profile</Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.textMuted, marginTop: 2 }}>
+                    Show a "Visit Store" button on your public profile page.
+                  </Text>
+                </View>
+                <Switch
+                  value={!!shop?.pin_to_profile}
+                  onValueChange={togglePinToProfile}
+                  trackColor={{ false: colors.border, true: Colors.brand + "80" }}
+                  thumbColor={shop?.pin_to_profile ? Colors.brand : colors.textMuted}
+                />
+              </View>
+              {shop?.pin_to_profile && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
+                  <Ionicons name="checkmark-circle" size={14} color="#34C759" />
+                  <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: "#34C759" }}>
+                    Your store is pinned and visible on your public profile.
+                  </Text>
+                </View>
+              )}
+            </View>
 
             <View style={[styles.quickActions, { backgroundColor: colors.surface }]}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Actions</Text>
@@ -424,13 +456,48 @@ export default function ShopManage() {
     );
   }
 
+  const isOrg = profile?.is_organization_verified;
+
+  if (!isOrg) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+        <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Store Manager</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 16 }}>
+          <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.brand + "18", alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name="lock-closed" size={36} color={Colors.brand} />
+          </View>
+          <Text style={{ fontSize: 22, fontFamily: "Inter_700Bold", color: colors.text, textAlign: "center" }}>Verified Organizations Only</Text>
+          <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.textMuted, textAlign: "center", lineHeight: 22 }}>
+            Only verified organizations can list and sell products on AfuMarket. Get your account verified to open your store and reach customers across the platform.
+          </Text>
+          <TouchableOpacity
+            style={{ backgroundColor: Colors.brand, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14, flexDirection: "row", alignItems: "center", gap: 8 }}
+            onPress={() => router.push("/settings/verification" as any)}
+          >
+            <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+            <Text style={{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: "#fff" }}>Apply for Verification</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push("/store")}>
+            <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: Colors.brand }}>Browse Marketplace</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Shop Manager</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Store Manager</Text>
         {shop && (
           <TouchableOpacity onPress={() => router.push({ pathname: "/shop/[userId]", params: { userId: user!.id } })} hitSlop={10}>
             <Ionicons name="eye-outline" size={22} color={Colors.brand} />

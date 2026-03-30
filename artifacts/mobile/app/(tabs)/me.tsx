@@ -306,7 +306,7 @@ export default function MeScreen() {
             <MenuItem
               icon="bag-handle-outline"
               iconBg="#FF6B35"
-              label="My Shop"
+              label="My Store"
               onPress={() => router.push("/shop/manage" as any)}
               badge="Admin"
             />

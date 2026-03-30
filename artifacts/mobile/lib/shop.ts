@@ -10,6 +10,7 @@ export type Shop = {
   category?: string;
   address?: string;
   is_active: boolean;
+  pin_to_profile: boolean;
   total_sales: number;
   total_revenue_acoin: number;
   rating: number;
