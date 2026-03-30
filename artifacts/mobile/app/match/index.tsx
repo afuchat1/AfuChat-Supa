@@ -28,6 +28,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
+import { chargeMatchSuperLike, chargeProfileBoost, getAcoinBalance, MATCH_PRICES } from "@/lib/matchTransactions";
 
 const { width: SW, height: SH } = Dimensions.get("window");
 const CARD_W = Math.min(SW - 32, 420);
@@ -561,14 +562,19 @@ export default function MatchScreen() {
   const [matchResult, setMatchResult] = useState<MatchRecord | null>(null);
   const [detailCandidate, setDetailCandidate] = useState<Candidate | null>(null);
   const [undoStack, setUndoStack] = useState<Candidate[]>([]);
+  const [acoinBalance, setAcoinBalance] = useState(0);
 
   // Check if user has a dating profile
   useEffect(() => { checkProfile(); }, []);
 
   async function checkProfile() {
     if (!user) return;
-    const { data } = await supabase.from("match_profiles").select("user_id, name, is_paused, show_in_discovery, profile_complete").eq("user_id", user.id).maybeSingle();
+    const [{ data }, balance] = await Promise.all([
+      supabase.from("match_profiles").select("user_id, name, is_paused, show_in_discovery, profile_complete").eq("user_id", user.id).maybeSingle(),
+      getAcoinBalance(user.id),
+    ]);
     setMyProfile(data);
+    setAcoinBalance(balance);
     setProfileLoading(false);
     if (data && !data.is_paused) fetchCandidates();
   }
@@ -655,13 +661,49 @@ export default function MatchScreen() {
     recordSwipe(top, "like");
   }
 
-  function handleSuperLike() {
+  async function handleSuperLike() {
     const top = candidates[0];
-    if (!top) return;
+    if (!top || !user) return;
+
+    const result = await chargeMatchSuperLike(user.id, top.name);
+    if (!result.success) {
+      showAlert("Insufficient ACoins", `${result.error}\n\nSuper Likes cost ${MATCH_PRICES.SUPER_LIKE} AC after your 3 free daily ones. Top up your wallet to continue.`, [
+        { text: "Top Up Wallet", onPress: () => router.push("/wallet/topup" as any) },
+        { text: "Cancel", style: "cancel" },
+      ]);
+      return;
+    }
+    if (!result.wasFree && result.newBalance !== undefined) {
+      setAcoinBalance(result.newBalance);
+    }
+
     setUndoStack((prev) => [top, ...prev.slice(0, 2)]);
     setCandidates((prev) => prev.slice(1));
     recordSwipe(top, "superlike");
     Haptics.impactAsync();
+  }
+
+  async function handleBoost() {
+    if (!user) return;
+    showAlert(
+      "Boost Your Profile ⚡",
+      `Boost will show your profile to 10× more people for 30 minutes.\n\nCost: ${MATCH_PRICES.BOOST_30MIN} AC\nYour balance: ${acoinBalance} AC`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: `Boost for ${MATCH_PRICES.BOOST_30MIN} AC`, onPress: async () => {
+          const result = await chargeProfileBoost(user.id);
+          if (!result.success) {
+            showAlert("Insufficient ACoins", `${result.error}\n\nTop up your AfuChat wallet to use Boost.`, [
+              { text: "Top Up Wallet", onPress: () => router.push("/wallet/topup" as any) },
+              { text: "Cancel", style: "cancel" },
+            ]);
+          } else {
+            setAcoinBalance(result.newBalance ?? 0);
+            showAlert("Boost Active! ⚡", "Your profile is now boosted for 30 minutes. Good luck!");
+          }
+        }},
+      ]
+    );
   }
 
   function handleUndo() {
@@ -762,7 +804,15 @@ export default function MatchScreen() {
           </LinearGradient>
           <Text style={[styles.headerTitle, { color: colors.text }]}>AfuMatch</Text>
         </View>
-        <View style={{ flexDirection: "row", gap: 4 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Pressable
+            style={styles.acoinBadge}
+            onPress={() => router.push("/wallet" as any)}
+            hitSlop={{ top: 8, left: 8, bottom: 8, right: 8 }}
+          >
+            <Ionicons name="logo-bitcoin" size={13} color="#FFD60A" />
+            <Text style={styles.acoinBadgeText}>{acoinBalance}</Text>
+          </Pressable>
           <Pressable style={styles.headerBtn} onPress={() => router.push("/match/preferences" as any)} hitSlop={{ top: 8, left: 8, bottom: 8, right: 8 }}>
             <Ionicons name="options-outline" size={22} color={colors.textMuted} />
           </Pressable>
@@ -850,7 +900,7 @@ export default function MatchScreen() {
               <Pressable style={[styles.actionBtn, styles.likeBtn]} onPress={handleSwipeRight}>
                 <Ionicons name="heart" size={28} color={BRAND} />
               </Pressable>
-              <Pressable style={[styles.actionBtn, styles.boostBtn]} onPress={() => showAlert("Boost", "Boost your profile to get 10× more visibility for 30 minutes. Coming soon!")}>
+              <Pressable style={[styles.actionBtn, styles.boostBtn]} onPress={handleBoost}>
                 <Ionicons name="flash" size={20} color="#AF52DE" />
               </Pressable>
             </View>
@@ -887,6 +937,8 @@ const styles = StyleSheet.create({
   headerBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   headerLogo: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontSize: 20, fontFamily: "Inter_700Bold" },
+  acoinBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#1C1C1E", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14 },
+  acoinBadgeText: { color: "#FFD60A", fontSize: 13, fontFamily: "Inter_700Bold" },
   tabBar: { flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth, marginBottom: 4 },
   tabItem: { flex: 1, alignItems: "center", paddingVertical: 12 },
   tabLabel: { fontSize: 15, fontFamily: "Inter_600SemiBold" },

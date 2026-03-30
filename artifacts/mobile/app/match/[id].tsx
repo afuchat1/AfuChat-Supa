@@ -20,6 +20,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { showAlert } from "@/lib/alert";
+import { chargeMatchGift, MATCH_PRICES, getAcoinBalance } from "@/lib/matchTransactions";
 
 const BRAND = "#FF2D55";
 
@@ -62,6 +63,7 @@ export default function MatchConversationScreen() {
   const [sending, setSending] = useState(false);
   const [showGifts, setShowGifts] = useState(false);
   const [showQuick, setShowQuick] = useState(true);
+  const [acoinBalance, setAcoinBalance] = useState(0);
   const flatRef = useRef<FlatList>(null);
 
   useEffect(() => { if (id) loadAll(); }, [id]);
@@ -83,6 +85,9 @@ export default function MatchConversationScreen() {
     setLoading(false);
     // Mark messages read
     await supabase.from("match_messages").update({ read_at: new Date().toISOString() }).eq("match_id", id).neq("sender_id", user.id).is("read_at", null);
+    // Load ACoin balance
+    const balance = await getAcoinBalance(user.id);
+    setAcoinBalance(balance);
   }
 
   useEffect(() => {
@@ -98,6 +103,20 @@ export default function MatchConversationScreen() {
 
   async function send(content?: string, giftEmoji?: string) {
     if (!id || !user || (!content?.trim() && !giftEmoji)) return;
+
+    // Charge ACoins for gifts
+    if (giftEmoji) {
+      const result = await chargeMatchGift(user.id, giftEmoji, otherProfile?.name ?? "match", id);
+      if (!result.success) {
+        showAlert("Insufficient ACoins", `${result.error}\n\nGifts cost ${MATCH_PRICES.GIFT} AC each. Top up your wallet to send gifts.`, [
+          { text: "Top Up Wallet", onPress: () => router.push("/wallet/topup" as any) },
+          { text: "Cancel", style: "cancel" },
+        ]);
+        return;
+      }
+      setAcoinBalance(result.newBalance ?? 0);
+    }
+
     setSending(true);
     setShowQuick(false);
     const msg: any = { match_id: id, sender_id: user.id };
@@ -239,11 +258,20 @@ export default function MatchConversationScreen() {
         {/* Gift emoji picker */}
         {showGifts && (
           <View style={[styles.giftPicker, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-            <Text style={[styles.giftPickerTitle, { color: colors.text }]}>Send a gift 🎁</Text>
+            <View style={styles.giftPickerHeader}>
+              <Text style={[styles.giftPickerTitle, { color: colors.text }]}>Send a gift 🎁</Text>
+              <View style={styles.giftCostBadge}>
+                <Ionicons name="logo-bitcoin" size={13} color="#FFD60A" />
+                <Text style={styles.giftCostText}>{MATCH_PRICES.GIFT} AC each</Text>
+                <View style={styles.giftBalanceDivider} />
+                <Text style={styles.giftBalanceText}>Balance: {acoinBalance} AC</Text>
+              </View>
+            </View>
             <View style={styles.giftRow}>
               {GIFT_EMOJIS.map((g) => (
                 <Pressable key={g} style={styles.giftEmoji} onPress={() => send(undefined, g)}>
                   <Text style={{ fontSize: 32 }}>{g}</Text>
+                  <Text style={styles.giftEmojiCost}>{MATCH_PRICES.GIFT} AC</Text>
                 </Pressable>
               ))}
             </View>
@@ -304,9 +332,15 @@ const styles = StyleSheet.create({
   quickChip: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
   quickText: { fontSize: 13, fontFamily: "Inter_400Regular" },
   giftPicker: { borderTopWidth: StyleSheet.hairlineWidth, padding: 16 },
-  giftPickerTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold", marginBottom: 12 },
+  giftPickerHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  giftPickerTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  giftCostBadge: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#1C1C1E", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  giftCostText: { color: "#FFD60A", fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  giftBalanceDivider: { width: 1, height: 12, backgroundColor: "#3A3A3C" },
+  giftBalanceText: { color: "#8E8E93", fontSize: 11, fontFamily: "Inter_400Regular" },
   giftRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  giftEmoji: { width: 52, height: 52, alignItems: "center", justifyContent: "center" },
+  giftEmoji: { width: 56, height: 64, alignItems: "center", justifyContent: "center", gap: 2 },
+  giftEmojiCost: { color: "#FFD60A", fontSize: 10, fontFamily: "Inter_600SemiBold" },
   inputBar: { flexDirection: "row", alignItems: "flex-end", gap: 10, paddingHorizontal: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
   inputAction: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   inputField: { flex: 1, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, fontFamily: "Inter_400Regular", maxHeight: 120 },

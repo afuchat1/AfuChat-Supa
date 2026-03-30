@@ -25,6 +25,9 @@ import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
 
 const { width: SW } = Dimensions.get("window");
+const CONTENT_W = SW - 48; // scrollContent has paddingHorizontal: 24 each side
+const DOB_GAP = 10;
+const DOB_UNIT = (CONTENT_W - DOB_GAP * 2) / 4; // day=1u, month=1u, year=2u
 const BRAND = "#FF2D55";
 const TOTAL_STEPS = 6;
 
@@ -274,17 +277,23 @@ export default function MatchOnboarding() {
               <View style={styles.fieldGroup}>
                 <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>DATE OF BIRTH</Text>
                 <View style={styles.dobRow}>
-                  {([["day", "DD", 2], ["month", "MM", 2], ["year", "YYYY", 4]] as const).map(([field, ph, ml]) => (
-                    <TextInput
-                      key={field}
-                      style={[styles.dobInput, { flex: field === "year" ? 2 : 1, backgroundColor: colors.surface, color: colors.text, borderColor: dob[field] ? BRAND : colors.border }]}
-                      placeholder={ph}
-                      placeholderTextColor={colors.textMuted}
-                      value={dob[field]}
-                      onChangeText={(v) => setDob((d) => ({ ...d, [field]: v.replace(/\D/g, "").slice(0, ml) }))}
-                      keyboardType="number-pad"
-                      maxLength={ml}
-                    />
+                  {([
+                    { field: "day" as const, ph: "DD", ml: 2, w: DOB_UNIT, label: "Day" },
+                    { field: "month" as const, ph: "MM", ml: 2, w: DOB_UNIT, label: "Month" },
+                    { field: "year" as const, ph: "YYYY", ml: 4, w: DOB_UNIT * 2, label: "Year" },
+                  ]).map(({ field, ph, ml, w, label }) => (
+                    <View key={field} style={{ width: w }}>
+                      <Text style={[styles.dobLabel, { color: colors.textMuted }]}>{label}</Text>
+                      <TextInput
+                        style={[styles.dobInput, { width: w, backgroundColor: colors.surface, color: colors.text, borderColor: dob[field] ? BRAND : colors.border }]}
+                        placeholder={ph}
+                        placeholderTextColor={colors.textMuted}
+                        value={dob[field]}
+                        onChangeText={(v) => setDob((d) => ({ ...d, [field]: v.replace(/\D/g, "").slice(0, ml) }))}
+                        keyboardType="number-pad"
+                        maxLength={ml}
+                      />
+                    </View>
                   ))}
                 </View>
                 <Text style={[styles.fieldHint, { color: colors.textMuted }]}>You must be 18 or older. Your age may be shown to matches.</Text>
@@ -584,8 +593,9 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, fontFamily: "Inter_400Regular" },
   textarea: { borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, fontFamily: "Inter_400Regular", minHeight: 110 },
   charCount: { textAlign: "right", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 4 },
-  dobRow: { flexDirection: "row", gap: 10 },
-  dobInput: { borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16, fontFamily: "Inter_400Regular", textAlign: "center" },
+  dobRow: { flexDirection: "row", gap: DOB_GAP, alignItems: "flex-end" },
+  dobLabel: { fontSize: 11, fontFamily: "Inter_500Medium", marginBottom: 6, textAlign: "center" },
+  dobInput: { borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 8, paddingVertical: 14, fontSize: 16, fontFamily: "Inter_400Regular", textAlign: "center" },
   genderGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   genderTile: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, minWidth: (SW - 68) / 2 },
   genderLabel: { fontSize: 15, fontFamily: "Inter_500Medium" },
