@@ -291,11 +291,10 @@ export default function MeScreen() {
       )}
 
       <MenuGroup>
-        <MenuItem icon="id-card-outline" iconBg="#1E3A5F" label="Digital ID" onPress={() => router.push("/digital-id")} badge="3D" />
         <MenuItem icon="crown" iconBg="#D4A853" label="Prestige Status" onPress={() => router.push("/prestige")} badge="NEW" />
-        <Separator indent={54} />
         {isAdmin && (
           <>
+            <Separator indent={54} />
             <MenuItem
               icon="videocam-outline"
               iconBg="#32D74B"
@@ -311,40 +310,18 @@ export default function MeScreen() {
               onPress={() => router.push("/shop/manage" as any)}
               badge="Admin"
             />
-            <Separator indent={54} />
           </>
         )}
-        <MenuItem icon="storefront-outline" iconBg="#AF52DE" label="Virtual Shop" onPress={() => router.push("/store")} badge="NEW" />
       </MenuGroup>
 
       <MenuGroup>
-        <MenuItem icon="sparkles-outline" iconBg="#00BCD4" label="AfuAi" onPress={() => router.push("/ai")} />
-        <Separator indent={54} />
         <MenuItem icon="newspaper-outline" iconBg="#FF9500" label="My Posts" onPress={() => router.push("/my-posts")} />
-        <Separator indent={54} />
-        <MenuItem icon="bookmark-outline" iconBg="#FF6B35" label="Saved Posts" onPress={() => router.push("/saved-posts")} />
-        <Separator indent={54} />
-        <MenuItem icon="folder-open-outline" iconBg="#BF5AF2" label="Collections" onPress={() => router.push("/collections")} />
-        <Separator indent={54} />
-        <MenuItem icon="document-outline" iconBg="#5856D6" label="File Manager" onPress={() => router.push("/file-manager")} />
         <Separator indent={54} />
         <MenuItem icon="person-add-outline" iconBg="#00BCD4" label="Find People" onPress={() => router.push("/user-discovery")} badge="NEW" />
         <Separator indent={54} />
         <MenuItem icon="images-outline" iconBg="#FF9500" label="Stories" onPress={() => router.push("/stories/create")} />
         <Separator indent={54} />
         <MenuItem icon="notifications-outline" iconBg="#007AFF" label="Notifications" onPress={() => router.push("/notifications")} />
-      </MenuGroup>
-
-      <MenuGroup>
-        <MenuItem icon="wallet-outline" iconBg="#00BCD4" label="Wallet" onPress={() => router.push("/wallet")} />
-        <Separator indent={54} />
-        <MenuItem icon="gift-outline" iconBg="#FF3B30" label="Gifts" onPress={() => router.push("/gifts")} />
-        <Separator indent={54} />
-        <MenuItem icon="game-controller-outline" iconBg="#007AFF" label="Games" onPress={() => router.push("/games")} />
-        <Separator indent={54} />
-        <MenuItem icon="card-outline" iconBg="#AF52DE" label="Pay & Services" onPress={() => router.push("/mini-programs")} />
-        <Separator indent={54} />
-        <MenuItem icon="gift-outline" iconBg="#FF9500" label="Referral Program" onPress={() => router.push("/referral")} />
       </MenuGroup>
 
       <MenuGroup>
