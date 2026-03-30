@@ -145,6 +145,7 @@ export default function ProductDetailScreen() {
 
   const inStock = product.is_unlimited_stock || product.stock > 0;
   const maxQty = product.is_unlimited_stock ? 99 : product.stock;
+  const isOwnListing = !!user && !!seller && user.id === seller.id;
 
   return (
     <View style={[st.root, { backgroundColor: colors.background }]}>
@@ -317,35 +318,45 @@ export default function ProductDetailScreen() {
       </ScrollView>
 
       {/* ── Sticky CTA buttons ── */}
-      <View style={[st.ctaBar, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom + 8 }]}>
-        <TouchableOpacity
-          style={[st.cartCta, { backgroundColor: colors.surface, borderColor: Colors.brand, opacity: !inStock || addingCart ? 0.5 : 1 }]}
-          onPress={handleAddToCart}
-          disabled={!inStock || addingCart}
-        >
-          {addingCart ? (
-            <ActivityIndicator size="small" color={Colors.brand} />
-          ) : (
-            <>
-              <Ionicons name="cart-outline" size={18} color={Colors.brand} />
-              <Text style={[st.cartCtaText, { color: Colors.brand }]}>Add to Cart</Text>
-            </>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[st.buyCta, { opacity: !inStock ? 0.5 : 1 }]}
-          onPress={() => {
-            if (!user) { router.push("/auth/login"); return; }
-            setShowCheckout(true);
-          }}
-          disabled={!inStock}
-        >
-          <LinearGradient colors={["#00BCD4", "#0097A7"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={st.buyCTAGradient}>
-            <Ionicons name="flash" size={18} color="#fff" />
-            <Text style={st.buyCtaText}>Buy Now</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
+      {isOwnListing ? (
+        <View style={[st.ctaBar, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom + 8, justifyContent: "center", alignItems: "center", gap: 6 }]}>
+          <Ionicons name="storefront-outline" size={20} color={colors.textMuted} />
+          <Text style={{ fontFamily: "Inter_500Medium", fontSize: 14, color: colors.textMuted }}>This is your listing</Text>
+          <TouchableOpacity onPress={() => router.push("/shop/manage" as any)}>
+            <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 13, color: Colors.brand }}>Go to Store Manager</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={[st.ctaBar, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom + 8 }]}>
+          <TouchableOpacity
+            style={[st.cartCta, { backgroundColor: colors.surface, borderColor: Colors.brand, opacity: !inStock || addingCart ? 0.5 : 1 }]}
+            onPress={handleAddToCart}
+            disabled={!inStock || addingCart}
+          >
+            {addingCart ? (
+              <ActivityIndicator size="small" color={Colors.brand} />
+            ) : (
+              <>
+                <Ionicons name="cart-outline" size={18} color={Colors.brand} />
+                <Text style={[st.cartCtaText, { color: Colors.brand }]}>Add to Cart</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[st.buyCta, { opacity: !inStock ? 0.5 : 1 }]}
+            onPress={() => {
+              if (!user) { router.push("/auth/login"); return; }
+              setShowCheckout(true);
+            }}
+            disabled={!inStock}
+          >
+            <LinearGradient colors={["#00BCD4", "#0097A7"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={st.buyCTAGradient}>
+              <Ionicons name="flash" size={18} color="#fff" />
+              <Text style={st.buyCtaText}>Buy Now</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── Order success modal ── */}
       <Modal visible={!!orderDone} transparent animationType="fade">

@@ -224,7 +224,7 @@ export default function MarketplaceScreen() {
                 <Text style={[st.manageBtnText, { color: Colors.brand }]}>My Store</Text>
               </TouchableOpacity>
             )}
-            {user && (
+            {user && !isOrg && (
               <TouchableOpacity style={[st.manageBtn, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => router.push("/shop/my-orders" as any)}>
                 <Ionicons name="cube-outline" size={15} color={colors.text} />
                 <Text style={[st.manageBtnText, { color: colors.text }]}>My Orders</Text>
