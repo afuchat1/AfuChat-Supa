@@ -81,36 +81,34 @@ export default function Root({ children }: PropsWithChildren) {
 
         <style dangerouslySetInnerHTML={{ __html: `
           html, body { height: 100%; margin: 0; padding: 0; }
-          body { overflow: hidden; }
-          * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+          body { overflow: hidden; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+          * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; box-sizing: border-box; }
           input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
           #root { display: flex; height: 100%; flex: 1; }
 
-          @media (min-width: 768px) {
-            body {
-              display: flex;
-              justify-content: center;
-              align-items: stretch;
-              background-color: #f0f0f0;
-            }
-            body[data-theme="dark"] {
-              background-color: #1a1a1a;
-            }
-            #root {
-              max-width: 480px;
-              width: 100%;
-              margin: 0 auto;
-              box-shadow: 0 0 40px rgba(0,0,0,0.15);
-              position: relative;
-            }
+          /* Polished thin scrollbars on web */
+          ::-webkit-scrollbar { width: 5px; height: 5px; }
+          ::-webkit-scrollbar-track { background: transparent; }
+          ::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.25); border-radius: 10px; }
+          ::-webkit-scrollbar-thumb:hover { background: rgba(0,188,212,0.5); }
+          * { scrollbar-width: thin; scrollbar-color: rgba(128,128,128,0.25) transparent; }
+
+          /* Pointer cursor on interactive elements */
+          [role="button"], button, a, [data-testid] { cursor: pointer !important; }
+
+          /* Mobile web: narrow centered shell */
+          @media (max-width: 767px) {
+            body { background-color: #f0ece7; }
           }
 
-          @media (min-width: 1024px) {
-            #root {
-              max-width: 420px;
-              border-left: 1px solid rgba(0,0,0,0.1);
-              border-right: 1px solid rgba(0,0,0,0.1);
-            }
+          /* Desktop: full-width, DesktopWrapper handles layout */
+          @media (min-width: 768px) {
+            body { background-color: #eef0f4; }
+            #root { width: 100%; }
+          }
+
+          @media (prefers-color-scheme: dark) {
+            body { background-color: #0a0a0a; }
           }
         `}} />
       </head>

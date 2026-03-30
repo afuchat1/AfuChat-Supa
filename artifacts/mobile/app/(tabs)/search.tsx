@@ -32,6 +32,7 @@ import * as Haptics from "expo-haptics";
 
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { supabase } from "@/lib/supabase";
 import {
   getSearchHistory,
@@ -194,7 +195,16 @@ export default function SearchScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const isDesktop = useIsDesktop();
   const { width: SW } = useWindowDimensions();
+
+  const QUICK_GAP = 10;
+  const QUICK_COLS = 4;
+  const SIDEBAR_W = 280;
+  const RIGHT_W = SW >= 1280 ? 380 : 0;
+  const contentW = isDesktop ? SW - SIDEBAR_W - RIGHT_W : SW;
+  const quickCardW = Math.floor((contentW - 32 - QUICK_GAP * (QUICK_COLS - 1)) / QUICK_COLS);
+  const scrollPB = isDesktop ? 32 : insets.bottom + 52 + 16;
 
   const inputRef = useRef<TextInput>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
@@ -737,7 +747,7 @@ export default function SearchScreen() {
     }
 
     return (
-      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom:120 }}>
+      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom:scrollPB }}>
         <Animated.View entering={FadeInDown.duration(250)} style={[styles.resultsBanner, { backgroundColor:colors.surface, borderBottomColor:colors.border }]}>
           <Ionicons name="search" size={14} color={BRAND} />
           <Text style={{ color:colors.textSecondary, fontSize:13, fontFamily:"Inter_400Regular" }}>
@@ -800,7 +810,7 @@ export default function SearchScreen() {
 
   function renderLoading() {
     return (
-      <ScrollView contentContainerStyle={{ paddingTop:16, paddingBottom:60 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingTop:16, paddingBottom:scrollPB }} showsVerticalScrollIndicator={false}>
         {[1,2,3,4,5].map(i => <CardSkeleton key={i} />)}
       </ScrollView>
     );
@@ -808,7 +818,7 @@ export default function SearchScreen() {
 
   function renderIdle() {
     return (
-      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom:120 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom:scrollPB }}>
         {/* Quick categories */}
         <View style={{ paddingHorizontal:16, paddingTop:20 }}>
           <Text style={[styles.idleHeading, { color:colors.text }]}>Browse Categories</Text>
@@ -816,7 +826,7 @@ export default function SearchScreen() {
             {QUICK_CATEGORIES.map((qc, i) => (
               <Animated.View key={qc.id} entering={FadeInDown.delay(i*30).duration(200)}>
                 <TouchableOpacity
-                  style={[styles.quickCard, { backgroundColor:colors.surface, borderColor:colors.border }]}
+                  style={[styles.quickCard, { width:quickCardW, backgroundColor:colors.surface, borderColor:colors.border }]}
                   onPress={() => qc.route ? router.push(qc.route as any) : (setTab(qc.id as SearchTab), inputRef.current?.focus())}
                   activeOpacity={0.75}
                 >
@@ -923,7 +933,7 @@ export default function SearchScreen() {
   return (
     <View style={[styles.root, { backgroundColor:colors.backgroundSecondary }]}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border, zIndex: 20, overflow: "visible" as any }]}>
         <Text style={[styles.headerTitle, { color:colors.text }]}>Search</Text>
 
         {/* Search Bar */}
@@ -1003,25 +1013,25 @@ export default function SearchScreen() {
             );
           })}
         </ScrollView>
-      </View>
 
-      {/* Suggestions dropdown */}
-      {showSuggest && suggestions.length > 0 && (
-        <Animated.View entering={FadeIn.duration(150)} style={[styles.suggestBox, { backgroundColor:colors.surface, borderColor:colors.border }]}>
-          {suggestions.map(p => (
-            <TouchableOpacity key={p.id} style={styles.suggestRow} onPress={() => onSuggestionPress(p)} activeOpacity={0.75}>
-              {p.avatar_url
-                ? <Image source={{ uri: p.avatar_url }} style={{ width:30, height:30, borderRadius:15 }} />
-                : <AvatarPlaceholder name={p.display_name} size={30} color={BRAND} />}
-              <View style={{ flex:1 }}>
-                <Text style={{ color:colors.text, fontSize:13, fontFamily:"Inter_500Medium" }} numberOfLines={1}>{p.display_name}</Text>
-                <Text style={{ color:colors.textMuted, fontSize:11 }}>@{p.handle}</Text>
-              </View>
-              <VerifiedBadge verified={p.is_verified} org={p.is_organization_verified} />
-            </TouchableOpacity>
-          ))}
-        </Animated.View>
-      )}
+        {/* Suggestions dropdown — inside header so absolute top:"100%" sits just below it */}
+        {showSuggest && suggestions.length > 0 && (
+          <Animated.View entering={FadeIn.duration(150)} style={[styles.suggestBox, { backgroundColor:colors.surface, borderColor:colors.border }]}>
+            {suggestions.map(p => (
+              <TouchableOpacity key={p.id} style={styles.suggestRow} onPress={() => onSuggestionPress(p)} activeOpacity={0.75}>
+                {p.avatar_url
+                  ? <Image source={{ uri: p.avatar_url }} style={{ width:30, height:30, borderRadius:15 }} />
+                  : <AvatarPlaceholder name={p.display_name} size={30} color={BRAND} />}
+                <View style={{ flex:1 }}>
+                  <Text style={{ color:colors.text, fontSize:13, fontFamily:"Inter_500Medium" }} numberOfLines={1}>{p.display_name}</Text>
+                  <Text style={{ color:colors.textMuted, fontSize:11 }}>@{p.handle}</Text>
+                </View>
+                <VerifiedBadge verified={p.is_verified} org={p.is_organization_verified} />
+              </TouchableOpacity>
+            ))}
+          </Animated.View>
+        )}
+      </View>
 
       {/* Body */}
       <View style={{ flex:1 }}>
@@ -1047,7 +1057,7 @@ const styles = StyleSheet.create({
   tabsRow:         { paddingHorizontal:12, paddingTop:4, paddingBottom:10, gap:6 },
   tabPill:         { flexDirection:"row", alignItems:"center", gap:5, paddingHorizontal:11, paddingVertical:7, borderRadius:20, backgroundColor:"transparent" },
   tabBadge:        { borderRadius:8, paddingHorizontal:5, paddingVertical:1, minWidth:16, alignItems:"center" },
-  suggestBox:      { position:"absolute", top:0, left:16, right:16, zIndex:100, borderRadius:14, borderWidth:1, shadowColor:"#000", shadowOpacity:0.12, shadowRadius:12, shadowOffset:{ width:0, height:4 }, elevation:8 },
+  suggestBox:      { position:"absolute", top:"100%" as any, left:16, right:16, zIndex:100, borderRadius:14, borderWidth:1, shadowColor:"#000", shadowOpacity:0.15, shadowRadius:16, shadowOffset:{ width:0, height:6 }, elevation:16 },
   suggestRow:      { flexDirection:"row", alignItems:"center", gap:10, padding:12 },
   resultsBanner:   { flexDirection:"row", alignItems:"center", gap:8, paddingHorizontal:16, paddingVertical:10, borderBottomWidth:1 },
   sectionLabel:    { flexDirection:"row", alignItems:"center", gap:6, paddingHorizontal:16, paddingBottom:8 },
@@ -1077,7 +1087,7 @@ const styles = StyleSheet.create({
   idleHeading:     { fontSize:16, fontFamily:"Inter_700Bold", marginBottom:0 },
   idleSectionHeader:{ flexDirection:"row", alignItems:"center", gap:8, marginBottom:4 },
   quickGrid:       { flexDirection:"row", flexWrap:"wrap", gap:10, marginTop:12 },
-  quickCard:       { width:"22%" as any, alignItems:"center", borderRadius:16, borderWidth:1, paddingVertical:14, paddingHorizontal:4, gap:8 },
+  quickCard:       { alignItems:"center", borderRadius:16, borderWidth:1, paddingVertical:14, paddingHorizontal:4, gap:8 },
   quickIcon:       { width:44, height:44, borderRadius:14, alignItems:"center", justifyContent:"center" },
   quickLabel:      { fontSize:11, fontFamily:"Inter_500Medium", textAlign:"center" },
   personChip:      { alignItems:"center", borderRadius:16, borderWidth:1, paddingVertical:12, paddingHorizontal:14, gap:8, width:110 },
