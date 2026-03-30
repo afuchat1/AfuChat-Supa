@@ -1,8 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
+  FlatList,
   Image,
   Platform,
   ScrollView,
+  SectionList,
   Share,
   StyleSheet,
   Text,
@@ -15,20 +18,21 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import Animated, { FadeIn, FadeInDown, FadeInRight, FadeInUp, SlideInRight } from "react-native-reanimated";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInRight,
+  FadeInUp,
+  SlideInDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
 
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
-import {
-  parseSearchQuery,
-  getTimeRange,
-  getTimeFilterLabel,
-  getMediaFilterLabel,
-  type MediaFilter,
-  type TimeFilter,
-  type ParsedQuery,
-} from "@/lib/searchParser";
 import {
   getSearchHistory,
   addToHistory,
@@ -37,1018 +41,879 @@ import {
   getSavedSearches,
   saveSearch,
   removeSavedSearch,
-  getPinnedResults,
-  pinResult,
-  unpinResult,
   type SavedSearch,
-  type PinnedResult,
 } from "@/lib/searchStore";
 
 const BRAND = "#00BCD4";
+const MATCH = "#FF2D55";
 const GOLD = "#D4A853";
+const SUCCESS = "#34C759";
 
-type SearchCategory = "all" | "people" | "posts" | "channels" | "gifts" | "hashtags";
+type SearchTab = "all" | "people" | "posts" | "channels" | "events" | "gifts" | "apps" | "shops";
 
-const CATEGORIES: { id: SearchCategory; label: string; icon: string }[] = [
-  { id: "all", label: "All", icon: "apps" },
-  { id: "people", label: "People", icon: "people" },
-  { id: "posts", label: "Posts", icon: "document-text" },
-  { id: "channels", label: "Channels", icon: "megaphone" },
-  { id: "hashtags", label: "Tags", icon: "pricetag" },
-  { id: "gifts", label: "Gifts", icon: "gift" },
+const TABS: { id: SearchTab; label: string; icon: string }[] = [
+  { id: "all",      label: "All",      icon: "apps-outline" },
+  { id: "people",   label: "People",   icon: "people-outline" },
+  { id: "posts",    label: "Posts",    icon: "document-text-outline" },
+  { id: "channels", label: "Channels", icon: "megaphone-outline" },
+  { id: "events",   label: "Events",   icon: "calendar-outline" },
+  { id: "gifts",    label: "Gifts",    icon: "gift-outline" },
+  { id: "shops",    label: "Shops",    icon: "storefront-outline" },
+  { id: "apps",     label: "Apps",     icon: "grid-outline" },
 ];
 
-const TIME_OPTIONS: { id: TimeFilter; label: string }[] = [
-  { id: null, label: "Any Time" },
-  { id: "today", label: "Today" },
-  { id: "yesterday", label: "Yesterday" },
-  { id: "this_week", label: "This Week" },
-  { id: "last_week", label: "Last Week" },
-  { id: "this_month", label: "This Month" },
-  { id: "last_month", label: "Last Month" },
-];
-
-const MEDIA_OPTIONS: { id: MediaFilter; label: string; icon: string }[] = [
-  { id: null, label: "All Types", icon: "grid" },
-  { id: "images", label: "Images", icon: "image" },
-  { id: "videos", label: "Videos", icon: "videocam" },
-];
-
-const TRENDING_TAGS = [
-  "gaming", "photography", "music", "travel", "coding",
-  "fitness", "cooking", "art", "fashion", "tech",
-  "crypto", "design", "startup", "afuchat",
-];
-
-const COMMANDS_HELP = [
-  { cmd: "@username", desc: "Search by person" },
-  { cmd: "#hashtag", desc: "Search hashtags" },
-  { cmd: "/images", desc: "Find image posts" },
-  { cmd: "/videos", desc: "Find video posts" },
-];
-
-type PersonResult = {
-  id: string;
-  handle: string;
-  display_name: string;
-  avatar_url: string | null;
-  bio: string | null;
-  is_verified: boolean;
-  is_organization_verified: boolean;
-  current_grade: string;
-  country: string | null;
+const RARITY_COLORS: Record<string, string> = {
+  common:    "#9E9E9E",
+  uncommon:  "#00BCD4",
+  rare:      "#2979FF",
+  epic:      "#CE93D8",
+  legendary: "#FFB74D",
 };
 
-type PostResult = {
-  id: string;
-  content: string;
-  image_url: string | null;
-  author_id: string;
-  author_handle: string;
-  author_name: string;
-  author_avatar: string | null;
-  view_count: number;
-  created_at: string;
-};
+const PLATFORM_APPS = [
+  { id: "afuai",        label: "AfuAI",          desc: "Your intelligent assistant. Ask anything.",          icon: "sparkles" as const,         gradient: ["#00BCD4","#0097A7"] as [string,string], route: "/ai",             category: "Intelligence" },
+  { id: "wallet",       label: "Wallet",          desc: "Send, receive and manage your ACoins & Nexa.",       icon: "wallet" as const,           gradient: ["#00BCD4","#26C6DA"] as [string,string], route: "/wallet",         category: "Finance" },
+  { id: "services",     label: "Services",        desc: "Pay bills, top up, and access local services.",      icon: "card" as const,             gradient: ["#AF52DE","#BF5AF2"] as [string,string], route: "/mini-programs",  category: "Finance" },
+  { id: "freelance",    label: "Freelance",       desc: "Hire talent or find work on AfuFreelance.",          icon: "briefcase" as const,        gradient: ["#34C759","#30D158"] as [string,string], route: "/freelance",      category: "Finance" },
+  { id: "games",        label: "Games",           desc: "Play mini games and win ACoins.",                    icon: "game-controller" as const,  gradient: ["#007AFF","#0A84FF"] as [string,string], route: "/games",          category: "Entertainment" },
+  { id: "gifts",        label: "Gifts",           desc: "Send animated gifts to people you love.",            icon: "gift" as const,             gradient: ["#FF3B30","#FF453A"] as [string,string], route: "/gifts",          category: "Entertainment" },
+  { id: "shop",         label: "Shop",            desc: "Discover products from creators and brands.",        icon: "storefront" as const,       gradient: ["#AF52DE","#BF5AF2"] as [string,string], route: "/store",          category: "Entertainment" },
+  { id: "files",        label: "Files",           desc: "Store and share your files securely.",               icon: "folder" as const,           gradient: ["#5856D6","#6E6CD3"] as [string,string], route: "/file-manager",   category: "Tools" },
+  { id: "digitalid",    label: "Digital ID",      desc: "Your verifiable 3D digital identity card.",          icon: "id-card" as const,          gradient: ["#1E3A5F","#2C5282"] as [string,string], route: "/digital-id",     category: "Tools" },
+  { id: "saved",        label: "Saved Posts",     desc: "All your bookmarked posts in one place.",            icon: "bookmark" as const,         gradient: ["#FF6B35","#FF8C00"] as [string,string], route: "/saved-posts",    category: "Tools" },
+  { id: "collections",  label: "Collections",     desc: "Curate and share themed collections.",               icon: "albums" as const,           gradient: ["#BF5AF2","#AF52DE"] as [string,string], route: "/collections",    category: "Tools" },
+  { id: "match",        label: "AfuMatch",        desc: "Meet new people and find meaningful connections.",   icon: "heart" as const,            gradient: ["#FF2D55","#FF375F"] as [string,string], route: "/match",          category: "Community" },
+  { id: "events",       label: "Events",          desc: "Discover local and online events near you.",         icon: "calendar" as const,         gradient: ["#FF9500","#FFCC00"] as [string,string], route: "/digital-events", category: "Community" },
+  { id: "referral",     label: "Referral",        desc: "Invite friends and earn Nexa rewards.",              icon: "people" as const,           gradient: ["#34C759","#00C781"] as [string,string], route: "/referral",       category: "Community" },
+  { id: "usernames",    label: "Usernames",       desc: "Buy and sell premium @handles.",                     icon: "at" as const,               gradient: ["#007AFF","#5AC8FA"] as [string,string], route: "/username-market",category: "Community" },
+  { id: "prestige",     label: "Prestige",        desc: "Your reputation and rank on AfuChat.",               icon: "trophy" as const,           gradient: ["#D4A853","#F5C842"] as [string,string], route: "/prestige",       category: "Community" },
+  { id: "premium",      label: "Premium",         desc: "Unlock exclusive features and perks.",               icon: "star" as const,             gradient: ["#FF9500","#FF6B00"] as [string,string], route: "/premium",        category: "Community" },
+  { id: "snake",        label: "Snake",           desc: "Classic snake game. Eat dots, grow, survive.",       icon: "game-controller" as const,  gradient: ["#34C759","#30D158"] as [string,string], route: "/games/snake",    category: "Games" },
+  { id: "tetris",       label: "Tetris",          desc: "Stack falling blocks to clear lines.",               icon: "game-controller" as const,  gradient: ["#007AFF","#0A84FF"] as [string,string], route: "/games/tetris",   category: "Games" },
+  { id: "minesweeper",  label: "Minesweeper",     desc: "Clear the board without hitting a mine.",            icon: "game-controller" as const,  gradient: ["#FF9500","#FFCC00"] as [string,string], route: "/games/minesweeper",category: "Games" },
+  { id: "2048",         label: "2048",            desc: "Merge tiles to reach 2048.",                         icon: "game-controller" as const,  gradient: ["#AF52DE","#BF5AF2"] as [string,string], route: "/games/game-2048",category: "Games" },
+  { id: "flappy",       label: "Flappy Bird",     desc: "Fly through the pipes without crashing.",            icon: "game-controller" as const,  gradient: ["#FF3B30","#FF453A"] as [string,string], route: "/games/flappy",   category: "Games" },
+  { id: "space",        label: "Space Shooter",   desc: "Blast enemies in deep space.",                       icon: "game-controller" as const,  gradient: ["#1E3A5F","#2C5282"] as [string,string], route: "/games/space-shooter",category: "Games" },
+  { id: "memory",       label: "Memory Match",    desc: "Test your memory with card matching.",               icon: "game-controller" as const,  gradient: ["#5856D6","#6E6CD3"] as [string,string], route: "/games/memory-match",category: "Games" },
+  { id: "brickbreak",   label: "Brick Breaker",   desc: "Break all the bricks before time runs out.",         icon: "game-controller" as const,  gradient: ["#FF2D55","#FF375F"] as [string,string], route: "/games/brick-breaker",category: "Games" },
+];
 
-type ChannelResult = {
-  id: string;
-  name: string;
-  description: string | null;
-  avatar_url: string | null;
-  subscriber_count: number;
-};
+const QUICK_CATEGORIES = [
+  { id: "people",   label: "People",   icon: "people",        color: BRAND,    route: null },
+  { id: "posts",    label: "Posts",    icon: "document-text", color: "#007AFF", route: null },
+  { id: "channels", label: "Channels", icon: "megaphone",     color: "#AF52DE", route: null },
+  { id: "events",   label: "Events",   icon: "calendar",      color: "#FF9500", route: "/digital-events" },
+  { id: "gifts",    label: "Gifts",    icon: "gift",          color: "#FF3B30", route: "/gifts" },
+  { id: "shops",    label: "Shop",     icon: "storefront",    color: "#34C759", route: "/store" },
+  { id: "match",    label: "AfuMatch", icon: "heart",         color: MATCH,     route: "/match" },
+  { id: "apps",     label: "All Apps", icon: "grid",          color: "#5856D6", route: "/apps" },
+];
 
-type GiftResult = {
-  id: string;
-  name: string;
-  emoji: string;
-  base_xp_cost: number;
-  rarity: string;
-};
+const TRENDING_TAGS = ["gaming","photography","music","travel","coding","fitness","cooking","art","fashion","tech","crypto","design","startup","afuchat","movies"];
 
-type SearchResults = {
-  people: PersonResult[];
-  posts: PostResult[];
+type PersonResult   = { id:string; handle:string; display_name:string; avatar_url:string|null; bio:string|null; is_verified:boolean; is_organization_verified:boolean; current_grade:string; country:string|null; xp?:number };
+type PostResult     = { id:string; content:string; image_url:string|null; author_id:string; author_handle:string; author_name:string; author_avatar:string|null; view_count:number; created_at:string };
+type ChannelResult  = { id:string; name:string; description:string|null; avatar_url:string|null; subscriber_count:number };
+type EventResult    = { id:string; title:string; description:string|null; emoji:string; price:number; event_date:string; capacity:number; tickets_sold:number; category:string|null; creator_name:string; creator_handle:string };
+type GiftResult     = { id:string; name:string; emoji:string; base_xp_cost:number; rarity:string; description:string|null };
+type ShopResult     = { id:string; kind:"product"|"freelance"|"community"; title:string; desc:string|null; emoji:string|null; image_url:string|null; price:number; badge:string|null; seller_name:string; route:string };
+type AppResult      = typeof PLATFORM_APPS[number];
+
+type AllResults = {
+  people:   PersonResult[];
+  posts:    PostResult[];
   channels: ChannelResult[];
-  gifts: GiftResult[];
+  events:   EventResult[];
+  gifts:    GiftResult[];
+  shops:    ShopResult[];
+  apps:     AppResult[];
 };
 
-const EMPTY_RESULTS: SearchResults = {
-  people: [], posts: [], channels: [], gifts: [],
-};
+const EMPTY: AllResults = { people:[], posts:[], channels:[], events:[], gifts:[], shops:[], apps:[] };
 
-function timeAgo(iso: string) {
-  if (!iso) return "";
+function timeAgo(iso:string) {
   const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "now";
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h`;
-  const days = Math.floor(hrs / 24);
-  if (days < 30) return `${days}d`;
-  return `${Math.floor(days / 30)}mo`;
+  const m = Math.floor(diff/60000);
+  if (m < 1) return "now";
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m/60); if (h < 24) return `${h}h`;
+  const d = Math.floor(h/24); if (d < 30) return `${d}d`;
+  return `${Math.floor(d/30)}mo`;
 }
 
-type ViewMode = "search" | "history" | "filters";
+function formatEventDate(iso:string) {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" });
+}
+
+function highlightText(text: string, query: string, baseColor: string, highlightColor: string) {
+  if (!query || query.length < 2) return <Text style={{ color: baseColor }}>{text}</Text>;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return <Text style={{ color: baseColor }}>{text}</Text>;
+  return (
+    <Text style={{ color: baseColor }}>
+      {text.slice(0, idx)}
+      <Text style={{ color: highlightColor, fontFamily: "Inter_700Bold" }}>{text.slice(idx, idx + query.length)}</Text>
+      {text.slice(idx + query.length)}
+    </Text>
+  );
+}
+
+function AvatarPlaceholder({ name, size, color, style }: { name:string; size:number; color:string; style?:any }) {
+  return (
+    <View style={[{ width:size, height:size, borderRadius:size/2, alignItems:"center", justifyContent:"center", backgroundColor: color+"22" }, style]}>
+      <Text style={{ color, fontSize:size*0.4, fontFamily:"Inter_700Bold" }}>{(name||"?")[0].toUpperCase()}</Text>
+    </View>
+  );
+}
+
+function VerifiedBadge({ verified, org }: { verified:boolean; org:boolean }) {
+  if (!verified) return null;
+  return <Ionicons name="checkmark-circle" size={13} color={org ? GOLD : BRAND} />;
+}
+
+function SkeletonBox({ w, h, r }: { w:number|string; h:number; r:number }) {
+  const { colors } = useTheme();
+  return <View style={{ width:w as any, height:h, borderRadius:r, backgroundColor: colors.inputBg, opacity:0.7 }} />;
+}
+
+function CardSkeleton() {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.card, { backgroundColor:colors.surface, borderColor:colors.border }]}>
+      <SkeletonBox w={44} h={44} r={22} />
+      <View style={{ flex:1, gap:6 }}>
+        <SkeletonBox w="60%" h={13} r={6} />
+        <SkeletonBox w="40%" h={11} r={6} />
+      </View>
+    </View>
+  );
+}
 
 export default function SearchScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { width: SCREEN_W } = useWindowDimensions();
+  const { width: SW } = useWindowDimensions();
+
   const inputRef = useRef<TextInput>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const searchIdRef = useRef(0);
 
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<SearchCategory>("all");
+  const [tab, setTab] = useState<SearchTab>("all");
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<SearchResults>(EMPTY_RESULTS);
+  const [results, setResults] = useState<AllResults>(EMPTY);
   const [hasSearched, setHasSearched] = useState(false);
-
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>(null);
-  const [mediaFilter, setMediaFilter] = useState<MediaFilter>(null);
-  const [personFilter, setPersonFilter] = useState<string | null>(null);
-  const [privateMode, setPrivateMode] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
 
   const [history, setHistory] = useState<string[]>([]);
-  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
-  const [pinnedResults, setPinnedResults] = useState<PinnedResult[]>([]);
+  const [saved, setSaved] = useState<SavedSearch[]>([]);
   const [trendingPeople, setTrendingPeople] = useState<PersonResult[]>([]);
   const [suggestions, setSuggestions] = useState<PersonResult[]>([]);
+  const [showSuggest, setShowSuggest] = useState(false);
 
-  const [viewMode, setViewMode] = useState<ViewMode>("search");
-  const [showTimeFilter, setShowTimeFilter] = useState(false);
-  const [showMediaFilter, setShowMediaFilter] = useState(false);
-  const [showCommands, setShowCommands] = useState(false);
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [sortMode, setSortMode] = useState<"relevance"|"recent"|"popular">("relevance");
+  const [showFilters, setShowFilters] = useState(false);
 
   const [isListening, setIsListening] = useState(false);
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const suggestRef = useRef<ReturnType<typeof setTimeout>>();
-  const searchIdRef = useRef(0);
-
-  const activeFilters = useMemo(() => {
-    const f: string[] = [];
-    if (timeFilter) f.push(getTimeFilterLabel(timeFilter));
-    if (mediaFilter) f.push(getMediaFilterLabel(mediaFilter));
-    if (personFilter) f.push(`@${personFilter}`);
-    if (privateMode) f.push("Private");
-    return f;
-  }, [timeFilter, mediaFilter, personFilter, privateMode]);
-
-  const parsed = useMemo(() => parseSearchQuery(query), [query]);
 
   useEffect(() => {
-    loadInitialData();
+    loadInitial();
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       if (suggestRef.current) clearTimeout(suggestRef.current);
     };
   }, []);
 
-  async function loadInitialData() {
-    const [h, s, p] = await Promise.all([getSearchHistory(), getSavedSearches(), getPinnedResults()]);
+  async function loadInitial() {
+    const [h, s] = await Promise.all([getSearchHistory(), getSavedSearches()]);
     setHistory(h);
-    setSavedSearches(s);
-    setPinnedResults(p);
-    loadTrending();
+    setSaved(s);
+    loadTrendingPeople();
   }
 
-  async function loadTrending() {
+  async function loadTrendingPeople() {
     const { data } = await supabase
       .from("profiles")
-      .select("id, handle, display_name, avatar_url, bio, is_verified, is_organization_verified, current_grade, country")
+      .select("id, handle, display_name, avatar_url, bio, is_verified, is_organization_verified, current_grade, country, xp")
       .eq("is_verified", true)
       .order("xp", { ascending: false })
-      .limit(12);
+      .limit(10);
     if (data) setTrendingPeople(data);
   }
 
   async function fetchSuggestions(text: string) {
-    if (text.length < 2) { setSuggestions([]); return; }
-    const pattern = `%${text}%`;
+    if (text.length < 2) { setSuggestions([]); setShowSuggest(false); return; }
     const { data } = await supabase
       .from("profiles")
-      .select("id, handle, display_name, avatar_url, bio, is_verified, is_organization_verified, current_grade, country")
-      .or(`handle.ilike.${pattern},display_name.ilike.${pattern}`)
+      .select("id, handle, display_name, avatar_url, is_verified, is_organization_verified, current_grade, country")
+      .or(`handle.ilike.%${text}%,display_name.ilike.%${text}%`)
       .order("xp", { ascending: false })
-      .limit(5);
-    if (data) setSuggestions(data);
+      .limit(6);
+    if (data && data.length > 0) { setSuggestions(data as any); setShowSuggest(true); }
+    else { setSuggestions([]); setShowSuggest(false); }
   }
 
-  const performSearch = useCallback(async (q: string, cat: SearchCategory, tFilter: TimeFilter, mFilter: MediaFilter, pFilter: string | null) => {
-    const p = parseSearchQuery(q);
-    const searchText = p.cleanQuery;
-    const effectiveTime = p.timeFilter || tFilter;
-    const effectiveMedia = p.mediaFilter || mFilter;
-    const effectivePerson = p.person || pFilter;
+  const searchApps = useCallback((q: string): AppResult[] => {
+    if (!q || q.length < 1) return [];
+    const lower = q.toLowerCase();
+    return PLATFORM_APPS.filter(a =>
+      a.label.toLowerCase().includes(lower) ||
+      a.desc.toLowerCase().includes(lower) ||
+      a.category.toLowerCase().includes(lower)
+    ).slice(0, 8);
+  }, []);
 
-    if (searchText.length < 1 && !p.isHashtagSearch && !effectivePerson && !effectiveMedia) {
-      setResults(EMPTY_RESULTS);
-      setHasSearched(false);
-      return;
+  const performSearch = useCallback(async (q: string, currentTab: SearchTab, vOnly: boolean, sort: "relevance"|"recent"|"popular") => {
+    const trimmed = q.trim();
+    if (trimmed.length < 1) {
+      setResults(EMPTY); setHasSearched(false); setTotalCount(0); return;
     }
 
-    const currentId = ++searchIdRef.current;
+    const id = ++searchIdRef.current;
     setLoading(true);
     setHasSearched(true);
-
-    const searchAll = cat === "all";
-    const pattern = searchText.length >= 1 ? `%${searchText}%` : null;
-    const timeRange = getTimeRange(effectiveTime);
+    const pat = `%${trimmed}%`;
+    const all = currentTab === "all";
 
     try {
-      const promises: Promise<any>[] = [];
+      const fetches: Promise<any>[] = [];
 
-      if (searchAll || cat === "people") {
-        if (pattern || effectivePerson) {
-          let q = supabase
-            .from("profiles")
-            .select("id, handle, display_name, avatar_url, bio, is_verified, is_organization_verified, current_grade, country");
-          if (effectivePerson) {
-            q = q.or(`handle.ilike.%${effectivePerson}%,display_name.ilike.%${effectivePerson}%`);
-          } else if (pattern) {
-            q = q.or(`handle.ilike.${pattern},display_name.ilike.${pattern},bio.ilike.${pattern}`);
-          }
-          promises.push(q.order("xp", { ascending: false }).limit(20));
-        } else {
-          promises.push(Promise.resolve({ data: [] }));
-        }
-      } else {
-        promises.push(Promise.resolve({ data: [] }));
-      }
+      if (all || currentTab === "people") {
+        let pq = supabase.from("profiles")
+          .select("id, handle, display_name, avatar_url, bio, is_verified, is_organization_verified, current_grade, country, xp")
+          .or(`handle.ilike.${pat},display_name.ilike.${pat},bio.ilike.${pat}`);
+        if (vOnly) pq = pq.eq("is_verified", true);
+        if (sort === "popular") pq = pq.order("xp", { ascending: false });
+        fetches.push(pq.limit(all ? 5 : 25));
+      } else fetches.push(Promise.resolve({ data: [] }));
 
-      if (searchAll || cat === "posts" || cat === "hashtags") {
-        if (pattern || p.isHashtagSearch) {
-          let q = supabase
-            .from("posts")
-            .select("id, content, image_url, author_id, view_count, created_at");
-          if (p.isHashtagSearch && p.hashtag) {
-            q = q.ilike("content", `%#${p.hashtag}%`);
-          } else if (effectivePerson) {
-            const { data: personData } = await supabase
-              .from("profiles")
-              .select("id")
-              .ilike("handle", `%${effectivePerson}%`)
-              .limit(5);
-            if (personData && personData.length > 0) {
-              q = q.in("author_id", personData.map((pd: any) => pd.id));
-              if (pattern) q = q.ilike("content", pattern);
-            } else {
-              promises.push(Promise.resolve({ data: [] }));
-              promises.push(Promise.resolve({ data: [] }));
-              promises.push(Promise.resolve({ data: [] }));
-              promises.push(Promise.resolve({ data: [] }));
-              promises.push(Promise.resolve({ data: [] }));
-              if (currentId !== searchIdRef.current) return;
-              setResults(EMPTY_RESULTS);
-              setLoading(false);
-              return;
-            }
-          } else if (pattern) {
-            q = q.ilike("content", pattern);
-          }
-          if (timeRange) {
-            q = q.gte("created_at", timeRange.from).lte("created_at", timeRange.to);
-          }
-          promises.push(q.order("created_at", { ascending: false }).limit(20));
-        } else {
-          promises.push(Promise.resolve({ data: [] }));
-        }
-      } else {
-        promises.push(Promise.resolve({ data: [] }));
-      }
+      if (all || currentTab === "posts") {
+        let pq = supabase.from("posts")
+          .select("id, content, image_url, author_id, view_count, created_at")
+          .ilike("content", pat);
+        if (sort === "recent") pq = pq.order("created_at", { ascending: false });
+        else if (sort === "popular") pq = pq.order("view_count", { ascending: false });
+        else pq = pq.order("created_at", { ascending: false });
+        fetches.push(pq.limit(all ? 5 : 25));
+      } else fetches.push(Promise.resolve({ data: [] }));
 
-      if (searchAll || cat === "channels") {
-        if (pattern) {
-          promises.push(
-            supabase
-              .from("channels")
-              .select("id, name, description, avatar_url, subscriber_count")
-              .or(`name.ilike.${pattern},description.ilike.${pattern}`)
-              .order("subscriber_count", { ascending: false })
-              .limit(20)
-          );
-        } else {
-          promises.push(Promise.resolve({ data: [] }));
-        }
-      } else {
-        promises.push(Promise.resolve({ data: [] }));
-      }
+      if (all || currentTab === "channels") {
+        fetches.push(
+          supabase.from("channels")
+            .select("id, name, description, avatar_url, subscriber_count")
+            .or(`name.ilike.${pat},description.ilike.${pat}`)
+            .order("subscriber_count", { ascending: false })
+            .limit(all ? 4 : 20)
+        );
+      } else fetches.push(Promise.resolve({ data: [] }));
 
-      if (searchAll || cat === "gifts") {
-        if (pattern) {
-          promises.push(
-            supabase
-              .from("gifts")
-              .select("id, name, emoji, base_xp_cost, rarity")
-              .ilike("name", pattern)
-              .order("base_xp_cost", { ascending: true })
-              .limit(20)
-          );
-        } else {
-          promises.push(Promise.resolve({ data: [] }));
-        }
-      } else {
-        promises.push(Promise.resolve({ data: [] }));
-      }
+      if (all || currentTab === "events") {
+        fetches.push(
+          supabase.from("digital_events")
+            .select("id, title, description, emoji, price, event_date, capacity, tickets_sold, creator_id, category, profiles!digital_events_creator_id_fkey(display_name, handle)")
+            .or(`title.ilike.${pat},description.ilike.${pat}`)
+            .gte("event_date", new Date().toISOString())
+            .order("event_date", { ascending: true })
+            .limit(all ? 4 : 20)
+        );
+      } else fetches.push(Promise.resolve({ data: [] }));
 
-      const [peopleRes, postsRes, channelsRes, giftsRes] = await Promise.all(promises);
+      if (all || currentTab === "gifts") {
+        fetches.push(
+          supabase.from("gifts")
+            .select("id, name, emoji, base_xp_cost, rarity, description")
+            .or(`name.ilike.${pat},description.ilike.${pat}`)
+            .order("base_xp_cost", { ascending: true })
+            .limit(all ? 6 : 30)
+        );
+      } else fetches.push(Promise.resolve({ data: [] }));
 
-      if (currentId !== searchIdRef.current) return;
+      if (all || currentTab === "shops") {
+        const [prods, frees, comms] = await Promise.all([
+          supabase.from("shop_products").select("id, name, description, image_url, price, category, seller_id").ilike("name", pat).eq("is_available", true).limit(all ? 3 : 15),
+          supabase.from("freelance_listings").select("id, title, description, price, emoji, seller_id, orders_count, profiles!freelance_listings_seller_id_fkey(display_name, handle)").or(`title.ilike.${pat},description.ilike.${pat}`).eq("is_active", true).limit(all ? 3 : 15),
+          supabase.from("paid_communities").select("id, name, description, emoji, price, member_count, creator_id, profiles!paid_communities_creator_id_fkey(display_name, handle)").or(`name.ilike.${pat},description.ilike.${pat}`).limit(all ? 2 : 10),
+        ]);
+        const shops: ShopResult[] = [
+          ...(prods.data || []).map((p: any) => ({ id: p.id, kind: "product" as const, title: p.name, desc: p.description, emoji: null, image_url: p.image_url, price: p.price, badge: p.category, seller_name: "", route: `/shop/${p.seller_id}` })),
+          ...(frees.data || []).map((f: any) => ({ id: f.id, kind: "freelance" as const, title: f.title, desc: f.description, emoji: f.emoji, image_url: null, price: f.price, badge: `${f.orders_count} orders`, seller_name: f.profiles?.display_name || "", route: "/freelance" })),
+          ...(comms.data || []).map((c: any) => ({ id: c.id, kind: "community" as const, title: c.name, desc: c.description, emoji: c.emoji, image_url: null, price: c.price, badge: `${c.member_count} members`, seller_name: c.profiles?.display_name || "", route: "/paid-communities" })),
+        ];
+        fetches.push(Promise.resolve({ data: shops, merged: true }));
+      } else fetches.push(Promise.resolve({ data: [] }));
+
+      fetches.push(Promise.resolve({ data: searchApps(trimmed) }));
+
+      const [peopleRes, postsRes, channelsRes, eventsRes, giftsRes, shopsRes, appsRes] = await Promise.all(fetches);
+      if (id !== searchIdRef.current) return;
 
       const people: PersonResult[] = peopleRes.data || [];
 
       let posts: PostResult[] = [];
-      if (postsRes.data && postsRes.data.length > 0) {
-        const authorIds = [...new Set((postsRes.data as any[]).map((pp: any) => pp.author_id))];
-        const { data: authors } = await supabase
-          .from("profiles")
-          .select("id, handle, display_name, avatar_url")
-          .in("id", authorIds);
-        const authorMap = new Map((authors || []).map((a: any) => [a.id, a]));
-        posts = (postsRes.data as any[]).map((pp: any) => {
-          const author = authorMap.get(pp.author_id) || {} as any;
-          return {
-            id: pp.id, content: pp.content, image_url: pp.image_url || null,
-            author_id: pp.author_id, author_handle: author.handle || "",
-            author_name: author.display_name || "", author_avatar: author.avatar_url || null,
-            view_count: pp.view_count || 0, created_at: pp.created_at,
-          };
+      if (postsRes.data?.length > 0) {
+        const aids = [...new Set(postsRes.data.map((p: any) => p.author_id))];
+        const { data: authors } = await supabase.from("profiles").select("id, handle, display_name, avatar_url").in("id", aids as string[]);
+        const amap = new Map((authors || []).map((a: any) => [a.id, a]));
+        posts = postsRes.data.map((p: any) => {
+          const a = amap.get(p.author_id) || {} as any;
+          return { id: p.id, content: p.content, image_url: p.image_url || null, author_id: p.author_id, author_handle: a.handle || "", author_name: a.display_name || "", author_avatar: a.avatar_url || null, view_count: p.view_count || 0, created_at: p.created_at };
         });
       }
 
       const channels: ChannelResult[] = channelsRes.data || [];
-      const gifts: GiftResult[] = giftsRes.data || [];
 
-      setResults({ people, posts, channels, gifts });
+      const events: EventResult[] = (eventsRes.data || []).map((e: any) => ({
+        id: e.id, title: e.title, description: e.description, emoji: e.emoji || "🎉", price: e.price || 0, event_date: e.event_date, capacity: e.capacity || 0, tickets_sold: e.tickets_sold || 0, category: e.category, creator_name: e.profiles?.display_name || "", creator_handle: e.profiles?.handle || "",
+      }));
+
+      const gifts: GiftResult[] = giftsRes.data || [];
+      const shops: ShopResult[] = (shopsRes.data && !shopsRes.merged) ? [] : (shopsRes.data || []);
+      const apps: AppResult[] = appsRes.data || [];
+
+      const total = people.length + posts.length + channels.length + events.length + gifts.length + shops.length + apps.length;
+      setResults({ people, posts, channels, events, gifts, shops, apps });
+      setTotalCount(total);
     } catch (e) {
       console.warn("Search error:", e);
     } finally {
-      if (currentId === searchIdRef.current) setLoading(false);
+      if (id === searchIdRef.current) setLoading(false);
     }
-  }, [user]);
-
-  function recordSearch(term: string) {
-    if (privateMode) return;
-    const trimmed = term.trim();
-    if (trimmed.length >= 2) {
-      addToHistory(trimmed).then(setHistory);
-    }
-  }
+  }, [searchApps]);
 
   function onChangeText(text: string) {
     setQuery(text);
-    setShowCommands(text === "/" || text === "@" || text === "#");
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (suggestRef.current) clearTimeout(suggestRef.current);
-    debounceRef.current = setTimeout(() => performSearch(text, category, timeFilter, mediaFilter, personFilter), 450);
-    suggestRef.current = setTimeout(() => fetchSuggestions(text), 200);
+    debounceRef.current = setTimeout(() => performSearch(text, tab, verifiedOnly, sortMode), 380);
+    suggestRef.current = setTimeout(() => fetchSuggestions(text), 180);
   }
 
-  function onSubmitSearch() {
+  function onSubmit() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    setSuggestions([]);
-    const trimmed = query.trim();
-    if (trimmed.length >= 1) {
-      recordSearch(trimmed);
-      performSearch(query, category, timeFilter, mediaFilter, personFilter);
+    setShowSuggest(false);
+    const t = query.trim();
+    if (t.length >= 1) {
+      addToHistory(t).then(setHistory);
+      performSearch(query, tab, verifiedOnly, sortMode);
     }
   }
 
-  function onCategoryPress(cat: SearchCategory) {
-    setCategory(cat);
-    if (query.trim().length >= 1) {
-      performSearch(query, cat, timeFilter, mediaFilter, personFilter);
-    }
+  function onTabPress(t: SearchTab) {
+    setTab(t);
+    Haptics.selectionAsync();
+    if (query.trim().length >= 1) performSearch(query, t, verifiedOnly, sortMode);
   }
 
   function clearSearch() {
     setQuery("");
-    setResults(EMPTY_RESULTS);
+    setResults(EMPTY);
     setHasSearched(false);
+    setTotalCount(0);
     setSuggestions([]);
-    setShowCommands(false);
+    setShowSuggest(false);
     inputRef.current?.focus();
   }
 
-  function handleTagPress(tag: string) {
-    const t = `#${tag}`;
-    setQuery(t);
-    recordSearch(t);
-    performSearch(t, category, timeFilter, mediaFilter, personFilter);
+  function onTagPress(tag: string) {
+    const q = `#${tag}`;
+    setQuery(q);
+    setShowSuggest(false);
+    addToHistory(q).then(setHistory);
+    performSearch(q, tab, verifiedOnly, sortMode);
   }
 
-  function handleHistoryPress(term: string) {
+  function onHistoryPress(term: string) {
     setQuery(term);
-    setViewMode("search");
-    performSearch(term, category, timeFilter, mediaFilter, personFilter);
+    setShowSuggest(false);
+    performSearch(term, tab, verifiedOnly, sortMode);
   }
 
-  function handleSuggestionPress(person: PersonResult) {
-    setSuggestions([]);
-    setQuery(`@${person.handle}`);
-    setPersonFilter(person.handle);
-    performSearch(`@${person.handle}`, category, timeFilter, mediaFilter, person.handle);
+  function onSuggestionPress(p: PersonResult) {
+    setShowSuggest(false);
+    const q = `@${p.handle}`;
+    setQuery(q);
+    addToHistory(q).then(setHistory);
+    performSearch(q, "people", verifiedOnly, sortMode);
+    setTab("people");
   }
 
-  function toggleSaveSearch() {
-    const trimmed = query.trim();
-    if (trimmed.length < 2) return;
-    const existing = savedSearches.find(s => s.query.toLowerCase() === trimmed.toLowerCase());
-    if (existing) {
-      removeSavedSearch(existing.id).then(setSavedSearches);
-    } else {
-      saveSearch(trimmed, category).then(setSavedSearches);
-    }
+  function toggleVerified() {
+    const nv = !verifiedOnly; setVerifiedOnly(nv);
+    if (query.trim().length >= 1) performSearch(query, tab, nv, sortMode);
   }
 
-  async function handlePinResult(type: string, id: string, title: string, subtitle: string, avatar?: string, routePath?: string) {
-    const existing = pinnedResults.find(p => p.id === id && p.type === type);
-    if (existing) {
-      const updated = await unpinResult(id, type);
-      setPinnedResults(updated);
-    } else {
-      const updated = await pinResult({ id, type, title, subtitle, avatar, routePath });
-      setPinnedResults(updated);
-    }
+  function onSortPress(s: "relevance"|"recent"|"popular") {
+    setSortMode(s); setShowFilters(false);
+    if (query.trim().length >= 1) performSearch(query, tab, verifiedOnly, s);
   }
 
-  function handleShareSearch() {
-    const trimmed = query.trim();
-    if (trimmed.length < 2) return;
-    Share.share({ message: `Search AfuChat for: "${trimmed}"` });
-  }
-
-  function applyTimeFilter(f: TimeFilter) {
-    setTimeFilter(f);
-    setShowTimeFilter(false);
-    if (query.trim().length >= 1) {
-      performSearch(query, category, f, mediaFilter, personFilter);
-    }
-  }
-
-  function applyMediaFilter(f: MediaFilter) {
-    setMediaFilter(f);
-    setShowMediaFilter(false);
-    if (query.trim().length >= 1) {
-      performSearch(query, category, timeFilter, f, personFilter);
-    }
-  }
-
-  function clearPersonFilter() {
-    setPersonFilter(null);
-    if (query.trim().length >= 1) {
-      performSearch(query, category, timeFilter, mediaFilter, null);
-    }
-  }
-
-  function clearAllFilters() {
-    setTimeFilter(null);
-    setMediaFilter(null);
-    setPersonFilter(null);
-    if (query.trim().length >= 1) {
-      performSearch(query, category, null, null, null);
-    }
-  }
-
-  function startVoiceSearch() {
+  function startVoice() {
     if (Platform.OS !== "web") return;
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) return;
-    const recognition = new SR();
-    recognition.lang = "en-US";
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
+    const r = new SR(); r.lang = "en-US"; r.interimResults = false;
     setIsListening(true);
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setQuery(transcript);
-      setIsListening(false);
-      recordSearch(transcript);
-      performSearch(transcript, category, timeFilter, mediaFilter, personFilter);
-    };
-    recognition.onerror = () => setIsListening(false);
-    recognition.onend = () => setIsListening(false);
-    recognition.start();
+    r.onresult = (e: any) => { const t = e.results[0][0].transcript; setQuery(t); setIsListening(false); performSearch(t, tab, verifiedOnly, sortMode); };
+    r.onerror = r.onend = () => setIsListening(false);
+    r.start();
   }
 
-  const isQuerySaved = useMemo(() => {
-    const trimmed = query.trim().toLowerCase();
-    return savedSearches.some(s => s.query.toLowerCase() === trimmed);
-  }, [query, savedSearches]);
+  const tabCounts: Record<SearchTab, number> = useMemo(() => ({
+    all:      totalCount,
+    people:   results.people.length,
+    posts:    results.posts.length,
+    channels: results.channels.length,
+    events:   results.events.length,
+    gifts:    results.gifts.length,
+    shops:    results.shops.length,
+    apps:     results.apps.length,
+  }), [results, totalCount]);
 
-  const totalResults =
-    results.people.length + results.posts.length +
-    results.channels.length + results.gifts.length;
+  const cleanQuery = query.trim().replace(/^[#@]/, "");
 
-  function SectionHeader({ title, count, icon }: { title: string; count: number; icon: string }) {
+  function SectionLabel({ icon, label, count, onSeeAll }: { icon: string; label: string; count: number; onSeeAll?: ()=>void }) {
     if (count === 0) return null;
     return (
-      <View style={s.sectionHeader}>
-        <Ionicons name={icon as any} size={15} color={BRAND} />
-        <Text style={[s.sectionTitle, { color: colors.text }]}>{title}</Text>
-        <View style={[s.countBadge, { backgroundColor: BRAND + "15" }]}>
-          <Text style={{ color: BRAND, fontSize: 11, fontFamily: "Inter_600SemiBold" }}>{count}</Text>
+      <View style={styles.sectionLabel}>
+        <Ionicons name={icon as any} size={14} color={BRAND} />
+        <Text style={[styles.sectionLabelText, { color: colors.text }]}>{label}</Text>
+        <View style={[styles.countPill, { backgroundColor: BRAND+"18" }]}>
+          <Text style={{ color: BRAND, fontSize:11, fontFamily:"Inter_600SemiBold" }}>{count}</Text>
         </View>
+        {onSeeAll && (
+          <TouchableOpacity style={styles.seeAllBtn} onPress={onSeeAll}>
+            <Text style={{ color: BRAND, fontSize:12, fontFamily:"Inter_600SemiBold" }}>See All</Text>
+            <Ionicons name="chevron-forward" size={12} color={BRAND} />
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
 
-  function renderPersonCard(person: PersonResult, index: number) {
-    const isPinned = pinnedResults.some(p => p.id === person.id && p.type === "person");
+  function PersonCard({ p, i }: { p: PersonResult; i: number }) {
     return (
-      <Animated.View key={person.id} entering={FadeInRight.delay(index * 30).duration(250)}>
-        <TouchableOpacity
-          style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          activeOpacity={0.7}
-          onPress={() => router.push(`/contact/${person.id}` as any)}
-          onLongPress={() => handlePinResult("person", person.id, person.display_name, `@${person.handle}`, person.avatar_url || undefined)}
-        >
-          {person.avatar_url ? (
-            <Image source={{ uri: person.avatar_url }} style={s.avatar48} />
-          ) : (
-            <View style={[s.avatar48, { backgroundColor: BRAND + "20", justifyContent: "center", alignItems: "center" }]}>
-              <Text style={{ color: BRAND, fontSize: 18, fontFamily: "Inter_700Bold" }}>
-                {(person.display_name || "?")[0].toUpperCase()}
-              </Text>
+      <Animated.View entering={FadeInRight.delay(i*25).duration(220)}>
+        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface, borderColor:colors.border }]} onPress={() => router.push(`/contact/${p.id}` as any)} activeOpacity={0.72}>
+          {p.avatar_url
+            ? <Image source={{ uri: p.avatar_url }} style={styles.av48} />
+            : <AvatarPlaceholder name={p.display_name} size={48} color={BRAND} />}
+          <View style={{ flex:1, gap:2 }}>
+            <View style={{ flexDirection:"row", alignItems:"center", gap:4 }}>
+              <Text style={[styles.cardTitle, { color:colors.text }]} numberOfLines={1}>{highlightText(p.display_name, cleanQuery, colors.text, BRAND)}</Text>
+              <VerifiedBadge verified={p.is_verified} org={p.is_organization_verified} />
             </View>
-          )}
-          <View style={{ flex: 1, gap: 2 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <Text style={[s.nameText, { color: colors.text }]} numberOfLines={1}>{person.display_name}</Text>
-              {person.is_verified && (
-                <Ionicons name="checkmark-circle" size={14} color={person.is_organization_verified ? GOLD : BRAND} />
-              )}
-              {isPinned && <Ionicons name="pin" size={12} color={GOLD} />}
-            </View>
-            <Text style={[s.subText, { color: colors.textMuted }]}>@{person.handle}</Text>
-            {person.bio ? <Text style={[s.bioText, { color: colors.textSecondary }]} numberOfLines={2}>{person.bio}</Text> : null}
+            <Text style={[styles.cardSub, { color:colors.textMuted }]}>@{p.handle}</Text>
+            {p.bio ? <Text style={[styles.bioText, { color:colors.textSecondary }]} numberOfLines={2}>{p.bio}</Text> : null}
           </View>
-          {person.country ? <Text style={{ fontSize: 11, color: colors.textMuted }}>{person.country}</Text> : null}
+          <View style={{ alignItems:"flex-end", gap:4 }}>
+            {p.country ? <Text style={{ fontSize:11, color:colors.textMuted }}>{p.country}</Text> : null}
+            <TouchableOpacity style={[styles.followBtn, { borderColor:BRAND }]} onPress={() => router.push(`/contact/${p.id}` as any)}>
+              <Text style={{ color:BRAND, fontSize:11, fontFamily:"Inter_600SemiBold" }}>View</Text>
+            </TouchableOpacity>
+          </View>
         </TouchableOpacity>
       </Animated.View>
     );
   }
 
-  function renderPostCard(post: PostResult, index: number) {
+  function PostCard({ p, i }: { p: PostResult; i: number }) {
+    const hasImage = !!p.image_url;
     return (
-      <Animated.View key={post.id} entering={FadeInDown.delay(index * 30).duration(250)}>
-        <TouchableOpacity
-          style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, flexDirection: "column", gap: 10 }]}
-          activeOpacity={0.7}
-          onPress={() => router.push(`/contact/${post.author_id}` as any)}
-          onLongPress={() => handlePinResult("post", post.id, post.content.slice(0, 60), `@${post.author_handle}`)}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            {post.author_avatar ? (
-              <Image source={{ uri: post.author_avatar }} style={s.avatar32} />
-            ) : (
-              <View style={[s.avatar32, { backgroundColor: colors.inputBg, justifyContent: "center", alignItems: "center" }]}>
-                <Text style={{ color: colors.text, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>
-                  {(post.author_name || "?")[0].toUpperCase()}
-                </Text>
-              </View>
-            )}
-            <View style={{ flex: 1 }}>
-              <Text style={[s.nameText, { color: colors.text, fontSize: 13 }]}>{post.author_name}</Text>
-              <Text style={{ color: colors.textMuted, fontSize: 11 }}>@{post.author_handle}</Text>
+      <Animated.View entering={FadeInDown.delay(i*25).duration(220)}>
+        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface, borderColor:colors.border, flexDirection:"column", gap:10 }]} onPress={() => router.push(`/p/${p.id}` as any)} activeOpacity={0.72}>
+          <View style={{ flexDirection:"row", alignItems:"center", gap:10 }}>
+            {p.author_avatar
+              ? <Image source={{ uri: p.author_avatar }} style={styles.av32} />
+              : <AvatarPlaceholder name={p.author_name} size={32} color="#007AFF" />}
+            <View style={{ flex:1 }}>
+              <Text style={[styles.cardTitle, { color:colors.text, fontSize:13 }]} numberOfLines={1}>{p.author_name}</Text>
+              <Text style={[styles.cardSub, { color:colors.textMuted }]}>@{p.author_handle}</Text>
             </View>
-            <Text style={{ color: colors.textMuted, fontSize: 11 }}>{timeAgo(post.created_at)}</Text>
+            <Text style={{ color:colors.textMuted, fontSize:11 }}>{timeAgo(p.created_at)}</Text>
           </View>
-          <Text style={[{ color: colors.text, fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 }]} numberOfLines={4}>{post.content}</Text>
-          {post.image_url ? (
-            <Image source={{ uri: post.image_url }} style={{ width: "100%", height: 160, borderRadius: 12 }} resizeMode="cover" />
-          ) : null}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <Text style={{ color:colors.text, fontSize:14, fontFamily:"Inter_400Regular", lineHeight:20 }} numberOfLines={hasImage ? 2 : 5}>
+            {p.content}
+          </Text>
+          {hasImage && (
+            <Image source={{ uri: p.image_url! }} style={{ width:"100%", height:140, borderRadius:10 }} resizeMode="cover" />
+          )}
+          <View style={{ flexDirection:"row", alignItems:"center", gap:3 }}>
             <Ionicons name="eye-outline" size={13} color={colors.textMuted} />
-            <Text style={{ color: colors.textMuted, fontSize: 11 }}>{post.view_count}</Text>
+            <Text style={{ color:colors.textMuted, fontSize:11 }}>{p.view_count}</Text>
           </View>
         </TouchableOpacity>
       </Animated.View>
     );
   }
 
-  function renderChannelCard(ch: ChannelResult, index: number) {
+  function ChannelCard({ ch, i }: { ch: ChannelResult; i: number }) {
     return (
-      <Animated.View key={ch.id} entering={FadeInDown.delay(index * 30).duration(250)}>
-        <TouchableOpacity
-          style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          activeOpacity={0.7}
-        >
-          {ch.avatar_url ? (
-            <Image source={{ uri: ch.avatar_url }} style={[s.avatar44, { borderRadius: 12 }]} />
-          ) : (
-            <LinearGradient colors={[BRAND, "#00ACC1"]} style={[s.avatar44, { borderRadius: 12, alignItems: "center", justifyContent: "center" }]}>
-              <Ionicons name="megaphone" size={18} color="#fff" />
-            </LinearGradient>
-          )}
-          <View style={{ flex: 1 }}>
-            <Text style={[s.nameText, { color: colors.text }]}>{ch.name}</Text>
-            {ch.description ? <Text style={{ color: colors.textSecondary, fontSize: 12 }} numberOfLines={1}>{ch.description}</Text> : null}
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <Ionicons name="people" size={12} color={colors.textMuted} />
-            <Text style={{ color: colors.textMuted, fontSize: 11 }}>{ch.subscriber_count || 0}</Text>
-          </View>
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  }
-
-  function renderGiftCard(gift: GiftResult, index: number) {
-    return (
-      <Animated.View key={gift.id} entering={FadeIn.delay(index * 30).duration(250)}>
-        <TouchableOpacity
-          style={[s.giftCard, { backgroundColor: colors.surface, borderColor: colors.border, width: (SCREEN_W - 56) / 4 }]}
-          activeOpacity={0.7}
-        >
-          <Text style={{ fontSize: 28 }}>{gift.emoji}</Text>
-          <Text style={[{ color: colors.text, fontSize: 11, fontFamily: "Inter_500Medium", textAlign: "center" }]}>{gift.name}</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-            <Ionicons name="diamond" size={11} color={GOLD} />
-            <Text style={{ color: GOLD, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>{gift.base_xp_cost}</Text>
-          </View>
-          <Text style={{ color: colors.textMuted, fontSize: 9, textTransform: "capitalize" }}>{gift.rarity}</Text>
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  }
-
-  function renderSuggestions() {
-    if (suggestions.length === 0 || hasSearched) return null;
-    return (
-      <Animated.View entering={FadeIn.duration(200)} style={[s.suggestionsBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        {suggestions.map((p, i) => (
-          <TouchableOpacity key={p.id} style={s.suggestionRow} onPress={() => handleSuggestionPress(p)}>
-            {p.avatar_url ? (
-              <Image source={{ uri: p.avatar_url }} style={{ width: 28, height: 28, borderRadius: 14 }} />
-            ) : (
-              <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: BRAND + "20", alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ color: BRAND, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>{(p.display_name || "?")[0]}</Text>
-              </View>
+      <Animated.View entering={FadeInRight.delay(i*25).duration(220)}>
+        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface, borderColor:colors.border }]} activeOpacity={0.72}>
+          {ch.avatar_url
+            ? <Image source={{ uri: ch.avatar_url }} style={[styles.av48, { borderRadius:12 }]} />
+            : (
+              <LinearGradient colors={[BRAND, "#00ACC1"]} style={[styles.av48, { borderRadius:12, alignItems:"center", justifyContent:"center" }]}>
+                <Ionicons name="megaphone" size={22} color="#fff" />
+              </LinearGradient>
             )}
-            <View style={{ flex: 1 }}>
-              <Text style={[{ color: colors.text, fontSize: 13, fontFamily: "Inter_500Medium" }]}>{p.display_name}</Text>
-              <Text style={{ color: colors.textMuted, fontSize: 11 }}>@{p.handle}</Text>
+          <View style={{ flex:1, gap:3 }}>
+            <Text style={[styles.cardTitle, { color:colors.text }]} numberOfLines={1}>{ch.name}</Text>
+            {ch.description ? <Text style={[styles.bioText, { color:colors.textSecondary }]} numberOfLines={2}>{ch.description}</Text> : null}
+          </View>
+          <View style={{ alignItems:"flex-end", gap:4 }}>
+            <View style={{ flexDirection:"row", alignItems:"center", gap:3 }}>
+              <Ionicons name="people" size={12} color={colors.textMuted} />
+              <Text style={{ color:colors.textMuted, fontSize:11 }}>{ch.subscriber_count || 0}</Text>
             </View>
-            {p.is_verified && <Ionicons name="checkmark-circle" size={13} color={BRAND} />}
-          </TouchableOpacity>
-        ))}
+            <TouchableOpacity style={[styles.followBtn, { borderColor:"#AF52DE" }]}>
+              <Text style={{ color:"#AF52DE", fontSize:11, fontFamily:"Inter_600SemiBold" }}>Subscribe</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
       </Animated.View>
     );
   }
 
-  function renderCommandsHelp() {
-    if (!showCommands) return null;
+  function EventCard({ ev, i }: { ev: EventResult; i: number }) {
+    const isFull = ev.capacity > 0 && ev.tickets_sold >= ev.capacity;
+    const pct = ev.capacity > 0 ? Math.min((ev.tickets_sold / ev.capacity) * 100, 100) : 0;
     return (
-      <Animated.View entering={FadeIn.duration(200)} style={[s.suggestionsBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Text style={[{ color: colors.textMuted, fontSize: 11, fontFamily: "Inter_600SemiBold", paddingHorizontal: 14, paddingTop: 10, letterSpacing: 1 }]}>COMMANDS</Text>
-        {COMMANDS_HELP.map((c, i) => (
-          <TouchableOpacity key={c.cmd} style={s.suggestionRow} onPress={() => { setQuery(c.cmd + " "); setShowCommands(false); inputRef.current?.focus(); }}>
-            <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: BRAND + "15", alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ color: BRAND, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>{c.cmd[0]}</Text>
+      <Animated.View entering={FadeInDown.delay(i*25).duration(220)}>
+        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface, borderColor:colors.border, flexDirection:"column", gap:10 }]} onPress={() => router.push("/digital-events" as any)} activeOpacity={0.72}>
+          <View style={{ flexDirection:"row", gap:12, alignItems:"flex-start" }}>
+            <View style={[styles.eventEmoji, { backgroundColor:"#FF9500"+"18" }]}>
+              <Text style={{ fontSize:26 }}>{ev.emoji}</Text>
             </View>
-            <Text style={[{ color: BRAND, fontSize: 14, fontFamily: "Inter_600SemiBold", flex: 1 }]}>{c.cmd}</Text>
-            <Text style={{ color: colors.textMuted, fontSize: 12 }}>{c.desc}</Text>
-          </TouchableOpacity>
-        ))}
+            <View style={{ flex:1, gap:3 }}>
+              <Text style={[styles.cardTitle, { color:colors.text }]} numberOfLines={2}>{ev.title}</Text>
+              <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
+                <Ionicons name="calendar-outline" size={12} color={colors.textMuted} />
+                <Text style={{ color:colors.textMuted, fontSize:11 }}>{formatEventDate(ev.event_date)}</Text>
+                {ev.category && <View style={[styles.catPill, { backgroundColor:"#FF9500"+"18" }]}>
+                  <Text style={{ color:"#FF9500", fontSize:10, fontFamily:"Inter_600SemiBold" }}>{ev.category}</Text>
+                </View>}
+              </View>
+              {ev.description ? <Text style={[styles.bioText, { color:colors.textSecondary }]} numberOfLines={1}>{ev.description}</Text> : null}
+            </View>
+            <View style={{ alignItems:"flex-end", gap:4 }}>
+              {ev.price === 0
+                ? <View style={[styles.freeBadge]}><Text style={styles.freeBadgeText}>FREE</Text></View>
+                : <View style={{ flexDirection:"row", alignItems:"center", gap:2 }}><Ionicons name="diamond" size={11} color={GOLD} /><Text style={{ color:GOLD, fontSize:12, fontFamily:"Inter_700Bold" }}>{ev.price}</Text></View>
+              }
+            </View>
+          </View>
+          {ev.capacity > 0 && (
+            <View style={{ gap:4 }}>
+              <View style={{ flexDirection:"row", justifyContent:"space-between" }}>
+                <Text style={{ color:colors.textMuted, fontSize:10 }}>{ev.tickets_sold}/{ev.capacity} tickets</Text>
+                {isFull && <Text style={{ color:"#EF4444", fontSize:10, fontFamily:"Inter_600SemiBold" }}>SOLD OUT</Text>}
+              </View>
+              <View style={[styles.progressBg, { backgroundColor:colors.inputBg }]}>
+                <View style={[styles.progressFill, { width:`${pct}%` as any, backgroundColor: pct >= 90 ? "#EF4444" : "#FF9500" }]} />
+              </View>
+            </View>
+          )}
+        </TouchableOpacity>
       </Animated.View>
     );
   }
 
-  function renderActiveFilters() {
-    if (activeFilters.length === 0) return null;
+  function GiftGrid({ gifts }: { gifts: GiftResult[] }) {
+    const cols = 4;
+    const cardW = Math.floor((SW - 48 - (cols - 1) * 8) / cols);
     return (
-      <View style={s.filterBar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 16 }}>
-          {timeFilter && (
-            <TouchableOpacity style={[s.filterChip, { backgroundColor: "#8B5CF6" + "15", borderColor: "#8B5CF6" + "40" }]} onPress={() => setShowTimeFilter(true)}>
-              <Ionicons name="time" size={12} color="#8B5CF6" />
-              <Text style={{ color: "#8B5CF6", fontSize: 12, fontFamily: "Inter_500Medium" }}>{getTimeFilterLabel(timeFilter)}</Text>
-              <TouchableOpacity onPress={() => applyTimeFilter(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close-circle" size={14} color="#8B5CF6" />
+      <View style={{ flexDirection:"row", flexWrap:"wrap", gap:8, paddingHorizontal:16, paddingBottom:8 }}>
+        {gifts.map((g, i) => {
+          const rc = RARITY_COLORS[g.rarity] || "#888";
+          return (
+            <Animated.View key={g.id} entering={FadeIn.delay(i*20).duration(200)}>
+              <TouchableOpacity style={[styles.giftCard, { backgroundColor:colors.surface, borderColor:rc+"44", width:cardW }]} onPress={() => router.push("/gifts" as any)} activeOpacity={0.75}>
+                <Text style={{ fontSize:30 }}>{g.emoji}</Text>
+                <Text style={{ color:colors.text, fontSize:11, fontFamily:"Inter_500Medium", textAlign:"center" }} numberOfLines={1}>{g.name}</Text>
+                <View style={{ flexDirection:"row", alignItems:"center", gap:2 }}>
+                  <Ionicons name="diamond" size={10} color={GOLD} />
+                  <Text style={{ color:GOLD, fontSize:11, fontFamily:"Inter_700Bold" }}>{g.base_xp_cost}</Text>
+                </View>
+                <View style={[styles.rarityDot, { backgroundColor:rc }]} />
               </TouchableOpacity>
-            </TouchableOpacity>
-          )}
-          {mediaFilter && (
-            <TouchableOpacity style={[s.filterChip, { backgroundColor: "#F59E0B" + "15", borderColor: "#F59E0B" + "40" }]} onPress={() => setShowMediaFilter(true)}>
-              <Ionicons name="images" size={12} color="#F59E0B" />
-              <Text style={{ color: "#F59E0B", fontSize: 12, fontFamily: "Inter_500Medium" }}>{getMediaFilterLabel(mediaFilter)}</Text>
-              <TouchableOpacity onPress={() => applyMediaFilter(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close-circle" size={14} color="#F59E0B" />
-              </TouchableOpacity>
-            </TouchableOpacity>
-          )}
-          {personFilter && (
-            <TouchableOpacity style={[s.filterChip, { backgroundColor: BRAND + "15", borderColor: BRAND + "40" }]} onPress={clearPersonFilter}>
-              <Ionicons name="person" size={12} color={BRAND} />
-              <Text style={{ color: BRAND, fontSize: 12, fontFamily: "Inter_500Medium" }}>@{personFilter}</Text>
-              <Ionicons name="close-circle" size={14} color={BRAND} />
-            </TouchableOpacity>
-          )}
-          {privateMode && (
-            <View style={[s.filterChip, { backgroundColor: "#EF4444" + "15", borderColor: "#EF4444" + "40" }]}>
-              <Ionicons name="eye-off" size={12} color="#EF4444" />
-              <Text style={{ color: "#EF4444", fontSize: 12, fontFamily: "Inter_500Medium" }}>Private</Text>
-            </View>
-          )}
-          {activeFilters.length > 1 && (
-            <TouchableOpacity style={[s.filterChip, { backgroundColor: colors.inputBg, borderColor: colors.border }]} onPress={clearAllFilters}>
-              <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_500Medium" }}>Clear All</Text>
-            </TouchableOpacity>
-          )}
-        </ScrollView>
+            </Animated.View>
+          );
+        })}
       </View>
     );
   }
 
-  function renderFilterModal() {
-    if (!showTimeFilter && !showMediaFilter) return null;
-    const options = showTimeFilter ? TIME_OPTIONS : MEDIA_OPTIONS;
-    const currentValue = showTimeFilter ? timeFilter : mediaFilter;
+  function ShopCard({ s, i }: { s: ShopResult; i: number }) {
+    const kindIcon = s.kind === "product" ? "cube-outline" : s.kind === "freelance" ? "briefcase-outline" : "people-outline";
+    const kindColor = s.kind === "product" ? "#AF52DE" : s.kind === "freelance" ? "#34C759" : "#007AFF";
     return (
-      <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => { setShowTimeFilter(false); setShowMediaFilter(false); }}>
-        <Animated.View entering={FadeInUp.duration(250)} style={[s.modalContent, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={[s.modalTitle, { color: colors.text }]}>{showTimeFilter ? "Time Range" : "Media Type"}</Text>
-          {options.map((opt: any) => (
-            <TouchableOpacity
-              key={String(opt.id)}
-              style={[s.modalOption, currentValue === opt.id && { backgroundColor: BRAND + "10" }]}
-              onPress={() => showTimeFilter ? applyTimeFilter(opt.id) : applyMediaFilter(opt.id)}
-            >
-              {opt.icon && <Ionicons name={opt.icon as any} size={18} color={currentValue === opt.id ? BRAND : colors.textMuted} />}
-              <Text style={[{ flex: 1, fontSize: 15, fontFamily: "Inter_500Medium", color: currentValue === opt.id ? BRAND : colors.text }]}>{opt.label}</Text>
-              {currentValue === opt.id && <Ionicons name="checkmark-circle" size={18} color={BRAND} />}
-            </TouchableOpacity>
-          ))}
-        </Animated.View>
-      </TouchableOpacity>
-    );
-  }
-
-  function renderPinnedResults() {
-    if (pinnedResults.length === 0) return null;
-    return (
-      <Animated.View entering={FadeInDown.duration(300)} style={s.idleSection}>
-        <View style={s.idleSectionHeader}>
-          <Ionicons name="pin" size={16} color={GOLD} />
-          <Text style={[s.idleSectionTitle, { color: colors.text }]}>Pinned</Text>
-        </View>
-        {pinnedResults.slice(0, 5).map((p, i) => (
-          <TouchableOpacity
-            key={`${p.type}-${p.id}`}
-            style={[s.historyRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={() => p.routePath ? router.push(p.routePath as any) : null}
-          >
-            <Ionicons name="pin" size={14} color={GOLD} />
-            <View style={{ flex: 1 }}>
-              <Text style={[{ color: colors.text, fontSize: 13, fontFamily: "Inter_500Medium" }]}>{p.title}</Text>
-              <Text style={{ color: colors.textMuted, fontSize: 11 }}>{p.subtitle}</Text>
+      <Animated.View entering={FadeInDown.delay(i*25).duration(220)}>
+        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface, borderColor:colors.border }]} onPress={() => router.push(s.route as any)} activeOpacity={0.72}>
+          {s.image_url
+            ? <Image source={{ uri: s.image_url }} style={[styles.av48, { borderRadius:10 }]} resizeMode="cover" />
+            : (
+              <View style={[styles.av48, { borderRadius:10, backgroundColor:kindColor+"18", alignItems:"center", justifyContent:"center" }]}>
+                <Text style={{ fontSize:24 }}>{s.emoji || "📦"}</Text>
+              </View>
+            )}
+          <View style={{ flex:1, gap:3 }}>
+            <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
+              <Text style={[styles.cardTitle, { color:colors.text }]} numberOfLines={1}>{s.title}</Text>
+              <View style={[styles.catPill, { backgroundColor:kindColor+"18" }]}>
+                <Ionicons name={kindIcon as any} size={10} color={kindColor} />
+                <Text style={{ color:kindColor, fontSize:9, fontFamily:"Inter_600SemiBold", textTransform:"capitalize" }}>{s.kind}</Text>
+              </View>
             </View>
-            <TouchableOpacity onPress={() => unpinResult(p.id, p.type).then(setPinnedResults)}>
-              <Ionicons name="close" size={16} color={colors.textMuted} />
-            </TouchableOpacity>
-          </TouchableOpacity>
-        ))}
+            {s.desc ? <Text style={[styles.bioText, { color:colors.textSecondary }]} numberOfLines={1}>{s.desc}</Text> : null}
+            {s.seller_name ? <Text style={{ color:colors.textMuted, fontSize:11 }}>by {s.seller_name}</Text> : null}
+          </View>
+          <View style={{ alignItems:"flex-end", gap:4 }}>
+            <View style={{ flexDirection:"row", alignItems:"center", gap:2 }}>
+              <Ionicons name="diamond" size={11} color={GOLD} />
+              <Text style={{ color:GOLD, fontSize:13, fontFamily:"Inter_700Bold" }}>{s.price}</Text>
+            </View>
+            {s.badge ? <Text style={{ color:colors.textMuted, fontSize:10 }}>{s.badge}</Text> : null}
+          </View>
+        </TouchableOpacity>
       </Animated.View>
     );
   }
 
-  function renderIdleState() {
+  function AppCard({ a, i }: { a: AppResult; i: number }) {
     return (
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        {renderPinnedResults()}
-
-        {savedSearches.length > 0 && (
-          <Animated.View entering={FadeInDown.duration(300)} style={s.idleSection}>
-            <View style={s.idleSectionHeader}>
-              <Ionicons name="bookmark" size={16} color={BRAND} />
-              <Text style={[s.idleSectionTitle, { color: colors.text }]}>Saved Searches</Text>
+      <Animated.View entering={FadeInRight.delay(i*25).duration(220)}>
+        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface, borderColor:colors.border }]} onPress={() => router.push(a.route as any)} activeOpacity={0.72}>
+          <LinearGradient colors={a.gradient} style={[styles.av48, { borderRadius:14, alignItems:"center", justifyContent:"center" }]}>
+            <Ionicons name={a.icon} size={22} color="#fff" />
+          </LinearGradient>
+          <View style={{ flex:1, gap:3 }}>
+            <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
+              <Text style={[styles.cardTitle, { color:colors.text }]}>{a.label}</Text>
+              <View style={[styles.catPill, { backgroundColor:a.gradient[0]+"22" }]}>
+                <Text style={{ color:a.gradient[0], fontSize:9, fontFamily:"Inter_600SemiBold" }}>{a.category}</Text>
+              </View>
             </View>
-            <View style={s.tagWrap}>
-              {savedSearches.slice(0, 6).map((ss) => (
-                <TouchableOpacity
-                  key={ss.id}
-                  style={[s.savedChip, { backgroundColor: BRAND + "10", borderColor: BRAND + "25" }]}
-                  onPress={() => handleHistoryPress(ss.query)}
-                >
-                  <Ionicons name="bookmark" size={11} color={BRAND} />
-                  <Text style={{ color: BRAND, fontSize: 13, fontFamily: "Inter_500Medium" }}>{ss.query}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </Animated.View>
-        )}
-
-        {history.length > 0 && (
-          <Animated.View entering={FadeInDown.duration(300)} style={s.idleSection}>
-            <View style={s.idleSectionHeader}>
-              <Ionicons name="time-outline" size={16} color={colors.textMuted} />
-              <Text style={[s.idleSectionTitle, { color: colors.text }]}>Recent</Text>
-              <TouchableOpacity onPress={() => setViewMode("history")}>
-                <Text style={{ color: BRAND, fontSize: 12, fontFamily: "Inter_500Medium" }}>See All</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={s.tagWrap}>
-              {history.slice(0, 6).map((term, i) => (
-                <TouchableOpacity
-                  key={i}
-                  style={[s.recentChip, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  onPress={() => handleHistoryPress(term)}
-                >
-                  <Ionicons name="search" size={12} color={colors.textMuted} />
-                  <Text style={{ color: colors.text, fontSize: 13 }}>{term}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </Animated.View>
-        )}
-
-        <Animated.View entering={FadeInDown.delay(100).duration(300)} style={s.idleSection}>
-          <View style={s.idleSectionHeader}>
-            <Ionicons name="trending-up" size={16} color={BRAND} />
-            <Text style={[s.idleSectionTitle, { color: colors.text }]}>Trending</Text>
+            <Text style={[styles.bioText, { color:colors.textSecondary }]} numberOfLines={2}>{a.desc}</Text>
           </View>
-          <View style={s.tagWrap}>
-            {TRENDING_TAGS.map((tag) => (
-              <TouchableOpacity key={tag} style={[s.trendTag, { backgroundColor: BRAND + "10", borderColor: BRAND + "25" }]} onPress={() => handleTagPress(tag)}>
-                <Text style={{ color: BRAND, fontSize: 13, fontFamily: "Inter_500Medium" }}>#{tag}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </Animated.View>
-
-        {trendingPeople.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(150).duration(300)} style={s.idleSection}>
-            <View style={s.idleSectionHeader}>
-              <Ionicons name="star" size={16} color={GOLD} />
-              <Text style={[s.idleSectionTitle, { color: colors.text }]}>Top Users</Text>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 16 }}>
-              {trendingPeople.map((p) => (
-                <TouchableOpacity key={p.id} style={[s.topUserCard, { backgroundColor: colors.surface, borderColor: colors.border }]} activeOpacity={0.7} onPress={() => router.push(`/contact/${p.id}` as any)}>
-                  {p.avatar_url ? (
-                    <Image source={{ uri: p.avatar_url }} style={{ width: 48, height: 48, borderRadius: 24 }} />
-                  ) : (
-                    <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: BRAND + "20", alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ color: BRAND, fontSize: 16, fontFamily: "Inter_700Bold" }}>{(p.display_name || "?")[0].toUpperCase()}</Text>
-                    </View>
-                  )}
-                  <Text style={[{ color: colors.text, fontSize: 12, fontFamily: "Inter_600SemiBold", textAlign: "center" }]} numberOfLines={1}>{p.display_name}</Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
-                    <Text style={{ color: colors.textMuted, fontSize: 10 }} numberOfLines={1}>@{p.handle}</Text>
-                    {p.is_verified && <Ionicons name="checkmark-circle" size={10} color={BRAND} />}
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </Animated.View>
-        )}
-
-        <Animated.View entering={FadeInDown.delay(200).duration(300)} style={s.idleSection}>
-          <View style={s.idleSectionHeader}>
-            <Ionicons name="terminal" size={16} color="#8B5CF6" />
-            <Text style={[s.idleSectionTitle, { color: colors.text }]}>Quick Commands</Text>
-          </View>
-          <View style={s.tagWrap}>
-            {COMMANDS_HELP.slice(0, 4).map((c) => (
-              <TouchableOpacity key={c.cmd} style={[s.cmdChip, { backgroundColor: "#8B5CF6" + "08", borderColor: "#8B5CF6" + "20" }]} onPress={() => { setQuery(c.cmd + " "); inputRef.current?.focus(); }}>
-                <Text style={{ color: "#8B5CF6", fontSize: 13, fontFamily: "Inter_600SemiBold" }}>{c.cmd}</Text>
-                <Text style={{ color: colors.textMuted, fontSize: 11 }}>{c.desc}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.delay(250).duration(300)} style={s.idleSection}>
-          <View style={s.idleSectionHeader}>
-            <Ionicons name="flash" size={16} color="#FF9500" />
-            <Text style={[s.idleSectionTitle, { color: colors.text }]}>Quick Actions</Text>
-          </View>
-          <View style={s.quickActions}>
-            {[
-              { label: "Scan QR", icon: "qr-code", color: BRAND, route: "/wallet/scan" },
-              { label: "New Chat", icon: "chatbubble-ellipses", color: "#3B82F6", route: "/(tabs)" },
-              { label: "Wallet", icon: "wallet", color: GOLD, route: "/wallet" },
-              { label: "Digital ID", icon: "card", color: "#8B5CF6", route: "/digital-id" },
-            ].map((action) => (
-              <TouchableOpacity key={action.label} style={[s.quickAction, { backgroundColor: action.color + "08", minWidth: (SCREEN_W - 64) / 2 - 5, maxWidth: (SCREEN_W - 64) / 2 - 5 }]} onPress={() => router.push(action.route as any)} activeOpacity={0.7}>
-                <View style={[s.quickActionIcon, { backgroundColor: action.color + "18" }]}>
-                  <Ionicons name={action.icon as any} size={20} color={action.color} />
-                </View>
-                <Text style={[{ color: colors.text, fontSize: 13, fontFamily: "Inter_500Medium" }]}>{action.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </Animated.View>
-      </ScrollView>
-    );
-  }
-
-  function renderHistoryPanel() {
-    return (
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-        <Animated.View entering={FadeIn.duration(300)}>
-          <View style={[s.idleSectionHeader, { marginBottom: 8 }]}>
-            <TouchableOpacity onPress={() => setViewMode("search")} style={{ marginRight: 8 }}>
-              <Ionicons name="arrow-back" size={20} color={colors.text} />
-            </TouchableOpacity>
-            <Text style={[s.idleSectionTitle, { color: colors.text }]}>Search History</Text>
-            <TouchableOpacity onPress={() => { clearHistory(); setHistory([]); }}>
-              <Text style={{ color: "#EF4444", fontSize: 12, fontFamily: "Inter_500Medium" }}>Clear All</Text>
-            </TouchableOpacity>
-          </View>
-          {history.length === 0 ? (
-            <View style={{ alignItems: "center", paddingTop: 60 }}>
-              <Ionicons name="time-outline" size={48} color={colors.textMuted} />
-              <Text style={{ color: colors.textMuted, fontSize: 15, marginTop: 12, fontFamily: "Inter_500Medium" }}>No search history</Text>
-              {privateMode && <Text style={{ color: "#EF4444", fontSize: 12, marginTop: 4 }}>Private mode is on</Text>}
-            </View>
-          ) : (
-            history.map((term, i) => (
-              <Animated.View key={`${term}-${i}`} entering={FadeInRight.delay(i * 20).duration(200)}>
-                <TouchableOpacity
-                  style={[s.historyRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  onPress={() => handleHistoryPress(term)}
-                >
-                  <Ionicons name="time-outline" size={16} color={colors.textMuted} />
-                  <Text style={[{ flex: 1, color: colors.text, fontSize: 14, fontFamily: "Inter_400Regular" }]}>{term}</Text>
-                  <TouchableOpacity onPress={() => removeFromHistory(term).then(setHistory)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Ionicons name="close" size={16} color={colors.textMuted} />
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              </Animated.View>
-            ))
-          )}
-        </Animated.View>
-      </ScrollView>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+      </Animated.View>
     );
   }
 
   function renderResults() {
-    const showPeople = (category === "all" || category === "people") && results.people.length > 0;
-    const showPosts = (category === "all" || category === "posts" || category === "hashtags") && results.posts.length > 0;
-    const showChannels = (category === "all" || category === "channels") && results.channels.length > 0;
-    const showGifts = (category === "all" || category === "gifts") && results.gifts.length > 0;
+    const showPeople   = (tab === "all" || tab === "people")   && results.people.length > 0;
+    const showPosts    = (tab === "all" || tab === "posts")    && results.posts.length > 0;
+    const showChannels = (tab === "all" || tab === "channels") && results.channels.length > 0;
+    const showEvents   = (tab === "all" || tab === "events")   && results.events.length > 0;
+    const showGifts    = (tab === "all" || tab === "gifts")    && results.gifts.length > 0;
+    const showShops    = (tab === "all" || tab === "shops")    && results.shops.length > 0;
+    const showApps     = (tab === "all" || tab === "apps")     && results.apps.length > 0;
+    const anyResults = showPeople || showPosts || showChannels || showEvents || showGifts || showShops || showApps;
 
-    if (totalResults === 0 && !loading) {
+    if (!anyResults) {
       return (
-        <Animated.View entering={FadeIn.duration(300)} style={s.emptyState}>
-          <Ionicons name="search-outline" size={52} color={colors.textMuted} />
-          <Text style={[s.emptyTitle, { color: colors.text }]}>No results found</Text>
-          <Text style={[s.emptySub, { color: colors.textMuted }]}>
-            Try a different term, category, or command
-          </Text>
-          <View style={{ flexDirection: "row", gap: 12, marginTop: 16 }}>
-            {activeFilters.length > 0 && (
-              <TouchableOpacity style={[s.emptyBtn, { borderColor: BRAND }]} onPress={clearAllFilters}>
-                <Text style={{ color: BRAND, fontSize: 13, fontFamily: "Inter_500Medium" }}>Clear Filters</Text>
+        <Animated.View entering={FadeIn.duration(300)} style={styles.emptyWrap}>
+          <LinearGradient colors={[BRAND+"22", BRAND+"08"]} style={styles.emptyIcon}>
+            <Ionicons name="search" size={40} color={BRAND} />
+          </LinearGradient>
+          <Text style={[styles.emptyTitle, { color:colors.text }]}>No results for "{query.trim()}"</Text>
+          <Text style={[styles.emptySub, { color:colors.textSecondary }]}>Try different keywords, check spelling, or explore below</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap:8, paddingHorizontal:16, marginTop:16 }}>
+            {TRENDING_TAGS.slice(0,8).map(tag => (
+              <TouchableOpacity key={tag} style={[styles.tagChip, { backgroundColor:BRAND+"15", borderColor:BRAND+"30" }]} onPress={() => onTagPress(tag)}>
+                <Text style={{ color:BRAND, fontSize:13, fontFamily:"Inter_500Medium" }}>#{tag}</Text>
               </TouchableOpacity>
-            )}
-          </View>
+            ))}
+          </ScrollView>
         </Animated.View>
       );
     }
 
     return (
-      <ScrollView contentContainerStyle={{ paddingBottom: 120, gap: 6 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        {query.trim().length >= 2 && (
-          <Animated.View entering={FadeIn.duration(200)} style={s.resultsMeta}>
-            <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_400Regular" }}>
-              {totalResults} result{totalResults !== 1 ? "s" : ""}{parsed.isHashtagSearch ? ` for #${parsed.hashtag}` : ""}{parsed.isPersonSearch ? ` from @${parsed.person}` : ""}
-            </Text>
-          </Animated.View>
-        )}
+      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom:120 }}>
+        <Animated.View entering={FadeInDown.duration(250)} style={[styles.resultsBanner, { backgroundColor:colors.surface, borderBottomColor:colors.border }]}>
+          <Ionicons name="search" size={14} color={BRAND} />
+          <Text style={{ color:colors.textSecondary, fontSize:13, fontFamily:"Inter_400Regular" }}>
+            <Text style={{ fontFamily:"Inter_600SemiBold", color:colors.text }}>{totalCount}</Text> results for{" "}
+            <Text style={{ fontFamily:"Inter_600SemiBold", color:BRAND }}>"{query.trim()}"</Text>
+          </Text>
+        </Animated.View>
 
         {showPeople && (
-          <View style={s.resultSection}>
-            <SectionHeader title="People" count={results.people.length} icon="people" />
-            {(category === "all" ? results.people.slice(0, 5) : results.people).map(renderPersonCard)}
+          <View style={{ paddingTop:16 }}>
+            <SectionLabel icon="people" label="People" count={results.people.length} onSeeAll={tab === "all" && results.people.length >= 5 ? () => onTabPress("people") : undefined} />
+            {results.people.map((p, i) => <PersonCard key={p.id} p={p} i={i} />)}
           </View>
         )}
 
         {showPosts && (
-          <View style={s.resultSection}>
-            <SectionHeader title={category === "hashtags" ? "Tagged Posts" : "Posts"} count={results.posts.length} icon="document-text" />
-            {(category === "all" ? results.posts.slice(0, 4) : results.posts).map(renderPostCard)}
+          <View style={{ paddingTop:16 }}>
+            <SectionLabel icon="document-text" label="Posts" count={results.posts.length} onSeeAll={tab === "all" && results.posts.length >= 5 ? () => onTabPress("posts") : undefined} />
+            {results.posts.map((p, i) => <PostCard key={p.id} p={p} i={i} />)}
           </View>
         )}
 
         {showChannels && (
-          <View style={s.resultSection}>
-            <SectionHeader title="Channels" count={results.channels.length} icon="megaphone" />
-            {(category === "all" ? results.channels.slice(0, 4) : results.channels).map(renderChannelCard)}
+          <View style={{ paddingTop:16 }}>
+            <SectionLabel icon="megaphone" label="Channels" count={results.channels.length} onSeeAll={tab === "all" && results.channels.length >= 4 ? () => onTabPress("channels") : undefined} />
+            {results.channels.map((ch, i) => <ChannelCard key={ch.id} ch={ch} i={i} />)}
+          </View>
+        )}
+
+        {showEvents && (
+          <View style={{ paddingTop:16 }}>
+            <SectionLabel icon="calendar" label="Events" count={results.events.length} onSeeAll={tab === "all" && results.events.length >= 4 ? () => onTabPress("events") : undefined} />
+            {results.events.map((ev, i) => <EventCard key={ev.id} ev={ev} i={i} />)}
           </View>
         )}
 
         {showGifts && (
-          <View style={s.resultSection}>
-            <SectionHeader title="Gifts" count={results.gifts.length} icon="gift" />
-            <View style={s.giftsGrid}>
-              {(category === "all" ? results.gifts.slice(0, 8) : results.gifts).map(renderGiftCard)}
+          <View style={{ paddingTop:16 }}>
+            <SectionLabel icon="gift" label="Gifts" count={results.gifts.length} onSeeAll={tab === "all" && results.gifts.length >= 6 ? () => onTabPress("gifts") : undefined} />
+            <GiftGrid gifts={results.gifts} />
+          </View>
+        )}
+
+        {showShops && (
+          <View style={{ paddingTop:16 }}>
+            <SectionLabel icon="storefront" label="Shops & Services" count={results.shops.length} onSeeAll={tab === "all" && results.shops.length >= 5 ? () => onTabPress("shops") : undefined} />
+            {results.shops.map((s, i) => <ShopCard key={`${s.kind}-${s.id}`} s={s} i={i} />)}
+          </View>
+        )}
+
+        {showApps && (
+          <View style={{ paddingTop:16 }}>
+            <SectionLabel icon="grid" label="Apps & Games" count={results.apps.length} onSeeAll={undefined} />
+            {results.apps.map((a, i) => <AppCard key={a.id} a={a} i={i} />)}
+          </View>
+        )}
+      </ScrollView>
+    );
+  }
+
+  function renderLoading() {
+    return (
+      <ScrollView contentContainerStyle={{ paddingTop:16, paddingBottom:60 }} showsVerticalScrollIndicator={false}>
+        {[1,2,3,4,5].map(i => <CardSkeleton key={i} />)}
+      </ScrollView>
+    );
+  }
+
+  function renderIdle() {
+    return (
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom:120 }}>
+        {/* Quick categories */}
+        <View style={{ paddingHorizontal:16, paddingTop:20 }}>
+          <Text style={[styles.idleHeading, { color:colors.text }]}>Browse Categories</Text>
+          <View style={styles.quickGrid}>
+            {QUICK_CATEGORIES.map((qc, i) => (
+              <Animated.View key={qc.id} entering={FadeInDown.delay(i*30).duration(200)}>
+                <TouchableOpacity
+                  style={[styles.quickCard, { backgroundColor:colors.surface, borderColor:colors.border }]}
+                  onPress={() => qc.route ? router.push(qc.route as any) : (setTab(qc.id as SearchTab), inputRef.current?.focus())}
+                  activeOpacity={0.75}
+                >
+                  <View style={[styles.quickIcon, { backgroundColor: qc.color+"18" }]}>
+                    <Ionicons name={qc.icon as any} size={22} color={qc.color} />
+                  </View>
+                  <Text style={[styles.quickLabel, { color:colors.text }]}>{qc.label}</Text>
+                </TouchableOpacity>
+              </Animated.View>
+            ))}
+          </View>
+        </View>
+
+        {/* Trending People */}
+        {trendingPeople.length > 0 && (
+          <View style={{ paddingTop:24 }}>
+            <View style={[styles.idleSectionHeader, { paddingHorizontal:16 }]}>
+              <Ionicons name="trending-up" size={16} color={BRAND} />
+              <Text style={[styles.idleHeading, { color:colors.text, marginBottom:0 }]}>Trending People</Text>
             </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap:10, paddingHorizontal:16, paddingTop:12, paddingBottom:4 }}>
+              {trendingPeople.map((p, i) => (
+                <Animated.View key={p.id} entering={FadeInRight.delay(i*30).duration(200)}>
+                  <TouchableOpacity style={[styles.personChip, { backgroundColor:colors.surface, borderColor:colors.border }]} onPress={() => router.push(`/contact/${p.id}` as any)} activeOpacity={0.75}>
+                    {p.avatar_url
+                      ? <Image source={{ uri: p.avatar_url }} style={styles.personChipAvatar} />
+                      : <AvatarPlaceholder name={p.display_name} size={40} color={BRAND} />}
+                    <View style={{ alignItems:"center", gap:2 }}>
+                      <View style={{ flexDirection:"row", alignItems:"center", gap:3 }}>
+                        <Text style={[styles.personChipName, { color:colors.text }]} numberOfLines={1}>{p.display_name}</Text>
+                        <VerifiedBadge verified={p.is_verified} org={p.is_organization_verified} />
+                      </View>
+                      <Text style={{ color:colors.textMuted, fontSize:10 }}>@{p.handle}</Text>
+                    </View>
+                  </TouchableOpacity>
+                </Animated.View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Trending Hashtags */}
+        <View style={{ paddingHorizontal:16, paddingTop:24 }}>
+          <View style={styles.idleSectionHeader}>
+            <Ionicons name="pricetag" size={16} color="#AF52DE" />
+            <Text style={[styles.idleHeading, { color:colors.text, marginBottom:0 }]}>Trending Topics</Text>
+          </View>
+          <View style={[styles.tagsWrap, { paddingTop:12 }]}>
+            {TRENDING_TAGS.map((tag, i) => (
+              <Animated.View key={tag} entering={FadeIn.delay(i*20).duration(180)}>
+                <TouchableOpacity style={[styles.tagChip, { backgroundColor:colors.surface, borderColor:colors.border }]} onPress={() => onTagPress(tag)} activeOpacity={0.75}>
+                  <Text style={{ color:"#AF52DE", fontSize:13, fontFamily:"Inter_500Medium" }}>#</Text>
+                  <Text style={{ color:colors.text, fontSize:13, fontFamily:"Inter_500Medium" }}>{tag}</Text>
+                </TouchableOpacity>
+              </Animated.View>
+            ))}
+          </View>
+        </View>
+
+        {/* Search History */}
+        {history.length > 0 && (
+          <View style={{ paddingHorizontal:16, paddingTop:24 }}>
+            <View style={[styles.idleSectionHeader, { marginBottom:12 }]}>
+              <Ionicons name="time-outline" size={16} color={colors.textMuted} />
+              <Text style={[styles.idleHeading, { color:colors.text, marginBottom:0 }]}>Recent Searches</Text>
+              <TouchableOpacity style={{ marginLeft:"auto" }} onPress={() => clearHistory().then(setHistory)}>
+                <Text style={{ color:colors.textMuted, fontSize:12, fontFamily:"Inter_500Medium" }}>Clear</Text>
+              </TouchableOpacity>
+            </View>
+            {history.slice(0,8).map((term, i) => (
+              <TouchableOpacity key={`${term}-${i}`} style={[styles.histRow, { backgroundColor:colors.surface, borderColor:colors.border }]} onPress={() => onHistoryPress(term)} activeOpacity={0.75}>
+                <Ionicons name="time-outline" size={15} color={colors.textMuted} />
+                <Text style={[{ flex:1, fontSize:14, fontFamily:"Inter_400Regular", color:colors.text }]}>{term}</Text>
+                <TouchableOpacity hitSlop={{ top:8, bottom:8, left:8, right:8 }} onPress={() => removeFromHistory(term).then(setHistory)}>
+                  <Ionicons name="close" size={15} color={colors.textMuted} />
+                </TouchableOpacity>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Saved Searches */}
+        {saved.length > 0 && (
+          <View style={{ paddingHorizontal:16, paddingTop:24 }}>
+            <View style={[styles.idleSectionHeader, { marginBottom:12 }]}>
+              <Ionicons name="bookmark-outline" size={16} color={GOLD} />
+              <Text style={[styles.idleHeading, { color:colors.text, marginBottom:0 }]}>Saved Searches</Text>
+            </View>
+            {saved.slice(0,5).map((s) => (
+              <TouchableOpacity key={s.id} style={[styles.histRow, { backgroundColor:colors.surface, borderColor:colors.border }]} onPress={() => onHistoryPress(s.query)} activeOpacity={0.75}>
+                <Ionicons name="bookmark" size={14} color={GOLD} />
+                <Text style={[{ flex:1, fontSize:14, fontFamily:"Inter_400Regular", color:colors.text }]}>{s.query}</Text>
+                <TouchableOpacity hitSlop={{ top:8, bottom:8, left:8, right:8 }} onPress={() => removeSavedSearch(s.id).then(setSaved)}>
+                  <Ionicons name="close" size={15} color={colors.textMuted} />
+                </TouchableOpacity>
+              </TouchableOpacity>
+            ))}
           </View>
         )}
       </ScrollView>
@@ -1056,191 +921,169 @@ export default function SearchScreen() {
   }
 
   return (
-    <View style={[s.screen, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-      <View style={[s.header, { borderBottomColor: colors.border }]}>
-        <View style={[s.searchBar, { backgroundColor: colors.inputBg, borderColor: query.length > 0 ? BRAND + "50" : colors.border }]}>
-          <Ionicons name="search" size={18} color={query.length > 0 ? BRAND : colors.textMuted} />
+    <View style={[styles.root, { backgroundColor:colors.backgroundSecondary }]}>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <Text style={[styles.headerTitle, { color:colors.text }]}>Search</Text>
+
+        {/* Search Bar */}
+        <View style={[styles.searchBar, { backgroundColor:colors.inputBg, borderColor: query.length > 0 ? BRAND+"50" : colors.border }]}>
+          <Ionicons name="search" size={18} color={query.length > 0 ? BRAND : colors.textMuted} style={{ marginRight:2 }} />
           <TextInput
             ref={inputRef}
-            style={[s.searchInput, { color: colors.text }]}
-            placeholder="Search or type / for commands..."
+            style={[styles.searchInput, { color:colors.text }]}
+            placeholder="Search people, posts, gifts, apps…"
             placeholderTextColor={colors.textMuted}
             value={query}
             onChangeText={onChangeText}
+            onSubmitEditing={onSubmit}
             returnKeyType="search"
             autoCorrect={false}
             autoCapitalize="none"
-            onSubmitEditing={onSubmitSearch}
           />
-          {query.length > 0 && (
-            <TouchableOpacity onPress={clearSearch} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <View style={[s.clearBtn, { backgroundColor: colors.textMuted + "30" }]}>
-                <Ionicons name="close" size={14} color={colors.textMuted} />
-              </View>
-            </TouchableOpacity>
-          )}
-          {Platform.OS === "web" && (
-            <TouchableOpacity onPress={startVoiceSearch} style={{ padding: 4 }}>
-              <Ionicons name={isListening ? "radio" : "mic-outline"} size={20} color={isListening ? "#EF4444" : colors.textMuted} />
-            </TouchableOpacity>
-          )}
-        </View>
-        <View style={s.headerActions}>
-          <TouchableOpacity
-            onPress={() => setShowTimeFilter(true)}
-            style={[s.headerBtn, timeFilter && { backgroundColor: "#8B5CF6" + "15" }]}
-          >
-            <Ionicons name="time-outline" size={18} color={timeFilter ? "#8B5CF6" : colors.textMuted} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setShowMediaFilter(true)}
-            style={[s.headerBtn, mediaFilter && { backgroundColor: "#F59E0B" + "15" }]}
-          >
-            <Ionicons name="funnel-outline" size={18} color={mediaFilter ? "#F59E0B" : colors.textMuted} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setPrivateMode(!privateMode)}
-            style={[s.headerBtn, privateMode && { backgroundColor: "#EF4444" + "15" }]}
-          >
-            <Ionicons name={privateMode ? "eye-off" : "eye-off-outline"} size={18} color={privateMode ? "#EF4444" : colors.textMuted} />
-          </TouchableOpacity>
-          {query.trim().length >= 2 && (
-            <>
-              <TouchableOpacity onPress={toggleSaveSearch} style={s.headerBtn}>
-                <Ionicons name={isQuerySaved ? "bookmark" : "bookmark-outline"} size={18} color={isQuerySaved ? BRAND : colors.textMuted} />
+          {query.length > 0
+            ? <TouchableOpacity onPress={clearSearch} hitSlop={{ top:8, bottom:8, left:8, right:8 }}>
+                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleShareSearch} style={s.headerBtn}>
-                <Ionicons name="share-outline" size={18} color={colors.textMuted} />
-              </TouchableOpacity>
-            </>
-          )}
+            : Platform.OS === "web"
+              ? <TouchableOpacity onPress={startVoice} hitSlop={{ top:8, bottom:8, left:8, right:8 }}>
+                  <Ionicons name={isListening ? "mic" : "mic-outline"} size={18} color={isListening ? MATCH : colors.textMuted} />
+                </TouchableOpacity>
+              : null
+          }
         </View>
-      </View>
 
-      <View style={[s.categoryBar, { borderBottomColor: colors.border }]}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 16 }}>
-          {CATEGORIES.map((cat) => {
-            const active = category === cat.id;
+        {/* Action row */}
+        <View style={styles.actionRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap:6 }}>
+            {/* Verified filter */}
+            <TouchableOpacity style={[styles.filterPill, verifiedOnly && { backgroundColor:BRAND, borderColor:BRAND }]} onPress={toggleVerified}>
+              <Ionicons name="checkmark-circle" size={13} color={verifiedOnly ? "#fff" : colors.textMuted} />
+              <Text style={{ color: verifiedOnly ? "#fff" : colors.textSecondary, fontSize:12, fontFamily:"Inter_500Medium" }}>Verified</Text>
+            </TouchableOpacity>
+
+            {/* Sort options */}
+            {(["relevance","recent","popular"] as const).map(s => (
+              <TouchableOpacity key={s} style={[styles.filterPill, sortMode === s && { backgroundColor:BRAND+"18", borderColor:BRAND+"50" }]} onPress={() => onSortPress(s)}>
+                <Ionicons name={s === "relevance" ? "flash-outline" : s === "recent" ? "time-outline" : "trending-up-outline"} size={13} color={sortMode === s ? BRAND : colors.textMuted} />
+                <Text style={{ color: sortMode === s ? BRAND : colors.textSecondary, fontSize:12, fontFamily:"Inter_500Medium", textTransform:"capitalize" }}>{s}</Text>
+              </TouchableOpacity>
+            ))}
+
+            {/* Save search */}
+            {hasSearched && query.trim().length >= 2 && (
+              <TouchableOpacity style={[styles.filterPill, saved.some(s => s.query.toLowerCase() === query.trim().toLowerCase()) && { backgroundColor:GOLD+"18", borderColor:GOLD+"50" }]}
+                onPress={() => {
+                  const ex = saved.find(s => s.query.toLowerCase() === query.trim().toLowerCase());
+                  if (ex) removeSavedSearch(ex.id).then(setSaved);
+                  else saveSearch(query.trim(), tab).then(setSaved);
+                }}>
+                <Ionicons name="bookmark-outline" size={13} color={GOLD} />
+                <Text style={{ color:GOLD, fontSize:12, fontFamily:"Inter_500Medium" }}>Save</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </View>
+
+        {/* Category Tabs */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsRow}>
+          {TABS.map(t => {
+            const active = tab === t.id;
+            const cnt = tabCounts[t.id];
             return (
-              <TouchableOpacity
-                key={cat.id}
-                style={[s.categoryChip, active ? { backgroundColor: BRAND, borderColor: BRAND } : { backgroundColor: "transparent", borderColor: colors.border }]}
-                onPress={() => onCategoryPress(cat.id)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name={cat.icon as any} size={13} color={active ? "#fff" : colors.textMuted} />
-                <Text style={[s.categoryText, { color: active ? "#fff" : colors.textSecondary }]}>{cat.label}</Text>
+              <TouchableOpacity key={t.id} style={[styles.tabPill, active && { backgroundColor:BRAND }]} onPress={() => onTabPress(t.id)} activeOpacity={0.75}>
+                <Ionicons name={t.icon as any} size={13} color={active ? "#fff" : colors.textMuted} />
+                <Text style={{ color: active ? "#fff" : colors.textSecondary, fontSize:12, fontFamily: active ? "Inter_600SemiBold" : "Inter_500Medium" }}>{t.label}</Text>
+                {hasSearched && cnt > 0 && (
+                  <View style={[styles.tabBadge, { backgroundColor: active ? "#ffffff40" : BRAND+"20" }]}>
+                    <Text style={{ color: active ? "#fff" : BRAND, fontSize:9, fontFamily:"Inter_700Bold" }}>{cnt}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
         </ScrollView>
       </View>
 
-      {renderActiveFilters()}
-
-      {loading && (
-        <View style={s.loadingBar}>
-          <Animated.View entering={SlideInRight.duration(800)} style={[s.loadingIndicator, { backgroundColor: BRAND }]} />
-        </View>
+      {/* Suggestions dropdown */}
+      {showSuggest && suggestions.length > 0 && (
+        <Animated.View entering={FadeIn.duration(150)} style={[styles.suggestBox, { backgroundColor:colors.surface, borderColor:colors.border }]}>
+          {suggestions.map(p => (
+            <TouchableOpacity key={p.id} style={styles.suggestRow} onPress={() => onSuggestionPress(p)} activeOpacity={0.75}>
+              {p.avatar_url
+                ? <Image source={{ uri: p.avatar_url }} style={{ width:30, height:30, borderRadius:15 }} />
+                : <AvatarPlaceholder name={p.display_name} size={30} color={BRAND} />}
+              <View style={{ flex:1 }}>
+                <Text style={{ color:colors.text, fontSize:13, fontFamily:"Inter_500Medium" }} numberOfLines={1}>{p.display_name}</Text>
+                <Text style={{ color:colors.textMuted, fontSize:11 }}>@{p.handle}</Text>
+              </View>
+              <VerifiedBadge verified={p.is_verified} org={p.is_organization_verified} />
+            </TouchableOpacity>
+          ))}
+        </Animated.View>
       )}
 
-      <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 8 }}>
-        {renderSuggestions()}
-        {renderCommandsHelp()}
-        {viewMode === "history" ? renderHistoryPanel() : hasSearched ? renderResults() : renderIdleState()}
+      {/* Body */}
+      <View style={{ flex:1 }}>
+        {loading
+          ? renderLoading()
+          : hasSearched
+            ? renderResults()
+            : renderIdle()
+        }
       </View>
-
-      {renderFilterModal()}
     </View>
   );
 }
 
-const s = StyleSheet.create({
-  screen: { flex: 1 },
-  header: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 6, gap: 8 },
-  searchBar: {
-    flexDirection: "row", alignItems: "center", borderRadius: 14,
-    paddingHorizontal: 14, height: 44, gap: 10, borderWidth: 1,
-  },
-  searchInput: {
-    flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: "100%",
-    ...(Platform.OS === "web" ? { outlineStyle: "none" } as any : {}),
-  },
-  clearBtn: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: 2, justifyContent: "flex-end" },
-  headerBtn: { padding: 6, borderRadius: 8 },
-  categoryBar: { paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth },
-  categoryChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 18, borderWidth: 1 },
-  categoryText: { fontSize: 12, fontFamily: "Inter_500Medium" },
-  filterBar: { paddingVertical: 6 },
-  filterChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16, borderWidth: 1 },
-  loadingBar: { height: 2, overflow: "hidden" },
-  loadingIndicator: { height: 2, width: "40%", borderRadius: 1 },
-
-  suggestionsBox: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, marginBottom: 8, overflow: "hidden" },
-  suggestionRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 10 },
-
-  idleSection: { marginBottom: 20 },
-  idleSectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
-  idleSectionTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", flex: 1 },
-  tagWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  trendTag: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
-  savedChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
-  cmdChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, borderWidth: 1, gap: 2 },
-  recentChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth },
-  topUserCard: { width: 100, alignItems: "center", paddingVertical: 14, paddingHorizontal: 8, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, gap: 5 },
-  quickActions: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
-  quickAction: {
-    flex: 1,
-    alignItems: "center", paddingVertical: 16, borderRadius: 14, gap: 8,
-  },
-  quickActionIcon: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
-
-  historyRow: {
-    flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 12,
-    borderRadius: 12, marginBottom: 6, borderWidth: StyleSheet.hairlineWidth,
-  },
-
-  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8, paddingHorizontal: 4 },
-  sectionTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold", flex: 1 },
-  countBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
-  resultSection: { marginBottom: 12 },
-  resultsMeta: { paddingHorizontal: 4, paddingBottom: 6 },
-
-  card: {
-    flexDirection: "row", alignItems: "center", padding: 12, borderRadius: 14,
-    gap: 12, marginBottom: 6, borderWidth: StyleSheet.hairlineWidth,
-  },
-  avatar48: { width: 48, height: 48, borderRadius: 24 },
-  avatar44: { width: 44, height: 44 },
-  avatar42: { width: 42, height: 42, borderRadius: 21 },
-  avatar32: { width: 32, height: 32, borderRadius: 16 },
-  nameText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  subText: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  bioText: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 16, marginTop: 2 },
-
-  giftCard: {
-    alignItems: "center", paddingVertical: 12,
-    borderRadius: 14, gap: 3, borderWidth: StyleSheet.hairlineWidth,
-  },
-  giftsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-
-  emptyState: { alignItems: "center", justifyContent: "center", paddingTop: 60, gap: 10 },
-  emptyTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
-  emptyBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
-
-  modalOverlay: {
-    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end", zIndex: 100,
-  },
-  modalContent: {
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingTop: 20, paddingBottom: 40, paddingHorizontal: 16, borderWidth: StyleSheet.hairlineWidth,
-  },
-  modalTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", marginBottom: 16, paddingHorizontal: 4 },
-  modalOption: {
-    flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 12,
-    paddingVertical: 14, borderRadius: 12,
-  },
+const styles = StyleSheet.create({
+  root:            { flex:1 },
+  header:          { borderBottomWidth:1, paddingBottom:0 },
+  headerTitle:     { fontSize:22, fontFamily:"Inter_700Bold", paddingHorizontal:16, marginBottom:10 },
+  searchBar:       { flexDirection:"row", alignItems:"center", marginHorizontal:16, paddingHorizontal:12, paddingVertical:10, borderRadius:14, borderWidth:1.5, gap:8 },
+  searchInput:     { flex:1, fontSize:15, fontFamily:"Inter_400Regular", padding:0 },
+  actionRow:       { paddingHorizontal:16, paddingVertical:10 },
+  filterPill:      { flexDirection:"row", alignItems:"center", gap:5, paddingHorizontal:11, paddingVertical:6, borderRadius:20, borderWidth:1, borderColor:"rgba(128,128,128,0.25)" },
+  tabsRow:         { paddingHorizontal:12, paddingTop:4, paddingBottom:10, gap:6 },
+  tabPill:         { flexDirection:"row", alignItems:"center", gap:5, paddingHorizontal:11, paddingVertical:7, borderRadius:20, backgroundColor:"transparent" },
+  tabBadge:        { borderRadius:8, paddingHorizontal:5, paddingVertical:1, minWidth:16, alignItems:"center" },
+  suggestBox:      { position:"absolute", top:0, left:16, right:16, zIndex:100, borderRadius:14, borderWidth:1, shadowColor:"#000", shadowOpacity:0.12, shadowRadius:12, shadowOffset:{ width:0, height:4 }, elevation:8 },
+  suggestRow:      { flexDirection:"row", alignItems:"center", gap:10, padding:12 },
+  resultsBanner:   { flexDirection:"row", alignItems:"center", gap:8, paddingHorizontal:16, paddingVertical:10, borderBottomWidth:1 },
+  sectionLabel:    { flexDirection:"row", alignItems:"center", gap:6, paddingHorizontal:16, paddingBottom:8 },
+  sectionLabelText:{ fontSize:14, fontFamily:"Inter_700Bold", flex:1 },
+  countPill:       { borderRadius:10, paddingHorizontal:7, paddingVertical:2 },
+  seeAllBtn:       { flexDirection:"row", alignItems:"center", gap:2, marginLeft:"auto" as any },
+  card:            { flexDirection:"row", alignItems:"center", gap:12, marginHorizontal:16, marginBottom:8, padding:14, borderRadius:16, borderWidth:1 },
+  cardTitle:       { fontSize:15, fontFamily:"Inter_600SemiBold" },
+  cardSub:         { fontSize:12, fontFamily:"Inter_400Regular" },
+  bioText:         { fontSize:12, fontFamily:"Inter_400Regular", lineHeight:16 },
+  av48:            { width:48, height:48, borderRadius:24 },
+  av32:            { width:32, height:32, borderRadius:16 },
+  av44:            { width:44, height:44, borderRadius:22 },
+  followBtn:       { paddingHorizontal:10, paddingVertical:4, borderRadius:8, borderWidth:1 },
+  giftCard:        { alignItems:"center", borderRadius:14, borderWidth:1, paddingVertical:12, paddingHorizontal:6, gap:4 },
+  rarityDot:       { width:6, height:6, borderRadius:3 },
+  eventEmoji:      { width:54, height:54, borderRadius:14, alignItems:"center", justifyContent:"center" },
+  catPill:         { flexDirection:"row", alignItems:"center", gap:3, paddingHorizontal:7, paddingVertical:3, borderRadius:8 },
+  freeBadge:       { backgroundColor:SUCCESS+"22", paddingHorizontal:8, paddingVertical:3, borderRadius:8 },
+  freeBadgeText:   { color:SUCCESS, fontSize:10, fontFamily:"Inter_700Bold" },
+  progressBg:      { height:4, borderRadius:2, overflow:"hidden" },
+  progressFill:    { height:4, borderRadius:2 },
+  emptyWrap:       { flex:1, alignItems:"center", paddingTop:60, paddingHorizontal:32, gap:8 },
+  emptyIcon:       { width:88, height:88, borderRadius:44, alignItems:"center", justifyContent:"center", marginBottom:8 },
+  emptyTitle:      { fontSize:18, fontFamily:"Inter_600SemiBold", textAlign:"center" },
+  emptySub:        { fontSize:14, fontFamily:"Inter_400Regular", textAlign:"center", lineHeight:20 },
+  idleHeading:     { fontSize:16, fontFamily:"Inter_700Bold", marginBottom:0 },
+  idleSectionHeader:{ flexDirection:"row", alignItems:"center", gap:8, marginBottom:4 },
+  quickGrid:       { flexDirection:"row", flexWrap:"wrap", gap:10, marginTop:12 },
+  quickCard:       { width:"22%" as any, alignItems:"center", borderRadius:16, borderWidth:1, paddingVertical:14, paddingHorizontal:4, gap:8 },
+  quickIcon:       { width:44, height:44, borderRadius:14, alignItems:"center", justifyContent:"center" },
+  quickLabel:      { fontSize:11, fontFamily:"Inter_500Medium", textAlign:"center" },
+  personChip:      { alignItems:"center", borderRadius:16, borderWidth:1, paddingVertical:12, paddingHorizontal:14, gap:8, width:110 },
+  personChipAvatar:{ width:40, height:40, borderRadius:20 },
+  personChipName:  { fontSize:12, fontFamily:"Inter_600SemiBold", maxWidth:80 },
+  tagsWrap:        { flexDirection:"row", flexWrap:"wrap", gap:8 },
+  tagChip:         { flexDirection:"row", alignItems:"center", gap:1, paddingHorizontal:12, paddingVertical:7, borderRadius:20, borderWidth:1 },
+  histRow:         { flexDirection:"row", alignItems:"center", gap:10, padding:13, borderRadius:13, borderWidth:1, marginBottom:6 },
 });
