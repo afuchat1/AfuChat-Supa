@@ -145,12 +145,19 @@ const CATEGORIES: Category[] = [
     title: "Community",
     apps: [
       {
+        id: "match",
+        label: "AfuMatch",
+        icon: "heart",
+        gradient: ["#FF2D55", "#FF375F"],
+        route: "/match",
+        badge: "NEW",
+      },
+      {
         id: "events",
         label: "Events",
         icon: "calendar",
         gradient: ["#FF9500", "#FFCC00"],
         route: "/digital-events",
-        badge: "NEW",
       },
       {
         id: "referral",
@@ -165,7 +172,6 @@ const CATEGORIES: Category[] = [
         icon: "at",
         gradient: ["#007AFF", "#5AC8FA"],
         route: "/username-market",
-        badge: "NEW",
       },
     ],
   },
@@ -271,7 +277,7 @@ export default function AppsScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{
           paddingTop: insets.top + 8,
-          paddingBottom: insets.bottom + 24,
+          paddingBottom: insets.bottom + 72,
         }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"

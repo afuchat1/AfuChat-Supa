@@ -707,7 +707,7 @@ export default function DiscoverScreen() {
             </View>
           )}
           columnWrapperStyle={isDesktop ? { gap: 0, paddingHorizontal: 8 } : undefined}
-          contentContainerStyle={{ gap: isDesktop ? 0 : 8, paddingVertical: 8, paddingBottom: 90 }}
+          contentContainerStyle={{ gap: isDesktop ? 0 : 8, paddingVertical: 8, paddingBottom: insets.bottom + 72 }}
           showsVerticalScrollIndicator={false}
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}

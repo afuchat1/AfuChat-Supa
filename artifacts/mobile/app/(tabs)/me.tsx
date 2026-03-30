@@ -208,7 +208,7 @@ export default function MeScreen() {
         style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 24 },
+          { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 72 },
         ]}
         showsVerticalScrollIndicator={false}
       >
