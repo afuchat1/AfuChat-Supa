@@ -195,7 +195,11 @@ export default function MatchProfileEditScreen() {
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+        >
 
           {/* Photos */}
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>PHOTOS</Text>
@@ -297,7 +301,7 @@ export default function MatchProfileEditScreen() {
 
           {/* Career */}
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>CAREER & EDUCATION</Text>
-          <View style={[styles.sectionCard, { backgroundColor: colors.surface }]}>
+          <View style={[styles.sectionCard, { backgroundColor: colors.surface, zIndex: 20 }]}>
             {[
               { l: "JOB TITLE", v: jobTitle, s: setJobTitle, ph: "e.g. Designer" },
               { l: "COMPANY", v: company, s: setCompany, ph: "e.g. Apple" },
@@ -313,7 +317,7 @@ export default function MatchProfileEditScreen() {
                 />
               </View>
             ))}
-            <View style={[styles.fieldGroup, { zIndex: 200 }]}>
+            <View style={[styles.fieldGroup, { zIndex: 10, marginBottom: 0 }]}>
               <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>SCHOOL</Text>
               <SchoolPickerInput
                 value={school}
@@ -326,7 +330,7 @@ export default function MatchProfileEditScreen() {
 
           {/* Location */}
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>LOCATION</Text>
-          <View style={[styles.sectionCard, { backgroundColor: colors.surface }]}>
+          <View style={[styles.sectionCard, { backgroundColor: colors.surface, zIndex: 10 }]}>
             {/* Country — auto-detected, locked */}
             <View style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>COUNTRY</Text>
@@ -350,7 +354,7 @@ export default function MatchProfileEditScreen() {
             </View>
 
             {/* City / Region — searchable dropdown */}
-            <View style={[styles.fieldGroup, { zIndex: 200, marginBottom: 0 }]}>
+            <View style={[styles.fieldGroup, { zIndex: 10, marginBottom: 0 }]}>
               <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>CITY / TOWN</Text>
               <RegionPickerInput
                 value={locationName}
