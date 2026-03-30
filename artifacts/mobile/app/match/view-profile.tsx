@@ -18,9 +18,11 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
+import { getPublicProfileGifts, getGiftItem } from "@/lib/matchTransactions";
 
 const { width: SW, height: SH } = Dimensions.get("window");
 const BRAND = "#FF2D55";
+const GOLD = "#FFD60A";
 
 const GOAL_LABELS: Record<string, { l: string; emoji: string }> = {
   serious: { l: "Serious Relationship", emoji: "💍" },
@@ -45,15 +47,18 @@ export default function ViewProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [currentPhoto, setCurrentPhoto] = useState(0);
   const [showReport, setShowReport] = useState(false);
+  const [gifts, setGifts] = useState<{ id: string; gift_emoji: string; sender_name: string; sent_at: string }[]>([]);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !user) return;
     Promise.all([
       supabase.from("match_profiles").select("*").eq("user_id", userId).maybeSingle(),
       supabase.from("match_photos").select("url, is_primary, display_order").eq("user_id", userId).order("display_order"),
-    ]).then(([{ data: mp }, { data: ph }]) => {
+      getPublicProfileGifts(user.id, userId),
+    ]).then(([{ data: mp }, { data: ph }, giftData]) => {
       setProfile(mp);
       setPhotos(ph ?? []);
+      setGifts(giftData);
       setLoading(false);
     });
   }, [userId]);
@@ -97,7 +102,6 @@ export default function ViewProfileScreen() {
           {photos.length > 0 ? (
             <>
               <Image source={{ uri: photos[currentPhoto]?.url ?? photos[0].url }} style={styles.mainPhoto} resizeMode="cover" />
-              {/* Photo dots */}
               {photos.length > 1 && (
                 <View style={styles.photoDots}>
                   {photos.map((_, i) => (
@@ -105,7 +109,6 @@ export default function ViewProfileScreen() {
                   ))}
                 </View>
               )}
-              {/* Left/right tap zones */}
               {photos.length > 1 && (
                 <>
                   <TouchableOpacity style={styles.tapLeft} activeOpacity={1} onPress={() => setCurrentPhoto((p) => Math.max(0, p - 1))} />
@@ -120,18 +123,12 @@ export default function ViewProfileScreen() {
               </View>
             </LinearGradient>
           )}
-
-          {/* Back button */}
           <TouchableOpacity style={[styles.backBtn, { top: insets.top + 8 }]} onPress={() => router.back()}>
             <View style={styles.backBtnInner}><Ionicons name="arrow-back" size={20} color="#fff" /></View>
           </TouchableOpacity>
-
-          {/* Report button */}
           <TouchableOpacity style={[styles.reportBtn, { top: insets.top + 8 }]} onPress={() => setShowReport(true)}>
             <View style={styles.backBtnInner}><Ionicons name="flag" size={18} color="#fff" /></View>
           </TouchableOpacity>
-
-          {/* Name overlay */}
           <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.nameOverlay} pointerEvents="none">
             <Text style={styles.profileName}>{profile.name}{profile.show_age && age ? `, ${age}` : ""}</Text>
             {(profile.job_title || profile.company) && (
@@ -149,9 +146,7 @@ export default function ViewProfileScreen() {
           </LinearGradient>
         </View>
 
-        {/* Info cards */}
         <View style={{ padding: 16, gap: 12 }}>
-
           {/* Relationship goal */}
           <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
             <Text style={{ fontSize: 26 }}>{goalInfo.emoji}</Text>
@@ -160,6 +155,34 @@ export default function ViewProfileScreen() {
               <Text style={[styles.infoCardValue, { color: colors.text }]}>{goalInfo.l}</Text>
             </View>
           </View>
+
+          {/* Gifts received section */}
+          {gifts.length > 0 && (
+            <View style={[styles.card, { backgroundColor: colors.surface }]}>
+              <View style={styles.giftCardHeader}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Gifts Received 🎁</Text>
+                <View style={[styles.giftCountBadge, { backgroundColor: BRAND + "18" }]}>
+                  <Text style={[styles.giftCountText, { color: BRAND }]}>{gifts.length}</Text>
+                </View>
+              </View>
+              <View style={styles.giftGrid}>
+                {gifts.map((g) => {
+                  const item = getGiftItem(g.gift_emoji);
+                  return (
+                    <View key={g.id} style={[styles.giftTile, { backgroundColor: colors.backgroundSecondary }]}>
+                      <Text style={styles.giftTileEmoji}>{g.gift_emoji}</Text>
+                      <Text style={[styles.giftTileName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
+                      <View style={styles.giftTilePrice}>
+                        <Ionicons name="diamond" size={8} color={GOLD} />
+                        <Text style={styles.giftTilePriceText}>{item.price}</Text>
+                      </View>
+                      <Text style={[styles.giftTileSender, { color: colors.textMuted }]} numberOfLines={1}>from {g.sender_name}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
 
           {/* Bio */}
           {profile.bio && (
@@ -264,6 +287,16 @@ const styles = StyleSheet.create({
   interestText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   safetyCard: { flexDirection: "row", alignItems: "flex-start", gap: 10, borderRadius: 14, padding: 14 },
   safetyText: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17 },
+  giftCardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  giftCountBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12 },
+  giftCountText: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  giftGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  giftTile: { width: (SW - 80) / 4, borderRadius: 12, padding: 8, alignItems: "center", gap: 3 },
+  giftTileEmoji: { fontSize: 28 },
+  giftTileName: { fontSize: 10, fontFamily: "Inter_600SemiBold", textAlign: "center" },
+  giftTilePrice: { flexDirection: "row", alignItems: "center", gap: 2 },
+  giftTilePriceText: { fontSize: 10, fontFamily: "Inter_700Bold", color: GOLD },
+  giftTileSender: { fontSize: 9, fontFamily: "Inter_400Regular", textAlign: "center" },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   reportSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 34 },
   sheetHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "#C7C7CC", alignSelf: "center", marginBottom: 20 },

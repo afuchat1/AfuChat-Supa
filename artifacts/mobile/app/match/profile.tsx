@@ -4,6 +4,7 @@ import {
   Dimensions,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -13,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -24,7 +26,7 @@ import { showAlert } from "@/lib/alert";
 import SchoolPickerInput from "@/components/SchoolPickerInput";
 import RegionPickerInput from "@/components/RegionPickerInput";
 import { detectGeo } from "@/lib/geoDetect";
-import { getReceivedMatchGifts, ReceivedMatchGift } from "@/lib/matchTransactions";
+import { getReceivedMatchGifts, ReceivedMatchGift, convertMatchGiftsToAcoins, getConvertedGiftIds, getGiftItem } from "@/lib/matchTransactions";
 
 const { width: SW } = Dimensions.get("window");
 const BRAND = "#FF2D55";
@@ -54,6 +56,9 @@ export default function MatchProfileEditScreen() {
   const [saving, setSaving] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
   const [receivedGifts, setReceivedGifts] = useState<ReceivedMatchGift[]>([]);
+  const [hiddenGiftIds, setHiddenGiftIds] = useState<Set<string>>(new Set());
+  const [convertedGiftIds, setConvertedGiftIds] = useState<Set<string>>(new Set());
+  const [managingGift, setManagingGift] = useState<ReceivedMatchGift | null>(null);
 
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
@@ -70,12 +75,16 @@ export default function MatchProfileEditScreen() {
 
   async function load() {
     if (!user) return;
-    const [{ data: mp }, { data: mphotos }, gifts] = await Promise.all([
+    const [{ data: mp }, { data: mphotos }, gifts, convertedIds, hiddenRaw] = await Promise.all([
       supabase.from("match_profiles").select("*").eq("user_id", user.id).maybeSingle(),
       supabase.from("match_photos").select("*").eq("user_id", user.id).order("display_order"),
       getReceivedMatchGifts(user.id),
+      getConvertedGiftIds(user.id),
+      AsyncStorage.getItem(`match_hidden_gifts_${user.id}`),
     ]);
     setReceivedGifts(gifts);
+    setConvertedGiftIds(convertedIds);
+    setHiddenGiftIds(new Set(hiddenRaw ? JSON.parse(hiddenRaw) : []));
     if (mp) {
       setName(mp.name ?? "");
       setBio(mp.bio ?? "");
@@ -142,6 +151,51 @@ export default function MatchProfileEditScreen() {
     if (photo.id) {
       await supabase.from("match_photos").delete().eq("id", photo.id);
     }
+  }
+
+  async function hideGift(giftId: string) {
+    if (!user) return;
+    const updated = new Set(hiddenGiftIds);
+    updated.add(giftId);
+    setHiddenGiftIds(updated);
+    await AsyncStorage.setItem(`match_hidden_gifts_${user.id}`, JSON.stringify([...updated]));
+    setManagingGift(null);
+  }
+
+  async function unhideGift(giftId: string) {
+    if (!user) return;
+    const updated = new Set(hiddenGiftIds);
+    updated.delete(giftId);
+    setHiddenGiftIds(updated);
+    await AsyncStorage.setItem(`match_hidden_gifts_${user.id}`, JSON.stringify([...updated]));
+  }
+
+  async function convertGift(gift: ReceivedMatchGift) {
+    if (!user) return;
+    setManagingGift(null);
+    if (convertedGiftIds.has(gift.id)) {
+      showAlert("Already Converted", "This gift has already been converted to ACoins.");
+      return;
+    }
+    const item = getGiftItem(gift.gift_emoji);
+    const fee = Math.ceil(item.price * 0.05);
+    const net = Math.max(1, item.price - fee);
+    showAlert(
+      `Convert ${gift.gift_emoji} to ACoins`,
+      `You'll receive ${net} AC (${fee} AC platform fee applies).`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: `Convert for ${net} AC`, onPress: async () => {
+          const result = await convertMatchGiftsToAcoins(user.id, [gift.id]);
+          if (result.success) {
+            showAlert("Converted!", `+${result.credited} AC added to your wallet. 🎉`);
+            setConvertedGiftIds((prev) => new Set([...prev, gift.id]));
+          } else {
+            showAlert("Error", result.error ?? "Conversion failed. Try again.");
+          }
+        }},
+      ]
+    );
   }
 
   async function save() {
@@ -338,15 +392,37 @@ export default function MatchProfileEditScreen() {
               <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>GIFTS RECEIVED ({receivedGifts.length})</Text>
               <View style={[styles.sectionCard, { backgroundColor: colors.surface }]}>
                 <View style={styles.giftGrid}>
-                  {receivedGifts.slice(0, 18).map((g, i) => (
-                    <View key={g.id} style={[styles.giftCell, { backgroundColor: colors.backgroundSecondary }]}>
-                      <Text style={styles.giftCellEmoji}>{g.gift_emoji}</Text>
-                      <Text style={[styles.giftCellName, { color: colors.textMuted }]} numberOfLines={1}>{g.sender_name}</Text>
-                    </View>
-                  ))}
+                  {receivedGifts.slice(0, 18).map((g) => {
+                    const isHidden = hiddenGiftIds.has(g.id);
+                    const isConverted = convertedGiftIds.has(g.id);
+                    return (
+                      <Pressable
+                        key={g.id}
+                        style={({ pressed }) => [
+                          styles.giftCell,
+                          { backgroundColor: colors.backgroundSecondary, opacity: pressed ? 0.7 : 1 },
+                          isHidden && { opacity: 0.32 },
+                        ]}
+                        onPress={() => setManagingGift(g)}
+                      >
+                        <Text style={[styles.giftCellEmoji, isHidden && { opacity: 0.5 }]}>{g.gift_emoji}</Text>
+                        {isConverted && (
+                          <View style={styles.giftConvertedBadge}>
+                            <Ionicons name="checkmark" size={8} color="#34C759" />
+                          </View>
+                        )}
+                        {isHidden && (
+                          <View style={styles.giftHiddenBadge}>
+                            <Ionicons name="eye-off" size={8} color="#8E8E93" />
+                          </View>
+                        )}
+                        <Text style={[styles.giftCellName, { color: colors.textMuted }]} numberOfLines={1}>{g.sender_name}</Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
                 <Text style={[styles.giftHint, { color: colors.textMuted }]}>
-                  Gifts from your matches · visible on your public profile
+                  Tap any gift to manage · Hidden gifts won't show on your public profile
                 </Text>
               </View>
             </>
@@ -391,6 +467,103 @@ export default function MatchProfileEditScreen() {
 
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Gift management modal */}
+      <Modal
+        visible={!!managingGift}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setManagingGift(null)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setManagingGift(null)}>
+          <Pressable onPress={() => {}} style={[styles.giftSheet, { backgroundColor: colors.surface }]}>
+            <View style={styles.sheetHandle} />
+            {/* Gift preview */}
+            <View style={styles.giftSheetPreview}>
+              <View style={[styles.giftSheetEmoji, { backgroundColor: BRAND + "12" }]}>
+                <Text style={{ fontSize: 48 }}>{managingGift?.gift_emoji}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.giftSheetName, { color: colors.text }]}>
+                  {managingGift ? getGiftItem(managingGift.gift_emoji).name : ""}
+                </Text>
+                <Text style={[styles.giftSheetFrom, { color: colors.textMuted }]}>
+                  from {managingGift?.sender_name}
+                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Ionicons name="diamond" size={11} color="#FFD60A" />
+                  <Text style={[styles.giftSheetPrice, { color: "#FFD60A" }]}>
+                    {managingGift ? getGiftItem(managingGift.gift_emoji).price : 0} ACoins
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={[styles.giftSheetDivider, { backgroundColor: colors.border }]} />
+
+            {/* Actions */}
+            {managingGift && hiddenGiftIds.has(managingGift.id) ? (
+              <TouchableOpacity
+                style={styles.giftSheetOption}
+                onPress={() => { unhideGift(managingGift.id); setManagingGift(null); }}
+              >
+                <View style={[styles.giftSheetOptionIcon, { backgroundColor: "#34C75920" }]}>
+                  <Ionicons name="eye" size={20} color="#34C759" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.giftSheetOptionTitle, { color: colors.text }]}>Show on Profile</Text>
+                  <Text style={[styles.giftSheetOptionSub, { color: colors.textMuted }]}>Make this gift visible to others</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.giftSheetOption}
+                onPress={() => managingGift && hideGift(managingGift.id)}
+              >
+                <View style={[styles.giftSheetOptionIcon, { backgroundColor: "#8E8E9320" }]}>
+                  <Ionicons name="eye-off-outline" size={20} color="#8E8E93" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.giftSheetOptionTitle, { color: colors.text }]}>Hide from Profile</Text>
+                  <Text style={[styles.giftSheetOptionSub, { color: colors.textMuted }]}>Others won't see this gift</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={[styles.giftSheetOption, managingGift && convertedGiftIds.has(managingGift.id) && { opacity: 0.4 }]}
+              onPress={() => managingGift && convertGift(managingGift)}
+              disabled={!!(managingGift && convertedGiftIds.has(managingGift.id))}
+            >
+              <View style={[styles.giftSheetOptionIcon, { backgroundColor: "#FFD60A20" }]}>
+                <Ionicons name="diamond" size={20} color="#FFD60A" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.giftSheetOptionTitle, { color: colors.text }]}>
+                  {managingGift && convertedGiftIds.has(managingGift.id) ? "Already Converted" : "Convert to ACoins"}
+                </Text>
+                <Text style={[styles.giftSheetOptionSub, { color: colors.textMuted }]}>
+                  Earn {managingGift ? Math.max(1, getGiftItem(managingGift.gift_emoji).price - Math.ceil(getGiftItem(managingGift.gift_emoji).price * 0.05)) : 0} AC (5% fee applies)
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.giftSheetOption} onPress={() => setManagingGift(null)}>
+              <View style={[styles.giftSheetOptionIcon, { backgroundColor: BRAND + "18" }]}>
+                <Ionicons name="heart" size={20} color={BRAND} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.giftSheetOptionTitle, { color: colors.text }]}>Leave on Profile</Text>
+                <Text style={[styles.giftSheetOptionSub, { color: colors.textMuted }]}>Keep showcasing this gift</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -427,8 +600,23 @@ const styles = StyleSheet.create({
   interestChip: { borderWidth: 1.5, borderRadius: 22, paddingHorizontal: 14, paddingVertical: 7 },
   interestText: { fontSize: 13, fontFamily: "Inter_500Medium" },
   giftGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
-  giftCell: { width: 60, height: 68, borderRadius: 12, alignItems: "center", justifyContent: "center", gap: 4, padding: 6 },
+  giftCell: { width: 60, height: 72, borderRadius: 12, alignItems: "center", justifyContent: "center", gap: 3, padding: 6, position: "relative" },
   giftCellEmoji: { fontSize: 26 },
   giftCellName: { fontSize: 9, fontFamily: "Inter_400Regular", textAlign: "center" },
   giftHint: { fontSize: 11, fontFamily: "Inter_400Regular", lineHeight: 16 },
+  giftConvertedBadge: { position: "absolute", top: 4, right: 4, width: 14, height: 14, borderRadius: 7, backgroundColor: "#34C759", alignItems: "center", justifyContent: "center" },
+  giftHiddenBadge: { position: "absolute", top: 4, right: 4, width: 14, height: 14, borderRadius: 7, backgroundColor: "#3A3A3C", alignItems: "center", justifyContent: "center" },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  giftSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 34 },
+  sheetHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "#C7C7CC", alignSelf: "center", margin: 12 },
+  giftSheetPreview: { flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 20, paddingVertical: 12 },
+  giftSheetEmoji: { width: 72, height: 72, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  giftSheetName: { fontSize: 18, fontFamily: "Inter_700Bold", marginBottom: 2 },
+  giftSheetFrom: { fontSize: 13, fontFamily: "Inter_400Regular", marginBottom: 4 },
+  giftSheetPrice: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  giftSheetDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: 20, marginVertical: 4 },
+  giftSheetOption: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingVertical: 14 },
+  giftSheetOptionIcon: { width: 42, height: 42, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  giftSheetOptionTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
+  giftSheetOptionSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
 });

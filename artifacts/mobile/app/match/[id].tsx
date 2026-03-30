@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -31,6 +32,7 @@ import SwipeableBottomSheet from "@/components/SwipeableBottomSheet";
 
 const BRAND = "#FF2D55";
 const GOLD = "#FFD60A";
+const EMOJI_PANEL_HEIGHT = 288;
 
 type Message = {
   id: string;
@@ -87,8 +89,8 @@ export default function MatchConversationScreen() {
   const [acoinBalance, setAcoinBalance] = useState(0);
   const [selectedGift, setSelectedGift] = useState<Message | null>(null);
   const [activeEmojiSection, setActiveEmojiSection] = useState(0);
+  const [pendingGiftEmoji, setPendingGiftEmoji] = useState<string | null>(null);
 
-  // Reactions: messageId → array of {emoji, count, reacted}
   const [reactions, setReactions] = useState<Record<string, Reaction[]>>({});
   const [reactionTarget, setReactionTarget] = useState<string | null>(null);
 
@@ -135,7 +137,7 @@ export default function MatchConversationScreen() {
       const giftItem = getGiftItem(giftEmoji);
       const result = await chargeMatchGift(user.id, giftEmoji, otherProfile?.name ?? "match", id, giftItem.price);
       if (!result.success) {
-        showAlert("Insufficient ACoins", `${result.error}\n\nThis gift costs ${giftItem.price} AC. Top up your wallet to send it.`, [
+        showAlert("Insufficient ACoins", `${result.error}\n\nThis gift costs ${giftItem.price} AC.`, [
           { text: "Top Up Wallet", onPress: () => router.push("/wallet/topup" as any) },
           { text: "Cancel", style: "cancel" },
         ]);
@@ -146,7 +148,6 @@ export default function MatchConversationScreen() {
 
     setSending(true);
     setShowQuick(false);
-    setShowEmoji(false);
     const msg: any = { match_id: id, sender_id: user.id };
     if (giftEmoji) {
       msg.is_gift = true;
@@ -161,6 +162,7 @@ export default function MatchConversationScreen() {
       flatRef.current?.scrollToEnd({ animated: true });
     }
     setText("");
+    setPendingGiftEmoji(null);
     setShowGifts(false);
     setSending(false);
   }
@@ -188,9 +190,42 @@ export default function MatchConversationScreen() {
     setReactionTarget(null);
   }
 
+  function openEmoji() {
+    Keyboard.dismiss();
+    setShowGifts(false);
+    setShowEmoji(true);
+  }
+
+  function closeEmoji() {
+    setShowEmoji(false);
+    setTimeout(() => inputRef.current?.focus(), 80);
+  }
+
+  function toggleEmoji() {
+    if (showEmoji) {
+      closeEmoji();
+    } else {
+      openEmoji();
+    }
+  }
+
   function insertEmoji(emoji: string) {
     setText((prev) => prev + emoji);
-    inputRef.current?.focus();
+  }
+
+  function openGifts() {
+    Keyboard.dismiss();
+    setShowEmoji(false);
+    setPendingGiftEmoji(null);
+    setShowGifts(true);
+  }
+
+  function toggleGifts() {
+    if (showGifts) {
+      setShowGifts(false);
+    } else {
+      openGifts();
+    }
   }
 
   function unmatch() {
@@ -208,6 +243,8 @@ export default function MatchConversationScreen() {
     if (!dob) return null;
     return new Date().getFullYear() - new Date(dob).getFullYear();
   }
+
+  const pendingGiftItem = pendingGiftEmoji ? getGiftItem(pendingGiftEmoji) : null;
 
   if (loading) return (
     <View style={[styles.root, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }]}>
@@ -248,7 +285,6 @@ export default function MatchConversationScreen() {
         </Pressable>
       </LinearGradient>
 
-      {/* First message banner */}
       {isFirstMessage && (
         <View style={[styles.firstMsgBanner, { backgroundColor: BRAND + "15" }]}>
           <Ionicons name="heart" size={16} color={BRAND} />
@@ -256,8 +292,12 @@ export default function MatchConversationScreen() {
         </View>
       )}
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={0}>
-        {/* Messages list */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={0}
+      >
+        {/* Messages */}
         <FlatList
           ref={flatRef}
           data={messages}
@@ -291,10 +331,7 @@ export default function MatchConversationScreen() {
                       </View>
                     </Pressable>
                   ) : (
-                    <Pressable
-                      onLongPress={() => setReactionTarget(item.id)}
-                      delayLongPress={400}
-                    >
+                    <Pressable onLongPress={() => setReactionTarget(item.id)} delayLongPress={400}>
                       <View style={[styles.bubble, isMine ? styles.bubbleMine : [styles.bubbleTheirs, { backgroundColor: colors.surface }]]}>
                         <Text style={[styles.bubbleText, { color: isMine ? "#fff" : colors.text }]}>{item.content}</Text>
                         <View style={styles.bubbleMeta}>
@@ -309,7 +346,6 @@ export default function MatchConversationScreen() {
                     </Pressable>
                   )}
 
-                  {/* Reactions row */}
                   {msgReactions.length > 0 && (
                     <View style={[styles.reactionsRow, isMine && styles.reactionsRowMine]}>
                       {msgReactions.map((r) => (
@@ -362,37 +398,104 @@ export default function MatchConversationScreen() {
               <Text style={[styles.panelTitle, { color: colors.text }]}>Send a Gift</Text>
               <View style={styles.balanceBadge}>
                 <Ionicons name="diamond" size={12} color={GOLD} />
-                <Text style={styles.balanceText}>Balance: {acoinBalance} AC</Text>
+                <Text style={styles.balanceText}>{acoinBalance} AC</Text>
               </View>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.giftGrid}>
-              {GIFT_CATALOG.map((g) => (
-                <Pressable
-                  key={g.emoji}
-                  style={({ pressed }) => [
-                    styles.giftCard,
-                    { backgroundColor: pressed ? BRAND + "15" : colors.backgroundSecondary, borderColor: colors.border },
-                    acoinBalance < g.price && { opacity: 0.45 },
-                  ]}
-                  onPress={() => send(undefined, g.emoji)}
-                  disabled={acoinBalance < g.price}
-                >
-                  <Text style={styles.giftCardEmoji}>{g.emoji}</Text>
-                  <Text style={[styles.giftCardName, { color: colors.text }]} numberOfLines={1}>{g.name}</Text>
-                  <View style={styles.giftCardPrice}>
-                    <Ionicons name="diamond" size={9} color={GOLD} />
-                    <Text style={styles.giftCardPriceText}>{g.price} AC</Text>
-                  </View>
-                </Pressable>
-              ))}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+              {GIFT_CATALOG.map((g) => {
+                const isSelected = pendingGiftEmoji === g.emoji;
+                const tooExpensive = acoinBalance < g.price;
+                return (
+                  <Pressable
+                    key={g.emoji}
+                    style={[
+                      styles.giftCard,
+                      { borderColor: isSelected ? BRAND : colors.border },
+                      isSelected && { backgroundColor: BRAND + "18" },
+                      !isSelected && { backgroundColor: colors.backgroundSecondary },
+                      tooExpensive && { opacity: 0.38 },
+                    ]}
+                    onPress={() => setPendingGiftEmoji(isSelected ? null : g.emoji)}
+                    disabled={tooExpensive}
+                  >
+                    <Text style={styles.giftCardEmoji}>{g.emoji}</Text>
+                    <Text style={[styles.giftCardName, { color: isSelected ? BRAND : colors.text }]} numberOfLines={1}>{g.name}</Text>
+                    <View style={styles.giftCardPrice}>
+                      <Ionicons name="diamond" size={9} color={GOLD} />
+                      <Text style={styles.giftCardPriceText}>{g.price} AC</Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
             </ScrollView>
+            {/* Send confirmation row */}
+            {pendingGiftItem && (
+              <View style={[styles.giftConfirmRow, { backgroundColor: colors.backgroundSecondary, borderColor: BRAND + "30" }]}>
+                <Text style={{ fontSize: 24 }}>{pendingGiftItem.emoji}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.giftConfirmName, { color: colors.text }]}>{pendingGiftItem.name}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <Ionicons name="diamond" size={10} color={GOLD} />
+                    <Text style={[styles.giftConfirmPrice, { color: GOLD }]}>{pendingGiftItem.price} ACoins</Text>
+                  </View>
+                </View>
+                <Pressable
+                  style={[styles.giftSendBtn, sending && { opacity: 0.5 }]}
+                  onPress={() => send(undefined, pendingGiftEmoji!)}
+                  disabled={sending}
+                >
+                  {sending ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="send" size={14} color="#fff" />
+                      <Text style={styles.giftSendBtnText}>Send</Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+            )}
           </View>
         )}
 
-        {/* Emoji picker panel */}
+        {/* Input bar */}
+        <View style={[styles.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: showEmoji ? 8 : insets.bottom + 8 }]}>
+          <Pressable style={styles.inputAction} onPress={toggleGifts}>
+            <Ionicons name="gift" size={22} color={showGifts ? BRAND : colors.textMuted} />
+          </Pressable>
+          {/* Emoji / Keyboard toggle */}
+          <Pressable style={styles.inputAction} onPress={toggleEmoji}>
+            <Ionicons
+              name={showEmoji ? "keypad-outline" : "happy-outline"}
+              size={22}
+              color={showEmoji ? BRAND : colors.textMuted}
+            />
+          </Pressable>
+          <TextInput
+            ref={inputRef}
+            style={[styles.inputField, { backgroundColor: colors.backgroundSecondary, color: colors.text }]}
+            placeholder="Type a message…"
+            placeholderTextColor={colors.textMuted}
+            value={text}
+            onChangeText={(v) => { setText(v); setShowQuick(false); }}
+            multiline
+            maxLength={1000}
+            returnKeyType="default"
+            onFocus={() => { setShowEmoji(false); setShowGifts(false); }}
+            showSoftInputOnFocus={!showEmoji}
+          />
+          <Pressable
+            style={[styles.sendBtn, { backgroundColor: text.trim() ? BRAND : colors.border }]}
+            onPress={() => send(text)}
+            disabled={!text.trim() || sending}
+          >
+            {sending ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="send" size={16} color="#fff" />}
+          </Pressable>
+        </View>
+
+        {/* Emoji picker panel — sits below input bar (keyboard replacement) */}
         {showEmoji && (
-          <View style={[styles.panel, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-            {/* Category tabs */}
+          <View style={[styles.emojiPanel, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: insets.bottom }]}>
             <View style={styles.emojiTabs}>
               {EMOJI_SECTIONS.map((s, i) => (
                 <Pressable
@@ -404,7 +507,6 @@ export default function MatchConversationScreen() {
                 </Pressable>
               ))}
             </View>
-            {/* Emoji grid */}
             <View style={styles.emojiGrid}>
               {EMOJI_SECTIONS[activeEmojiSection].emojis.map((em) => (
                 <Pressable
@@ -418,35 +520,6 @@ export default function MatchConversationScreen() {
             </View>
           </View>
         )}
-
-        {/* Input bar */}
-        <View style={[styles.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: insets.bottom + 8 }]}>
-          <Pressable style={styles.inputAction} onPress={() => { setShowGifts((v) => !v); setShowEmoji(false); }}>
-            <Ionicons name="gift" size={22} color={showGifts ? BRAND : colors.textMuted} />
-          </Pressable>
-          <Pressable style={styles.inputAction} onPress={() => { setShowEmoji((v) => !v); setShowGifts(false); }}>
-            <Text style={{ fontSize: 22 }}>{showEmoji ? "🙂" : "😊"}</Text>
-          </Pressable>
-          <TextInput
-            ref={inputRef}
-            style={[styles.inputField, { backgroundColor: colors.backgroundSecondary, color: colors.text }]}
-            placeholder="Type a message…"
-            placeholderTextColor={colors.textMuted}
-            value={text}
-            onChangeText={(v) => { setText(v); setShowQuick(false); }}
-            multiline
-            maxLength={1000}
-            returnKeyType="send"
-            onFocus={() => { setShowEmoji(false); setShowGifts(false); }}
-          />
-          <Pressable
-            style={[styles.sendBtn, { backgroundColor: text.trim() ? BRAND : colors.border }]}
-            onPress={() => send(text)}
-            disabled={!text.trim() || sending}
-          >
-            {sending ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="send" size={16} color="#fff" />}
-          </Pressable>
-        </View>
       </KeyboardAvoidingView>
 
       {/* Reaction picker overlay */}
@@ -466,7 +539,7 @@ export default function MatchConversationScreen() {
         </Pressable>
       )}
 
-      {/* Gift detail bottom sheet — swipe to close */}
+      {/* Gift detail bottom sheet */}
       <SwipeableBottomSheet
         visible={!!selectedGift}
         onClose={() => setSelectedGift(null)}
@@ -515,7 +588,7 @@ export default function MatchConversationScreen() {
             <View style={[styles.giftDetailNote, { backgroundColor: colors.backgroundSecondary }]}>
               <Ionicons name="star" size={16} color={BRAND} />
               <Text style={[styles.giftDetailNoteText, { color: colors.textSecondary }]}>
-                This gift appears on your AfuMatch profile and can be converted to ACoins in your wallet.
+                This gift appears on your AfuMatch profile. Manage your gift showcase from your profile settings.
               </Text>
             </View>
           )}
@@ -543,8 +616,6 @@ const styles = StyleSheet.create({
   bubbleText: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22 },
   bubbleMeta: { flexDirection: "row", alignItems: "center", gap: 4, justifyContent: "flex-end" },
   bubbleTime: { fontSize: 11, fontFamily: "Inter_400Regular" },
-
-  // Gift bubble
   giftBubble: { borderRadius: 18, padding: 14, alignItems: "center", gap: 3, minWidth: 110 },
   giftBubbleMine: { backgroundColor: BRAND + "CC" },
   giftName: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
@@ -552,8 +623,6 @@ const styles = StyleSheet.create({
   giftPriceText: { color: GOLD, fontSize: 11, fontFamily: "Inter_700Bold" },
   giftTapHint: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 1 },
   giftTapHintText: { fontSize: 10, fontFamily: "Inter_400Regular" },
-
-  // Reactions
   reactionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4, marginLeft: 4 },
   reactionsRowMine: { justifyContent: "flex-end", marginLeft: 0, marginRight: 4 },
   reactionChip: { flexDirection: "row", alignItems: "center", gap: 3, borderWidth: 1, borderRadius: 12, paddingHorizontal: 7, paddingVertical: 3 },
@@ -563,46 +632,37 @@ const styles = StyleSheet.create({
   reactionPicker: { flexDirection: "row", borderRadius: 32, paddingHorizontal: 12, paddingVertical: 10, gap: 4, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 12, elevation: 8 },
   reactionPickerItem: { padding: 4 },
   reactionPickerEmoji: { fontSize: 26 },
-
-  // Panels
-  panel: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12 },
+  panel: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10 },
   panelHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
   panelTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   balanceBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#1C1C1E", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   balanceText: { color: "#8E8E93", fontSize: 11, fontFamily: "Inter_400Regular" },
-
-  // Gift grid
-  giftGrid: { gap: 8, paddingBottom: 4 },
-  giftCard: { width: 76, alignItems: "center", borderRadius: 14, padding: 10, gap: 4, borderWidth: 1 },
+  giftCard: { width: 76, alignItems: "center", borderRadius: 14, padding: 10, gap: 4, borderWidth: 1.5 },
   giftCardEmoji: { fontSize: 30 },
   giftCardName: { fontSize: 10, fontFamily: "Inter_500Medium", textAlign: "center" },
   giftCardPrice: { flexDirection: "row", alignItems: "center", gap: 2 },
   giftCardPriceText: { color: GOLD, fontSize: 10, fontFamily: "Inter_700Bold" },
-
-  // Emoji picker
-  emojiTabs: { flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#3A3A3C", marginBottom: 8 },
-  emojiTab: { flex: 1, alignItems: "center", paddingVertical: 6 },
-  emojiTabIcon: { fontSize: 20 },
-  emojiGrid: { flexDirection: "row", flexWrap: "wrap", gap: 2 },
-  emojiItem: { width: "12.5%", aspectRatio: 1, alignItems: "center", justifyContent: "center", borderRadius: 8 },
-  emojiItemText: { fontSize: 24 },
-
-  // Input bar
+  giftConfirmRow: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 14, borderWidth: 1, padding: 12, marginTop: 10 },
+  giftConfirmName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  giftConfirmPrice: { fontSize: 12, fontFamily: "Inter_700Bold" },
+  giftSendBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: BRAND, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10 },
+  giftSendBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_700Bold" },
   inputBar: { flexDirection: "row", alignItems: "flex-end", gap: 8, paddingHorizontal: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
   inputAction: { width: 34, height: 34, alignItems: "center", justifyContent: "center" },
   inputField: { flex: 1, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, fontFamily: "Inter_400Regular", maxHeight: 120 },
   sendBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-
-  // Quick replies
+  emojiPanel: { borderTopWidth: StyleSheet.hairlineWidth, height: EMOJI_PANEL_HEIGHT },
+  emojiTabs: { flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#3A3A3C" },
+  emojiTab: { flex: 1, alignItems: "center", paddingVertical: 8 },
+  emojiTabIcon: { fontSize: 20 },
+  emojiGrid: { flexDirection: "row", flexWrap: "wrap", padding: 4, gap: 2 },
+  emojiItem: { width: "12.5%", aspectRatio: 1, alignItems: "center", justifyContent: "center", borderRadius: 8 },
+  emojiItemText: { fontSize: 24 },
   quickWrap: { paddingVertical: 8 },
   quickChip: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
   quickText: { fontSize: 13, fontFamily: "Inter_400Regular" },
-
-  // Empty state
   emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold", marginBottom: 8 },
   emptySub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", paddingHorizontal: 32 },
-
-  // Gift detail sheet
   giftDetailHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16 },
   giftDetailTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
   giftDetailEmoji: { borderRadius: 20, padding: 24, alignItems: "center", marginBottom: 16, gap: 6 },

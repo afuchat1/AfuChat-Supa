@@ -175,6 +175,48 @@ export async function getReceivedMatchGifts(userId: string): Promise<ReceivedMat
   }));
 }
 
+/** Gifts visible on a user's public profile — only from matches the viewer is part of */
+export async function getPublicProfileGifts(
+  viewerId: string,
+  ownerId: string
+): Promise<{ id: string; gift_emoji: string; sender_name: string; sent_at: string }[]> {
+  const { data: match } = await supabase
+    .from("match_matches")
+    .select("id")
+    .or(
+      `and(user1_id.eq.${viewerId},user2_id.eq.${ownerId}),and(user1_id.eq.${ownerId},user2_id.eq.${viewerId})`
+    )
+    .maybeSingle();
+
+  if (!match) return [];
+
+  const { data: gifts } = await supabase
+    .from("match_messages")
+    .select("id, sender_id, gift_emoji, sent_at")
+    .eq("match_id", match.id)
+    .eq("is_gift", true)
+    .neq("sender_id", ownerId)
+    .order("sent_at", { ascending: false });
+
+  if (!gifts || gifts.length === 0) return [];
+
+  const senderIds = [...new Set(gifts.map((g: any) => g.sender_id))] as string[];
+  const { data: profiles } = await supabase
+    .from("match_profiles")
+    .select("user_id, name")
+    .in("user_id", senderIds);
+
+  const nameMap: Record<string, string> = {};
+  (profiles ?? []).forEach((p: any) => { nameMap[p.user_id] = p.name ?? "Someone"; });
+
+  return gifts.map((g: any) => ({
+    id: g.id,
+    gift_emoji: g.gift_emoji ?? "🎁",
+    sender_name: nameMap[g.sender_id] ?? "Someone",
+    sent_at: g.sent_at,
+  }));
+}
+
 export async function getConvertedGiftIds(userId: string): Promise<Set<string>> {
   const { data } = await supabase
     .from("acoin_transactions")
