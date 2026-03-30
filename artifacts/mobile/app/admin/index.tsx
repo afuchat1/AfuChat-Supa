@@ -87,10 +87,13 @@ const TABS = [
   { id: "lookup", label: "ID Lookup", icon: "finger-print" as const },
   { id: "users", label: "Users", icon: "people" as const },
   { id: "content", label: "Content", icon: "document-text" as const },
+  { id: "match", label: "AfuMatch", icon: "heart" as const },
+  { id: "channels", label: "Channels", icon: "megaphone" as const },
   { id: "referrals", label: "Referrals", icon: "git-network" as const },
   { id: "subs", label: "Plans", icon: "diamond" as const },
   { id: "currency", label: "Currency", icon: "cash" as const },
   { id: "reports", label: "Reports", icon: "shield" as const },
+  { id: "system", label: "System", icon: "settings" as const },
 ];
 
 function timeAgo(iso: string) {
@@ -137,6 +140,20 @@ export default function AdminDashboard() {
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupResult, setLookupResult] = useState<any>(null);
   const [lookupError, setLookupError] = useState("");
+
+  const [matchProfileCount, setMatchProfileCount] = useState(0);
+  const [matchSwipeCount, setMatchSwipeCount] = useState(0);
+  const [matchLikeCount, setMatchLikeCount] = useState(0);
+  const [matchGiftCount, setMatchGiftCount] = useState(0);
+  const [matchReports, setMatchReports] = useState<any[]>([]);
+  const [matchProfiles, setMatchProfiles] = useState<any[]>([]);
+
+  const [channels, setChannels] = useState<any[]>([]);
+  const [channelSearch, setChannelSearch] = useState("");
+
+  const [systemToday, setSystemToday] = useState({ users: 0, posts: 0, stories: 0, gifts: 0 });
+  const [systemWeek, setSystemWeek] = useState({ users: 0, posts: 0, messages: 0 });
+  const [recentGifts, setRecentGifts] = useState<any[]>([]);
   const isAdmin = !!profile?.is_admin;
 
   const loadStats = useCallback(async () => {
@@ -252,9 +269,95 @@ export default function AdminDashboard() {
     if (data) setReferrals(data);
   }, []);
 
+  const loadMatchData = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+      const [
+        { count: profileCount },
+        { count: swipeCount },
+        { count: likeCount },
+        { count: giftCount },
+      ] = await Promise.all([
+        supabase.from("match_profiles").select("*", { count: "exact", head: true }),
+        supabase.from("match_swipes").select("*", { count: "exact", head: true }),
+        supabase.from("match_likes").select("*", { count: "exact", head: true }),
+        supabase.from("gift_transactions").select("*", { count: "exact", head: true }),
+      ]);
+      setMatchProfileCount(profileCount || 0);
+      setMatchSwipeCount(swipeCount || 0);
+      setMatchLikeCount(likeCount || 0);
+      setMatchGiftCount(giftCount || 0);
+
+      const { data: profiles } = await supabase
+        .from("match_profiles")
+        .select("user_id, gender, looking_for, city, country, created_at, profiles!match_profiles_user_id_fkey(display_name, handle, is_verified)")
+        .order("created_at", { ascending: false })
+        .limit(30);
+      if (profiles) setMatchProfiles(profiles);
+
+      const { data: mReports } = await supabase
+        .from("match_reports")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(30);
+      if (mReports) setMatchReports(mReports);
+    } catch {}
+  }, []);
+
+  const loadChannelData = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      const { data } = await supabase
+        .from("channels")
+        .select("id, name, description, is_verified, subscriber_count, created_at, owner_id, profiles!channels_owner_id_fkey(display_name, handle)")
+        .order("subscriber_count", { ascending: false })
+        .limit(60);
+      if (data) setChannels(data);
+    } catch {}
+  }, []);
+
+  const loadSystemData = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      const now = new Date();
+      const todayISO = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+      const weekISO = new Date(now.getTime() - 7 * 86400000).toISOString();
+      const [
+        { count: usersToday },
+        { count: postsToday },
+        { count: storiesToday },
+        { count: giftsToday },
+        { count: usersWeek },
+        { count: postsWeek },
+        { count: messagesWeek },
+      ] = await Promise.all([
+        supabase.from("profiles").select("*", { count: "exact", head: true }).gte("created_at", todayISO),
+        supabase.from("posts").select("*", { count: "exact", head: true }).gte("created_at", todayISO),
+        supabase.from("stories").select("*", { count: "exact", head: true }).gte("created_at", todayISO),
+        supabase.from("gift_transactions").select("*", { count: "exact", head: true }).gte("created_at", todayISO),
+        supabase.from("profiles").select("*", { count: "exact", head: true }).gte("created_at", weekISO),
+        supabase.from("posts").select("*", { count: "exact", head: true }).gte("created_at", weekISO),
+        supabase.from("messages").select("*", { count: "exact", head: true }).gte("created_at", weekISO),
+      ]);
+      setSystemToday({ users: usersToday || 0, posts: postsToday || 0, stories: storiesToday || 0, gifts: giftsToday || 0 });
+      setSystemWeek({ users: usersWeek || 0, posts: postsWeek || 0, messages: messagesWeek || 0 });
+
+      const { data: gifts } = await supabase
+        .from("gift_transactions")
+        .select("id, gift_name, acoin_value, created_at, sender:profiles!gift_transactions_sender_id_fkey(display_name), receiver:profiles!gift_transactions_receiver_id_fkey(display_name)")
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (gifts) setRecentGifts(gifts);
+    } catch {}
+  }, []);
+
   const loadAll = useCallback(async () => {
     setLoading(true);
-    await Promise.all([loadStats(), loadUsers(), loadPosts(), loadPlans(), loadCurrency(), loadReports(), loadReferrals()]);
+    await Promise.all([
+      loadStats(), loadUsers(), loadPosts(), loadPlans(), loadCurrency(),
+      loadReports(), loadReferrals(), loadMatchData(), loadChannelData(), loadSystemData(),
+    ]);
     setLoading(false);
   }, []);
 
@@ -969,15 +1072,224 @@ export default function AdminDashboard() {
     );
   }
 
+  function renderMatch() {
+    const filteredChannels = channelSearch
+      ? matchProfiles.filter((p: any) => {
+          const name = p.profiles?.display_name?.toLowerCase() ?? "";
+          const handle = p.profiles?.handle?.toLowerCase() ?? "";
+          return name.includes(channelSearch.toLowerCase()) || handle.includes(channelSearch.toLowerCase());
+        })
+      : matchProfiles;
+    return (
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>AfuMatch Management</Text>
+        <View style={styles.statsGrid}>
+          <StatCard title="Profiles" value={matchProfileCount} icon="person-circle" color="#FF2D55" colors={colors} />
+          <StatCard title="Swipes" value={matchSwipeCount} icon="swap-horizontal" color="#FF9500" colors={colors} />
+          <StatCard title="Matches" value={matchLikeCount} icon="heart" color="#FF2D55" colors={colors} />
+          <StatCard title="Gifts Sent" value={matchGiftCount} icon="gift" color={GOLD} colors={colors} />
+        </View>
+        {matchReports.length > 0 && (
+          <View style={{ marginTop: 8, gap: 8 }}>
+            <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Match Reports ({matchReports.length})</Text>
+            {matchReports.map((r: any) => (
+              <View key={r.id} style={[styles.reportCard, { backgroundColor: colors.surface }]}>
+                <View style={styles.reportHeader}>
+                  <Ionicons name="flag" size={16} color="#FF3B30" />
+                  <Text style={[styles.reportReason, { color: colors.text }]}>{r.reason || "No reason given"}</Text>
+                </View>
+                <Text style={[styles.reportMeta, { color: colors.textMuted }]}>
+                  {timeAgo(r.created_at)}
+                </Text>
+                <View style={styles.reportFooter}>
+                  <View style={[styles.statusBadge, { backgroundColor: r.resolved ? "#10B98120" : "#FF950020" }]}>
+                    <Text style={{ color: r.resolved ? "#10B981" : "#FF9500", fontSize: 11, fontFamily: "Inter_600SemiBold" }}>
+                      {r.resolved ? "Resolved" : "Open"}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+        <Text style={[styles.lookupCardTitle, { color: colors.text, marginTop: 8 }]}>
+          Match Profiles ({matchProfileCount})
+        </Text>
+        {matchProfiles.slice(0, 20).map((mp: any) => {
+          const p = mp.profiles;
+          return (
+            <View key={mp.user_id} style={[styles.userRow, { backgroundColor: colors.surface }]}>
+              <View style={[styles.userAvatar, { backgroundColor: "#FF2D55" }]}>
+                <Text style={styles.userAvatarText}>{(p?.display_name || "?")[0].toUpperCase()}</Text>
+              </View>
+              <View style={styles.userInfo}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1}>{p?.display_name || "Unknown"}</Text>
+                  {p?.is_verified && <Ionicons name="checkmark-circle" size={14} color={BRAND} />}
+                </View>
+                <Text style={[styles.userHandle, { color: colors.textSecondary }]}>@{p?.handle || "?"}</Text>
+                <Text style={[styles.userMeta, { color: colors.textMuted }]}>
+                  {mp.gender || "?"} · looking for {mp.looking_for || "?"} · {mp.city || mp.country || "?"}
+                </Text>
+              </View>
+              <Text style={[{ fontSize: 10, color: colors.textMuted }]}>{timeAgo(mp.created_at)}</Text>
+            </View>
+          );
+        })}
+        {matchProfiles.length === 0 && (
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>No AfuMatch profiles yet</Text>
+        )}
+      </View>
+    );
+  }
+
+  function renderChannels() {
+    const filtered = channelSearch
+      ? channels.filter((c: any) => c.name?.toLowerCase().includes(channelSearch.toLowerCase()))
+      : channels;
+    return (
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Channel Management</Text>
+        <View style={styles.statsGrid}>
+          <StatCard title="Total" value={stats.totalChannels} icon="megaphone" color="#6366F1" colors={colors} />
+          <StatCard title="Verified" value={channels.filter((c: any) => c.is_verified).length} icon="checkmark-circle" color={GOLD} colors={colors} />
+          <StatCard title="Top Subs" value={channels[0]?.subscriber_count ?? 0} icon="people" color={BRAND} colors={colors} />
+          <StatCard title="Listed" value={filtered.length} icon="list" color="#10B981" colors={colors} />
+        </View>
+        <TextInput
+          style={[styles.searchInput, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
+          placeholder="Search channels…"
+          placeholderTextColor={colors.textMuted}
+          value={channelSearch}
+          onChangeText={setChannelSearch}
+        />
+        {filtered.map((ch: any) => {
+          const owner = ch.profiles;
+          return (
+            <View key={ch.id} style={[styles.userRow, { backgroundColor: colors.surface }]}>
+              <View style={[styles.userAvatar, { backgroundColor: "#6366F1" }]}>
+                <Ionicons name="megaphone" size={20} color="#fff" />
+              </View>
+              <View style={styles.userInfo}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1}>{ch.name}</Text>
+                  {ch.is_verified && <Ionicons name="checkmark-circle" size={14} color={GOLD} />}
+                </View>
+                <Text style={[styles.userHandle, { color: colors.textSecondary }]}>
+                  by @{owner?.handle || "?"} · {(ch.subscriber_count || 0).toLocaleString()} subscribers
+                </Text>
+                {ch.description ? (
+                  <Text style={[styles.userMeta, { color: colors.textMuted }]} numberOfLines={1}>{ch.description}</Text>
+                ) : null}
+              </View>
+              <View style={styles.userActions}>
+                <View style={{ alignItems: "center" }}>
+                  <Text style={[{ fontSize: 9, color: colors.textMuted }]}>Verified</Text>
+                  <Switch
+                    value={!!ch.is_verified}
+                    onValueChange={async (val) => {
+                      await supabase.from("channels").update({ is_verified: val }).eq("id", ch.id);
+                      loadChannelData();
+                    }}
+                    trackColor={{ true: GOLD, false: colors.border }}
+                    thumbColor="#fff"
+                  />
+                </View>
+              </View>
+            </View>
+          );
+        })}
+        {filtered.length === 0 && (
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>No channels found</Text>
+        )}
+      </View>
+    );
+  }
+
+  function renderSystem() {
+    return (
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>System Health</Text>
+        <View style={[styles.planCard, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Today</Text>
+          <View style={styles.statsGrid}>
+            <StatCard title="New Users" value={systemToday.users} icon="person-add" color={BRAND} colors={colors} />
+            <StatCard title="Posts" value={systemToday.posts} icon="create" color="#3B82F6" colors={colors} />
+            <StatCard title="Stories" value={systemToday.stories} icon="aperture" color="#EC4899" colors={colors} />
+            <StatCard title="Gifts" value={systemToday.gifts} icon="gift" color={GOLD} colors={colors} />
+          </View>
+        </View>
+        <View style={[styles.planCard, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Last 7 Days</Text>
+          <View style={[styles.statsGrid, { marginTop: 4 }]}>
+            <StatCard title="New Users" value={systemWeek.users} icon="people" color={BRAND} colors={colors} />
+            <StatCard title="Posts" value={systemWeek.posts} icon="document-text" color="#3B82F6" colors={colors} />
+            <StatCard title="Messages" value={systemWeek.messages} icon="chatbubbles" color="#10B981" colors={colors} />
+            <StatCard title="Total Users" value={stats.totalUsers} icon="globe" color="#6366F1" colors={colors} />
+          </View>
+        </View>
+        <View style={[styles.planCard, { backgroundColor: colors.surface, gap: 10 }]}>
+          <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Platform Totals</Text>
+          {[
+            { label: "Total Users", value: stats.totalUsers, color: BRAND },
+            { label: "Premium Members", value: stats.premiumUsers, color: GOLD },
+            { label: "Verified Users", value: stats.verifiedUsers, color: GOLD },
+            { label: "Total Posts", value: stats.totalPosts, color: "#3B82F6" },
+            { label: "Total Messages", value: stats.totalMessages, color: "#10B981" },
+            { label: "Total Chats", value: stats.totalChats, color: "#8B5CF6" },
+            { label: "Total Stories", value: stats.totalStories, color: "#EC4899" },
+            { label: "Total Channels", value: stats.totalChannels, color: "#6366F1" },
+            { label: "Total Referrals", value: stats.totalReferrals, color: "#14B8A6" },
+            { label: "AfuMatch Profiles", value: matchProfileCount, color: "#FF2D55" },
+            { label: "Match Swipes", value: matchSwipeCount, color: "#FF9500" },
+            { label: "Total Nexa (XP)", value: stats.totalNexa, color: BRAND },
+            { label: "Total ACoins", value: stats.totalAcoin, color: GOLD },
+            { label: "Pending Deletions", value: stats.pendingDeletions, color: "#FF3B30" },
+          ].map((row) => (
+            <View key={row.label} style={[styles.lookupRow, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.lookupLabel, { color: colors.textMuted }]}>{row.label}</Text>
+              <Text style={[styles.lookupValue, { color: row.color }]}>{row.value.toLocaleString()}</Text>
+            </View>
+          ))}
+        </View>
+        {recentGifts.length > 0 && (
+          <View style={[styles.lookupCard, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Recent Gifts</Text>
+            {recentGifts.map((g: any, i: number) => (
+              <View key={g.id} style={[styles.lookupListItem, i < recentGifts.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_500Medium" }}>{g.gift_name}</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+                    {g.sender?.display_name || "?"} → {g.receiver?.display_name || "?"}
+                  </Text>
+                </View>
+                <View style={{ alignItems: "flex-end", gap: 2 }}>
+                  <View style={[styles.priceBadge, { backgroundColor: GOLD + "20", paddingHorizontal: 6, paddingVertical: 3 }]}>
+                    <Ionicons name="diamond" size={10} color={GOLD} />
+                    <Text style={{ color: GOLD, fontSize: 11, fontFamily: "Inter_700Bold" }}>{g.acoin_value}</Text>
+                  </View>
+                  <Text style={{ color: colors.textMuted, fontSize: 10 }}>{timeAgo(g.created_at)}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    );
+  }
+
   const tabContent: Record<string, () => React.ReactNode> = {
     overview: renderOverview,
     lookup: renderLookup,
     users: renderUsers,
     content: renderContent,
+    match: renderMatch,
+    channels: renderChannels,
     referrals: renderReferrals,
     subs: renderSubscriptions,
     currency: renderCurrency,
     reports: renderReports,
+    system: renderSystem,
   };
 
   return (
