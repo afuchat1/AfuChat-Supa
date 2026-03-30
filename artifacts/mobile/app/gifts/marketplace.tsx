@@ -22,6 +22,7 @@ import { useTheme } from "@/hooks/useTheme";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import SwipeableBottomSheet from "@/components/SwipeableBottomSheet";
 
 type MarketplaceListing = {
   id: string;
@@ -372,10 +373,8 @@ export default function GiftMarketplaceScreen() {
         />
       )}
 
-      <Modal visible={!!selectedListing} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <View style={styles.dragHandle} />
+      <SwipeableBottomSheet visible={!!selectedListing} onClose={() => setSelectedListing(null)} backgroundColor={colors.surface}>
+          <View style={[styles.modalContent]}>
             <TouchableOpacity style={styles.modalClose} onPress={() => setSelectedListing(null)}>
               <Ionicons name="close-circle" size={28} color={colors.textMuted} />
             </TouchableOpacity>
@@ -456,8 +455,7 @@ export default function GiftMarketplaceScreen() {
               </TouchableOpacity>
             )}
           </View>
-        </View>
-      </Modal>
+      </SwipeableBottomSheet>
     </View>
   );
 }
@@ -492,7 +490,7 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 20, fontFamily: "Inter_600SemiBold" },
   emptySub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
   modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" },
-  modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 16 },
+  modalContent: { padding: 24, gap: 16 },
   dragHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "#ccc", alignSelf: "center" },
   modalClose: { position: "absolute", top: 16, right: 16, zIndex: 1 },
   modalGiftDisplay: { alignItems: "center", gap: 8, paddingTop: 8 },

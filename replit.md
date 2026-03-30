@@ -167,6 +167,7 @@ The app uses an **existing** Supabase project with pre-created tables. No schema
 - `lib/shortId.ts` — Base62 encoder/decoder for UUIDs. Converts 36-char UUIDs into ~22-char short IDs for clean public URLs (e.g. `0a6c129b-3906-4db8-8812-c17c17e9b766` → `JfJNiqOg7jGpEWkpIxGNi`). Used in share URLs and API server routes. Exports `encodeId()`, `decodeId()`, `isEncodedId()`, `isUuid()`.
 - `lib/share.ts` — Share utility (sharePost, shareProfile, shareStory, shareRedEnvelope) using React Native Share API. Generates afuchat.com deep links with short IDs (no UUIDs exposed). Used across discover feed, post detail, my-posts, contact profile, stories, and red envelopes.
 - `components/PushNotificationManager.tsx` — Null component wired into root layout for notification setup
+- `components/SwipeableBottomSheet.tsx` — Reusable animated bottom sheet with swipe-to-close gesture (PanResponder). Wraps content with spring-animated slide-in and drag-to-dismiss. Used across wallet, gifts, and match screens.
 
 ## Responsive Layout Pattern
 

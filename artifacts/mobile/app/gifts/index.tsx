@@ -22,6 +22,7 @@ import { useGiftPrices } from "@/hooks/useGiftPrices";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { GiftCardSkeleton } from "@/components/ui/Skeleton";
+import SwipeableBottomSheet from "@/components/SwipeableBottomSheet";
 
 type Gift = {
   id: string;
@@ -427,10 +428,8 @@ export default function GiftsScreen() {
         />
       )}
 
-      <Modal visible={!!selectedGift && !confirmConvert} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <View style={styles.dragHandle} />
+      <SwipeableBottomSheet visible={!!selectedGift && !confirmConvert} onClose={() => setSelectedGift(null)} backgroundColor={colors.surface}>
+          <View style={[styles.modalContent]}>
             <TouchableOpacity style={styles.modalClose} onPress={() => setSelectedGift(null)}>
               <Ionicons name="close-circle" size={28} color={colors.textMuted} />
             </TouchableOpacity>
@@ -503,8 +502,7 @@ export default function GiftsScreen() {
               </TouchableOpacity>
             )}
           </View>
-        </View>
-      </Modal>
+      </SwipeableBottomSheet>
 
       <Modal visible={confirmConvert} animationType="fade" transparent>
         <View style={styles.confirmOverlay}>
@@ -583,10 +581,8 @@ export default function GiftsScreen() {
         </View>
       </Modal>
 
-      <Modal visible={!!sendGift} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <View style={styles.dragHandle} />
+      <SwipeableBottomSheet visible={!!sendGift} onClose={() => setSendGift(null)} backgroundColor={colors.surface}>
+          <View style={[styles.modalContent]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.text }]}>Send Gift</Text>
               <TouchableOpacity onPress={() => setSendGift(null)}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
@@ -632,8 +628,7 @@ export default function GiftsScreen() {
               <Text style={styles.sendBtnText}>{sending ? "Sending..." : "Send Gift"}</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </Modal>
+      </SwipeableBottomSheet>
     </View>
   );
 }
@@ -666,7 +661,7 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 20, fontFamily: "Inter_600SemiBold" },
   emptySub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
   modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" },
-  modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 16 },
+  modalContent: { padding: 24, gap: 16 },
   dragHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "#ccc", alignSelf: "center" },
   modalClose: { position: "absolute", top: 16, right: 16, zIndex: 1 },
   modalGiftDisplay: { alignItems: "center", gap: 8, paddingTop: 8 },

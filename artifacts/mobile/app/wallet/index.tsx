@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import SwipeableBottomSheet from "@/components/SwipeableBottomSheet";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -73,87 +74,82 @@ function TransactionDetailModal({ tx, visible, onClose, colors }: { tx: Transact
   const refId = tx.id.length > 12 ? tx.id.substring(0, 12).toUpperCase() : tx.id.toUpperCase();
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <View style={detailStyles.overlay}>
-        <View style={[detailStyles.content, { backgroundColor: colors.surface }]}>
-          <View style={detailStyles.dragHandle} />
-          <View style={detailStyles.header}>
-            <Text style={[detailStyles.title, { color: colors.text }]}>Transaction Details</Text>
-            <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
-          </View>
-
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <View style={[detailStyles.amountCard, { backgroundColor: tx.color + "15" }]}>
-              <View style={[detailStyles.amountIcon, { backgroundColor: tx.color + "25" }]}>
-                <Ionicons name={tx.icon as any} size={28} color={tx.color} />
-              </View>
-              <Text style={[detailStyles.amountText, { color: amountColor }]}>{amountDisplay}</Text>
-              <Text style={[detailStyles.typeText, { color: colors.textSecondary }]}>{tx.label}</Text>
-            </View>
-
-            <View style={[detailStyles.section, { backgroundColor: colors.inputBg }]}>
-              <DetailRow label="Date" value={formatDateTime(tx.created_at)} colors={colors} />
-              <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
-              <DetailRow label="Type" value={tx.label} colors={colors} />
-              <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
-              <DetailRow label="Currency" value={currencyLabel || "Gift"} colors={colors} />
-              {tx.status && (
-                <>
-                  <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
-                  <DetailRow label="Status" value={tx.status === "completed" || !tx.status ? "Completed" : tx.status === "pending" ? "Pending" : tx.status === "failed" ? "Failed" : tx.status} valueColor={tx.status === "failed" ? "#FF3B30" : tx.status === "pending" ? "#FF9500" : "#34C759"} colors={colors} />
-                </>
-              )}
-              {tx.counterparty && (
-                <>
-                  <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
-                  <DetailRow label={isPositive || tx.type === "gift_received" || tx.type === "nexa_received" ? "From" : "To"} value={tx.counterparty} valueColor={Colors.brand} colors={colors} />
-                </>
-              )}
-              {tx.message && (
-                <>
-                  <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
-                  <DetailRow label="Message" value={tx.message} colors={colors} />
-                </>
-              )}
-              {tx.nexaSpent != null && tx.nexaSpent > 0 && (
-                <>
-                  <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
-                  <DetailRow label="Nexa Spent" value={`${tx.nexaSpent} Nexa`} colors={colors} />
-                </>
-              )}
-              {tx.fee != null && tx.fee > 0 && (
-                <>
-                  <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
-                  <DetailRow label="Fee" value={`${tx.fee} ACoin`} colors={colors} />
-                </>
-              )}
-              {tx.metadata?.rate && (
-                <>
-                  <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
-                  <DetailRow label="Rate" value={`${tx.metadata.rate} Nexa = 1 ACoin`} colors={colors} />
-                </>
-              )}
-              {tx.metadata?.plan_name && (
-                <>
-                  <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
-                  <DetailRow label="Plan" value={tx.metadata.plan_name} colors={colors} />
-                </>
-              )}
-              {tx.metadata?.duration_days && (
-                <>
-                  <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
-                  <DetailRow label="Duration" value={`${tx.metadata.duration_days} days`} colors={colors} />
-                </>
-              )}
-            </View>
-
-            <View style={[detailStyles.section, { backgroundColor: colors.inputBg, marginTop: 12 }]}>
-              <DetailRow label="Reference" value={refId} colors={colors} />
-            </View>
-          </ScrollView>
-        </View>
+    <SwipeableBottomSheet visible={visible} onClose={onClose} backgroundColor={colors.surface} maxHeight="90%">
+      <View style={detailStyles.header}>
+        <Text style={[detailStyles.title, { color: colors.text }]}>Transaction Details</Text>
+        <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
       </View>
-    </Modal>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+        <View style={[detailStyles.amountCard, { backgroundColor: tx.color + "15" }]}>
+          <View style={[detailStyles.amountIcon, { backgroundColor: tx.color + "25" }]}>
+            <Ionicons name={tx.icon as any} size={28} color={tx.color} />
+          </View>
+          <Text style={[detailStyles.amountText, { color: amountColor }]}>{amountDisplay}</Text>
+          <Text style={[detailStyles.typeText, { color: colors.textSecondary }]}>{tx.label}</Text>
+        </View>
+
+        <View style={[detailStyles.section, { backgroundColor: colors.inputBg }]}>
+          <DetailRow label="Date" value={formatDateTime(tx.created_at)} colors={colors} />
+          <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
+          <DetailRow label="Type" value={tx.label} colors={colors} />
+          <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
+          <DetailRow label="Currency" value={currencyLabel || "Gift"} colors={colors} />
+          {tx.status && (
+            <>
+              <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
+              <DetailRow label="Status" value={tx.status === "completed" || !tx.status ? "Completed" : tx.status === "pending" ? "Pending" : tx.status === "failed" ? "Failed" : tx.status} valueColor={tx.status === "failed" ? "#FF3B30" : tx.status === "pending" ? "#FF9500" : "#34C759"} colors={colors} />
+            </>
+          )}
+          {tx.counterparty && (
+            <>
+              <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
+              <DetailRow label={isPositive || tx.type === "gift_received" || tx.type === "nexa_received" ? "From" : "To"} value={tx.counterparty} valueColor={Colors.brand} colors={colors} />
+            </>
+          )}
+          {tx.message && (
+            <>
+              <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
+              <DetailRow label="Message" value={tx.message} colors={colors} />
+            </>
+          )}
+          {tx.nexaSpent != null && tx.nexaSpent > 0 && (
+            <>
+              <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
+              <DetailRow label="Nexa Spent" value={`${tx.nexaSpent} Nexa`} colors={colors} />
+            </>
+          )}
+          {tx.fee != null && tx.fee > 0 && (
+            <>
+              <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
+              <DetailRow label="Fee" value={`${tx.fee} ACoin`} colors={colors} />
+            </>
+          )}
+          {tx.metadata?.rate && (
+            <>
+              <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
+              <DetailRow label="Rate" value={`${tx.metadata.rate} Nexa = 1 ACoin`} colors={colors} />
+            </>
+          )}
+          {tx.metadata?.plan_name && (
+            <>
+              <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
+              <DetailRow label="Plan" value={tx.metadata.plan_name} colors={colors} />
+            </>
+          )}
+          {tx.metadata?.duration_days && (
+            <>
+              <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
+              <DetailRow label="Duration" value={`${tx.metadata.duration_days} days`} colors={colors} />
+            </>
+          )}
+        </View>
+
+        <View style={[detailStyles.section, { backgroundColor: colors.inputBg, marginTop: 12 }]}>
+          <DetailRow label="Reference" value={refId} colors={colors} />
+        </View>
+      </ScrollView>
+    </SwipeableBottomSheet>
   );
 }
 
@@ -620,59 +616,53 @@ export default function WalletScreen() {
 
       <TransactionDetailModal tx={selectedTx} visible={!!selectedTx} onClose={() => setSelectedTx(null)} colors={colors} />
 
-      <Modal visible={showTransfer} animationType="slide" transparent>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-              <View style={styles.dragHandle} />
-              <View style={styles.modalHeader}>
-                <Text style={[styles.modalTitle, { color: colors.text }]}>Send Nexa</Text>
-                <TouchableOpacity onPress={() => setShowTransfer(false)}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
-              </View>
-              <Text style={[styles.modalSub, { color: colors.textMuted }]}>Balance: {profile?.xp || 0} Nexa</Text>
-              <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Recipient @handle" placeholderTextColor={colors.textMuted} value={transferHandle} onChangeText={setTransferHandle} autoCapitalize="none" />
-              <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Amount" placeholderTextColor={colors.textMuted} value={transferAmount} onChangeText={setTransferAmount} keyboardType="numeric" />
-              <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Message (optional)" placeholderTextColor={colors.textMuted} value={transferMsg} onChangeText={setTransferMsg} />
-              <TouchableOpacity style={[styles.sendBtn, sending && { opacity: 0.6 }]} onPress={sendNexa} disabled={sending}>
-                {sending ? <ActivityIndicator color="#fff" /> : <Text style={styles.sendBtnText}>Send Nexa</Text>}
-              </TouchableOpacity>
+      <SwipeableBottomSheet visible={showTransfer} onClose={() => setShowTransfer(false)} backgroundColor={colors.surface}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Send Nexa</Text>
+              <TouchableOpacity onPress={() => setShowTransfer(false)}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
             </View>
+            <Text style={[styles.modalSub, { color: colors.textMuted }]}>Balance: {profile?.xp || 0} Nexa</Text>
+            <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Recipient @handle" placeholderTextColor={colors.textMuted} value={transferHandle} onChangeText={setTransferHandle} autoCapitalize="none" />
+            <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Amount" placeholderTextColor={colors.textMuted} value={transferAmount} onChangeText={setTransferAmount} keyboardType="numeric" />
+            <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Message (optional)" placeholderTextColor={colors.textMuted} value={transferMsg} onChangeText={setTransferMsg} />
+            <TouchableOpacity style={[styles.sendBtn, sending && { opacity: 0.6 }]} onPress={sendNexa} disabled={sending}>
+              {sending ? <ActivityIndicator color="#fff" /> : <Text style={styles.sendBtnText}>Send Nexa</Text>}
+            </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
-      </Modal>
+      </SwipeableBottomSheet>
 
-      <Modal visible={showConvert} animationType="slide" transparent>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-              <View style={styles.dragHandle} />
-              <View style={styles.modalHeader}>
-                <Text style={[styles.modalTitle, { color: colors.text }]}>Convert Nexa {"\u2192"} ACoin</Text>
-                <TouchableOpacity onPress={() => setShowConvert(false)}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
-              </View>
-              <Text style={[styles.modalSub, { color: colors.textMuted }]}>
-                Balance: {profile?.xp || 0} Nexa {"\u00b7"} Rate: {currencySettings?.nexa_to_acoin_rate || 100} Nexa = 1 ACoin
-              </Text>
-              <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Nexa amount to convert" placeholderTextColor={colors.textMuted} value={convertAmount} onChangeText={setConvertAmount} keyboardType="numeric" />
-              {previewAcoin && (
-                <View style={[styles.previewBox, { backgroundColor: colors.inputBg }]}>
-                  <View style={styles.previewRow}>
-                    <Text style={[styles.previewLabel, { color: colors.textSecondary }]}>You'll receive</Text>
-                    <Text style={[styles.previewValue, { color: Colors.brand }]}>{previewAcoin.acoin} ACoin</Text>
-                  </View>
-                  <View style={styles.previewRow}>
-                    <Text style={[styles.previewLabel, { color: colors.textMuted }]}>Fee ({currencySettings?.conversion_fee_percent}%)</Text>
-                    <Text style={[styles.previewLabel, { color: colors.textMuted }]}>{previewAcoin.fee} ACoin</Text>
-                  </View>
-                </View>
-              )}
-              <TouchableOpacity style={[styles.sendBtn, { backgroundColor: "#FF9500" }, converting && { opacity: 0.6 }]} onPress={convertNexaToAcoin} disabled={converting}>
-                {converting ? <ActivityIndicator color="#fff" /> : <Text style={styles.sendBtnText}>Convert to ACoin</Text>}
-              </TouchableOpacity>
+      <SwipeableBottomSheet visible={showConvert} onClose={() => setShowConvert(false)} backgroundColor={colors.surface}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Convert Nexa {"\u2192"} ACoin</Text>
+              <TouchableOpacity onPress={() => setShowConvert(false)}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
             </View>
+            <Text style={[styles.modalSub, { color: colors.textMuted }]}>
+              Balance: {profile?.xp || 0} Nexa {"\u00b7"} Rate: {currencySettings?.nexa_to_acoin_rate || 100} Nexa = 1 ACoin
+            </Text>
+            <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Nexa amount to convert" placeholderTextColor={colors.textMuted} value={convertAmount} onChangeText={setConvertAmount} keyboardType="numeric" />
+            {previewAcoin && (
+              <View style={[styles.previewBox, { backgroundColor: colors.inputBg }]}>
+                <View style={styles.previewRow}>
+                  <Text style={[styles.previewLabel, { color: colors.textSecondary }]}>You'll receive</Text>
+                  <Text style={[styles.previewValue, { color: Colors.brand }]}>{previewAcoin.acoin} ACoin</Text>
+                </View>
+                <View style={styles.previewRow}>
+                  <Text style={[styles.previewLabel, { color: colors.textMuted }]}>Fee ({currencySettings?.conversion_fee_percent}%)</Text>
+                  <Text style={[styles.previewLabel, { color: colors.textMuted }]}>{previewAcoin.fee} ACoin</Text>
+                </View>
+              </View>
+            )}
+            <TouchableOpacity style={[styles.sendBtn, { backgroundColor: "#FF9500" }, converting && { opacity: 0.6 }]} onPress={convertNexaToAcoin} disabled={converting}>
+              {converting ? <ActivityIndicator color="#fff" /> : <Text style={styles.sendBtnText}>Convert to ACoin</Text>}
+            </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
-      </Modal>
+      </SwipeableBottomSheet>
     </View>
   );
 }
@@ -706,7 +696,7 @@ const styles = StyleSheet.create({
   txCurrency: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
   emptyText: { textAlign: "center", marginTop: 40, fontSize: 15, fontFamily: "Inter_400Regular" },
   modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" },
-  modalContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 14 },
+  modalContent: { padding: 24, gap: 14 },
   dragHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "#ccc", alignSelf: "center", marginBottom: 4 },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   modalTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },

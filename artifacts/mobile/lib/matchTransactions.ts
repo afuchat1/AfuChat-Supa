@@ -7,6 +7,27 @@ export const MATCH_PRICES = {
   FREE_SUPER_LIKES_PER_DAY: 3,
 } as const;
 
+export type GiftItem = { emoji: string; name: string; price: number };
+
+export const GIFT_CATALOG: GiftItem[] = [
+  { emoji: "🌹", name: "Rose",        price: 2  },
+  { emoji: "💐", name: "Bouquet",     price: 5  },
+  { emoji: "🎁", name: "Gift Box",    price: 3  },
+  { emoji: "💎", name: "Diamond",     price: 20 },
+  { emoji: "🍫", name: "Chocolate",   price: 2  },
+  { emoji: "🦋", name: "Butterfly",   price: 4  },
+  { emoji: "⭐", name: "Star",        price: 3  },
+  { emoji: "🎵", name: "Music Note",  price: 2  },
+  { emoji: "🌙", name: "Moon",        price: 5  },
+  { emoji: "✨", name: "Sparkle",     price: 3  },
+  { emoji: "🏆", name: "Trophy",      price: 10 },
+  { emoji: "👑", name: "Crown",       price: 15 },
+];
+
+export function getGiftItem(emoji: string): GiftItem {
+  return GIFT_CATALOG.find((g) => g.emoji === emoji) ?? { emoji, name: "Gift", price: MATCH_PRICES.GIFT };
+}
+
 export async function getAcoinBalance(userId: string): Promise<number> {
   const { data } = await supabase
     .from("profiles")
@@ -59,10 +80,13 @@ export async function chargeMatchGift(
   userId: string,
   giftEmoji: string,
   recipientName: string,
-  matchId: string
+  matchId: string,
+  price?: number
 ): Promise<{ success: boolean; error?: string; newBalance?: number }> {
-  return deductAcoins(userId, MATCH_PRICES.GIFT, "match_gift", {
+  const cost = price ?? getGiftItem(giftEmoji).price;
+  return deductAcoins(userId, cost, "match_gift", {
     gift_emoji: giftEmoji,
+    gift_price: cost,
     recipient_name: recipientName,
     match_id: matchId,
     description: `Sent ${giftEmoji} gift in AfuMatch`,

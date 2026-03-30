@@ -4,7 +4,6 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -22,9 +21,16 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { showAlert } from "@/lib/alert";
-import { chargeMatchGift, MATCH_PRICES, getAcoinBalance } from "@/lib/matchTransactions";
+import {
+  chargeMatchGift,
+  GIFT_CATALOG,
+  getGiftItem,
+  getAcoinBalance,
+} from "@/lib/matchTransactions";
+import SwipeableBottomSheet from "@/components/SwipeableBottomSheet";
 
 const BRAND = "#FF2D55";
+const GOLD = "#FFD60A";
 
 type Message = {
   id: string;
@@ -47,9 +53,21 @@ type MatchProfile = {
   location_name: string | null;
 };
 
-const QUICK_REPLIES = ["Hey there! 👋", "You seem interesting 😊", "Love your photos! ❤️", "Let's chat 💬", "How's your day? ☀️", "What do you do for fun? 🎉"];
+type Reaction = { emoji: string; count: number; reacted: boolean };
 
-const GIFT_EMOJIS = ["🌹", "💐", "🎁", "💎", "🍫", "🦋", "⭐", "🎵", "🌙", "✨"];
+const QUICK_REPLIES = [
+  "Hey there! 👋", "You seem interesting 😊", "Love your photos! ❤️",
+  "Let's chat 💬", "How's your day? ☀️", "What do you do for fun? 🎉",
+];
+
+const REACTION_EMOJIS = ["❤️", "😂", "😍", "😮", "😢", "😡", "👍", "🔥", "🥺", "🎉"];
+
+const EMOJI_SECTIONS = [
+  { label: "Smileys", emojis: ["😀","😂","🥹","😍","🥰","😘","😊","🤩","😜","😏","😎","🥳","😇","🤗","🙃","😅","😭","😤","😱","🤔"] },
+  { label: "Gestures", emojis: ["👍","👎","❤️","🙏","🤝","👏","🔥","💯","✨","🎉","💪","🤙","👌","🫶","✌️"] },
+  { label: "Food", emojis: ["🍕","🍔","🌮","🍜","🍣","🍫","🍰","☕","🧋","🍷","🍾","🎂","🍩","🍓","🥑"] },
+  { label: "Nature", emojis: ["🌹","🌸","🌺","🌻","🌙","⭐","🌈","☀️","🦋","🐶","🐱","🌊","🏔","🌴","🌿"] },
+];
 
 export default function MatchConversationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -64,10 +82,18 @@ export default function MatchConversationScreen() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [showGifts, setShowGifts] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
   const [showQuick, setShowQuick] = useState(true);
   const [acoinBalance, setAcoinBalance] = useState(0);
   const [selectedGift, setSelectedGift] = useState<Message | null>(null);
+  const [activeEmojiSection, setActiveEmojiSection] = useState(0);
+
+  // Reactions: messageId → array of {emoji, count, reacted}
+  const [reactions, setReactions] = useState<Record<string, Reaction[]>>({});
+  const [reactionTarget, setReactionTarget] = useState<string | null>(null);
+
   const flatRef = useRef<FlatList>(null);
+  const inputRef = useRef<TextInput>(null);
 
   useEffect(() => { if (id) loadAll(); }, [id]);
 
@@ -86,9 +112,7 @@ export default function MatchConversationScreen() {
     }
     setMessages((msgs as Message[]) ?? []);
     setLoading(false);
-    // Mark messages read
     await supabase.from("match_messages").update({ read_at: new Date().toISOString() }).eq("match_id", id).neq("sender_id", user.id).is("read_at", null);
-    // Load ACoin balance
     const balance = await getAcoinBalance(user.id);
     setAcoinBalance(balance);
   }
@@ -107,11 +131,11 @@ export default function MatchConversationScreen() {
   async function send(content?: string, giftEmoji?: string) {
     if (!id || !user || (!content?.trim() && !giftEmoji)) return;
 
-    // Charge ACoins for gifts
     if (giftEmoji) {
-      const result = await chargeMatchGift(user.id, giftEmoji, otherProfile?.name ?? "match", id);
+      const giftItem = getGiftItem(giftEmoji);
+      const result = await chargeMatchGift(user.id, giftEmoji, otherProfile?.name ?? "match", id, giftItem.price);
       if (!result.success) {
-        showAlert("Insufficient ACoins", `${result.error}\n\nGifts cost ${MATCH_PRICES.GIFT} AC each. Top up your wallet to send gifts.`, [
+        showAlert("Insufficient ACoins", `${result.error}\n\nThis gift costs ${giftItem.price} AC. Top up your wallet to send it.`, [
           { text: "Top Up Wallet", onPress: () => router.push("/wallet/topup" as any) },
           { text: "Cancel", style: "cancel" },
         ]);
@@ -122,9 +146,15 @@ export default function MatchConversationScreen() {
 
     setSending(true);
     setShowQuick(false);
+    setShowEmoji(false);
     const msg: any = { match_id: id, sender_id: user.id };
-    if (giftEmoji) { msg.is_gift = true; msg.gift_emoji = giftEmoji; msg.content = `Sent a gift ${giftEmoji}`; }
-    else { msg.content = content?.trim(); }
+    if (giftEmoji) {
+      msg.is_gift = true;
+      msg.gift_emoji = giftEmoji;
+      msg.content = `Sent a gift ${giftEmoji}`;
+    } else {
+      msg.content = content?.trim();
+    }
     const { data } = await supabase.from("match_messages").insert(msg).select().single();
     if (data) {
       setMessages((prev) => [...prev, data as Message]);
@@ -135,8 +165,36 @@ export default function MatchConversationScreen() {
     setSending(false);
   }
 
+  function addReaction(messageId: string, emoji: string) {
+    setReactions((prev) => {
+      const existing = prev[messageId] ?? [];
+      const idx = existing.findIndex((r) => r.emoji === emoji);
+      let updated: Reaction[];
+      if (idx >= 0) {
+        const r = existing[idx];
+        if (r.reacted) {
+          const newCount = r.count - 1;
+          updated = newCount <= 0
+            ? existing.filter((_, i) => i !== idx)
+            : existing.map((r, i) => i === idx ? { ...r, count: newCount, reacted: false } : r);
+        } else {
+          updated = existing.map((r, i) => i === idx ? { ...r, count: r.count + 1, reacted: true } : r);
+        }
+      } else {
+        updated = [...existing, { emoji, count: 1, reacted: true }];
+      }
+      return { ...prev, [messageId]: updated };
+    });
+    setReactionTarget(null);
+  }
+
+  function insertEmoji(emoji: string) {
+    setText((prev) => prev + emoji);
+    inputRef.current?.focus();
+  }
+
   function unmatch() {
-    showAlert("Unmatch", `Are you sure you want to unmatch with ${otherProfile?.name ?? "this person"}? This will remove your match and all messages.`, [
+    showAlert("Unmatch", `Are you sure you want to unmatch with ${otherProfile?.name ?? "this person"}?`, [
       { text: "Cancel", style: "cancel" },
       { text: "Unmatch", style: "destructive", onPress: async () => {
         await supabase.from("match_messages").delete().eq("match_id", id);
@@ -148,8 +206,7 @@ export default function MatchConversationScreen() {
 
   function calcAge(dob: string | null) {
     if (!dob) return null;
-    const age = new Date().getFullYear() - new Date(dob).getFullYear();
-    return age;
+    return new Date().getFullYear() - new Date(dob).getFullYear();
   }
 
   if (loading) return (
@@ -179,7 +236,7 @@ export default function MatchConversationScreen() {
           <View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <Text style={styles.headerName}>{otherProfile?.name ?? "Match"}</Text>
-              {match?.is_super_match && <Ionicons name="star" size={14} color="#FFD60A" />}
+              {match?.is_super_match && <Ionicons name="star" size={14} color={GOLD} />}
             </View>
             <Text style={styles.headerSub}>
               {[calcAge(otherProfile?.date_of_birth ?? null) ? `${calcAge(otherProfile?.date_of_birth ?? null)} yrs` : null, otherProfile?.job_title, otherProfile?.location_name].filter(Boolean).join(" · ")}
@@ -191,7 +248,7 @@ export default function MatchConversationScreen() {
         </Pressable>
       </LinearGradient>
 
-      {/* First message prompt */}
+      {/* First message banner */}
       {isFirstMessage && (
         <View style={[styles.firstMsgBanner, { backgroundColor: BRAND + "15" }]}>
           <Ionicons name="heart" size={16} color={BRAND} />
@@ -200,6 +257,7 @@ export default function MatchConversationScreen() {
       )}
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={0}>
+        {/* Messages list */}
         <FlatList
           ref={flatRef}
           data={messages}
@@ -208,35 +266,65 @@ export default function MatchConversationScreen() {
           onContentSizeChange={() => flatRef.current?.scrollToEnd({ animated: false })}
           renderItem={({ item }) => {
             const isMine = item.sender_id === user?.id;
+            const msgReactions = reactions[item.id] ?? [];
             return (
               <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
-                {item.is_gift ? (
-                  <Pressable
-                    style={[styles.giftBubble, isMine ? styles.giftBubbleMine : { backgroundColor: colors.surface }]}
-                    onPress={() => setSelectedGift(item)}
-                  >
-                    <Text style={{ fontSize: 36 }}>{item.gift_emoji}</Text>
-                    <Text style={[styles.giftLabel, { color: isMine ? "#fff" : colors.text }]}>
-                      {isMine ? "Gift sent" : "Gift received"}
-                    </Text>
-                    <View style={styles.giftTapHint}>
-                      <Ionicons name="information-circle-outline" size={11} color={isMine ? "rgba(255,255,255,0.6)" : colors.textMuted} />
-                      <Text style={[styles.giftTapHintText, { color: isMine ? "rgba(255,255,255,0.6)" : colors.textMuted }]}>tap to view</Text>
-                    </View>
-                  </Pressable>
-                ) : (
-                  <View style={[styles.bubble, isMine ? styles.bubbleMine : [styles.bubbleTheirs, { backgroundColor: colors.surface }]]}>
-                    <Text style={[styles.bubbleText, { color: isMine ? "#fff" : colors.text }]}>{item.content}</Text>
-                    <View style={styles.bubbleMeta}>
-                      <Text style={[styles.bubbleTime, { color: isMine ? "rgba(255,255,255,0.7)" : colors.textMuted }]}>
-                        {new Date(item.sent_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                <View>
+                  {item.is_gift ? (
+                    <Pressable
+                      style={[styles.giftBubble, isMine ? styles.giftBubbleMine : { backgroundColor: colors.surface }]}
+                      onPress={() => setSelectedGift(item)}
+                      onLongPress={() => setReactionTarget(item.id)}
+                      delayLongPress={400}
+                    >
+                      <Text style={{ fontSize: 36 }}>{item.gift_emoji}</Text>
+                      <Text style={[styles.giftName, { color: isMine ? "#fff" : colors.text }]}>
+                        {getGiftItem(item.gift_emoji ?? "🎁").name}
                       </Text>
-                      {isMine && (
-                        <Ionicons name={item.read_at ? "checkmark-done" : "checkmark"} size={13} color={item.read_at ? "#fff" : "rgba(255,255,255,0.7)"} />
-                      )}
+                      <View style={[styles.giftPriceBadge, { backgroundColor: isMine ? "rgba(0,0,0,0.2)" : colors.backgroundSecondary }]}>
+                        <Ionicons name="diamond" size={10} color={GOLD} />
+                        <Text style={styles.giftPriceText}>{getGiftItem(item.gift_emoji ?? "🎁").price} AC</Text>
+                      </View>
+                      <View style={styles.giftTapHint}>
+                        <Ionicons name="information-circle-outline" size={11} color={isMine ? "rgba(255,255,255,0.6)" : colors.textMuted} />
+                        <Text style={[styles.giftTapHintText, { color: isMine ? "rgba(255,255,255,0.6)" : colors.textMuted }]}>tap for details</Text>
+                      </View>
+                    </Pressable>
+                  ) : (
+                    <Pressable
+                      onLongPress={() => setReactionTarget(item.id)}
+                      delayLongPress={400}
+                    >
+                      <View style={[styles.bubble, isMine ? styles.bubbleMine : [styles.bubbleTheirs, { backgroundColor: colors.surface }]]}>
+                        <Text style={[styles.bubbleText, { color: isMine ? "#fff" : colors.text }]}>{item.content}</Text>
+                        <View style={styles.bubbleMeta}>
+                          <Text style={[styles.bubbleTime, { color: isMine ? "rgba(255,255,255,0.7)" : colors.textMuted }]}>
+                            {new Date(item.sent_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </Text>
+                          {isMine && (
+                            <Ionicons name={item.read_at ? "checkmark-done" : "checkmark"} size={13} color={item.read_at ? "#fff" : "rgba(255,255,255,0.7)"} />
+                          )}
+                        </View>
+                      </View>
+                    </Pressable>
+                  )}
+
+                  {/* Reactions row */}
+                  {msgReactions.length > 0 && (
+                    <View style={[styles.reactionsRow, isMine && styles.reactionsRowMine]}>
+                      {msgReactions.map((r) => (
+                        <Pressable
+                          key={r.emoji}
+                          style={[styles.reactionChip, { backgroundColor: r.reacted ? BRAND + "20" : colors.surface, borderColor: r.reacted ? BRAND : colors.border }]}
+                          onPress={() => addReaction(item.id, r.emoji)}
+                        >
+                          <Text style={styles.reactionEmoji}>{r.emoji}</Text>
+                          {r.count > 1 && <Text style={[styles.reactionCount, { color: r.reacted ? BRAND : colors.textMuted }]}>{r.count}</Text>}
+                        </Pressable>
+                      ))}
                     </View>
-                  </View>
-                )}
+                  )}
+                </View>
               </View>
             );
           }}
@@ -267,23 +355,64 @@ export default function MatchConversationScreen() {
           </View>
         )}
 
-        {/* Gift emoji picker */}
+        {/* Gift picker panel */}
         {showGifts && (
-          <View style={[styles.giftPicker, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-            <View style={styles.giftPickerHeader}>
-              <Text style={[styles.giftPickerTitle, { color: colors.text }]}>Send a gift 🎁</Text>
-              <View style={styles.giftCostBadge}>
-                <Ionicons name="logo-bitcoin" size={13} color="#FFD60A" />
-                <Text style={styles.giftCostText}>{MATCH_PRICES.GIFT} AC each</Text>
-                <View style={styles.giftBalanceDivider} />
-                <Text style={styles.giftBalanceText}>Balance: {acoinBalance} AC</Text>
+          <View style={[styles.panel, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+            <View style={styles.panelHeader}>
+              <Text style={[styles.panelTitle, { color: colors.text }]}>Send a Gift</Text>
+              <View style={styles.balanceBadge}>
+                <Ionicons name="diamond" size={12} color={GOLD} />
+                <Text style={styles.balanceText}>Balance: {acoinBalance} AC</Text>
               </View>
             </View>
-            <View style={styles.giftRow}>
-              {GIFT_EMOJIS.map((g) => (
-                <Pressable key={g} style={styles.giftEmoji} onPress={() => send(undefined, g)}>
-                  <Text style={{ fontSize: 32 }}>{g}</Text>
-                  <Text style={styles.giftEmojiCost}>{MATCH_PRICES.GIFT} AC</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.giftGrid}>
+              {GIFT_CATALOG.map((g) => (
+                <Pressable
+                  key={g.emoji}
+                  style={({ pressed }) => [
+                    styles.giftCard,
+                    { backgroundColor: pressed ? BRAND + "15" : colors.backgroundSecondary, borderColor: colors.border },
+                    acoinBalance < g.price && { opacity: 0.45 },
+                  ]}
+                  onPress={() => send(undefined, g.emoji)}
+                  disabled={acoinBalance < g.price}
+                >
+                  <Text style={styles.giftCardEmoji}>{g.emoji}</Text>
+                  <Text style={[styles.giftCardName, { color: colors.text }]} numberOfLines={1}>{g.name}</Text>
+                  <View style={styles.giftCardPrice}>
+                    <Ionicons name="diamond" size={9} color={GOLD} />
+                    <Text style={styles.giftCardPriceText}>{g.price} AC</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Emoji picker panel */}
+        {showEmoji && (
+          <View style={[styles.panel, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+            {/* Category tabs */}
+            <View style={styles.emojiTabs}>
+              {EMOJI_SECTIONS.map((s, i) => (
+                <Pressable
+                  key={s.label}
+                  style={[styles.emojiTab, activeEmojiSection === i && { borderBottomColor: BRAND, borderBottomWidth: 2 }]}
+                  onPress={() => setActiveEmojiSection(i)}
+                >
+                  <Text style={styles.emojiTabIcon}>{s.emojis[0]}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {/* Emoji grid */}
+            <View style={styles.emojiGrid}>
+              {EMOJI_SECTIONS[activeEmojiSection].emojis.map((em) => (
+                <Pressable
+                  key={em}
+                  style={({ pressed }) => [styles.emojiItem, pressed && { backgroundColor: colors.border + "44" }]}
+                  onPress={() => insertEmoji(em)}
+                >
+                  <Text style={styles.emojiItemText}>{em}</Text>
                 </Pressable>
               ))}
             </View>
@@ -292,10 +421,14 @@ export default function MatchConversationScreen() {
 
         {/* Input bar */}
         <View style={[styles.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: insets.bottom + 8 }]}>
-          <Pressable style={styles.inputAction} onPress={() => setShowGifts((v) => !v)}>
+          <Pressable style={styles.inputAction} onPress={() => { setShowGifts((v) => !v); setShowEmoji(false); }}>
             <Ionicons name="gift" size={22} color={showGifts ? BRAND : colors.textMuted} />
           </Pressable>
+          <Pressable style={styles.inputAction} onPress={() => { setShowEmoji((v) => !v); setShowGifts(false); }}>
+            <Text style={{ fontSize: 22 }}>{showEmoji ? "🙂" : "😊"}</Text>
+          </Pressable>
           <TextInput
+            ref={inputRef}
             style={[styles.inputField, { backgroundColor: colors.backgroundSecondary, color: colors.text }]}
             placeholder="Type a message…"
             placeholderTextColor={colors.textMuted}
@@ -304,7 +437,7 @@ export default function MatchConversationScreen() {
             multiline
             maxLength={1000}
             returnKeyType="send"
-            onSubmitEditing={() => send(text)}
+            onFocus={() => { setShowEmoji(false); setShowGifts(false); }}
           />
           <Pressable
             style={[styles.sendBtn, { backgroundColor: text.trim() ? BRAND : colors.border }]}
@@ -316,71 +449,78 @@ export default function MatchConversationScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* Gift Detail Modal */}
-      <Modal visible={!!selectedGift} animationType="slide" transparent>
-        <View style={styles.giftModalOverlay}>
-          <View style={[styles.giftModalContent, { backgroundColor: colors.surface }]}>
-            <View style={styles.giftModalHandle} />
-
-            {/* Header */}
-            <View style={styles.giftModalHeader}>
-              <Text style={[styles.giftModalTitle, { color: colors.text }]}>Gift Details</Text>
-              <Pressable onPress={() => setSelectedGift(null)} hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}>
-                <Ionicons name="close" size={24} color={colors.text} />
+      {/* Reaction picker overlay */}
+      {reactionTarget && (
+        <Pressable style={styles.reactionOverlay} onPress={() => setReactionTarget(null)}>
+          <View style={[styles.reactionPicker, { backgroundColor: colors.surface }]}>
+            {REACTION_EMOJIS.map((em) => (
+              <Pressable
+                key={em}
+                style={({ pressed }) => [styles.reactionPickerItem, pressed && { transform: [{ scale: 1.3 }] }]}
+                onPress={() => addReaction(reactionTarget, em)}
+              >
+                <Text style={styles.reactionPickerEmoji}>{em}</Text>
               </Pressable>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Emoji showcase */}
-              <View style={[styles.giftModalEmoji, { backgroundColor: BRAND + "12" }]}>
-                <Text style={{ fontSize: 72 }}>{selectedGift?.gift_emoji}</Text>
-              </View>
-
-              {/* Direction */}
-              <Text style={[styles.giftModalDirection, { color: BRAND }]}>
-                {selectedGift?.sender_id === user?.id ? "You sent this gift 💝" : "You received this gift 🎁"}
-              </Text>
-
-              {/* Details */}
-              <View style={[styles.giftModalDetails, { backgroundColor: colors.backgroundSecondary }]}>
-                <View style={styles.giftModalRow}>
-                  <Text style={[styles.giftModalLabel, { color: colors.textMuted }]}>
-                    {selectedGift?.sender_id === user?.id ? "To" : "From"}
-                  </Text>
-                  <Text style={[styles.giftModalValue, { color: colors.text }]}>{otherProfile?.name ?? "Match"}</Text>
-                </View>
-                <View style={[styles.giftModalDivider, { backgroundColor: colors.border }]} />
-                <View style={styles.giftModalRow}>
-                  <Text style={[styles.giftModalLabel, { color: colors.textMuted }]}>Sent</Text>
-                  <Text style={[styles.giftModalValue, { color: colors.text }]}>
-                    {selectedGift ? new Date(selectedGift.sent_at).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
-                  </Text>
-                </View>
-                <View style={[styles.giftModalDivider, { backgroundColor: colors.border }]} />
-                <View style={styles.giftModalRow}>
-                  <Text style={[styles.giftModalLabel, { color: colors.textMuted }]}>Value</Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <Ionicons name="diamond" size={14} color="#FFD60A" />
-                    <Text style={[styles.giftModalValue, { color: "#FFD60A" }]}>{MATCH_PRICES.GIFT} ACoins</Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Received gift note */}
-              {selectedGift?.sender_id !== user?.id && (
-                <View style={[styles.giftModalNote, { backgroundColor: colors.backgroundSecondary }]}>
-                  <Ionicons name="star" size={16} color={BRAND} />
-                  <Text style={[styles.giftModalNoteText, { color: colors.textSecondary }]}>
-                    This gift is displayed on your AfuMatch profile.
-                  </Text>
-                </View>
-              )}
-
-              <View style={{ height: 24 }} />
-            </ScrollView>
+            ))}
           </View>
+        </Pressable>
+      )}
+
+      {/* Gift detail bottom sheet — swipe to close */}
+      <SwipeableBottomSheet
+        visible={!!selectedGift}
+        onClose={() => setSelectedGift(null)}
+        backgroundColor={colors.surface}
+        maxHeight="80%"
+      >
+        <View style={styles.giftDetailHeader}>
+          <Text style={[styles.giftDetailTitle, { color: colors.text }]}>Gift Details</Text>
+          <Pressable onPress={() => setSelectedGift(null)} hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}>
+            <Ionicons name="close" size={24} color={colors.text} />
+          </Pressable>
         </View>
-      </Modal>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}>
+          <View style={[styles.giftDetailEmoji, { backgroundColor: BRAND + "12" }]}>
+            <Text style={{ fontSize: 72 }}>{selectedGift?.gift_emoji}</Text>
+            <Text style={[styles.giftDetailEmojiName, { color: colors.textSecondary }]}>
+              {getGiftItem(selectedGift?.gift_emoji ?? "🎁").name}
+            </Text>
+          </View>
+          <Text style={[styles.giftDetailDirection, { color: BRAND }]}>
+            {selectedGift?.sender_id === user?.id ? "You sent this gift 💝" : "You received this gift 🎁"}
+          </Text>
+          <View style={[styles.giftDetailRows, { backgroundColor: colors.backgroundSecondary }]}>
+            {[
+              { label: selectedGift?.sender_id === user?.id ? "To" : "From", value: otherProfile?.name ?? "Match" },
+              { label: "Sent", value: selectedGift ? new Date(selectedGift.sent_at).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "" },
+            ].map((row, i, arr) => (
+              <View key={row.label}>
+                <View style={styles.giftDetailRow}>
+                  <Text style={[styles.giftDetailLabel, { color: colors.textMuted }]}>{row.label}</Text>
+                  <Text style={[styles.giftDetailValue, { color: colors.text }]}>{row.value}</Text>
+                </View>
+                {i < arr.length - 1 && <View style={[styles.giftDetailDivider, { backgroundColor: colors.border }]} />}
+              </View>
+            ))}
+            <View style={[styles.giftDetailDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.giftDetailRow}>
+              <Text style={[styles.giftDetailLabel, { color: colors.textMuted }]}>Value</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Ionicons name="diamond" size={14} color={GOLD} />
+                <Text style={[styles.giftDetailValue, { color: GOLD }]}>{getGiftItem(selectedGift?.gift_emoji ?? "🎁").price} ACoins</Text>
+              </View>
+            </View>
+          </View>
+          {selectedGift?.sender_id !== user?.id && (
+            <View style={[styles.giftDetailNote, { backgroundColor: colors.backgroundSecondary }]}>
+              <Ionicons name="star" size={16} color={BRAND} />
+              <Text style={[styles.giftDetailNoteText, { color: colors.textSecondary }]}>
+                This gift appears on your AfuMatch profile and can be converted to ACoins in your wallet.
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      </SwipeableBottomSheet>
     </View>
   );
 }
@@ -403,42 +543,76 @@ const styles = StyleSheet.create({
   bubbleText: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22 },
   bubbleMeta: { flexDirection: "row", alignItems: "center", gap: 4, justifyContent: "flex-end" },
   bubbleTime: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  giftBubble: { borderRadius: 18, padding: 16, alignItems: "center", gap: 4, minWidth: 100 },
+
+  // Gift bubble
+  giftBubble: { borderRadius: 18, padding: 14, alignItems: "center", gap: 3, minWidth: 110 },
   giftBubbleMine: { backgroundColor: BRAND + "CC" },
-  giftLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  giftTapHint: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
+  giftName: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  giftPriceBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  giftPriceText: { color: GOLD, fontSize: 11, fontFamily: "Inter_700Bold" },
+  giftTapHint: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 1 },
   giftTapHintText: { fontSize: 10, fontFamily: "Inter_400Regular" },
-  giftModalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" },
-  giftModalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingBottom: 32, maxHeight: "80%" },
-  giftModalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#3A3A3C", alignSelf: "center", marginTop: 12, marginBottom: 4 },
-  giftModalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 16 },
-  giftModalTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  giftModalEmoji: { borderRadius: 20, padding: 24, alignItems: "center", marginBottom: 16 },
-  giftModalDirection: { fontSize: 16, fontFamily: "Inter_600SemiBold", textAlign: "center", marginBottom: 16 },
-  giftModalDetails: { borderRadius: 14, marginBottom: 12, overflow: "hidden" },
-  giftModalRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14 },
-  giftModalLabel: { fontSize: 14, fontFamily: "Inter_400Regular" },
-  giftModalValue: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  giftModalDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: 16 },
-  giftModalNote: { flexDirection: "row", alignItems: "flex-start", gap: 10, borderRadius: 12, padding: 14, marginBottom: 12 },
-  giftModalNoteText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
+
+  // Reactions
+  reactionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4, marginLeft: 4 },
+  reactionsRowMine: { justifyContent: "flex-end", marginLeft: 0, marginRight: 4 },
+  reactionChip: { flexDirection: "row", alignItems: "center", gap: 3, borderWidth: 1, borderRadius: 12, paddingHorizontal: 7, paddingVertical: 3 },
+  reactionEmoji: { fontSize: 14 },
+  reactionCount: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  reactionOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.3)" },
+  reactionPicker: { flexDirection: "row", borderRadius: 32, paddingHorizontal: 12, paddingVertical: 10, gap: 4, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 12, elevation: 8 },
+  reactionPickerItem: { padding: 4 },
+  reactionPickerEmoji: { fontSize: 26 },
+
+  // Panels
+  panel: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12 },
+  panelHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  panelTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  balanceBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#1C1C1E", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  balanceText: { color: "#8E8E93", fontSize: 11, fontFamily: "Inter_400Regular" },
+
+  // Gift grid
+  giftGrid: { gap: 8, paddingBottom: 4 },
+  giftCard: { width: 76, alignItems: "center", borderRadius: 14, padding: 10, gap: 4, borderWidth: 1 },
+  giftCardEmoji: { fontSize: 30 },
+  giftCardName: { fontSize: 10, fontFamily: "Inter_500Medium", textAlign: "center" },
+  giftCardPrice: { flexDirection: "row", alignItems: "center", gap: 2 },
+  giftCardPriceText: { color: GOLD, fontSize: 10, fontFamily: "Inter_700Bold" },
+
+  // Emoji picker
+  emojiTabs: { flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#3A3A3C", marginBottom: 8 },
+  emojiTab: { flex: 1, alignItems: "center", paddingVertical: 6 },
+  emojiTabIcon: { fontSize: 20 },
+  emojiGrid: { flexDirection: "row", flexWrap: "wrap", gap: 2 },
+  emojiItem: { width: "12.5%", aspectRatio: 1, alignItems: "center", justifyContent: "center", borderRadius: 8 },
+  emojiItemText: { fontSize: 24 },
+
+  // Input bar
+  inputBar: { flexDirection: "row", alignItems: "flex-end", gap: 8, paddingHorizontal: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  inputAction: { width: 34, height: 34, alignItems: "center", justifyContent: "center" },
+  inputField: { flex: 1, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, fontFamily: "Inter_400Regular", maxHeight: 120 },
+  sendBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+
+  // Quick replies
   quickWrap: { paddingVertical: 8 },
   quickChip: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
   quickText: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  giftPicker: { borderTopWidth: StyleSheet.hairlineWidth, padding: 16 },
-  giftPickerHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-  giftPickerTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  giftCostBadge: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#1C1C1E", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  giftCostText: { color: "#FFD60A", fontSize: 11, fontFamily: "Inter_600SemiBold" },
-  giftBalanceDivider: { width: 1, height: 12, backgroundColor: "#3A3A3C" },
-  giftBalanceText: { color: "#8E8E93", fontSize: 11, fontFamily: "Inter_400Regular" },
-  giftRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  giftEmoji: { width: 56, height: 64, alignItems: "center", justifyContent: "center", gap: 2 },
-  giftEmojiCost: { color: "#FFD60A", fontSize: 10, fontFamily: "Inter_600SemiBold" },
-  inputBar: { flexDirection: "row", alignItems: "flex-end", gap: 10, paddingHorizontal: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
-  inputAction: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
-  inputField: { flex: 1, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, fontFamily: "Inter_400Regular", maxHeight: 120 },
-  sendBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+
+  // Empty state
   emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold", marginBottom: 8 },
   emptySub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", paddingHorizontal: 32 },
+
+  // Gift detail sheet
+  giftDetailHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16 },
+  giftDetailTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  giftDetailEmoji: { borderRadius: 20, padding: 24, alignItems: "center", marginBottom: 16, gap: 6 },
+  giftDetailEmojiName: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  giftDetailDirection: { fontSize: 16, fontFamily: "Inter_600SemiBold", textAlign: "center", marginBottom: 16 },
+  giftDetailRows: { borderRadius: 14, marginBottom: 12, overflow: "hidden" },
+  giftDetailRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14 },
+  giftDetailLabel: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  giftDetailValue: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  giftDetailDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: 16 },
+  giftDetailNote: { flexDirection: "row", alignItems: "flex-start", gap: 10, borderRadius: 12, padding: 14 },
+  giftDetailNoteText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
 });
