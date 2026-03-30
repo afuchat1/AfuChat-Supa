@@ -232,6 +232,63 @@ export async function getConvertedGiftIds(userId: string): Promise<Set<string>> 
   return ids;
 }
 
+export async function sendMatchGiftFromDb(
+  senderId: string,
+  receiverId: string,
+  giftId: string,
+  giftName: string,
+  giftEmoji: string,
+  price: number,
+  matchId: string
+): Promise<{ success: boolean; error?: string; newBalance?: number }> {
+  const result = await deductAcoins(senderId, price, "match_gift", {
+    gift_id: giftId,
+    gift_name: giftName,
+    gift_emoji: giftEmoji,
+    gift_price: price,
+    receiver_id: receiverId,
+    match_id: matchId,
+    description: `Sent ${giftEmoji} ${giftName} gift in AfuMatch`,
+  });
+
+  if (!result.success) return result;
+
+  const { data: txData } = await supabase.from("gift_transactions").insert({
+    gift_id: giftId,
+    sender_id: senderId,
+    receiver_id: receiverId,
+    xp_cost: price,
+    message: null,
+  }).select("id").single();
+
+  await supabase.from("user_gifts").insert({
+    user_id: receiverId,
+    gift_id: giftId,
+    transaction_id: txData?.id ?? null,
+    acquired_at: new Date().toISOString(),
+    is_pinned: false,
+  });
+
+  const { data: currentStats } = await supabase
+    .from("gift_statistics")
+    .select("price_multiplier, total_sent, last_sale_price")
+    .eq("gift_id", giftId)
+    .maybeSingle();
+
+  const currentMultiplier = currentStats ? parseFloat(String(currentStats.price_multiplier)) : 1;
+  const newMultiplier = Math.min(currentMultiplier + 0.01, 3.0);
+
+  await supabase.from("gift_statistics").upsert({
+    gift_id: giftId,
+    price_multiplier: newMultiplier,
+    total_sent: (currentStats?.total_sent || 0) + 1,
+    last_sale_price: currentStats?.last_sale_price ?? null,
+    last_updated: new Date().toISOString(),
+  }, { onConflict: "gift_id" });
+
+  return result;
+}
+
 export async function convertMatchGiftsToAcoins(
   userId: string,
   messageIds: string[]

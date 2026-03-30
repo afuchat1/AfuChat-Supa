@@ -55,6 +55,7 @@ import { translateText, LANG_LABELS } from "@/lib/translate";
 import { useLanguage } from "@/context/LanguageContext";
 import { askAi, aiSuggestReply, transcribeAudio } from "@/lib/aiHelper";
 import EmojiPicker from "rn-emoji-keyboard";
+import GiftPickerSheet, { DbGift } from "@/components/gifts/GiftPickerSheet";
 
 type Gift = {
   id: string;
@@ -739,10 +740,7 @@ export default function ChatScreen() {
   const [envelopeCount, setEnvelopeCount] = useState("1");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showGiftPicker, setShowGiftPicker] = useState(false);
-  const [gifts, setGifts] = useState<Gift[]>([]);
-  const [giftsLoading, setGiftsLoading] = useState(false);
   const [giftSending, setGiftSending] = useState(false);
-  const [giftMsg, setGiftMsg] = useState("");
   const [giftReveal, setGiftReveal] = useState<{ content: string; isReceiver: boolean } | null>(null);
   const [envReveal, setEnvReveal] = useState<{
     amount: number | null;
@@ -1426,40 +1424,12 @@ export default function ChatScreen() {
     loadMessages();
   }
 
-  async function loadGifts() {
-    setGiftsLoading(true);
-    try {
-      const { data, error } = await supabase.from("gifts").select("*").order("base_xp_cost", { ascending: true });
-      if (data && data.length > 0) {
-        setGifts(data.map((g: any) => ({
-          ...g,
-          acoin_price: getDynamicPrice(g.id, g.base_xp_cost),
-        })));
-      }
-    } finally {
-      setGiftsLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    if (gifts.length > 0) {
-      setGifts((prev) =>
-        prev.map((g) => ({
-          ...g,
-          acoin_price: getDynamicPrice(g.id, g.base_xp_cost),
-        }))
-      );
-    }
-  }, [statsMap]);
-
-  async function sendGift(gift: Gift) {
+  async function sendGift(gift: DbGift, message: string, price: number) {
     if (!user || giftSending) return;
     if (messageLimited) {
       showAlert("Message limit", `You can only send one message until ${chatInfo?.other_name || "this user"} replies or follows you.`);
       return;
     }
-
-    const price = gift.acoin_price ?? gift.base_xp_cost;
 
     const { data: senderProfile } = await supabase.from("profiles").select("acoin").eq("id", user.id).single();
     if (!senderProfile || (senderProfile.acoin || 0) < price) {
@@ -1496,7 +1466,7 @@ export default function ChatScreen() {
       sender_id: user.id,
       receiver_id: receiverId,
       xp_cost: price,
-      message: giftMsg.trim() || null,
+      message: message.trim() || null,
     });
 
     if (txErr) {
@@ -1536,7 +1506,7 @@ export default function ChatScreen() {
     await supabase.from("messages").insert({
       chat_id: activeChatId,
       sender_id: user.id,
-      encrypted_content: `🎁 ${gift.emoji} ${gift.name}${giftMsg ? ` - ${giftMsg}` : ""}|giftId:${gift.id}|receiverId:${receiverId}`,
+      encrypted_content: `🎁 ${gift.emoji} ${gift.name}${message.trim() ? ` - ${message.trim()}` : ""}|giftId:${gift.id}|receiverId:${receiverId}`,
     });
 
     notifyGiftReceived({
@@ -1547,10 +1517,8 @@ export default function ChatScreen() {
     });
     try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("gift_sent"); } catch (_) {}
     setShowGiftPicker(false);
-    setGiftMsg("");
     setGiftSending(false);
     loadMessages();
-    loadGifts();
   }
 
   async function pickFromCamera() {
@@ -2186,7 +2154,7 @@ export default function ChatScreen() {
                 {!input.trim() && (
                   <>
                     {!chatInfo?.is_group && !chatInfo?.is_channel && (
-                      <TouchableOpacity onPress={() => { loadGifts(); setShowGiftPicker(true); }} hitSlop={8} style={st.pillIcon}>
+                      <TouchableOpacity onPress={() => setShowGiftPicker(true)} hitSlop={8} style={st.pillIcon}>
                         <Ionicons name="gift-outline" size={22} color={colors.textMuted} />
                       </TouchableOpacity>
                     )}
@@ -2425,70 +2393,14 @@ export default function ChatScreen() {
         </TouchableOpacity>
       </BottomSheet>
 
-      <Modal visible={showGiftPicker} transparent animationType="fade" onRequestClose={() => setShowGiftPicker(false)}>
-        <View style={st.giftModalOverlay}>
-          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setShowGiftPicker(false)} />
-          <View style={[st.giftModalContainer, { backgroundColor: colors.surface }]}>
-            <View style={st.giftModalHeader}>
-              <Text style={[st.giftModalTitle, { color: colors.text }]}>Send a Gift</Text>
-              <TouchableOpacity onPress={() => setShowGiftPicker(false)} hitSlop={12}>
-                <Ionicons name="close" size={24} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-            <View style={[st.giftModalMsgRow, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
-              <Ionicons name="chatbubble-outline" size={16} color={colors.textMuted} />
-              <TextInput
-                style={[st.giftModalMsgInput, { color: colors.text }]}
-                placeholder="Add a message (optional)"
-                placeholderTextColor={colors.textMuted}
-                value={giftMsg}
-                onChangeText={setGiftMsg}
-              />
-            </View>
-            <Text style={[st.giftModalSectionLabel, { color: colors.textMuted }]}>
-              To: {chatInfo?.other_name || "Friend"}
-            </Text>
-            <View style={st.giftScrollContainer}>
-              {giftsLoading ? (
-                <View style={st.giftModalLoadingCenter}>
-                  <ActivityIndicator color={BRAND} size="large" />
-                  <Text style={[st.giftModalLoadingText, { color: colors.textMuted }]}>Loading gifts…</Text>
-                </View>
-              ) : gifts.length === 0 ? (
-                <View style={st.giftModalLoadingCenter}>
-                  <Text style={{ fontSize: 40 }}>🎁</Text>
-                  <Text style={[st.giftModalLoadingText, { color: colors.textMuted }]}>No gifts available</Text>
-                </View>
-              ) : (
-                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={st.giftGrid}>
-                  {gifts.map((gift) => (
-                    <TouchableOpacity
-                      key={gift.id}
-                      style={[st.giftModalItem, { backgroundColor: colors.inputBg, borderColor: colors.border }]}
-                      onPress={() => sendGift(gift)}
-                      disabled={giftSending}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={st.giftModalEmoji}>{gift.emoji}</Text>
-                      <Text style={[st.giftModalName, { color: colors.text }]} numberOfLines={1}>{gift.name}</Text>
-                      <View style={st.giftModalPriceRow}>
-                        <Text style={[st.giftModalPrice, { color: Colors.gold }]}>{gift.acoin_price ?? gift.base_xp_cost}</Text>
-                        <Text style={[st.giftModalCurrency, { color: colors.textMuted }]}> ACoin</Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              )}
-            </View>
-            {giftSending && (
-              <View style={st.giftModalLoading}>
-                <ActivityIndicator color={BRAND} size="small" />
-                <Text style={[st.giftModalLoadingText, { color: colors.textMuted }]}>Sending gift...</Text>
-              </View>
-            )}
-          </View>
-        </View>
-      </Modal>
+      <GiftPickerSheet
+        visible={showGiftPicker}
+        onClose={() => setShowGiftPicker(false)}
+        onSend={sendGift}
+        sending={giftSending}
+        acoinBalance={profile?.acoin ?? 0}
+        recipientName={chatInfo?.other_name}
+      />
 
       <BottomSheet visible={showAttachMenu} onClose={() => setShowAttachMenu(false)}>
         <Text style={[st.sheetTitle, { color: colors.text }]}>Share</Text>

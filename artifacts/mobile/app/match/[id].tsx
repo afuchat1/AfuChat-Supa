@@ -23,11 +23,11 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { showAlert } from "@/lib/alert";
 import {
-  chargeMatchGift,
-  GIFT_CATALOG,
-  getGiftItem,
   getAcoinBalance,
+  getGiftItem,
+  sendMatchGiftFromDb,
 } from "@/lib/matchTransactions";
+import GiftPickerSheet, { DbGift } from "@/components/gifts/GiftPickerSheet";
 import SwipeableBottomSheet from "@/components/SwipeableBottomSheet";
 
 const BRAND = "#FF2D55";
@@ -89,10 +89,10 @@ export default function MatchConversationScreen() {
   const [acoinBalance, setAcoinBalance] = useState(0);
   const [selectedGift, setSelectedGift] = useState<Message | null>(null);
   const [activeEmojiSection, setActiveEmojiSection] = useState(0);
-  const [pendingGiftEmoji, setPendingGiftEmoji] = useState<string | null>(null);
 
   const [reactions, setReactions] = useState<Record<string, Reaction[]>>({});
   const [reactionTarget, setReactionTarget] = useState<string | null>(null);
+  const otherUserId = match ? (match.user1_id === user?.id ? match.user2_id : match.user1_id) : null;
 
   const flatRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
@@ -130,39 +130,47 @@ export default function MatchConversationScreen() {
     return () => { supabase.removeChannel(channel); };
   }, [id]);
 
-  async function send(content?: string, giftEmoji?: string) {
-    if (!id || !user || (!content?.trim() && !giftEmoji)) return;
-
-    if (giftEmoji) {
-      const giftItem = getGiftItem(giftEmoji);
-      const result = await chargeMatchGift(user.id, giftEmoji, otherProfile?.name ?? "match", id, giftItem.price);
-      if (!result.success) {
-        showAlert("Insufficient ACoins", `${result.error}\n\nThis gift costs ${giftItem.price} AC.`, [
-          { text: "Top Up Wallet", onPress: () => router.push("/wallet/topup" as any) },
-          { text: "Cancel", style: "cancel" },
-        ]);
-        return;
-      }
-      setAcoinBalance(result.newBalance ?? 0);
-    }
-
+  async function send(content?: string) {
+    if (!id || !user || !content?.trim()) return;
     setSending(true);
     setShowQuick(false);
-    const msg: any = { match_id: id, sender_id: user.id };
-    if (giftEmoji) {
-      msg.is_gift = true;
-      msg.gift_emoji = giftEmoji;
-      msg.content = `Sent a gift ${giftEmoji}`;
-    } else {
-      msg.content = content?.trim();
-    }
+    const msg: any = { match_id: id, sender_id: user.id, content: content.trim() };
     const { data } = await supabase.from("match_messages").insert(msg).select().single();
     if (data) {
       setMessages((prev) => [...prev, data as Message]);
       flatRef.current?.scrollToEnd({ animated: true });
     }
     setText("");
-    setPendingGiftEmoji(null);
+    setSending(false);
+  }
+
+  async function sendDbGift(gift: DbGift, message: string, price: number) {
+    if (!id || !user || !otherUserId) return;
+    setSending(true);
+    const result = await sendMatchGiftFromDb(user.id, otherUserId, gift.id, gift.name, gift.emoji, price, id);
+    if (!result.success) {
+      showAlert("Insufficient ACoins", result.error ?? "Could not send gift.", [
+        { text: "Top Up Wallet", onPress: () => router.push("/wallet/topup" as any) },
+        { text: "Cancel", style: "cancel" },
+      ]);
+      setSending(false);
+      return;
+    }
+    setAcoinBalance(result.newBalance ?? 0);
+    const msgContent = message.trim()
+      ? `Sent ${gift.emoji} ${gift.name} — ${message.trim()}`
+      : `Sent ${gift.emoji} ${gift.name}`;
+    const { data } = await supabase.from("match_messages").insert({
+      match_id: id,
+      sender_id: user.id,
+      is_gift: true,
+      gift_emoji: gift.emoji,
+      content: msgContent,
+    }).select().single();
+    if (data) {
+      setMessages((prev) => [...prev, data as Message]);
+      flatRef.current?.scrollToEnd({ animated: true });
+    }
     setShowGifts(false);
     setSending(false);
   }
@@ -216,7 +224,6 @@ export default function MatchConversationScreen() {
   function openGifts() {
     Keyboard.dismiss();
     setShowEmoji(false);
-    setPendingGiftEmoji(null);
     setShowGifts(true);
   }
 
@@ -243,8 +250,6 @@ export default function MatchConversationScreen() {
     if (!dob) return null;
     return new Date().getFullYear() - new Date(dob).getFullYear();
   }
-
-  const pendingGiftItem = pendingGiftEmoji ? getGiftItem(pendingGiftEmoji) : null;
 
   if (loading) return (
     <View style={[styles.root, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }]}>
@@ -391,72 +396,14 @@ export default function MatchConversationScreen() {
           </View>
         )}
 
-        {/* Gift picker panel */}
-        {showGifts && (
-          <View style={[styles.panel, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-            <View style={styles.panelHeader}>
-              <Text style={[styles.panelTitle, { color: colors.text }]}>Send a Gift</Text>
-              <View style={styles.balanceBadge}>
-                <Ionicons name="diamond" size={12} color={GOLD} />
-                <Text style={styles.balanceText}>{acoinBalance} AC</Text>
-              </View>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
-              {GIFT_CATALOG.map((g) => {
-                const isSelected = pendingGiftEmoji === g.emoji;
-                const tooExpensive = acoinBalance < g.price;
-                return (
-                  <Pressable
-                    key={g.emoji}
-                    style={[
-                      styles.giftCard,
-                      { borderColor: isSelected ? BRAND : colors.border },
-                      isSelected && { backgroundColor: BRAND + "18" },
-                      !isSelected && { backgroundColor: colors.backgroundSecondary },
-                      tooExpensive && { opacity: 0.38 },
-                    ]}
-                    onPress={() => setPendingGiftEmoji(isSelected ? null : g.emoji)}
-                    disabled={tooExpensive}
-                  >
-                    <Text style={styles.giftCardEmoji}>{g.emoji}</Text>
-                    <Text style={[styles.giftCardName, { color: isSelected ? BRAND : colors.text }]} numberOfLines={1}>{g.name}</Text>
-                    <View style={styles.giftCardPrice}>
-                      <Ionicons name="diamond" size={9} color={GOLD} />
-                      <Text style={styles.giftCardPriceText}>{g.price} AC</Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-            {/* Send confirmation row */}
-            {pendingGiftItem && (
-              <View style={[styles.giftConfirmRow, { backgroundColor: colors.backgroundSecondary, borderColor: BRAND + "30" }]}>
-                <Text style={{ fontSize: 24 }}>{pendingGiftItem.emoji}</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.giftConfirmName, { color: colors.text }]}>{pendingGiftItem.name}</Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <Ionicons name="diamond" size={10} color={GOLD} />
-                    <Text style={[styles.giftConfirmPrice, { color: GOLD }]}>{pendingGiftItem.price} ACoins</Text>
-                  </View>
-                </View>
-                <Pressable
-                  style={[styles.giftSendBtn, sending && { opacity: 0.5 }]}
-                  onPress={() => send(undefined, pendingGiftEmoji!)}
-                  disabled={sending}
-                >
-                  {sending ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <>
-                      <Ionicons name="send" size={14} color="#fff" />
-                      <Text style={styles.giftSendBtnText}>Send</Text>
-                    </>
-                  )}
-                </Pressable>
-              </View>
-            )}
-          </View>
-        )}
+        <GiftPickerSheet
+          visible={showGifts}
+          onClose={() => setShowGifts(false)}
+          onSend={sendDbGift}
+          sending={sending}
+          acoinBalance={acoinBalance}
+          recipientName={otherProfile?.name}
+        />
 
         {/* Input bar */}
         <View style={[styles.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: showEmoji ? 8 : insets.bottom + 8 }]}>

@@ -445,11 +445,47 @@ export default function GiftsScreen() {
               </View>
             </View>
 
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
-              <Ionicons name="diamond" size={14} color={Colors.gold} />
-              <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: Colors.gold }}>{selectedGift ? getDynamicPrice(selectedGift.gift.id, selectedGift.gift.base_xp_cost) : 0}</Text>
-              <Text style={{ fontSize: 12, fontFamily: "Inter_500Medium", color: colors.textMuted, marginLeft: 2 }}>ACoin value</Text>
-            </View>
+            {(() => {
+              const base = selectedGift?.gift.base_xp_cost ?? 0;
+              const current = selectedGift ? getDynamicPrice(selectedGift.gift.id, base) : 0;
+              const diff = current - base;
+              const pct = base > 0 ? Math.round((diff / base) * 100) : 0;
+              const stat = selectedGift ? statsMap[selectedGift.gift.id] : null;
+              const lastSale = stat?.lastSalePrice ?? null;
+              const isMarketDriven = ["rare","epic","legendary"].includes(selectedGift?.gift.rarity ?? "");
+              return (
+                <View style={{ marginTop: 6, gap: 6 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <Ionicons name="diamond" size={15} color={Colors.gold} />
+                      <Text style={{ fontSize: 18, fontFamily: "Inter_700Bold", color: Colors.gold }}>{current}</Text>
+                      <Text style={{ fontSize: 12, fontFamily: "Inter_500Medium", color: colors.textMuted }}>AC</Text>
+                    </View>
+                    {pct !== 0 && (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: pct > 0 ? "#10B98118" : "#EF444418", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                        <Ionicons name={pct > 0 ? "trending-up" : "trending-down"} size={13} color={pct > 0 ? "#10B981" : "#EF4444"} />
+                        <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: pct > 0 ? "#10B981" : "#EF4444" }}>
+                          {pct > 0 ? "+" : ""}{pct}% from base
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  {base !== current && (
+                    <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.textMuted, textAlign: "center" }}>
+                      Base price: {base} AC · Current: {current} AC
+                    </Text>
+                  )}
+                  {isMarketDriven && lastSale != null && lastSale > 0 && (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, justifyContent: "center" }}>
+                      <Ionicons name="storefront-outline" size={12} color={colors.textMuted} />
+                      <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.textMuted }}>
+                        Last sold: <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.text }}>{lastSale} AC</Text>
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              );
+            })()}
 
             {selectedGift?.gift.description && (
               <Text style={[styles.giftDesc, { color: colors.textSecondary }]}>{selectedGift.gift.description}</Text>

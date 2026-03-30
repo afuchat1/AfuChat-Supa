@@ -276,6 +276,9 @@ export default function GiftMarketplaceScreen() {
     const rBg = rarityBgColors[item.gift.rarity] || "rgba(0,0,0,0.05)";
     const rColor = rarityColors[item.gift.rarity] || "#888";
     const isOwn = item.seller_id === user?.id;
+    const base = item.gift.base_xp_cost;
+    const asking = item.asking_price;
+    const pct = base > 0 ? Math.round(((asking - base) / base) * 100) : 0;
 
     return (
       <TouchableOpacity
@@ -298,8 +301,16 @@ export default function GiftMarketplaceScreen() {
         </View>
         <View style={styles.priceRow}>
           <Ionicons name="diamond" size={14} color={Colors.gold} />
-          <Text style={styles.priceText}>{item.asking_price}</Text>
+          <Text style={styles.priceText}>{asking}</Text>
         </View>
+        {pct !== 0 && (
+          <View style={[styles.pctBadge, { backgroundColor: pct > 0 ? "#10B98118" : "#EF444418" }]}>
+            <Ionicons name={pct > 0 ? "trending-up" : "trending-down"} size={10} color={pct > 0 ? "#10B981" : "#EF4444"} />
+            <Text style={[styles.pctText, { color: pct > 0 ? "#10B981" : "#EF4444" }]}>
+              {pct > 0 ? "+" : ""}{pct}%
+            </Text>
+          </View>
+        )}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 2, justifyContent: "center" }}>
           <Text style={[styles.sellerText, { color: colors.textMuted }]} numberOfLines={1}>by {item.seller_name}</Text>
           <VerifiedBadge isVerified={item.seller_is_verified} isOrganizationVerified={item.seller_is_organization_verified} size={12} />
@@ -406,14 +417,34 @@ export default function GiftMarketplaceScreen() {
               </Text>
             </View>
 
-            <View style={[styles.priceCard, { backgroundColor: colors.inputBg }]}>
-              <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>Price</Text>
-              <View style={styles.priceValueRow}>
-                <Ionicons name="diamond" size={22} color={Colors.gold} />
-                <Text style={[styles.priceValueText, { color: colors.text }]}>{selectedListing?.asking_price || 0}</Text>
-                <Text style={[styles.priceCurrency, { color: colors.textMuted }]}>ACoin</Text>
-              </View>
-            </View>
+            {(() => {
+              const base2 = selectedListing?.gift.base_xp_cost ?? 0;
+              const asking2 = selectedListing?.asking_price ?? 0;
+              const pct2 = base2 > 0 ? Math.round(((asking2 - base2) / base2) * 100) : 0;
+              return (
+                <View style={[styles.priceCard, { backgroundColor: colors.inputBg }]}>
+                  <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>Asking Price</Text>
+                  <View style={styles.priceValueRow}>
+                    <Ionicons name="diamond" size={22} color={Colors.gold} />
+                    <Text style={[styles.priceValueText, { color: colors.text }]}>{asking2}</Text>
+                    <Text style={[styles.priceCurrency, { color: colors.textMuted }]}>AC</Text>
+                    {pct2 !== 0 && (
+                      <View style={[styles.pctBadge, { backgroundColor: pct2 > 0 ? "#10B98118" : "#EF444418", marginLeft: 6 }]}>
+                        <Ionicons name={pct2 > 0 ? "trending-up" : "trending-down"} size={12} color={pct2 > 0 ? "#10B981" : "#EF4444"} />
+                        <Text style={[styles.pctText, { color: pct2 > 0 ? "#10B981" : "#EF4444", fontSize: 12 }]}>
+                          {pct2 > 0 ? "+" : ""}{pct2}%
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  {base2 > 0 && (
+                    <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.textMuted, marginTop: 2 }}>
+                      Base value: {base2} AC
+                    </Text>
+                  )}
+                </View>
+              );
+            })()}
 
             {selectedListing?.seller_id === user?.id ? (
               <TouchableOpacity
@@ -482,6 +513,8 @@ const styles = StyleSheet.create({
   rarityText: { fontSize: 10, fontFamily: "Inter_600SemiBold", textTransform: "capitalize" as any },
   priceRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   priceText: { fontSize: 15, fontFamily: "Inter_700Bold", color: Colors.gold },
+  pctBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
+  pctText: { fontSize: 10, fontFamily: "Inter_700Bold" },
   sellerText: { fontSize: 11, fontFamily: "Inter_400Regular" },
   ownBadge: { position: "absolute", top: 8, left: 8, backgroundColor: Colors.brand, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, zIndex: 1 },
   ownBadgeText: { color: "#fff", fontSize: 9, fontFamily: "Inter_700Bold" },
