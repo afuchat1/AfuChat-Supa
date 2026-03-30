@@ -42,11 +42,11 @@ type Message = {
   sender?: { display_name: string; handle: string; avatar_url: string | null } | null;
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  open: "#1a7f1a",
-  in_progress: "#0066cc",
-  resolved: "#888",
-  closed: "#888",
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  open: { label: "Open", color: "#1a7f1a", bg: "#e3f9e5" },
+  in_progress: { label: "In Progress", color: "#0066cc", bg: "#e5f5ff" },
+  resolved: { label: "Resolved", color: "#888", bg: "#f0f0f0" },
+  closed: { label: "Closed", color: "#555", bg: "#e0e0e0" },
 };
 
 export default function TicketDetail() {
@@ -76,14 +76,13 @@ export default function TicketDetail() {
     if (t) setTicket(t as Ticket);
     if (msgs) setMessages(msgs as Message[]);
     setLoading(false);
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 200);
   }, [id]);
 
   useEffect(() => {
     fetchData();
-
-    // Realtime subscription for new messages
     const channel = supabase
-      .channel(`ticket-${id}`)
+      .channel(`user-ticket-${id}`)
       .on("postgres_changes", {
         event: "INSERT",
         schema: "public",
@@ -92,21 +91,30 @@ export default function TicketDetail() {
       }, (payload) => {
         const newMsg = payload.new as Message;
         if (newMsg.is_internal) return;
-        setMessages((prev) => [...prev, newMsg]);
+        setMessages((prev) => {
+          const exists = prev.some((m) => m.id === newMsg.id);
+          return exists ? prev : [...prev, newMsg];
+        });
         setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
       })
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "support_tickets",
+        filter: `id=eq.${id}`,
+      }, (payload) => {
+        setTicket((prev) => prev ? { ...prev, ...(payload.new as Ticket) } : prev);
+      })
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [id, fetchData]);
 
   async function sendReply() {
     if (!reply.trim() || !user || !id) return;
     if (ticket?.status === "closed") {
-      showAlert("Ticket Closed", "This ticket has been closed. Please open a new support request.");
+      showAlert("Ticket Closed", "This ticket is closed. Please open a new support request if you need further help.");
       return;
     }
-
     setSending(true);
     const text = reply.trim();
     setReply("");
@@ -122,76 +130,97 @@ export default function TicketDetail() {
       showAlert("Error", "Failed to send message. Please try again.");
       setReply(text);
     } else {
-      // Re-open ticket if resolved
       if (ticket?.status === "resolved") {
         await supabase.from("support_tickets").update({ status: "open", updated_at: new Date().toISOString() }).eq("id", id);
         setTicket((prev) => prev ? { ...prev, status: "open" } : prev);
       }
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     }
     setSending(false);
   }
 
+  const statusCfg = STATUS_CONFIG[ticket?.status || "open"];
+  const shortId = id?.split("-")[0].toUpperCase();
+
   if (loading) {
     return (
       <View style={[st.root, { backgroundColor: colors.background }]}>
-        <View style={[st.header, { paddingTop: insets.top + 12, backgroundColor: BRAND }]}>
-          <TouchableOpacity onPress={() => router.back()} style={st.backBtn}>
+        <View style={[st.header, { backgroundColor: BRAND, paddingTop: insets.top + 10 }]}>
+          <TouchableOpacity onPress={() => router.back()} style={st.iconBtn}>
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
           <Text style={st.headerTitle}>Support Ticket</Text>
         </View>
-        <ActivityIndicator style={{ flex: 1 }} color={BRAND} />
+        <View style={st.centered}><ActivityIndicator color={BRAND} size="large" /></View>
       </View>
     );
   }
 
-  const statusColor = STATUS_COLORS[ticket?.status || "open"];
-  const shortId = id?.split("-")[0].toUpperCase();
-
   return (
     <View style={[st.root, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[st.header, { paddingTop: insets.top + 12, backgroundColor: BRAND }]}>
-        <TouchableOpacity onPress={() => router.back()} style={st.backBtn}>
+      <View style={[st.header, { backgroundColor: BRAND, paddingTop: insets.top + 10 }]}>
+        <TouchableOpacity onPress={() => router.back()} style={st.iconBtn}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <View style={st.headerTextCol}>
-          <Text style={st.headerTitle} numberOfLines={1}>{ticket?.subject || "Ticket"}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={st.headerTitle} numberOfLines={1}>{ticket?.subject || "Support Ticket"}</Text>
           <Text style={st.headerSub}>#{shortId}</Text>
         </View>
-        <View style={[st.statusBadgeHeader, { backgroundColor: "rgba(255,255,255,0.25)" }]}>
+        <View style={[st.statusBadge, { backgroundColor: "rgba(255,255,255,0.22)" }]}>
+          <View style={st.statusDot} />
           <Text style={st.statusBadgeText}>{ticket?.status?.replace("_", " ").toUpperCase()}</Text>
         </View>
       </View>
 
-      {/* Ticket info strip */}
+      {/* Info strip */}
       <View style={[st.infoStrip, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <View style={st.infoItem}>
+        <View style={st.infoChip}>
           <Ionicons name="folder-outline" size={13} color={colors.textMuted} />
-          <Text style={[st.infoText, { color: colors.textMuted }]} numberOfLines={1}>{ticket?.category}</Text>
+          <Text style={[st.infoChipText, { color: colors.textMuted }]} numberOfLines={1}>
+            {ticket?.category?.replace(/_/g, " ")}
+          </Text>
         </View>
-        <View style={st.infoItem}>
-          <View style={[st.dot, { backgroundColor: statusColor }]} />
-          <Text style={[st.infoText, { color: statusColor, fontFamily: "Inter_600SemiBold" }]}>{ticket?.status?.replace("_", " ")}</Text>
+        <View style={st.infoSep} />
+        <View style={st.infoChip}>
+          <View style={[st.infoDot, { backgroundColor: statusCfg?.color || "#888" }]} />
+          <Text style={[st.infoChipText, { color: statusCfg?.color || "#888", fontFamily: "Inter_600SemiBold" }]}>
+            {ticket?.status?.replace("_", " ")}
+          </Text>
         </View>
-        <View style={st.infoItem}>
-          <Ionicons name="time-outline" size={13} color={colors.textMuted} />
-          <Text style={[st.infoText, { color: colors.textMuted }]}>{ticket ? new Date(ticket.created_at).toLocaleDateString() : ""}</Text>
+        <View style={st.infoSep} />
+        <View style={st.infoChip}>
+          <Ionicons name="calendar-outline" size={13} color={colors.textMuted} />
+          <Text style={[st.infoChipText, { color: colors.textMuted }]}>
+            {ticket ? new Date(ticket.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : ""}
+          </Text>
         </View>
       </View>
 
       {/* Messages */}
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }} keyboardVerticalOffset={0}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={{ flex: 1 }}
+      >
         <FlatList
           ref={listRef}
           data={messages}
           keyExtractor={(m) => m.id}
-          contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 8 }}
+          contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 12 }}
           onLayout={() => listRef.current?.scrollToEnd({ animated: false })}
+          ListHeaderComponent={
+            <View style={[st.threadNotice, { backgroundColor: BRAND + "12", borderColor: BRAND + "30" }]}>
+              <Ionicons name="information-circle-outline" size={16} color={BRAND} />
+              <Text style={[st.threadNoticeText, { color: BRAND }]}>
+                Our support team will review your request and respond here and via email.
+              </Text>
+            </View>
+          }
           ListEmptyComponent={
-            <View style={st.noMsgs}>
-              <Text style={[st.noMsgsText, { color: colors.textMuted }]}>No messages yet — start by describing your issue.</Text>
+            <View style={st.emptyMsgs}>
+              <Ionicons name="chatbubble-outline" size={36} color={colors.textMuted} />
+              <Text style={[st.emptyMsgsText, { color: colors.textMuted }]}>
+                No messages yet. Add more details below to help us assist you faster.
+              </Text>
             </View>
           }
           renderItem={({ item }) => {
@@ -200,41 +229,70 @@ export default function TicketDetail() {
 
             if (isSystem) {
               return (
-                <View style={st.systemMsg}>
-                  <Text style={[st.systemMsgText, { color: colors.textMuted }]}>{item.message}</Text>
+                <View style={st.systemMsgRow}>
+                  <View style={[st.systemMsgPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Ionicons name="information-circle-outline" size={12} color={colors.textMuted} />
+                    <Text style={[st.systemMsgText, { color: colors.textMuted }]}>{item.message}</Text>
+                  </View>
                 </View>
               );
             }
 
             const senderName = isUser ? "You" : (item.sender?.display_name || "AfuChat Support");
+            const msgTime = new Date(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
             return (
               <View style={[st.msgRow, isUser ? st.msgRowUser : st.msgRowStaff]}>
                 {!isUser && (
-                  <View style={[st.avatarCircle, { backgroundColor: BRAND }]}>
-                    <Text style={st.avatarText}>S</Text>
+                  <View style={[st.avatar, { backgroundColor: BRAND }]}>
+                    <Ionicons name="headset" size={14} color="#fff" />
                   </View>
                 )}
                 <View style={st.msgCol}>
-                  <Text style={[st.senderName, { color: isUser ? BRAND : colors.textMuted }]}>{senderName}</Text>
-                  <View style={[st.bubble, isUser ? st.bubbleUser : { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <Text style={[st.bubbleText, { color: isUser ? "#fff" : colors.text }]}>{item.message}</Text>
+                  <Text style={[st.senderLabel, { color: isUser ? BRAND : colors.textMuted, textAlign: isUser ? "right" : "left" }]}>
+                    {senderName}
+                  </Text>
+                  <View
+                    style={[
+                      st.bubble,
+                      isUser
+                        ? { backgroundColor: BRAND, borderColor: "transparent" }
+                        : { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth },
+                    ]}
+                  >
+                    <Text style={[st.bubbleText, { color: isUser ? "#fff" : colors.text }]}>
+                      {item.message}
+                    </Text>
                   </View>
-                  <Text style={[st.msgTime, { color: colors.textMuted }]}>{new Date(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</Text>
+                  <Text style={[st.msgTime, { color: colors.textMuted, textAlign: isUser ? "right" : "left" }]}>
+                    {msgTime}
+                  </Text>
                 </View>
+                {isUser && (
+                  <View style={[st.avatar, { backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}>
+                    <Ionicons name="person" size={14} color={BRAND} />
+                  </View>
+                )}
               </View>
             );
           }}
         />
 
-        {/* Reply input */}
-        {ticket?.status !== "closed" ? (
+        {/* Reply input / closed notice */}
+        {ticket?.status === "closed" ? (
+          <View style={[st.closedBar, { borderTopColor: colors.border, paddingBottom: insets.bottom + 8, backgroundColor: colors.surface }]}>
+            <Ionicons name="lock-closed-outline" size={16} color={colors.textMuted} />
+            <Text style={[st.closedText, { color: colors.textMuted }]}>
+              This ticket is closed. Open a new ticket if you need further assistance.
+            </Text>
+          </View>
+        ) : (
           <View style={[st.inputBar, { borderTopColor: colors.border, paddingBottom: insets.bottom + 8, backgroundColor: colors.background }]}>
             <TextInput
               style={[st.replyInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
               value={reply}
               onChangeText={setReply}
-              placeholder="Write a message..."
+              placeholder="Write a message…"
               placeholderTextColor={colors.textMuted}
               multiline
               maxLength={2000}
@@ -247,10 +305,6 @@ export default function TicketDetail() {
               {sending ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="send" size={18} color="#fff" />}
             </TouchableOpacity>
           </View>
-        ) : (
-          <View style={[st.closedBar, { borderTopColor: colors.border, paddingBottom: insets.bottom + 8 }]}>
-            <Text style={[st.closedText, { color: colors.textMuted }]}>This ticket is closed. Open a new ticket if you need further help.</Text>
-          </View>
         )}
       </KeyboardAvoidingView>
     </View>
@@ -259,35 +313,77 @@ export default function TicketDetail() {
 
 const st = StyleSheet.create({
   root: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 16, gap: 12 },
-  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  headerTextCol: { flex: 1 },
+  header: {
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 16, paddingBottom: 14, gap: 10,
+  },
+  iconBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   headerTitle: { color: "#fff", fontSize: 17, fontFamily: "Inter_700Bold" },
-  headerSub: { color: "rgba(255,255,255,0.75)", fontSize: 12, fontFamily: "Inter_400Regular" },
-  statusBadgeHeader: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+  headerSub: { color: "rgba(255,255,255,0.75)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
+  statusBadge: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5,
+  },
+  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff" },
   statusBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
-  infoStrip: { flexDirection: "row", paddingHorizontal: 16, paddingVertical: 10, gap: 16, borderBottomWidth: StyleSheet.hairlineWidth },
-  infoItem: { flexDirection: "row", alignItems: "center", gap: 4 },
-  infoText: { fontSize: 12, fontFamily: "Inter_500Medium", textTransform: "capitalize" },
-  dot: { width: 7, height: 7, borderRadius: 4 },
-  noMsgs: { padding: 32, alignItems: "center" },
-  noMsgsText: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
-  systemMsg: { alignItems: "center", padding: 8 },
-  systemMsgText: { fontSize: 12, fontFamily: "Inter_400Regular", fontStyle: "italic" },
-  msgRow: { flexDirection: "row", gap: 8, maxWidth: "90%" },
+
+  infoStrip: {
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 16, paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  infoChip: { flexDirection: "row", alignItems: "center", gap: 5, flex: 1 },
+  infoChipText: { fontSize: 12, fontFamily: "Inter_500Medium", textTransform: "capitalize" },
+  infoSep: { width: StyleSheet.hairlineWidth, height: 14, backgroundColor: "#ccc", marginHorizontal: 4 },
+  infoDot: { width: 7, height: 7, borderRadius: 4 },
+
+  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
+
+  threadNotice: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    borderRadius: 12, borderWidth: StyleSheet.hairlineWidth,
+    padding: 12, marginBottom: 4,
+  },
+  threadNoticeText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
+
+  emptyMsgs: { padding: 40, alignItems: "center", gap: 10 },
+  emptyMsgsText: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
+
+  systemMsgRow: { alignItems: "center" },
+  systemMsgPill: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    borderRadius: 20, borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12, paddingVertical: 5,
+  },
+  systemMsgText: { fontSize: 11, fontFamily: "Inter_400Regular", fontStyle: "italic" },
+
+  msgRow: { flexDirection: "row", gap: 8, maxWidth: "88%" },
   msgRowUser: { alignSelf: "flex-end", flexDirection: "row-reverse" },
   msgRowStaff: { alignSelf: "flex-start" },
-  avatarCircle: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", marginTop: 20 },
-  avatarText: { color: "#fff", fontSize: 14, fontFamily: "Inter_700Bold" },
+  avatar: {
+    width: 30, height: 30, borderRadius: 15,
+    alignItems: "center", justifyContent: "center", marginTop: 20,
+  },
   msgCol: { flex: 1 },
-  senderName: { fontSize: 11, fontFamily: "Inter_600SemiBold", marginBottom: 3, textAlign: "left" },
-  bubble: { borderRadius: 14, padding: 12, borderWidth: StyleSheet.hairlineWidth },
-  bubbleUser: { backgroundColor: BRAND, borderColor: "transparent" },
-  bubbleText: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22 },
-  msgTime: { fontSize: 10, fontFamily: "Inter_400Regular", marginTop: 3 },
-  inputBar: { flexDirection: "row", alignItems: "flex-end", padding: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, gap: 8 },
-  replyInput: { flex: 1, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, fontFamily: "Inter_400Regular", maxHeight: 100 },
-  sendBtn: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
-  closedBar: { padding: 16, borderTopWidth: StyleSheet.hairlineWidth, alignItems: "center" },
-  closedText: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
+  senderLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", marginBottom: 3 },
+  bubble: { borderRadius: 16, padding: 12 },
+  bubbleText: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 21 },
+  msgTime: { fontSize: 10, fontFamily: "Inter_400Regular", marginTop: 4 },
+
+  inputBar: {
+    flexDirection: "row", alignItems: "flex-end", gap: 8,
+    padding: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  replyInput: {
+    flex: 1, borderRadius: 22, borderWidth: 1.5,
+    paddingHorizontal: 16, paddingVertical: 11,
+    fontSize: 15, fontFamily: "Inter_400Regular", maxHeight: 110,
+  },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+
+  closedBar: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    padding: 16, borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  closedText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
 });
