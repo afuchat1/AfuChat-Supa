@@ -395,12 +395,18 @@ export default function SellerApplyScreen() {
           </View>
 
           {/* Terms note */}
-          <View style={[st.termsBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Ionicons name="information-circle-outline" size={15} color={colors.textMuted} />
+          <TouchableOpacity
+            style={[st.termsBox, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={() => router.push({ pathname: "/terms", params: { section: "marketplace" } } as any)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="shield-checkmark-outline" size={15} color={Colors.brand} />
             <Text style={[st.termsText, { color: colors.textMuted }]}>
-              By submitting, you agree that AfuChat may verify your business details and that all information provided is accurate. False information will result in permanent disqualification.
+              By submitting you agree to AfuChat's{" "}
+              <Text style={{ color: Colors.brand, fontFamily: "Inter_500Medium" }}>Marketplace Terms</Text>
+              {" "}and Seller Policies. Providing false information will result in permanent disqualification.
             </Text>
-          </View>
+          </TouchableOpacity>
 
           {/* Submit */}
           <TouchableOpacity

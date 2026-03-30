@@ -278,6 +278,21 @@ export default function CartScreen() {
                 <Text style={[styles.topUpText, { color: Colors.brand }]}>Insufficient balance — Top up wallet</Text>
               </TouchableOpacity>
             )}
+            <TouchableOpacity
+              onPress={() => router.push({ pathname: "/terms", params: { section: "marketplace" } } as any)}
+              style={{ alignItems: "center", paddingTop: 2 }}
+            >
+              <Text style={[styles.topUpText, { color: colors.textMuted, fontSize: 11, textDecorationLine: "none" }]}>
+                By placing an order you agree to our{" "}
+                <Text style={{ color: Colors.brand }}>Marketplace Terms</Text>
+                {" "}and{" "}
+                <Text style={{ color: Colors.brand }}
+                  onPress={() => router.push({ pathname: "/terms", params: { section: "acoins" } } as any)}
+                >
+                  AfuPay Terms
+                </Text>
+              </Text>
+            </TouchableOpacity>
           </View>
         </>
       )}

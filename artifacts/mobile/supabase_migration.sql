@@ -638,3 +638,14 @@ UPDATE subscription_plans SET
     'Priority support'
   ]
 WHERE tier = 'platinum';
+
+-- ─── Notifications: add reference columns (run 2026-03-30) ────────────────────
+-- Allows notifications to link to any entity (orders, channels, etc.)
+ALTER TABLE notifications
+  ADD COLUMN IF NOT EXISTS reference_id TEXT,
+  ADD COLUMN IF NOT EXISTS reference_type TEXT;
+
+-- Create index for faster notification lookups
+CREATE INDEX IF NOT EXISTS notifications_reference_idx
+  ON notifications (reference_type, reference_id)
+  WHERE reference_id IS NOT NULL;

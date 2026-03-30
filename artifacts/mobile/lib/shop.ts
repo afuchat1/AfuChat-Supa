@@ -1,4 +1,12 @@
 import { supabase } from "./supabase";
+import {
+  notifyOrderPlaced,
+  notifyDeliveryConfirmed,
+  notifyDisputeRaised,
+  notifyRefundIssued,
+  notifyAcoinReceived,
+  notifyOrderReview,
+} from "./notifyUser";
 
 export type Shop = {
   id: string;
@@ -269,6 +277,18 @@ export async function placeOrder(params: {
     message: `Order placed for ${items.length} item${items.length > 1 ? "s" : ""}. Payment of ${totalAcoin} AC is held in escrow. Seller will receive ${sellerReceives} AC upon delivery confirmation.`,
   });
 
+  // Notify seller of new order (fire-and-forget)
+  supabase.from("profiles").select("display_name").eq("id", buyerId).single().then(({ data: bp }) => {
+    notifyOrderPlaced({
+      sellerId,
+      buyerName: bp?.display_name || "A buyer",
+      buyerUserId: buyerId,
+      orderId: order.id,
+      totalAcoin,
+      itemCount: items.length,
+    });
+  });
+
   return { success: true, orderId: order.id };
 }
 
@@ -340,6 +360,24 @@ export async function confirmDelivery(params: {
     message: "✅ Delivery confirmed. Funds have been released to the seller. Thank you for your purchase!",
   });
 
+  // Notify seller payment released + buyer escrow notification (fire-and-forget)
+  supabase.from("profiles").select("display_name").eq("id", buyerId).single().then(({ data: bp }) => {
+    notifyDeliveryConfirmed({
+      sellerId: order.seller_id,
+      buyerName: bp?.display_name || "The buyer",
+      buyerUserId: buyerId,
+      orderId,
+      amountReleased: sellerReceives,
+    });
+  });
+  notifyAcoinReceived({
+    userId: order.seller_id,
+    amount: sellerReceives,
+    reason: `Order payment released — ${sellerReceives} AC added to your AfuPay wallet`,
+    referenceId: orderId,
+    referenceType: "order",
+  });
+
   return { success: true };
 }
 
@@ -373,6 +411,19 @@ export async function raiseDispute(params: {
     order_id: orderId,
     sender_id: buyerId,
     message: `⚠️ Dispute raised: ${reason}\n\nOur support team will review this within 24 hours.`,
+  });
+
+  // Notify seller of dispute (fire-and-forget)
+  supabase.from("shop_orders").select("seller_id").eq("id", orderId).single().then(({ data: ord }) => {
+    if (!ord?.seller_id) return;
+    supabase.from("profiles").select("display_name").eq("id", buyerId).single().then(({ data: bp }) => {
+      notifyDisputeRaised({
+        sellerId: ord.seller_id,
+        buyerName: bp?.display_name || "A buyer",
+        buyerUserId: buyerId,
+        orderId,
+      });
+    });
   });
 
   return { success: true };
@@ -409,6 +460,16 @@ export async function refundOrder(params: {
     order_id: orderId,
     sender_id: buyerId,
     message: `💰 Refund of ${totalAcoin} AC has been processed to your account.`,
+  });
+
+  // Notify buyer of refund (fire-and-forget)
+  notifyRefundIssued({ buyerId, orderId, amountRefunded: totalAcoin });
+  notifyAcoinReceived({
+    userId: buyerId,
+    amount: totalAcoin,
+    reason: `Refund of ${totalAcoin} AC returned to your AfuPay wallet`,
+    referenceId: orderId,
+    referenceType: "order",
   });
 
   return { success: true };
@@ -482,6 +543,20 @@ export async function submitReview(params: {
       updated_at: new Date().toISOString(),
     }).eq("id", shopId);
   }
+
+  // Notify seller of new review (fire-and-forget)
+  supabase.from("shops").select("seller_id").eq("id", shopId).single().then(({ data: sh }) => {
+    if (!sh?.seller_id) return;
+    supabase.from("profiles").select("display_name").eq("id", reviewerId).single().then(({ data: rp }) => {
+      notifyOrderReview({
+        sellerId: sh.seller_id,
+        buyerName: rp?.display_name || "A customer",
+        buyerUserId: reviewerId,
+        orderId,
+        rating,
+      });
+    });
+  });
 
   return { success: true };
 }

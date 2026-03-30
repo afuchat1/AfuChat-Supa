@@ -68,6 +68,31 @@ export async function setupNotificationChannels(): Promise<void> {
       enableVibrate: true,
       bypassDnd: false,
     });
+
+    await Notifications.setNotificationChannelAsync("marketplace", {
+      name: "Marketplace & Payments",
+      description: "Orders, escrow releases, disputes, and payments",
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#34C759",
+      sound: true,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      showBadge: true,
+      enableVibrate: true,
+      enableLights: true,
+      bypassDnd: false,
+    });
+
+    await Notifications.setNotificationChannelAsync("system", {
+      name: "System & Account",
+      description: "Account updates, verifications, and admin messages",
+      importance: Notifications.AndroidImportance.HIGH,
+      sound: true,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      showBadge: true,
+      enableVibrate: false,
+      bypassDnd: false,
+    });
   } catch (e) {
     console.warn("[PushNotif] Channel setup failed:", e);
   }
@@ -139,15 +164,44 @@ export function setupNotificationListeners() {
 
   const responseSubscription = Notifications.addNotificationResponseReceivedListener(
     (response) => {
-      const data = response.notification.request.content.data;
+      const data = response.notification.request.content.data as Record<string, string>;
+      // Priority 1: explicit deep-link URL
       if (data?.url) {
-        router.push(data.url as string);
-      } else if (data?.chatId) {
-        router.push(`/chat/${data.chatId}`);
-      } else if (data?.postId) {
-        router.push(`/post/${data.postId}`);
-      } else if (data?.type === "follow") {
-        router.push("/notifications");
+        router.push(data.url as any);
+        return;
+      }
+      // Priority 2: type-based routing
+      switch (data?.type) {
+        case "message":
+          if (data.chatId) router.push(`/chat/${data.chatId}` as any);
+          break;
+        case "order":
+        case "escrow":
+          if (data.orderId) router.push(`/shop/order/${data.orderId}` as any);
+          else router.push("/shop/my-orders" as any);
+          break;
+        case "payment":
+          router.push("/me" as any);
+          break;
+        case "channel":
+        case "live":
+          if (data.channelId) router.push(`/channel/${data.channelId}` as any);
+          break;
+        case "follow":
+          if (data.userId) router.push(`/contact/${data.userId}` as any);
+          else router.push("/notifications" as any);
+          break;
+        case "like":
+        case "reply":
+        case "mention":
+          if (data.postId) router.push(`/post/${data.postId}` as any);
+          else router.push("/notifications" as any);
+          break;
+        case "gift":
+          router.push("/notifications" as any);
+          break;
+        default:
+          router.push("/notifications" as any);
       }
     },
   );

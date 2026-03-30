@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 
-async function callNotify(params: {
+type NotifyParams = {
   userId: string;
   title: string;
   body: string;
@@ -8,23 +8,29 @@ async function callNotify(params: {
   notificationType?: string;
   actorId?: string;
   postId?: string | null;
-}) {
+  referenceId?: string | null;
+  referenceType?: string | null;
+};
+
+async function callNotify(params: NotifyParams) {
+  const {
+    userId, title, body, data = {}, notificationType, actorId,
+    postId, referenceId, referenceType,
+  } = params;
+
   try {
     const { data: profile } = await supabase
       .from("profiles")
       .select("expo_push_token")
-      .eq("id", params.userId)
+      .eq("id", userId)
       .single();
 
     if (profile?.expo_push_token) {
       const channelId =
-        params.data?.type === "message"
-          ? "messages"
-          : params.data?.type === "follow" ||
-              params.data?.type === "like" ||
-              params.data?.type === "reply"
-            ? "social"
-            : "default";
+        data.type === "message" ? "messages" :
+        data.type === "follow" || data.type === "like" || data.type === "reply" ? "social" :
+        data.type === "order" || data.type === "payment" || data.type === "escrow" ? "marketplace" :
+        "default";
 
       const res = await fetch("https://exp.host/--/api/v2/push/send", {
         method: "POST",
@@ -35,9 +41,9 @@ async function callNotify(params: {
         },
         body: JSON.stringify({
           to: profile.expo_push_token,
-          title: params.title,
-          body: params.body,
-          data: params.data || {},
+          title,
+          body,
+          data,
           sound: "default",
           badge: 1,
           priority: "high",
@@ -52,21 +58,28 @@ async function callNotify(params: {
       }
     }
   } catch (e) {
-    console.warn("[Notify] Failed:", e);
+    console.warn("[Notify] Push failed:", e);
   }
 
-  if (params.notificationType && params.actorId) {
+  if (notificationType) {
     try {
-      await supabase.from("notifications").insert({
-        user_id: params.userId,
-        actor_id: params.actorId,
-        type: params.notificationType,
-        post_id: params.postId || null,
+      const record: any = {
+        user_id: userId,
+        actor_id: actorId || null,
+        type: notificationType,
+        post_id: postId || null,
+        reference_id: referenceId || null,
+        reference_type: referenceType || null,
         is_read: false,
-      });
-    } catch {}
+      };
+      await supabase.from("notifications").insert(record);
+    } catch (e) {
+      console.warn("[Notify] DB insert failed:", e);
+    }
   }
 }
+
+// ─── Social Notifications ────────────────────────────────────────────
 
 export async function notifyNewMessage(params: {
   recipientIds: string[];
@@ -80,12 +93,11 @@ export async function notifyNewMessage(params: {
     ? `${params.senderName} in ${params.groupName || "Group"}`
     : params.senderName;
   const body = params.messageText || "Sent an attachment";
+  const short = body.length > 100 ? body.substring(0, 97) + "..." : body;
 
   for (const userId of params.recipientIds) {
     callNotify({
-      userId,
-      title,
-      body: body.length > 100 ? body.substring(0, 97) + "..." : body,
+      userId, title, body: short,
       data: { chatId: params.chatId, type: "message" },
     });
   }
@@ -100,7 +112,7 @@ export async function notifyNewFollow(params: {
     userId: params.targetUserId,
     title: "New Follower",
     body: `${params.followerName} started following you`,
-    data: { type: "follow" },
+    data: { type: "follow", userId: params.followerUserId },
     notificationType: "new_follower",
     actorId: params.followerUserId,
   });
@@ -130,13 +142,13 @@ export async function notifyPostReply(params: {
   postId: string;
   replyPreview: string;
 }) {
+  const body = params.replyPreview.length > 100
+    ? params.replyPreview.substring(0, 97) + "..."
+    : params.replyPreview;
   callNotify({
     userId: params.postAuthorId,
     title: params.replierName,
-    body:
-      params.replyPreview.length > 100
-        ? params.replyPreview.substring(0, 97) + "..."
-        : params.replyPreview,
+    body,
     data: { postId: params.postId, type: "reply" },
     notificationType: "new_reply",
     actorId: params.replierUserId,
@@ -152,10 +164,279 @@ export async function notifyGiftReceived(params: {
 }) {
   callNotify({
     userId: params.recipientId,
-    title: "Gift Received!",
+    title: "Gift Received! 🎁",
     body: `${params.senderName} sent you ${params.giftName}`,
     data: { type: "gift" },
     notificationType: "gift",
     actorId: params.senderUserId,
+  });
+}
+
+export async function notifyMention(params: {
+  targetUserId: string;
+  mentionedBy: string;
+  mentionedByUserId: string;
+  postId: string;
+  preview: string;
+}) {
+  callNotify({
+    userId: params.targetUserId,
+    title: `${params.mentionedBy} mentioned you`,
+    body: params.preview.substring(0, 100),
+    data: { postId: params.postId, type: "mention" },
+    notificationType: "new_mention",
+    actorId: params.mentionedByUserId,
+    postId: params.postId,
+  });
+}
+
+// ─── Marketplace / Shop Notifications ────────────────────────────────
+
+export async function notifyOrderPlaced(params: {
+  sellerId: string;
+  buyerName: string;
+  buyerUserId: string;
+  orderId: string;
+  totalAcoin: number;
+  itemCount: number;
+}) {
+  callNotify({
+    userId: params.sellerId,
+    title: "New Order Received! 🛍️",
+    body: `${params.buyerName} placed an order for ${params.itemCount} item${params.itemCount !== 1 ? "s" : ""} — ${params.totalAcoin} AC in escrow`,
+    data: { type: "order", orderId: params.orderId, url: `/shop/order/${params.orderId}` },
+    notificationType: "order_placed",
+    actorId: params.buyerUserId,
+    referenceId: params.orderId,
+    referenceType: "order",
+  });
+}
+
+export async function notifyOrderShipped(params: {
+  buyerId: string;
+  sellerName: string;
+  sellerUserId: string;
+  orderId: string;
+}) {
+  callNotify({
+    userId: params.buyerId,
+    title: "Your Order Has Shipped! 📦",
+    body: `${params.sellerName} has shipped your order. Confirm delivery to release payment.`,
+    data: { type: "order", orderId: params.orderId, url: `/shop/order/${params.orderId}` },
+    notificationType: "order_shipped",
+    actorId: params.sellerUserId,
+    referenceId: params.orderId,
+    referenceType: "order",
+  });
+}
+
+export async function notifyDeliveryConfirmed(params: {
+  sellerId: string;
+  buyerName: string;
+  buyerUserId: string;
+  orderId: string;
+  amountReleased: number;
+}) {
+  callNotify({
+    userId: params.sellerId,
+    title: "Payment Released! 💰",
+    body: `${params.buyerName} confirmed delivery. ${params.amountReleased} AC has been credited to your wallet.`,
+    data: { type: "escrow", orderId: params.orderId, url: `/shop/order/${params.orderId}` },
+    notificationType: "escrow_released",
+    actorId: params.buyerUserId,
+    referenceId: params.orderId,
+    referenceType: "order",
+  });
+}
+
+export async function notifyDisputeRaised(params: {
+  sellerId: string;
+  buyerName: string;
+  buyerUserId: string;
+  orderId: string;
+}) {
+  callNotify({
+    userId: params.sellerId,
+    title: "Order Dispute Opened ⚠️",
+    body: `${params.buyerName} raised a dispute on their order. Our team is reviewing it.`,
+    data: { type: "order", orderId: params.orderId, url: `/shop/order/${params.orderId}` },
+    notificationType: "dispute_raised",
+    actorId: params.buyerUserId,
+    referenceId: params.orderId,
+    referenceType: "order",
+  });
+}
+
+export async function notifyRefundIssued(params: {
+  buyerId: string;
+  orderId: string;
+  amountRefunded: number;
+}) {
+  callNotify({
+    userId: params.buyerId,
+    title: "Refund Issued ✅",
+    body: `Your refund of ${params.amountRefunded} AC has been returned to your AfuPay wallet.`,
+    data: { type: "payment", orderId: params.orderId, url: `/shop/order/${params.orderId}` },
+    notificationType: "refund_issued",
+    referenceId: params.orderId,
+    referenceType: "order",
+  });
+}
+
+export async function notifyOrderReview(params: {
+  sellerId: string;
+  buyerName: string;
+  buyerUserId: string;
+  orderId: string;
+  rating: number;
+}) {
+  callNotify({
+    userId: params.sellerId,
+    title: `New Review — ${params.rating}⭐`,
+    body: `${params.buyerName} left a review for your shop.`,
+    data: { type: "order", orderId: params.orderId, url: `/shop/order/${params.orderId}` },
+    notificationType: "shop_review",
+    actorId: params.buyerUserId,
+    referenceId: params.orderId,
+    referenceType: "order",
+  });
+}
+
+// ─── ACoins / Payment Notifications ──────────────────────────────────
+
+export async function notifyAcoinReceived(params: {
+  userId: string;
+  amount: number;
+  reason: string;
+  referenceId?: string;
+  referenceType?: string;
+}) {
+  callNotify({
+    userId: params.userId,
+    title: `+${params.amount} AC Received 💰`,
+    body: params.reason,
+    data: { type: "payment", url: "/me" },
+    notificationType: "acoin_received",
+    referenceId: params.referenceId || null,
+    referenceType: params.referenceType || null,
+  });
+}
+
+export async function notifyAcoinSent(params: {
+  userId: string;
+  amount: number;
+  reason: string;
+}) {
+  callNotify({
+    userId: params.userId,
+    title: `${params.amount} AC Sent`,
+    body: params.reason,
+    data: { type: "payment", url: "/me" },
+    notificationType: "acoin_sent",
+  });
+}
+
+export async function notifySubscriptionActivated(params: {
+  userId: string;
+  planName: string;
+}) {
+  callNotify({
+    userId: params.userId,
+    title: "Subscription Active! ⭐",
+    body: `Your ${params.planName} subscription is now active. Enjoy premium features!`,
+    data: { type: "payment", url: "/monetize" },
+    notificationType: "subscription_activated",
+  });
+}
+
+// ─── Channel / Social Group Notifications ────────────────────────────
+
+export async function notifyChannelPost(params: {
+  subscriberIds: string[];
+  channelName: string;
+  channelId: string;
+  postPreview: string;
+}) {
+  const body = params.postPreview.length > 100
+    ? params.postPreview.substring(0, 97) + "..."
+    : params.postPreview;
+  for (const userId of params.subscriberIds) {
+    callNotify({
+      userId,
+      title: params.channelName,
+      body,
+      data: { type: "channel", channelId: params.channelId, url: `/channel/${params.channelId}` },
+      notificationType: "channel_post",
+      referenceId: params.channelId,
+      referenceType: "channel",
+    });
+  }
+}
+
+export async function notifyLiveStream(params: {
+  followerIds: string[];
+  streamerName: string;
+  streamerId: string;
+  channelId: string;
+}) {
+  for (const userId of params.followerIds) {
+    callNotify({
+      userId,
+      title: `${params.streamerName} is live! 🔴`,
+      body: "Tap to join the stream",
+      data: { type: "live", userId: params.streamerId, url: `/channel/${params.channelId}` },
+      notificationType: "live_started",
+      actorId: params.streamerId,
+      referenceId: params.channelId,
+      referenceType: "channel",
+    });
+  }
+}
+
+// ─── System / Admin Notifications ────────────────────────────────────
+
+export async function notifySystemMessage(params: {
+  userId: string;
+  title: string;
+  body: string;
+  url?: string;
+}) {
+  callNotify({
+    userId: params.userId,
+    title: params.title,
+    body: params.body,
+    data: { type: "system", url: params.url || "/" },
+    notificationType: "system",
+  });
+}
+
+export async function notifySellerApplicationStatus(params: {
+  userId: string;
+  approved: boolean;
+}) {
+  callNotify({
+    userId: params.userId,
+    title: params.approved ? "Seller Application Approved! 🎉" : "Seller Application Update",
+    body: params.approved
+      ? "Your seller application has been approved. You can now list products on AfuMarket!"
+      : "Your seller application needs more information. Please check your email.",
+    data: { type: "system", url: params.approved ? "/shop/manage" : "/shop/apply" },
+    notificationType: params.approved ? "seller_approved" : "seller_rejected",
+  });
+}
+
+export async function notifyVerificationStatus(params: {
+  userId: string;
+  approved: boolean;
+  profileType: string;
+}) {
+  callNotify({
+    userId: params.userId,
+    title: params.approved ? `${params.profileType} Verification Approved ✅` : "Verification Update",
+    body: params.approved
+      ? "Your account has been verified. A badge is now visible on your profile."
+      : "Your verification request needs additional information.",
+    data: { type: "system", url: "/me" },
+    notificationType: params.approved ? "verification_approved" : "verification_update",
   });
 }
