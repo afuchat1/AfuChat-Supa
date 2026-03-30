@@ -224,6 +224,12 @@ export default function MarketplaceScreen() {
                 <Text style={[st.manageBtnText, { color: Colors.brand }]}>My Store</Text>
               </TouchableOpacity>
             )}
+            {user && (
+              <TouchableOpacity style={[st.manageBtn, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => router.push("/shop/my-orders" as any)}>
+                <Ionicons name="cube-outline" size={15} color={colors.text} />
+                <Text style={[st.manageBtnText, { color: colors.text }]}>My Orders</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={[st.cartBtn, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => router.push("/shop/cart")}>
               <Ionicons name="cart-outline" size={22} color={colors.text} />
               {cartCount > 0 && (

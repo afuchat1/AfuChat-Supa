@@ -22,7 +22,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
-import { Shop, ShopProduct, ShopOrder, SHOP_CATEGORIES, PRODUCT_CATEGORIES, ORDER_STATUS_LABELS, formatShopAcoin, formatShopUGX, PLATFORM_FEE_PCT } from "@/lib/shop";
+import { Shop, ShopProduct, ShopOrder, SHOP_CATEGORIES, PRODUCT_CATEGORIES, ORDER_STATUS_LABELS, ESCROW_STATUS_LABELS, formatShopAcoin, formatShopUGX, PLATFORM_FEE_PCT } from "@/lib/shop";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
@@ -204,8 +204,14 @@ export default function ShopManage() {
   }
 
   async function updateOrderStatus(orderId: string, status: string) {
-    await supabase.from("shop_orders").update({ status, updated_at: new Date().toISOString() }).eq("id", orderId);
-    setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: status as any } : o));
+    const now = new Date().toISOString();
+    const updates: any = { status, updated_at: now };
+    if (status === "shipped") updates.seller_confirmed_at = now;
+    await supabase.from("shop_orders").update(updates).eq("id", orderId);
+    setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: status as any, ...(status === "shipped" ? { seller_confirmed_at: now } : {}) } : o));
+    if (status === "shipped") {
+      await supabase.from("shop_order_messages").insert({ order_id: orderId, sender_id: user?.id, message: "📦 Your order has been shipped! Please confirm delivery once you receive it to release payment to me." });
+    }
   }
 
   const filteredOrders = orderFilter === "all" ? orders : orders.filter((o) => o.status === orderFilter);
@@ -429,25 +435,49 @@ export default function ShopManage() {
 
               <View style={styles.orderFooter}>
                 <View>
-                  <Text style={[styles.orderTotal, { color: Colors.brand }]}>{formatShopAcoin(Math.floor(order.total_acoin * (1 - PLATFORM_FEE_PCT / 100)))} earned</Text>
+                  {(order as any).escrow_status === "released"
+                    ? <Text style={[styles.orderTotal, { color: "#34C759" }]}>{formatShopAcoin((order as any).escrowed_acoin || Math.floor(order.total_acoin * (1 - PLATFORM_FEE_PCT / 100)))} received</Text>
+                    : <Text style={[styles.orderTotal, { color: "#FF9500" }]}>{formatShopAcoin((order as any).escrowed_acoin || Math.floor(order.total_acoin * (1 - PLATFORM_FEE_PCT / 100)))} in escrow</Text>}
                   <Text style={[styles.orderDate, { color: colors.textMuted }]}>{new Date(order.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</Text>
                 </View>
-                {order.status === "paid" && (
-                  <TouchableOpacity style={[styles.processBtn, { backgroundColor: "#007AFF" }]} onPress={() => updateOrderStatus(order.id, "processing")}>
-                    <Text style={styles.processBtnText}>Process</Text>
+                <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                  <TouchableOpacity
+                    style={[styles.processBtn, { backgroundColor: "#5856D6" + "20", paddingHorizontal: 10 }]}
+                    onPress={() => router.push(`/shop/order/${order.id}` as any)}
+                  >
+                    <Ionicons name="chatbubble-outline" size={14} color="#5856D6" />
                   </TouchableOpacity>
-                )}
-                {order.status === "processing" && (
-                  <TouchableOpacity style={[styles.processBtn, { backgroundColor: "#AF52DE" }]} onPress={() => updateOrderStatus(order.id, "shipped")}>
-                    <Text style={styles.processBtnText}>Mark Shipped</Text>
-                  </TouchableOpacity>
-                )}
-                {order.status === "shipped" && (
-                  <TouchableOpacity style={[styles.processBtn, { backgroundColor: "#34C759" }]} onPress={() => updateOrderStatus(order.id, "delivered")}>
-                    <Text style={styles.processBtnText}>Delivered</Text>
-                  </TouchableOpacity>
-                )}
+                  {order.status === "paid" && (
+                    <TouchableOpacity style={[styles.processBtn, { backgroundColor: "#007AFF" }]} onPress={() => updateOrderStatus(order.id, "processing")}>
+                      <Text style={styles.processBtnText}>Process</Text>
+                    </TouchableOpacity>
+                  )}
+                  {order.status === "processing" && (
+                    <TouchableOpacity style={[styles.processBtn, { backgroundColor: "#AF52DE" }]} onPress={() => updateOrderStatus(order.id, "shipped")}>
+                      <Text style={styles.processBtnText}>Ship</Text>
+                    </TouchableOpacity>
+                  )}
+                  {order.status === "shipped" && (order as any).escrow_status === "held" && (
+                    <View style={[styles.processBtn, { backgroundColor: "#FF9500" + "20" }]}>
+                      <Text style={[styles.processBtnText, { color: "#FF9500" }]}>Awaiting buyer</Text>
+                    </View>
+                  )}
+                </View>
               </View>
+              {(order as any).escrow_status === "held" && (
+                <View style={{ marginTop: 8, padding: 8, backgroundColor: "#FF9500" + "12", borderRadius: 10, borderWidth: 1, borderColor: "#FF9500" + "25" }}>
+                  <Text style={{ color: "#FF9500", fontSize: 11, fontFamily: "Inter_400Regular" }}>
+                    🔒 Payment held in escrow — released when buyer confirms delivery
+                  </Text>
+                </View>
+              )}
+              {(order as any).escrow_status === "disputed" && (
+                <View style={{ marginTop: 8, padding: 8, backgroundColor: "#FF3B30" + "12", borderRadius: 10, borderWidth: 1, borderColor: "#FF3B30" + "25" }}>
+                  <Text style={{ color: "#FF3B30", fontSize: 11, fontFamily: "Inter_400Regular" }}>
+                    ⚠️ Dispute open — our team is reviewing this order
+                  </Text>
+                </View>
+              )}
             </View>
           );
         }}

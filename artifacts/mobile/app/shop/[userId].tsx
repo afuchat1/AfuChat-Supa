@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
-import { Shop, ShopProduct, PRODUCT_CATEGORIES, addToCart, getOrCreateCart, formatShopAcoin } from "@/lib/shop";
+import { Shop, ShopProduct, ShopReview, PRODUCT_CATEGORIES, addToCart, getOrCreateCart, formatShopAcoin, getShopReviews } from "@/lib/shop";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { Avatar } from "@/components/ui/Avatar";
@@ -78,6 +78,7 @@ export default function StoreStorefront() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeCategory, setActiveCategory] = useState("All");
   const [addingId, setAddingId] = useState<string | null>(null);
+  const [reviews, setReviews] = useState<ShopReview[]>([]);
 
   const cardW = Math.floor((width - 16 * 2 - 10) / 2);
 
@@ -96,6 +97,10 @@ export default function StoreStorefront() {
     setShop(shopRes.data as any);
     setProducts(productsRes.data || []);
     setLoading(false); setRefreshing(false);
+    if (shopRes.data?.id) {
+      const revs = await getShopReviews(shopRes.data.id, 10);
+      setReviews(revs);
+    }
   }, [userId]);
 
   const loadCart = useCallback(async () => {
@@ -273,6 +278,32 @@ export default function StoreStorefront() {
             </View>
           }
           contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
+          ListFooterComponent={
+            reviews.length > 0 ? (
+              <View style={{ paddingHorizontal: 16, paddingTop: 20, gap: 12 }}>
+                <Text style={[{ fontSize: 16, fontFamily: "Inter_700Bold", color: colors.text }]}>Customer Reviews</Text>
+                {reviews.map((r) => (
+                  <View key={r.id} style={[{ backgroundColor: colors.surface, borderRadius: 16, padding: 14, gap: 8 }]}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <Avatar uri={r.reviewer?.avatar_url} size={34} name={r.reviewer?.display_name || "?"} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 13 }]}>{r.reviewer?.display_name || "Customer"}</Text>
+                        <Text style={[{ color: colors.textMuted, fontSize: 11 }]}>{new Date(r.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</Text>
+                      </View>
+                      <View style={{ flexDirection: "row", gap: 2 }}>
+                        {[1,2,3,4,5].map(s => (
+                          <Ionicons key={s} name={s <= r.rating ? "star" : "star-outline"} size={13} color={s <= r.rating ? "#D4A853" : "#ccc"} />
+                        ))}
+                      </View>
+                    </View>
+                    {r.review_text ? (
+                      <Text style={[{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }]}>{r.review_text}</Text>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            ) : null
+          }
         />
       )}
     </View>
