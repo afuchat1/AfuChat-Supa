@@ -36,7 +36,7 @@ const SECTIONS: Section[] = [
     clauses: [
       {
         heading: "1. Acceptance of Terms",
-        body: "By accessing or using AfuChat ("the Platform"), you agree to be bound by these Terms of Service. If you do not agree, you may not use the Platform. We may update these Terms at any time; continued use constitutes acceptance.",
+        body: `By accessing or using AfuChat ("the Platform"), you agree to be bound by these Terms of Service. If you do not agree, you may not use the Platform. We may update these Terms at any time; continued use constitutes acceptance.`,
       },
       {
         heading: "2. Eligibility",
@@ -64,7 +64,7 @@ const SECTIONS: Section[] = [
       },
       {
         heading: "8. Disclaimer of Warranties",
-        body: "The Platform is provided on an "AS IS" and "AS AVAILABLE" basis without warranties of any kind. We do not warrant that the Platform will be uninterrupted, error-free, or secure. Your use of the Platform is at your sole risk.",
+        body: `The Platform is provided on an "AS IS" and "AS AVAILABLE" basis without warranties of any kind. We do not warrant that the Platform will be uninterrupted, error-free, or secure. Your use of the Platform is at your sole risk.`,
       },
       {
         heading: "9. Limitation of Liability",

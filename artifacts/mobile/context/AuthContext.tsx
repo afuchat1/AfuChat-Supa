@@ -6,6 +6,7 @@ import { getStoredAccounts, storeAccount, removeStoredAccount, updateAccountToke
 import { cacheProfile, getCachedProfile, isOnline, onConnectivityChange } from "@/lib/offlineStore";
 import { startOfflineSync } from "@/lib/offlineSync";
 import { clearPushToken } from "@/lib/pushNotifications";
+import { registerDeviceSession } from "@/lib/deviceSession";
 
 type Profile = {
   id: string;
@@ -26,6 +27,7 @@ type Profile = {
   language: string;
   tipping_enabled: boolean;
   is_admin: boolean;
+  is_support_staff: boolean;
   is_organization_verified: boolean;
   gender: string | null;
   date_of_birth: string | null;
@@ -100,7 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const [{ data: profileData }, { data: subData }] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, handle, display_name, avatar_url, banner_url, bio, phone_number, xp, acoin, current_grade, is_verified, is_private, show_online_status, country, website_url, language, tipping_enabled, is_admin, is_organization_verified, gender, date_of_birth, region, interests, onboarding_completed, scheduled_deletion_at, created_at")
+          .select("id, handle, display_name, avatar_url, banner_url, bio, phone_number, xp, acoin, current_grade, is_verified, is_private, show_online_status, country, website_url, language, tipping_enabled, is_admin, is_support_staff, is_organization_verified, gender, date_of_birth, region, interests, onboarding_completed, scheduled_deletion_at, created_at")
           .eq("id", userId)
           .single(),
         supabase
@@ -263,11 +265,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshLinkedAccounts();
 
     const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
           fetchProfile(session.user.id);
+          // Register device on first sign-in to detect new devices
+          if (event === "SIGNED_IN") {
+            registerDeviceSession(session.user.id).catch(() => {});
+          }
         } else {
           setProfile(null);
           setSubscription(null);

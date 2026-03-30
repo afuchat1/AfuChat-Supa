@@ -127,6 +127,9 @@ function RootLayoutNav() {
       <Stack.Screen name="settings/chat" />
       <Stack.Screen name="settings/blocked" />
       <Stack.Screen name="admin/index" />
+      <Stack.Screen name="admin/support-dashboard" options={{ headerShown: false }} />
+      <Stack.Screen name="support/index" options={{ headerShown: false }} />
+      <Stack.Screen name="support/ticket/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding/index" options={{ animation: "fade", gestureEnabled: false }} />
       <Stack.Screen name="referral" />
       <Stack.Screen name="language-settings" />

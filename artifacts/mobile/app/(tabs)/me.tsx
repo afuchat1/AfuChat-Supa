@@ -406,14 +406,43 @@ export default function MeScreen() {
         )}
       </MenuGroup>
 
-      {profile?.is_admin && (
+      <MenuGroup>
+        <MenuItem
+          icon="help-buoy-outline"
+          iconBg="#5856D6"
+          label="Support Center"
+          onPress={() => router.push("/support" as any)}
+        />
+        <Separator indent={54} />
+        <MenuItem
+          icon="document-text-outline"
+          iconBg="#007AFF"
+          label="Terms & Policies"
+          onPress={() => router.push("/terms")}
+        />
+      </MenuGroup>
+
+      {(profile?.is_admin || profile?.is_support_staff) && (
         <MenuGroup>
           <MenuItem
-            icon="shield-checkmark"
-            iconBg={Colors.brand}
-            label="Admin Dashboard"
-            onPress={() => router.push("/admin")}
+            icon="headset-outline"
+            iconBg="#FF6B35"
+            label="Support Dashboard"
+            onPress={() => router.push("/admin/support-dashboard" as any)}
+            badge="Staff"
           />
+          {profile?.is_admin && (
+            <>
+              <Separator indent={54} />
+              <MenuItem
+                icon="shield-checkmark"
+                iconBg={Colors.brand}
+                label="Admin Dashboard"
+                onPress={() => router.push("/admin")}
+                badge="Admin"
+              />
+            </>
+          )}
         </MenuGroup>
       )}
 
