@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
+import { showAlert } from "@/lib/alert";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
@@ -56,38 +57,14 @@ function ContactRow({ item }: { item: Contact }) {
   async function startChat() {
     Haptics.selectionAsync();
     if (!user) return;
-
-    const { data: myChats } = await supabase
-      .from("chat_members")
-      .select("chat_id")
-      .eq("user_id", user.id);
-
-    const myIds = (myChats || []).map((m: any) => m.chat_id);
-
-    if (myIds.length > 0) {
-      const { data: shared } = await supabase
-        .from("chat_members")
-        .select("chat_id, chats!inner(id, is_group, is_channel)")
-        .eq("user_id", item.id)
-        .in("chat_id", myIds)
-        .eq("chats.is_group", false)
-        .eq("chats.is_channel", false);
-
-      if (shared && shared.length > 0) {
-        router.push({ pathname: "/chat/[id]", params: { id: shared[0].chat_id } });
-        return;
-      }
-    }
-
-    router.push({
-      pathname: "/chat/[id]",
-      params: {
-        id: "new",
-        contactId: item.id,
-        contactName: item.display_name,
-        contactAvatar: item.avatar_url || "",
-      },
+    const { data: chatId, error } = await supabase.rpc("get_or_create_direct_chat", {
+      other_user_id: item.id,
     });
+    if (error || !chatId) {
+      showAlert("Error", "Could not start conversation. Please try again.");
+      return;
+    }
+    router.push({ pathname: "/chat/[id]", params: { id: chatId } });
   }
 
   return (

@@ -475,22 +475,23 @@ DECLARE
   v_chat_id UUID;
   v_me UUID := auth.uid();
 BEGIN
-  -- Look for existing 1-on-1 chat between the two users
-  SELECT gc.id INTO v_chat_id
-  FROM group_chats gc
-  JOIN group_chat_members m1 ON m1.group_id = gc.id AND m1.user_id = v_me
-  JOIN group_chat_members m2 ON m2.group_id = gc.id AND m2.user_id = other_user_id
-  WHERE gc.is_public = FALSE
+  -- Look for existing 1-on-1 direct chat between the two users
+  SELECT cm1.chat_id INTO v_chat_id
+  FROM chat_members cm1
+  JOIN chat_members cm2 ON cm2.chat_id = cm1.chat_id AND cm2.user_id = other_user_id
+  JOIN chats c ON c.id = cm1.chat_id
+    AND (c.is_group IS NULL OR c.is_group = FALSE)
+    AND (c.is_channel IS NULL OR c.is_channel = FALSE)
+  WHERE cm1.user_id = v_me
   LIMIT 1;
 
   IF v_chat_id IS NULL THEN
-    INSERT INTO group_chats (name, creator_id, is_public)
-    VALUES ('Direct Chat', v_me, FALSE)
+    INSERT INTO chats (is_group, is_channel, created_by)
+    VALUES (FALSE, FALSE, v_me)
     RETURNING id INTO v_chat_id;
 
-    INSERT INTO group_chat_members (group_id, user_id, role) VALUES
-      (v_chat_id, v_me, 'owner'),
-      (v_chat_id, other_user_id, 'member');
+    INSERT INTO chat_members (chat_id, user_id)
+    VALUES (v_chat_id, v_me), (v_chat_id, other_user_id);
   END IF;
 
   RETURN v_chat_id;

@@ -155,32 +155,15 @@ export default function ContactProfileScreen() {
   async function startChat() {
     if (!id) return;
     if (!user) { router.push("/(auth)/login"); return; }
-    const { data: myChats } = await supabase.from("chat_members").select("chat_id").eq("user_id", user.id);
-    const myIds = (myChats || []).map((m: any) => m.chat_id);
-    if (myIds.length > 0) {
-      const { data: shared } = await supabase
-        .from("chat_members")
-        .select("chat_id, chats!inner(id, is_group, is_channel)")
-        .eq("user_id", id)
-        .in("chat_id", myIds)
-        .eq("chats.is_group", false);
-      if (shared && shared.length > 0) {
-        const directChat = shared.find((s: any) => !s.chats?.is_channel);
-        if (directChat) {
-          router.push({ pathname: "/chat/[id]", params: { id: directChat.chat_id } });
-          return;
-        }
-      }
-    }
-    router.push({
-      pathname: "/chat/[id]",
-      params: {
-        id: "new",
-        contactId: id as string,
-        contactName: profile?.display_name || "",
-        contactAvatar: profile?.avatar_url || "",
-      },
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const { data: chatId, error } = await supabase.rpc("get_or_create_direct_chat", {
+      other_user_id: id,
     });
+    if (error || !chatId) {
+      showAlert("Error", "Could not start conversation. Please try again.");
+      return;
+    }
+    router.push({ pathname: "/chat/[id]", params: { id: chatId } });
   }
 
   async function toggleFollow() {
