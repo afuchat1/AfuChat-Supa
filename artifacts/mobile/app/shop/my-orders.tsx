@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { supabase } from "@/lib/supabase";
 import { ShopOrder, ORDER_STATUS_LABELS, ESCROW_STATUS_LABELS, getBuyerOrders, formatShopAcoin } from "@/lib/shop";
 const BRAND = "#00BCD4";
 const GOLD = "#D4A853";
@@ -134,6 +135,25 @@ export default function MyOrdersScreen() {
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Real-time: re-fetch when any of this buyer's orders are updated
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`buyer-orders:${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "shop_orders", filter: `buyer_id=eq.${user.id}` },
+        () => load()
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "shop_orders", filter: `buyer_id=eq.${user.id}` },
+        () => load()
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, load]);
 
   async function onRefresh() {
     setRefreshing(true);

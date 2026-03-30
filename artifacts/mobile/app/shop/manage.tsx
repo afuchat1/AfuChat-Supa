@@ -72,6 +72,30 @@ export default function ShopManage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Real-time: update order list instantly when a new order arrives or status changes
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`seller-orders:${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "shop_orders", filter: `seller_id=eq.${user.id}` },
+        () => load()
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "shop_orders", filter: `seller_id=eq.${user.id}` },
+        (payload: any) => {
+          // Optimistically update the specific order in state
+          setOrders((prev) =>
+            prev.map((o) => (o.id === payload.new.id ? { ...o, ...payload.new } : o))
+          );
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, load]);
+
   async function uploadImage(uri: string, path: string): Promise<string | null> {
     try {
       const ext = uri.split(".").pop()?.toLowerCase() || "jpg";
@@ -518,7 +542,7 @@ export default function ShopManage() {
           </Text>
           <TouchableOpacity
             style={{ backgroundColor: Colors.brand, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14, flexDirection: "row", alignItems: "center", gap: 8 }}
-            onPress={() => router.push("/settings/verification" as any)}
+            onPress={() => router.push("/shop/apply" as any)}
           >
             <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
             <Text style={{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: "#fff" }}>Apply for Verification</Text>

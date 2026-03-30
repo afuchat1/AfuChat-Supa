@@ -421,6 +421,7 @@ export default function ChatsScreen() {
 
   useEffect(() => {
     if (!user) return;
+    // Listen for new chats being created (new chat_member rows for this user)
     const memberChannel = supabase
       .channel(`chatlist-member-inserts:${user.id}`)
       .on(
@@ -437,25 +438,52 @@ export default function ChatsScreen() {
     return addOnlineListener(() => loadChats());
   }, [user, loadChats]);
 
+  // Periodic background refresh — ensures the list stays current even if
+  // a realtime event is missed or the channel briefly disconnects
+  useFocusEffect(
+    useCallback(() => {
+      const interval = setInterval(() => loadChats(true), 15000);
+      return () => clearInterval(interval);
+    }, [loadChats])
+  );
+
   const chatIdsKey = chats.map((c) => c.id).sort().join(",");
 
   useEffect(() => {
     if (!user || !chatIdsKey) return;
 
     const chatIds = chatIdsKey.split(",");
-    const channel = supabase.channel(`chatlist-messages:${user.id}`);
 
+    // Subscribe to new messages in each known chat
+    const msgChannel = supabase.channel(`chatlist-messages:${user.id}`);
     chatIds.forEach((chatId) => {
-      channel.on(
+      msgChannel.on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages", filter: `chat_id=eq.${chatId}` },
         () => loadChats(true)
       );
     });
+    msgChannel.subscribe();
 
-    channel.subscribe();
+    // Also subscribe to chat-level updates (pinning, archiving, name changes)
+    // We filter client-side since Supabase realtime doesn't support IN filters
+    const chatChannel = supabase
+      .channel(`chatlist-chats:${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "chats" },
+        (payload: any) => {
+          if (chatIds.includes(payload.new?.id)) {
+            loadChats(true);
+          }
+        }
+      )
+      .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(msgChannel);
+      supabase.removeChannel(chatChannel);
+    };
   }, [user, chatIdsKey, loadChats]);
 
   const filtered = search

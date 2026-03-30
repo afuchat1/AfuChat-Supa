@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ActivityIndicator, Image, Platform, StyleSheet, View, Text } from "react-native";
+import { ActivityIndicator, Image, StyleSheet, View, Text } from "react-native";
 import { router } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import Colors from "@/constants/colors";
@@ -20,10 +20,13 @@ export default function IndexScreen() {
         router.replace("/(tabs)");
       }
     } else {
-      router.replace("/(tabs)/discover");
+      // Non-logged-in users land on the tabs root — the tab layout
+      // will show the correct first visible tab (search/discover)
+      router.replace("/(tabs)");
     }
   }
 
+  // Redirect once auth state is known
   useEffect(() => {
     if (loading) return;
     doRedirect(
@@ -34,10 +37,16 @@ export default function IndexScreen() {
     );
   }, [session, profile, loading]);
 
+  // Safety timeout — only fires if auth takes too long
   useEffect(() => {
     const timeout = setTimeout(() => {
-      doRedirect(!!session, !!profile, profile?.onboarding_completed ?? true, session?.user?.id);
-    }, 6000);
+      // If auth is still loading at 8s, treat as unauthenticated and go to tabs
+      // (the tabs layout will redirect to onboarding / login as needed)
+      if (!redirected.current) {
+        redirected.current = true;
+        router.replace("/(tabs)");
+      }
+    }, 8000);
     return () => clearTimeout(timeout);
   }, []);
 
