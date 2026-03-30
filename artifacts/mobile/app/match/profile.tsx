@@ -21,6 +21,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
+import SchoolPickerInput from "@/components/SchoolPickerInput";
 
 const { width: SW } = Dimensions.get("window");
 const BRAND = "#FF2D55";
@@ -285,7 +286,6 @@ export default function MatchProfileEditScreen() {
             {[
               { l: "JOB TITLE", v: jobTitle, s: setJobTitle, ph: "e.g. Designer" },
               { l: "COMPANY", v: company, s: setCompany, ph: "e.g. Apple" },
-              { l: "SCHOOL", v: school, s: setSchool, ph: "e.g. Harvard" },
             ].map((f) => (
               <View key={f.l} style={styles.fieldGroup}>
                 <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{f.l}</Text>
@@ -298,6 +298,15 @@ export default function MatchProfileEditScreen() {
                 />
               </View>
             ))}
+            <View style={[styles.fieldGroup, { zIndex: 200 }]}>
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>SCHOOL</Text>
+              <SchoolPickerInput
+                value={school}
+                onChange={(v) => setSchool(v.slice(0, 120))}
+                country={country || undefined}
+                placeholder="Search your school or university"
+              />
+            </View>
           </View>
 
           {/* Location */}

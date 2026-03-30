@@ -23,6 +23,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
+import SchoolPickerInput from "@/components/SchoolPickerInput";
 
 const { width: SW } = Dimensions.get("window");
 const CONTENT_W = SW - 48; // scrollContent has paddingHorizontal: 24 each side
@@ -421,7 +422,6 @@ export default function MatchOnboarding() {
               {[
                 { label: "JOB TITLE", value: jobTitle, set: setJobTitle, ph: "e.g. Software Engineer", cap: 60 },
                 { label: "COMPANY", value: company, set: setCompany, ph: "e.g. Google", cap: 60 },
-                { label: "SCHOOL", value: school, set: setSchool, ph: "e.g. University of Nairobi", cap: 80 },
               ].map((f) => (
                 <View key={f.label} style={styles.fieldGroup}>
                   <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{f.label}</Text>
@@ -434,6 +434,16 @@ export default function MatchOnboarding() {
                   />
                 </View>
               ))}
+
+              <View style={[styles.fieldGroup, { zIndex: 200 }]}>
+                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>SCHOOL</Text>
+                <SchoolPickerInput
+                  value={school}
+                  onChange={(v) => setSchool(v.slice(0, 120))}
+                  country={country || undefined}
+                  placeholder="Search your school or university"
+                />
+              </View>
 
               <View style={styles.fieldGroup}>
                 <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>EDUCATION LEVEL</Text>
