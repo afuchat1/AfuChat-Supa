@@ -25,7 +25,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
 import SchoolPickerInput from "@/components/SchoolPickerInput";
 import RegionPickerInput from "@/components/RegionPickerInput";
-import { detectGeo } from "@/lib/geoDetect";
+import { detectGeo, clearGeoCache } from "@/lib/geoDetect";
 
 const { width: SW } = Dimensions.get("window");
 const CONTENT_W = SW - 48; // scrollContent has paddingHorizontal: 24 each side
@@ -108,18 +108,28 @@ export default function MatchOnboarding() {
   const [country, setCountry] = useState("");
   const [geoLoading, setGeoLoading] = useState(false);
   const geoDetected = useRef(false);
+  const [geoFailed, setGeoFailed] = useState(false);
+
+  function runGeoDetect(retry = false) {
+    if (retry) clearGeoCache();
+    setGeoLoading(true);
+    setGeoFailed(false);
+    detectGeo().then((geo) => {
+      if (geo) {
+        setCountry(geo.countryName);
+        if (!locationName) setLocationName(geo.city);
+        setGeoFailed(false);
+      } else {
+        setGeoFailed(true);
+      }
+      setGeoLoading(false);
+    });
+  }
 
   useEffect(() => {
     if (step === 6 && !geoDetected.current && !country) {
       geoDetected.current = true;
-      setGeoLoading(true);
-      detectGeo().then((geo) => {
-        if (geo) {
-          setCountry(geo.countryName);
-          if (!locationName) setLocationName(geo.city);
-        }
-        setGeoLoading(false);
-      });
+      runGeoDetect();
     }
   }, [step]);
 
@@ -546,15 +556,30 @@ export default function MatchOnboarding() {
                       <ActivityIndicator size="small" color={BRAND} style={{ marginRight: 8 }} />
                       <Text style={[styles.lockedText, { color: colors.textMuted }]}>Detecting your country…</Text>
                     </>
+                  ) : geoFailed && !country ? (
+                    <>
+                      <Ionicons name="warning-outline" size={16} color="#FF9500" style={{ marginRight: 6 }} />
+                      <Text style={[styles.lockedText, { color: colors.textMuted, flex: 1 }]}>
+                        Could not detect
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => runGeoDetect(true)}
+                        style={{ backgroundColor: BRAND + "22", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}
+                      >
+                        <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: BRAND }}>Retry</Text>
+                      </TouchableOpacity>
+                    </>
                   ) : (
                     <Text style={[styles.lockedText, { color: country ? colors.text : colors.textMuted }]}>
-                      {country || "Could not detect — please check network"}
+                      {country || "Detecting…"}
                     </Text>
                   )}
-                  <View style={[styles.lockedBadge, { backgroundColor: "#34C75922" }]}>
-                    <Ionicons name="lock-closed" size={11} color="#34C759" />
-                    <Text style={styles.lockedBadgeText}>Auto</Text>
-                  </View>
+                  {!geoFailed && (
+                    <View style={[styles.lockedBadge, { backgroundColor: "#34C75922" }]}>
+                      <Ionicons name="lock-closed" size={11} color="#34C759" />
+                      <Text style={styles.lockedBadgeText}>Auto</Text>
+                    </View>
+                  )}
                 </View>
               </View>
 
