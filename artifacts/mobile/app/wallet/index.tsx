@@ -604,6 +604,17 @@ export default function WalletScreen() {
           )}
           {TabFilters}
           {TxList}
+          {/* Hidden gift vault entry — only visible on ACoin tab at bottom */}
+          {activeTab === "acoin" && (
+            <Pressable
+              style={[styles.vaultEntry, { borderTopColor: colors.border }]}
+              onPress={() => router.push("/wallet/gift-vault" as any)}
+            >
+              <Ionicons name="gift-outline" size={13} color={colors.textMuted} />
+              <Text style={[styles.vaultEntryText, { color: colors.textMuted }]}>Gift Vault</Text>
+              <Ionicons name="chevron-forward" size={11} color={colors.textMuted} />
+            </Pressable>
+          )}
         </>
       )}
 
@@ -704,6 +715,8 @@ const styles = StyleSheet.create({
   previewBox: { borderRadius: 12, padding: 14, gap: 6 },
   previewRow: { flexDirection: "row", justifyContent: "space-between" },
   previewLabel: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  vaultEntry: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 20, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth },
+  vaultEntryText: { fontSize: 11, fontFamily: "Inter_400Regular", flex: 1 },
   previewValue: { fontSize: 16, fontFamily: "Inter_700Bold" },
   sendBtn: { backgroundColor: Colors.brand, borderRadius: 14, paddingVertical: 14, alignItems: "center" },
   sendBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },

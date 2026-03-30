@@ -4,8 +4,10 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -64,6 +66,7 @@ export default function MatchConversationScreen() {
   const [showGifts, setShowGifts] = useState(false);
   const [showQuick, setShowQuick] = useState(true);
   const [acoinBalance, setAcoinBalance] = useState(0);
+  const [selectedGift, setSelectedGift] = useState<Message | null>(null);
   const flatRef = useRef<FlatList>(null);
 
   useEffect(() => { if (id) loadAll(); }, [id]);
@@ -208,10 +211,19 @@ export default function MatchConversationScreen() {
             return (
               <View style={[styles.msgRow, isMine && styles.msgRowMine]}>
                 {item.is_gift ? (
-                  <View style={[styles.giftBubble, isMine ? styles.giftBubbleMine : { backgroundColor: colors.surface }]}>
+                  <Pressable
+                    style={[styles.giftBubble, isMine ? styles.giftBubbleMine : { backgroundColor: colors.surface }]}
+                    onPress={() => setSelectedGift(item)}
+                  >
                     <Text style={{ fontSize: 36 }}>{item.gift_emoji}</Text>
-                    <Text style={[styles.giftLabel, { color: isMine ? "#fff" : colors.text }]}>Gift sent</Text>
-                  </View>
+                    <Text style={[styles.giftLabel, { color: isMine ? "#fff" : colors.text }]}>
+                      {isMine ? "Gift sent" : "Gift received"}
+                    </Text>
+                    <View style={styles.giftTapHint}>
+                      <Ionicons name="information-circle-outline" size={11} color={isMine ? "rgba(255,255,255,0.6)" : colors.textMuted} />
+                      <Text style={[styles.giftTapHintText, { color: isMine ? "rgba(255,255,255,0.6)" : colors.textMuted }]}>tap to view</Text>
+                    </View>
+                  </Pressable>
                 ) : (
                   <View style={[styles.bubble, isMine ? styles.bubbleMine : [styles.bubbleTheirs, { backgroundColor: colors.surface }]]}>
                     <Text style={[styles.bubbleText, { color: isMine ? "#fff" : colors.text }]}>{item.content}</Text>
@@ -303,6 +315,72 @@ export default function MatchConversationScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Gift Detail Modal */}
+      <Modal visible={!!selectedGift} animationType="slide" transparent>
+        <View style={styles.giftModalOverlay}>
+          <View style={[styles.giftModalContent, { backgroundColor: colors.surface }]}>
+            <View style={styles.giftModalHandle} />
+
+            {/* Header */}
+            <View style={styles.giftModalHeader}>
+              <Text style={[styles.giftModalTitle, { color: colors.text }]}>Gift Details</Text>
+              <Pressable onPress={() => setSelectedGift(null)} hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </Pressable>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Emoji showcase */}
+              <View style={[styles.giftModalEmoji, { backgroundColor: BRAND + "12" }]}>
+                <Text style={{ fontSize: 72 }}>{selectedGift?.gift_emoji}</Text>
+              </View>
+
+              {/* Direction */}
+              <Text style={[styles.giftModalDirection, { color: BRAND }]}>
+                {selectedGift?.sender_id === user?.id ? "You sent this gift 💝" : "You received this gift 🎁"}
+              </Text>
+
+              {/* Details */}
+              <View style={[styles.giftModalDetails, { backgroundColor: colors.backgroundSecondary }]}>
+                <View style={styles.giftModalRow}>
+                  <Text style={[styles.giftModalLabel, { color: colors.textMuted }]}>
+                    {selectedGift?.sender_id === user?.id ? "To" : "From"}
+                  </Text>
+                  <Text style={[styles.giftModalValue, { color: colors.text }]}>{otherProfile?.name ?? "Match"}</Text>
+                </View>
+                <View style={[styles.giftModalDivider, { backgroundColor: colors.border }]} />
+                <View style={styles.giftModalRow}>
+                  <Text style={[styles.giftModalLabel, { color: colors.textMuted }]}>Sent</Text>
+                  <Text style={[styles.giftModalValue, { color: colors.text }]}>
+                    {selectedGift ? new Date(selectedGift.sent_at).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
+                  </Text>
+                </View>
+                <View style={[styles.giftModalDivider, { backgroundColor: colors.border }]} />
+                <View style={styles.giftModalRow}>
+                  <Text style={[styles.giftModalLabel, { color: colors.textMuted }]}>Value</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <Ionicons name="diamond" size={14} color="#FFD60A" />
+                    <Text style={[styles.giftModalValue, { color: "#FFD60A" }]}>{MATCH_PRICES.GIFT} ACoins</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Received gift note */}
+              {selectedGift?.sender_id !== user?.id && (
+                <View style={[styles.giftModalNote, { backgroundColor: colors.backgroundSecondary }]}>
+                  <Ionicons name="star" size={16} color={BRAND} />
+                  <Text style={[styles.giftModalNoteText, { color: colors.textSecondary }]}>
+                    This gift is displayed on your AfuMatch profile.
+                  </Text>
+                </View>
+              )}
+
+              <View style={{ height: 24 }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -328,6 +406,22 @@ const styles = StyleSheet.create({
   giftBubble: { borderRadius: 18, padding: 16, alignItems: "center", gap: 4, minWidth: 100 },
   giftBubbleMine: { backgroundColor: BRAND + "CC" },
   giftLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  giftTapHint: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
+  giftTapHintText: { fontSize: 10, fontFamily: "Inter_400Regular" },
+  giftModalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" },
+  giftModalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingBottom: 32, maxHeight: "80%" },
+  giftModalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#3A3A3C", alignSelf: "center", marginTop: 12, marginBottom: 4 },
+  giftModalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 16 },
+  giftModalTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  giftModalEmoji: { borderRadius: 20, padding: 24, alignItems: "center", marginBottom: 16 },
+  giftModalDirection: { fontSize: 16, fontFamily: "Inter_600SemiBold", textAlign: "center", marginBottom: 16 },
+  giftModalDetails: { borderRadius: 14, marginBottom: 12, overflow: "hidden" },
+  giftModalRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14 },
+  giftModalLabel: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  giftModalValue: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  giftModalDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: 16 },
+  giftModalNote: { flexDirection: "row", alignItems: "flex-start", gap: 10, borderRadius: 12, padding: 14, marginBottom: 12 },
+  giftModalNoteText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
   quickWrap: { paddingVertical: 8 },
   quickChip: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
   quickText: { fontSize: 13, fontFamily: "Inter_400Regular" },

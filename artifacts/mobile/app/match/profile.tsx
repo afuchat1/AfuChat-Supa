@@ -24,6 +24,7 @@ import { showAlert } from "@/lib/alert";
 import SchoolPickerInput from "@/components/SchoolPickerInput";
 import RegionPickerInput from "@/components/RegionPickerInput";
 import { detectGeo } from "@/lib/geoDetect";
+import { getReceivedMatchGifts, ReceivedMatchGift } from "@/lib/matchTransactions";
 
 const { width: SW } = Dimensions.get("window");
 const BRAND = "#FF2D55";
@@ -52,6 +53,7 @@ export default function MatchProfileEditScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
+  const [receivedGifts, setReceivedGifts] = useState<ReceivedMatchGift[]>([]);
 
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
@@ -68,10 +70,12 @@ export default function MatchProfileEditScreen() {
 
   async function load() {
     if (!user) return;
-    const [{ data: mp }, { data: mphotos }] = await Promise.all([
+    const [{ data: mp }, { data: mphotos }, gifts] = await Promise.all([
       supabase.from("match_profiles").select("*").eq("user_id", user.id).maybeSingle(),
       supabase.from("match_photos").select("*").eq("user_id", user.id).order("display_order"),
+      getReceivedMatchGifts(user.id),
     ]);
+    setReceivedGifts(gifts);
     if (mp) {
       setName(mp.name ?? "");
       setBio(mp.bio ?? "");
@@ -328,6 +332,26 @@ export default function MatchProfileEditScreen() {
             </View>
           </View>
 
+          {/* Gifts Received */}
+          {receivedGifts.length > 0 && (
+            <>
+              <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>GIFTS RECEIVED ({receivedGifts.length})</Text>
+              <View style={[styles.sectionCard, { backgroundColor: colors.surface }]}>
+                <View style={styles.giftGrid}>
+                  {receivedGifts.slice(0, 18).map((g, i) => (
+                    <View key={g.id} style={[styles.giftCell, { backgroundColor: colors.backgroundSecondary }]}>
+                      <Text style={styles.giftCellEmoji}>{g.gift_emoji}</Text>
+                      <Text style={[styles.giftCellName, { color: colors.textMuted }]} numberOfLines={1}>{g.sender_name}</Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={[styles.giftHint, { color: colors.textMuted }]}>
+                  Gifts from your matches · visible on your public profile
+                </Text>
+              </View>
+            </>
+          )}
+
           {/* Location */}
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>LOCATION</Text>
           <View style={[styles.sectionCard, { backgroundColor: colors.surface, zIndex: 10 }]}>
@@ -402,4 +426,9 @@ const styles = StyleSheet.create({
   interestGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   interestChip: { borderWidth: 1.5, borderRadius: 22, paddingHorizontal: 14, paddingVertical: 7 },
   interestText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  giftGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
+  giftCell: { width: 60, height: 68, borderRadius: 12, alignItems: "center", justifyContent: "center", gap: 4, padding: 6 },
+  giftCellEmoji: { fontSize: 26 },
+  giftCellName: { fontSize: 9, fontFamily: "Inter_400Regular", textAlign: "center" },
+  giftHint: { fontSize: 11, fontFamily: "Inter_400Regular", lineHeight: 16 },
 });
