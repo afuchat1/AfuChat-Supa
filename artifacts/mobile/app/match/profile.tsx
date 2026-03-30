@@ -22,6 +22,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
 import SchoolPickerInput from "@/components/SchoolPickerInput";
+import RegionPickerInput from "@/components/RegionPickerInput";
+import { detectGeo } from "@/lib/geoDetect";
 
 const { width: SW } = Dimensions.get("window");
 const BRAND = "#FF2D55";
@@ -49,6 +51,7 @@ export default function MatchProfileEditScreen() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [geoLoading, setGeoLoading] = useState(false);
 
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
@@ -76,9 +79,21 @@ export default function MatchProfileEditScreen() {
       setCompany(mp.company ?? "");
       setSchool(mp.school ?? "");
       setLocationName(mp.location_name ?? "");
-      setCountry(mp.country ?? "");
       setInterests(mp.interests ?? []);
       setGoal(mp.relationship_goal ?? "open");
+      const savedCountry = mp.country ?? "";
+      if (savedCountry) {
+        setCountry(savedCountry);
+      } else {
+        setGeoLoading(true);
+        detectGeo().then((geo) => {
+          if (geo) {
+            setCountry(geo.countryName);
+            if (!mp.location_name) setLocationName(geo.city);
+          }
+          setGeoLoading(false);
+        });
+      }
     }
     if (mphotos) {
       setPhotos(mphotos.map((p: any) => ({ id: p.id, uri: p.url, url: p.url, order: p.display_order, is_primary: p.is_primary })));
@@ -312,22 +327,38 @@ export default function MatchProfileEditScreen() {
           {/* Location */}
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>LOCATION</Text>
           <View style={[styles.sectionCard, { backgroundColor: colors.surface }]}>
-            {[
-              { l: "CITY / TOWN", v: locationName, s: setLocationName, ph: "e.g. Lagos" },
-              { l: "COUNTRY", v: country, s: setCountry, ph: "e.g. Nigeria" },
-            ].map((f) => (
-              <View key={f.l} style={styles.fieldGroup}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{f.l}</Text>
-                <TextInput
-                  style={[styles.input, { color: colors.text, borderColor: colors.border }]}
-                  value={f.v}
-                  onChangeText={f.s}
-                  placeholder={f.ph}
-                  placeholderTextColor={colors.textMuted}
-                  autoCapitalize="words"
-                />
+            {/* Country — auto-detected, locked */}
+            <View style={styles.fieldGroup}>
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>COUNTRY</Text>
+              <View style={[styles.lockedRow, { borderColor: country ? BRAND : colors.border }]}>
+                <Ionicons name="earth" size={18} color={country ? BRAND : colors.textMuted} style={{ marginRight: 8 }} />
+                {geoLoading ? (
+                  <>
+                    <ActivityIndicator size="small" color={BRAND} style={{ marginRight: 8 }} />
+                    <Text style={[styles.lockedText, { color: colors.textMuted }]}>Detecting your country…</Text>
+                  </>
+                ) : (
+                  <Text style={[styles.lockedText, { color: country ? colors.text : colors.textMuted }]}>
+                    {country || "Could not detect — check network"}
+                  </Text>
+                )}
+                <View style={styles.lockedBadge}>
+                  <Ionicons name="lock-closed" size={11} color="#34C759" />
+                  <Text style={styles.lockedBadgeText}>Auto</Text>
+                </View>
               </View>
-            ))}
+            </View>
+
+            {/* City / Region — searchable dropdown */}
+            <View style={[styles.fieldGroup, { zIndex: 200, marginBottom: 0 }]}>
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>CITY / TOWN</Text>
+              <RegionPickerInput
+                value={locationName}
+                onChange={setLocationName}
+                country={country}
+                placeholder="Search your city or town"
+              />
+            </View>
           </View>
 
         </ScrollView>
@@ -344,6 +375,10 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.8, paddingHorizontal: 20, paddingTop: 24, paddingBottom: 8 },
   sectionCard: { marginHorizontal: 16, borderRadius: 14, padding: 16 },
   fieldGroup: { marginBottom: 16 },
+  lockedRow: { flexDirection: "row", alignItems: "center", borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13 },
+  lockedText: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
+  lockedBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginLeft: 8, backgroundColor: "#34C75922" },
+  lockedBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#34C759" },
   fieldLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.6, marginBottom: 6 },
   input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontFamily: "Inter_400Regular" },
   textarea: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontFamily: "Inter_400Regular", minHeight: 100 },

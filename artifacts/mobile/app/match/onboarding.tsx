@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -24,6 +24,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
 import SchoolPickerInput from "@/components/SchoolPickerInput";
+import RegionPickerInput from "@/components/RegionPickerInput";
+import { detectGeo } from "@/lib/geoDetect";
 
 const { width: SW } = Dimensions.get("window");
 const CONTENT_W = SW - 48; // scrollContent has paddingHorizontal: 24 each side
@@ -104,6 +106,22 @@ export default function MatchOnboarding() {
   // Step 6 — Location
   const [locationName, setLocationName] = useState("");
   const [country, setCountry] = useState("");
+  const [geoLoading, setGeoLoading] = useState(false);
+  const geoDetected = useRef(false);
+
+  useEffect(() => {
+    if (step === 6 && !geoDetected.current && !country) {
+      geoDetected.current = true;
+      setGeoLoading(true);
+      detectGeo().then((geo) => {
+        if (geo) {
+          setCountry(geo.countryName);
+          if (!locationName) setLocationName(geo.city);
+        }
+        setGeoLoading(false);
+      });
+    }
+  }, [step]);
 
   function advanceProgress(toStep: number) {
     Animated.spring(progress, {
@@ -518,22 +536,38 @@ export default function MatchOnboarding() {
                 </Text>
               </View>
 
-              {[
-                { label: "CITY / TOWN", value: locationName, set: setLocationName, ph: "e.g. Nairobi" },
-                { label: "COUNTRY", value: country, set: setCountry, ph: "e.g. Kenya" },
-              ].map((f) => (
-                <View key={f.label} style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{f.label}</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: colors.surface, color: colors.text, borderColor: f.value ? BRAND : colors.border }]}
-                    placeholder={f.ph}
-                    placeholderTextColor={colors.textMuted}
-                    value={f.value}
-                    onChangeText={f.set}
-                    autoCapitalize="words"
-                  />
+              {/* Country — auto-detected, locked */}
+              <View style={styles.fieldGroup}>
+                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>COUNTRY</Text>
+                <View style={[styles.lockedRow, { backgroundColor: colors.surface, borderColor: country ? BRAND : colors.border }]}>
+                  <Ionicons name="earth" size={18} color={country ? BRAND : colors.textMuted} style={{ marginRight: 8 }} />
+                  {geoLoading ? (
+                    <>
+                      <ActivityIndicator size="small" color={BRAND} style={{ marginRight: 8 }} />
+                      <Text style={[styles.lockedText, { color: colors.textMuted }]}>Detecting your country…</Text>
+                    </>
+                  ) : (
+                    <Text style={[styles.lockedText, { color: country ? colors.text : colors.textMuted }]}>
+                      {country || "Could not detect — please check network"}
+                    </Text>
+                  )}
+                  <View style={[styles.lockedBadge, { backgroundColor: "#34C75922" }]}>
+                    <Ionicons name="lock-closed" size={11} color="#34C759" />
+                    <Text style={styles.lockedBadgeText}>Auto</Text>
+                  </View>
                 </View>
-              ))}
+              </View>
+
+              {/* City / Region — searchable dropdown */}
+              <View style={[styles.fieldGroup, { zIndex: 200 }]}>
+                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>CITY / TOWN</Text>
+                <RegionPickerInput
+                  value={locationName}
+                  onChange={setLocationName}
+                  country={country}
+                  placeholder="Search your city or town"
+                />
+              </View>
 
               <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: BRAND }]}>
                 <Text style={[styles.summaryTitle, { color: colors.text }]}>Your AfuMatch Profile</Text>
@@ -634,6 +668,10 @@ const styles = StyleSheet.create({
   goalLabel: { flex: 1, fontSize: 15, fontFamily: "Inter_500Medium" },
   locationCard: { flexDirection: "row", alignItems: "flex-start", gap: 10, borderRadius: 14, padding: 14, marginBottom: 24 },
   locationPrivacy: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
+  lockedRow: { flexDirection: "row", alignItems: "center", borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13 },
+  lockedText: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
+  lockedBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginLeft: 8 },
+  lockedBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#34C759" },
   summaryCard: { borderWidth: 1.5, borderRadius: 16, padding: 16, marginTop: 8 },
   summaryTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold", marginBottom: 12 },
   summaryRows: { gap: 4 },
