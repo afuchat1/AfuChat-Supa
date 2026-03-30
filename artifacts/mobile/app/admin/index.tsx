@@ -243,14 +243,14 @@ export default function AdminDashboard() {
 
   const loadReports = useCallback(async () => {
     if (!isAdmin) return;
-    const { data } = await supabase.from("reports").select("*").order("created_at", { ascending: false }).limit(50);
+    const { data } = await supabase.from("user_reports").select("*").order("created_at", { ascending: false }).limit(50);
     if (data) {
-      const userIds = [...new Set(data.flatMap((r: any) => [r.reporter_id, r.reported_id]))];
+      const userIds = [...new Set(data.flatMap((r: any) => [r.reporter_id, r.reported_user_id].filter(Boolean)))];
       if (userIds.length > 0) {
         const { data: profiles } = await supabase.from("profiles").select("id, display_name").in("id", userIds);
         const nameMap: Record<string, string> = {};
         for (const p of (profiles || [])) nameMap[p.id] = p.display_name;
-        setReports(data.map((r: any) => ({ ...r, reporter_name: nameMap[r.reporter_id] || "Unknown", reported_name: nameMap[r.reported_id] || "Unknown" })));
+        setReports(data.map((r: any) => ({ ...r, reporter_name: nameMap[r.reporter_id] || "Unknown", reported_name: nameMap[r.reported_user_id] || "Unknown" })));
       } else {
         setReports(data);
       }
@@ -281,7 +281,7 @@ export default function AdminDashboard() {
       ] = await Promise.all([
         supabase.from("match_profiles").select("*", { count: "exact", head: true }),
         supabase.from("match_swipes").select("*", { count: "exact", head: true }),
-        supabase.from("match_likes").select("*", { count: "exact", head: true }),
+        supabase.from("match_matches").select("*", { count: "exact", head: true }),
         supabase.from("gift_transactions").select("*", { count: "exact", head: true }),
       ]);
       setMatchProfileCount(profileCount || 0);
@@ -500,14 +500,14 @@ export default function AdminDashboard() {
         supabase.from("red_envelopes").select("id", { count: "exact", head: true }).eq("sender_id", userId),
         supabase.from("red_envelope_claims").select("id", { count: "exact", head: true }).eq("user_id", userId),
         supabase.from("user_subscriptions").select("*, subscription_plans(name, tier)").eq("user_id", userId).eq("is_active", true).maybeSingle(),
-        supabase.from("post_likes").select("id", { count: "exact", head: true }).eq("user_id", userId),
+        supabase.from("post_acknowledgments").select("id", { count: "exact", head: true }).eq("user_id", userId),
         supabase.from("chats").select("id", { count: "exact", head: true }).or(`user1_id.eq.${userId},user2_id.eq.${userId}`),
         supabase.from("messages").select("id", { count: "exact", head: true }).eq("sender_id", userId),
         supabase.from("follows").select("follower_id, profiles!follows_follower_id_fkey(handle, display_name, avatar_url)").eq("following_id", userId).order("created_at", { ascending: false }).limit(50),
         supabase.from("follows").select("following_id, profiles!follows_following_id_fkey(handle, display_name, avatar_url)").eq("follower_id", userId).order("created_at", { ascending: false }).limit(50),
         supabase.from("posts").select("id, content, view_count, created_at").eq("author_id", userId).order("created_at", { ascending: false }).limit(20),
         supabase.from("chats").select("id, created_at, user1_id, user2_id").or(`user1_id.eq.${userId},user2_id.eq.${userId}`).order("created_at", { ascending: false }).limit(20),
-        supabase.from("post_likes").select("post_id, created_at, posts(content, author_id)").eq("user_id", userId).order("created_at", { ascending: false }).limit(20),
+        supabase.from("post_acknowledgments").select("post_id, created_at, posts(content, author_id)").eq("user_id", userId).order("created_at", { ascending: false }).limit(20),
       ]);
 
       let email = "\u2014";

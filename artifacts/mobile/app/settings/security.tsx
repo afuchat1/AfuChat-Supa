@@ -75,16 +75,14 @@ export default function SecuritySettingsScreen() {
     try {
       const [
         { data: profileData },
-        { data: moments },
-        { data: conversations },
-        { data: contacts },
+        { data: userPosts },
+        { data: chatMemberships },
         { data: xpTransfers },
         { data: acoinTx },
       ] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", user.id).single(),
-        supabase.from("moments").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
-        supabase.from("conversation_members").select("conversation_id").eq("user_id", user.id),
-        supabase.from("contacts").select("*").or(`user_id.eq.${user.id},contact_id.eq.${user.id}`),
+        supabase.from("posts").select("id, content, created_at, view_count").eq("author_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("chat_members").select("chat_id").eq("user_id", user.id),
         supabase.from("xp_transfers").select("*").or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`).order("created_at", { ascending: false }).limit(100),
         supabase.from("acoin_transactions").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(100),
       ]);
@@ -96,9 +94,8 @@ export default function SecuritySettingsScreen() {
           created_at: user.created_at,
         },
         profile: profileData,
-        posts: moments || [],
-        conversations_count: conversations?.length || 0,
-        contacts: contacts || [],
+        posts: userPosts || [],
+        chats_count: chatMemberships?.length || 0,
         nexa_transfers: xpTransfers || [],
         acoin_transactions: acoinTx || [],
       };

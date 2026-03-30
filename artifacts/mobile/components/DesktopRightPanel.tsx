@@ -97,17 +97,22 @@ function TrendingTopics({ colors }: { colors: any }) {
   useEffect(() => {
     (async () => {
       const { data } = await supabase
-        .from("moments")
-        .select("hashtags")
-        .not("hashtags", "is", null)
+        .from("posts")
+        .select("content")
+        .eq("is_blocked", false)
+        .order("view_count", { ascending: false })
         .limit(200);
 
       if (!data) { setLoading(false); return; }
 
       const tagMap: Record<string, number> = {};
+      const hashtagRe = /#(\w+)/g;
       for (const row of data) {
-        const tags: string[] = row.hashtags || [];
-        for (const tag of tags) {
+        const content = row.content || "";
+        let match;
+        hashtagRe.lastIndex = 0;
+        while ((match = hashtagRe.exec(content)) !== null) {
+          const tag = match[1].toLowerCase();
           tagMap[tag] = (tagMap[tag] || 0) + 1;
         }
       }
