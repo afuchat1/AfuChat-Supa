@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
   Modal,
@@ -485,6 +484,35 @@ export default function ShopManage() {
           </TouchableOpacity>
           <TouchableOpacity onPress={() => router.push("/store")}>
             <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: Colors.brand }}>Browse Marketplace</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  if (profile && !profile.is_organization_verified) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
+        <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Store Manager</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 16 }}>
+          <View style={{ width: 80, height: 80, borderRadius: 24, backgroundColor: Colors.brand + "15", alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name="lock-closed-outline" size={36} color={Colors.brand} />
+          </View>
+          <Text style={{ fontSize: 20, fontFamily: "Inter_700Bold", color: colors.text, textAlign: "center" }}>Verified Orgs Only</Text>
+          <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.textMuted, textAlign: "center", lineHeight: 21 }}>
+            Only organization-verified accounts can manage a store and list products. Submit a seller application to get started.
+          </Text>
+          <TouchableOpacity
+            style={{ backgroundColor: Colors.brand, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14, marginTop: 8 }}
+            onPress={() => router.replace("/shop/apply")}
+          >
+            <Text style={{ color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold" }}>Apply to Become a Seller</Text>
           </TouchableOpacity>
         </View>
       </View>

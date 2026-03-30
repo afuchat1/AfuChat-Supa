@@ -86,6 +86,7 @@ const TABS = [
   { id: "overview", label: "Overview", icon: "stats-chart" as const },
   { id: "lookup", label: "ID Lookup", icon: "finger-print" as const },
   { id: "users", label: "Users", icon: "people" as const },
+  { id: "sellers", label: "Seller Apps", icon: "storefront" as const },
   { id: "content", label: "Content", icon: "document-text" as const },
   { id: "match", label: "AfuMatch", icon: "heart" as const },
   { id: "channels", label: "Channels", icon: "megaphone" as const },
@@ -133,6 +134,11 @@ export default function AdminDashboard() {
   const [plans, setPlans] = useState<SubPlan[]>([]);
   const [currencySettings, setCurrencySettings] = useState<CurrencySettings | null>(null);
   const [reports, setReports] = useState<any[]>([]);
+  const [sellerApplications, setSellerApplications] = useState<any[]>([]);
+  const [sellerAppFilter, setSellerAppFilter] = useState<"all" | "pending" | "approved" | "rejected">("pending");
+  const [reviewingApp, setReviewingApp] = useState<any | null>(null);
+  const [reviewNote, setReviewNote] = useState("");
+  const [reviewSaving, setReviewSaving] = useState(false);
   const [userSearch, setUserSearch] = useState("");
   const [postSearch, setPostSearch] = useState("");
   const [balanceModal, setBalanceModal] = useState<UserRow | null>(null);
@@ -259,6 +265,16 @@ export default function AdminDashboard() {
     }
   }, []);
 
+  const loadSellerApplications = useCallback(async () => {
+    if (!isAdmin) return;
+    const { data } = await supabase
+      .from("seller_applications")
+      .select("*, profiles!seller_applications_user_id_fkey(display_name, handle, avatar_url, country)")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    setSellerApplications(data || []);
+  }, []);
+
   const loadReferrals = useCallback(async () => {
     if (!isAdmin) return;
     const { data } = await supabase
@@ -356,7 +372,7 @@ export default function AdminDashboard() {
     setLoading(true);
     await Promise.all([
       loadStats(), loadUsers(), loadPosts(), loadPlans(), loadCurrency(),
-      loadReports(), loadReferrals(), loadMatchData(), loadChannelData(), loadSystemData(),
+      loadReports(), loadSellerApplications(), loadReferrals(), loadMatchData(), loadChannelData(), loadSystemData(),
     ]);
     setLoading(false);
   }, []);
@@ -1278,10 +1294,160 @@ export default function AdminDashboard() {
     );
   }
 
+  async function handleSellerReview(appId: string, userId: string, decision: "approved" | "rejected") {
+    setReviewSaving(true);
+    await supabase.from("seller_applications").update({
+      status: decision,
+      admin_note: reviewNote.trim() || null,
+      reviewed_by: profile?.id,
+      reviewed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("id", appId);
+    if (decision === "approved") {
+      await supabase.from("profiles").update({ is_organization_verified: true }).eq("id", userId);
+    }
+    setReviewSaving(false);
+    setReviewingApp(null);
+    setReviewNote("");
+    loadSellerApplications();
+    loadUsers();
+  }
+
+  function renderSellerApps() {
+    const filtered = sellerAppFilter === "all" ? sellerApplications : sellerApplications.filter((a) => a.status === sellerAppFilter);
+    const pendingCount = sellerApplications.filter((a) => a.status === "pending").length;
+    return (
+      <View style={styles.section}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Seller Applications</Text>
+          {pendingCount > 0 && (
+            <View style={{ backgroundColor: "#FF9500", paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10 }}>
+              <Text style={{ color: "#fff", fontSize: 12, fontFamily: "Inter_700Bold" }}>{pendingCount} pending</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Filter chips */}
+        <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+          {(["pending", "approved", "rejected", "all"] as const).map((f) => (
+            <TouchableOpacity
+              key={f}
+              onPress={() => setSellerAppFilter(f)}
+              style={{
+                paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1,
+                backgroundColor: sellerAppFilter === f ? BRAND : colors.surface,
+                borderColor: sellerAppFilter === f ? BRAND : colors.border,
+              }}
+            >
+              <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: sellerAppFilter === f ? "#fff" : colors.textSecondary, textTransform: "capitalize" }}>{f}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {filtered.length === 0 ? (
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>No {sellerAppFilter} applications.</Text>
+        ) : (
+          filtered.map((app: any) => {
+            const statusColor = app.status === "approved" ? "#34C759" : app.status === "rejected" ? "#FF3B30" : "#FF9500";
+            return (
+              <View key={app.id} style={[styles.reportCard, { backgroundColor: colors.surface }]}>
+                <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                      <Text style={[styles.reportReason, { color: colors.text }]}>{app.business_name}</Text>
+                      <View style={[styles.statusBadge, { backgroundColor: statusColor + "18" }]}>
+                        <Text style={{ color: statusColor, fontSize: 10, fontFamily: "Inter_700Bold", textTransform: "uppercase" }}>{app.status}</Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.reportMeta, { color: colors.textMuted }]}>
+                      @{app.profiles?.handle || "?"} · {app.business_type} · {app.category}
+                    </Text>
+                    <Text style={[styles.reportMeta, { color: colors.textMuted, marginTop: 2 }]}>
+                      {app.address}, {app.country} · {timeAgo(app.created_at)}
+                    </Text>
+                    {app.description ? (
+                      <Text style={{ fontSize: 13, color: colors.textSecondary, marginTop: 6, lineHeight: 18 }} numberOfLines={3}>
+                        {app.description}
+                      </Text>
+                    ) : null}
+                    {app.website_url ? (
+                      <Text style={{ fontSize: 12, color: BRAND, marginTop: 4 }} numberOfLines={1}>{app.website_url}</Text>
+                    ) : null}
+                    {app.admin_note ? (
+                      <View style={{ marginTop: 6, padding: 8, backgroundColor: colors.backgroundSecondary, borderRadius: 8 }}>
+                        <Text style={{ fontSize: 11, color: colors.textMuted, fontFamily: "Inter_600SemiBold" }}>REVIEW NOTE</Text>
+                        <Text style={{ fontSize: 12, color: colors.text, marginTop: 2 }}>{app.admin_note}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+                {app.status === "pending" && (
+                  <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, { flex: 1, alignItems: "center", backgroundColor: "#34C75910", borderColor: "#34C759" }]}
+                      onPress={() => { setReviewingApp(app); setReviewNote(""); }}
+                    >
+                      <Text style={{ color: "#34C759", fontSize: 13, fontFamily: "Inter_700Bold" }}>Review</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            );
+          })
+        )}
+
+        {/* Review Modal */}
+        <Modal visible={!!reviewingApp} transparent animationType="slide" onRequestClose={() => setReviewingApp(null)}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Review Application</Text>
+              {reviewingApp && (
+                <Text style={[styles.modalSubtitle, { color: colors.textMuted }]}>
+                  {reviewingApp.business_name} by @{reviewingApp.profiles?.handle}
+                </Text>
+              )}
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.textSecondary }}>Note to Applicant (optional)</Text>
+                <TextInput
+                  style={[styles.searchInput, { backgroundColor: colors.backgroundSecondary, color: colors.text, borderColor: colors.border, height: 80, textAlignVertical: "top" }]}
+                  placeholder="Reason for decision, what to improve, etc."
+                  placeholderTextColor={colors.textMuted}
+                  value={reviewNote}
+                  onChangeText={setReviewNote}
+                  multiline
+                />
+              </View>
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <TouchableOpacity
+                  style={[styles.closeBtn, { flex: 1, backgroundColor: "#34C75910", borderColor: "#34C759" }]}
+                  onPress={() => reviewingApp && handleSellerReview(reviewingApp.id, reviewingApp.user_id, "approved")}
+                  disabled={reviewSaving}
+                >
+                  {reviewSaving ? <ActivityIndicator size="small" color="#34C759" /> : <Text style={{ color: "#34C759", fontFamily: "Inter_700Bold" }}>Approve</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.closeBtn, { flex: 1, backgroundColor: "#FF3B3010", borderColor: "#FF3B30" }]}
+                  onPress={() => reviewingApp && handleSellerReview(reviewingApp.id, reviewingApp.user_id, "rejected")}
+                  disabled={reviewSaving}
+                >
+                  {reviewSaving ? <ActivityIndicator size="small" color="#FF3B30" /> : <Text style={{ color: "#FF3B30", fontFamily: "Inter_700Bold" }}>Reject</Text>}
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity style={[styles.closeBtn, { borderColor: colors.border }]} onPress={() => setReviewingApp(null)}>
+                <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold" }}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      </View>
+    );
+  }
+
   const tabContent: Record<string, () => React.ReactNode> = {
     overview: renderOverview,
     lookup: renderLookup,
     users: renderUsers,
+    sellers: renderSellerApps,
     content: renderContent,
     match: renderMatch,
     channels: renderChannels,

@@ -515,6 +515,41 @@ RETURNS INTEGER LANGUAGE sql SECURITY DEFINER STABLE AS $$
 $$;
 GRANT EXECUTE ON FUNCTION get_mutual_followers_count TO authenticated;
 
+-- ────────────────────────────────────────────────────────────
+-- 20. Seller applications table
+-- ────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS seller_applications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  business_name TEXT NOT NULL,
+  business_type TEXT NOT NULL,
+  category TEXT NOT NULL,
+  description TEXT NOT NULL,
+  website_url TEXT,
+  phone_number TEXT NOT NULL,
+  address TEXT NOT NULL,
+  country TEXT NOT NULL,
+  id_document_url TEXT,
+  business_reg_url TEXT,
+  social_links JSONB DEFAULT '{}'::jsonb,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  admin_note TEXT,
+  reviewed_by UUID REFERENCES profiles(id),
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS seller_apps_user_id_idx ON seller_applications(user_id);
+CREATE INDEX IF NOT EXISTS seller_apps_status_idx ON seller_applications(status);
+ALTER TABLE seller_applications ENABLE ROW LEVEL SECURITY;
+CREATE POLICY seller_apps_own ON seller_applications FOR ALL TO authenticated
+  USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+CREATE POLICY seller_apps_admin_read ON seller_applications FOR SELECT TO authenticated
+  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true));
+CREATE POLICY seller_apps_admin_update ON seller_applications FOR UPDATE TO authenticated
+  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true));
+GRANT ALL ON seller_applications TO authenticated;
+
 
 -- ────────────────────────────────────────────────────────────
 -- Done! Summary of what was created:

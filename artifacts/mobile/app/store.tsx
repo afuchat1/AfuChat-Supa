@@ -362,12 +362,22 @@ export default function MarketplaceScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
       />
 
-      {/* ── Info bar for non-org users ── */}
+      {/* ── Seller action bar for non-org users ── */}
       {!isOrg && user && (
-        <View style={[st.infoBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-          <Ionicons name="information-circle-outline" size={15} color={colors.textMuted} />
-          <Text style={[st.infoBarText, { color: colors.textMuted }]}>Only verified organizations can list products. Get verified to open your store.</Text>
-        </View>
+        <TouchableOpacity
+          style={[st.sellerBar, { backgroundColor: Colors.brand + "12", borderTopColor: Colors.brand + "30" }]}
+          onPress={() => router.push("/shop/apply")}
+          activeOpacity={0.85}
+        >
+          <View style={[st.sellerBarIcon, { backgroundColor: Colors.brand + "20" }]}>
+            <Ionicons name="storefront-outline" size={18} color={Colors.brand} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[st.sellerBarTitle, { color: Colors.brand }]}>Want to sell on AfuMarket?</Text>
+            <Text style={[st.sellerBarSub, { color: colors.textMuted }]}>Submit your business details to get verified</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={Colors.brand} />
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -519,13 +529,15 @@ const st = StyleSheet.create({
   emptyTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", textAlign: "center" },
   emptyText: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
   endText: { textAlign: "center", fontSize: 13, fontFamily: "Inter_400Regular", padding: 20 },
-  infoBar: {
+  sellerBar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 12,
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 12,
+    borderTopWidth: 1,
   },
-  infoBarText: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1, lineHeight: 16 },
+  sellerBarIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  sellerBarTitle: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  sellerBarSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
 });
