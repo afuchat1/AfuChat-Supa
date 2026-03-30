@@ -345,12 +345,12 @@ export default function SearchScreen() {
 
       if (all || currentTab === "shops") {
         const [prods, frees, comms] = await Promise.all([
-          supabase.from("shop_products").select("id, name, description, image_url, price, category, seller_id").ilike("name", pat).eq("is_available", true).limit(all ? 3 : 15),
+          supabase.from("shop_products").select("id, name, description, images, price_acoin, category, seller_id").ilike("name", pat).eq("is_available", true).limit(all ? 3 : 15),
           supabase.from("freelance_listings").select("id, title, description, price, emoji, seller_id, orders_count, profiles!freelance_listings_seller_id_fkey(display_name, handle)").or(`title.ilike.${pat},description.ilike.${pat}`).eq("is_active", true).limit(all ? 3 : 15),
           supabase.from("paid_communities").select("id, name, description, emoji, price, member_count, creator_id, profiles!paid_communities_creator_id_fkey(display_name, handle)").or(`name.ilike.${pat},description.ilike.${pat}`).limit(all ? 2 : 10),
         ]);
         const shops: ShopResult[] = [
-          ...(prods.data || []).map((p: any) => ({ id: p.id, kind: "product" as const, title: p.name, desc: p.description, emoji: null, image_url: p.image_url, price: p.price, badge: p.category, seller_name: "", route: `/shop/${p.seller_id}` })),
+          ...(prods.data || []).map((p: any) => ({ id: p.id, kind: "product" as const, title: p.name, desc: p.description, emoji: null, image_url: Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : null, price: p.price_acoin ?? 0, badge: p.category, seller_name: "", route: `/shop/${p.seller_id}` })),
           ...(frees.data || []).map((f: any) => ({ id: f.id, kind: "freelance" as const, title: f.title, desc: f.description, emoji: f.emoji, image_url: null, price: f.price, badge: `${f.orders_count} orders`, seller_name: f.profiles?.display_name || "", route: "/freelance" })),
           ...(comms.data || []).map((c: any) => ({ id: c.id, kind: "community" as const, title: c.name, desc: c.description, emoji: c.emoji, image_url: null, price: c.price, badge: `${c.member_count} members`, seller_name: c.profiles?.display_name || "", route: "/paid-communities" })),
         ];
@@ -445,11 +445,9 @@ export default function SearchScreen() {
 
   function onSuggestionPress(p: PersonResult) {
     setShowSuggest(false);
-    const q = `@${p.handle}`;
-    setQuery(q);
-    addToHistory(q).then(setHistory);
-    performSearch(q, "people", verifiedOnly, sortMode);
-    setTab("people");
+    setQuery("");
+    Haptics.selectionAsync();
+    router.push(`/contact/${p.id}` as any);
   }
 
   function toggleVerified() {
@@ -510,7 +508,7 @@ export default function SearchScreen() {
   function PersonCard({ p, i }: { p: PersonResult; i: number }) {
     return (
       <Animated.View entering={FadeInRight.delay(i*25).duration(220)}>
-        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface }]} onPress={() => router.push(`/contact/${p.id}` as any)} activeOpacity={0.75}>
+        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface }]} onPress={() => { Haptics.selectionAsync(); router.push(`/contact/${p.id}` as any); }} activeOpacity={0.75}>
           <View style={styles.av48Wrap}>
             {p.avatar_url
               ? <Image source={{ uri: p.avatar_url }} style={styles.av48} />
@@ -539,15 +537,17 @@ export default function SearchScreen() {
     const hasImage = !!p.image_url;
     return (
       <Animated.View entering={FadeInDown.delay(i*25).duration(220)}>
-        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface, flexDirection:"column", gap:10 }]} onPress={() => router.push(`/p/${p.id}` as any)} activeOpacity={0.75}>
+        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface, flexDirection:"column", gap:10 }]} onPress={() => { Haptics.selectionAsync(); router.push(`/p/${p.id}` as any); }} activeOpacity={0.75}>
           <View style={{ flexDirection:"row", alignItems:"center", gap:10 }}>
-            {p.author_avatar
-              ? <Image source={{ uri: p.author_avatar }} style={styles.av36} />
-              : <AvatarPlaceholder name={p.author_name} size={36} color="#007AFF" />}
-            <View style={{ flex:1 }}>
+            <TouchableOpacity onPress={(e) => { e.stopPropagation(); Haptics.selectionAsync(); router.push(`/contact/${p.author_id}` as any); }} activeOpacity={0.8} hitSlop={{ top:4, bottom:4, left:4, right:4 }}>
+              {p.author_avatar
+                ? <Image source={{ uri: p.author_avatar }} style={styles.av36} />
+                : <AvatarPlaceholder name={p.author_name} size={36} color="#007AFF" />}
+            </TouchableOpacity>
+            <TouchableOpacity style={{ flex:1 }} onPress={(e) => { e.stopPropagation(); Haptics.selectionAsync(); router.push(`/contact/${p.author_id}` as any); }} activeOpacity={0.8}>
               <Text style={[styles.cardTitle, { color:colors.text, fontSize:13 }]} numberOfLines={1}>{p.author_name}</Text>
               <Text style={[styles.cardSub, { color:colors.textMuted }]}>@{p.author_handle}</Text>
-            </View>
+            </TouchableOpacity>
             <View style={[styles.timeChip, { backgroundColor: colors.backgroundSecondary }]}>
               <Text style={{ color:colors.textMuted, fontSize:10, fontFamily:"Inter_500Medium" }}>{timeAgo(p.created_at)}</Text>
             </View>
@@ -572,7 +572,7 @@ export default function SearchScreen() {
   function ChannelCard({ ch, i }: { ch: ChannelResult; i: number }) {
     return (
       <Animated.View entering={FadeInRight.delay(i*25).duration(220)}>
-        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface }]} activeOpacity={0.75}>
+        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface }]} onPress={() => { Haptics.selectionAsync(); router.push(`/channel/${ch.id}` as any); }} activeOpacity={0.75}>
           {ch.avatar_url
             ? <Image source={{ uri: ch.avatar_url }} style={[styles.av52, { borderRadius:14 }]} />
             : (
@@ -733,20 +733,29 @@ export default function SearchScreen() {
 
     if (!anyResults) {
       return (
-        <Animated.View entering={FadeIn.duration(300)} style={styles.emptyWrap}>
-          <LinearGradient colors={[BRAND+"22", BRAND+"08"]} style={styles.emptyIcon}>
-            <Ionicons name="search" size={40} color={BRAND} />
-          </LinearGradient>
-          <Text style={[styles.emptyTitle, { color:colors.text }]}>No results for "{query.trim()}"</Text>
-          <Text style={[styles.emptySub, { color:colors.textSecondary }]}>Try different keywords, check spelling, or explore below</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap:8, paddingHorizontal:16, marginTop:16 }}>
-            {TRENDING_TAGS.slice(0,8).map(tag => (
-              <TouchableOpacity key={tag} style={[styles.tagChip, { backgroundColor:BRAND+"15", borderColor:BRAND+"30" }]} onPress={() => onTagPress(tag)}>
-                <Text style={{ color:BRAND, fontSize:13, fontFamily:"Inter_500Medium" }}>#{tag}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </Animated.View>
+        <ScrollView contentContainerStyle={{ flexGrow:1, alignItems:"center", justifyContent:"center", paddingBottom: scrollPB + 32 }} showsVerticalScrollIndicator={false}>
+          <Animated.View entering={FadeInDown.duration(320)} style={{ alignItems:"center", paddingHorizontal:32 }}>
+            <LinearGradient colors={[BRAND+"28", BRAND+"08"]} style={[styles.emptyIcon, { width:100, height:100, borderRadius:50, marginBottom:20 }]}>
+              <Ionicons name="search-outline" size={44} color={BRAND} />
+            </LinearGradient>
+            <Text style={[styles.emptyTitle, { color:colors.text, fontSize:20 }]}>Nothing found</Text>
+            <Text style={[styles.emptySub, { color:colors.textSecondary, marginTop:6, marginBottom:28 }]}>
+              No results for <Text style={{ fontFamily:"Inter_600SemiBold", color:colors.text }}>"{query.trim()}"</Text>
+              {"\n"}Try different keywords or check the spelling.
+            </Text>
+            <View style={[{ width:"100%", borderRadius:16, padding:16, gap:12, backgroundColor:colors.surface }]}>
+              <Text style={{ color:colors.textMuted, fontSize:12, fontFamily:"Inter_600SemiBold", letterSpacing:0.5, textTransform:"uppercase" }}>Explore trending</Text>
+              <View style={styles.tagsWrap}>
+                {TRENDING_TAGS.slice(0,8).map(tag => (
+                  <TouchableOpacity key={tag} style={[styles.tagChip, { backgroundColor:BRAND+"12", borderColor:BRAND+"25" }]} onPress={() => onTagPress(tag)} activeOpacity={0.7}>
+                    <Text style={{ color:BRAND, fontSize:13, fontFamily:"Inter_700Bold" }}>#</Text>
+                    <Text style={{ color:BRAND, fontSize:13, fontFamily:"Inter_500Medium" }}>{tag}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </Animated.View>
+        </ScrollView>
       );
     }
 
