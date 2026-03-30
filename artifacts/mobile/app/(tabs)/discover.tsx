@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   FlatList,
   Image,
@@ -14,6 +13,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { showAlert } from "@/lib/alert";
 import ViewShot from "react-native-view-shot";
 import { useSafeAreaInsets as useCardInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -130,7 +130,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress, colWidth
     setCapturing(true);
     try {
       if (typeof cardRef.current.capture !== "function") {
-        Alert.alert("Error", "Capture not available.");
+        showAlert("Error", "Capture not available.");
         setCapturing(false);
         return;
       }
@@ -145,11 +145,11 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress, colWidth
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: "Save Post Image" });
         } else {
-          Alert.alert("Not available", "Sharing is not available on this device.");
+          showAlert("Not available", "Sharing is not available on this device.");
         }
       }
     } catch {
-      Alert.alert("Error", "Could not capture post image.");
+      showAlert("Error", "Could not capture post image.");
     }
     setCapturing(false);
   }

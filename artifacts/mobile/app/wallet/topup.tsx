@@ -12,9 +12,6 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
-import { WebView } from "react-native-webview";
-import { Platform } from "react-native";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
@@ -83,8 +80,6 @@ const COUNTRY_CURRENCY: Record<string, { code: string; symbol: string }> = {
   "Ivory Coast": { code: "XOF", symbol: "CFA" },
 };
 
-type TopUpStage = "select" | "processing" | "payment" | "success";
-
 function getUserCurrency(country: string | null | undefined): { code: string; symbol: string } {
   if (!country) return { code: "USD", symbol: "$" };
   return COUNTRY_CURRENCY[country] || { code: "USD", symbol: "$" };
@@ -98,13 +93,10 @@ function formatLocalPrice(usdPrice: number, rate: number, symbol: string, code: 
 
 export default function TopUpScreen() {
   const { colors } = useTheme();
-  const { user, profile, refreshProfile } = useAuth();
+  const { profile } = useAuth();
   const insets = useSafeAreaInsets();
   const [selectedPack, setSelectedPack] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState("");
-  const [stage, setStage] = useState<TopUpStage>("select");
-  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
-  const [processing, setProcessing] = useState(false);
   const [exchangeRate, setExchangeRate] = useState<number>(1);
   const [rateLoading, setRateLoading] = useState(true);
 
@@ -135,118 +127,10 @@ export default function TopUpScreen() {
   }
 
   async function initiatePayment() {
-    const pack = selectedPack !== null ? ACOIN_PACKAGES[selectedPack] : null;
-    const customVal = customAmount ? parseInt(customAmount) : 0;
-
-    if (!pack && (!customVal || customVal < 50)) {
-      showAlert("Select amount", "Please select a package or enter at least 50 ACoin.");
-      return;
-    }
-
-    const acoinAmount = pack ? pack.amount : customVal;
-
-    setProcessing(true);
-    Haptics.selectionAsync();
-
-    try {
-      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token || "";
-      const response = await fetch(`${supabaseUrl}/functions/v1/pesapal-payment`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          action: "create-order",
-          userId: user?.id,
-          acoinAmount: acoinAmount,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.redirectUrl) {
-        setPaymentUrl(data.redirectUrl);
-        setStage("payment");
-      } else {
-        showAlert("Error", data.error || "Failed to initiate payment. Please try again.");
-      }
-    } catch (err) {
-      showAlert("Error", "Network error. Please check your connection and try again.");
-    }
-
-    setProcessing(false);
-  }
-
-  function handleWebViewNavigation(url: string) {
-    if (url.includes("payment=success") || url.includes("status=completed")) {
-      setStage("success");
-      refreshProfile();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } else if (url.includes("payment=cancelled") || url.includes("status=cancelled")) {
-      setStage("select");
-      showAlert("Cancelled", "Payment was cancelled.");
-    }
-  }
-
-  if (stage === "payment" && paymentUrl) {
-    if (Platform.OS === "web") {
-      return (
-        <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-          <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-            <TouchableOpacity onPress={() => { setStage("select"); refreshProfile(); }}>
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
-            </TouchableOpacity>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>Complete Payment</Text>
-            <View style={{ width: 24 }} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <iframe
-              src={paymentUrl}
-              style={{ width: "100%", height: "100%", border: "none" } as any}
-              allow="payment"
-            />
-          </View>
-        </View>
-      );
-    }
-
-    return (
-      <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-        <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => setStage("select")}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Complete Payment</Text>
-          <View style={{ width: 24 }} />
-        </View>
-        <WebView
-          source={{ uri: paymentUrl }}
-          style={{ flex: 1 }}
-          onNavigationStateChange={(navState) => handleWebViewNavigation(navState.url)}
-          startInLoadingState
-          renderLoading={() => <ActivityIndicator color={Colors.gold} style={{ flex: 1 }} />}
-        />
-      </View>
-    );
-  }
-
-  if (stage === "success") {
-    return (
-      <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, justifyContent: "center", alignItems: "center", padding: 40 }]}>
-        <View style={styles.successIcon}>
-          <Ionicons name="checkmark-circle" size={80} color="#34C759" />
-        </View>
-        <Text style={[styles.successTitle, { color: colors.text }]}>Top Up Successful!</Text>
-        <Text style={[styles.successSub, { color: colors.textMuted }]}>
-          Your ACoin balance has been updated. It may take a moment to reflect.
-        </Text>
-        <TouchableOpacity style={[styles.doneBtn, { backgroundColor: Colors.gold }]} onPress={() => router.back()}>
-          <Text style={styles.doneBtnText}>Back to Wallet</Text>
-        </TouchableOpacity>
-      </View>
+    showAlert(
+      "Coming Soon",
+      "ACoin top-up via card and mobile money is almost ready! We are finishing integration with Pesapal. You will be notified as soon as it launches.",
+      [{ text: "Got it" }]
     );
   }
 
@@ -322,23 +206,23 @@ export default function TopUpScreen() {
         <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
           <Ionicons name="shield-checkmark" size={18} color={Colors.gold} />
           <Text style={[styles.infoText, { color: colors.textMuted }]}>
-            Payments are processed securely through Pesapal. Supports M-Pesa, Visa, Mastercard, and more.
+            Secure payments via Pesapal — supports M-Pesa, Airtel Money, Visa, Mastercard and more.
+          </Text>
+        </View>
+
+        <View style={[styles.comingSoonBanner, { backgroundColor: "#FFF3E0", borderColor: "#FFB74D" }]}>
+          <Ionicons name="time-outline" size={18} color="#F57C00" />
+          <Text style={[styles.comingSoonText, { color: "#E65100" }]}>
+            ACoin top-up is coming soon — payment gateway integration in progress.
           </Text>
         </View>
 
         <TouchableOpacity
-          style={[styles.payBtn, { backgroundColor: Colors.gold }, (processing || rateLoading || (selectedPack === null && !customAmount)) && { opacity: 0.5 }]}
+          style={[styles.payBtn, { backgroundColor: Colors.gold, opacity: 0.6 }]}
           onPress={initiatePayment}
-          disabled={processing || rateLoading || (selectedPack === null && !customAmount)}
         >
-          {processing ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <Ionicons name="card-outline" size={20} color="#fff" />
-              <Text style={styles.payBtnText}>Pay with Pesapal</Text>
-            </>
-          )}
+          <Ionicons name="card-outline" size={20} color="#fff" />
+          <Text style={styles.payBtnText}>Pay with Pesapal — Coming Soon</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -415,9 +299,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   payBtnText: { color: "#fff", fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  successIcon: { marginBottom: 16 },
-  successTitle: { fontSize: 24, fontFamily: "Inter_700Bold", marginBottom: 8 },
-  successSub: { fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22, marginBottom: 24 },
-  doneBtn: { borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32 },
-  doneBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  comingSoonBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    marginTop: 4,
+  },
+  comingSoonText: { flex: 1, fontSize: 13, fontFamily: "Inter_500Medium", lineHeight: 18 },
 });

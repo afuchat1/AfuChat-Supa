@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { showAlert } from "@/lib/alert";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -43,7 +44,7 @@ export default function HotelsScreen() {
 
   const handleBook = async () => {
     if (!user || !hotel || !room) {
-      Alert.alert("Error", "Please select a hotel and room type");
+      showAlert("Error", "Please select a hotel and room type");
       return;
     }
 
@@ -60,12 +61,12 @@ export default function HotelsScreen() {
 
     if (result.success) {
       Haptics.notificationAsync("success");
-      Alert.alert("Booked!", `${hotel.name} - ${room.name} room for ${numNights} night(s)`, [
+      showAlert("Booked!", `${hotel.name} - ${room.name} room for ${numNights} night(s)`, [
         { text: "OK", onPress: () => router.back() },
       ]);
     } else {
       Haptics.notificationAsync("error");
-      Alert.alert("Failed", result.error || "Booking failed");
+      showAlert("Failed", result.error || "Booking failed");
     }
   };
 

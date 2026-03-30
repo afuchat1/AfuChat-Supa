@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { showAlert } from "@/lib/alert";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -40,7 +41,7 @@ export default function DataBundlesScreen() {
 
   const handlePurchase = async () => {
     if (!user || !provider || !phone || !bundle) {
-      Alert.alert("Error", "Please fill in all fields");
+      showAlert("Error", "Please fill in all fields");
       return;
     }
 
@@ -56,12 +57,12 @@ export default function DataBundlesScreen() {
 
     if (result.success) {
       Haptics.notificationAsync("success");
-      Alert.alert("Success", `${bundle.data} data bundle activated for ${phone}`, [
+      showAlert("Success", `${bundle.data} data bundle activated for ${phone}`, [
         { text: "OK", onPress: () => router.back() },
       ]);
     } else {
       Haptics.notificationAsync("error");
-      Alert.alert("Failed", result.error || "Transaction failed");
+      showAlert("Failed", result.error || "Transaction failed");
     }
   };
 

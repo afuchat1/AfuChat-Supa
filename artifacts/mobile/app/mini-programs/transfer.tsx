@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { showAlert } from "@/lib/alert";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -24,7 +25,7 @@ export default function TransferScreen() {
 
   const handleTransfer = async () => {
     if (!user || !recipient || numAmount <= 0) {
-      Alert.alert("Error", "Please enter recipient and amount");
+      showAlert("Error", "Please enter recipient and amount");
       return;
     }
 
@@ -38,12 +39,12 @@ export default function TransferScreen() {
 
     if (result.success) {
       Haptics.notificationAsync("success");
-      Alert.alert("Transfer Sent!", `${numAmount} ACoins sent to ${recipient}`, [
+      showAlert("Transfer Sent!", `${numAmount} ACoins sent to ${recipient}`, [
         { text: "OK", onPress: () => router.back() },
       ]);
     } else {
       Haptics.notificationAsync("error");
-      Alert.alert("Failed", result.error || "Transfer failed");
+      showAlert("Failed", result.error || "Transfer failed");
     }
   };
 

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { showAlert } from "@/lib/alert";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -40,7 +41,7 @@ export default function TicketsScreen() {
 
   const handleBuy = async () => {
     if (!user || !event || !ticket) {
-      Alert.alert("Error", "Please select an event");
+      showAlert("Error", "Please select an event");
       return;
     }
 
@@ -56,12 +57,12 @@ export default function TicketsScreen() {
 
     if (result.success) {
       Haptics.notificationAsync("success");
-      Alert.alert("Ticket Purchased!", `${quantity}× ${ticket.name} for ${event.name}`, [
+      showAlert("Ticket Purchased!", `${quantity}× ${ticket.name} for ${event.name}`, [
         { text: "OK", onPress: () => router.back() },
       ]);
     } else {
       Haptics.notificationAsync("error");
-      Alert.alert("Failed", result.error || "Purchase failed");
+      showAlert("Failed", result.error || "Purchase failed");
     }
   };
 

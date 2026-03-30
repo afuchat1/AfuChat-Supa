@@ -500,6 +500,21 @@ $$;
 
 GRANT EXECUTE ON FUNCTION get_or_create_direct_chat TO authenticated;
 
+-- ────────────────────────────────────────────────────────────
+-- 19. Mutual followers count helper
+-- ────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION get_mutual_followers_count(user_a UUID, user_b UUID)
+RETURNS INTEGER LANGUAGE sql SECURITY DEFINER STABLE AS $$
+  SELECT COUNT(*)::INTEGER
+  FROM follows f1
+  JOIN follows f2 ON f1.follower_id = f2.following_id AND f1.following_id = f2.follower_id
+  WHERE f1.follower_id = user_a
+    AND f1.following_id != user_a
+    AND f2.follower_id = user_b
+    AND f2.following_id = user_b;
+$$;
+GRANT EXECUTE ON FUNCTION get_mutual_followers_count TO authenticated;
+
 
 -- ────────────────────────────────────────────────────────────
 -- Done! Summary of what was created:
@@ -522,6 +537,7 @@ GRANT EXECUTE ON FUNCTION get_or_create_direct_chat TO authenticated;
 -- NEW:    security_preferences
 -- NEW:    advanced_feature_settings
 -- NEW:    get_or_create_direct_chat() RPC
+-- NEW:    get_mutual_followers_count() RPC
 -- ────────────────────────────────────────────────────────────
 
 -- ============================================================

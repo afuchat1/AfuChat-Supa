@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { showAlert } from "@/lib/alert";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -33,11 +34,11 @@ export default function AirtimeScreen() {
 
   const handlePurchase = async () => {
     if (!user || !provider || !phone || numAmount <= 0) {
-      Alert.alert("Error", "Please fill in all fields");
+      showAlert("Error", "Please fill in all fields");
       return;
     }
     if (phone.length < 10) {
-      Alert.alert("Error", "Please enter a valid phone number");
+      showAlert("Error", "Please enter a valid phone number");
       return;
     }
 
@@ -51,12 +52,12 @@ export default function AirtimeScreen() {
 
     if (result.success) {
       Haptics.notificationAsync("success");
-      Alert.alert("Success", `${numAmount} ACoins airtime sent to ${phone}`, [
+      showAlert("Success", `${numAmount} ACoins airtime sent to ${phone}`, [
         { text: "OK", onPress: () => router.back() },
       ]);
     } else {
       Haptics.notificationAsync("error");
-      Alert.alert("Failed", result.error || "Transaction failed");
+      showAlert("Failed", result.error || "Transaction failed");
     }
   };
 

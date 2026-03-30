@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { showAlert } from "@/lib/alert";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -34,7 +35,7 @@ export default function BillsScreen() {
 
   const handlePay = async () => {
     if (!user || !billType || !accountNumber || numAmount <= 0) {
-      Alert.alert("Error", "Please fill in all fields");
+      showAlert("Error", "Please fill in all fields");
       return;
     }
 
@@ -49,12 +50,12 @@ export default function BillsScreen() {
 
     if (result.success) {
       Haptics.notificationAsync("success");
-      Alert.alert("Success", `${selectedBill?.name} bill of ${numAmount} ACoins paid successfully`, [
+      showAlert("Success", `${selectedBill?.name} bill of ${numAmount} ACoins paid successfully`, [
         { text: "OK", onPress: () => router.back() },
       ]);
     } else {
       Haptics.notificationAsync("error");
-      Alert.alert("Failed", result.error || "Payment failed");
+      showAlert("Failed", result.error || "Payment failed");
     }
   };
 
