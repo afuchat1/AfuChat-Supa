@@ -1,5 +1,21 @@
 # Workspace
 
+## Replit Environment Setup
+
+- **Package manager**: pnpm (workspace monorepo)
+- **Node.js**: 20 (via `.replit` modules config)
+- **Workflows**:
+  - `API Server` — builds with esbuild and starts on port 3000
+  - `Start application` — runs Expo Metro bundler on port 5000 (web preview)
+- **Environment variables set**:
+  - `PORT=3000`, `NODE_ENV=development` (shared)
+  - `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` (shared)
+  - `DATABASE_URL`, `PGHOST`, etc. (Replit-managed PostgreSQL — used by `@workspace/db` Drizzle ORM)
+- **Optional secrets** (set via Replit secrets tab for full functionality):
+  - `SUPABASE_SERVICE_ROLE_KEY` — enables email notifications watcher and admin routes
+  - `GROQ_API_KEY` — AI chat features
+  - `RESEND_API_KEY` — transactional + marketing email sending
+
 ## Overview
 
 pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
