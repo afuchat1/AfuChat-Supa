@@ -20,9 +20,7 @@ export default function IndexScreen() {
         router.replace("/(tabs)");
       }
     } else {
-      // Non-logged-in users land on the tabs root — the tab layout
-      // will show the correct first visible tab (search/discover)
-      router.replace("/(tabs)");
+      router.replace("/(tabs)/discover");
     }
   }
 
@@ -44,7 +42,7 @@ export default function IndexScreen() {
       // (the tabs layout will redirect to onboarding / login as needed)
       if (!redirected.current) {
         redirected.current = true;
-        router.replace("/(tabs)");
+        router.replace("/(tabs)/discover");
       }
     }, 8000);
     return () => clearTimeout(timeout);
