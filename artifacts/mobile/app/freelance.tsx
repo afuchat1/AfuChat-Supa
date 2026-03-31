@@ -18,6 +18,7 @@ import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { transferAcoin } from "@/lib/monetize";
 import { showAlert } from "@/lib/alert";
+import { ComingSoonView } from "@/components/ui/ComingSoonView";
 
 type Listing = {
   id: string;
@@ -41,6 +42,7 @@ export default function FreelanceScreen() {
   const { colors } = useTheme();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
+
   const [tab, setTab] = useState<"browse" | "mine" | "create">("browse");
   const [selectedCat, setSelectedCat] = useState("All");
   const [listings, setListings] = useState<Listing[]>([]);
@@ -184,6 +186,10 @@ export default function FreelanceScreen() {
       </View>
     </View>
   );
+
+  if (Platform.OS === "web" && !profile?.is_admin) {
+    return <ComingSoonView title="Freelance" description="AfuFreelance is coming to web soon. Hire talent or find work on the mobile app today." />;
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>

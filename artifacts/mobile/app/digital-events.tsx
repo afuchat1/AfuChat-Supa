@@ -15,9 +15,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
+import { Platform } from "react-native";
 import Colors from "@/constants/colors";
 import { transferAcoin } from "@/lib/monetize";
 import { showAlert } from "@/lib/alert";
+import { ComingSoonView } from "@/components/ui/ComingSoonView";
 
 type DigitalEvent = {
   id: string;
@@ -46,6 +48,7 @@ export default function DigitalEventsScreen() {
   const { colors } = useTheme();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
+
   const [tab, setTab] = useState<"browse" | "mine" | "create">("browse");
   const [events, setEvents] = useState<DigitalEvent[]>([]);
   const [myEvents, setMyEvents] = useState<DigitalEvent[]>([]);
@@ -186,6 +189,10 @@ export default function DigitalEventsScreen() {
       </View>
     );
   };
+
+  if (Platform.OS === "web" && !profile?.is_admin) {
+    return <ComingSoonView title="Events" description="Digital Events are coming to web soon. Discover and join events on the mobile app today." />;
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>

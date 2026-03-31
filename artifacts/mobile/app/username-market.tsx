@@ -15,9 +15,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
+import { Platform } from "react-native";
 import Colors from "@/constants/colors";
 import { transferAcoin } from "@/lib/monetize";
 import { showAlert } from "@/lib/alert";
+import { ComingSoonView } from "@/components/ui/ComingSoonView";
 
 type UsernameListing = {
   id: string;
@@ -47,6 +49,7 @@ export default function UsernameMarketScreen() {
   const { colors } = useTheme();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
+
   const [tab, setTab] = useState<"browse" | "mine" | "list">("browse");
   const [listings, setListings] = useState<UsernameListing[]>([]);
   const [myListings, setMyListings] = useState<UsernameListing[]>([]);
@@ -181,6 +184,10 @@ export default function UsernameMarketScreen() {
       </View>
     );
   };
+
+  if (Platform.OS === "web" && !profile?.is_admin) {
+    return <ComingSoonView title="Username Market" description="The AfuChat Username Market is coming to web soon. Buy and sell premium handles on the mobile app." />;
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>

@@ -23,6 +23,7 @@ import { supabase } from "@/lib/supabase";
 import { ImageViewer, useImageViewer } from "@/components/ImageViewer";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { ComingSoonView } from "@/components/ui/ComingSoonView";
 
 type MediaType = "all" | "images" | "videos" | "documents" | "voice" | "links" | "pinned";
 
@@ -101,7 +102,7 @@ function getFileIcon(name: string): string {
 
 export default function FileManagerScreen() {
   const { colors } = useTheme();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const imgViewer = useImageViewer();
@@ -380,6 +381,10 @@ export default function FileManagerScreen() {
   };
 
   const totalSize = items.reduce((sum, i) => sum + (i.size || 0), 0);
+
+  if (Platform.OS === "web" && !profile?.is_admin) {
+    return <ComingSoonView title="File Manager" description="The AfuChat File Manager is coming to web soon. Access all your shared media and files on the mobile app." />;
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>

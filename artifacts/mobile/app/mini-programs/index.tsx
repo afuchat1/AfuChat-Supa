@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +12,8 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
+import { useAuth } from "@/context/AuthContext";
+import { ComingSoonView } from "@/components/ui/ComingSoonView";
 import Colors from "@/constants/colors";
 
 
@@ -81,6 +84,11 @@ function ServiceIcon({ item }: { item: ServiceItem }) {
 export default function PayAndServicesScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { profile } = useAuth();
+
+  if (Platform.OS === "web" && !profile?.is_admin) {
+    return <ComingSoonView title="Mini Programs" description="AfuChat Mini Programs are coming to web soon. Access all your favourite services on the mobile app today." />;
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>

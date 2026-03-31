@@ -25,6 +25,7 @@ import Colors from "@/constants/colors";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { Avatar } from "@/components/ui/Avatar";
 import { PostSkeleton } from "@/components/ui/Skeleton";
+import { ComingSoonView } from "@/components/ui/ComingSoonView";
 
 type ProductWithShop = ShopProduct & {
   shops: Shop & {
@@ -207,6 +208,10 @@ export default function MarketplaceScreen() {
   ), [cardW]);
 
   const headerTopPad = Platform.OS === "ios" ? insets.top : Math.max(insets.top, 12);
+
+  if (Platform.OS === "web" && !profile?.is_admin) {
+    return <ComingSoonView title="Marketplace" description="The AfuChat Marketplace is coming to web soon. Shop from verified stores on the mobile app today." />;
+  }
 
   return (
     <View style={[st.root, { backgroundColor: colors.background }]}>

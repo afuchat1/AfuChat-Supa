@@ -19,6 +19,7 @@ import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { ComingSoonView } from "@/components/ui/ComingSoonView";
 
 type Collection = {
   id: string;
@@ -167,7 +168,7 @@ function CreateSheet({
 
 export default function CollectionsScreen() {
   const { colors, isDark } = useTheme();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const isDesktop = useIsDesktop();
   const insets = useSafeAreaInsets();
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -320,6 +321,10 @@ export default function CollectionsScreen() {
         )}
       </View>
     );
+  }
+
+  if (Platform.OS === "web" && !profile?.is_admin) {
+    return <ComingSoonView title="Collections" description="AfuCollections is coming to web soon. Organize and share your curated content on the mobile app today." />;
   }
 
   return (
