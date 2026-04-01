@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-import { router } from "expo-router";
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 
 export default function AuthCallbackScreen() {
   const [status, setStatus] = useState("Signing you in…");
   const handled = useRef(false);
+  const params = useLocalSearchParams<{ code?: string }>();
 
   useEffect(() => {
     let mounted = true;
 
-    async function handleSession(session: any) {
+    async function upsertAndRedirect(session: any) {
       if (!session || handled.current) return;
       handled.current = true;
 
@@ -40,25 +41,62 @@ export default function AuthCallbackScreen() {
 
       if (!mounted) return;
       setStatus("Welcome to AfuChat!");
-      await new Promise((r) => setTimeout(r, 300));
+      await new Promise((r) => setTimeout(r, 200));
       if (mounted) router.replace("/(tabs)");
     }
+
+    async function tryExchangeCode() {
+      let code = params.code;
+
+      if (!code && Platform.OS === "web" && typeof window !== "undefined") {
+        const urlParams = new URLSearchParams(window.location.search);
+        code = urlParams.get("code") || undefined;
+
+        if (!code && window.location.hash) {
+          const hashParams = new URLSearchParams(window.location.hash.substring(1));
+          const accessToken = hashParams.get("access_token");
+          const refreshToken = hashParams.get("refresh_token");
+          if (accessToken && refreshToken) {
+            const { data, error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            if (!error && data.session) {
+              await upsertAndRedirect(data.session);
+              return;
+            }
+          }
+        }
+      }
+
+      if (code) {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+        if (!error && data.session) {
+          await upsertAndRedirect(data.session);
+          return;
+        }
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await upsertAndRedirect(session);
+        return;
+      }
+    }
+
+    tryExchangeCode();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return;
-
-        if (event === "SIGNED_IN" && session) {
-          await handleSession(session);
-        } else if (event === "INITIAL_SESSION") {
-          if (session) {
-            await handleSession(session);
-          } else {
-            if (mounted) {
-              setStatus("Redirecting to login…");
+        if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session) {
+          await upsertAndRedirect(session);
+        } else if (event === "INITIAL_SESSION" && !session && !handled.current) {
+          setTimeout(() => {
+            if (!handled.current && mounted) {
               router.replace("/(auth)/login");
             }
-          }
+          }, 3000);
         }
       }
     );
@@ -67,11 +105,11 @@ export default function AuthCallbackScreen() {
       if (handled.current || !mounted) return;
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        await handleSession(session);
+        await upsertAndRedirect(session);
       } else if (mounted) {
         router.replace("/(auth)/login");
       }
-    }, 6000);
+    }, 4000);
 
     return () => {
       mounted = false;
