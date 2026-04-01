@@ -764,6 +764,10 @@ export default function ChatScreen() {
     totalAmount: number;
   } | null>(null);
   const [envClaiming, setEnvClaiming] = useState(false);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const showScrollBtnRef = useRef(false);
+  const [newMsgCount, setNewMsgCount] = useState(0);
+  const scrollBtnOpacity = useRef(new Animated.Value(0)).current;
   const [isRecording, setIsRecording] = useState(false);
   const [recLocked, setRecLocked] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -1164,6 +1168,9 @@ export default function ChatScreen() {
           if (newMsg.sender_id === user?.id) return;
           const { data: senderProfile } = await supabase.from("profiles").select("display_name, avatar_url, handle").eq("id", newMsg.sender_id).single();
           setMessages((prev) => [{ ...newMsg, sender: senderProfile as any, reactions: [], status: undefined }, ...prev]);
+          if (showScrollBtnRef.current) {
+            setNewMsgCount((c) => c + 1);
+          }
 
           if (user) {
             await supabase.from("message_status").upsert({ message_id: newMsg.id, user_id: user.id, delivered_at: new Date().toISOString(), read_at: new Date().toISOString() }, { onConflict: "message_id,user_id" });
@@ -2160,18 +2167,48 @@ export default function ChatScreen() {
     return current.toDateString() !== next.toDateString();
   }
 
+  const handleScroll = useCallback((e: any) => {
+    const offsetY = e.nativeEvent.contentOffset.y;
+    const shouldShow = offsetY > 300;
+    if (shouldShow !== showScrollBtnRef.current) {
+      showScrollBtnRef.current = shouldShow;
+      setShowScrollBtn(shouldShow);
+      Animated.timing(scrollBtnOpacity, {
+        toValue: shouldShow ? 1 : 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+      if (!shouldShow) setNewMsgCount(0);
+    }
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    setNewMsgCount(0);
+  }, []);
+
   const headerTitle = chatInfo?.is_group || chatInfo?.is_channel ? chatInfo.name || "Group" : chatInfo?.other_name || "Chat";
   const headerAvatar = chatInfo?.is_group || chatInfo?.is_channel ? chatInfo?.avatar_url : chatInfo?.other_avatar;
+
+  const getMessageSpacing = useCallback((index: number): number => {
+    if (index === 0) return 0;
+    const current = messages[index];
+    const prev = messages[index - 1];
+    return current.sender_id === prev.sender_id ? 2 : 8;
+  }, [messages]);
 
   const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
     const isMe = item.sender_id === user?.id;
     const showDate = shouldShowDate(index);
+    const spacing = getMessageSpacing(index);
 
     return (
-      <View>
+      <View style={{ marginTop: showDate ? 0 : spacing }}>
         {showDate && (
           <View style={st.dateBadge}>
-            <Text style={[st.dateBadgeText, { color: colors.textMuted }]}>{formatDateHeader(item.sent_at)}</Text>
+            <View style={[st.datePill, { backgroundColor: colors.surface }]}>
+              <Text style={[st.dateBadgeText, { color: colors.textMuted }]}>{formatDateHeader(item.sent_at)}</Text>
+            </View>
           </View>
         )}
         <MessageBubble
@@ -2232,19 +2269,46 @@ export default function ChatScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}>
         {loading ? (
           <ChatLoadingSkeleton />
+        ) : messages.length === 0 ? (
+          <View style={st.emptyState}>
+            <View style={[st.emptyIconWrap, { backgroundColor: BRAND + "14" }]}>
+              <Ionicons name="chatbubbles-outline" size={48} color={BRAND} />
+            </View>
+            <Text style={[st.emptyTitle, { color: colors.text }]}>No messages yet</Text>
+            <Text style={[st.emptySub, { color: colors.textMuted }]}>
+              Say hello to start the conversation
+            </Text>
+          </View>
         ) : (
-          <FlatList
-            ref={flatListRef}
-            data={messages}
-            keyExtractor={(m) => m.id}
-            renderItem={renderMessage}
-            inverted
-            contentContainerStyle={st.listContent}
-            showsVerticalScrollIndicator={false}
-            ListFooterComponent={
-              typingUsers.length > 0 ? <TypingBubble names={typingUsers} colors={colors} /> : null
-            }
-          />
+          <View style={{ flex: 1 }}>
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={(m) => m.id}
+              renderItem={renderMessage}
+              inverted
+              contentContainerStyle={st.listContent}
+              showsVerticalScrollIndicator={false}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+              ListFooterComponent={
+                typingUsers.length > 0 ? <TypingBubble names={typingUsers} colors={colors} /> : null
+              }
+            />
+            <Animated.View
+              style={[st.scrollFab, { opacity: scrollBtnOpacity, backgroundColor: colors.surface }]}
+              pointerEvents={showScrollBtn ? "auto" : "none"}
+            >
+              <TouchableOpacity onPress={scrollToBottom} style={st.scrollFabBtn} activeOpacity={0.7}>
+                <Ionicons name="chevron-down" size={22} color={colors.text} />
+                {newMsgCount > 0 && (
+                  <View style={st.scrollFabBadge}>
+                    <Text style={st.scrollFabBadgeText}>{newMsgCount > 99 ? "99+" : newMsgCount}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
         )}
 
         {editingMessage && (
@@ -2866,14 +2930,85 @@ const st = StyleSheet.create({
 
   dateBadge: {
     alignSelf: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 10,
-    marginVertical: 8,
+    marginVertical: 10,
+  },
+  datePill: {
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 12,
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
   },
   dateBadgeText: { fontSize: 12, fontFamily: "Inter_500Medium" },
 
-  msgRow: { flexDirection: "row", paddingHorizontal: 6, marginVertical: 1 },
+  emptyState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 40,
+    gap: 10,
+  },
+  emptyIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontFamily: "Inter_600SemiBold",
+  },
+  emptySub: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    lineHeight: 20,
+  },
+
+  scrollFab: {
+    position: "absolute",
+    right: 16,
+    bottom: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+  },
+  scrollFabBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  scrollFabBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#00BCD4",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+  },
+  scrollFabBadgeText: {
+    color: "#fff",
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+  },
+
+  msgRow: { flexDirection: "row", paddingHorizontal: 6, marginVertical: 0 },
   msgRowMe: { justifyContent: "flex-end" },
   msgRowOther: { justifyContent: "flex-start" },
 

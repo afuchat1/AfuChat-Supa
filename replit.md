@@ -61,6 +61,14 @@ The project is structured as a pnpm monorepo using TypeScript, with distinct pac
 - **Gamification**: XP rewards for user activities, tracked via DB functions with cooldowns.
 - **Account Management**: Soft-delete with a 30-day grace period, followed by permanent purge via an authenticated API endpoint.
 - **SEO & Deep Linking**: API server routes for public profiles and posts with SEO-friendly short IDs, `sitemap.xml`, `robots.txt`, and app link configurations.
+- **Chat UX (Telegram/WhatsApp/Signal patterns)**:
+  - Swipe-to-record voice messages with direction-locked gestures (Telegram pattern: 10pt deadzone, horizontal=cancel at -120px, vertical=lock at -100px).
+  - 60fps native-thread animations via `react-native-reanimated` + `react-native-gesture-handler` (Gesture.Pan, useSharedValue, withSpring).
+  - Scroll-to-bottom FAB with unread message count badge (uses ref to avoid stale closures in realtime subscriptions).
+  - Telegram-style message spacing: 2px same-sender, 8px different-sender for visual grouping.
+  - Date separator pills with subtle background and shadow.
+  - Empty chat state with icon + prompt text.
+  - Read receipt checkmarks: single (sent), double (delivered), blue double (read).
 - **Cross-Platform Adaptations**: Platform-specific guards for features like push notifications, haptics, blur effects, keyboard handling, and camera access.
 - **Premium Tiering**: Features gated by subscription tiers (Silver, Gold) using `LockedToggle`/`LockedLink` components, accessible via the `app/advanced-features.tsx` screen.
 - **Onboarding**: A forced 5-step onboarding flow for new users covering display name, handle, country, phone number, date of birth, gender, interests, and profile photo.
