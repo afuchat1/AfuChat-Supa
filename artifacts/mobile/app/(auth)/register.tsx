@@ -176,34 +176,63 @@ export default function RegisterScreen() {
     try {
       setOauthLoading(provider);
       const REDIRECT_URL = "https://www.afuchat.com/";
-      if (Platform.OS === "web") {
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: provider as any,
-          options: { redirectTo: REDIRECT_URL },
-        });
-        if (error) {
-          showAlert("Error", error.message);
-          setOauthLoading(null);
-        }
-        return;
-      }
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: provider as any,
-        options: { redirectTo: REDIRECT_URL, skipBrowserRedirect: true },
+        options: {
+          redirectTo: REDIRECT_URL,
+          skipBrowserRedirect: true,
+        },
       });
       if (error) {
         showAlert("Error", error.message);
         setOauthLoading(null);
         return;
       }
-      if (data?.url) {
-        oauthHandledRef.current = false;
-        const result = await WebBrowser.openAuthSessionAsync(data.url, REDIRECT_URL);
-        if (result.type === "success" && result.url) {
-          await handleOAuthRedirect(result.url);
-        } else {
+
+      if (!data?.url) {
+        setOauthLoading(null);
+        return;
+      }
+
+      oauthHandledRef.current = false;
+
+      if (Platform.OS === "web") {
+        const width = 500;
+        const height = 650;
+        const left = window.screenX + (window.innerWidth - width) / 2;
+        const top = window.screenY + (window.innerHeight - height) / 2;
+        const popup = window.open(
+          data.url,
+          "oauth_popup",
+          `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`
+        );
+        if (!popup) {
+          showAlert("Error", "Popup blocked. Please allow popups for this site.");
           setOauthLoading(null);
+          return;
         }
+        const pollTimer = setInterval(async () => {
+          try {
+            if (popup.closed) {
+              clearInterval(pollTimer);
+              setOauthLoading(null);
+              return;
+            }
+            const popupUrl = popup.location.href;
+            if (popupUrl && isOAuthRedirect(popupUrl)) {
+              clearInterval(pollTimer);
+              popup.close();
+              await handleOAuthRedirect(popupUrl);
+            }
+          } catch (_) {}
+        }, 300);
+        return;
+      }
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, REDIRECT_URL);
+      if (result.type === "success" && result.url) {
+        await handleOAuthRedirect(result.url);
       } else {
         setOauthLoading(null);
       }
