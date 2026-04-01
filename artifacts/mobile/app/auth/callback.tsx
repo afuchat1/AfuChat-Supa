@@ -44,65 +44,59 @@ export default function AuthCallbackScreen() {
       if (mounted) router.replace("/(tabs)");
     }
 
-    async function exchangeAndRedirect() {
-      try {
-        if (Platform.OS === "web" && typeof window !== "undefined") {
-          const urlParams = new URLSearchParams(window.location.search);
-          const code = urlParams.get("code");
-
-          if (code) {
-            const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-            if (!error && data.session) {
-              await upsertAndRedirect(data.session);
-              return;
-            }
-          }
-
-          if (window.location.hash) {
-            const hashParams = new URLSearchParams(window.location.hash.substring(1));
-            const accessToken = hashParams.get("access_token");
-            const refreshToken = hashParams.get("refresh_token");
-            if (accessToken && refreshToken) {
-              const { data, error } = await supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken,
-              });
-              if (!error && data.session) {
-                await upsertAndRedirect(data.session);
-                return;
-              }
-            }
-          }
-        }
-
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          await upsertAndRedirect(session);
-          return;
-        }
-      } catch (_) {}
-
-      if (!handled.current && mounted) {
-        setTimeout(() => {
-          if (!handled.current && mounted) {
-            router.replace("/(auth)/login");
-          }
-        }, 2000);
-      }
-    }
-
-    exchangeAndRedirect();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (!mounted) return;
-        if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
+        if (!mounted || handled.current) return;
+        if (event === "SIGNED_IN" && session) {
           await upsertAndRedirect(session);
         } else if (event === "INITIAL_SESSION" && session) {
           await upsertAndRedirect(session);
         }
       }
     );
+
+    async function tryManualExchange() {
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get("code");
+        if (code && !handled.current) {
+          try {
+            const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+            if (!error && data.session) {
+              await upsertAndRedirect(data.session);
+              return;
+            }
+          } catch (_) {}
+        }
+      }
+    }
+
+    async function pollSession() {
+      for (let attempt = 0; attempt < 20; attempt++) {
+        if (handled.current || !mounted) return;
+        await new Promise((r) => setTimeout(r, 400));
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            await upsertAndRedirect(session);
+            return;
+          }
+        } catch (_) {}
+      }
+      if (!handled.current && mounted) {
+        router.replace("/(auth)/login");
+      }
+    }
+
+    setTimeout(() => {
+      if (!handled.current) {
+        tryManualExchange().then(() => {
+          if (!handled.current) {
+            pollSession();
+          }
+        });
+      }
+    }, 300);
 
     return () => {
       mounted = false;
