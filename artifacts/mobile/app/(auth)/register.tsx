@@ -225,13 +225,12 @@ export default function RegisterScreen() {
 
       setOauthLoading(provider);
 
-      const nativeRedirect = makeRedirectUri({ scheme: "afuchat", path: "auth" });
-      const redirectUrl = Platform.OS === "web" ? "https://www.afuchat.com/" : nativeRedirect;
+      const REDIRECT_URL = "https://www.afuchat.com/";
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: provider as any,
         options: {
-          redirectTo: redirectUrl,
+          redirectTo: REDIRECT_URL,
           skipBrowserRedirect: true,
         },
       });
@@ -281,26 +280,7 @@ export default function RegisterScreen() {
         return;
       }
 
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-      if (result.type === "success" && result.url) {
-        const resultUrl = result.url;
-        const parsed = new URL(resultUrl);
-        const code = parsed.searchParams.get("code");
-        if (code) {
-          const { error: codeError } = await supabase.auth.exchangeCodeForSession(code);
-          if (codeError) {
-            showAlert("Error", codeError.message);
-          } else {
-            router.replace("/(tabs)");
-            return;
-          }
-        } else {
-          showAlert("Error", "No authorization code received.");
-        }
-        setOauthLoading(null);
-      } else {
-        setOauthLoading(null);
-      }
+      setOauthModalUrl(data.url);
     } catch (_) {
       setOauthLoading(null);
       showAlert("Error", "Could not complete sign up. Please try again.");
