@@ -88,6 +88,7 @@ function RootLayoutNav() {
       }}
     >
       <Stack.Screen name="index" options={{ animation: "fade" }} />
+      <Stack.Screen name="auth/callback" options={{ animation: "fade", gestureEnabled: false }} />
       <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
       <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
       <Stack.Screen name="chat/[id]" />

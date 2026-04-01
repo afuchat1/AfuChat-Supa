@@ -17,7 +17,6 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
-import { makeRedirectUri } from "expo-auth-session";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
@@ -36,7 +35,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [oauthLoading, setOauthLoading] = useState<"google" | "github" | null>(null);
+  const [oauthLoading, setOauthLoading] = useState<string | null>(null);
 
   const [resetStep, setResetStep] = useState<"idle" | "email" | "code">("idle");
   const [resetEmail, setResetEmail] = useState("");
@@ -171,19 +170,28 @@ export default function LoginScreen() {
     }
   }
 
-  async function handleOAuth(provider: "google" | "github") {
+  async function signInWithProvider(provider: string) {
     try {
       setOauthLoading(provider);
 
-      const redirectUrl = makeRedirectUri({
-        scheme: "afuchat",
-        path: "(auth)/login",
-      });
+      const CALLBACK_URL = "https://www.afuchat.com/auth/callback";
+
+      if (Platform.OS === "web") {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: provider as any,
+          options: { redirectTo: CALLBACK_URL },
+        });
+        if (error) {
+          showAlert("Error", error.message);
+          setOauthLoading(null);
+        }
+        return;
+      }
 
       const { data, error } = await supabase.auth.signInWithOAuth({
-        provider,
+        provider: provider as any,
         options: {
-          redirectTo: redirectUrl,
+          redirectTo: CALLBACK_URL,
           skipBrowserRedirect: true,
         },
       });
@@ -195,7 +203,7 @@ export default function LoginScreen() {
       }
 
       if (data?.url) {
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {
+        const result = await WebBrowser.openAuthSessionAsync(data.url, CALLBACK_URL, {
           showInRecents: false,
         });
 
@@ -233,7 +241,6 @@ export default function LoginScreen() {
               access_token: accessToken,
               refresh_token: refreshToken,
             });
-
             if (sessionError) {
               showAlert("Error", sessionError.message);
             } else {
@@ -243,7 +250,7 @@ export default function LoginScreen() {
         }
       }
       setOauthLoading(null);
-    } catch (err: any) {
+    } catch (_) {
       setOauthLoading(null);
       showAlert("Error", "Could not complete sign in. Please try again.");
     }
@@ -495,7 +502,7 @@ export default function LoginScreen() {
 
           <TouchableOpacity
             style={[styles.oauthBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
-            onPress={() => handleOAuth("google")}
+            onPress={() => signInWithProvider("google")}
             disabled={!!oauthLoading}
             activeOpacity={0.7}
           >
@@ -515,7 +522,7 @@ export default function LoginScreen() {
 
           <TouchableOpacity
             style={[styles.oauthBtn, { backgroundColor: "#24292e" }]}
-            onPress={() => handleOAuth("github")}
+            onPress={() => signInWithProvider("github")}
             disabled={!!oauthLoading}
             activeOpacity={0.7}
           >
