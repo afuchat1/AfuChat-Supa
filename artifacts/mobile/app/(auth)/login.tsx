@@ -23,6 +23,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { GoogleLogo, GitHubLogo } from "@/components/ui/OAuthLogos";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -506,18 +507,16 @@ export default function LoginScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.oauthBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+            style={[styles.oauthBtn, { borderColor: colors.border, backgroundColor: isDark ? "#1f1f1f" : "#ffffff" }]}
             onPress={() => signInWithProvider("google")}
             disabled={!!oauthLoading}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
           >
             {oauthLoading === "google" ? (
               <ActivityIndicator color={Colors.brand} />
             ) : (
               <>
-                <View style={styles.googleIconWrap}>
-                  <Text style={styles.googleG}>G</Text>
-                </View>
+                <GoogleLogo size={22} />
                 <Text style={[styles.oauthBtnText, { color: colors.text }]}>
                   Continue with Google
                 </Text>
@@ -526,17 +525,17 @@ export default function LoginScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.oauthBtn, { backgroundColor: "#24292e" }]}
+            style={[styles.oauthBtn, { backgroundColor: isDark ? "#f5f5f5" : "#24292f", borderColor: isDark ? "#f5f5f5" : "#24292f" }]}
             onPress={() => signInWithProvider("github")}
             disabled={!!oauthLoading}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
           >
             {oauthLoading === "github" ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={isDark ? "#24292f" : "#fff"} />
             ) : (
               <>
-                <Ionicons name="logo-github" size={20} color="#fff" />
-                <Text style={[styles.oauthBtnText, { color: "#fff" }]}>
+                <GitHubLogo size={22} color={isDark ? "#24292f" : "#ffffff"} />
+                <Text style={[styles.oauthBtnText, { color: isDark ? "#24292f" : "#ffffff" }]}>
                   Continue with GitHub
                 </Text>
               </>
@@ -746,29 +745,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     height: 52,
     borderRadius: 14,
-    borderWidth: 1.5,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
+    gap: 12,
   },
   oauthBtnText: {
     fontSize: 16,
-    fontFamily: "Inter_500Medium",
-  },
-  googleIconWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#ddd",
-  },
-  googleG: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#4285F4",
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.1,
   },
   registerBtn: {
     height: 52,

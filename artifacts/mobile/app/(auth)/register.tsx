@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
   Linking,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -17,11 +18,13 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { WebView } from "react-native-webview";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { GoogleLogo, GitHubLogo } from "@/components/ui/OAuthLogos";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -46,6 +49,10 @@ export default function RegisterScreen() {
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+
+  const [oauthLoading, setOauthLoading] = useState<string | null>(null);
+  const [oauthModalUrl, setOauthModalUrl] = useState<string | null>(null);
+  const oauthHandledRef = useRef(false);
 
   const [verifyStep, setVerifyStep] = useState(false);
   const [otpCode, setOtpCode] = useState("");
@@ -120,6 +127,83 @@ export default function RegisterScreen() {
     setVerifyLoading(false);
     const uid = signupUserId || data.user?.id;
     router.replace({ pathname: "/onboarding", params: { userId: uid || "" } });
+  }
+
+  function isOAuthCallback(url: string): boolean {
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.toLowerCase();
+      return (
+        (host === "www.afuchat.com" || host === "afuchat.com") &&
+        parsed.pathname === "/auth/callback"
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  async function handleOAuthCallback(url: string) {
+    if (oauthHandledRef.current) return;
+    oauthHandledRef.current = true;
+    try {
+      const parsed = new URL(url);
+      const code = parsed.searchParams.get("code");
+      if (!code) {
+        showAlert("Error", "No authorization code received. Please try again.");
+        setOauthModalUrl(null);
+        setOauthLoading(null);
+        return;
+      }
+      const { error: codeError } = await supabase.auth.exchangeCodeForSession(code);
+      if (codeError) {
+        showAlert("Error", codeError.message);
+      } else {
+        setOauthModalUrl(null);
+        setOauthLoading(null);
+        router.replace("/(tabs)");
+        return;
+      }
+    } catch (_) {
+      showAlert("Error", "Could not complete sign up. Please try again.");
+    }
+    setOauthModalUrl(null);
+    setOauthLoading(null);
+  }
+
+  async function signInWithProvider(provider: string) {
+    try {
+      setOauthLoading(provider);
+      const CALLBACK_URL = "https://www.afuchat.com/auth/callback";
+      if (Platform.OS === "web") {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: provider as any,
+          options: { redirectTo: CALLBACK_URL },
+        });
+        if (error) {
+          showAlert("Error", error.message);
+          setOauthLoading(null);
+        }
+        return;
+      }
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: provider as any,
+        options: { redirectTo: CALLBACK_URL, skipBrowserRedirect: true },
+      });
+      if (error) {
+        showAlert("Error", error.message);
+        setOauthLoading(null);
+        return;
+      }
+      if (data?.url) {
+        oauthHandledRef.current = false;
+        setOauthModalUrl(data.url);
+      } else {
+        setOauthLoading(null);
+      }
+    } catch (_) {
+      setOauthLoading(null);
+      showAlert("Error", "Could not complete sign up. Please try again.");
+    }
   }
 
   async function handleResendCode() {
@@ -339,6 +423,46 @@ export default function RegisterScreen() {
             )}
           </Pressable>
 
+          <View style={styles.divider}>
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+            <Text style={[styles.dividerText, { color: colors.textMuted }]}>or sign up with</Text>
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+          </View>
+
+          <View style={styles.oauthRow}>
+            <TouchableOpacity
+              style={[styles.oauthBtn, { borderColor: colors.border, backgroundColor: isDark ? "#1f1f1f" : "#ffffff" }]}
+              onPress={() => signInWithProvider("google")}
+              disabled={!!oauthLoading}
+              activeOpacity={0.8}
+            >
+              {oauthLoading === "google" ? (
+                <ActivityIndicator color={Colors.brand} />
+              ) : (
+                <>
+                  <GoogleLogo size={22} />
+                  <Text style={[styles.oauthBtnText, { color: colors.text }]}>Google</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.oauthBtn, { backgroundColor: isDark ? "#f5f5f5" : "#24292f", borderColor: isDark ? "#f5f5f5" : "#24292f" }]}
+              onPress={() => signInWithProvider("github")}
+              disabled={!!oauthLoading}
+              activeOpacity={0.8}
+            >
+              {oauthLoading === "github" ? (
+                <ActivityIndicator color={isDark ? "#24292f" : "#fff"} />
+              ) : (
+                <>
+                  <GitHubLogo size={22} color={isDark ? "#24292f" : "#ffffff"} />
+                  <Text style={[styles.oauthBtnText, { color: isDark ? "#24292f" : "#ffffff" }]}>GitHub</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.loginLink}
@@ -354,9 +478,88 @@ export default function RegisterScreen() {
         </View>
       </ScrollView>
       </KeyboardAvoidingView>
+
+      {Platform.OS !== "web" && (
+        <Modal
+          visible={!!oauthModalUrl}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => {
+            setOauthModalUrl(null);
+            setOauthLoading(null);
+          }}
+        >
+          <View style={[oauthModalStyles.container, { backgroundColor: colors.background }]}>
+            <View style={[oauthModalStyles.header, { borderBottomColor: colors.border }]}>
+              <TouchableOpacity
+                onPress={() => {
+                  setOauthModalUrl(null);
+                  setOauthLoading(null);
+                }}
+                style={oauthModalStyles.closeBtn}
+              >
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+              <Text style={[oauthModalStyles.headerTitle, { color: colors.text }]}>Sign Up</Text>
+              <View style={{ width: 40 }} />
+            </View>
+            {oauthModalUrl && (
+              <WebView
+                source={{ uri: oauthModalUrl }}
+                style={{ flex: 1 }}
+                javaScriptEnabled
+                domStorageEnabled
+                startInLoadingState
+                renderLoading={() => (
+                  <View style={oauthModalStyles.loadingOverlay}>
+                    <ActivityIndicator size="large" color={Colors.brand} />
+                  </View>
+                )}
+                onNavigationStateChange={(navState) => {
+                  if (navState.url && isOAuthCallback(navState.url)) {
+                    handleOAuthCallback(navState.url);
+                  }
+                }}
+                onShouldStartLoadWithRequest={(request) => {
+                  if (request.url && isOAuthCallback(request.url)) {
+                    handleOAuthCallback(request.url);
+                    return false;
+                  }
+                  return true;
+                }}
+              />
+            )}
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
+
+const oauthModalStyles = StyleSheet.create({
+  container: { flex: 1 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  closeBtn: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerTitle: { fontSize: 17, fontWeight: "600" },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.9)",
+  },
+});
 
 const regSplit = StyleSheet.create({
   brandPanel: {
@@ -467,6 +670,33 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 17,
     fontFamily: "Inter_600SemiBold",
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginVertical: 4,
+  },
+  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth },
+  dividerText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  oauthRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  oauthBtn: {
+    flex: 1,
+    flexDirection: "row",
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  oauthBtnText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.1,
   },
   loginLink: { alignItems: "center", marginTop: 4 },
   loginLinkText: { fontSize: 14, fontFamily: "Inter_400Regular" },
