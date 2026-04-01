@@ -20,12 +20,17 @@ import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
 import { WebView } from "react-native-webview";
-import {
-  GoogleSignin,
-  isErrorWithCode,
-  statusCodes,
-} from "@react-native-google-signin/google-signin";
 import { supabase } from "@/lib/supabase";
+
+let GoogleSignin: any = null;
+let isErrorWithCode: any = null;
+let statusCodes: any = null;
+try {
+  const mod = require("@react-native-google-signin/google-signin");
+  GoogleSignin = mod.GoogleSignin;
+  isErrorWithCode = mod.isErrorWithCode;
+  statusCodes = mod.statusCodes;
+} catch (_) {}
 import { useTheme } from "@/hooks/useTheme";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import Colors from "@/constants/colors";
@@ -262,7 +267,7 @@ export default function LoginScreen() {
 
   async function signInWithProvider(provider: string) {
     try {
-      if (provider === "google" && Platform.OS !== "web") {
+      if (provider === "google" && Platform.OS !== "web" && GoogleSignin) {
         return nativeGoogleSignIn();
       }
 
