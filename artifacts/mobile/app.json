@@ -38,6 +38,7 @@
     },
     "android": {
       "package": "com.afuchat.app",
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",

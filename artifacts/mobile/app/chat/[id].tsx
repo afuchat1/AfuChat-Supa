@@ -4,6 +4,7 @@ import {
   Animated,
   FlatList,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   PanResponder,
@@ -16,6 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardStickyView } from "react-native-keyboard-controller";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -1808,6 +1810,15 @@ export default function ChatScreen() {
 
   async function startVoiceRecordingHold() {
     if (recordingRef.current || isRecording) return;
+    const safetyTimer = setTimeout(() => {
+      if (!recStartedRef.current && recPressActiveRef.current) {
+        recPressActiveRef.current = false;
+        recCancelledRef.current = false;
+        recLockedRef.current = false;
+        setIsRecording(false);
+        setRecLocked(false);
+      }
+    }, 5000);
     try {
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== "granted") {
@@ -1843,6 +1854,7 @@ export default function ChatScreen() {
       );
       recordingRef.current = recording;
       recStartedRef.current = true;
+      clearTimeout(safetyTimer);
 
       if (!recPressActiveRef.current && !recLockedRef.current) {
         try {
@@ -1890,6 +1902,13 @@ export default function ChatScreen() {
         } catch (_) {}
       }, 100);
     } catch (err) {
+      clearTimeout(safetyTimer);
+      recPressActiveRef.current = false;
+      recStartedRef.current = false;
+      recCancelledRef.current = false;
+      recLockedRef.current = false;
+      setIsRecording(false);
+      setRecLocked(false);
       try { await Audio.setAudioModeAsync({ allowsRecordingIOS: false }); } catch (_) {}
       showAlert("Error", "Could not start recording.");
     }
@@ -1905,9 +1924,18 @@ export default function ChatScreen() {
     setRecLocked(false);
     recLockedRef.current = false;
     recStartedRef.current = false;
+    recPressActiveRef.current = false;
+    recCancelledRef.current = false;
     setRecordingDuration(0);
     setRecordingTenths(0);
     setWaveformLevels([]);
+    slideX.value = withSpring(0, SPRING_SNAP);
+    slideY.value = withSpring(0, SPRING_SNAP);
+    micScale.value = withSpring(1, SPRING_CONFIG);
+    recBarOpacity.value = withTiming(0, { duration: 150 });
+    cancelProgress.value = withTiming(0, { duration: 150 });
+    lockProgress.value = withTiming(0, { duration: 150 });
+    directionLock.value = "none";
 
     try {
       await recordingRef.current.stopAndUnloadAsync();
@@ -1955,7 +1983,6 @@ export default function ChatScreen() {
   }
 
   async function cancelVoiceRecording() {
-    if (!recordingRef.current) return;
     clearInterval(recordingTimer.current);
     clearInterval(meterInterval.current);
     pulseAnim.stopAnimation();
@@ -1964,14 +1991,25 @@ export default function ChatScreen() {
     setRecLocked(false);
     recLockedRef.current = false;
     recStartedRef.current = false;
+    recPressActiveRef.current = false;
+    recCancelledRef.current = false;
     setRecordingDuration(0);
     setRecordingTenths(0);
     setWaveformLevels([]);
-    try {
-      await recordingRef.current.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-    } catch (_) {}
-    recordingRef.current = null;
+    slideX.value = withSpring(0, SPRING_SNAP);
+    slideY.value = withSpring(0, SPRING_SNAP);
+    micScale.value = withSpring(1, SPRING_CONFIG);
+    recBarOpacity.value = withTiming(0, { duration: 150 });
+    cancelProgress.value = withTiming(0, { duration: 150 });
+    lockProgress.value = withTiming(0, { duration: 150 });
+    directionLock.value = "none";
+    if (recordingRef.current) {
+      try {
+        await recordingRef.current.stopAndUnloadAsync();
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      } catch (_) {}
+      recordingRef.current = null;
+    }
   }
 
 
@@ -2266,7 +2304,7 @@ export default function ChatScreen() {
         </TouchableOpacity>
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}>
         {loading ? (
           <ChatLoadingSkeleton />
         ) : messages.length === 0 ? (
@@ -2420,7 +2458,7 @@ export default function ChatScreen() {
                   </>
                 ) : (
                   <View style={[st.inputPill, { backgroundColor: colors.inputBg }]}>
-                    <TouchableOpacity hitSlop={8} style={st.pillIcon} onPress={() => setShowEmojiPicker(true)}>
+                    <TouchableOpacity hitSlop={8} style={st.pillIcon} onPress={() => { Keyboard.dismiss(); setShowEmojiPicker(true); }}>
                       <Ionicons name="happy-outline" size={24} color={colors.textMuted} />
                     </TouchableOpacity>
                     <TextInput
