@@ -778,8 +778,11 @@ export default function ChatScreen() {
   const recStartedRef = useRef(false);
   const recPressActiveRef = useRef(false);
 
-  const CANCEL_THRESHOLD = -100;
-  const LOCK_THRESHOLD = -80;
+  const CANCEL_THRESHOLD = -120;
+  const LOCK_THRESHOLD = -100;
+  const DIRECTION_DEADZONE = 10;
+  const SPRING_CONFIG = { damping: 18, stiffness: 200, mass: 0.8 };
+  const SPRING_SNAP = { damping: 20, stiffness: 180 };
 
   const slideX = useSharedValue(0);
   const slideY = useSharedValue(0);
@@ -788,6 +791,7 @@ export default function ChatScreen() {
   const cancelProgress = useSharedValue(0);
   const lockProgress = useSharedValue(0);
   const chevronAnim = useSharedValue(0);
+  const directionLock = useSharedValue<"none" | "horizontal" | "vertical">("none");
 
   useEffect(() => {
     if (isRecording && !recLocked) {
@@ -833,41 +837,62 @@ export default function ChatScreen() {
   const micGesture = Gesture.Pan()
     .minDistance(0)
     .onBegin(() => {
-      micScale.value = withSpring(1.4, { damping: 12, stiffness: 200 });
-      recBarOpacity.value = withTiming(1, { duration: 150 });
+      micScale.value = withSpring(1.35, SPRING_CONFIG);
+      recBarOpacity.value = withTiming(1, { duration: 200 });
+      directionLock.value = "none";
       runOnJS(onRecStart)();
     })
     .onUpdate((e) => {
       if (recLockedRef.current || recCancelledRef.current) return;
-      const clampedX = Math.min(0, e.translationX);
-      const clampedY = Math.min(0, e.translationY);
-      slideX.value = clampedX;
-      slideY.value = clampedY;
-      cancelProgress.value = interpolate(clampedX, [CANCEL_THRESHOLD, 0], [1, 0], Extrapolation.CLAMP);
-      lockProgress.value = interpolate(clampedY, [LOCK_THRESHOLD, 0], [1, 0], Extrapolation.CLAMP);
-      if (clampedX < CANCEL_THRESHOLD && !recCancelledRef.current) {
-        recCancelledRef.current = true;
-        slideX.value = withSpring(0, { damping: 15 });
-        slideY.value = withSpring(0, { damping: 15 });
-        micScale.value = withSpring(1, { damping: 15 });
-        recBarOpacity.value = withTiming(0, { duration: 200 });
-        cancelProgress.value = withTiming(0, { duration: 200 });
-        lockProgress.value = withTiming(0, { duration: 200 });
-        runOnJS(onRecCancel)();
-      } else if (clampedY < LOCK_THRESHOLD && !recLockedRef.current && !recCancelledRef.current) {
-        slideX.value = withSpring(0, { damping: 15 });
-        slideY.value = withSpring(0, { damping: 15 });
-        micScale.value = withSpring(1, { damping: 15 });
-        cancelProgress.value = withTiming(0, { duration: 200 });
-        lockProgress.value = withTiming(0, { duration: 200 });
-        runOnJS(onRecLock)();
+
+      const absX = Math.abs(e.translationX);
+      const absY = Math.abs(e.translationY);
+
+      if (directionLock.value === "none") {
+        if (absX > DIRECTION_DEADZONE || absY > DIRECTION_DEADZONE) {
+          directionLock.value = absX > absY ? "horizontal" : "vertical";
+        }
+        return;
+      }
+
+      if (directionLock.value === "horizontal") {
+        const clampedX = Math.min(0, e.translationX);
+        slideX.value = clampedX;
+        slideY.value = 0;
+        cancelProgress.value = interpolate(clampedX, [CANCEL_THRESHOLD, 0], [1, 0], Extrapolation.CLAMP);
+        lockProgress.value = 0;
+
+        if (clampedX < CANCEL_THRESHOLD && !recCancelledRef.current) {
+          recCancelledRef.current = true;
+          slideX.value = withSpring(0, SPRING_SNAP);
+          slideY.value = withSpring(0, SPRING_SNAP);
+          micScale.value = withSpring(1, SPRING_SNAP);
+          recBarOpacity.value = withTiming(0, { duration: 200 });
+          cancelProgress.value = withTiming(0, { duration: 200 });
+          runOnJS(onRecCancel)();
+        }
+      } else {
+        const clampedY = Math.min(0, e.translationY);
+        slideY.value = clampedY;
+        slideX.value = 0;
+        lockProgress.value = interpolate(clampedY, [LOCK_THRESHOLD, 0], [1, 0], Extrapolation.CLAMP);
+        cancelProgress.value = 0;
+
+        if (clampedY < LOCK_THRESHOLD && !recLockedRef.current && !recCancelledRef.current) {
+          slideX.value = withSpring(0, SPRING_SNAP);
+          slideY.value = withSpring(0, SPRING_SNAP);
+          micScale.value = withSpring(1.1, SPRING_CONFIG);
+          lockProgress.value = withTiming(0, { duration: 200 });
+          runOnJS(onRecLock)();
+        }
       }
     })
     .onEnd(() => {
       recPressActiveRef.current = false;
-      slideX.value = withSpring(0, { damping: 15 });
-      slideY.value = withSpring(0, { damping: 15 });
-      micScale.value = withSpring(1, { damping: 12, stiffness: 200 });
+      directionLock.value = "none";
+      slideX.value = withSpring(0, SPRING_SNAP);
+      slideY.value = withSpring(0, SPRING_SNAP);
+      micScale.value = withSpring(1, SPRING_CONFIG);
       recBarOpacity.value = withTiming(0, { duration: 150 });
       cancelProgress.value = withTiming(0, { duration: 150 });
       lockProgress.value = withTiming(0, { duration: 150 });
@@ -889,19 +914,19 @@ export default function ChatScreen() {
   }));
 
   const cancelZoneAnimStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(cancelProgress.value, [0, 0.5, 1], [0.2, 0.6, 1], Extrapolation.CLAMP),
+    opacity: interpolate(cancelProgress.value, [0, 0.3, 1], [0, 0.5, 1], Extrapolation.CLAMP),
     transform: [{ scale: interpolate(cancelProgress.value, [0, 1], [0.8, 1.15], Extrapolation.CLAMP) }],
   }));
 
   const slideHintAnimStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(cancelProgress.value, [0, 0.6], [1, 0], Extrapolation.CLAMP),
+    opacity: interpolate(cancelProgress.value, [0, 0.5], [1, 0], Extrapolation.CLAMP),
     transform: [{ translateX: interpolate(chevronAnim.value, [0, 0.5, 1], [0, -8, 0], Extrapolation.CLAMP) }],
   }));
 
   const lockIndicatorAnimStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(lockProgress.value, [0, 0.4, 1], [0.35, 0.7, 1], Extrapolation.CLAMP),
+    opacity: interpolate(lockProgress.value, [0, 0.3, 1], [0.3, 0.65, 1], Extrapolation.CLAMP),
     transform: [
-      { translateY: interpolate(lockProgress.value, [0, 1], [0, -14], Extrapolation.CLAMP) },
+      { translateY: interpolate(lockProgress.value, [0, 1], [0, -18], Extrapolation.CLAMP) },
       { scale: interpolate(lockProgress.value, [0, 1], [0.85, 1.1], Extrapolation.CLAMP) },
     ],
   }));
