@@ -280,7 +280,12 @@ export default function LoginScreen() {
         return;
       }
 
-      setOauthModalUrl(data.url);
+      const result = await WebBrowser.openAuthSessionAsync(data.url, REDIRECT_URL);
+      if (result.type === "success" && result.url) {
+        await handleOAuthRedirect(result.url);
+      } else {
+        setOauthLoading(null);
+      }
     } catch (_) {
       setOauthLoading(null);
       showAlert("Error", "Could not complete sign in. Please try again.");
