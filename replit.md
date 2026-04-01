@@ -1,323 +1,102 @@
-# Workspace
+# Overview
 
-## Replit Environment Setup
+This project is a pnpm workspace monorepo utilizing TypeScript to develop AfuChat, a WeChat-style chat super app. AfuChat aims to provide a comprehensive communication and lifestyle platform, connecting users through chat, social features, and integrated services. The platform is designed for cross-platform compatibility, running on mobile (iOS/Android), web, and desktop.
 
-- **Package manager**: pnpm (workspace monorepo)
-- **Node.js**: 20 (via `.replit` modules config)
-- **Workflows**:
-  - `API Server` — builds with esbuild and starts on port 3000
-  - `Start application` — runs Expo Metro bundler on port 5000 (web preview)
-- **Environment variables set**:
-  - `PORT=3000`, `NODE_ENV=development` (shared)
-  - `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` (shared)
-  - `DATABASE_URL`, `PGHOST`, etc. (Replit-managed PostgreSQL — used by `@workspace/db` Drizzle ORM)
-- **Optional secrets** (set via Replit secrets tab for full functionality):
-  - `SUPABASE_SERVICE_ROLE_KEY` — enables email notifications watcher and admin routes
-  - `GROQ_API_KEY` — AI chat features
-  - `RESEND_API_KEY` — transactional + marketing email sending
+Key capabilities include:
+- Real-time chat and social networking features (posts, stories, follows).
+- Advanced AI integrations for chat, image generation, and intelligent features.
+- In-app wallet with custom currencies (Nexa/ACoin) for virtual goods, gifts, and services.
+- Gamified user experience with XP rewards and in-app games.
+- A marketplace for unique digital gifts.
+- Extensive mini-programs for daily-life services like bill payments, airtime, and data bundles.
+- A robust administrative dashboard for user and content management.
 
-## Overview
+The project leverages an existing Supabase backend for data persistence and authentication, focusing on delivering a rich, interactive, and secure user experience.
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+# User Preferences
 
-## Stack
+I prefer clear and concise information.
+I appreciate detailed explanations for complex features.
+I want an iterative development approach with regular updates.
+Please ask for my confirmation before making significant architectural changes or implementing major new features.
+Do not make changes to files in the `lib/` directory without explicit approval.
+Do not make changes to the existing Supabase schema unless absolutely necessary and after thorough discussion.
+Prioritize performance and user experience in all development tasks.
+Ensure all new features are thoroughly tested across all supported platforms (web, iOS, Android).
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
+# System Architecture
 
-## Structure
+The project is structured as a pnpm monorepo using TypeScript, with distinct packages for deployable applications and shared libraries.
 
-```text
-artifacts-monorepo/
-├── artifacts/              # Deployable applications
-│   ├── api-server/         # Express API server
-│   ├── mobile/             # AfuChat Expo React Native + Web app
-│   └── mockup-sandbox/     # Component preview server
-├── lib/                    # Shared libraries
-│   ├── api-spec/           # OpenAPI spec + Orval codegen config
-│   ├── api-client-react/   # Generated React Query hooks
-│   ├── api-zod/            # Generated Zod schemas from OpenAPI
-│   └── db/                 # Drizzle ORM schema + DB connection
-├── scripts/                # Utility scripts (single workspace package)
-│   └── src/                # Individual .ts scripts
-├── pnpm-workspace.yaml
-├── tsconfig.base.json
-├── tsconfig.json
-└── package.json
-```
+**Core Technologies:**
+- **Monorepo Tool**: pnpm workspaces
+- **Backend**: Express 5 API server, PostgreSQL with Drizzle ORM, Supabase for authentication and real-time.
+- **Frontend**: Expo React Native for mobile and web, targeting a unified codebase.
+- **Validation**: Zod for API request and response validation.
+- **API Codegen**: Orval from OpenAPI specification for generating API clients and Zod schemas.
+- **Build**: esbuild for API server, Expo Metro bundler for mobile/web.
 
-## AfuChat Mobile App (artifacts/mobile)
+**Application Structure:**
+- `artifacts/`: Contains deployable applications (`api-server`, `mobile`, `mockup-sandbox`).
+- `lib/`: Houses shared libraries like `api-spec`, `api-client-react`, `api-zod`, and `db`.
+- `scripts/`: Utility scripts.
 
-Expo React Native app — WeChat-style chat super app connecting to an external Supabase backend.
+**UI/UX and Design:**
+- **Branding**: AfuChat blue-green (`#00BCD4`) and gold (`#D4A853`).
+- **Typography**: Inter font family.
+- **Theming**: Dark/light theme support (dark uses Google-style warm greys, light uses cream tones), persisted via `AsyncStorage`.
+- **Responsive Design**: Utilizes `useWindowDimensions()` and custom `useResponsive()` hooks for dynamic layouts across web, mobile, and desktop, avoiding static `Dimensions.get('window')`.
+- **UI Components**: Reusable components for avatars, verified badges, skeletons, offline banners, and swipeable bottom sheets.
+- **Input Styling**: Consistent rounded `borderRadius: 12` for all input fields.
 
-### Backend: Supabase (rhnsjqqtdzlkvqazfcbg.supabase.co)
+**Technical Implementations:**
+- **Authentication**: Supabase Auth with email/password, Google/GitHub OAuth, OTP-based password reset, email confirmation. Supports multi-account switching via `expo-secure-store`/`AsyncStorage`.
+- **Navigation**: Expo Router with tab-based navigation and deep linking support.
+- **Offline Support**: Offline-first architecture with `AsyncStorage` caching for critical data, message queuing, and auto-sync on reconnect. Includes network status banners.
+- **Real-time**: Supabase Realtime for chat, notifications, and presence.
+- **Notifications**: Expo Push Notifications with custom sound, token management, and authenticated edge function triggers.
+- **Media Handling**: Centralized media upload utility to Supabase Storage buckets for various content types.
+- **AI Features**: Multi-provider AI assistant and image generation with cascading fallbacks via Supabase Edge Functions. Includes rich markdown rendering, actionable responses, and executable actions.
+- **Monetization**: `ACoin` and `Nexa` (XP) in-app currencies. Dynamic gift pricing, subscription plans, and in-app purchases for services.
+- **Gamification**: XP rewards for user activities, tracked via DB functions with cooldowns.
+- **Account Management**: Soft-delete with a 30-day grace period, followed by permanent purge via an authenticated API endpoint.
+- **SEO & Deep Linking**: API server routes for public profiles and posts with SEO-friendly short IDs, `sitemap.xml`, `robots.txt`, and app link configurations.
+- **Cross-Platform Adaptations**: Platform-specific guards for features like push notifications, haptics, blur effects, keyboard handling, and camera access.
+- **Premium Tiering**: Features gated by subscription tiers (Silver, Gold) using `LockedToggle`/`LockedLink` components, accessible via the `app/advanced-features.tsx` screen.
+- **Onboarding**: A forced 5-step onboarding flow for new users covering display name, handle, country, phone number, date of birth, gender, interests, and profile photo.
+- **Referral System**: Deep link-based referral system for user acquisition, applying referrer handles during onboarding.
 
-The app uses an **existing** Supabase project with pre-created tables. No schema migration needed.
+# External Dependencies
 
-### Key Supabase Tables Used
-
-- **profiles** — `id`, `handle`, `display_name`, `avatar_url`, `bio`, `xp` (Nexa), `acoin`, `current_grade`, `is_verified`, `is_organization_verified`, `is_admin`, `country`, `website_url`, `phone_number`, `banner_url`, `language`, `tipping_enabled`, `last_seen` (timestamptz), `show_online_status`, `is_private`, `show_last_seen`, `show_bio_publicly`, `message_privacy` (everyone/followers/nobody), `reactions_privacy` (everyone/followers/nobody), `hide_from_search`, `hide_posts_non_followers`, `allow_tagging` (everyone/followers/nobody), `data_personalization`, `data_analytics`, `date_of_birth`, `gender`, `match_visible`. NOTE: No `is_premium` field — premium status comes from `user_subscriptions`.
-- **match_profiles** — SEPARATE dating profile (NOT `profiles`). Columns: `user_id` (UNIQUE), `name`, `date_of_birth`, `gender` (man/woman/non_binary/other), `bio`, `job_title`, `company`, `school`, `education_level`, `height_cm`, `interests[]`, `looking_for` (men/women/everyone), `relationship_goal` (casual/serious/open/friendship), `show_in_discovery`, `show_age`, `show_distance`, `profile_complete`, `is_paused`, `location_name`, `country`. RLS: user owns own row; others can SELECT if show_in_discovery=TRUE.
-- **match_photos** — Dating profile photos. Columns: `id`, `user_id`, `url`, `display_order`, `is_primary`. Storage: `match-photos` bucket (public, 5MB limit). RLS: user manages own; all can select.
-- **match_messages** — In-match chat messages. Columns: `id`, `match_id` (FK match_matches), `sender_id`, `content`, `media_url`, `media_type`, `is_gift`, `gift_emoji`, `read_at`, `sent_at`. RLS: both match participants.
-- **match_reports** — Safety reporting. Columns: `reporter_id`, `reported_id`, `reason` (fake_profile/inappropriate_photos/harassment/spam/underage/other), `description`. RLS: insert only for reporter.
-- **match_swipes** — `id`, `swiper_id`, `swiped_id`, `direction` (like/nope/superlike), `created_at`. UNIQUE(swiper_id, swiped_id). RLS: swipers own their rows.
-- **match_matches** — `id`, `user1_id`, `user2_id`, `matched_at`, `is_super_match`, `chat_id`, `unmatched_at`. UNIQUE(user1_id, user2_id). RLS: both users can see.
-- **match_preferences** — `user_id` (PK), `show_in_match`, `min_age`, `max_age`, `preferred_countries`, `interested_in` (men/women/everyone), `max_distance_km`, `updated_at`. RLS: user owns row.
-- **match_gifts** — `id`, `match_id`, `sender_id`, `receiver_id`, `gift_id`, `message`, `sent_at`. RLS: sender/receiver can see.
-- **check_mutual_match** — PL/pgSQL SECURITY DEFINER function: args `(p_swiper UUID, p_swiped UUID, p_direction TEXT)` → returns `UUID` (match_id if mutual, else NULL). Creates match_matches row on mutual like.
-- **subscription_plans** — `id`, `name`, `description`, `acoin_price`, `duration_days`, `features` (jsonb), `grants_verification`, `is_active`, `tier` (silver/gold/platinum)
-- **user_subscriptions** — `id`, `user_id` (UNIQUE), `plan_id`, `started_at`, `expires_at`, `is_active`, `acoin_paid`. Premium = active + not expired.
-- **currency_settings** — `nexa_to_acoin_rate`, `conversion_fee_percent`, `p2p_fee_percent`. Used for Nexa→ACoin conversion.
-- **acoin_transactions** — `id`, `user_id`, `amount`, `transaction_type`, `nexa_spent`, `fee_charged`, `metadata`
-- **xp_transfers** — `id`, `sender_id`, `receiver_id`, `amount`, `message`, `status`. XP is displayed as "Nexa" throughout the app.
-- **linked_accounts** — `id`, `primary_user_id`, `linked_user_id`, `linked_at`. Premium-only feature.
-- **chats** — `id`, `name`, `is_group`, `is_channel`, `created_by`, `is_pinned`, `is_archived`, `avatar_url`, `description`, `user_id`, `is_verified`, `who_can_send`, `member_limit`
-- **chat_members** — `id`, `chat_id`, `user_id`, `joined_at`, `is_admin`
-- **messages** — `id`, `chat_id`, `sender_id`, `encrypted_content`, `sent_at`, `reply_to_message_id`, `attachment_url`, `attachment_type`, `audio_url`, `edited_at`
-- **follows** — `id`, `follower_id`, `following_id` (acts as contacts system)
-- **follow_requests** — `id`, `requester_id`, `target_id`, `status`
-- **posts** — `id`, `author_id`, `content` (max 280 chars), `image_url`, `view_count`, `is_blocked`, `wall_user_id`, `language_code`
-- **post_images** — `id`, `post_id`, `image_url`, `display_order`
-- **post_replies** — `id`, `post_id`, `author_id`, `content`, `parent_reply_id`
-- **stories** — `id`, `user_id`, `media_url`, `media_type`, `caption`, `expires_at`, `view_count`
-- **gifts** — `id`, `name`, `emoji`, `base_xp_cost`, `rarity`, `description`, `image_url`, `season`, `available_from`, `available_until`. Virtual gift catalog. No `acoin_price` column — dynamic price computed at runtime.
-- **gift_statistics** — `id`, `gift_id` (unique), `total_sent`, `price_multiplier` (default 1.00, +0.01 per send, cap 3.0), `last_sale_price`, `last_updated`. Realtime-enabled. Dynamic price = `MAX(base_xp_cost × price_multiplier, last_sale_price)`. `last_sale_price` reflects actual last transaction price (can go up or down). `useGiftPrices` hook (`hooks/useGiftPrices.ts`) subscribes to Supabase Realtime changes on this table for instant price updates everywhere.
-- **gift_transactions** — `gift_id`, `sender_id`, `receiver_id`, `xp_cost`, `message`. Records gift sends. Uses Nexa (XP) for payment via `send_gift` RPC.
-- **user_gifts** — `id`, `user_id`, `gift_id`, `is_pinned`, `acquired_at`, `transaction_id`. User's gift gallery/collection.
-- **gift_marketplace** — `id`, `seller_id`, `user_gift_id`, `gift_id`, `asking_price`, `status` (listed/sold/cancelled), `buyer_id`, `listed_at`, `sold_at`. Rare/Epic/Legendary gifts only. 5% marketplace fee on sales.
-- **transaction_requests** — `id` (UUID), `requester_id`, `owner_id`, `currency` (ACoin only), `amount`, `message`, `status` ('pending'|'accepted'|'declined'|'expired'|'cancelled'), `created_at`, `responded_at`. QR-scan pay/request via wallet scanner. Supports two actions: Pay (instant ACoin transfer) and Request (creates pending request for owner to accept/decline). RLS: both parties can SELECT; requester can INSERT (pending only); owner can UPDATE pending→accepted/declined; requester can UPDATE pending→cancelled. Immutability trigger prevents field tampering during status changes. Migration: `supabase/migrations/20240201_transaction_requests.sql`.
-- **message_reactions** — emoji reactions on messages
-- **blocked_users** — block/unblock users
-- **notifications** — system notifications
-
-### App Architecture
-
-- **Auth**: Supabase Auth (email/password, Google OAuth, GitHub OAuth via WebBrowser + PKCE), AuthContext provider. App scheme `afuchat://` for OAuth deep links. OTP-based password reset (6-digit code, not link). Email confirmation required on registration (OTP verify). All auth emails sent from `noreply@afuchat.com` via Resend (edge function `send-password-reset` handles all email types with branded templates + AfuChat Technologies Ltd footer).
-- **Navigation**: Expo Router with tabs (AfuChat, Search, Discover, Me). Contacts tab exists but is hidden (`href: null`).
-- **Design**: AfuChat blue-green `#00BCD4` brand color (Google Maps blue-green), gold business badge `#D4A853`, Inter font family, dark/light theme (dark theme uses Google-style warm greys: bg `#202124`, surface `#303134`, border `#3C4043`), branded afu-symbol logo used for app icon, splash screen (teal background), favicon, and notification icon
-- **Badge System**: `is_organization_verified=true` → gold badge (#D4A853) + "Verified Business" tag. `is_verified=true` (subscription) → blue-green badge (#00BCD4), no business tag. Applied across me.tsx, discover.tsx, contacts.tsx, contact/[id].tsx, post/[id].tsx, admin/index.tsx.
-- **Cross-platform Alerts**: `lib/alert.ts` exports `showAlert()` — Android uses native `Alert.alert()` for Material Design dialogs; iOS/web use `IOSAlert` custom modal registered in `_layout.tsx` via event listener pattern (`registerAlertListener`/`unregisterAlertListener`). Web fallback uses `window.confirm`/`window.prompt` if listener not registered. All screens use `showAlert()` instead of `Alert.alert` directly.
-- **Account Switching**: `lib/accountStore.ts` stores multiple Supabase sessions using `expo-secure-store` (native) / AsyncStorage (web). AuthContext exposes `addAccount(email, password)`, `switchAccount(userId)`, `removeAccount(userId)`. Users add accounts with email+password and switch instantly without logging out.
-- **Chat Attachments**: Messages support image, video, audio, file, and gif attachment types. Video uses `expo-av` Video component with native controls. Audio messages use expo-av playback.
-- **Stories**: View screen has animated progress bars, auto-advance timer (5s for images, video duration for video stories), and hold-to-pause. Create screen supports both image and video preview.
-- **Themes**: Dark theme uses pure `#000000` black. Light theme uses cream tones (`#FDF8F3` background). User can toggle via Appearance setting on Me tab (System/Dark/Light). ThemeContext with AsyncStorage persistence.
-- **Account Deletion**: Soft-delete with 30-day grace period. `profiles.scheduled_deletion_at` set to now+30d on delete request. User is signed out. On next login, if scheduled_deletion_at is set, user is prompted to restore or proceed with deletion. After 30 days, `POST /api/account-purge` (requires `ACCOUNT_PURGE_SECRET`) permanently removes all user data (moments, messages, follows, contacts, stories, transactions, subscriptions, notifications) and deletes the Supabase auth user. `profiles.account_deleted` boolean marks fully purged accounts.
-- **Push Notifications**: Expo Push Notifications via `expo-notifications` + `expo-device`. Token stored in `profiles.expo_push_token`. Edge function `send-push-notification` uses Expo Push API with JWT auth verification (caller must be authenticated). Notifications triggered client-side for: new messages, follows, post likes, post replies, red envelope claims. Badge cleared on app active + opening Notifications screen. Token cleared on sign-out. Custom notification sound (`assets/sounds/notification.wav`) used across all channels (default, messages, social).
-- **Offline Support**: Full offline-first architecture. `lib/offlineStore.ts` caches profile, conversations, contacts, moments, notifications, and per-chat messages to AsyncStorage. `lib/offlineSync.ts` queues messages when offline (shown with clock icon) and auto-syncs on reconnect via `onConnectivityChange`. On reconnect, also calls `reconnectRealtime()` (disconnects + reconnects Supabase Realtime) and fires `addOnlineListener()` callbacks so screens refresh immediately. `OfflineBanner` component (red "No internet" / green "Back online") shown on all tabs, chat screen, and notifications. AuthContext re-fetches profile on reconnect. Home tab calls `loadChats()` on reconnect. Supabase client has `persistSession: true` so users stay logged in offline.
-- **Real-time**: Supabase Realtime for: chat messages (per-chat channel), typing indicators, notification inserts (notifications screen + home tab badge), new chat member inserts (home tab), per-chat message inserts (home tab conversation list). All channels reconnect automatically via `offlineSync.reconnectRealtime()` when coming back online.
-- **State**: React Context (AuthContext, ThemeContext) + local component state
-- **Premium**: Uses `user_subscriptions` table (NOT `profiles.is_premium`). Plans loaded from `subscription_plans` table. Payment via ACoin. AuthContext exposes `isPremium`, `subscription` fields.
-- **Currency**: XP displayed as "Nexa" throughout. ACoin is premium currency. Nexa→ACoin conversion via `currency_settings` table rates/fees. Red envelopes and gifts use ACoins (DB functions `create_red_envelope`, `claim_red_envelope`, `deduct_acoin`, `credit_acoin` are SECURITY DEFINER and operate on `profiles.acoin`).
-- **Activity Rewards (Nexa/XP)**: Users earn Nexa for nearly every activity via `reward_activity_xp` DB function (SECURITY DEFINER) with cooldown-based spam prevention. Tracked in `activity_rewards` table. Helper: `lib/rewardXp.ts`. Reward amounts: profile completion 1000, referral 2000, daily login 20, post 50, reply 20, like 5, follow 10, message 2, story create 30, story view 3, gift sent 25, group/channel create 50, red envelope sent 30, red envelope claimed 10.
-
-### Key Files
-
-- `lib/supabase.ts` — Supabase client config (exports `supabaseUrl` and `supabaseAnonKey` constants)
-- `lib/mediaUpload.ts` — Centralized media upload utility. Uses `fetch(uri)→blob` + Supabase JS client `.upload()` on all platforms (web+native). Exports `uploadToStorage()`, `uploadAvatar()`, `uploadChatMedia()`. Adds cache-busting `?t=` to URLs. Used by profile/edit, onboarding, chat, stories, moments, and channel/create.
-- **Supabase Storage Buckets**: `avatars` (profile photos), `voice-messages` (audio, path: `{userId}/{file}`), `chat-attachments` (images/docs in chat, path: `{userId}/{chatId}/{file}`), `post-images` (moments/posts, path: `{userId}/{file}`), `stories` (story media, path: `{userId}/{file}`), `group-avatars` (channel/group avatars, path: `{userId}/{file}`), `profile-banners`, `ai-generated-images`, `ai-chat-attachments`, `service-images`, `event-images`, `product-images`, `listing-images`, `developer-showcase`, `mini-programs`, `mini-app-apks`, `verification-documents`, `afumail-attachments`, `restaurant-images`. All upload paths start with `{userId}/` for RLS compliance.
-- `components/AudioPlayer.tsx` — Custom audio player using `expo-audio` (useAudioPlayer + useAudioPlayerStatus). Shows play/pause, waveform bars with progress fill, and duration/position. Used for voice messages in chat bubbles.
-- `context/AuthContext.tsx` — Auth provider with profile + subscription loading. Premium status from `user_subscriptions` table.
-- `context/ThemeContext.tsx` — Theme provider with explicit light/dark/system toggle, persisted to AsyncStorage
-- `constants/colors.ts` — Brand colors + light/dark theme + gold badge color
-- `hooks/useTheme.ts` — Theme hook (reads from ThemeContext, exposes `setThemeMode`)
-- `components/ui/Avatar.tsx` — Avatar with initials fallback
-- `components/ui/Separator.tsx` — List separator
-- `components/ui/VerifiedBadge.tsx` — Shared verified badge (gold for business, teal for personal)
-- `components/ui/Skeleton.tsx` — Animated skeleton loading placeholders (ChatRowSkeleton, ContactRowSkeleton, PostSkeleton, ProfileSkeleton, NotificationSkeleton, GiftCardSkeleton, WalletSkeleton, PostDetailSkeleton, ListRowSkeleton, GameCardSkeleton, PremiumSkeleton, AdminSkeleton, ReferralSkeleton, MarketplaceCardSkeleton, ChatLoadingSkeleton, ChatBubbleSkeleton)
-- `components/ui/OfflineBanner.tsx` — Network status banner (red offline / green reconnected) with animated fade
-- `lib/offlineStore.ts` — AsyncStorage-based caching for profile, conversations, contacts, moments, notifications, messages; pending message queue; NetInfo connectivity tracking
-- `lib/offlineSync.ts` — Auto-sync pending messages on reconnect
-- `app/(tabs)/index.tsx` — Chats list with stories bar
-- `app/(tabs)/search.tsx` — Comprehensive omni-search engine with: 9 categories (All/People/Posts/Chats/Media/Links/Channels/Tags/Gifts), natural language parsing (`lib/searchParser.ts`), command system (@user/#tag//files//links//images//videos//voice), time range filters (today/yesterday/this week/last week/this month/last month), media type filters, person-based filtering, private search mode (no history), voice search (Web Speech API), smart auto-suggestions, saved searches, search pinning (long-press), search sharing, search history panel with management, trending topics, top verified users, quick actions, debounced real-time results with stale-request protection. Persistent storage via `lib/searchStore.ts` (AsyncStorage)
-- `app/(tabs)/contacts.tsx` — Unified New Message + Contacts page (New Group, New Channel, Find Contacts actions at top + alphabetical contact list with chat start). Hidden from tab bar, reached via FAB from chats.
-- `app/(tabs)/apps.tsx` — Apps hub (iOS-style grid). 5 categories: Intelligence (AfuAi), Finance (Wallet, Services, Freelance), Entertainment (Games, Gifts, Shop), Tools (Files, Digital ID, Saved, Collections), Community (Events, Referral, Usernames). Featured AfuAi banner at top, live search filter, spring-animated press tiles, badge support (NEW/AI/3D). Tab positioned 3rd in bottom nav (between Search and Discover).
-- `app/(tabs)/discover.tsx` — Posts feed (tap to post detail)
-- `app/(tabs)/me.tsx` — Profile & settings hub. Kept: profile card, stats (Nexa/ACoin/Grade), XP level bar, profile completion bar, premium banner, Prestige Status, admin tools (Creator Studio, My Shop), My Posts, Find People, Stories, Notifications, account (Premium, Switch Accounts), settings (Appearance, Language, Chat, Privacy, Security, Notification Settings, Advanced Features, Device Security), Admin Dashboard. App-like features (AfuAi, Wallet, Games, Gifts, Services, Shop, Files, Digital ID, Saved, Collections, Events, Referral, Usernames) moved to the Apps tab.
-- `app/chat/[id].tsx` — Chat with WhatsApp-style SVG bubble tails, swipe-to-reply gesture (PanResponder, directional swipe with haptic feedback and reply icon indicator), long-press reaction picker with Report Message option (inserts to `message_reports` table, only for other users' messages), typing indicators, read receipts (blue double-check), gift box UI, red envelopes, offline message queue, cached messages, file uploads via FileSystem.uploadAsync (native) / fetch→blob (web), date headers, network status indicator
-- `app/moments/create.tsx` — Create new post
-- `app/profile/edit.tsx` — Edit profile
-- `app/group/create.tsx` — Create group chat
-- `app/contact/[id].tsx` — Contact profile with golden badge, country, join date, verification details, bio, follow/block/report account (5 reasons: Spam, Harassment, Hate Speech, Impersonation, Inappropriate Content → `user_reports` table with `reported_user_id`), user posts feed, SEO Head (OG tags)
-- `app/stories/create.tsx` — Create story (image + caption, 24h expiry)
-- `app/stories/view.tsx` — View stories with progress dots and view tracking
-- `app/post/[id].tsx` — Post detail with likes, replies, view count, SEO Head. Features: Edit post (own posts), Delete post (own), Report post (others, via `user_reports` table), Share with short ID URLs, Capture post as image (Substack-style download via `react-native-view-shot` + `expo-sharing`). Three-dot menu with contextual actions. Inline edit mode with save/cancel.
-- `app/notifications.tsx` — Notifications list with mark read
-- `app/wallet/index.tsx` — Nexa/ACoin balance, send Nexa, Nexa→ACoin conversion (using currency_settings), filtered transaction history, Buy Nexa / Buy ACoin buttons
-- `app/wallet/topup.tsx` — Top up Nexa or ACoin via Pesapal (M-Pesa, Visa, Mastercard). Supports both currency types with dedicated packages and custom amounts.
-- `app/gifts/index.tsx` — User's owned gifts gallery (no shop tab). Convert gifts to ACoin (5.99% hidden fee), send gifts to friends, pin/unpin via long press. Listed marketplace gifts hidden from gallery. Double-listing prevented. Marketplace listing check before send/convert.
-- `app/gifts/marketplace.tsx` — Gift marketplace for rare/epic/legendary gifts. Atomic buy flow with full rollback on failure. 5% marketplace fee. Seller ownership verified on transfer. Skeleton loading.
-- `app/red-envelope/[id].tsx` — Red envelope claim and status
-- `app/games/index.tsx` — Games hub with 8 real video games (Snake, Tetris, 2048, Flappy Bird, Space Shooter, Brick Breaker, Minesweeper, Memory Match) with Acoin power-ups
-- `app/mini-programs/index.tsx` — Services hub with daily-life services + embedded games section
-- `app/mini-programs/airtime.tsx` — Buy airtime (MTN, Airtel, Glo, 9mobile) with 2% fee
-- `app/mini-programs/data-bundles.tsx` — Buy data bundles (1GB-50GB) with 2% fee
-- `app/mini-programs/bills.tsx` — Pay bills (electricity, water, TV, internet, waste, insurance) with 3% fee
-- `app/mini-programs/hotels.tsx` — Book hotels (single/double/suite rooms) with 5% fee
-- `app/mini-programs/tickets.tsx` — Buy event tickets (regular/VIP/VVIP) with 4% fee
-- `app/mini-programs/transfer.tsx` — Send money to users with 1.5% fee
-- `app/mini-programs/fee-details.tsx` — Fee breakdown page for all services
-- `lib/serviceTransactions.ts` — Service transaction helper (fee calc, ACoin debit, transaction recording with full metadata)
-- `lib/gameCoins.ts` — Game Acoin utility (spend for power-ups, extra lives, etc.)
-- `app/ai/index.tsx` — AfuAi chat with full user context (balance, stats, gifts, premium status, recent transactions), animated thinking dots indicator, actionable navigation buttons from AI responses (allowlisted routes only), platform-aware system prompt. Powered by Supabase Edge Function `ai-chat`. Features: rich markdown rendering, suggestion chips, copy/regenerate/clear, inline invoice cards (styled receipts with copy), executable actions via `[EXEC:action_type:{params}]` tags (send Nexa, follow/unfollow, subscribe, cancel subscription, convert Nexa→ACoin) with confirmation cards (Confirm/Cancel buttons) and success/failure states with auto-generated invoices for financial actions, `[INVOICE:{json}]` tags for historical transaction receipts.
-- `app/digital-id.tsx` — Digital ID card screen. Flip card (front: identity, back: stats + QR). All user data (profile, stats, activity counts) is base64-encoded into the QR code payload as `afuchat://id/{base64}`. No visible data sections below the card — data is only accessible by scanning the QR.
-- `app/admin/index.tsx` — Admin Dashboard (admin-only, accessible from Me tab). Features: platform overview stats, **ID Lookup** (search by Afu ID number or handle to see complete user data including identity, rank, activity, account status), user management (verify toggle, balance adjust), content moderation (block/delete posts), subscription plans view, currency settings, moderation reports. Only visible to users with `is_admin=true` in profiles.
-- `app/my-posts/index.tsx` — Dedicated My Posts screen (user's own posts with delete)
-- `app/premium.tsx` — Premium subscription with plans from `subscription_plans` table, ACoin payment, free features list, active subscription display
-- `app/linked-accounts.tsx` — Account switching (add accounts with email+password, switch instantly, sessions stored via accountStore)
-- `app/(auth)/login.tsx` — Login screen with email/password, Google/GitHub OAuth (WebBrowser auth session with PKCE), OTP-based forgot password (email → 6-digit code → new password in-app)
-- `app/(auth)/register.tsx` — Register screen with terms/privacy checkbox (must agree before account creation)
-- `app/settings/privacy.tsx` — Privacy settings (private account, online status, hide lists)
-- `app/settings/notifications.tsx` — Notification preferences
-- `app/settings/chat.tsx` — Chat preferences (theme, bubble, font, read receipts)
-- `app/settings/blocked.tsx` — Blocked users management
-- `lib/pushNotifications.ts` — Push notification registration, permission, badge, tap navigation, token management. Web-safe: conditionally loads `expo-notifications` and `expo-device` only on native platforms via `require()` behind `Platform.OS !== 'web'` guard to prevent crashes in Expo web/Go.
-- `lib/notifyUser.ts` — Notification trigger helpers (messages, follows, likes, replies, gifts) via authenticated Supabase Edge Function calls
-- `lib/shortId.ts` — Base62 encoder/decoder for UUIDs. Converts 36-char UUIDs into ~22-char short IDs for clean public URLs (e.g. `0a6c129b-3906-4db8-8812-c17c17e9b766` → `JfJNiqOg7jGpEWkpIxGNi`). Used in share URLs and API server routes. Exports `encodeId()`, `decodeId()`, `isEncodedId()`, `isUuid()`.
-- `lib/share.ts` — Share utility (sharePost, shareProfile, shareStory, shareRedEnvelope) using React Native Share API. Generates afuchat.com deep links with short IDs (no UUIDs exposed). Used across discover feed, post detail, my-posts, contact profile, stories, and red envelopes.
-- `components/PushNotificationManager.tsx` — Null component wired into root layout for notification setup
-- `components/SwipeableBottomSheet.tsx` — Reusable animated bottom sheet with swipe-to-close gesture (PanResponder). Wraps content with spring-animated slide-in and drag-to-dismiss. Used across wallet, gifts, and match screens.
-
-## Responsive Layout Pattern
-
-All screens use `useWindowDimensions()` from React Native instead of static `Dimensions.get('window')`. This ensures layouts respond dynamically to window resizes (web/desktop) and orientation changes.
-
-- **Shared hooks**: `hooks/useResponsive.ts` provides `useResponsive()` with `scale`, `gridColumns`, `fontSize`, `spacing`, and breakpoints. `useGameCardWidth()`, `useStoreCardWidth()`, `useBadgeSize()` for specific grid calculations.
-- **Pattern**: Call `useWindowDimensions()` inside the component body, compute derived sizes (cell widths, card widths, etc.), and apply via inline styles where the static `StyleSheet.create` can't be used.
-- **Zero static Dimensions.get**: The entire `artifacts/mobile` codebase has been migrated — no `Dimensions.get('window')` calls remain.
-
-## Web & Desktop Deployment (Vercel)
-
-The AfuChat app is cross-platform — same codebase runs on mobile (iOS/Android via Expo), web (afuchat.com), and desktop (desktop.afuchat.com).
-
-### Web Build
-- `npx expo export --platform web --output-dir dist` — builds static web assets to `dist/`
-- `vercel.json` — Vercel deployment config with SPA rewrites and cache headers
-- `app/+html.tsx` — Custom HTML document with meta tags, SEO, PWA support, and responsive desktop styles
-- `public/manifest.json` — PWA manifest for installable web app
-- `public/logo.png` — App icon for PWA
-- Web output uses `output: "single"` mode (SPA with client-side routing)
-
-### Platform Guards
-- Push notifications: Only register on native (`Platform.OS !== 'web'`)
-- Haptics: Safe-fail on web
-- SF Symbols: Falls back to Ionicons on web
-- Blur effects: Falls back to solid colors on web
-- Keyboard handling: `KeyboardAwareScrollViewCompat` switches to standard `ScrollView` on web
-- Offline detection: Uses `navigator.onLine` + `window.addEventListener` on web, NetInfo on native
-- Alerts: Web fallback uses `window.alert`/`window.confirm`/`window.prompt`
-- Camera button in chat attach menu: Hidden on web (`Platform.OS !== 'web'`); gallery/file/GIF still available
-- Advanced Features — web-only toggles (Drag & Drop Upload, Split Screen, Screen Share): Only rendered when `Platform.OS === 'web'`
-
-### Premium Tier Gating (Advanced Features)
-The `app/advanced-features.tsx` screen uses a `LockedToggle`/`LockedLink` component system. Features that require a paid tier show a lock icon, tier badge (Silver/Gold colour-coded), and an "Upgrade" button that routes to `/premium` instead of rendering a usable switch. Free users can still toggle free-tier features normally.
-
-Tier thresholds (`TIER_ORDER`: free=0, silver=1, gold=2, platinum=3):
-- **Silver+**: Message Translation (AI), Voice to Text (AI), Smart Notifications (AI), Smart Chat Folders, Temporary Chat Mode, Auto-Reply Mode, Focus Mode, Activity Status, Auto Media Organization, Advanced Emoji Reactions, Content Filter, Message Reminders, Chat→Post, Message Edit History
-- **Gold+**: Chat Summary (AI), Scheduled Focus, Link→Mini App, Keyword Alerts, Chat Export Format, Cross-Device Sync, Split Screen Mode, Screen Share in Chat, Group Roles System
-- **Free**: Text to Speech (device-native, no API cost), Offline Drafts, Interactive Link Preview, Quick Action Menu, User Tagging, In-App Browser
-
-## Auth & Onboarding Flow
-
-- **Registration**: Sign up page collects only email + password. After signup, user verifies email via 6-digit OTP code.
-- **Onboarding**: After OTP verification, new users are routed to a 5-step onboarding flow (`/onboarding`):
-  - Step 1: Display name + username (handle) — required
-  - Step 2: Country (auto-detected via GPS/reverse geocoding using expo-location, with full searchable picker fallback for 130+ countries with flags and dial codes) + phone number (validated against country-specific digit length) — required
-  - Step 3: Date of birth (scrollable day/month/year dropdown selectors) + gender (male/female) — all required, must be 13+
-  - Step 4: Interests selection — pick at least 3 from 18 options
-  - Step 5: Profile photo upload (via expo-image-picker, uploaded to Supabase Storage `avatars` bucket) + profile summary review
-- **Onboarding completion**: Profile is created with `onboarding_completed = true` on the `profiles` table. Existing users already have this set to `true`.
-- **Onboarding enforcement**: Both `index.tsx` and `(tabs)/_layout.tsx` check `profile.onboarding_completed` — redirects to `/onboarding` if false. Users cannot access the app without completing onboarding.
-- **Routing logic** (`index.tsx`): If session exists but `profile.onboarding_completed` is false, redirects to onboarding. Otherwise goes to `(tabs)`.
-- **Profile columns**: `gender` (text), `date_of_birth` (date), `country` (text), `phone_number` (text), `interests` (text[]), `onboarding_completed` (boolean, default false).
-- **Country data**: `constants/countries.ts` exports `COUNTRIES` array with name, code, dial code, flag emoji, and valid phone digit lengths for each country.
-- **Edit Profile**: `profile/edit.tsx` supports real avatar upload via expo-image-picker + Supabase Storage. Change Photo button opens gallery, selected image uploaded on save.
-- **Referral system**: No manual codes — referrals work via deep links and web routes. `afuchat.com/username` (no @) = referral link → stores referrer handle and redirects to signup. `afuchat.com/@username` (with @) = public profile → looks up user by handle and shows their contact profile. Both patterns handled by `app/[handle].tsx` dynamic route (works on web and via native deep links). Referrer handle stored via `AsyncStorage` and auto-applied during onboarding. Referrer gets +500 XP, referred user gets 1 week free Platinum premium.
-
-## UI Conventions
-
-- **Input styling**: All TextInput fields/containers use `borderRadius: 12` (rounded corners). No `borderWidth` or `borderBottomWidth` on input containers. Search boxes, chat inputs, reply bars, form fields, modal inputs all follow this pattern.
-- **Keyboard handling**: All screens with TextInputs are wrapped in `KeyboardAvoidingView` with `behavior="padding"` on iOS and `"height"` on Android.
-- **Brand colors**: `#00BCD4` blue-green (Google Maps style), `#D4A853` gold. Dark theme uses warm greys (`#202124` bg, `#303134` surface).
-
-## Supabase Edge Functions
-
-- `send-push-notification` — Expo Push API for mobile push notifications (JWT auth, batch support, channel routing)
-- `send-password-reset` — Custom email hook for ALL Supabase auth emails (recovery, signup, magic link, email change, reauthentication, invite). Sends via Resend from `noreply@afuchat.com` with branded templates + AfuChat Technologies Ltd footer. Deployed with `--no-verify-jwt` (uses webhook signature instead).
-- `send-marketing-email` — Admin-only marketing/notification email system. Templates: welcome, inactive_reminder, new_feature, weekly_digest, special_offer, custom. Supports `toAll` or targeted `userIds`. Batched 50/batch with 1s delays. Paginated user fetching.
-- `ai-chat` — Multi-provider AI assistant with cascading fallback: Gemini 2.5 Flash (primary) → Lovable AI → DeepSeek → GPT-4o Mini → AIML API. All keys stored as Supabase edge function secrets.
-- `generate-ai-image` — Multi-provider AI image generation with cascading fallback: DALL-E 3 → Runware → AIML Flux → Freepik AI. Premium-only, proper JWT auth via supabase.auth.getUser().
-
-## TypeScript & Composite Projects
-
-Every package extends `tsconfig.base.json` which sets `composite: true`. The root `tsconfig.json` lists all packages as project references. This means:
-
-- **Always typecheck from the root** — run `pnpm run typecheck` (which runs `tsc --build --emitDeclarationOnly`). This builds the full dependency graph so that cross-package imports resolve correctly. Running `tsc` inside a single package will fail if its dependencies haven't been built yet.
-- **`emitDeclarationOnly`** — we only emit `.d.ts` files during typecheck; actual JS bundling is handled by esbuild/tsx/vite...etc, not `tsc`.
-- **Project references** — when package A depends on package B, A's `tsconfig.json` must list B in its `references` array. `tsc --build` uses this to determine build order and skip up-to-date packages.
-
-## Root Scripts
-
-- `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
-- `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
-
-## Packages
-
-### `artifacts/api-server` (`@workspace/api-server`)
-
-Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence.
-
-- Entry: `src/index.ts` — reads `PORT`, starts Express
-- App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health`; `src/routes/ai-chat.ts` exposes `POST /api/ai/chat` (proxies to Supabase Edge Function `ai-chat`)
-- **SEO & Link Previews**:
-  - `src/routes/landing.ts` — Homepage with full OG/Twitter Card meta, JSON-LD (WebApplication schema), live user/post counts from Supabase, Google Play CTA
-  - `src/routes/public-profile.ts` — `/@:handle` public profile pages with OG profile tags, Twitter Cards, JSON-LD Person schema, followers/following stats, post feed from `posts` table with images from `post_images`. Redirects `/:handle` → `/@:handle`
-  - `src/routes/public-post.ts` — `/p/:shortId` public post pages with Base62-encoded short IDs (no UUIDs exposed). Old `/post/:uuid` redirects 301 → `/p/:shortId`. Full OG article tags, Twitter Cards (summary_large_image when post has images), JSON-LD SocialMediaPosting schema, author info, like/reply counts, post images. Only shows non-blocked posts from public authors
-  - `src/routes/seo.ts` — `robots.txt` (allows `/@*`, `/p/*`, `/post/*`), dynamic `sitemap.xml` (profiles + posts with short IDs, filtered by public authors only), `.well-known/assetlinks.json` (Android App Links), `.well-known/apple-app-site-association` (iOS Universal Links)
-  - All routes use Supabase anon key only (public, read-only access via RLS)
-  - **Short ID system**: Base62 encoding of UUIDs (e.g. `0a6c129b...` → `JfJNiqOg7jGpEWkpIxGNi`). Same encoder in mobile app (`lib/shortId.ts`) and API server. Old UUID URLs 301-redirect to short URLs for SEO continuity
-- Depends on: `@workspace/db`, `@workspace/api-zod`
-- `pnpm --filter @workspace/api-server run dev` — run the dev server
-- `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
-- Build bundles an allowlist of deps (express, cors, pg, drizzle-orm, zod, etc.) and externalizes the rest
-
-### `lib/db` (`@workspace/db`)
-
-Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client instance and schema models.
-
-- `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
-- `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
-- `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
-- Exports: `.` (pool, db, schema), `./schema` (schema only)
-
-Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
-
-### `lib/api-spec` (`@workspace/api-spec`)
-
-Owns the OpenAPI 3.1 spec (`openapi.yaml`) and the Orval config (`orval.config.ts`). Running codegen produces output into two sibling packages:
-
-1. `lib/api-client-react/src/generated/` — React Query hooks + fetch client
-2. `lib/api-zod/src/generated/` — Zod schemas
-
-Run codegen: `pnpm --filter @workspace/api-spec run codegen`
-
-### `lib/api-zod` (`@workspace/api-zod`)
-
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
-
-### `lib/api-client-react` (`@workspace/api-client-react`)
-
-Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
-
-### `scripts` (`@workspace/scripts`)
-
-Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+- **Supabase**: Primary backend for database (PostgreSQL), authentication, real-time, and storage. Uses an existing Supabase project.
+- **Drizzle ORM**: PostgreSQL ORM integrated via `@workspace/db`.
+- **Express 5**: API framework for the `api-server`.
+- **Expo**: Framework for building universal React applications (mobile, web, desktop).
+  - `expo-router`: File-system based router.
+  - `expo-secure-store`: Secure key-value storage for native platforms.
+  - `expo-image-picker`: Access to device's image library.
+  - `expo-av`: Audio and video playback.
+  - `expo-notifications`: Push notifications.
+  - `expo-device`: Device information.
+  - `expo-location`: Geolocation services.
+- **Zod**: Schema declaration and validation library.
+- **Orval**: OpenAPI code generator.
+- **React Query**: Data fetching and caching library for React.
+- **pnpm**: Monorepo package manager.
+- **esbuild**: Fast JavaScript bundler.
+- **Resend**: Email API for transactional and marketing emails (used by Supabase Edge Functions for auth emails).
+- **GROQ API**: AI chat features (optional, via API key).
+- **Pesapal**: Payment gateway for Nexa/ACoin top-ups (M-Pesa, Visa, Mastercard).
+- **NetInfo**: React Native community library for network connectivity status.
+- **React Native Share API**: For sharing content from the app.
+- **`react-native-view-shot`**: Capturing post content as images.
+- **AI Providers (via Supabase Edge Functions)**:
+  - Gemini 2.5 Flash
+  - Lovable AI
+  - DeepSeek
+  - GPT-4o Mini
+  - AIML API
+  - DALL-E 3
+  - Runware
+  - AIML Flux
+  - Freepik AI
