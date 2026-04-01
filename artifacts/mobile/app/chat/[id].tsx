@@ -56,6 +56,16 @@ import { useLanguage } from "@/context/LanguageContext";
 import { askAi, aiSuggestReply, transcribeAudio } from "@/lib/aiHelper";
 import EmojiPicker from "rn-emoji-keyboard";
 import GiftPickerSheet, { DbGift } from "@/components/gifts/GiftPickerSheet";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import ReAnimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  interpolate,
+  Extrapolation,
+  runOnJS,
+} from "react-native-reanimated";
 
 type Gift = {
   id: string;
@@ -763,8 +773,6 @@ export default function ChatScreen() {
   const recordingTimer = useRef<any>(null);
   const meterInterval = useRef<any>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const recSlideX = useRef(new Animated.Value(0)).current;
-  const recSlideY = useRef(new Animated.Value(0)).current;
   const recLockedRef = useRef(false);
   const recCancelledRef = useRef(false);
   const recStartedRef = useRef(false);
@@ -773,59 +781,134 @@ export default function ChatScreen() {
   const CANCEL_THRESHOLD = -100;
   const LOCK_THRESHOLD = -80;
 
-  const micPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        recLockedRef.current = false;
-        recCancelledRef.current = false;
-        recStartedRef.current = false;
-        recPressActiveRef.current = true;
-        recSlideX.setValue(0);
-        recSlideY.setValue(0);
-        startVoiceRecordingHold();
-      },
-      onPanResponderMove: (_e, gs) => {
-        if (recLockedRef.current || recCancelledRef.current || !recStartedRef.current) return;
-        const clampedX = Math.min(0, gs.dx);
-        const clampedY = Math.min(0, gs.dy);
-        recSlideX.setValue(clampedX);
-        recSlideY.setValue(clampedY);
-        if (clampedX < CANCEL_THRESHOLD && !recCancelledRef.current) {
-          recCancelledRef.current = true;
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-          cancelVoiceRecording();
-          recSlideX.setValue(0);
-          recSlideY.setValue(0);
-        } else if (clampedY < LOCK_THRESHOLD && !recLockedRef.current && !recCancelledRef.current) {
-          recLockedRef.current = true;
-          setRecLocked(true);
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          recSlideX.setValue(0);
-          recSlideY.setValue(0);
-        }
-      },
-      onPanResponderRelease: () => {
-        recPressActiveRef.current = false;
-        if (recCancelledRef.current || recLockedRef.current) return;
-        if (recStartedRef.current) {
-          stopVoiceRecording();
-        }
-        recSlideX.setValue(0);
-        recSlideY.setValue(0);
-      },
-      onPanResponderTerminate: () => {
-        recPressActiveRef.current = false;
-        if (recCancelledRef.current || recLockedRef.current) return;
-        if (recStartedRef.current) {
-          cancelVoiceRecording();
-        }
-        recSlideX.setValue(0);
-        recSlideY.setValue(0);
-      },
+  const slideX = useSharedValue(0);
+  const slideY = useSharedValue(0);
+  const micScale = useSharedValue(1);
+  const recBarOpacity = useSharedValue(0);
+  const cancelProgress = useSharedValue(0);
+  const lockProgress = useSharedValue(0);
+  const chevronAnim = useSharedValue(0);
+
+  useEffect(() => {
+    if (isRecording && !recLocked) {
+      const run = () => {
+        chevronAnim.value = 0;
+        chevronAnim.value = withTiming(1, { duration: 1200 }, (finished) => {
+          if (finished) runOnJS(run)();
+        });
+      };
+      run();
+    } else {
+      chevronAnim.value = 0;
+    }
+  }, [isRecording, recLocked]);
+
+  const onRecStart = useCallback(() => {
+    recLockedRef.current = false;
+    recCancelledRef.current = false;
+    recStartedRef.current = false;
+    recPressActiveRef.current = true;
+    startVoiceRecordingHold();
+  }, [isRecording]);
+
+  const onRecCancel = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    cancelVoiceRecording();
+  }, []);
+
+  const onRecLock = useCallback(() => {
+    recLockedRef.current = true;
+    setRecLocked(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }, []);
+
+  const onRecSend = useCallback(() => {
+    stopVoiceRecording();
+  }, []);
+
+  const onRecTerminate = useCallback(() => {
+    cancelVoiceRecording();
+  }, []);
+
+  const micGesture = Gesture.Pan()
+    .minDistance(0)
+    .onBegin(() => {
+      micScale.value = withSpring(1.4, { damping: 12, stiffness: 200 });
+      recBarOpacity.value = withTiming(1, { duration: 150 });
+      runOnJS(onRecStart)();
     })
-  ).current;
+    .onUpdate((e) => {
+      if (recLockedRef.current || recCancelledRef.current) return;
+      const clampedX = Math.min(0, e.translationX);
+      const clampedY = Math.min(0, e.translationY);
+      slideX.value = clampedX;
+      slideY.value = clampedY;
+      cancelProgress.value = interpolate(clampedX, [CANCEL_THRESHOLD, 0], [1, 0], Extrapolation.CLAMP);
+      lockProgress.value = interpolate(clampedY, [LOCK_THRESHOLD, 0], [1, 0], Extrapolation.CLAMP);
+      if (clampedX < CANCEL_THRESHOLD && !recCancelledRef.current) {
+        recCancelledRef.current = true;
+        slideX.value = withSpring(0, { damping: 15 });
+        slideY.value = withSpring(0, { damping: 15 });
+        micScale.value = withSpring(1, { damping: 15 });
+        recBarOpacity.value = withTiming(0, { duration: 200 });
+        cancelProgress.value = withTiming(0, { duration: 200 });
+        lockProgress.value = withTiming(0, { duration: 200 });
+        runOnJS(onRecCancel)();
+      } else if (clampedY < LOCK_THRESHOLD && !recLockedRef.current && !recCancelledRef.current) {
+        slideX.value = withSpring(0, { damping: 15 });
+        slideY.value = withSpring(0, { damping: 15 });
+        micScale.value = withSpring(1, { damping: 15 });
+        cancelProgress.value = withTiming(0, { duration: 200 });
+        lockProgress.value = withTiming(0, { duration: 200 });
+        runOnJS(onRecLock)();
+      }
+    })
+    .onEnd(() => {
+      recPressActiveRef.current = false;
+      slideX.value = withSpring(0, { damping: 15 });
+      slideY.value = withSpring(0, { damping: 15 });
+      micScale.value = withSpring(1, { damping: 12, stiffness: 200 });
+      recBarOpacity.value = withTiming(0, { duration: 150 });
+      cancelProgress.value = withTiming(0, { duration: 150 });
+      lockProgress.value = withTiming(0, { duration: 150 });
+      if (recCancelledRef.current || recLockedRef.current) return;
+      if (recStartedRef.current) {
+        runOnJS(onRecSend)();
+      }
+    })
+    .onFinalize(() => {
+      recPressActiveRef.current = false;
+    });
+
+  const micBtnAnimStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: slideX.value },
+      { translateY: slideY.value * 0.3 },
+      { scale: micScale.value },
+    ],
+  }));
+
+  const cancelZoneAnimStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(cancelProgress.value, [0, 0.5, 1], [0.2, 0.6, 1], Extrapolation.CLAMP),
+    transform: [{ scale: interpolate(cancelProgress.value, [0, 1], [0.8, 1.15], Extrapolation.CLAMP) }],
+  }));
+
+  const slideHintAnimStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(cancelProgress.value, [0, 0.6], [1, 0], Extrapolation.CLAMP),
+    transform: [{ translateX: interpolate(chevronAnim.value, [0, 0.5, 1], [0, -8, 0], Extrapolation.CLAMP) }],
+  }));
+
+  const lockIndicatorAnimStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(lockProgress.value, [0, 0.4, 1], [0.35, 0.7, 1], Extrapolation.CLAMP),
+    transform: [
+      { translateY: interpolate(lockProgress.value, [0, 1], [0, -14], Extrapolation.CLAMP) },
+      { scale: interpolate(lockProgress.value, [0, 1], [0.85, 1.1], Extrapolation.CLAMP) },
+    ],
+  }));
+
+  const recBarAnimStyle = useAnimatedStyle(() => ({
+    opacity: recBarOpacity.value,
+  }));
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [gifSearch, setGifSearch] = useState("");
@@ -2217,10 +2300,12 @@ export default function ChatScreen() {
             </TouchableOpacity>
           </View>
         ) : isRecording && !recLocked ? (
-          <View style={[st.inputBar, st.recHoldBar, { paddingBottom: Math.max(insets.bottom, 4) }]}>
-            <Animated.View style={[st.recCancelZone, { opacity: recSlideX.interpolate({ inputRange: [CANCEL_THRESHOLD, 0], outputRange: [1, 0.3], extrapolate: "clamp" }) }]}>
-              <Ionicons name="trash" size={20} color="#FF3B30" />
-            </Animated.View>
+          <ReAnimated.View style={[st.inputBar, st.recHoldBar, { paddingBottom: Math.max(insets.bottom, 4) }, recBarAnimStyle]}>
+            <ReAnimated.View style={[st.recCancelZone, cancelZoneAnimStyle]}>
+              <View style={st.recCancelCircle}>
+                <Ionicons name="trash" size={18} color="#FF3B30" />
+              </View>
+            </ReAnimated.View>
             <View style={st.recHoldCenter}>
               <View style={st.recHoldTimerRow}>
                 <Animated.View style={[st.recordingDot, { opacity: pulseAnim }]} />
@@ -2228,23 +2313,26 @@ export default function ChatScreen() {
                   {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, "0")},{recordingTenths}
                 </Text>
               </View>
-              <Animated.View style={{ opacity: recSlideX.interpolate({ inputRange: [CANCEL_THRESHOLD, 0], outputRange: [0, 1], extrapolate: "clamp" }) }}>
+              <ReAnimated.View style={slideHintAnimStyle}>
                 <View style={st.recSlideHint}>
-                  <Ionicons name="chevron-back" size={16} color={colors.textMuted} />
+                  <Ionicons name="chevron-back" size={14} color={colors.textMuted} />
+                  <Ionicons name="chevron-back" size={14} color={colors.textMuted} style={{ marginLeft: -8, opacity: 0.5 }} />
                   <Text style={[st.recSlideText, { color: colors.textMuted }]}>Slide to cancel</Text>
                 </View>
-              </Animated.View>
+              </ReAnimated.View>
             </View>
             <View style={st.recMicWrap}>
-              <Animated.View style={[st.recLockIndicator, { opacity: recSlideY.interpolate({ inputRange: [LOCK_THRESHOLD, 0], outputRange: [1, 0.5], extrapolate: "clamp" }), transform: [{ translateY: recSlideY.interpolate({ inputRange: [LOCK_THRESHOLD, 0], outputRange: [-10, 0], extrapolate: "clamp" }) }] }]}>
-                <Ionicons name="lock-closed" size={16} color={colors.textMuted} />
-                <Ionicons name="chevron-up" size={12} color={colors.textMuted} />
-              </Animated.View>
-              <Animated.View style={[st.recMicBtn, { transform: [{ translateX: recSlideX }, { scale: recSlideY.interpolate({ inputRange: [LOCK_THRESHOLD, 0], outputRange: [1.2, 1], extrapolate: "clamp" }) }] }]}>
+              <ReAnimated.View style={[st.recLockIndicator, lockIndicatorAnimStyle]}>
+                <View style={[st.recLockPill, { backgroundColor: colors.inputBg }]}>
+                  <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
+                  <Ionicons name="chevron-up" size={10} color={colors.textMuted} style={{ marginTop: -2 }} />
+                </View>
+              </ReAnimated.View>
+              <ReAnimated.View style={[st.recMicBtn, micBtnAnimStyle]}>
                 <Ionicons name="mic" size={24} color="#fff" />
-              </Animated.View>
+              </ReAnimated.View>
             </View>
-          </View>
+          </ReAnimated.View>
         ) : (
           <>
             {(chatInfo?.is_group || chatInfo?.is_channel) && (
@@ -2295,9 +2383,11 @@ export default function ChatScreen() {
                   )}
                 </TouchableOpacity>
               ) : (
-                <View {...micPanResponder.panHandlers} style={[st.sendBtn, { backgroundColor: BRAND }]}>
-                  <Ionicons name="mic" size={20} color="#fff" />
-                </View>
+                <GestureDetector gesture={micGesture}>
+                  <ReAnimated.View style={[st.sendBtn, { backgroundColor: BRAND }]}>
+                    <Ionicons name="mic" size={20} color="#fff" />
+                  </ReAnimated.View>
+                </GestureDetector>
               )}
             </View>
           </>
@@ -2882,14 +2972,16 @@ const st = StyleSheet.create({
   input: { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 22, borderWidth: 0, outlineStyle: "none" as any, paddingTop: 10, paddingBottom: 10, minHeight: 28, maxHeight: 120 },
   sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   recHoldBar: { alignItems: "center" },
-  recCancelZone: { width: 40, alignItems: "center", justifyContent: "center" },
+  recCancelZone: { width: 44, alignItems: "center", justifyContent: "center" },
+  recCancelCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,59,48,0.1)", alignItems: "center", justifyContent: "center" },
   recHoldCenter: { flex: 1, alignItems: "center", justifyContent: "center", gap: 2 },
   recHoldTimerRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  recSlideHint: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, marginTop: 2 },
+  recSlideHint: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 2, marginTop: 2 },
   recSlideText: { fontSize: 13, fontFamily: "Inter_400Regular" },
   recMicWrap: { alignItems: "center", justifyContent: "flex-end" },
-  recMicBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: BRAND, alignItems: "center", justifyContent: "center", elevation: 4, shadowColor: BRAND, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 6 },
-  recLockIndicator: { alignItems: "center", marginBottom: 6 },
+  recMicBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: BRAND, alignItems: "center", justifyContent: "center", elevation: 6, shadowColor: BRAND, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.5, shadowRadius: 8 },
+  recLockIndicator: { alignItems: "center", marginBottom: 8 },
+  recLockPill: { width: 32, borderRadius: 16, paddingVertical: 6, alignItems: "center", justifyContent: "center", elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 3 },
   recLockedBar: { flex: 1, flexDirection: "row", alignItems: "center", borderRadius: 22, paddingHorizontal: 8, minHeight: 48, gap: 8 },
   recLockedTrash: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,59,48,0.1)", alignItems: "center", justifyContent: "center" },
   recLockedWaveWrap: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 2, height: 28, overflow: "hidden" },
