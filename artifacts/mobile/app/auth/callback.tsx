@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 
 export default function AuthCallbackScreen() {
   const [status, setStatus] = useState("Signing you in…");
   const handled = useRef(false);
-  const params = useLocalSearchParams<{ code?: string }>();
 
   useEffect(() => {
     let mounted = true;
@@ -45,76 +44,38 @@ export default function AuthCallbackScreen() {
       if (mounted) router.replace("/(tabs)");
     }
 
-    async function tryExchangeCode() {
-      let code = params.code;
-
-      if (!code && Platform.OS === "web" && typeof window !== "undefined") {
-        const urlParams = new URLSearchParams(window.location.search);
-        code = urlParams.get("code") || undefined;
-
-        if (!code && window.location.hash) {
-          const hashParams = new URLSearchParams(window.location.hash.substring(1));
-          const accessToken = hashParams.get("access_token");
-          const refreshToken = hashParams.get("refresh_token");
-          if (accessToken && refreshToken) {
-            const { data, error } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-            if (!error && data.session) {
-              await upsertAndRedirect(data.session);
-              return;
-            }
-          }
-        }
-      }
-
-      if (code) {
-        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-        if (!error && data.session) {
-          await upsertAndRedirect(data.session);
+    async function pollForSession() {
+      for (let i = 0; i < 15; i++) {
+        if (handled.current || !mounted) return;
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          await upsertAndRedirect(session);
           return;
         }
+        await new Promise((r) => setTimeout(r, 500));
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        await upsertAndRedirect(session);
-        return;
+      if (!handled.current && mounted) {
+        router.replace("/(auth)/login");
       }
     }
-
-    tryExchangeCode();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return;
-        if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session) {
+        if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
           await upsertAndRedirect(session);
-        } else if (event === "INITIAL_SESSION" && !session && !handled.current) {
-          setTimeout(() => {
-            if (!handled.current && mounted) {
-              router.replace("/(auth)/login");
-            }
-          }, 3000);
+        } else if (event === "INITIAL_SESSION" && session) {
+          await upsertAndRedirect(session);
         }
       }
     );
 
-    const safetyTimeout = setTimeout(async () => {
-      if (handled.current || !mounted) return;
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        await upsertAndRedirect(session);
-      } else if (mounted) {
-        router.replace("/(auth)/login");
-      }
-    }, 4000);
+    pollForSession();
 
     return () => {
       mounted = false;
       subscription.unsubscribe();
-      clearTimeout(safetyTimeout);
     };
   }, []);
 
