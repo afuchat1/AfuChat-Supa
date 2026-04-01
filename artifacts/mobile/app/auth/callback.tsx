@@ -44,21 +44,54 @@ export default function AuthCallbackScreen() {
       if (mounted) router.replace("/(tabs)");
     }
 
-    async function pollForSession() {
-      for (let i = 0; i < 15; i++) {
-        if (handled.current || !mounted) return;
+    async function exchangeAndRedirect() {
+      try {
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          const urlParams = new URLSearchParams(window.location.search);
+          const code = urlParams.get("code");
+
+          if (code) {
+            const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+            if (!error && data.session) {
+              await upsertAndRedirect(data.session);
+              return;
+            }
+          }
+
+          if (window.location.hash) {
+            const hashParams = new URLSearchParams(window.location.hash.substring(1));
+            const accessToken = hashParams.get("access_token");
+            const refreshToken = hashParams.get("refresh_token");
+            if (accessToken && refreshToken) {
+              const { data, error } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              });
+              if (!error && data.session) {
+                await upsertAndRedirect(data.session);
+                return;
+              }
+            }
+          }
+        }
+
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           await upsertAndRedirect(session);
           return;
         }
-        await new Promise((r) => setTimeout(r, 500));
-      }
+      } catch (_) {}
 
       if (!handled.current && mounted) {
-        router.replace("/(auth)/login");
+        setTimeout(() => {
+          if (!handled.current && mounted) {
+            router.replace("/(auth)/login");
+          }
+        }, 2000);
       }
     }
+
+    exchangeAndRedirect();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -70,8 +103,6 @@ export default function AuthCallbackScreen() {
         }
       }
     );
-
-    pollForSession();
 
     return () => {
       mounted = false;
