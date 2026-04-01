@@ -18,6 +18,7 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import * as WebBrowser from "expo-web-browser";
 import { WebView } from "react-native-webview";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
@@ -197,7 +198,12 @@ export default function RegisterScreen() {
       }
       if (data?.url) {
         oauthHandledRef.current = false;
-        setOauthModalUrl(data.url);
+        const result = await WebBrowser.openAuthSessionAsync(data.url, REDIRECT_URL);
+        if (result.type === "success" && result.url) {
+          await handleOAuthRedirect(result.url);
+        } else {
+          setOauthLoading(null);
+        }
       } else {
         setOauthLoading(null);
       }
