@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -16,7 +17,7 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import * as WebBrowser from "expo-web-browser";
+import { WebView } from "react-native-webview";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
@@ -24,8 +25,6 @@ import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
-
-WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const { colors, isDark } = useTheme();
@@ -36,6 +35,9 @@ export default function LoginScreen() {
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
+
+  const [oauthModalUrl, setOauthModalUrl] = useState<string | null>(null);
+  const oauthHandledRef = useRef(false);
 
   const [resetStep, setResetStep] = useState<"idle" | "email" | "code">("idle");
   const [resetEmail, setResetEmail] = useState("");
@@ -170,6 +172,51 @@ export default function LoginScreen() {
     }
   }
 
+  function isOAuthCallback(url: string): boolean {
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.toLowerCase();
+      return (
+        (host === "www.afuchat.com" || host === "afuchat.com") &&
+        parsed.pathname === "/auth/callback"
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  async function handleOAuthCallback(url: string) {
+    if (oauthHandledRef.current) return;
+    oauthHandledRef.current = true;
+
+    try {
+      const parsed = new URL(url);
+      const code = parsed.searchParams.get("code");
+
+      if (!code) {
+        showAlert("Error", "No authorization code received. Please try again.");
+        setOauthModalUrl(null);
+        setOauthLoading(null);
+        return;
+      }
+
+      const { error: codeError } = await supabase.auth.exchangeCodeForSession(code);
+      if (codeError) {
+        showAlert("Error", codeError.message);
+      } else {
+        setOauthModalUrl(null);
+        setOauthLoading(null);
+        router.replace("/(tabs)");
+        return;
+      }
+    } catch (_) {
+      showAlert("Error", "Could not complete sign in. Please try again.");
+    }
+
+    setOauthModalUrl(null);
+    setOauthLoading(null);
+  }
+
   async function signInWithProvider(provider: string) {
     try {
       setOauthLoading(provider);
@@ -203,53 +250,11 @@ export default function LoginScreen() {
       }
 
       if (data?.url) {
-        const result = await WebBrowser.openAuthSessionAsync(data.url, CALLBACK_URL, {
-          showInRecents: false,
-        });
-
-        if (result.type === "success" && result.url) {
-          const url = new URL(result.url);
-
-          const code = url.searchParams.get("code");
-          if (code) {
-            const { error: codeError } = await supabase.auth.exchangeCodeForSession(code);
-            if (codeError) {
-              showAlert("Error", codeError.message);
-            } else {
-              router.replace("/(tabs)");
-              setOauthLoading(null);
-              return;
-            }
-          }
-
-          let accessToken: string | null = null;
-          let refreshToken: string | null = null;
-
-          if (url.hash) {
-            const hashParams = new URLSearchParams(url.hash.substring(1));
-            accessToken = hashParams.get("access_token");
-            refreshToken = hashParams.get("refresh_token");
-          }
-
-          if (!accessToken) {
-            accessToken = url.searchParams.get("access_token");
-            refreshToken = url.searchParams.get("refresh_token");
-          }
-
-          if (accessToken && refreshToken) {
-            const { error: sessionError } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-            if (sessionError) {
-              showAlert("Error", sessionError.message);
-            } else {
-              router.replace("/(tabs)");
-            }
-          }
-        }
+        oauthHandledRef.current = false;
+        setOauthModalUrl(data.url);
+      } else {
+        setOauthLoading(null);
       }
-      setOauthLoading(null);
     } catch (_) {
       setOauthLoading(null);
       showAlert("Error", "Could not complete sign in. Please try again.");
@@ -557,9 +562,93 @@ export default function LoginScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+
+      {Platform.OS !== "web" && (
+        <Modal
+          visible={!!oauthModalUrl}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => {
+            setOauthModalUrl(null);
+            setOauthLoading(null);
+          }}
+        >
+          <View style={[oauthModalStyles.container, { backgroundColor: colors.background }]}>
+            <View style={[oauthModalStyles.header, { borderBottomColor: colors.border }]}>
+              <TouchableOpacity
+                onPress={() => {
+                  setOauthModalUrl(null);
+                  setOauthLoading(null);
+                }}
+                style={oauthModalStyles.closeBtn}
+              >
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+              <Text style={[oauthModalStyles.headerTitle, { color: colors.text }]}>Sign In</Text>
+              <View style={{ width: 40 }} />
+            </View>
+            {oauthModalUrl && (
+              <WebView
+                source={{ uri: oauthModalUrl }}
+                style={{ flex: 1 }}
+                javaScriptEnabled
+                domStorageEnabled
+                startInLoadingState
+                renderLoading={() => (
+                  <View style={oauthModalStyles.loadingOverlay}>
+                    <ActivityIndicator size="large" color={Colors.brand} />
+                  </View>
+                )}
+                onNavigationStateChange={(navState) => {
+                  if (navState.url && isOAuthCallback(navState.url)) {
+                    handleOAuthCallback(navState.url);
+                  }
+                }}
+                onShouldStartLoadWithRequest={(request) => {
+                  if (request.url && isOAuthCallback(request.url)) {
+                    handleOAuthCallback(request.url);
+                    return false;
+                  }
+                  return true;
+                }}
+              />
+            )}
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
+
+const oauthModalStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  closeBtn: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: "600",
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.9)",
+  },
+});
 
 const authSplit = StyleSheet.create({
   brandPanel: {
