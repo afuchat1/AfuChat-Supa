@@ -118,7 +118,7 @@ export default function LoginScreen() {
     }
     setResetLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(resetEmail.trim(), {
-      redirectTo: "https://afuchat.com/reset-callback",
+      redirectTo: "https://www.afuchat.com/",
     });
     setResetLoading(false);
     if (error) {
