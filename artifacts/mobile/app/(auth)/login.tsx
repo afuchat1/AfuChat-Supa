@@ -173,20 +173,21 @@ export default function LoginScreen() {
     }
   }
 
-  function isOAuthCallback(url: string): boolean {
+  function isOAuthRedirect(url: string): boolean {
     try {
       const parsed = new URL(url);
       const host = parsed.hostname.toLowerCase();
       return (
         (host === "www.afuchat.com" || host === "afuchat.com") &&
-        parsed.pathname === "/auth/callback"
+        (parsed.pathname === "/" || parsed.pathname === "") &&
+        (parsed.searchParams.has("code") || parsed.hash.includes("access_token"))
       );
     } catch {
       return false;
     }
   }
 
-  async function handleOAuthCallback(url: string) {
+  async function handleOAuthRedirect(url: string) {
     if (oauthHandledRef.current) return;
     oauthHandledRef.current = true;
 
@@ -222,12 +223,12 @@ export default function LoginScreen() {
     try {
       setOauthLoading(provider);
 
-      const CALLBACK_URL = "https://www.afuchat.com/auth/callback";
+      const REDIRECT_URL = "https://www.afuchat.com/";
 
       if (Platform.OS === "web") {
         const { error } = await supabase.auth.signInWithOAuth({
           provider: provider as any,
-          options: { redirectTo: CALLBACK_URL },
+          options: { redirectTo: REDIRECT_URL },
         });
         if (error) {
           showAlert("Error", error.message);
@@ -239,7 +240,7 @@ export default function LoginScreen() {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: provider as any,
         options: {
-          redirectTo: CALLBACK_URL,
+          redirectTo: REDIRECT_URL,
           skipBrowserRedirect: true,
         },
       });
@@ -599,13 +600,13 @@ export default function LoginScreen() {
                   </View>
                 )}
                 onNavigationStateChange={(navState) => {
-                  if (navState.url && isOAuthCallback(navState.url)) {
-                    handleOAuthCallback(navState.url);
+                  if (navState.url && isOAuthRedirect(navState.url)) {
+                    handleOAuthRedirect(navState.url);
                   }
                 }}
                 onShouldStartLoadWithRequest={(request) => {
-                  if (request.url && isOAuthCallback(request.url)) {
-                    handleOAuthCallback(request.url);
+                  if (request.url && isOAuthRedirect(request.url)) {
+                    handleOAuthRedirect(request.url);
                     return false;
                   }
                   return true;
