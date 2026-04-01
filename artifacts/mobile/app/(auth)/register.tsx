@@ -229,7 +229,7 @@ export default function RegisterScreen() {
 
       const redirectUrl = Platform.OS === "web"
         ? "https://www.afuchat.com/"
-        : makeRedirectUri({ scheme: "afuchat", path: "(auth)/register" });
+        : makeRedirectUri({ native: "afuchat://(auth)/register" });
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: provider as any,

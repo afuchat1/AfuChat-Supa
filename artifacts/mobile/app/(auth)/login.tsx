@@ -277,7 +277,7 @@ export default function LoginScreen() {
 
       const redirectUrl = Platform.OS === "web"
         ? "https://www.afuchat.com/"
-        : makeRedirectUri({ scheme: "afuchat", path: "(auth)/login" });
+        : makeRedirectUri({ native: "afuchat://(auth)/login" });
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: provider as any,
