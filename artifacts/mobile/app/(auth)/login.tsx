@@ -39,6 +39,8 @@ import { GoogleLogo, GitHubLogo } from "@/components/ui/OAuthLogos";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
+WebBrowser.maybeCompleteAuthSession();
+
 export default function LoginScreen() {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -273,12 +275,14 @@ export default function LoginScreen() {
 
       setOauthLoading(provider);
 
-      const REDIRECT_URL = "https://www.afuchat.com/";
+      const redirectUrl = Platform.OS === "web"
+        ? "https://www.afuchat.com/"
+        : makeRedirectUri({ scheme: "afuchat", path: "(auth)/login" });
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: provider as any,
         options: {
-          redirectTo: REDIRECT_URL,
+          redirectTo: redirectUrl,
           skipBrowserRedirect: true,
         },
       });
@@ -329,7 +333,51 @@ export default function LoginScreen() {
         return;
       }
 
-      setOauthModalUrl(data.url);
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {
+        showInRecents: false,
+      });
+
+      if (result.type === "success" && result.url) {
+        const url = new URL(result.url);
+        const code = url.searchParams.get("code");
+        if (code) {
+          const { error: codeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (codeError) {
+            showAlert("Error", codeError.message);
+          } else {
+            router.replace("/(tabs)");
+            setOauthLoading(null);
+            return;
+          }
+        }
+
+        let accessToken: string | null = null;
+        let refreshToken: string | null = null;
+
+        if (url.hash) {
+          const hashParams = new URLSearchParams(url.hash.substring(1));
+          accessToken = hashParams.get("access_token");
+          refreshToken = hashParams.get("refresh_token");
+        }
+
+        if (!accessToken) {
+          accessToken = url.searchParams.get("access_token");
+          refreshToken = url.searchParams.get("refresh_token");
+        }
+
+        if (accessToken && refreshToken) {
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (sessionError) {
+            showAlert("Error", sessionError.message);
+          } else {
+            router.replace("/(tabs)");
+          }
+        }
+      }
+      setOauthLoading(null);
     } catch (_) {
       setOauthLoading(null);
       showAlert("Error", "Could not complete sign in. Please try again.");
