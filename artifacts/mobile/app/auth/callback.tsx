@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
@@ -11,7 +11,7 @@ export default function AuthCallbackScreen() {
   useEffect(() => {
     let mounted = true;
 
-    async function upsertAndRedirect(session: any) {
+    async function handleSession(session: any) {
       if (!session || handled.current) return;
       handled.current = true;
 
@@ -40,67 +40,43 @@ export default function AuthCallbackScreen() {
 
       if (!mounted) return;
       setStatus("Welcome to AfuChat!");
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 300));
       if (mounted) router.replace("/(tabs)");
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (!mounted || handled.current) return;
+        if (!mounted) return;
+
         if (event === "SIGNED_IN" && session) {
-          await upsertAndRedirect(session);
-        } else if (event === "INITIAL_SESSION" && session) {
-          await upsertAndRedirect(session);
+          await handleSession(session);
+        } else if (event === "INITIAL_SESSION") {
+          if (session) {
+            await handleSession(session);
+          } else {
+            if (mounted) {
+              setStatus("Redirecting to login…");
+              router.replace("/(auth)/login");
+            }
+          }
         }
       }
     );
 
-    async function tryManualExchange() {
-      if (Platform.OS === "web" && typeof window !== "undefined") {
-        const urlParams = new URLSearchParams(window.location.search);
-        const code = urlParams.get("code");
-        if (code && !handled.current) {
-          try {
-            const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-            if (!error && data.session) {
-              await upsertAndRedirect(data.session);
-              return;
-            }
-          } catch (_) {}
-        }
-      }
-    }
-
-    async function pollSession() {
-      for (let attempt = 0; attempt < 20; attempt++) {
-        if (handled.current || !mounted) return;
-        await new Promise((r) => setTimeout(r, 400));
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
-            await upsertAndRedirect(session);
-            return;
-          }
-        } catch (_) {}
-      }
-      if (!handled.current && mounted) {
+    const safetyTimeout = setTimeout(async () => {
+      if (handled.current || !mounted) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await handleSession(session);
+      } else if (mounted) {
         router.replace("/(auth)/login");
       }
-    }
-
-    setTimeout(() => {
-      if (!handled.current) {
-        tryManualExchange().then(() => {
-          if (!handled.current) {
-            pollSession();
-          }
-        });
-      }
-    }, 300);
+    }, 6000);
 
     return () => {
       mounted = false;
       subscription.unsubscribe();
+      clearTimeout(safetyTimeout);
     };
   }, []);
 
