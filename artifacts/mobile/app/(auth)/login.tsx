@@ -20,6 +20,11 @@ import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
 import { WebView } from "react-native-webview";
+import {
+  GoogleSignin,
+  isErrorWithCode,
+  statusCodes,
+} from "@react-native-google-signin/google-signin";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
@@ -221,8 +226,46 @@ export default function LoginScreen() {
     setOauthLoading(null);
   }
 
+  async function nativeGoogleSignIn() {
+    try {
+      setOauthLoading("google");
+      GoogleSignin.configure({
+        webClientId: "830762767270-lmefgjjk25i17lithkq6iisjv8gfh08d.apps.googleusercontent.com",
+      });
+      await GoogleSignin.hasPlayServices();
+      const response = await GoogleSignin.signIn();
+      const idToken = response?.data?.idToken;
+      if (!idToken) {
+        showAlert("Error", "Could not get Google ID token.");
+        setOauthLoading(null);
+        return;
+      }
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: "google",
+        token: idToken,
+      });
+      if (error) {
+        showAlert("Error", error.message);
+        setOauthLoading(null);
+      } else {
+        router.replace("/(tabs)");
+      }
+    } catch (err: any) {
+      setOauthLoading(null);
+      if (isErrorWithCode(err)) {
+        if (err.code === statusCodes.SIGN_IN_CANCELLED) return;
+        if (err.code === statusCodes.IN_PROGRESS) return;
+      }
+      showAlert("Error", err?.message || "Google sign in failed.");
+    }
+  }
+
   async function signInWithProvider(provider: string) {
     try {
+      if (provider === "google" && Platform.OS !== "web") {
+        return nativeGoogleSignIn();
+      }
+
       setOauthLoading(provider);
 
       const nativeRedirect = makeRedirectUri({ scheme: "afuchat", path: "auth" });
