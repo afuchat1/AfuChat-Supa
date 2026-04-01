@@ -280,12 +280,7 @@ export default function LoginScreen() {
         return;
       }
 
-      const result = await WebBrowser.openAuthSessionAsync(data.url, REDIRECT_URL);
-      if (result.type === "success" && result.url) {
-        await handleOAuthRedirect(result.url);
-      } else {
-        setOauthLoading(null);
-      }
+      setOauthModalUrl(data.url);
     } catch (_) {
       setOauthLoading(null);
       showAlert("Error", "Could not complete sign in. Please try again.");
@@ -623,6 +618,7 @@ export default function LoginScreen() {
                 javaScriptEnabled
                 domStorageEnabled
                 startInLoadingState
+                userAgent="Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
                 renderLoading={() => (
                   <View style={oauthModalStyles.loadingOverlay}>
                     <ActivityIndicator size="large" color={Colors.brand} />
