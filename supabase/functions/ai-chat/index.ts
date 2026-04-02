@@ -5,6 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ── GROQ voice transcription ─────────────────────────────────────────────────
 async function transcribeWithGroq(audioUrl: string, apiKey: string): Promise<string> {
   const audioResp = await fetch(audioUrl);
   if (!audioResp.ok) throw new Error(`Failed to download audio: ${audioResp.status}`);
@@ -23,58 +24,26 @@ async function transcribeWithGroq(audioUrl: string, apiKey: string): Promise<str
   return data.text || "";
 }
 
+// ── Groq text chat (Llama) ────────────────────────────────────────────────────
 async function chatWithGroq(messages: any[], maxTokens: number, apiKey: string): Promise<string> {
-  const models = [
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
-    "gemma2-9b-it",
-    "mixtral-8x7b-32768",
-  ];
-
-  for (const model of models) {
-    try {
-      console.log(`Trying model: ${model}`);
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          max_tokens: maxTokens,
-          temperature: 0.7,
-        }),
-      });
-
-      if (res.status === 429) {
-        console.log(`Rate limited on ${model}, trying next model...`);
-        continue;
-      }
-
-      if (!res.ok) {
-        const errText = await res.text();
-        console.error(`${model} error ${res.status}: ${errText}`);
-        continue;
-      }
-
-      const data = await res.json();
-      const text = data.choices?.[0]?.message?.content ?? "";
-      if (!text) {
-        console.log(`${model} returned empty, trying next...`);
-        continue;
-      }
-
-      console.log(`Success with ${model}`);
-      return text;
-    } catch (e: any) {
-      console.error(`${model} failed:`, e?.message || e);
-      continue;
-    }
-  }
-
-  throw new Error("All models exhausted");
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "llama-3.3-70b-versatile",
+      messages,
+      max_tokens: maxTokens,
+      temperature: 0.7,
+    }),
+  });
+  if (!res.ok) throw new Error(`Groq ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  const text = data.choices?.[0]?.message?.content ?? "";
+  if (!text) throw new Error("Groq returned empty response");
+  return text;
 }
 
 function json(data: unknown, status = 200): Response {
@@ -92,6 +61,7 @@ serve(async (req) => {
   try {
     const body = await req.json();
 
+    // ── Audio transcription ───────────────────────────────────────
     if (body.audioUrl) {
       const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
       if (!GROQ_API_KEY) {
@@ -107,6 +77,7 @@ serve(async (req) => {
       }
     }
 
+    // ── Text chat ─────────────────────────────────────────────────
     const { messages, max_tokens, fast } = body;
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return json({ error: "messages array is required" }, 400);
