@@ -31,7 +31,7 @@ The project is structured as a pnpm monorepo using TypeScript, with distinct pac
 
 **Core Technologies:**
 - **Monorepo Tool**: pnpm workspaces
-- **Backend**: Express 5 API server, PostgreSQL with Drizzle ORM, Supabase for authentication and real-time.
+- **Backend**: Express 5 API server (`artifacts/api-server`), Supabase for all data persistence, authentication, real-time, and Edge Functions. The Replit PostgreSQL database is provisioned but not used — all data lives in Supabase.
 - **Frontend**: Expo React Native for mobile and web, targeting a unified codebase.
 - **Validation**: Zod for API request and response validation.
 - **API Codegen**: Orval from OpenAPI specification for generating API clients and Zod schemas.
