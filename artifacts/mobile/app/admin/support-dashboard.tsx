@@ -22,7 +22,7 @@ import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
-const BRAND = Colors.brand;
+const BRAND_FALLBACK = Colors.brand;
 
 type Ticket = {
   id: string;
@@ -76,6 +76,7 @@ function timeAgo(dateStr: string): string {
 
 export default function SupportDashboard() {
   const { colors } = useTheme();
+  const BRAND = colors.accent;
   const { profile, user } = useAuth();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();

@@ -307,13 +307,13 @@ export default function FileManagerScreen() {
         )}
         {isSelected && (
           <View style={styles.gridSelectOverlay}>
-            <View style={styles.gridCheckCircle}>
+            <View style={[styles.gridCheckCircle, { backgroundColor: colors.accent }]}>
               <Ionicons name="checkmark" size={16} color="#fff" />
             </View>
           </View>
         )}
         {item.is_pinned && !selectMode && (
-          <View style={styles.pinnedDot}>
+          <View style={[styles.pinnedDot, { backgroundColor: colors.accent }]}>
             <Ionicons name="pin" size={10} color="#fff" />
           </View>
         )}

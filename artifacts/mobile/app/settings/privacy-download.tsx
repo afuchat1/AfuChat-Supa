@@ -68,7 +68,7 @@ export default function PrivacyDownloadScreen() {
             <Text style={[styles.successDesc, { color: colors.textMuted }]}>
               We're preparing your data export. You'll receive an email within 48 hours with a secure download link.
             </Text>
-            <TouchableOpacity style={styles.doneBtn} onPress={() => router.back()}>
+            <TouchableOpacity style={[styles.doneBtn, { backgroundColor: colors.accent }]} onPress={() => router.back()}>
               <Text style={styles.doneBtnText}>Done</Text>
             </TouchableOpacity>
           </View>
@@ -96,7 +96,7 @@ export default function PrivacyDownloadScreen() {
                       onPress={() => toggle(item.id)}
                       activeOpacity={0.7}
                     >
-                      <View style={[styles.rowIcon, { backgroundColor: item.iconBg }]}>
+                      <View style={[styles.rowIcon, { backgroundColor: item.id === "profile" ? colors.accent : item.iconBg }]}>
                         <Ionicons name={item.icon} size={18} color="#fff" />
                       </View>
                       <View style={styles.rowText}>
@@ -117,7 +117,7 @@ export default function PrivacyDownloadScreen() {
             </Text>
 
             <TouchableOpacity
-              style={[styles.requestBtn, { opacity: selected.size === 0 ? 0.5 : 1 }]}
+              style={[styles.requestBtn, { backgroundColor: colors.accent, opacity: selected.size === 0 ? 0.5 : 1 }]}
               onPress={requestDownload}
               activeOpacity={0.85}
             >

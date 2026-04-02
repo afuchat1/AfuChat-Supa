@@ -287,7 +287,7 @@ export default function GiftMarketplaceScreen() {
         activeOpacity={0.7}
       >
         {isOwn && (
-          <View style={styles.ownBadge}>
+          <View style={[styles.ownBadge, { backgroundColor: colors.accent }]}>
             <Text style={styles.ownBadgeText}>YOURS</Text>
           </View>
         )}

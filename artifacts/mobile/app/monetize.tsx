@@ -277,15 +277,15 @@ export default function MonetizeScreen() {
         </LinearGradient>
 
         {availableUGX > 0 && (
-          <View style={[styles.withdrawCard, { backgroundColor: colors.surface, borderColor: Colors.brand + "44" }]}>
-            <View style={[styles.withdrawIconWrap, { backgroundColor: Colors.brand + "18" }]}>
+          <View style={[styles.withdrawCard, { backgroundColor: colors.surface, borderColor: colors.accent + "44" }]}>
+            <View style={[styles.withdrawIconWrap, { backgroundColor: colors.accent + "18" }]}>
               <Ionicons name="wallet-outline" size={22} color={colors.accent} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.withdrawTitle, { color: colors.text }]}>Available to Withdraw</Text>
-              <Text style={[styles.withdrawAmount, { color: Colors.brand }]}>{formatUGX(availableUGX)}</Text>
+              <Text style={[styles.withdrawAmount, { color: colors.accent }]}>{formatUGX(availableUGX)}</Text>
             </View>
-            <TouchableOpacity style={[styles.withdrawBtn, { backgroundColor: Colors.brand }]} onPress={() => router.push("/wallet" as any)}>
+            <TouchableOpacity style={[styles.withdrawBtn, { backgroundColor: colors.accent }]} onPress={() => router.push("/wallet" as any)}>
               <Text style={styles.withdrawBtnText}>Withdraw</Text>
             </TouchableOpacity>
           </View>
@@ -344,7 +344,7 @@ export default function MonetizeScreen() {
               <Text style={{ fontSize: 40 }}>💸</Text>
               <Text style={[styles.emptyTitle, { color: colors.text }]}>No earnings yet</Text>
               <Text style={[styles.emptySub, { color: colors.textMuted }]}>Enable monetization features to start earning ACoin from your audience.</Text>
-              <TouchableOpacity style={[styles.emptyBtn, { backgroundColor: Colors.brand }]} onPress={() => setTab("features")}>
+              <TouchableOpacity style={[styles.emptyBtn, { backgroundColor: colors.accent }]} onPress={() => setTab("features")}>
                 <Text style={styles.emptyBtnText}>Set Up Features</Text>
               </TouchableOpacity>
             </View>
@@ -378,9 +378,9 @@ export default function MonetizeScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 60, paddingTop: 8 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
-        <View style={[styles.infoBanner, { backgroundColor: Colors.brand + "14" }]}>
+        <View style={[styles.infoBanner, { backgroundColor: colors.accent + "14" }]}>
           <Ionicons name="information-circle-outline" size={16} color={colors.accent} />
-          <Text style={[styles.infoBannerText, { color: Colors.brand }]}>
+          <Text style={[styles.infoBannerText, { color: colors.accent }]}>
             {activeFeatures} of {MONETIZE_FEATURES.length} features active · Payments are in ACoin (1 ACoin = UGX {ACOIN_TO_UGX})
           </Text>
         </View>
@@ -458,7 +458,7 @@ export default function MonetizeScreen() {
           <Text style={{ fontSize: 48 }}>🛒</Text>
           <Text style={[styles.emptyTitle, { color: colors.text }]}>Market is empty</Text>
           <Text style={[styles.emptySub, { color: colors.textMuted }]}>Be the first creator to enable monetization features</Text>
-          <TouchableOpacity style={[styles.emptyBtn, { backgroundColor: Colors.brand }]} onPress={() => setTab("features")}>
+          <TouchableOpacity style={[styles.emptyBtn, { backgroundColor: colors.accent }]} onPress={() => setTab("features")}>
             <Text style={styles.emptyBtnText}>Enable Features</Text>
           </TouchableOpacity>
         </View>
@@ -493,7 +493,7 @@ export default function MonetizeScreen() {
                   <Text style={[styles.marketName, { color: colors.text }]} numberOfLines={1}>
                     {p?.display_name || `@${p?.handle || "creator"}`}
                   </Text>
-                  {p?.is_verified && <Ionicons name="checkmark-circle" size={13} color={Colors.brand} />}
+                  {p?.is_verified && <Ionicons name="checkmark-circle" size={13} color={colors.accent} />}
                 </View>
                 <Text style={[styles.marketFeature, { color: colors.textMuted }]}>
                   {feature.emoji} {feature.title}
@@ -535,7 +535,7 @@ export default function MonetizeScreen() {
             onPress={() => setTab(t.key)}
           >
             <Ionicons name={t.icon} size={15} color={tab === t.key ? colors.accent : colors.textMuted} />
-            <Text style={[styles.tabText, { color: tab === t.key ? Colors.brand : colors.textMuted }]}>{t.label}</Text>
+            <Text style={[styles.tabText, { color: tab === t.key ? colors.accent : colors.textMuted }]}>{t.label}</Text>
           </TouchableOpacity>
         ))}
       </View>

@@ -19,7 +19,7 @@ import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
-const BRAND = Colors.brand;
+const BRAND_FALLBACK = Colors.brand;
 
 type Ticket = {
   id: string;
@@ -52,6 +52,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
 export default function TicketDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
+  const BRAND = colors.accent;
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const listRef = useRef<FlatList>(null);

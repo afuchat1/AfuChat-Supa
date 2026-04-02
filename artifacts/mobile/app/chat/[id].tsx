@@ -109,7 +109,7 @@ type ChatInfo = {
 };
 
 const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
-const BRAND = Colors.brand;
+const BRAND_FALLBACK = Colors.brand;
 
 function formatLastSeen(ts: string | null | undefined): { text: string; isOnline: boolean } {
   if (!ts) return { text: "Offline", isOnline: false };
@@ -251,7 +251,7 @@ function SmartReplyBar({ messages, myId, input, onSend, colors }: {
           onPress={() => onSend(r)}
           style={{
             backgroundColor: colors.inputBg,
-            borderColor: BRAND + "60",
+            borderColor: (colors.accent || BRAND_FALLBACK) + "60",
             borderWidth: 1,
             borderRadius: 18,
             paddingHorizontal: 13,
@@ -374,6 +374,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   isPremiumSender?: boolean;
 }) {
   const { colors } = useTheme();
+  const BRAND = colors.accent;
   const { preferredLang, voiceToText, textToSpeech } = useLanguage();
   const { themeColors: chatTheme, bubbleRadius: chatRadius, prefs: chatPrefsLocal } = useChatPreferences();
   const [translated, setTranslated] = useState<string | null>(null);
@@ -723,6 +724,7 @@ export default function ChatScreen() {
   const isDraft = id === "new";
   const { user, profile, isPremium } = useAuth();
   const { colors } = useTheme();
+  const BRAND = colors.accent;
   const { prefs: chatPrefs, themeColors: chatThemeColors, bubbleRadius: chatBubbleRadius } = useChatPreferences();
   const { statsMap, getDynamicPrice } = useGiftPrices();
 
@@ -2574,7 +2576,7 @@ export default function ChatScreen() {
                   )}
                   <GestureDetector gesture={micGesture}>
                     <ReAnimated.View style={[
-                      isRecording && !recLocked ? st.recMicBtn : [st.sendBtn, { backgroundColor: BRAND }],
+                      isRecording && !recLocked ? [st.recMicBtn, { backgroundColor: BRAND, shadowColor: BRAND }] : [st.sendBtn, { backgroundColor: BRAND }],
                       isRecording && !recLocked ? micBtnAnimStyle : undefined,
                     ]}>
                       <Ionicons name="mic" size={isRecording ? 24 : 20} color="#fff" />
@@ -2943,11 +2945,11 @@ export default function ChatScreen() {
                 <Text style={[st.giftRevealNote, { color: colors.textMuted }]}>This gift has been added to your Gift Gallery</Text>
               )}
               {giftReveal?.isReceiver ? (
-                <TouchableOpacity style={st.giftRevealBtn} onPress={() => { setGiftReveal(null); router.push("/gifts"); }}>
+                <TouchableOpacity style={[st.giftRevealBtn, { backgroundColor: BRAND }]} onPress={() => { setGiftReveal(null); router.push("/gifts"); }}>
                   <Text style={st.giftRevealBtnText}>View Gift Gallery</Text>
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity style={st.giftRevealBtn} onPress={() => setGiftReveal(null)}>
+                <TouchableOpacity style={[st.giftRevealBtn, { backgroundColor: BRAND }]} onPress={() => setGiftReveal(null)}>
                   <Text style={st.giftRevealBtnText}>Awesome!</Text>
                 </TouchableOpacity>
               )}
@@ -3253,7 +3255,7 @@ const st = StyleSheet.create({
   recSlideHint: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 2, marginTop: 2 },
   recSlideText: { fontSize: 13, fontFamily: "Inter_400Regular" },
   recMicWrap: { alignItems: "center", justifyContent: "flex-end" },
-  recMicBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: BRAND, alignItems: "center", justifyContent: "center", elevation: 6, shadowColor: BRAND, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.5, shadowRadius: 8 },
+  recMicBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: BRAND_FALLBACK, alignItems: "center", justifyContent: "center", elevation: 6, shadowColor: BRAND_FALLBACK, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.5, shadowRadius: 8 },
   recLockIndicator: { alignItems: "center", marginBottom: 8 },
   recLockPill: { width: 32, borderRadius: 16, paddingVertical: 6, alignItems: "center", justifyContent: "center", elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 3 },
   recLockedBar: { flex: 1, flexDirection: "row", alignItems: "center", borderRadius: 22, paddingHorizontal: 8, minHeight: 48, gap: 8 },
@@ -3333,7 +3335,7 @@ const st = StyleSheet.create({
   giftRevealTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
   giftRevealDetail: { fontSize: 16, fontFamily: "Inter_500Medium", textAlign: "center" },
   giftRevealNote: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
-  giftRevealBtn: { backgroundColor: BRAND, borderRadius: 14, paddingHorizontal: 40, paddingVertical: 14, marginTop: 8 },
+  giftRevealBtn: { backgroundColor: BRAND_FALLBACK, borderRadius: 14, paddingHorizontal: 40, paddingVertical: 14, marginTop: 8 },
   giftRevealBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
 
   attachGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "center", paddingVertical: 8 },

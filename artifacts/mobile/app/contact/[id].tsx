@@ -411,7 +411,7 @@ export default function ContactProfileScreen() {
 
           {!isOwnProfile && (
             <View style={styles.profileActions}>
-              <TouchableOpacity style={[styles.followBtn, isFollowing && styles.followBtnActive]} onPress={toggleFollow}>
+              <TouchableOpacity style={[styles.followBtn, { backgroundColor: colors.accent }, isFollowing && [styles.followBtnActive, { backgroundColor: "transparent", borderColor: colors.accent }]]} onPress={toggleFollow}>
                 <Ionicons name={isFollowing ? "checkmark" : "person-add-outline"} size={16} color={isFollowing ? colors.accent : "#fff"} />
                 <Text style={[styles.followBtnText, isFollowing && { color: colors.accent }]}>
                   {isFollowing ? "Following" : "Follow"}

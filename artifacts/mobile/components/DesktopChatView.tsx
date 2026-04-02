@@ -195,7 +195,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
               : { backgroundColor: isDark ? "#2a2a2e" : "#f0f0f5", borderBottomLeftRadius: 4 },
           ]}>
             {!isMe && chatInfo?.is_group && (
-              <Text style={styles.senderName}>{item.sender?.display_name}</Text>
+              <Text style={[styles.senderName, { color: colors.accent }]}>{item.sender?.display_name}</Text>
             )}
             {item.message_type === "image" && item.media_url ? (
               <Image source={{ uri: item.media_url }} style={styles.msgImage} resizeMode="cover" />

@@ -329,7 +329,7 @@ export default function GiftsScreen() {
 
   function renderGiftCard({ item }: { item: OwnedGift }) {
     const rBg = rarityBgColors[item.gift.rarity] || rarityBgColors.common;
-    const rColor = rarityColors[item.gift.rarity] || rarityColors.common;
+    const rColor = item.gift.rarity === "uncommon" ? colors.accent : (rarityColors[item.gift.rarity] || rarityColors.common);
     const livePrice = getDynamicPrice(item.gift.id, item.gift.base_xp_cost);
 
     return (
@@ -340,7 +340,7 @@ export default function GiftsScreen() {
         activeOpacity={0.7}
       >
         {item.is_pinned && (
-          <View style={styles.pinBadge}>
+          <View style={[styles.pinBadge, { backgroundColor: colors.accent }]}>
             <Ionicons name="pin" size={10} color="#fff" />
           </View>
         )}
@@ -440,8 +440,8 @@ export default function GiftsScreen() {
               </View>
               <Text style={[styles.modalGiftName, { color: colors.text }]}>{selectedGift?.gift.name}</Text>
               <View style={[styles.rarityBadgeLg, { backgroundColor: rarityBgColors[selectedGift?.gift.rarity || "common"] }]}>
-                <View style={[styles.rarityDot, { backgroundColor: rarityColors[selectedGift?.gift.rarity || "common"] }]} />
-                <Text style={[styles.rarityTextLg, { color: rarityColors[selectedGift?.gift.rarity || "common"] }]}>{selectedGift?.gift.rarity}</Text>
+                <View style={[styles.rarityDot, { backgroundColor: (selectedGift?.gift.rarity === "uncommon" ? colors.accent : rarityColors[selectedGift?.gift.rarity || "common"]) }]} />
+                <Text style={[styles.rarityTextLg, { color: (selectedGift?.gift.rarity === "uncommon" ? colors.accent : rarityColors[selectedGift?.gift.rarity || "common"]) }]}>{selectedGift?.gift.rarity}</Text>
               </View>
             </View>
 
@@ -629,7 +629,7 @@ export default function GiftsScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={[styles.sendPreviewName, { color: colors.text }]}>{sendGift?.gift.name}</Text>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 }}>
-                  <Text style={[styles.sendPreviewRarity, { color: rarityColors[sendGift?.gift.rarity || "common"] }]}>{sendGift?.gift.rarity}</Text>
+                  <Text style={[styles.sendPreviewRarity, { color: (sendGift?.gift.rarity === "uncommon" ? colors.accent : rarityColors[sendGift?.gift.rarity || "common"]) }]}>{sendGift?.gift.rarity}</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
                     <Ionicons name="diamond" size={11} color={Colors.gold} />
                     <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: Colors.gold }}>{sendGift ? getDynamicPrice(sendGift.gift.id, sendGift.gift.base_xp_cost) : 0}</Text>
@@ -656,7 +656,7 @@ export default function GiftsScreen() {
               multiline
             />
             <TouchableOpacity
-              style={[styles.sendBtn, (!sendHandle.trim() || sending) && { opacity: 0.5 }]}
+              style={[styles.sendBtn, { backgroundColor: colors.accent }, (!sendHandle.trim() || sending) && { opacity: 0.5 }]}
               onPress={handleSendGift}
               disabled={sending || !sendHandle.trim()}
             >

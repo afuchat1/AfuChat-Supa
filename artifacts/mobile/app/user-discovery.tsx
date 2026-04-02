@@ -311,7 +311,7 @@ export default function UserDiscoveryScreen() {
               <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
             ) : (
               <View style={[styles.avatarPlaceholder, { backgroundColor: colors.accent + "22" }]}>
-                <Text style={styles.avatarInitial}>{(item.display_name || "@")[0].toUpperCase()}</Text>
+                <Text style={[styles.avatarInitial, { color: colors.accent }]}>{(item.display_name || "@")[0].toUpperCase()}</Text>
               </View>
             )}
             {isNearby && item.location_updated_at && (

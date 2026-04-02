@@ -349,14 +349,14 @@ export default function ScanScreen() {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <View style={[styles.permBox, { paddingTop: insets.top + 20 }]}>
-          <View style={styles.permIconCircle}>
+          <View style={[styles.permIconCircle, { backgroundColor: colors.accent + "18" }]}>
             <Ionicons name="camera-outline" size={48} color={colors.accent} />
           </View>
           <Text style={[styles.permTitle, { color: colors.text }]}>Camera Access Required</Text>
           <Text style={[styles.permSub, { color: colors.textSecondary }]}>
             We need camera permission to scan AfuChat ID card QR codes for payments.
           </Text>
-          <TouchableOpacity style={styles.permBtn} onPress={requestPermission}>
+          <TouchableOpacity style={[styles.permBtn, { backgroundColor: colors.accent }]} onPress={requestPermission}>
             <Ionicons name="camera" size={18} color="#fff" />
             <Text style={styles.permBtnText}>Allow Camera</Text>
           </TouchableOpacity>
@@ -394,11 +394,11 @@ export default function ScanScreen() {
         <View style={styles.scanArea}>
           <Text style={styles.scanLabel}>Point at an AfuChat ID card</Text>
           <View style={styles.scanFrame}>
-            <View style={[styles.corner, styles.tl]} />
-            <View style={[styles.corner, styles.tr]} />
-            <View style={[styles.corner, styles.bl]} />
-            <View style={[styles.corner, styles.br]} />
-            <Animated.View style={[styles.scanLine, scanLineStyle]} />
+            <View style={[styles.corner, styles.tl, { borderColor: colors.accent }]} />
+            <View style={[styles.corner, styles.tr, { borderColor: colors.accent }]} />
+            <View style={[styles.corner, styles.bl, { borderColor: colors.accent }]} />
+            <View style={[styles.corner, styles.br, { borderColor: colors.accent }]} />
+            <Animated.View style={[styles.scanLine, { backgroundColor: colors.accent, shadowColor: colors.accent }, scanLineStyle]} />
           </View>
           <Text style={styles.scanHint}>
             Align the QR code within the frame

@@ -96,6 +96,7 @@ function PinKeypad({
   onComplete: (pin: string) => void;
   onCancel: () => void;
 }) {
+  const { colors } = useTheme();
   const [digits, setDigits] = useState<string[]>([]);
   const [error, setError] = useState(false);
   const shakeX = useSharedValue(0);
@@ -125,11 +126,11 @@ function PinKeypad({
 
   return (
     <View style={pkStyles.root}>
-      <Text style={pkStyles.title}>{title}</Text>
+      <Text style={[pkStyles.title, { color: colors.accent }]}>{title}</Text>
       <Text style={pkStyles.subtitle}>{subtitle}</Text>
       <Animated.View style={[pkStyles.dotsRow, shakeStyle]}>
         {Array.from({ length: DOTS }).map((_, i) => (
-          <View key={i} style={[pkStyles.dot, i < digits.length && pkStyles.dotFilled, error && pkStyles.dotError]} />
+          <View key={i} style={[pkStyles.dot, i < digits.length && [pkStyles.dotFilled, { backgroundColor: colors.accent, borderColor: colors.accent }], error && pkStyles.dotError]} />
         ))}
       </Animated.View>
       <View style={pkStyles.keypad}>
@@ -139,12 +140,12 @@ function PinKeypad({
               if (!k) return <View key={ki} style={pkStyles.keyBtn} />;
               if (k === "del") return (
                 <TouchableOpacity key="del" style={pkStyles.keyBtn} onPress={backspace}>
-                  <Ionicons name="backspace-outline" size={22} color={Colors.brand} />
+                  <Ionicons name="backspace-outline" size={22} color={colors.accent} />
                 </TouchableOpacity>
               );
               return (
-                <TouchableOpacity key={k} style={[pkStyles.keyBtn, pkStyles.keyBtnFill]} onPress={() => pressDigit(k)}>
-                  <Text style={pkStyles.keyText}>{k}</Text>
+                <TouchableOpacity key={k} style={[pkStyles.keyBtn, pkStyles.keyBtnFill, { backgroundColor: colors.accent + "15", borderColor: colors.accent + "30" }]} onPress={() => pressDigit(k)}>
+                  <Text style={[pkStyles.keyText, { color: colors.accent }]}>{k}</Text>
                 </TouchableOpacity>
               );
             })}

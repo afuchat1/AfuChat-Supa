@@ -202,7 +202,7 @@ export default function SavedPostsScreen() {
                 Tap the bookmark icon on any post to save it here
               </Text>
               <TouchableOpacity
-                style={styles.discoverBtn}
+                style={[styles.discoverBtn, { backgroundColor: colors.accent }]}
                 onPress={() => router.back()}
               >
                 <Text style={styles.discoverBtnText}>Browse Discover</Text>

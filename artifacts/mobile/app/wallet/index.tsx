@@ -404,11 +404,11 @@ export default function WalletScreen() {
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn} onPress={() => setShowTransfer(true)}>
           <Ionicons name="send" size={16} color={colors.accent} />
-          <Text style={styles.actionBtnText}>Send</Text>
+          <Text style={[styles.actionBtnText, { color: colors.accent }]}>Send</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn} onPress={() => setShowConvert(true)}>
           <Ionicons name="swap-horizontal" size={16} color={colors.accent} />
-          <Text style={styles.actionBtnText}>Convert</Text>
+          <Text style={[styles.actionBtnText, { color: colors.accent }]}>Convert</Text>
         </TouchableOpacity>
       </View>
       <View style={styles.btnRow}>
@@ -627,7 +627,7 @@ export default function WalletScreen() {
             <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Recipient @handle" placeholderTextColor={colors.textMuted} value={transferHandle} onChangeText={setTransferHandle} autoCapitalize="none" />
             <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Amount" placeholderTextColor={colors.textMuted} value={transferAmount} onChangeText={setTransferAmount} keyboardType="numeric" />
             <TextInput style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg }]} placeholder="Message (optional)" placeholderTextColor={colors.textMuted} value={transferMsg} onChangeText={setTransferMsg} />
-            <TouchableOpacity style={[styles.sendBtn, sending && { opacity: 0.6 }]} onPress={sendNexa} disabled={sending}>
+            <TouchableOpacity style={[styles.sendBtn, { backgroundColor: colors.accent }, sending && { opacity: 0.6 }]} onPress={sendNexa} disabled={sending}>
               {sending ? <ActivityIndicator color="#fff" /> : <Text style={styles.sendBtnText}>Send Nexa</Text>}
             </TouchableOpacity>
           </View>

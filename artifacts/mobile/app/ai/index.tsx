@@ -944,7 +944,7 @@ When the user asks for a receipt, invoice, or transaction details, generate an i
       return (
         <View style={[s.msgRow, s.msgRowUser]}>
           <View style={{ alignItems: "flex-end", maxWidth: "80%" }}>
-            <View style={[s.bubble, s.userBubble]}>
+            <View style={[s.bubble, s.userBubble, { backgroundColor: colors.accent }]}>
               <RichMessageContent content={item.content} colors={colors} isUser />
             </View>
             {item.timestamp && (

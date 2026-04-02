@@ -92,7 +92,7 @@ function NavButton({
           <Text style={styles.badgeText}>{item.badge > 99 ? "99+" : item.badge}</Text>
         </View>
       )}
-      {isActive && <View style={styles.activeBar} />}
+      {isActive && <View style={[styles.activeBar, { backgroundColor: colors.accent }]} />}
     </TouchableOpacity>
   );
 }

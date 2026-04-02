@@ -191,7 +191,7 @@ export default function MyPostsScreen() {
               <Ionicons name="newspaper-outline" size={64} color={colors.textMuted} />
               <Text style={[styles.emptyTitle, { color: colors.text }]}>No posts yet</Text>
               <Text style={[styles.emptySub, { color: colors.textSecondary }]}>Share your first post!</Text>
-              <TouchableOpacity style={styles.createBtn} onPress={() => router.push("/moments/create")}>
+              <TouchableOpacity style={[styles.createBtn, { backgroundColor: colors.accent }]} onPress={() => router.push("/moments/create")}>
                 <Text style={styles.createBtnText}>Create Post</Text>
               </TouchableOpacity>
             </View>

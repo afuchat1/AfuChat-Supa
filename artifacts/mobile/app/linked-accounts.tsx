@@ -118,7 +118,7 @@ export default function LinkedAccountsScreen() {
                 <View style={styles.accountNameRow}>
                   <Text style={[styles.accountName, { color: colors.text }]}>{account.displayName}</Text>
                   {isCurrent && (
-                    <View style={styles.currentBadge}>
+                    <View style={[styles.currentBadge, { backgroundColor: colors.accent }]}>
                       <Text style={styles.currentBadgeText}>ACTIVE</Text>
                     </View>
                   )}
@@ -130,7 +130,7 @@ export default function LinkedAccountsScreen() {
                 <ActivityIndicator color={colors.accent} />
               ) : isCurrent ? null : (
                 <View style={styles.switchActions}>
-                  <TouchableOpacity style={styles.switchBtn} onPress={() => handleSwitch(account.userId)}>
+                  <TouchableOpacity style={[styles.switchBtn, { backgroundColor: colors.accent + "15" }]} onPress={() => handleSwitch(account.userId)}>
                     <Ionicons name="swap-horizontal" size={18} color={colors.accent} />
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => handleRemove(account.userId)}>
@@ -148,7 +148,7 @@ export default function LinkedAccountsScreen() {
             <View style={{ flex: 1 }}>
               <View style={styles.accountNameRow}>
                 <Text style={[styles.accountName, { color: colors.text }]}>{profile.display_name}</Text>
-                <View style={styles.currentBadge}>
+                <View style={[styles.currentBadge, { backgroundColor: colors.accent }]}>
                   <Text style={styles.currentBadgeText}>ACTIVE</Text>
                 </View>
               </View>
@@ -194,7 +194,7 @@ export default function LinkedAccountsScreen() {
               <TouchableOpacity style={[styles.cancelBtn, { borderColor: colors.border }]} onPress={() => { setShowAdd(false); setEmail(""); setPassword(""); }}>
                 <Text style={[styles.cancelBtnText, { color: colors.text }]}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.linkBtn, linking && { opacity: 0.6 }]} onPress={handleAddAccount} disabled={linking}>
+              <TouchableOpacity style={[styles.linkBtn, { backgroundColor: colors.accent }, linking && { opacity: 0.6 }]} onPress={handleAddAccount} disabled={linking}>
                 {linking ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.linkBtnText}>Add & Connect</Text>}
               </TouchableOpacity>
             </View>

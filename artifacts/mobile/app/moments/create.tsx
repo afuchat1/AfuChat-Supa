@@ -227,7 +227,7 @@ export default function CreatePostScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }} />
         {loading && uploadProgress ? (
-          <View style={styles.progressPill}>
+          <View style={[styles.progressPill, { backgroundColor: colors.accent }]}>
             <ActivityIndicator size={12} color="#fff" />
             <Text style={styles.progressText}>{uploadProgress}</Text>
           </View>
@@ -236,7 +236,7 @@ export default function CreatePostScreen() {
           <TouchableOpacity
             style={[
               styles.postBtn,
-              { opacity: loading || isOverLimit || (!content.trim() && images.length === 0) ? 0.5 : 1 },
+              { backgroundColor: colors.accent, opacity: loading || isOverLimit || (!content.trim() && images.length === 0) ? 0.5 : 1 },
             ]}
             onPress={handlePost}
             disabled={loading || isOverLimit}

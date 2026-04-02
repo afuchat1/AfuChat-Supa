@@ -400,7 +400,7 @@ export default function RegisterScreen() {
             </View>
 
             <TouchableOpacity
-              style={[styles.primaryBtn, verifyLoading && { opacity: 0.6 }]}
+              style={[styles.primaryBtn, { backgroundColor: colors.accent }, verifyLoading && { opacity: 0.6 }]}
               onPress={handleVerifyOtp}
               disabled={verifyLoading}
             >
@@ -517,20 +517,20 @@ export default function RegisterScreen() {
             accessibilityRole="checkbox"
             accessibilityState={{ checked: agreedToTerms }}
           >
-            <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
+            <View style={[styles.checkbox, agreedToTerms && [styles.checkboxChecked, { backgroundColor: colors.accent, borderColor: colors.accent }]]}>
               {agreedToTerms && <Ionicons name="checkmark" size={14} color="#fff" />}
             </View>
             <Text style={[styles.termsText, { color: colors.textSecondary }]}>
               I have read and agree to the{" "}
               <Text
-                style={styles.termsLink}
+                style={[styles.termsLink, { color: colors.accent }]}
                 onPress={() => router.push("/terms")}
               >
                 Terms of Service
               </Text>
               {" "}and{" "}
               <Text
-                style={styles.termsLink}
+                style={[styles.termsLink, { color: colors.accent }]}
                 onPress={() => router.push("/privacy")}
               >
                 Privacy Policy
@@ -539,7 +539,7 @@ export default function RegisterScreen() {
           </TouchableOpacity>
 
           <Pressable
-            style={[styles.primaryBtn, { opacity: (loading || !agreedToTerms) ? 0.5 : 1 }]}
+            style={[styles.primaryBtn, { backgroundColor: colors.accent, opacity: (loading || !agreedToTerms) ? 0.5 : 1 }]}
             onPress={handleRegister}
             disabled={loading || !agreedToTerms}
             accessibilityRole="button"

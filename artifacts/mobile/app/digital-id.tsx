@@ -122,6 +122,7 @@ function MicroPattern() {
 }
 
 function CardFront({ profile, grade, isPremium, scale, cardW }: { profile: any; grade: ReturnType<typeof GradeInfo>; isPremium: boolean; scale: number; cardW: number }) {
+  const { colors } = useTheme();
   const afuId = formatAfuId(toAfuId(profile?.id || "00000000"));
   const joinDate = profile?.created_at ? new Date(profile.created_at) : null;
   const joinStr = joinDate ? joinDate.toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "\u2014";
@@ -130,9 +131,9 @@ function CardFront({ profile, grade, isPremium, scale, cardW }: { profile: any; 
   return (
     <View style={StyleSheet.absoluteFill}>
       <LinearGradient colors={["#080E18", "#0C1929", "#0A1220"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-      <FloatingOrb delay={0} x="8%" y="15%" size={90 * s} color={Colors.brand} />
+      <FloatingOrb delay={0} x="8%" y="15%" size={90 * s} color={colors.accent} />
       <FloatingOrb delay={600} x="70%" y="8%" size={55 * s} color={grade.colors[0]} />
-      <FloatingOrb delay={1200} x="75%" y="65%" size={35 * s} color={Colors.brand} />
+      <FloatingOrb delay={1200} x="75%" y="65%" size={35 * s} color={colors.accent} />
       <MicroPattern />
       <HoloShimmer cardW={cardW} />
       <LinearGradient colors={[`${grade.colors[0]}08`, `${grade.colors[0]}18`, `${grade.colors[1]}30`]} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 1 }} pointerEvents="none" />
@@ -202,6 +203,7 @@ function CardFront({ profile, grade, isPremium, scale, cardW }: { profile: any; 
 }
 
 function CardBack({ profile, grade, isPremium, qrValue, scale, cardW }: { profile: any; grade: ReturnType<typeof GradeInfo>; isPremium: boolean; qrValue: string; scale: number; cardW: number }) {
+  const { colors } = useTheme();
   const xp = profile?.xp || 0;
   const level = Math.floor(Math.sqrt(xp / 100)) + 1;
   const acoin = profile?.acoin || 0;
@@ -213,7 +215,7 @@ function CardBack({ profile, grade, isPremium, qrValue, scale, cardW }: { profil
   const qrBoxSize = qrSize + 16;
 
   const cardStats = [
-    { label: "NEXA", value: xp.toLocaleString(), icon: "flash" as const, color: Colors.brand },
+    { label: "NEXA", value: xp.toLocaleString(), icon: "flash" as const, color: colors.accent },
     { label: "LEVEL", value: level.toString(), icon: "trending-up" as const, color: "#FF9500" },
     { label: "ACOIN", value: acoin.toLocaleString(), icon: "diamond" as const, color: Colors.gold },
   ];
@@ -222,7 +224,7 @@ function CardBack({ profile, grade, isPremium, qrValue, scale, cardW }: { profil
     <View style={StyleSheet.absoluteFill}>
       <LinearGradient colors={["#0A1220", "#080E18", "#0F0A1E"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
       <FloatingOrb delay={300} x="5%" y="60%" size={50 * s} color={grade.colors[0]} />
-      <FloatingOrb delay={900} x="80%" y="20%" size={40 * s} color={Colors.brand} />
+      <FloatingOrb delay={900} x="80%" y="20%" size={40 * s} color={colors.accent} />
       <MicroPattern />
       <HoloShimmer cardW={cardW} />
 
@@ -258,7 +260,7 @@ function CardBack({ profile, grade, isPremium, qrValue, scale, cardW }: { profil
             <Text style={[styles.idLabel, { fontSize: Math.max(6, 8 * s) }]}>AFU ID</Text>
             <Text style={[styles.idNumber, { fontSize: Math.max(11, 15 * s), letterSpacing: 2 * s }]}>{afuId}</Text>
             <Text style={[styles.idLabel, { marginTop: 4 * s, fontSize: Math.max(6, 8 * s) }]}>SCAN TO PAY</Text>
-            <Text style={[styles.idNumber, { color: Colors.brand, fontSize: Math.max(10, 12 * s) }]}>@{handle}</Text>
+            <Text style={[styles.idNumber, { color: colors.accent, fontSize: Math.max(10, 12 * s) }]}>@{handle}</Text>
           </View>
         </View>
       </View>

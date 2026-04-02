@@ -108,7 +108,7 @@ function PINVerifyModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={pinStyles.overlay}>
         <View style={[pinStyles.sheet, { backgroundColor: colors.surface }]}>
-          <View style={pinStyles.lockIcon}>
+          <View style={[pinStyles.lockIcon, { backgroundColor: colors.accent + "18" }]}>
             <Ionicons name="lock-closed" size={28} color={colors.accent} />
           </View>
           <Text style={[pinStyles.title, { color: colors.text }]}>Security Verification</Text>

@@ -631,7 +631,7 @@ export default function ShopManage() {
 
             <TouchableOpacity style={styles.logoPicker} onPress={() => pickShopImage("logo")}>
               {shopLogo ? <Image source={{ uri: shopLogo }} style={styles.logoPreview} resizeMode="cover" /> : <View style={[styles.logoPreview, { backgroundColor: colors.accent + "18", alignItems: "center", justifyContent: "center" }]}><Text style={{ fontSize: 24 }}>🏪</Text></View>}
-              <View style={styles.logoEditBadge}><Ionicons name="camera-outline" size={12} color="#fff" /></View>
+              <View style={[styles.logoEditBadge, { backgroundColor: colors.accent }]}><Ionicons name="camera-outline" size={12} color="#fff" /></View>
             </TouchableOpacity>
 
             {[

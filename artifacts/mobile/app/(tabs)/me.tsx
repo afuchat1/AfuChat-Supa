@@ -162,7 +162,7 @@ function XpLevelBar({ xp }: { xp: number }) {
   return (
     <View style={[styles.xpBar, { backgroundColor: colors.surface }]}>
       <View style={styles.xpRow}>
-        <View style={styles.xpLevelBadge}>
+        <View style={[styles.xpLevelBadge, { backgroundColor: colors.accent }]}>
           <Text style={styles.xpLevelText}>Lv.{level}</Text>
         </View>
         <View style={{ flex: 1 }}>

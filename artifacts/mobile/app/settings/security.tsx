@@ -298,7 +298,7 @@ export default function SecuritySettingsScreen() {
               secureTextEntry
             />
             <TouchableOpacity
-              style={[styles.actionBtn, changingPwd && { opacity: 0.6 }]}
+              style={[styles.actionBtn, { backgroundColor: colors.accent }, changingPwd && { opacity: 0.6 }]}
               onPress={handleChangePassword}
               disabled={changingPwd}
             >

@@ -254,6 +254,7 @@ function AppTile({ app, onTap }: { app: AppItem; onTap: (id: string) => void }) 
 }
 
 function FeaturedBanner({ app, onTap }: { app: AppItem; onTap: (id: string) => void }) {
+  const { colors } = useTheme();
   function handlePress() {
     Haptics.selectionAsync();
     onTap(app.id);
@@ -284,8 +285,8 @@ function FeaturedBanner({ app, onTap }: { app: AppItem; onTap: (id: string) => v
             </View>
           </View>
           <View style={styles.featuredCta}>
-            <Text style={styles.featuredCtaText}>Open</Text>
-            <Ionicons name="arrow-forward" size={14} color={Colors.brand} />
+            <Text style={[styles.featuredCtaText, { color: colors.accent }]}>Open</Text>
+            <Ionicons name="arrow-forward" size={14} color={colors.accent} />
           </View>
         </View>
       </LinearGradient>

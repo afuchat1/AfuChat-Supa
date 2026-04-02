@@ -20,7 +20,7 @@ import Colors from "@/constants/colors";
 import { notifyPostLike, notifyPostReply } from "@/lib/notifyUser";
 import { showAlert } from "@/lib/alert";
 
-const BRAND = Colors.brand;
+const BRAND_FALLBACK = Colors.brand;
 
 type Author = {
   id: string;
@@ -62,6 +62,7 @@ function formatRelative(iso: string): string {
 export function DesktopPostView({ postId, onClose }: { postId: string; onClose: () => void }) {
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
+  const BRAND = colors.accent;
   const [post, setPost] = useState<PostData | null>(null);
   const [replies, setReplies] = useState<Reply[]>([]);
   const [loading, setLoading] = useState(true);
@@ -318,7 +319,7 @@ export function DesktopPostView({ postId, onClose }: { postId: string; onClose: 
           <TouchableOpacity
             onPress={submitReply}
             disabled={!replyText.trim() || sending}
-            style={[pv.sendBtn, { opacity: replyText.trim() && !sending ? 1 : 0.4 }]}
+            style={[pv.sendBtn, { backgroundColor: BRAND, opacity: replyText.trim() && !sending ? 1 : 0.4 }]}
           >
             {sending ? (
               <ActivityIndicator size="small" color="#fff" />

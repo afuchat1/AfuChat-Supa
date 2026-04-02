@@ -20,7 +20,7 @@ import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
-const BRAND = Colors.brand;
+const BRAND_FALLBACK = Colors.brand;
 
 const CATEGORIES = [
   { id: "account", label: "Account & Login", icon: "person-circle-outline" },
@@ -54,6 +54,7 @@ type TabId = "home" | "new" | "tickets";
 
 export default function SupportCenter() {
   const { colors } = useTheme();
+  const BRAND = colors.accent;
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
 

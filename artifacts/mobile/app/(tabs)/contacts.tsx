@@ -254,7 +254,7 @@ export default function ContactsScreen() {
                 </View>
                 <Text style={[styles.handle, { color: colors.textSecondary }]}>@{addResult.handle}</Text>
               </View>
-              <TouchableOpacity style={styles.addBtn} onPress={followUser}>
+              <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.accent }]} onPress={followUser}>
                 <Text style={styles.addBtnText}>Follow</Text>
               </TouchableOpacity>
             </View>

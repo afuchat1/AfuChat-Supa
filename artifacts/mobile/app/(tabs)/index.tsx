@@ -234,7 +234,7 @@ function StoriesBar({ userId, colors }: { userId: string; colors: any }) {
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={storyBarStyles.list}>
       {Platform.OS !== "web" && (
         <TouchableOpacity style={storyBarStyles.item} onPress={() => router.push("/stories/create")}>
-          <View style={[storyBarStyles.addCircle, { backgroundColor: colors.inputBg }]}>
+          <View style={[storyBarStyles.addCircle, { backgroundColor: colors.inputBg, borderColor: colors.accent }]}>
             <Ionicons name="add" size={28} color={colors.accent} />
           </View>
           <Text style={[storyBarStyles.name, { color: colors.textSecondary }]} numberOfLines={1}>My Story</Text>
@@ -554,8 +554,8 @@ export default function ChatsScreen() {
           styles.searchBox,
           {
             backgroundColor: colors.inputBg,
-            borderColor: searchFocused ? Colors.brand : colors.border,
-            shadowColor: searchFocused ? Colors.brand : "#000",
+            borderColor: searchFocused ? colors.accent : colors.border,
+            shadowColor: searchFocused ? colors.accent : "#000",
             shadowOpacity: searchFocused ? 0.18 : 0.05,
           },
         ]}>
@@ -632,7 +632,7 @@ export default function ChatsScreen() {
       {user && (
         <>
           <TouchableOpacity
-            style={[styles.fab, { backgroundColor: Colors.brand, bottom: insets.bottom + 52 + 16 }]}
+            style={[styles.fab, { backgroundColor: colors.accent, bottom: insets.bottom + 52 + 16 }]}
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/contacts"); }}
             activeOpacity={0.85}
           >

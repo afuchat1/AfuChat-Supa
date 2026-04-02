@@ -109,11 +109,11 @@ export default function PrivacyRestrictedScreen() {
                 <Text style={[styles.handle, { color: colors.textMuted }]}>@{item.profile.handle}</Text>
               </View>
               <TouchableOpacity
-                style={styles.unrestrictBtn}
+                style={[styles.unrestrictBtn, { borderColor: colors.accent }]}
                 onPress={() => unrestrict(item)}
                 disabled={removing === item.id}
               >
-                {removing === item.id ? <ActivityIndicator size="small" color={colors.accent} /> : <Text style={styles.unrestrictText}>Unrestrict</Text>}
+                {removing === item.id ? <ActivityIndicator size="small" color={colors.accent} /> : <Text style={[styles.unrestrictText, { color: colors.accent }]}>Unrestrict</Text>}
               </TouchableOpacity>
             </View>
           )}

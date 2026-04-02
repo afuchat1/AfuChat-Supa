@@ -224,7 +224,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
             </View>
             {showFollowBtn && (
               <TouchableOpacity
-                style={styles.followBtn}
+                style={[styles.followBtn, { backgroundColor: colors.accent }]}
                 onPress={() => onToggleFollow(item.author_id)}
                 activeOpacity={0.7}
               >
@@ -1045,7 +1045,7 @@ export default function DiscoverScreen() {
           <Ionicons name="lock-closed-outline" size={56} color={colors.textMuted} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>Sign in to see Following</Text>
           <Text style={[styles.emptySub, { color: colors.textSecondary }]}>Follow people to see their posts here</Text>
-          <TouchableOpacity style={styles.createBtn} onPress={() => router.push("/(auth)/login")}>
+          <TouchableOpacity style={[styles.createBtn, { backgroundColor: colors.accent }]} onPress={() => router.push("/(auth)/login")}>
             <Text style={styles.createBtnText}>Sign In</Text>
           </TouchableOpacity>
         </View>
@@ -1054,7 +1054,7 @@ export default function DiscoverScreen() {
           <Ionicons name="people-outline" size={56} color={colors.textMuted} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>No one followed yet</Text>
           <Text style={[styles.emptySub, { color: colors.textSecondary }]}>Follow people to see their posts here</Text>
-          <TouchableOpacity style={styles.createBtn} onPress={() => setFeedTab("for_you")}>
+          <TouchableOpacity style={[styles.createBtn, { backgroundColor: colors.accent }]} onPress={() => setFeedTab("for_you")}>
             <Text style={styles.createBtnText}>Browse For You</Text>
           </TouchableOpacity>
         </View>

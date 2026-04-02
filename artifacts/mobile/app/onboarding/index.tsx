@@ -846,7 +846,7 @@ export default function OnboardingScreen() {
       </View>
 
       <View style={[styles.progressBarBg, { backgroundColor: colors.inputBg }]}>
-        <Animated.View style={[styles.progressBarFill, { width: progressWidth }]} />
+        <Animated.View style={[styles.progressBarFill, { width: progressWidth, backgroundColor: colors.accent }]} />
       </View>
 
       <ScrollView
@@ -865,7 +865,7 @@ export default function OnboardingScreen() {
         <Pressable
           style={[
             styles.nextBtn,
-            { opacity: canProceed() ? 1 : 0.4 },
+            { backgroundColor: colors.accent, opacity: canProceed() ? 1 : 0.4 },
           ]}
           onPress={step === TOTAL_STEPS ? handleComplete : goNext}
           disabled={!canProceed() || loading}
