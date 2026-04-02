@@ -30,35 +30,44 @@ async function chatWithGroq(messages: any[], maxTokens: number, apiKey: string):
   let lastError = "";
 
   for (const model of models) {
-    try {
-      console.log(`Trying model: ${model}`);
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          max_tokens: maxTokens,
-          temperature: 0.7,
-        }),
-      });
-      if (!res.ok) {
-        lastError = `Groq ${model} ${res.status}: ${await res.text()}`;
-        console.error(lastError);
-        if (res.status === 401) throw new Error(lastError);
-        continue;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        console.log(`Trying ${model} (attempt ${attempt + 1})`);
+        const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            max_tokens: maxTokens,
+            temperature: 0.7,
+          }),
+        });
+        if (res.status === 429) {
+          const retryAfter = parseInt(res.headers.get("retry-after") || "3", 10);
+          const wait = Math.min(retryAfter, 5) * 1000;
+          console.log(`Rate limited on ${model}, waiting ${wait}ms...`);
+          await new Promise(r => setTimeout(r, wait));
+          continue;
+        }
+        if (!res.ok) {
+          lastError = `Groq ${model} ${res.status}: ${await res.text()}`;
+          console.error(lastError);
+          if (res.status === 401) throw new Error(lastError);
+          break;
+        }
+        const data = await res.json();
+        const text = data.choices?.[0]?.message?.content ?? "";
+        if (!text) { lastError = `${model} returned empty`; break; }
+        return text;
+      } catch (e: any) {
+        lastError = e?.message || String(e);
+        if (lastError.includes("401")) throw e;
+        console.error(`Model ${model} attempt ${attempt + 1} failed:`, lastError);
       }
-      const data = await res.json();
-      const text = data.choices?.[0]?.message?.content ?? "";
-      if (!text) { lastError = `${model} returned empty`; continue; }
-      return text;
-    } catch (e: any) {
-      lastError = e?.message || String(e);
-      if (lastError.includes("401")) throw e;
-      console.error(`Model ${model} failed:`, lastError);
     }
   }
   throw new Error(`All models failed. Last: ${lastError}`);
@@ -109,17 +118,32 @@ serve(async (req) => {
 
     const tokenLimit = max_tokens || (fast ? 300 : 3000);
 
+    const totalChars = messages.reduce((sum: number, m: any) => sum + (m.content?.length || 0), 0);
+    console.log(`Groq chat: ${messages.length} msgs, ${totalChars} chars, ${tokenLimit} max_tokens`);
+
+    const trimmedMessages = totalChars > 24000
+      ? messages.map((m: any, i: number) => {
+          if (i === 0 && m.role === "system" && m.content.length > 12000) {
+            return { ...m, content: m.content.slice(0, 12000) + "\n[System context trimmed]" };
+          }
+          return m;
+        })
+      : messages;
+
     try {
-      console.log(`Groq chat: ${messages.length} messages, ${tokenLimit} tokens`);
-      const reply = await chatWithGroq(messages, tokenLimit, GROQ_KEY);
+      const reply = await chatWithGroq(trimmedMessages, tokenLimit, GROQ_KEY);
       console.log("Groq chat succeeded");
       return json({ reply });
     } catch (e: any) {
-      console.error("Groq chat failed:", e?.message || e);
-      return json({ reply: "I'm having trouble connecting to my AI systems right now. Please try again in a moment." });
+      const errMsg = e?.message || String(e);
+      console.error("Groq chat failed:", errMsg);
+      if (errMsg.includes("rate") || errMsg.includes("429")) {
+        return json({ reply: "I'm a bit busy right now — too many requests hitting me at once. Give me a few seconds and try again! 🙏" });
+      }
+      return json({ reply: "Something went wrong on my end. Please try again in a moment." });
     }
   } catch (error: any) {
     console.error("ai-chat function error:", error?.message || error);
-    return json({ reply: "I'm having trouble connecting to my AI systems right now. Please try again in a moment." });
+    return json({ reply: "Something went wrong on my end. Please try again in a moment." });
   }
 });

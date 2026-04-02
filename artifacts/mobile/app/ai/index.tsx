@@ -1402,12 +1402,12 @@ When asked about analytics or insights, provide data-driven analysis:
 
       const conversationMessages = messages
         .filter(m => m.role !== "thinking")
-        .slice(-20)
-        .map(m => ({ role: m.role, content: m.content }));
+        .slice(-10)
+        .map(m => ({ role: m.role, content: m.content.slice(0, 2000) }));
       conversationMessages.push({ role: "user", content });
 
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 45000);
+      const fetchTimeout = setTimeout(() => controller.abort(), 45000);
       const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-chat`, {
         method: "POST",
         signal: controller.signal,
@@ -1418,10 +1418,10 @@ When asked about analytics or insights, provide data-driven analysis:
         },
         body: JSON.stringify({
           messages: [{ role: "system", content: systemPrompt }, ...conversationMessages],
-          max_tokens: 3000,
+          max_tokens: 2000,
         }),
       });
-      clearTimeout(timeout);
+      clearTimeout(fetchTimeout);
 
       if (!res.ok) {
         const errText = await res.text().catch(() => "");
