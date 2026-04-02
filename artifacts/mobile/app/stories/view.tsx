@@ -54,6 +54,8 @@ export default function ViewStoryScreen() {
   const [loadingViewers, setLoadingViewers] = useState(false);
   const progressAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
+  const [mediaDims, setMediaDims] = useState<{ [key: string]: { w: number; h: number } }>({});
+  const fetchedDimsRef = useRef<Set<string>>(new Set());
 
   const isOwner = user?.id === userId;
 
@@ -71,6 +73,21 @@ export default function ViewStoryScreen() {
         }
       });
   }, [userId]);
+
+  useEffect(() => {
+    stories.forEach((s) => {
+      if (s.media_type !== "video" && s.media_url && !fetchedDimsRef.current.has(s.id)) {
+        fetchedDimsRef.current.add(s.id);
+        Image.getSize(
+          s.media_url,
+          (w, h) => {
+            if (w > 0 && h > 0) setMediaDims((prev) => ({ ...prev, [s.id]: { w, h } }));
+          },
+          () => {}
+        );
+      }
+    });
+  }, [stories]);
 
   const goNext = useCallback(() => {
     if (index < stories.length - 1) {
@@ -151,39 +168,86 @@ export default function ViewStoryScreen() {
     });
   }, [slideAnim]);
 
-  const { width, height } = useWindowDimensions();
+  const { width: screenW, height: screenH } = useWindowDimensions();
 
   if (!story) return <View style={[styles.root, { backgroundColor: "#0D0D0D" }]} />;
 
   const elapsed = Math.floor((Date.now() - new Date(story.created_at).getTime()) / 3600000);
   const timeLabel = elapsed < 1 ? "just now" : `${elapsed}h ago`;
 
-  const panelHeight = height * 0.45;
+  const panelHeight = screenH * 0.45;
   const translateY = slideAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [panelHeight, 0],
   });
 
+  const dims = mediaDims[story.id];
+  const isVideo = story.media_type === "video";
+  const availW = screenW;
+  const availH = screenH - insets.top - insets.bottom;
+
+  let mediaW = availW;
+  let mediaH = availH;
+  let mediaRadius = 0;
+
+  if (!isVideo && dims && dims.w > 0 && dims.h > 0 && isFinite(dims.w) && isFinite(dims.h)) {
+    const imgAspect = dims.w / dims.h;
+
+    mediaW = dims.w;
+    mediaH = dims.h;
+
+    if (mediaW > availW) {
+      mediaW = availW;
+      mediaH = mediaW / imgAspect;
+    }
+    if (mediaH > availH) {
+      mediaH = availH;
+      mediaW = mediaH * imgAspect;
+    }
+
+    const MIN_SIZE = 200;
+    if (mediaW < MIN_SIZE && dims.w < availW) {
+      mediaW = Math.min(MIN_SIZE, availW);
+      mediaH = mediaW / imgAspect;
+    }
+    if (mediaH < MIN_SIZE && dims.h < availH) {
+      mediaH = Math.min(MIN_SIZE, availH);
+      mediaW = mediaH * imgAspect;
+    }
+
+    mediaRadius = mediaW < availW || mediaH < availH ? 16 : 0;
+  }
+
   return (
     <View style={[styles.root, { backgroundColor: "#0D0D0D" }]}>
-      {story.media_type === "video" ? (
-        <Video
-          source={{ uri: story.media_url }}
-          style={styles.media}
-          resizeMode={ResizeMode.COVER}
-          shouldPlay={!paused}
-          isLooping={false}
-          isMuted={false}
-          onPlaybackStatusUpdate={(status: any) => {
-            if (status.isLoaded && status.durationMillis) {
-              progressAnim.setValue(status.positionMillis / status.durationMillis);
-            }
-            if (status.didJustFinish) goNext();
-          }}
-        />
-      ) : (
-        <Image source={{ uri: story.media_url }} style={styles.media} resizeMode="cover" />
-      )}
+      <View style={styles.mediaContainer}>
+        {isVideo ? (
+          <Video
+            source={{ uri: story.media_url }}
+            style={styles.media}
+            resizeMode={ResizeMode.CONTAIN}
+            shouldPlay={!paused}
+            isLooping={false}
+            isMuted={false}
+            onPlaybackStatusUpdate={(status: any) => {
+              if (status.isLoaded && status.durationMillis) {
+                progressAnim.setValue(status.positionMillis / status.durationMillis);
+              }
+              if (status.didJustFinish) goNext();
+            }}
+          />
+        ) : (
+          <Image
+            source={{ uri: story.media_url }}
+            style={{
+              width: mediaW,
+              height: mediaH,
+              borderRadius: mediaRadius,
+            }}
+            resizeMode="contain"
+          />
+        )}
+      </View>
 
       <View style={[styles.progressBar, { top: insets.top + 8 }]}>
         {stories.map((_, i) => (
@@ -321,6 +385,11 @@ export default function ViewStoryScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  mediaContainer: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   media: { ...StyleSheet.absoluteFillObject },
   progressBar: { flexDirection: "row", gap: 3, paddingHorizontal: 8, position: "absolute", left: 0, right: 0 },
   progressSegment: { flex: 1, height: 3, borderRadius: 1.5, overflow: "hidden" },
