@@ -58,7 +58,7 @@ The project is structured as a pnpm monorepo using TypeScript, with distinct pac
 - **Real-time**: Supabase Realtime for chat, notifications, presence, and discover feed updates (likes, comments, views, follows, new posts). Twitter/X-style "New posts" pill for feed updates.
 - **Notifications**: Expo Push Notifications with custom sound, token management, and authenticated edge function triggers.
 - **Media Handling**: Centralized media upload utility to Supabase Storage.
-- **AI Features**: Multi-provider AI assistant and image generation with cascading fallbacks via Supabase Edge Functions. Includes rich markdown rendering and actionable responses.
+- **AI Features**: Advanced AI assistant (AfuAi) powered by Groq Llama-3.3-70b via Supabase Edge Functions. Features: chat history persistence (ai_conversations/ai_messages tables), history browser with search/pin/delete, full platform intelligence (pulls user posts, channels, events, marketplace, followers, bookmarks, transactions), 15 executable actions (send_nexa, send_acoin, follow, unfollow, subscribe, cancel_subscription, convert_nexa, create_post, bookmark_post, delete_post, update_bio, update_status, search_users, buy_gift, send_message), auto-conversation-titling, rich markdown rendering, action buttons, suggestion chips, invoices/receipts, and confirmation cards. System prompt includes comprehensive AfuChat encyclopedia with all platform features.
 - **Monetization**: `ACoin` and `Nexa` (XP) in-app currencies, dynamic gift pricing, subscription plans, and in-app purchases.
 - **Gamification**: XP rewards for user activities with cooldowns.
 - **Account Management**: Soft-delete with a 30-day grace period, followed by permanent purge.

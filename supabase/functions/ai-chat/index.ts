@@ -89,7 +89,7 @@ serve(async (req) => {
       return json({ reply: "AI service is not configured. Please set the GROQ_API_KEY secret in Supabase." });
     }
 
-    const tokenLimit = max_tokens || (fast ? 300 : 2048);
+    const tokenLimit = max_tokens || (fast ? 300 : 3000);
 
     try {
       console.log(`Groq chat: ${messages.length} messages, ${tokenLimit} tokens`);
