@@ -601,21 +601,25 @@ export default function ChatsScreen() {
         />
       )}
 
-      <TouchableOpacity
-        style={[styles.fab, { backgroundColor: Colors.brand, bottom: insets.bottom + 52 + 16 }]}
-        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/contacts"); }}
-        activeOpacity={0.85}
-      >
-        <Ionicons name="create-outline" size={24} color="#fff" />
-      </TouchableOpacity>
+      {user && (
+        <>
+          <TouchableOpacity
+            style={[styles.fab, { backgroundColor: Colors.brand, bottom: insets.bottom + 52 + 16 }]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/contacts"); }}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="create-outline" size={24} color="#fff" />
+          </TouchableOpacity>
 
-      <TouchableOpacity
-        style={[styles.fab, { backgroundColor: Colors.brand, bottom: insets.bottom + 52 + 16 + 54 + 12, opacity: 0.92 }]}
-        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/stories/camera"); }}
-        activeOpacity={0.85}
-      >
-        <Ionicons name="camera" size={24} color="#fff" />
-      </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.fab, { backgroundColor: Colors.brand, bottom: insets.bottom + 52 + 16 + 54 + 12 }]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/stories/camera"); }}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="camera" size={24} color="#fff" />
+          </TouchableOpacity>
+        </>
+      )}
     </View>
   );
 }

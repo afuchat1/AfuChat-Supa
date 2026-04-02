@@ -119,6 +119,7 @@ function RootLayoutNav() {
       <Stack.Screen name="mini-programs/transfer" />
       <Stack.Screen name="mini-programs/fee-details" />
       <Stack.Screen name="notifications" />
+      <Stack.Screen name="stories/camera" options={{ headerShown: false, animation: "slide_from_bottom" }} />
       <Stack.Screen name="stories/create" options={bottomSheetAnim} />
       <Stack.Screen name="stories/view" options={{ animation: "fade" }} />
       <Stack.Screen name="red-envelope/[id]" options={bottomSheetAnim} />

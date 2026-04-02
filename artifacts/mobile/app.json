@@ -103,6 +103,14 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "AfuChat uses the camera to take photos and videos for stories.",
+          "microphonePermission": "AfuChat uses the microphone to record video with audio.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
         "expo-notifications",
         {
           "icon": "./assets/images/afu-symbol.png",

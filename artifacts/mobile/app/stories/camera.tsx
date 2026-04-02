@@ -6,12 +6,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
 
 type CameraMode = "photo" | "video";
 
@@ -26,10 +27,13 @@ export default function StoryCameraScreen() {
   const [flash, setFlash] = useState<"off" | "on">("off");
   const [recording, setRecording] = useState(false);
   const [processing, setProcessing] = useState(false);
-  useEffect(() => {
-    if (!camPermission?.granted) requestCamPermission();
-    if (!micPermission?.granted) requestMicPermission();
-  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      setProcessing(false);
+      setRecording(false);
+    }, [])
+  );
 
   const takePicture = useCallback(async () => {
     if (!cameraRef.current || processing) return;
@@ -38,8 +42,12 @@ export default function StoryCameraScreen() {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
       if (photo?.uri) {
         router.push({ pathname: "/stories/create", params: { mediaUri: photo.uri, mediaType: "image" } });
+      } else {
+        showAlert("Error", "Could not capture photo. Please try again.");
+        setProcessing(false);
       }
-    } catch {
+    } catch (e: any) {
+      showAlert("Error", e?.message || "Failed to take photo.");
       setProcessing(false);
     }
   }, [processing]);
@@ -52,7 +60,10 @@ export default function StoryCameraScreen() {
     }
     if (!micPermission?.granted) {
       const { granted } = await requestMicPermission();
-      if (!granted) return;
+      if (!granted) {
+        showAlert("Microphone Required", "Microphone access is needed to record video with audio.");
+        return;
+      }
     }
     setRecording(true);
     try {
@@ -60,27 +71,42 @@ export default function StoryCameraScreen() {
       setRecording(false);
       if (video?.uri) {
         router.push({ pathname: "/stories/create", params: { mediaUri: video.uri, mediaType: "video" } });
+      } else {
+        showAlert("Error", "Could not record video. Please try again.");
       }
-    } catch {
+    } catch (e: any) {
       setRecording(false);
+      showAlert("Error", e?.message || "Failed to record video.");
     }
   }, [recording, micPermission]);
 
   const openGallery = useCallback(async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images", "videos"],
-      quality: 0.85,
-    });
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      router.push({
-        pathname: "/stories/create",
-        params: { mediaUri: asset.uri, mediaType: asset.type === "video" ? "video" : "image" },
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images", "videos"],
+        quality: 0.85,
       });
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        router.push({
+          pathname: "/stories/create",
+          params: { mediaUri: asset.uri, mediaType: asset.type === "video" ? "video" : "image" },
+        });
+      }
+    } catch {
+      showAlert("Error", "Could not open gallery.");
     }
   }, []);
 
-  if (!camPermission?.granted) {
+  if (!camPermission) {
+    return (
+      <View style={[st.root, { backgroundColor: "#000", alignItems: "center", justifyContent: "center" }]}>
+        <ActivityIndicator color="#fff" size="large" />
+      </View>
+    );
+  }
+
+  if (!camPermission.granted) {
     return (
       <View style={[st.root, { backgroundColor: "#000" }]}>
         <View style={st.permWrap}>
@@ -89,8 +115,12 @@ export default function StoryCameraScreen() {
           <TouchableOpacity style={st.permBtn} onPress={requestCamPermission}>
             <Text style={st.permBtnText}>Allow Camera</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={st.permSecondary} onPress={openGallery}>
+            <Ionicons name="images-outline" size={18} color="rgba(255,255,255,0.7)" />
+            <Text style={[st.permBtnText, { color: "rgba(255,255,255,0.7)" }]}>Choose from Gallery</Text>
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => router.back()}>
-            <Text style={[st.permBtnText, { color: "rgba(255,255,255,0.5)", marginTop: 16 }]}>Go Back</Text>
+            <Text style={[st.permBtnText, { color: "rgba(255,255,255,0.4)", marginTop: 8 }]}>Go Back</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -293,6 +323,16 @@ const st = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 24,
+  },
+  permSecondary: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
   },
   permBtnText: {
     color: "#fff",
