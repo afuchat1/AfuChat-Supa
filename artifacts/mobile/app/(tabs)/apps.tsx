@@ -475,7 +475,7 @@ export default function AppsScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Search</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Apps</Text>
           {isPremium && (
             <View style={styles.premiumPill}>
               <Ionicons name="diamond" size={11} color="#FFD60A" />

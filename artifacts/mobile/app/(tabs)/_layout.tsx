@@ -28,8 +28,8 @@ function NativeTabLayout() {
         <Label>Discover</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="apps">
-        <Icon sf={{ default: "magnifyingglass", selected: "magnifyingglass" }} />
-        <Label>Search</Label>
+        <Icon sf={{ default: "square.grid.2x2", selected: "square.grid.2x2.fill" }} />
+        <Label>Apps</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="me">
         <Icon sf={{ default: "person.circle", selected: "person.circle.fill" }} />
@@ -113,12 +113,12 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
       <Tabs.Screen
         name="apps"
         options={{
-          title: "Search",
+          title: "Apps",
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
-              <SymbolView name="magnifyingglass" tintColor={color} size={22} />
+              <SymbolView name={focused ? "square.grid.2x2.fill" : "square.grid.2x2"} tintColor={color} size={22} />
             ) : (
-              <Ionicons name={focused ? "search" : "search-outline"} size={22} color={color} />
+              <Ionicons name={focused ? "grid" : "grid-outline"} size={22} color={color} />
             ),
         }}
       />
