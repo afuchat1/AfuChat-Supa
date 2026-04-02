@@ -490,9 +490,8 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   const isGiftMsg = msg.encrypted_content.startsWith("🎁");
   const meBubbleColor = chatTheme?.bubble || BRAND;
   const otherBubbleColor = colors.bubbleIncoming;
-  const isAi = !!msg._isAi;
-  const bubbleColor = isAi ? "#004D5C" : (isMe ? meBubbleColor : otherBubbleColor);
-  const textColor = isAi ? "#E0F7FA" : (isMe ? "#FFFFFF" : colors.bubbleIncomingText);
+  const bubbleColor = isMe ? meBubbleColor : otherBubbleColor;
+  const textColor = isMe ? "#FFFFFF" : colors.bubbleIncomingText;
   const isPending = msg._pending || msg.status === "sending";
 
   const fadeIn = useRef(new Animated.Value(0)).current;
@@ -555,15 +554,11 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
           isPending && { opacity: 0.6 },
         ]}>
           {isPremiumSender && <PremiumBubbleShimmer />}
-          {isAi ? (
-            <Text style={[st.senderName, { color: "#00BCD4", fontFamily: "Inter_600SemiBold", letterSpacing: 0.3 }]}>
-              ✦ AfuAI
-            </Text>
-          ) : (!isMe && showName && (
+          {!isMe && showName && (
             <Text style={[st.senderName, { color: BRAND }]}>
               {msg.sender?.display_name}
             </Text>
-          ))}
+          )}
 
           {replyPreview && (
             <View style={[st.replyPreview, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.06)" }]}>
@@ -2414,6 +2409,14 @@ export default function ChatScreen() {
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}>
+        {chatInfo?.other_id === AFUAI_BOT_ID && (
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 7, backgroundColor: "#00BCD4" + "18", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#00BCD4" + "40", gap: 7 }}>
+            <Ionicons name="sparkles-outline" size={13} color="#00BCD4" />
+            <Text style={{ flex: 1, fontSize: 12, color: "#00BCD4", fontFamily: "Inter_400Regular" }}>
+              You're chatting with AfuAI — an AI assistant. Responses are AI-generated and may not always be accurate.
+            </Text>
+          </View>
+        )}
         {loading ? (
           <ChatLoadingSkeleton />
         ) : messages.length === 0 ? (
