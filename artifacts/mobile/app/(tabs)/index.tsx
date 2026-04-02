@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Animated,
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -603,7 +604,7 @@ export default function ChatsScreen() {
             />
           )}
           ItemSeparatorComponent={() => <Separator indent={74} />}
-          ListHeaderComponent={user ? <StoriesBar userId={user.id} colors={colors} /> : null}
+          ListHeaderComponent={user && Platform.OS !== "web" ? <StoriesBar userId={user.id} colors={colors} /> : null}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
