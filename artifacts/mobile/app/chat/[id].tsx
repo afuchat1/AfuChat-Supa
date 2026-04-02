@@ -101,6 +101,7 @@ type ChatInfo = {
   other_name: string;
   other_avatar: string | null;
   other_id: string;
+  member_ids: string[];
   avatar_url: string | null;
   is_verified?: boolean;
   is_organization_verified?: boolean;
@@ -755,6 +756,7 @@ export default function ChatScreen() {
           other_name: contactName as string,
           other_avatar: contactAvatar as string | null || null,
           other_id: contactId as string,
+          member_ids: contactId ? [contactId as string] : [],
           avatar_url: null,
         }
       : null
@@ -1001,6 +1003,7 @@ export default function ChatScreen() {
     if (chat) {
       const others = (chat.chat_members || []).filter((m: any) => m.user_id !== user.id);
       const other = others[0]?.profiles;
+      const memberIds = others.map((m: any) => m.profiles?.id).filter(Boolean) as string[];
       setChatInfo({
         is_group: !!chat.is_group,
         is_channel: !!chat.is_channel,
@@ -1008,6 +1011,7 @@ export default function ChatScreen() {
         other_name: other?.display_name || "Unknown",
         other_avatar: other?.avatar_url || null,
         other_id: other?.id || "",
+        member_ids: memberIds,
         avatar_url: chat.avatar_url,
         is_verified: !!other?.is_verified,
         is_organization_verified: !!other?.is_organization_verified,
@@ -1583,12 +1587,19 @@ export default function ChatScreen() {
     }
 
     if (!error && chatInfo) {
-      notifyNewMessage({
-        recipientIds: [chatInfo.other_id],
-        senderName: profile?.display_name || "Someone",
-        messageText: text,
-        chatId: activeChatId,
-      });
+      const recipientIds = chatInfo.member_ids.length > 0
+        ? chatInfo.member_ids
+        : chatInfo.other_id ? [chatInfo.other_id] : [];
+      if (recipientIds.length > 0) {
+        notifyNewMessage({
+          recipientIds,
+          senderName: profile?.display_name || "Someone",
+          messageText: text,
+          chatId: activeChatId,
+          isGroup: chatInfo.is_group,
+          groupName: chatInfo.name || undefined,
+        });
+      }
     }
 
     try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("message_sent"); } catch (_) {}

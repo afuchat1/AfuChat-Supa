@@ -184,7 +184,7 @@ export default function ArticleDetailScreen() {
       setArticle((a) => a ? { ...a, replyCount: a.replyCount + 1 } : a);
       setReplyText("");
       if (article.author.id !== user.id) {
-        notifyPostReply({ postAuthorId: article.author.id, replierName: myProfile?.display_name || "Someone", replierUserId: user.id, postId: article.id });
+        notifyPostReply({ postAuthorId: article.author.id, replierName: myProfile?.display_name || "Someone", replierUserId: user.id, postId: article.id, replyPreview: replyText.trim() });
       }
     }
     setReplying(false);

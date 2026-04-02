@@ -140,11 +140,12 @@ export async function notifyPostReply(params: {
   replierName: string;
   replierUserId: string;
   postId: string;
-  replyPreview: string;
+  replyPreview?: string;
 }) {
-  const body = params.replyPreview.length > 100
-    ? params.replyPreview.substring(0, 97) + "..."
-    : params.replyPreview;
+  const preview = (params.replyPreview || "").trim();
+  const body = preview.length > 100
+    ? preview.substring(0, 97) + "..."
+    : preview || "Replied to your post";
   callNotify({
     userId: params.postAuthorId,
     title: params.replierName,
