@@ -38,6 +38,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { translateText, LANG_LABELS } from "@/lib/translate";
 import { useDesktopDetail } from "@/context/DesktopDetailContext";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
+import VideoFeed from "@/components/VideoFeed";
 
 type PostItem = {
   id: string;
@@ -56,6 +57,9 @@ type PostItem = {
   replyCount: number;
   score: number;
   bookmarked: boolean;
+  post_type: string;
+  article_title: string | null;
+  video_url: string | null;
 };
 
 function formatRelative(iso: string): string {
@@ -118,6 +122,10 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress, colWidth
   }, [preferredLang, item.content]);
 
   function openPost() {
+    if (item.post_type === "article") {
+      router.push({ pathname: "/article/[id]", params: { id: item.id } });
+      return;
+    }
     if (isDesktop) {
       openDetail({ type: "post", id: item.id });
     } else {
@@ -191,8 +199,32 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress, colWidth
             </View>
           </View>
 
+          {/* ── Article badge ── */}
+          {item.post_type === "article" && (
+            <View style={[styles.postTypeBadge, { backgroundColor: Colors.brand + "15" }]}>
+              <Ionicons name="document-text-outline" size={12} color={Colors.brand} />
+              <Text style={[styles.postTypeBadgeText, { color: Colors.brand }]}>Article</Text>
+            </View>
+          )}
+
+          {/* ── Video badge ── */}
+          {item.post_type === "video" && (
+            <View style={[styles.postTypeBadge, { backgroundColor: "#FF3B3015" }]}>
+              <Ionicons name="videocam-outline" size={12} color="#FF3B30" />
+              <Text style={[styles.postTypeBadgeText, { color: "#FF3B30" }]}>Video</Text>
+            </View>
+          )}
+
+          {/* ── Article title ── */}
+          {item.post_type === "article" && item.article_title && (
+            <Text style={[styles.articleTitle, { color: colors.text }]}>{item.article_title}</Text>
+          )}
+
           {/* ── Content ── */}
-          <RichText style={[styles.cardContent, { color: colors.text }]}>{displayContent}</RichText>
+          <RichText
+            style={[styles.cardContent, { color: colors.text }]}
+            numberOfLines={item.post_type === "article" ? 3 : undefined}
+          >{displayContent}</RichText>
 
           {isTranslated && (
             <View style={styles.translatedBadge}>
@@ -201,6 +233,17 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress, colWidth
                 {`Translated · ${LANG_LABELS[preferredLang || ""] ?? preferredLang}`}
               </Text>
             </View>
+          )}
+
+          {/* ── Read Article CTA ── */}
+          {item.post_type === "article" && (
+            <TouchableOpacity
+              onPress={openPost}
+              style={[styles.readArticleBtn, { borderColor: Colors.brand }]}
+            >
+              <Text style={[styles.readArticleText, { color: Colors.brand }]}>Read Article</Text>
+              <Ionicons name="arrow-forward" size={14} color={Colors.brand} />
+            </TouchableOpacity>
           )}
 
           {/* ── Images — edge-to-edge inside card ── */}
@@ -289,11 +332,12 @@ export default function DiscoverScreen() {
   const RIGHT_PANEL_W = screenWidth >= 1280 ? 380 : 0;
   const centerW = isDesktop ? screenWidth - SIDEBAR_W - RIGHT_PANEL_W : screenWidth;
   const desktopColWidth = isDesktop ? Math.floor((centerW - 32) / 2) : undefined;
-  const [feedTab, setFeedTab] = useState<"for_you" | "following">("for_you");
+  const [feedTab, setFeedTab] = useState<"for_you" | "following" | "videos">("for_you");
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [showCreatePicker, setShowCreatePicker] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [followingEmpty, setFollowingEmpty] = useState(false);
   const PAGE_SIZE = 30;
@@ -335,6 +379,7 @@ export default function DiscoverScreen() {
         .from("posts")
         .select(`
           id, author_id, content, image_url, created_at, view_count, visibility, language_code,
+          post_type, article_title, video_url,
           profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified),
           post_images(image_url, display_order)
         `)
@@ -372,6 +417,7 @@ export default function DiscoverScreen() {
           is_organization_verified: p.profiles?.is_organization_verified || false,
           profile: { display_name: p.profiles?.display_name || "User", handle: p.profiles?.handle || "user", avatar_url: p.profiles?.avatar_url || null },
           liked: myLikeSet.has(p.id), likeCount: likeMap[p.id] || 0, replyCount: replyMap[p.id] || 0, score: 0, bookmarked: myBookmarkSet.has(p.id),
+          post_type: p.post_type || "post", article_title: p.article_title || null, video_url: p.video_url || null,
         }));
 
         if (isRefresh) setPosts(mapped); else setPosts((prev) => { const ids = new Set(prev.map((p) => p.id)); return [...prev, ...mapped.filter((i) => !ids.has(i.id))]; });
@@ -388,6 +434,7 @@ export default function DiscoverScreen() {
       .from("posts")
       .select(`
         id, author_id, content, image_url, created_at, view_count, visibility, language_code,
+        post_type, article_title, video_url,
         profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified, country, interests),
         post_images(image_url, display_order)
       `)
@@ -520,6 +567,9 @@ export default function DiscoverScreen() {
           replyCount,
           score,
           bookmarked: myBookmarkSet.has(p.id),
+          post_type: p.post_type || "post",
+          article_title: p.article_title || null,
+          video_url: p.video_url || null,
         };
       });
 
@@ -544,17 +594,18 @@ export default function DiscoverScreen() {
   const loadPosts = useCallback((tab?: "for_you" | "following") => fetchPosts(0, true, tab), [fetchPosts]);
 
   const loadMore = useCallback(() => {
-    if (loadingMore || !hasMore) return;
+    if (loadingMore || !hasMore || feedTab === "videos") return;
     setLoadingMore(true);
-    fetchPosts(posts.length, false, feedTab);
+    fetchPosts(posts.length, false, feedTab as "for_you" | "following");
   }, [fetchPosts, posts.length, loadingMore, hasMore, feedTab]);
 
   useEffect(() => {
+    if (feedTab === "videos") return;
     setLoading(true);
     setPosts([]);
     setHasMore(true);
     setFollowingEmpty(false);
-    loadPosts(feedTab);
+    loadPosts(feedTab as "for_you" | "following");
   }, [feedTab]);
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
@@ -653,6 +704,15 @@ export default function DiscoverScreen() {
               Following
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabPill, feedTab === "videos" && { backgroundColor: "#FF3B30" }]}
+            onPress={() => setFeedTab("videos")}
+          >
+            <Ionicons name="videocam" size={13} color={feedTab === "videos" ? "#fff" : colors.textMuted} style={{ marginRight: 3 }} />
+            <Text style={[styles.tabPillText, { color: feedTab === "videos" ? "#fff" : colors.textMuted }]}>
+              Videos
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {!user && (
@@ -666,8 +726,11 @@ export default function DiscoverScreen() {
         )}
       </View>
 
-      {/* Following tab — not signed in */}
-      {feedTab === "following" && !user ? (
+      {/* ── Videos tab ── */}
+      {feedTab === "videos" ? (
+        <VideoFeed />
+      ) : /* Following tab — not signed in */
+      feedTab === "following" && !user ? (
         <View style={styles.center}>
           <Ionicons name="lock-closed-outline" size={56} color={colors.textMuted} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>Sign in to see Following</Text>
@@ -728,12 +791,51 @@ export default function DiscoverScreen() {
       {user && (
         <TouchableOpacity
           style={[styles.fab, { backgroundColor: Colors.brand, bottom: insets.bottom + 52 + 16 }]}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/moments/create"); }}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowCreatePicker(true); }}
           activeOpacity={0.85}
         >
-          <Ionicons name="create-outline" size={24} color="#fff" />
+          <Ionicons name="add" size={28} color="#fff" />
         </TouchableOpacity>
       )}
+
+      {/* Create type picker */}
+      <Modal
+        visible={showCreatePicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCreatePicker(false)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" }}
+          activeOpacity={1}
+          onPress={() => setShowCreatePicker(false)}
+        >
+          <View style={[styles.createPickerSheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 16 }]}>
+            <View style={[styles.createPickerHandle, { backgroundColor: colors.border }]} />
+            <Text style={[styles.createPickerTitle, { color: colors.text }]}>What would you like to create?</Text>
+            {[
+              { icon: "create-outline", label: "Post", desc: "Share a thought, photo, or link", route: "/moments/create", color: Colors.brand },
+              { icon: "document-text-outline", label: "Article", desc: "Write a long-form article", route: "/moments/create-article", color: "#007AFF" },
+              { icon: "videocam-outline", label: "Video", desc: "Share a short video clip", route: "/moments/create-video", color: "#FF3B30" },
+            ].map((opt) => (
+              <TouchableOpacity
+                key={opt.label}
+                style={[styles.createPickerOption, { backgroundColor: colors.backgroundTertiary }]}
+                onPress={() => { setShowCreatePicker(false); setTimeout(() => router.push(opt.route as any), 150); }}
+              >
+                <View style={[styles.createPickerIconBox, { backgroundColor: opt.color + "18" }]}>
+                  <Ionicons name={opt.icon as any} size={24} color={opt.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.createPickerLabel, { color: colors.text }]}>{opt.label}</Text>
+                  <Text style={[styles.createPickerDesc, { color: colors.textMuted }]}>{opt.desc}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
       <ImageViewer
         images={imgViewer.images}
         initialIndex={imgViewer.index}
@@ -875,4 +977,72 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
   },
+  postTypeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    alignSelf: "flex-start",
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginHorizontal: 13,
+    marginBottom: 6,
+    marginTop: 6,
+  },
+  postTypeBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  articleTitle: {
+    fontSize: 18,
+    fontFamily: "Inter_700Bold",
+    paddingHorizontal: 13,
+    marginBottom: 6,
+    lineHeight: 24,
+  },
+  readArticleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    marginHorizontal: 13,
+    marginTop: 8,
+    marginBottom: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
+  },
+  readArticleText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  createPickerSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    gap: 10,
+  },
+  createPickerHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 10,
+  },
+  createPickerTitle: {
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+    marginBottom: 4,
+  },
+  createPickerOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    padding: 14,
+    borderRadius: 14,
+  },
+  createPickerIconBox: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  createPickerLabel: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  createPickerDesc: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
 });

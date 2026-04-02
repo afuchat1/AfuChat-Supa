@@ -1,0 +1,224 @@
+import React, { useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { router } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import { Video, ResizeMode } from "expo-av";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
+import { useTheme } from "@/hooks/useTheme";
+import Colors from "@/constants/colors";
+import { showAlert } from "@/lib/alert";
+import { uploadToStorage } from "@/lib/mediaUpload";
+
+const MAX_DURATION_SECONDS = 90;
+
+export default function CreateVideoScreen() {
+  const { colors } = useTheme();
+  const { user, profile } = useAuth();
+  const insets = useSafeAreaInsets();
+
+  const [videoUri, setVideoUri] = useState<string | null>(null);
+  const [duration, setDuration] = useState<number>(0);
+  const [caption, setCaption] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
+  const videoRef = useRef<Video>(null);
+
+  async function pickVideo() {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      allowsEditing: true,
+      quality: 0.8,
+      videoMaxDuration: MAX_DURATION_SECONDS,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      const dur = (asset.duration || 0) / 1000;
+      if (dur > MAX_DURATION_SECONDS) {
+        showAlert("Too long", `Videos must be ${MAX_DURATION_SECONDS} seconds or shorter.`);
+        return;
+      }
+      setVideoUri(asset.uri);
+      setDuration(dur);
+    }
+  }
+
+  async function post() {
+    if (!user) { router.push("/(auth)/login"); return; }
+    if (!videoUri) { showAlert("No video", "Please pick a video first."); return; }
+    setLoading(true);
+    setUploadProgress("Uploading video…");
+    try {
+      const ext = videoUri.split(".").pop()?.split("?")[0] || "mp4";
+      const filePath = `${user.id}/${Date.now()}.${ext}`;
+      const { publicUrl, error: uploadError } = await uploadToStorage("videos", filePath, videoUri);
+      if (uploadError || !publicUrl) throw new Error(uploadError || "Upload failed");
+
+      setUploadProgress("Publishing…");
+      const { error } = await supabase.from("posts").insert({
+        author_id: user.id,
+        content: caption.trim(),
+        video_url: publicUrl,
+        post_type: "video",
+        visibility: "public",
+        view_count: 0,
+      });
+      if (error) throw error;
+      try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("post_created"); } catch (_) {}
+      router.back();
+    } catch (err: any) {
+      showAlert("Error", err.message || "Failed to post video.");
+    } finally {
+      setLoading(false);
+      setUploadProgress("");
+    }
+  }
+
+  const canPost = !!videoUri && !loading;
+  const durationLabel = duration > 0 ? `${Math.round(duration)}s / ${MAX_DURATION_SECONDS}s` : "";
+
+  return (
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top + 8, borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn} hitSlop={8}>
+          <Ionicons name="close" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>New Video</Text>
+        <TouchableOpacity
+          onPress={post}
+          disabled={!canPost}
+          style={[styles.postBtn, { backgroundColor: canPost ? Colors.brand : colors.backgroundTertiary }]}
+        >
+          {loading
+            ? <ActivityIndicator size="small" color="#fff" />
+            : <Text style={[styles.postBtnText, { color: canPost ? "#fff" : colors.textMuted }]}>Post</Text>
+          }
+        </TouchableOpacity>
+      </View>
+
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Video picker / preview */}
+          {!videoUri ? (
+            <TouchableOpacity style={[styles.pickerArea, { backgroundColor: colors.backgroundTertiary, borderColor: colors.border }]} onPress={pickVideo}>
+              <View style={[styles.pickerIcon, { backgroundColor: Colors.brand + "20" }]}>
+                <Ionicons name="videocam" size={40} color={Colors.brand} />
+              </View>
+              <Text style={[styles.pickerTitle, { color: colors.text }]}>Tap to select a video</Text>
+              <Text style={[styles.pickerSub, { color: colors.textMuted }]}>MP4, MOV, WebM · max {MAX_DURATION_SECONDS}s</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.previewContainer}>
+              <Video
+                ref={videoRef}
+                source={{ uri: videoUri }}
+                style={styles.preview}
+                resizeMode={ResizeMode.CONTAIN}
+                shouldPlay={false}
+                isLooping
+                useNativeControls
+              />
+              <View style={styles.previewOverlay}>
+                {durationLabel ? (
+                  <View style={styles.durationBadge}>
+                    <Ionicons name="time-outline" size={12} color="#fff" />
+                    <Text style={styles.durationText}>{durationLabel}</Text>
+                  </View>
+                ) : null}
+              </View>
+              <TouchableOpacity style={[styles.changeVideoBtn, { backgroundColor: colors.backgroundTertiary }]} onPress={pickVideo}>
+                <Ionicons name="swap-horizontal" size={16} color={colors.text} />
+                <Text style={[styles.changeVideoText, { color: colors.text }]}>Change video</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Caption */}
+          <View style={[styles.captionBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Ionicons name="pencil-outline" size={18} color={colors.textMuted} style={{ marginTop: 2 }} />
+            <TextInput
+              style={[styles.captionInput, { color: colors.text }]}
+              placeholder="Write a caption… #hashtags @mentions"
+              placeholderTextColor={colors.textMuted}
+              value={caption}
+              onChangeText={setCaption}
+              multiline
+              maxLength={500}
+            />
+          </View>
+
+          {/* Tips */}
+          <View style={[styles.tipsBox, { backgroundColor: colors.backgroundTertiary }]}>
+            <Text style={[styles.tipsTitle, { color: colors.textSecondary }]}>Tips for great videos</Text>
+            {[
+              "Keep it under 60 seconds for maximum engagement",
+              "Good lighting makes a huge difference",
+              "Add hashtags to reach more people",
+            ].map((tip, i) => (
+              <View key={i} style={styles.tipRow}>
+                <View style={[styles.tipDot, { backgroundColor: Colors.brand }]} />
+                <Text style={[styles.tipText, { color: colors.textMuted }]}>{tip}</Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Upload progress */}
+          {uploadProgress ? (
+            <View style={styles.progressRow}>
+              <ActivityIndicator size="small" color={Colors.brand} />
+              <Text style={[styles.progressText, { color: colors.textSecondary }]}>{uploadProgress}</Text>
+            </View>
+          ) : null}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth, gap: 12 },
+  headerBtn: { padding: 4 },
+  headerTitle: { flex: 1, fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  postBtn: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20 },
+  postBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  content: { padding: 20, gap: 16 },
+  pickerArea: { borderRadius: 16, borderWidth: 2, borderStyle: "dashed", alignItems: "center", justifyContent: "center", padding: 48, gap: 12 },
+  pickerIcon: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
+  pickerTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  pickerSub: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  previewContainer: { borderRadius: 16, overflow: "hidden", aspectRatio: 9 / 16, maxHeight: 420, backgroundColor: "#000" },
+  preview: { flex: 1 },
+  previewOverlay: { position: "absolute", top: 12, right: 12, gap: 8 },
+  durationBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  durationText: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#fff" },
+  changeVideoBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 12, margin: 0 },
+  changeVideoText: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  captionBox: { flexDirection: "row", gap: 10, padding: 14, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, alignItems: "flex-start" },
+  captionInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22, minHeight: 60 },
+  tipsBox: { borderRadius: 12, padding: 16, gap: 8 },
+  tipsTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", marginBottom: 4 },
+  tipRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  tipDot: { width: 5, height: 5, borderRadius: 2.5, marginTop: 7 },
+  tipText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 20 },
+  progressRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  progressText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+});
