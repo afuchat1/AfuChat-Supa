@@ -1317,7 +1317,14 @@ AI CAPABILITIES (what you can do):
     }
 
     try {
-      const userContext = await getUserContext();
+      let userContext = "";
+      try {
+        userContext = await getUserContext();
+        if (userContext.length > 8000) userContext = userContext.slice(0, 8000) + "\n[Context trimmed for length]";
+      } catch (ctxErr) {
+        console.warn("getUserContext failed, continuing without context:", ctxErr);
+        userContext = `\nUSER CONTEXT:\n- Name: ${profile?.display_name || "User"}\n- Handle: @${profile?.handle || "unknown"}\n`;
+      }
       const conversationHistory = messages
         .filter(m => m.role !== "thinking")
         .slice(-20)
@@ -1399,8 +1406,11 @@ When asked about analytics or insights, provide data-driven analysis:
         .map(m => ({ role: m.role, content: m.content }));
       conversationMessages.push({ role: "user", content });
 
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 45000);
       const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-chat`, {
         method: "POST",
+        signal: controller.signal,
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
@@ -1411,6 +1421,12 @@ When asked about analytics or insights, provide data-driven analysis:
           max_tokens: 3000,
         }),
       });
+      clearTimeout(timeout);
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(`HTTP ${res.status}: ${errText.slice(0, 200)}`);
+      }
 
       const data = await res.json();
 
@@ -1444,11 +1460,15 @@ When asked about analytics or insights, provide data-driven analysis:
           autoTitleConversation(convId, content, cleanText);
         }
       }
-    } catch {
+    } catch (err: any) {
+      console.error("AfuAi sendMessage error:", err?.message || err);
       if (requestIdRef.current !== currentRequestId) return;
+      const errMsg = err?.name === "AbortError"
+        ? "The request took too long. Please try again."
+        : "Could not connect to AfuAi. Please check your connection and try again.";
       setMessages(prev => [
         ...prev,
-        { id: `e_${Date.now()}`, role: "assistant", content: "Could not connect to AfuAi. Please check your connection and try again.", timestamp: Date.now() },
+        { id: `e_${Date.now()}`, role: "assistant", content: errMsg, timestamp: Date.now() },
       ]);
     }
     if (requestIdRef.current === currentRequestId) setLoading(false);
