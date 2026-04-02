@@ -114,8 +114,9 @@ export default function ContactProfileScreen() {
     setPostsLoading(true);
     const { data } = await supabase
       .from("posts")
-      .select("id, content, image_url, created_at, view_count")
+      .select("id, content, image_url, created_at, view_count, visibility")
       .eq("author_id", id)
+      .in("visibility", ["public", "followers"])
       .order("created_at", { ascending: false })
       .limit(20);
 

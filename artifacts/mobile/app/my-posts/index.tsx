@@ -30,6 +30,7 @@ type PostItem = {
   images: string[];
   created_at: string;
   view_count: number;
+  visibility: string;
   likeCount: number;
   replyCount: number;
 };
@@ -59,7 +60,15 @@ function MyPostCard({ item, profile, onDelete }: { item: PostItem; profile: any;
             <Text style={[styles.cardName, { color: colors.text }]}>{profile?.display_name || "You"}</Text>
             <VerifiedBadge isVerified={profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={14} />
           </View>
-          <Text style={[styles.cardTime, { color: colors.textMuted }]}>{formatRelative(item.created_at)}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text style={[styles.cardTime, { color: colors.textMuted }]}>{formatRelative(item.created_at)}</Text>
+            {item.visibility !== "public" && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 2, backgroundColor: colors.backgroundTertiary, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
+                <Ionicons name={item.visibility === "private" ? "lock-closed" : "people"} size={10} color={colors.textMuted} />
+                <Text style={{ fontSize: 10, fontFamily: "Inter_500Medium", color: colors.textMuted }}>{item.visibility === "private" ? "Only Me" : "Followers"}</Text>
+              </View>
+            )}
+          </View>
         </View>
         <TouchableOpacity onPress={() => onDelete(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
@@ -106,7 +115,7 @@ export default function MyPostsScreen() {
     if (!user) { setLoading(false); return; }
     const { data } = await supabase
       .from("posts")
-      .select(`id, content, image_url, created_at, view_count, post_images(image_url, display_order)`)
+      .select(`id, content, image_url, created_at, view_count, visibility, post_images(image_url, display_order)`)
       .eq("author_id", user.id)
       .order("created_at", { ascending: false })
       .limit(50);
@@ -130,6 +139,7 @@ export default function MyPostsScreen() {
         images: (p.post_images || []).sort((a: any, b: any) => a.display_order - b.display_order).map((i: any) => i.image_url),
         created_at: p.created_at,
         view_count: p.view_count || 0,
+        visibility: p.visibility || "public",
         likeCount: likeMap[p.id] || 0,
         replyCount: replyMap[p.id] || 0,
       })));

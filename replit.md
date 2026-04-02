@@ -52,6 +52,7 @@ The project is structured as a pnpm monorepo using TypeScript, with distinct pac
 **Technical Implementations:**
 - **Authentication**: Supabase Auth with email/password, Google/GitHub OAuth, OTP-based password reset, email confirmation. Supports multi-account switching via `expo-secure-store`/`AsyncStorage`.
 - **Navigation**: Expo Router with tab-based navigation and deep linking support. Tabs: AfuChat (chats, auth-gated), Discover (feed), Apps (with built-in search for people/posts/apps), Me (profile, auth-gated). Post creation via FAB on discover page.
+- **Post Visibility**: Posts have a `visibility` column (`public`, `followers`, `private`, default `public`). Create screen saves the audience selection to DB. Discover feed "For You" shows only public posts; "Following" shows public + followers posts. Search only returns public posts. Profile pages show public + followers posts. My Posts page shows all with visibility badges. Post detail page includes visibility field.
 - **Offline Support**: Offline-first architecture with `AsyncStorage` caching for critical data, message queuing, and auto-sync on reconnect. Includes network status banners.
 - **Real-time**: Supabase Realtime for chat, notifications, and presence.
 - **Notifications**: Expo Push Notifications with custom sound, token management, and authenticated edge function triggers.

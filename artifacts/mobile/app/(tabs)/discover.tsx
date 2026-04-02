@@ -47,6 +47,7 @@ type PostItem = {
   images: string[];
   created_at: string;
   view_count: number;
+  visibility: string;
   is_verified: boolean;
   is_organization_verified: boolean;
   profile: { display_name: string; handle: string; avatar_url: string | null };
@@ -333,12 +334,13 @@ export default function DiscoverScreen() {
       const { data } = await supabase
         .from("posts")
         .select(`
-          id, author_id, content, image_url, created_at, view_count, language_code,
+          id, author_id, content, image_url, created_at, view_count, visibility, language_code,
           profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified),
           post_images(image_url, display_order)
         `)
         .eq("is_blocked", false)
         .in("author_id", followingIds)
+        .in("visibility", ["public", "followers"])
         .order("created_at", { ascending: false })
         .range(offset, offset + PAGE_SIZE - 1);
 
@@ -365,6 +367,7 @@ export default function DiscoverScreen() {
           image_url: p.image_url,
           images: (p.post_images || []).sort((a: any, b: any) => a.display_order - b.display_order).map((i: any) => i.image_url),
           created_at: p.created_at, view_count: p.view_count || 0,
+          visibility: p.visibility || "public",
           is_verified: p.profiles?.is_verified || false,
           is_organization_verified: p.profiles?.is_organization_verified || false,
           profile: { display_name: p.profiles?.display_name || "User", handle: p.profiles?.handle || "user", avatar_url: p.profiles?.avatar_url || null },
@@ -384,11 +387,12 @@ export default function DiscoverScreen() {
     const { data } = await supabase
       .from("posts")
       .select(`
-        id, author_id, content, image_url, created_at, view_count, language_code,
+        id, author_id, content, image_url, created_at, view_count, visibility, language_code,
         profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified, country, interests),
         post_images(image_url, display_order)
       `)
       .eq("is_blocked", false)
+      .eq("visibility", "public")
       .order("created_at", { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1);
 
@@ -503,6 +507,7 @@ export default function DiscoverScreen() {
             .map((i: any) => i.image_url),
           created_at: p.created_at,
           view_count: p.view_count || 0,
+          visibility: p.visibility || "public",
           is_verified: p.profiles?.is_verified || false,
           is_organization_verified: p.profiles?.is_organization_verified || false,
           profile: {

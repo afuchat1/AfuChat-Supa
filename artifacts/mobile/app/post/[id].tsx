@@ -46,6 +46,7 @@ type PostData = {
   images: string[];
   created_at: string;
   view_count: number;
+  visibility: string;
   author: { id: string; display_name: string; avatar_url: string | null; handle: string; is_verified: boolean; is_organization_verified: boolean };
   liked: boolean;
   likeCount: number;
@@ -121,7 +122,7 @@ export default function PostDetailScreen() {
     if (!id) return;
     const { data } = await supabase
       .from("posts")
-      .select(`id, content, image_url, created_at, view_count,
+      .select(`id, content, image_url, created_at, view_count, visibility,
         profiles!posts_author_id_fkey(id, display_name, avatar_url, handle, is_verified, is_organization_verified),
         post_images(image_url, display_order)`)
       .eq("id", id)
@@ -165,6 +166,7 @@ export default function PostDetailScreen() {
       images: ((data as any).post_images || []).sort((a: any, b: any) => a.display_order - b.display_order).map((i: any) => i.image_url),
       created_at: data.created_at,
       view_count: (data.view_count || 0) + (user ? 1 : 0),
+      visibility: (data as any).visibility || "public",
       author: (data as any).profiles,
       liked: !!myLike,
       likeCount: likeCount || 0,

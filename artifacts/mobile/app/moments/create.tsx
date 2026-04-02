@@ -162,6 +162,7 @@ export default function CreatePostScreen() {
       author_id: user.id,
       content: postContent,
       image_url: firstImage,
+      visibility: audience,
     };
     if (langCode) insertPayload.language_code = langCode;
 

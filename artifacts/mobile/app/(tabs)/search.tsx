@@ -304,8 +304,9 @@ export default function SearchScreen() {
 
       if (all || currentTab === "posts") {
         let pq = supabase.from("posts")
-          .select("id, content, image_url, author_id, view_count, created_at")
-          .ilike("content", pat);
+          .select("id, content, image_url, author_id, view_count, visibility, created_at")
+          .ilike("content", pat)
+          .eq("visibility", "public");
         if (sort === "recent") pq = pq.order("created_at", { ascending: false });
         else if (sort === "popular") pq = pq.order("view_count", { ascending: false });
         else pq = pq.order("created_at", { ascending: false });
