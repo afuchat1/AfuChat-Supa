@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import {
-  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -16,7 +15,6 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
-import Constants from "expo-constants";
 
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -35,7 +33,6 @@ import { PrestigeBadge } from "@/components/ui/PrestigeBadge";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { CHAT_THEME_COLORS, type ChatTheme } from "@/context/ChatPreferencesContext";
 
-const afuSymbol = require("@/assets/images/afu-symbol.png");
 
 
 type MenuItemProps = {
@@ -484,10 +481,6 @@ export default function MeScreen() {
         </MenuGroup>
       )}
 
-      <View style={styles.versionRow}>
-        <Image source={afuSymbol} style={{ width: 22, height: 22, tintColor: colors.accent }} resizeMode="contain" />
-        <Text style={[styles.version, { color: colors.textMuted }]}>AfuChat v{Constants.expoConfig?.version ?? "2.0.30"}</Text>
-      </View>
     </ScrollView>
     </View>
   );
@@ -587,6 +580,4 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   premiumBadgeText: { color: "#1C1C1E", fontSize: 10, fontFamily: "Inter_700Bold" },
-  versionRow: { alignItems: "center", marginTop: 8, gap: 6 },
-  version: { textAlign: "center", fontSize: 12, fontFamily: "Inter_400Regular" },
 });

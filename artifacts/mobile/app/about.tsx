@@ -14,7 +14,8 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Constants from "expo-constants";
 import { useTheme } from "@/hooks/useTheme";
-import Colors from "@/constants/colors";
+
+const afuSymbol = require("@/assets/images/afu-symbol.png");
 
 const APP_VERSION = Constants.expoConfig?.version ?? "2.0.30";
 const BUILD = Constants.expoConfig?.ios?.buildNumber ?? Constants.expoConfig?.android?.versionCode?.toString() ?? "2030";
@@ -81,11 +82,6 @@ const FAQ: { q: string; a: string }[] = [
     q: "What platforms is AfuChat available on?",
     a: "AfuChat is available on iOS, Android, and web. Download from the App Store, Google Play, or access it via your browser.",
   },
-];
-
-const LEGAL_LINKS = [
-  { label: "Terms of Service",  icon: "document-text-outline", route: "/terms"   },
-  { label: "Privacy Policy",    icon: "shield-checkmark-outline", route: "/privacy" },
 ];
 
 function FaqItem({ item }: { item: { q: string; a: string } }) {
@@ -183,60 +179,45 @@ export default function AboutScreen() {
           ))}
         </View>
 
-        {/* Legal */}
+        {/* Policies & Support */}
         <View style={st.sectionHeader}>
-          <Ionicons name="shield-checkmark" size={18} color={colors.accent} />
-          <Text style={[st.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Legal</Text>
+          <Ionicons name="list" size={18} color={colors.accent} />
+          <Text style={[st.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Policies & Support</Text>
         </View>
         <View style={[st.legalCard, { backgroundColor: colors.surface }]}>
-          {LEGAL_LINKS.map((l, i) => (
-            <React.Fragment key={l.label}>
+          {[
+            { label: "Terms of Service",   sub: "Rules and conditions of use",          icon: "document-text-outline",    iconBg: "#007AFF18",   iconColor: "#007AFF",  route: "/terms"   },
+            { label: "Privacy Policy",     sub: "How we collect and use your data",      icon: "shield-checkmark-outline", iconBg: "#34C75918",   iconColor: "#34C759",  route: "/privacy" },
+            { label: "License",            sub: "Open-source licenses and attributions", icon: "ribbon-outline",           iconBg: "#5856D618",   iconColor: "#5856D6",  route: null,       info: "MIT License · © " + new Date().getFullYear() + " AfuChat" },
+            { label: "Support Center",     sub: "Submit a ticket or browse help articles",icon: "help-buoy-outline",       iconBg: "#FF950018",   iconColor: "#FF9500",  route: "/support" },
+            { label: "Email Support",      sub: "support@afuchat.com",                   icon: "mail-outline",             iconBg: "#00BCD418",   iconColor: "#00BCD4",  email: "support@afuchat.com" },
+          ].map((item, i, arr) => (
+            <React.Fragment key={item.label}>
               {i > 0 && <View style={[st.divider, { backgroundColor: colors.border }]} />}
-              <TouchableOpacity style={st.legalRow} onPress={() => router.push(l.route as any)} activeOpacity={0.7}>
-                <View style={[st.legalIcon, { backgroundColor: colors.accent + "14" }]}>
-                  <Ionicons name={l.icon as any} size={18} color={colors.accent} />
+              <TouchableOpacity
+                style={st.legalRow}
+                activeOpacity={item.info ? 1 : 0.7}
+                onPress={() => {
+                  if (item.email) { Linking.openURL(`mailto:${item.email}`); return; }
+                  if (item.route) router.push(item.route as any);
+                }}
+              >
+                <View style={[st.legalIcon, { backgroundColor: item.iconBg }]}>
+                  <Ionicons name={item.icon as any} size={18} color={item.iconColor} />
                 </View>
-                <Text style={[st.legalLabel, { color: colors.text }]}>{l.label}</Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[st.legalLabel, { color: colors.text }]}>{item.label}</Text>
+                  <Text style={[st.legalSub, { color: colors.textMuted }]}>{item.info ?? item.sub}</Text>
+                </View>
+                {!item.info && <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />}
               </TouchableOpacity>
             </React.Fragment>
           ))}
         </View>
 
-        {/* Contact */}
-        <View style={st.sectionHeader}>
-          <Ionicons name="mail" size={18} color={colors.accent} />
-          <Text style={[st.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Contact Us</Text>
-        </View>
-        <View style={[st.legalCard, { backgroundColor: colors.surface }]}>
-          <TouchableOpacity style={st.legalRow} onPress={() => router.push("/support" as any)} activeOpacity={0.7}>
-            <View style={[st.legalIcon, { backgroundColor: "#5856D618" }]}>
-              <Ionicons name="help-buoy-outline" size={18} color="#5856D6" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[st.legalLabel, { color: colors.text }]}>Support Center</Text>
-              <Text style={[st.legalSub, { color: colors.textMuted }]}>Submit a ticket or browse help articles</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-          </TouchableOpacity>
-          <View style={[st.divider, { backgroundColor: colors.border }]} />
-          <TouchableOpacity style={st.legalRow} onPress={() => Linking.openURL("mailto:support@afuchat.com")} activeOpacity={0.7}>
-            <View style={[st.legalIcon, { backgroundColor: "#007AFF18" }]}>
-              <Ionicons name="mail-outline" size={18} color="#007AFF" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[st.legalLabel, { color: colors.text }]}>Email Support</Text>
-              <Text style={[st.legalSub, { color: colors.textMuted }]}>support@afuchat.com</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Footer */}
+        {/* Footer — moved from Me tab */}
         <View style={st.footer}>
-          <View style={[st.footerLogo, { backgroundColor: colors.accent + "14" }]}>
-            <Ionicons name="chatbubble-ellipses" size={20} color={colors.accent} />
-          </View>
+          <Image source={afuSymbol} style={[st.footerSymbol, { tintColor: colors.accent }]} resizeMode="contain" />
           <Text style={[st.footerName, { color: colors.text }]}>AfuChat</Text>
           <Text style={[st.footerVersion, { color: colors.textMuted }]}>Version {APP_VERSION} · Build {BUILD}</Text>
           <Text style={[st.footerCopy, { color: colors.textMuted }]}>
@@ -325,7 +306,7 @@ const st = StyleSheet.create({
   divider: { height: StyleSheet.hairlineWidth, marginLeft: 66 },
 
   footer: { alignItems: "center", paddingTop: 36, paddingBottom: 16, gap: 6 },
-  footerLogo: { width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  footerSymbol: { width: 28, height: 28, marginBottom: 4 },
   footerName: { fontSize: 16, fontWeight: "800" },
   footerVersion: { fontSize: 12 },
   footerCopy: { fontSize: 12, marginTop: 4 },
