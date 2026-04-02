@@ -16,6 +16,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
+import Constants from "expo-constants";
 
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -485,7 +486,7 @@ export default function MeScreen() {
 
       <View style={styles.versionRow}>
         <Image source={afuSymbol} style={{ width: 22, height: 22, tintColor: colors.accent }} resizeMode="contain" />
-        <Text style={[styles.version, { color: colors.textMuted }]}>AfuChat v1.0.0</Text>
+        <Text style={[styles.version, { color: colors.textMuted }]}>AfuChat v{Constants.expoConfig?.version ?? "2.0.30"}</Text>
       </View>
     </ScrollView>
     </View>
