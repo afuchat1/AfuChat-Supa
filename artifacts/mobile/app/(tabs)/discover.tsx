@@ -442,7 +442,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
 
 export default function DiscoverScreen() {
   "use no memo";
-  const { colors } = useTheme();
+  const { colors, themeMode, setThemeMode } = useTheme();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
@@ -1023,6 +1023,18 @@ export default function DiscoverScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          onPress={() => setThemeMode(themeMode === "dark" ? "light" : themeMode === "light" ? "system" : "dark")}
+          hitSlop={8}
+          style={{ padding: 8 }}
+        >
+          <Ionicons
+            name={themeMode === "dark" ? "moon" : themeMode === "light" ? "sunny" : "phone-portrait-outline"}
+            size={20}
+            color={colors.textMuted}
+          />
+        </TouchableOpacity>
 
         {!user && (
           <TouchableOpacity

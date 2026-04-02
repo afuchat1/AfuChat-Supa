@@ -42,7 +42,7 @@ const afuSymbol = require("@/assets/images/afu-symbol.png");
 WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, themeMode, setThemeMode } = useTheme();
   const insets = useSafeAreaInsets();
   const isDesktop = useIsDesktop();
   const [email, setEmail] = useState("");
@@ -524,6 +524,27 @@ export default function LoginScreen() {
 
   return (
     <View style={[styles.root, { flexDirection: isDesktop ? "row" : "column", backgroundColor: isDesktop ? (isDark ? "#0a0a0a" : "#ffffff") : colors.background }]}>
+      <TouchableOpacity
+        onPress={() => setThemeMode(themeMode === "dark" ? "light" : themeMode === "light" ? "system" : "dark")}
+        style={{
+          position: "absolute",
+          top: insets.top + 12,
+          right: 16,
+          zIndex: 50,
+          width: 38,
+          height: 38,
+          borderRadius: 19,
+          backgroundColor: colors.inputBg,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Ionicons
+          name={themeMode === "dark" ? "moon" : themeMode === "light" ? "sunny" : "phone-portrait-outline"}
+          size={18}
+          color={colors.text}
+        />
+      </TouchableOpacity>
       {isDesktop && (
         <View style={[authSplit.brandPanel, { backgroundColor: colors.accent }]}>
           <Image source={afuSymbol} style={{ width: 80, height: 80, tintColor: "#fff", marginBottom: 28 }} resizeMode="contain" />

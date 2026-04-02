@@ -30,8 +30,6 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import Colors from "@/constants/colors";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { PrestigeBadge } from "@/components/ui/PrestigeBadge";
-import { useAppAccent } from "@/context/AppAccentContext";
-import { CHAT_THEME_COLORS, type ChatTheme } from "@/context/ChatPreferencesContext";
 
 
 
@@ -184,23 +182,12 @@ function XpLevelBar({ xp }: { xp: number }) {
 }
 
 export default function MeScreen() {
-  const { colors, isDark, themeMode, setThemeMode } = useTheme();
-  const { accent, appTheme, setAppTheme } = useAppAccent();
+  const { colors } = useTheme();
   const { profile, isPremium, subscription } = useAuth();
   const isAdmin = !!profile?.is_admin;
   const { langLabel } = useLanguage();
   const insets = useSafeAreaInsets();
-  const [colorPickerOpen, setColorPickerOpen] = useState(false);
 
-  function cycleTheme() {
-    Haptics.selectionAsync();
-    if (themeMode === "system") setThemeMode("dark");
-    else if (themeMode === "dark") setThemeMode("light");
-    else setThemeMode("system");
-  }
-
-  const themeLabel = themeMode === "system" ? "System" : themeMode === "dark" ? "Dark" : "Light";
-  const themeIcon = themeMode === "dark" ? "moon" : themeMode === "light" ? "sunny" : "phone-portrait-outline";
   const gradeIcon = profile?.current_grade === "Newcomer" ? "leaf-outline" : "star-outline";
 
   return (
@@ -341,56 +328,6 @@ export default function MeScreen() {
       </MenuGroup>
 
       <MenuGroup>
-        <MenuItem
-          icon={themeIcon as any}
-          iconBg={isDark ? "#1C1C1E" : "#FFD60A"}
-          label="Appearance"
-          value={themeLabel}
-          onPress={cycleTheme}
-        />
-        <Separator indent={54} />
-        <TouchableOpacity
-          style={{ paddingHorizontal: 16, paddingVertical: 14, backgroundColor: colors.surface }}
-          activeOpacity={0.7}
-          onPress={() => { Haptics.selectionAsync(); setColorPickerOpen((o) => !o); }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <View style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: accent, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
-              <Ionicons name="color-palette-outline" size={18} color="#fff" />
-            </View>
-            <Text style={{ fontSize: 16, fontFamily: "Inter_500Medium", color: colors.text, flex: 1 }}>App Color</Text>
-            <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.textSecondary, marginRight: 6 }}>{appTheme}</Text>
-            <Ionicons name={colorPickerOpen ? "chevron-up" : "chevron-down"} size={15} color={colors.textMuted} />
-          </View>
-          {colorPickerOpen && (
-            <View style={{ flexDirection: "row", gap: 12, justifyContent: "center", marginTop: 14 }}>
-              {(Object.keys(CHAT_THEME_COLORS) as ChatTheme[]).map((name) => {
-                const themeObj = CHAT_THEME_COLORS[name];
-                const selected = appTheme === name;
-                return (
-                  <TouchableOpacity
-                    key={name}
-                    onPress={() => { Haptics.selectionAsync(); setAppTheme(name); }}
-                    activeOpacity={0.7}
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 18,
-                      backgroundColor: themeObj.accent,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderWidth: selected ? 3 : 0,
-                      borderColor: isDark ? "#fff" : "#000",
-                    }}
-                  >
-                    {selected && <Ionicons name="checkmark" size={18} color="#fff" />}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
-        </TouchableOpacity>
-        <Separator indent={54} />
         <MenuItem
           icon="language-outline"
           iconBg="#007AFF"
