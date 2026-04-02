@@ -71,8 +71,14 @@ export async function uploadToStorage(
   contentType?: string,
 ): Promise<{ publicUrl: string | null; error: string | null }> {
   try {
-    const ext = fileUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "bin";
-    const mime = contentType || getMime(ext);
+    let resolvedMime = contentType;
+    if (!resolvedMime && fileUri.startsWith("data:")) {
+      resolvedMime = fileUri.match(/data:([^;]+)/)?.[1] || undefined;
+    }
+    const ext = fileUri.startsWith("data:")
+      ? (resolvedMime?.split("/")?.[1]?.replace("jpeg", "jpg") || "bin")
+      : (fileUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "bin");
+    const mime = resolvedMime || getMime(ext);
 
     const session = (await supabase.auth.getSession()).data.session;
     if (!session) return { publicUrl: null, error: "Not authenticated" };

@@ -61,9 +61,17 @@ export default function CreatePostScreen() {
 
     let uploadedUrls: string[] = [];
     for (const uri of images) {
-      const ext = uri.split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
+      let ext: string;
+      let mime: string | undefined;
+      if (uri.startsWith("data:")) {
+        const dataMime = uri.match(/data:([^;]+)/)?.[1] || "";
+        ext = dataMime.includes("png") ? "png" : dataMime.includes("webp") ? "webp" : "jpg";
+        mime = dataMime || "image/jpeg";
+      } else {
+        ext = uri.split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
+      }
       const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const { publicUrl } = await uploadToStorage("post-images", fileName, uri);
+      const { publicUrl } = await uploadToStorage("post-images", fileName, uri, mime);
       if (publicUrl) uploadedUrls.push(publicUrl);
     }
 

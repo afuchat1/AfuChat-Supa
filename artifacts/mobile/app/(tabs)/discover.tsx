@@ -707,7 +707,7 @@ export default function DiscoverScreen() {
             </View>
           )}
           columnWrapperStyle={isDesktop ? { gap: 0, paddingHorizontal: 8 } : undefined}
-          contentContainerStyle={{ gap: isDesktop ? 0 : 8, paddingVertical: 8, paddingBottom: insets.bottom + 72 }}
+          contentContainerStyle={{ gap: isDesktop ? 0 : 8, paddingVertical: 8, paddingBottom: insets.bottom + 52 + 80 + 50 }}
           showsVerticalScrollIndicator={false}
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
@@ -726,6 +726,15 @@ export default function DiscoverScreen() {
             ) : null
           }
         />
+      )}
+      {user && (
+        <TouchableOpacity
+          style={[styles.fab, { backgroundColor: Colors.brand, bottom: insets.bottom + 52 + 16 }]}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/moments/create"); }}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="create-outline" size={24} color="#fff" />
+        </TouchableOpacity>
       )}
       <ImageViewer
         images={imgViewer.images}
@@ -853,5 +862,19 @@ const styles = StyleSheet.create({
   menuItemText: {
     fontSize: 16,
     fontFamily: "Inter_500Medium",
+  },
+  fab: {
+    position: "absolute",
+    right: 20,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
   },
 });
