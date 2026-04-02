@@ -1336,7 +1336,7 @@ AI CAPABILITIES (what you can do):
       let userContext = "";
       try {
         userContext = await getUserContext();
-        if (userContext.length > 6000) userContext = userContext.slice(0, 6000) + "\n[Context trimmed]";
+        
       } catch (ctxErr) {
         console.warn("getUserContext failed:", ctxErr);
         userContext = `\nUSER CONTEXT:\n- Name: ${profile?.display_name || "User"}\n- Handle: @${profile?.handle || "unknown"}\n`;
@@ -1385,12 +1385,11 @@ INVOICES: [INVOICE:{"type":"...","date":"...","amount":100,"currency":"Nexa","fr
 
       const conversationMessages = messages
         .filter(m => m.role !== "thinking")
-        .slice(-8)
-        .map(m => ({ role: m.role as string, content: m.content.slice(0, 1500) }));
+        .map(m => ({ role: m.role as string, content: m.content }));
       conversationMessages.push({ role: "user", content });
 
       const controller = new AbortController();
-      const fetchTimeout = setTimeout(() => controller.abort(), 45000);
+      const fetchTimeout = setTimeout(() => controller.abort(), 120000);
       const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-chat`, {
         method: "POST",
         signal: controller.signal,
@@ -1401,7 +1400,7 @@ INVOICES: [INVOICE:{"type":"...","date":"...","amount":100,"currency":"Nexa","fr
         },
         body: JSON.stringify({
           messages: [{ role: "system", content: systemPrompt }, ...conversationMessages],
-          max_tokens: 2000,
+          max_tokens: 8000,
         }),
       });
       clearTimeout(fetchTimeout);

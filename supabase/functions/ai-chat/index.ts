@@ -116,22 +116,12 @@ serve(async (req) => {
       return json({ reply: "AI service is not configured. Please set the GROQ_API_KEY secret in Supabase." });
     }
 
-    const tokenLimit = max_tokens || (fast ? 300 : 3000);
+    const tokenLimit = max_tokens || 8000;
 
-    const totalChars = messages.reduce((sum: number, m: any) => sum + (m.content?.length || 0), 0);
-    console.log(`Groq chat: ${messages.length} msgs, ${totalChars} chars, ${tokenLimit} max_tokens`);
-
-    const trimmedMessages = totalChars > 24000
-      ? messages.map((m: any, i: number) => {
-          if (i === 0 && m.role === "system" && m.content.length > 12000) {
-            return { ...m, content: m.content.slice(0, 12000) + "\n[System context trimmed]" };
-          }
-          return m;
-        })
-      : messages;
+    console.log(`Groq chat: ${messages.length} msgs, ${tokenLimit} max_tokens`);
 
     try {
-      const reply = await chatWithGroq(trimmedMessages, tokenLimit, GROQ_KEY);
+      const reply = await chatWithGroq(messages, tokenLimit, GROQ_KEY);
       console.log("Groq chat succeeded");
       return json({ reply });
     } catch (e: any) {
