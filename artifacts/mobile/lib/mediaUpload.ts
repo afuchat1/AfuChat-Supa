@@ -26,6 +26,44 @@ function getMime(ext: string): string {
   return MIME_MAP[ext.toLowerCase()] || "application/octet-stream";
 }
 
+async function uploadViaRestApi(
+  bucket: string,
+  filePath: string,
+  body: FormData | Blob | File,
+  accessToken: string,
+  isFormData: boolean,
+): Promise<{ ok: boolean; error: string | null }> {
+  const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
+  const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucket}/${encodedPath}`;
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+    "x-upsert": "true",
+    apikey: supabaseAnonKey,
+  };
+
+  if (!isFormData && body instanceof Blob) {
+    headers["Content-Type"] = (body as File).type || "application/octet-stream";
+  }
+
+  const response = await fetch(uploadUrl, {
+    method: "POST",
+    headers,
+    body,
+  });
+
+  if (!response.ok) {
+    let errMsg = "Upload failed";
+    try {
+      const parsed = await response.json();
+      errMsg = parsed.message || parsed.error || errMsg;
+    } catch {}
+    return { ok: false, error: `${errMsg} (${response.status})` };
+  }
+
+  return { ok: true, error: null };
+}
+
 export async function uploadToStorage(
   bucket: string,
   filePath: string,
@@ -36,13 +74,10 @@ export async function uploadToStorage(
     const ext = fileUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "bin";
     const mime = contentType || getMime(ext);
 
+    const session = (await supabase.auth.getSession()).data.session;
+    if (!session) return { publicUrl: null, error: "Not authenticated" };
+
     if (Platform.OS !== "web") {
-      const session = (await supabase.auth.getSession()).data.session;
-      if (!session) return { publicUrl: null, error: "Not authenticated" };
-
-      const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
-      const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucket}/${encodedPath}`;
-
       const formData = new FormData();
       formData.append("file", {
         uri: fileUri,
@@ -50,34 +85,26 @@ export async function uploadToStorage(
         type: mime,
       } as any);
 
-      const response = await fetch(uploadUrl, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          "x-upsert": "true",
-          apikey: supabaseAnonKey,
-        },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        let errMsg = "Upload failed";
-        try {
-          const parsed = await response.json();
-          errMsg = parsed.message || parsed.error || errMsg;
-        } catch {}
-        return { publicUrl: null, error: `${errMsg} (${response.status})` };
-      }
+      const result = await uploadViaRestApi(bucket, filePath, formData, session.access_token, true);
+      if (!result.ok) return { publicUrl: null, error: result.error };
     } else {
-      const response = await fetch(fileUri);
-      const blob = await response.blob();
+      let blob: Blob;
+      try {
+        const response = await fetch(fileUri);
+        blob = await response.blob();
+      } catch {
+        return { publicUrl: null, error: "Could not read selected file. Please try selecting again." };
+      }
 
-      const { error } = await supabase.storage
+      const file = new File([blob], filePath.split("/").pop() || "file", { type: mime });
+
+      const sdkResult = await supabase.storage
         .from(bucket)
-        .upload(filePath, blob, { contentType: mime, upsert: true });
+        .upload(filePath, file, { contentType: mime, upsert: true });
 
-      if (error) {
-        return { publicUrl: null, error: error.message };
+      if (sdkResult.error) {
+        const restResult = await uploadViaRestApi(bucket, filePath, file, session.access_token, false);
+        if (!restResult.ok) return { publicUrl: null, error: sdkResult.error.message };
       }
     }
 
