@@ -3218,9 +3218,9 @@ const st = StyleSheet.create({
 
   senderName: { fontSize: 12, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
 
-  replyPreview: { flexDirection: "row", alignItems: "center", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginBottom: 4, gap: 6 },
-  replyBarLine: { width: 3, height: "100%", borderRadius: 2, minHeight: 16 },
-  replyPreviewText: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1 },
+  replyPreview: { flexDirection: "row", alignItems: "center", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginBottom: 4, gap: 6, alignSelf: "stretch" },
+  replyBarLine: { width: 3, alignSelf: "stretch", borderRadius: 2, minHeight: 16, flexShrink: 0 },
+  replyPreviewText: { fontSize: 12, fontFamily: "Inter_400Regular", flexShrink: 1, flexGrow: 0 },
 
   bubbleText: { fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 21 },
 
