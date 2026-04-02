@@ -808,10 +808,10 @@ export default function ChatScreen() {
   const recordingTimer = useRef<any>(null);
   const meterInterval = useRef<any>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const recLockedRef = useRef(false);
-  const recCancelledRef = useRef(false);
-  const recStartedRef = useRef(false);
-  const recPressActiveRef = useRef(false);
+  const recLockedSV = useSharedValue(false);
+  const recCancelledSV = useSharedValue(false);
+  const recStartedSV = useSharedValue(false);
+  const recPressActiveSV = useSharedValue(false);
 
   const CANCEL_THRESHOLD = -120;
   const LOCK_THRESHOLD = -100;
@@ -843,10 +843,10 @@ export default function ChatScreen() {
   }, [isRecording, recLocked]);
 
   const onRecStart = useCallback(() => {
-    recLockedRef.current = false;
-    recCancelledRef.current = false;
-    recStartedRef.current = false;
-    recPressActiveRef.current = true;
+    recLockedSV.value = false;
+    recCancelledSV.value = false;
+    recStartedSV.value = false;
+    recPressActiveSV.value = true;
     startVoiceRecordingHold();
   }, [isRecording]);
 
@@ -856,7 +856,7 @@ export default function ChatScreen() {
   }, []);
 
   const onRecLock = useCallback(() => {
-    recLockedRef.current = true;
+    recLockedSV.value = true;
     setRecLocked(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, []);
@@ -878,7 +878,7 @@ export default function ChatScreen() {
       runOnJS(onRecStart)();
     })
     .onUpdate((e) => {
-      if (recLockedRef.current || recCancelledRef.current) return;
+      if (recLockedSV.value || recCancelledSV.value) return;
 
       const absX = Math.abs(e.translationX);
       const absY = Math.abs(e.translationY);
@@ -897,8 +897,8 @@ export default function ChatScreen() {
         cancelProgress.value = interpolate(clampedX, [CANCEL_THRESHOLD, 0], [1, 0], Extrapolation.CLAMP);
         lockProgress.value = 0;
 
-        if (clampedX < CANCEL_THRESHOLD && !recCancelledRef.current) {
-          recCancelledRef.current = true;
+        if (clampedX < CANCEL_THRESHOLD && !recCancelledSV.value) {
+          recCancelledSV.value = true;
           slideX.value = withSpring(0, SPRING_SNAP);
           slideY.value = withSpring(0, SPRING_SNAP);
           micScale.value = withSpring(1, SPRING_SNAP);
@@ -913,7 +913,7 @@ export default function ChatScreen() {
         lockProgress.value = interpolate(clampedY, [LOCK_THRESHOLD, 0], [1, 0], Extrapolation.CLAMP);
         cancelProgress.value = 0;
 
-        if (clampedY < LOCK_THRESHOLD && !recLockedRef.current && !recCancelledRef.current) {
+        if (clampedY < LOCK_THRESHOLD && !recLockedSV.value && !recCancelledSV.value) {
           slideX.value = withSpring(0, SPRING_SNAP);
           slideY.value = withSpring(0, SPRING_SNAP);
           micScale.value = withSpring(1.1, SPRING_CONFIG);
@@ -923,7 +923,7 @@ export default function ChatScreen() {
       }
     })
     .onEnd(() => {
-      recPressActiveRef.current = false;
+      recPressActiveSV.value = false;
       directionLock.value = "none";
       slideX.value = withSpring(0, SPRING_SNAP);
       slideY.value = withSpring(0, SPRING_SNAP);
@@ -931,13 +931,13 @@ export default function ChatScreen() {
       recBarOpacity.value = withTiming(0, { duration: 150 });
       cancelProgress.value = withTiming(0, { duration: 150 });
       lockProgress.value = withTiming(0, { duration: 150 });
-      if (recCancelledRef.current || recLockedRef.current) return;
-      if (recStartedRef.current) {
+      if (recCancelledSV.value || recLockedSV.value) return;
+      if (recStartedSV.value) {
         runOnJS(onRecSend)();
       }
     })
     .onFinalize(() => {
-      recPressActiveRef.current = false;
+      recPressActiveSV.value = false;
     });
 
   const micBtnAnimStyle = useAnimatedStyle(() => ({
@@ -1854,10 +1854,10 @@ export default function ChatScreen() {
   async function startVoiceRecordingHold() {
     if (recordingRef.current || isRecording) return;
     const safetyTimer = setTimeout(() => {
-      if (!recStartedRef.current && recPressActiveRef.current) {
-        recPressActiveRef.current = false;
-        recCancelledRef.current = false;
-        recLockedRef.current = false;
+      if (!recStartedSV.value && recPressActiveSV.value) {
+        recPressActiveSV.value = false;
+        recCancelledSV.value = false;
+        recLockedSV.value = false;
         setIsRecording(false);
         setRecLocked(false);
       }
@@ -1896,16 +1896,16 @@ export default function ChatScreen() {
             },
       );
       recordingRef.current = recording;
-      recStartedRef.current = true;
+      recStartedSV.value = true;
       clearTimeout(safetyTimer);
 
-      if (!recPressActiveRef.current && !recLockedRef.current) {
+      if (!recPressActiveSV.value && !recLockedSV.value) {
         try {
           await recording.stopAndUnloadAsync();
           await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
         } catch (_) {}
         recordingRef.current = null;
-        recStartedRef.current = false;
+        recStartedSV.value = false;
         return;
       }
 
@@ -1946,10 +1946,10 @@ export default function ChatScreen() {
       }, 100);
     } catch (err) {
       clearTimeout(safetyTimer);
-      recPressActiveRef.current = false;
-      recStartedRef.current = false;
-      recCancelledRef.current = false;
-      recLockedRef.current = false;
+      recPressActiveSV.value = false;
+      recStartedSV.value = false;
+      recCancelledSV.value = false;
+      recLockedSV.value = false;
       setIsRecording(false);
       setRecLocked(false);
       try { await Audio.setAudioModeAsync({ allowsRecordingIOS: false }); } catch (_) {}
@@ -1965,10 +1965,10 @@ export default function ChatScreen() {
     pulseAnim.setValue(1);
     setIsRecording(false);
     setRecLocked(false);
-    recLockedRef.current = false;
-    recStartedRef.current = false;
-    recPressActiveRef.current = false;
-    recCancelledRef.current = false;
+    recLockedSV.value = false;
+    recStartedSV.value = false;
+    recPressActiveSV.value = false;
+    recCancelledSV.value = false;
     setRecordingDuration(0);
     setRecordingTenths(0);
     setWaveformLevels([]);
@@ -2032,10 +2032,10 @@ export default function ChatScreen() {
     pulseAnim.setValue(1);
     setIsRecording(false);
     setRecLocked(false);
-    recLockedRef.current = false;
-    recStartedRef.current = false;
-    recPressActiveRef.current = false;
-    recCancelledRef.current = false;
+    recLockedSV.value = false;
+    recStartedSV.value = false;
+    recPressActiveSV.value = false;
+    recCancelledSV.value = false;
     setRecordingDuration(0);
     setRecordingTenths(0);
     setWaveformLevels([]);
