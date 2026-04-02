@@ -70,7 +70,7 @@ The project is structured as a pnpm monorepo using TypeScript, with distinct pac
   - Empty chat state with icon + prompt text.
   - Read receipt checkmarks: single (sent), double (delivered), blue double (read).
 - **Story Camera**: Full-screen camera screen (`app/stories/camera.tsx`) for story posting with Photo/Video modes, flash toggle, front/back camera flip, and gallery picker. Camera FAB on chats tab navigates to camera, which pushes to story create screen after capture. Uses `expo-camera` CameraView with mic permission gating for video recording.
-- **Story Privacy**: Privacy levels (Everyone/Close Friends/Only Me) encoded as a `🔒<level>` tag appended to caption text (no DB column needed). Create screen encodes it, view screen strips it before display, and story listing filters private stories from non-owners client-side.
+- **Story Privacy**: Privacy levels (Everyone/Close Friends/Only Me) stored in a `privacy` column on the `stories` table (values: `everyone`, `close_friends`, `only_me`, default `everyone`). RLS policy enforces server-side filtering (only `everyone` stories or own stories visible). Client-side filtering also applied in story listing and viewer for defense in depth.
 - **Cross-Platform Adaptations**: Platform-specific guards for features like push notifications, haptics, blur effects, keyboard handling, and camera access.
 - **Premium Tiering**: Features gated by subscription tiers (Silver, Gold) using `LockedToggle`/`LockedLink` components, accessible via the `app/advanced-features.tsx` screen.
 - **Onboarding**: A forced 5-step onboarding flow for new users covering display name, handle, country, phone number, date of birth, gender, interests, and profile photo.

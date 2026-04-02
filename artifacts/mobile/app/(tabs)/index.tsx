@@ -152,7 +152,7 @@ function StoriesBar({ userId, colors }: { userId: string; colors: any }) {
     const now = new Date().toISOString();
     const { data: storiesData } = await supabase
       .from("stories")
-      .select("id, user_id, caption, created_at, profiles!stories_user_id_fkey(display_name, avatar_url)")
+      .select("id, user_id, caption, privacy, created_at, profiles!stories_user_id_fkey(display_name, avatar_url)")
       .gt("expires_at", now)
       .order("created_at", { ascending: true })
       .limit(100);
@@ -163,11 +163,9 @@ function StoriesBar({ userId, colors }: { userId: string; colors: any }) {
     }
 
     const filtered = storiesData.filter((s: any) => {
-      const cap = s.caption || "";
-      const privacyMatch = cap.match(/🔒(everyone|close_friends|only_me)$/);
-      const privacy = privacyMatch ? privacyMatch[1] : "everyone";
-      if (privacy === "only_me" && s.user_id !== userId) return false;
-      if (privacy === "close_friends" && s.user_id !== userId) return false;
+      const p = s.privacy || "everyone";
+      if (p === "only_me" && s.user_id !== userId) return false;
+      if (p === "close_friends" && s.user_id !== userId) return false;
       return true;
     });
 

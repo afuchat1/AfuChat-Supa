@@ -61,16 +61,14 @@ export default function ViewStoryScreen() {
     if (!userId) return;
     supabase
       .from("stories")
-      .select("id, media_url, media_type, caption, created_at, view_count, user_id, profiles!stories_user_id_fkey(display_name, avatar_url, handle, is_verified, is_organization_verified)")
+      .select("id, media_url, media_type, caption, privacy, created_at, view_count, user_id, profiles!stories_user_id_fkey(display_name, avatar_url, handle, is_verified, is_organization_verified)")
       .eq("user_id", userId)
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: true })
       .then(({ data }) => {
         if (data) {
           const visible = data.filter((s: any) => {
-            const cap = s.caption || "";
-            const m = cap.match(/🔒(everyone|close_friends|only_me)$/);
-            const p = m ? m[1] : "everyone";
+            const p = s.privacy || "everyone";
             if (p === "only_me" && s.user_id !== user?.id) return false;
             if (p === "close_friends" && s.user_id !== user?.id) return false;
             return true;
@@ -252,14 +250,11 @@ export default function ViewStoryScreen() {
         </View>
       )}
 
-      {story.caption ? (() => {
-        const displayCaption = story.caption.replace(/\n?🔒(everyone|close_friends|only_me)$/, "").trim();
-        return displayCaption ? (
-          <View style={[styles.captionBar, { paddingBottom: insets.bottom + (isOwner ? 56 : 16) }]}>
-            <Text style={styles.captionText}>{displayCaption}</Text>
-          </View>
-        ) : null;
-      })() : null}
+      {story.caption ? (
+        <View style={[styles.captionBar, { paddingBottom: insets.bottom + (isOwner ? 56 : 16) }]}>
+          <Text style={styles.captionText}>{story.caption}</Text>
+        </View>
+      ) : null}
 
       {isOwner ? (
         <TouchableOpacity
