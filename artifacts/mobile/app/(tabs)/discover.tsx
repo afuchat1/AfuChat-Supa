@@ -141,18 +141,40 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress, colWidth
     if (!cardRef.current) return;
     setCapturing(true);
     try {
-      if (typeof cardRef.current.capture !== "function") {
-        showAlert("Error", "Capture not available.");
-        setCapturing(false);
-        return;
-      }
-      const uri = await cardRef.current.capture();
       if (Platform.OS === "web") {
+        const html2canvas = (await import("html2canvas")).default;
+        const { findDOMNode } = await import("react-dom");
+        let el: HTMLElement | null = null;
+        try {
+          const domNode = findDOMNode(cardRef.current as any);
+          if (domNode && domNode instanceof HTMLElement) el = domNode;
+        } catch {}
+        if (!el && typeof document !== "undefined") {
+          el = document.querySelector("[data-post-card=\"" + item.id + "\"]") as HTMLElement | null;
+        }
+        if (!el) {
+          showAlert("Error", "Capture not available.");
+          setCapturing(false);
+          return;
+        }
+        const canvas = await html2canvas(el as HTMLElement, {
+          useCORS: true,
+          allowTaint: false,
+          backgroundColor: null,
+          scale: 2,
+        });
+        const dataUrl = canvas.toDataURL("image/png");
         const link = document.createElement("a");
-        link.href = uri;
+        link.href = dataUrl;
         link.download = `afuchat-post-${Date.now()}.png`;
         link.click();
       } else {
+        if (typeof (cardRef.current as any).capture !== "function") {
+          showAlert("Error", "Capture not available.");
+          setCapturing(false);
+          return;
+        }
+        const uri = await (cardRef.current as any).capture();
         const Sharing = require("expo-sharing");
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: "Save Post Image" });
@@ -160,22 +182,8 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress, colWidth
           showAlert("Not available", "Sharing is not available on this device.");
         }
       }
-    } catch {
-      if (Platform.OS === "web") {
-        try {
-          const postUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/post/${item.id}`;
-          if (typeof navigator !== "undefined" && navigator.clipboard) {
-            await navigator.clipboard.writeText(postUrl);
-            showAlert("Saved", "Post link copied to clipboard.");
-          } else {
-            showAlert("Error", "Could not capture post image.");
-          }
-        } catch {
-          showAlert("Error", "Could not capture post image.");
-        }
-      } else {
-        showAlert("Error", "Could not capture post image.");
-      }
+    } catch (err) {
+      showAlert("Error", "Could not capture post image.");
     }
     setCapturing(false);
   }
@@ -187,6 +195,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress, colWidth
           style={[styles.card, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}
           onPress={openPost}
           activeOpacity={0.97}
+          {...(Platform.OS === "web" ? { dataSet: { postCard: item.id } } as any : {})}
         >
           {/* ── Header ── */}
           <View style={styles.cardHeader}>
