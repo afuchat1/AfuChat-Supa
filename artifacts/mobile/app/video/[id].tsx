@@ -37,6 +37,7 @@ type VideoPost = {
   video_url: string;
   created_at: string;
   view_count: number;
+  audio_name: string | null;
   profile: { display_name: string; handle: string; avatar_url: string | null };
   liked: boolean;
   bookmarked: boolean;
@@ -49,8 +50,25 @@ type Reply = {
   author_id: string;
   content: string;
   created_at: string;
+  parent_reply_id: string | null;
   profile: { display_name: string; handle: string; avatar_url: string | null };
+  children?: Reply[];
 };
+
+function buildVideoReplyTree(flatReplies: Reply[]): Reply[] {
+  const map = new Map<string, Reply>();
+  const roots: Reply[] = [];
+  for (const r of flatReplies) { map.set(r.id, { ...r, children: [] }); }
+  for (const r of flatReplies) {
+    const node = map.get(r.id)!;
+    if (r.parent_reply_id && map.has(r.parent_reply_id)) {
+      map.get(r.parent_reply_id)!.children!.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+  return roots;
+}
 
 function formatCount(n: number): string {
   if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
@@ -65,6 +83,31 @@ function formatRelative(iso: string): string {
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
   if (diff < 2592000000) return `${Math.floor(diff / 86400000)}d`;
   return `${Math.floor(diff / 2592000000)}mo`;
+}
+
+function VideoReplyItem({ reply: r, depth, onReplyTo }: { reply: Reply; depth: number; onReplyTo: (r: Reply) => void }) {
+  const indent = Math.min(depth, 3) * 24;
+  return (
+    <>
+      <View style={[cStyles.replyRow, { paddingLeft: indent }]}>
+        <Avatar uri={r.profile.avatar_url} name={r.profile.display_name} size={depth > 0 ? 26 : 34} />
+        <View style={cStyles.replyBody}>
+          <View style={cStyles.replyMeta}>
+            <Text style={cStyles.replyName}>{r.profile.display_name}</Text>
+            <Text style={cStyles.replyTime}>{formatRelative(r.created_at)}</Text>
+          </View>
+          <Text style={cStyles.replyContent}>{r.content}</Text>
+          <TouchableOpacity onPress={() => onReplyTo(r)} style={cStyles.replyToBtn} hitSlop={8}>
+            <Ionicons name="arrow-undo-outline" size={11} color="rgba(255,255,255,0.35)" />
+            <Text style={cStyles.replyToBtnText}>Reply</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+      {r.children?.map((child) => (
+        <VideoReplyItem key={child.id} reply={child} depth={depth + 1} onReplyTo={onReplyTo} />
+      ))}
+    </>
+  );
 }
 
 function CommentsSheet({
@@ -84,13 +127,15 @@ function CommentsSheet({
   const [loading, setLoading] = useState(false);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<Reply | null>(null);
   const listRef = useRef<FlatList>(null);
+  const inputRef = useRef<TextInput>(null);
 
   const loadReplies = useCallback(() => {
     if (!postId) return;
     supabase
       .from("post_replies")
-      .select("id, author_id, content, created_at, profiles!post_replies_author_id_fkey(display_name, handle, avatar_url)")
+      .select("id, author_id, content, created_at, parent_reply_id, profiles!post_replies_author_id_fkey(display_name, handle, avatar_url)")
       .eq("post_id", postId)
       .order("created_at", { ascending: true })
       .limit(200)
@@ -102,6 +147,7 @@ function CommentsSheet({
               author_id: r.author_id,
               content: r.content || "",
               created_at: r.created_at,
+              parent_reply_id: r.parent_reply_id || null,
               profile: {
                 display_name: r.profiles?.display_name || "User",
                 handle: r.profiles?.handle || "user",
@@ -118,6 +164,8 @@ function CommentsSheet({
     if (!visible || !postId) return;
     setReplies([]);
     setLoading(true);
+    setText("");
+    setReplyingTo(null);
     loadReplies();
   }, [visible, postId, loadReplies]);
 
@@ -135,13 +183,21 @@ function CommentsSheet({
     return () => { supabase.removeChannel(channel); };
   }, [visible, postId, loadReplies]);
 
+  function handleReplyTo(reply: Reply) {
+    setReplyingTo(reply);
+    setText(`@${reply.profile.handle} `);
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }
+
   async function sendReply() {
     if (!user || !text.trim()) return;
     setSending(true);
+    const insertData: any = { post_id: postId, author_id: user.id, content: text.trim() };
+    if (replyingTo) insertData.parent_reply_id = replyingTo.id;
     const { data, error } = await supabase
       .from("post_replies")
-      .insert({ post_id: postId, author_id: user.id, content: text.trim() })
-      .select("id, author_id, content, created_at")
+      .insert(insertData)
+      .select("id, author_id, content, created_at, parent_reply_id")
       .single();
     if (!error && data) {
       const newReply: Reply = {
@@ -149,6 +205,7 @@ function CommentsSheet({
         author_id: data.author_id,
         content: data.content,
         created_at: data.created_at,
+        parent_reply_id: data.parent_reply_id || null,
         profile: {
           display_name: profile?.display_name || "You",
           handle: profile?.handle || "you",
@@ -157,8 +214,12 @@ function CommentsSheet({
       };
       setReplies((prev) => [...prev, newReply]);
       onReplyCountChange(postId, 1);
+      const wasThreaded = !!replyingTo;
       setText("");
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+      setReplyingTo(null);
+      if (!wasThreaded) {
+        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+      }
     }
     setSending(false);
   }
@@ -192,50 +253,54 @@ function CommentsSheet({
               ) : (
                 <FlatList
                   ref={listRef}
-                  data={replies}
+                  data={buildVideoReplyTree(replies)}
                   keyExtractor={(r) => r.id}
                   style={cStyles.list}
                   showsVerticalScrollIndicator={false}
                   renderItem={({ item: r }) => (
-                    <View style={cStyles.replyRow}>
-                      <Avatar uri={r.profile.avatar_url} name={r.profile.display_name} size={34} />
-                      <View style={cStyles.replyBody}>
-                        <View style={cStyles.replyMeta}>
-                          <Text style={cStyles.replyName}>{r.profile.display_name}</Text>
-                          <Text style={cStyles.replyTime}>{formatRelative(r.created_at)}</Text>
-                        </View>
-                        <Text style={cStyles.replyContent}>{r.content}</Text>
-                      </View>
-                    </View>
+                    <VideoReplyItem reply={r} depth={0} onReplyTo={handleReplyTo} />
                   )}
                 />
               )}
 
               {user ? (
-                <View style={cStyles.inputRow}>
-                  <Avatar uri={profile?.avatar_url} name={profile?.display_name || "You"} size={30} />
-                  <View style={cStyles.inputWrap}>
-                    <TextInput
-                      style={cStyles.input}
-                      placeholder="Add a comment..."
-                      placeholderTextColor="rgba(255,255,255,0.3)"
-                      value={text}
-                      onChangeText={setText}
-                      multiline
-                      maxLength={500}
-                    />
+                <View>
+                  {replyingTo && (
+                    <View style={cStyles.replyingBanner}>
+                      <Text style={cStyles.replyingText}>
+                        Replying to <Text style={{ color: Colors.brand }}>@{replyingTo.profile.handle}</Text>
+                      </Text>
+                      <TouchableOpacity onPress={() => { setReplyingTo(null); setText(""); }} hitSlop={8}>
+                        <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.35)" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  <View style={cStyles.inputRow}>
+                    <Avatar uri={profile?.avatar_url} name={profile?.display_name || "You"} size={30} />
+                    <View style={cStyles.inputWrap}>
+                      <TextInput
+                        ref={inputRef}
+                        style={cStyles.input}
+                        placeholder={replyingTo ? `Reply to @${replyingTo.profile.handle}...` : "Add a comment..."}
+                        placeholderTextColor="rgba(255,255,255,0.3)"
+                        value={text}
+                        onChangeText={setText}
+                        multiline
+                        maxLength={500}
+                      />
+                    </View>
+                    <TouchableOpacity
+                      onPress={sendReply}
+                      disabled={!text.trim() || sending}
+                      style={[cStyles.sendBtn, text.trim() ? cStyles.sendBtnActive : null]}
+                    >
+                      {sending ? (
+                        <ActivityIndicator size={16} color="#fff" />
+                      ) : (
+                        <Ionicons name="arrow-up" size={18} color={text.trim() ? "#fff" : "rgba(255,255,255,0.3)"} />
+                      )}
+                    </TouchableOpacity>
                   </View>
-                  <TouchableOpacity
-                    onPress={sendReply}
-                    disabled={!text.trim() || sending}
-                    style={[cStyles.sendBtn, text.trim() ? cStyles.sendBtnActive : null]}
-                  >
-                    {sending ? (
-                      <ActivityIndicator size={16} color="#fff" />
-                    ) : (
-                      <Ionicons name="arrow-up" size={18} color={text.trim() ? "#fff" : "rgba(255,255,255,0.3)"} />
-                    )}
-                  </TouchableOpacity>
                 </View>
               ) : (
                 <TouchableOpacity style={cStyles.signIn} onPress={() => { onClose(); router.push("/(auth)/login"); }}>
@@ -274,6 +339,10 @@ const cStyles = StyleSheet.create({
   replyName: { color: "rgba(255,255,255,0.85)", fontSize: 13, fontFamily: "Inter_600SemiBold" },
   replyTime: { color: "rgba(255,255,255,0.3)", fontSize: 11, fontFamily: "Inter_400Regular" },
   replyContent: { color: "rgba(255,255,255,0.9)", fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
+  replyToBtn: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6, alignSelf: "flex-start" },
+  replyToBtnText: { color: "rgba(255,255,255,0.35)", fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  replyingBanner: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, paddingVertical: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "rgba(255,255,255,0.08)" },
+  replyingText: { color: "rgba(255,255,255,0.5)", fontSize: 12, fontFamily: "Inter_400Regular" },
   inputRow: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -549,6 +618,15 @@ function VideoItem({
         </TouchableOpacity>
       </View>
 
+      <View style={[vStyles.musicRow, { bottom: (insets.bottom > 0 ? insets.bottom : 0) + 6 }]}>
+        <Ionicons name="musical-notes" size={13} color="rgba(255,255,255,0.7)" />
+        <View style={vStyles.musicMarquee}>
+          <Text style={vStyles.musicText} numberOfLines={1}>
+            {item.audio_name || `Original audio · ${item.profile.display_name}`}
+          </Text>
+        </View>
+      </View>
+
       <View style={[vStyles.progressBar, { bottom: insets.bottom > 0 ? insets.bottom : 0 }]}>
         <View style={[vStyles.progressFill, { width: `${progress * 100}%` }]} />
       </View>
@@ -655,6 +733,21 @@ const vStyles = StyleSheet.create({
     marginTop: 4,
   },
 
+  musicRow: {
+    position: "absolute",
+    left: 16,
+    right: 76,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  musicMarquee: { flex: 1, overflow: "hidden" },
+  musicText: {
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+  },
+
   progressBar: {
     position: "absolute",
     left: 0,
@@ -704,7 +797,7 @@ export default function VideoPlayerScreen() {
     let query = supabase
       .from("posts")
       .select(`
-        id, author_id, content, video_url, created_at, view_count,
+        id, author_id, content, video_url, created_at, view_count, audio_name,
         profiles!posts_author_id_fkey(display_name, handle, avatar_url)
       `)
       .eq("post_type", "video")
@@ -763,6 +856,7 @@ export default function VideoPlayerScreen() {
         video_url: p.video_url,
         created_at: p.created_at,
         view_count: p.view_count || 0,
+        audio_name: p.audio_name || null,
         profile: {
           display_name: p.profiles?.display_name || "User",
           handle: p.profiles?.handle || "user",

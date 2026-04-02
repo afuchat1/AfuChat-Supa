@@ -36,7 +36,9 @@ type Reply = {
   id: string;
   content: string;
   created_at: string;
+  parent_reply_id: string | null;
   author: { id: string; display_name: string; avatar_url: string | null; handle: string; is_verified: boolean; is_organization_verified: boolean };
+  children?: Reply[];
 };
 
 type PostData = {
@@ -61,30 +63,57 @@ function timeAgo(iso: string): string {
   return `${Math.floor(diff / 86400000)}d`;
 }
 
-function ReplyCard({ item, colors }: { item: Reply; colors: any }) {
+function ReplyCard({ item, colors, depth, onReplyTo }: { item: Reply; colors: any; depth: number; onReplyTo: (reply: Reply) => void }) {
   const { displayText, isTranslated, lang } = useAutoTranslate(item.content);
+  const indent = Math.min(depth, 3) * 28;
   return (
-    <View style={[styles.replyRow, { backgroundColor: colors.surface }]}>
-      <Avatar uri={item.author.avatar_url} name={item.author.display_name} size={36} />
-      <View style={{ flex: 1 }}>
-        <View style={styles.replyHeader}>
-          <Text style={[styles.replyName, { color: colors.text }]}>{item.author.display_name}</Text>
-          {item.author.is_organization_verified && <Ionicons name="checkmark-circle" size={12} color={Colors.gold} style={{ marginLeft: 3 }} />}
-          {!item.author.is_organization_verified && item.author.is_verified && <Ionicons name="checkmark-circle" size={12} color={Colors.brand} style={{ marginLeft: 3 }} />}
-          <Text style={[styles.replyTime, { color: colors.textMuted }]}> {timeAgo(item.created_at)}</Text>
-        </View>
-        <RichText style={[styles.replyContent, { color: colors.text }]}>{displayText}</RichText>
-        {isTranslated && (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 }}>
-            <Ionicons name="language" size={10} color={colors.textMuted} />
-            <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: colors.textMuted }}>
-              {`Translated · ${LANG_LABELS[lang || ""] ?? lang}`}
-            </Text>
+    <>
+      <View style={[styles.replyRow, { backgroundColor: colors.surface, paddingLeft: 16 + indent }]}>
+        <Avatar uri={item.author.avatar_url} name={item.author.display_name} size={depth > 0 ? 28 : 36} />
+        <View style={{ flex: 1 }}>
+          <View style={styles.replyHeader}>
+            <Text style={[styles.replyName, { color: colors.text }]}>{item.author.display_name}</Text>
+            {item.author.is_organization_verified && <Ionicons name="checkmark-circle" size={12} color={Colors.gold} style={{ marginLeft: 3 }} />}
+            {!item.author.is_organization_verified && item.author.is_verified && <Ionicons name="checkmark-circle" size={12} color={Colors.brand} style={{ marginLeft: 3 }} />}
+            <Text style={[styles.replyTime, { color: colors.textMuted }]}> {timeAgo(item.created_at)}</Text>
           </View>
-        )}
+          <RichText style={[styles.replyContent, { color: colors.text }]}>{displayText}</RichText>
+          {isTranslated && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 }}>
+              <Ionicons name="language" size={10} color={colors.textMuted} />
+              <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: colors.textMuted }}>
+                {`Translated · ${LANG_LABELS[lang || ""] ?? lang}`}
+              </Text>
+            </View>
+          )}
+          <TouchableOpacity onPress={() => onReplyTo(item)} style={styles.replyBtn} hitSlop={8}>
+            <Ionicons name="arrow-undo-outline" size={13} color={colors.textMuted} />
+            <Text style={[styles.replyBtnText, { color: colors.textMuted }]}>Reply</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+      {item.children?.map((child) => (
+        <ReplyCard key={child.id} item={child} colors={colors} depth={depth + 1} onReplyTo={onReplyTo} />
+      ))}
+    </>
   );
+}
+
+function buildReplyTree(flatReplies: Reply[]): Reply[] {
+  const map = new Map<string, Reply>();
+  const roots: Reply[] = [];
+  for (const r of flatReplies) {
+    map.set(r.id, { ...r, children: [] });
+  }
+  for (const r of flatReplies) {
+    const node = map.get(r.id)!;
+    if (r.parent_reply_id && map.has(r.parent_reply_id)) {
+      map.get(r.parent_reply_id)!.children!.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+  return roots;
 }
 
 export default function PostDetailScreen() {
@@ -103,6 +132,8 @@ export default function PostDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<Reply | null>(null);
+  const replyInputRef = useRef<TextInput>(null);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [aiSummarizing, setAiSummarizing] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
@@ -184,13 +215,13 @@ export default function PostDetailScreen() {
     if (!id) return;
     const { data } = await supabase
       .from("post_replies")
-      .select("id, content, created_at, profiles!post_replies_author_id_fkey(id, display_name, avatar_url, handle, is_verified, is_organization_verified)")
+      .select("id, content, created_at, parent_reply_id, profiles!post_replies_author_id_fkey(id, display_name, avatar_url, handle, is_verified, is_organization_verified)")
       .eq("post_id", id)
       .order("created_at", { ascending: true })
-      .limit(50);
+      .limit(200);
 
     if (data) {
-      setReplies(data.map((r: any) => ({ ...r, author: r.profiles })));
+      setReplies(data.map((r: any) => ({ ...r, author: r.profiles, parent_reply_id: r.parent_reply_id || null })));
     }
   }, [id]);
 
@@ -249,6 +280,12 @@ export default function PostDetailScreen() {
     }
   }
 
+  function handleReplyTo(reply: Reply) {
+    setReplyingTo(reply);
+    setReplyText(`@${reply.author.handle} `);
+    setTimeout(() => replyInputRef.current?.focus(), 100);
+  }
+
   async function sendReply() {
     if (!replyText.trim() || !user || sending) return;
     if (replyText.trim().length > 280) {
@@ -258,15 +295,14 @@ export default function PostDetailScreen() {
     setSending(true);
     if (Platform.OS !== "web") { try { const H = require("expo-haptics"); H.impactAsync(H.ImpactFeedbackStyle.Light); } catch {} }
     const content = replyText.trim();
-    const { error } = await supabase.from("post_replies").insert({
-      post_id: id,
-      author_id: user.id,
-      content,
-    });
+    const insertData: any = { post_id: id, author_id: user.id, content };
+    if (replyingTo) insertData.parent_reply_id = replyingTo.id;
+    const { error } = await supabase.from("post_replies").insert(insertData);
     if (error) {
       showAlert("Error", "Could not post reply.");
     } else {
       setReplyText("");
+      setReplyingTo(null);
       setPost((p) => p ? { ...p, replyCount: p.replyCount + 1 } : p);
       loadReplies();
       try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("post_reply"); } catch (_) {}
@@ -367,7 +403,7 @@ export default function PostDetailScreen() {
       </View>
 
       <FlatList
-        data={replies}
+        data={buildReplyTree(replies)}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={
           <View style={[styles.postSection, { backgroundColor: colors.surface }]}>
@@ -498,21 +534,34 @@ export default function PostDetailScreen() {
               )}
             </View>
         }
-        renderItem={({ item }) => <ReplyCard item={item} colors={colors} />}
+        renderItem={({ item }) => <ReplyCard item={item} colors={colors} depth={0} onReplyTo={handleReplyTo} />}
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
       />
 
       {user ? (
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
+          {replyingTo && (
+            <View style={[styles.replyingBanner, { backgroundColor: colors.backgroundSecondary, borderTopColor: colors.border }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.replyingText, { color: colors.textMuted }]}>
+                  Replying to <Text style={{ color: Colors.brand, fontFamily: "Inter_600SemiBold" }}>@{replyingTo.author.handle}</Text>
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => { setReplyingTo(null); setReplyText(""); }} hitSlop={8}>
+                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          )}
           <View style={[styles.replyBar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 4 }]}>
             <View style={[styles.replyPill, { backgroundColor: colors.inputBg }]}>
               <TouchableOpacity hitSlop={8} style={styles.pillIcon}>
                 <Ionicons name="happy-outline" size={24} color={colors.textMuted} />
               </TouchableOpacity>
               <TextInput
+                ref={replyInputRef}
                 style={[styles.replyInput, { color: colors.text }]}
-                placeholder="Write a reply..."
+                placeholder={replyingTo ? `Reply to @${replyingTo.author.handle}...` : "Write a reply..."}
                 placeholderTextColor={colors.textMuted}
                 value={replyText}
                 onChangeText={setReplyText}
@@ -664,11 +713,15 @@ const styles = StyleSheet.create({
   statBtn: { flexDirection: "row", alignItems: "center", gap: 6 },
   statText: { fontSize: 14, fontFamily: "Inter_500Medium" },
   repliesLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  replyRow: { flexDirection: "row", paddingHorizontal: 16, paddingVertical: 10, gap: 10 },
+  replyRow: { flexDirection: "row", paddingVertical: 10, paddingRight: 16, gap: 10 },
   replyHeader: { flexDirection: "row", alignItems: "center" },
   replyName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   replyTime: { fontSize: 12, fontFamily: "Inter_400Regular" },
   replyContent: { fontSize: 15, fontFamily: "Inter_400Regular", marginTop: 2, lineHeight: 21 },
+  replyBtn: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6, alignSelf: "flex-start" },
+  replyBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  replyingBanner: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth },
+  replyingText: { fontSize: 13, fontFamily: "Inter_400Regular" },
   replyBar: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 5, paddingVertical: 5, gap: 5 },
   replyPill: { flex: 1, flexDirection: "row", alignItems: "center", borderRadius: 22, paddingHorizontal: 4, minHeight: 44 },
   pillIcon: { paddingHorizontal: 6 },
