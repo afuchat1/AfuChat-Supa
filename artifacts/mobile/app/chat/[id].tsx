@@ -833,12 +833,17 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
             {isMe && (
               <Ionicons
                 name={
+                  msg.status === "failed" ? "alert-circle-outline" :
                   isPending ? "time-outline" :
                   msg.status === "read" ? "checkmark-done" :
                   msg.status === "delivered" ? "checkmark-done" : "checkmark"
                 }
                 size={14}
-                color={msg.status === "read" ? "#53BDEB" : isMe ? "rgba(255,255,255,0.55)" : colors.textMuted}
+                color={
+                  msg.status === "failed" ? "#FF4444" :
+                  msg.status === "read" ? "#53BDEB" :
+                  "rgba(255,255,255,0.55)"
+                }
                 style={{ marginLeft: 3 }}
               />
             )}
@@ -1239,7 +1244,14 @@ export default function ChatScreen() {
         _isAi: m.sender_id === AFUAI_BOT_ID || undefined,
       }));
 
-      setMessages(mapped);
+      setMessages((prev) => {
+        const localOnly = prev.filter(
+          (m) => m.sender_id === AFUAI_BOT_ID || (typeof m.id === "string" && m.id.startsWith("msg_"))
+        );
+        const dbIds = new Set(mapped.map((m: any) => m.id));
+        const extras = localOnly.filter((m) => !dbIds.has(m.id));
+        return extras.length > 0 ? [...extras, ...mapped] : mapped;
+      });
       cacheMessages(chatId, mapped);
 
       const unreadFromOthers = data.filter((m: any) => m.sender_id !== user.id);
@@ -1357,8 +1369,9 @@ export default function ChatScreen() {
         async (payload) => {
           const newMsg = payload.new as any;
           if (newMsg.sender_id === user?.id) return;
+          if (newMsg.sender_id === AFUAI_BOT_ID) return;
           const { data: senderProfile } = await supabase.from("profiles").select("display_name, avatar_url, handle").eq("id", newMsg.sender_id).single();
-          setMessages((prev) => [{ ...newMsg, sender: senderProfile as any, reactions: [], status: undefined, _isAi: newMsg.sender_id === AFUAI_BOT_ID || undefined }, ...prev]);
+          setMessages((prev) => [{ ...newMsg, sender: senderProfile as any, reactions: [], status: undefined }, ...prev]);
           playNotificationSound();
           if (showScrollBtnRef.current) {
             setNewMsgCount((c) => c + 1);
@@ -1896,8 +1909,9 @@ export default function ChatScreen() {
         async (payload) => {
           const newMsg = payload.new as any;
           if (newMsg.sender_id === user.id) return;
+          if (newMsg.sender_id === AFUAI_BOT_ID) return;
           const { data: senderProfile } = await supabase.from("profiles").select("display_name, avatar_url, handle").eq("id", newMsg.sender_id).single();
-          setMessages((prev) => [{ ...newMsg, sender: senderProfile as any, reactions: [], status: undefined, _isAi: newMsg.sender_id === AFUAI_BOT_ID || undefined }, ...prev]);
+          setMessages((prev) => [{ ...newMsg, sender: senderProfile as any, reactions: [], status: undefined }, ...prev]);
         }
       )
       .subscribe();
@@ -1920,6 +1934,8 @@ export default function ChatScreen() {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+    const isAfuAiDirectChat = chatInfo?.other_id === AFUAI_BOT_ID;
+
     const activeChatId = await getOrCreateChatId();
     if (!activeChatId) {
       setSending(false);
@@ -1928,24 +1944,33 @@ export default function ChatScreen() {
     }
 
     const now = new Date().toISOString();
-    const tempId = `temp_${Date.now()}`;
-    const optimistic: Message = {
-      id: tempId,
+    const msgId = `msg_${Date.now()}`;
+
+    const userMsg: Message = {
+      id: msgId,
       chat_id: activeChatId,
       sender_id: user.id,
       encrypted_content: text,
       sent_at: now,
-      sender: { display_name: "You", avatar_url: profile?.avatar_url || null, handle: profile?.handle || "" },
+      sender: { display_name: profile?.display_name || "You", avatar_url: profile?.avatar_url || null, handle: profile?.handle || "" },
       reply_to_message_id: replyTo?.id || null,
-      status: "sending",
-      _pending: !isOnline(),
+      status: "sent",
+      reactions: [],
     };
-    setMessages((prev) => [optimistic, ...prev]);
+    setMessages((prev) => [userMsg, ...prev]);
     setReplyTo(null);
+    setSending(false);
+
+    if (isAfuAiDirectChat) {
+      const snapshot = messages;
+      handleAfuAiResponse(text, snapshot);
+      try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("message_sent"); } catch (_) {}
+      return;
+    }
 
     if (!isOnline()) {
-      await queueMessage({ id: tempId, chat_id: activeChatId, sender_id: user.id, encrypted_content: text, created_at: now });
-      setSending(false);
+      setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, status: "sending" as const, _pending: true } : m));
+      await queueMessage({ id: msgId, chat_id: activeChatId, sender_id: user.id, encrypted_content: text, created_at: now });
       return;
     }
 
@@ -1959,7 +1984,11 @@ export default function ChatScreen() {
     const { data: inserted, error } = await supabase.from("messages").insert(insertPayload).select("id").single();
     if (inserted) {
       setMessages((prev) =>
-        prev.map((m) => m.id === tempId ? { ...m, id: inserted.id, status: "sent", _pending: false } : m)
+        prev.map((m) => m.id === msgId ? { ...m, id: inserted.id, status: "sent" as const, _pending: false } : m)
+      );
+    } else if (error) {
+      setMessages((prev) =>
+        prev.map((m) => m.id === msgId ? { ...m, status: "failed" as const } : m)
       );
     }
 
@@ -1980,10 +2009,8 @@ export default function ChatScreen() {
     }
 
     try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("message_sent"); } catch (_) {}
-    setSending(false);
 
-    const isAfuAiDirectChat = chatInfo?.other_id === AFUAI_BOT_ID;
-    if (isAfuAiDirectChat || /@afuai/i.test(text)) {
+    if (/@afuai/i.test(text)) {
       const snapshot = messages;
       handleAfuAiResponse(text, snapshot);
     }
