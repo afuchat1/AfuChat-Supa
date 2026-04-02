@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   RefreshControl,
   SectionList,
@@ -293,18 +294,22 @@ export default function ContactsScreen() {
                 <Text style={[styles.actionLabel, { color: colors.text }]}>New Channel</Text>
                 <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: "auto" }} />
               </TouchableOpacity>
-              <Separator indent={58} />
-              <TouchableOpacity
-                style={styles.actionRow}
-                onPress={() => router.push("/phone-contacts")}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.actionIcon, { backgroundColor: Colors.brand }]}>
-                  <Ionicons name="call" size={20} color="#fff" />
-                </View>
-                <Text style={[styles.actionLabel, { color: colors.text }]}>Find Contacts on AfuChat</Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: "auto" }} />
-              </TouchableOpacity>
+              {Platform.OS !== "web" && (
+                <>
+                  <Separator indent={58} />
+                  <TouchableOpacity
+                    style={styles.actionRow}
+                    onPress={() => router.push("/phone-contacts")}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.actionIcon, { backgroundColor: Colors.brand }]}>
+                      <Ionicons name="call" size={20} color="#fff" />
+                    </View>
+                    <Text style={[styles.actionLabel, { color: colors.text }]}>Find Contacts on AfuChat</Text>
+                    <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: "auto" }} />
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
 
             {loading && (

@@ -232,12 +232,14 @@ function StoriesBar({ userId, colors }: { userId: string; colors: any }) {
 
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={storyBarStyles.list}>
-      <TouchableOpacity style={storyBarStyles.item} onPress={() => router.push("/stories/create")}>
-        <View style={[storyBarStyles.addCircle, { backgroundColor: colors.inputBg }]}>
-          <Ionicons name="add" size={28} color={Colors.brand} />
-        </View>
-        <Text style={[storyBarStyles.name, { color: colors.textSecondary }]} numberOfLines={1}>My Story</Text>
-      </TouchableOpacity>
+      {Platform.OS !== "web" && (
+        <TouchableOpacity style={storyBarStyles.item} onPress={() => router.push("/stories/create")}>
+          <View style={[storyBarStyles.addCircle, { backgroundColor: colors.inputBg }]}>
+            <Ionicons name="add" size={28} color={Colors.brand} />
+          </View>
+          <Text style={[storyBarStyles.name, { color: colors.textSecondary }]} numberOfLines={1}>My Story</Text>
+        </TouchableOpacity>
+      )}
       {storyUsers.map((u) => (
         <TouchableOpacity
           key={u.userId}
@@ -614,7 +616,7 @@ export default function ChatsScreen() {
             />
           )}
           ItemSeparatorComponent={() => <Separator indent={74} />}
-          ListHeaderComponent={user && Platform.OS !== "web" ? <StoriesBar userId={user.id} colors={colors} /> : null}
+          ListHeaderComponent={user ? <StoriesBar userId={user.id} colors={colors} /> : null}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -637,13 +639,15 @@ export default function ChatsScreen() {
             <Ionicons name="create-outline" size={24} color="#fff" />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.cameraFab, { bottom: insets.bottom + 52 + 16 + 54 + 12 }]}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/stories/camera"); }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="camera" size={20} color={Colors.brand} />
-          </TouchableOpacity>
+          {Platform.OS !== "web" && (
+            <TouchableOpacity
+              style={[styles.cameraFab, { bottom: insets.bottom + 52 + 16 + 54 + 12 }]}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/stories/camera"); }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="camera" size={20} color={Colors.brand} />
+            </TouchableOpacity>
+          )}
         </>
       )}
     </View>
