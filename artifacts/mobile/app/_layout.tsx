@@ -28,6 +28,7 @@ import { registerAlertListener, unregisterAlertListener } from "@/lib/alert";
 import { setBaseUrl } from "@/lib/api-client-react/src";
 import { AppLockGate } from "@/components/AppLockGate";
 import { SplashOverlay } from "@/components/SplashOverlay";
+import { ChatPreferencesProvider } from "@/context/ChatPreferencesContext";
 
 try { setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`); } catch (_) {}
 
@@ -217,6 +218,7 @@ export default function RootLayout() {
                   <ThemeSyncManager />
                   <DesktopWrapper>
                     <LanguageProvider>
+                      <ChatPreferencesProvider>
                       <PushNotificationManager />
                       <AppLockGate>
                         <RootLayoutNav />
@@ -228,6 +230,7 @@ export default function RootLayout() {
                         buttons={alertState.buttons}
                         onDismiss={dismissAlert}
                       />
+                      </ChatPreferencesProvider>
                     </LanguageProvider>
                   </DesktopWrapper>
                 </AuthProvider>

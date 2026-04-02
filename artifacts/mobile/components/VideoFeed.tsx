@@ -19,7 +19,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
-import { notifyPostLike } from "@/lib/notifyUser";
+import { notifyPostLike, notifyNewFollow } from "@/lib/notifyUser";
 
 const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get("window");
 
@@ -34,6 +34,7 @@ export type VideoPost = {
   liked: boolean;
   likeCount: number;
   replyCount: number;
+  following: boolean;
 };
 
 function formatCount(n: number): string {
@@ -46,15 +47,20 @@ function VideoItem({
   item,
   isActive,
   onLike,
+  onFollow,
+  currentUserId,
 }: {
   item: VideoPost;
   isActive: boolean;
   onLike: (postId: string, liked: boolean) => void;
+  onFollow: (authorId: string) => void;
+  currentUserId?: string;
 }) {
   const videoRef = useRef<Video>(null);
   const [muted, setMuted] = useState(false);
   const [paused, setPaused] = useState(false);
   const heartScale = useRef(new Animated.Value(1)).current;
+  const followScale = useRef(new Animated.Value(1)).current;
 
   function handleLike() {
     Animated.sequence([
@@ -64,7 +70,17 @@ function VideoItem({
     onLike(item.id, item.liked);
   }
 
+  function handleFollow() {
+    Animated.sequence([
+      Animated.timing(followScale, { toValue: 0.8, duration: 80, useNativeDriver: true }),
+      Animated.spring(followScale, { toValue: 1, tension: 300, friction: 8, useNativeDriver: true }),
+    ]).start();
+    onFollow(item.author_id);
+  }
+
   const shouldPlay = isActive && !paused;
+  const isOwnVideo = currentUserId === item.author_id;
+  const showFollowButton = !isOwnVideo && !item.following;
 
   return (
     <View style={styles.videoItem}>
@@ -79,7 +95,6 @@ function VideoItem({
           isLooping
           isMuted={muted}
         />
-        {/* Pause overlay */}
         {paused && (
           <View style={styles.pauseOverlay}>
             <Ionicons name="play" size={52} color="rgba(255,255,255,0.85)" />
@@ -96,12 +111,22 @@ function VideoItem({
           onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}
           style={styles.authorRow}
         >
-          <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={34} />
+          <View style={styles.avatarWrapper}>
+            <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={40} />
+            {showFollowButton && (
+              <Animated.View style={[styles.followPlusBadge, { transform: [{ scale: followScale }] }]}>
+                <TouchableOpacity onPress={handleFollow} hitSlop={6}>
+                  <Ionicons name="add" size={14} color="#fff" />
+                </TouchableOpacity>
+              </Animated.View>
+            )}
+          </View>
           <View>
             <Text style={styles.authorName}>@{item.profile.handle}</Text>
             <Text style={styles.authorDisplay}>{item.profile.display_name}</Text>
           </View>
         </TouchableOpacity>
+
         {item.content ? (
           <Text style={styles.caption} numberOfLines={3}>{item.content}</Text>
         ) : null}
@@ -144,7 +169,6 @@ type Props = {
 export default function VideoFeed({ tabBarHeight = 52 }: Props) {
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
-  const ITEM_HEIGHT = SCREEN_H - (Platform.OS === "ios" ? 0 : 0);
 
   const [posts, setPosts] = useState<VideoPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -167,10 +191,13 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
 
     if (data && data.length > 0) {
       const postIds = data.map((p: any) => p.id);
-      const [{ data: likesData }, { data: repliesData }, { data: myLikes }] = await Promise.all([
+      const authorIds = [...new Set(data.map((p: any) => p.author_id as string))];
+
+      const [{ data: likesData }, { data: repliesData }, { data: myLikes }, { data: myFollows }] = await Promise.all([
         supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds),
         supabase.from("post_replies").select("post_id").in("post_id", postIds),
         user ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id) : { data: [] },
+        user ? supabase.from("follows").select("following_id").eq("follower_id", user.id).in("following_id", authorIds) : { data: [] },
       ]);
 
       const likeMap: Record<string, number> = {};
@@ -178,6 +205,7 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
       const replyMap: Record<string, number> = {};
       for (const r of (repliesData || [])) replyMap[r.post_id] = (replyMap[r.post_id] || 0) + 1;
       const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
+      const followingSet = new Set((myFollows || []).map((f: any) => f.following_id as string));
 
       setPosts(data.map((p: any) => ({
         id: p.id,
@@ -190,6 +218,7 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
         liked: myLikeSet.has(p.id),
         likeCount: likeMap[p.id] || 0,
         replyCount: replyMap[p.id] || 0,
+        following: followingSet.has(p.author_id),
       })));
     }
     setLoading(false);
@@ -221,9 +250,22 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
     }
   }
 
+  async function handleFollow(authorId: string) {
+    if (!user) { router.push("/(auth)/login"); return; }
+    setPosts((prev) => prev.map((p) => p.author_id === authorId ? { ...p, following: true } : p));
+    await supabase.from("follows").insert({ follower_id: user.id, following_id: authorId });
+    try {
+      notifyNewFollow({ targetUserId: authorId, followerName: profile?.display_name || "Someone", followerUserId: user.id });
+    } catch (_) {}
+    try {
+      const { rewardXp } = await import("../lib/rewardXp");
+      rewardXp("follow_user");
+    } catch (_) {}
+  }
+
   if (loading) {
     return (
-      <View style={[styles.center, { height: ITEM_HEIGHT }]}>
+      <View style={[styles.center, { height: SCREEN_H }]}>
         <ActivityIndicator color={Colors.brand} size="large" />
       </View>
     );
@@ -231,7 +273,7 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
 
   if (posts.length === 0) {
     return (
-      <View style={[styles.center, { height: ITEM_HEIGHT, backgroundColor: "#000" }]}>
+      <View style={[styles.center, { height: SCREEN_H, backgroundColor: "#000" }]}>
         <Ionicons name="videocam-outline" size={56} color="rgba(255,255,255,0.4)" />
         <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 16, fontFamily: "Inter_500Medium", marginTop: 16, textAlign: "center" }}>
           No videos yet.{"\n"}Be the first to post!
@@ -257,6 +299,8 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
           item={item}
           isActive={index === activeIndex}
           onLike={handleLike}
+          onFollow={handleFollow}
+          currentUserId={user?.id}
         />
       )}
       pagingEnabled
@@ -279,13 +323,27 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 300,
+    height: 320,
     backgroundColor: "transparent",
-    backgroundImage: Platform.OS === "web" ? "linear-gradient(to bottom, transparent, rgba(0,0,0,0.75))" : undefined,
+    backgroundImage: Platform.OS === "web" ? "linear-gradient(to bottom, transparent, rgba(0,0,0,0.85))" : undefined,
   } as any,
   pauseOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
   bottomInfo: { position: "absolute", bottom: 100, left: 16, right: 80 },
   authorRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
+  avatarWrapper: { position: "relative" },
+  followPlusBadge: {
+    position: "absolute",
+    bottom: -3,
+    right: -3,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.brand,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "#000",
+  },
   authorName: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
   authorDisplay: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontFamily: "Inter_400Regular" },
   caption: { color: "#fff", fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },

@@ -54,6 +54,7 @@ import { syncPendingMessages } from "@/lib/offlineSync";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { translateText, LANG_LABELS } from "@/lib/translate";
 import { useLanguage } from "@/context/LanguageContext";
+import { useChatPreferences, CHAT_THEME_COLORS, BUBBLE_RADIUS } from "@/context/ChatPreferencesContext";
 import { askAi, aiSuggestReply, transcribeAudio } from "@/lib/aiHelper";
 import { EmojiKeyboard } from "rn-emoji-keyboard";
 import GiftPickerSheet, { DbGift } from "@/components/gifts/GiftPickerSheet";
@@ -373,6 +374,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
 }) {
   const { colors } = useTheme();
   const { preferredLang, voiceToText, textToSpeech } = useLanguage();
+  const { themeColors: chatTheme, bubbleRadius: chatRadius, prefs: chatPrefsLocal } = useChatPreferences();
   const [translated, setTranslated] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
   const [showTranslated, setShowTranslated] = useState(false);
@@ -482,7 +484,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
 
   const isRedEnvelope = msg.encrypted_content.startsWith("🧧");
   const isGiftMsg = msg.encrypted_content.startsWith("🎁");
-  const meBubbleColor = BRAND;
+  const meBubbleColor = chatTheme?.bubble || BRAND;
   const otherBubbleColor = colors.bubbleIncoming;
   const bubbleColor = isMe ? meBubbleColor : otherBubbleColor;
   const textColor = isMe ? "#FFFFFF" : colors.bubbleIncomingText;
@@ -542,7 +544,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
 
         <View style={[
           st.bubble,
-          { backgroundColor: bubbleColor },
+          { backgroundColor: bubbleColor, borderRadius: chatRadius ?? 18 },
           isMe ? st.bubbleMe : st.bubbleOther,
           showTail ? (isMe ? st.bubbleTailMe : st.bubbleTailOther) : null,
           isPending && { opacity: 0.6 },
@@ -572,7 +574,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
             >
               <Image source={{ uri: msg.attachment_url! }} style={st.attachImage} resizeMode="cover" />
               {hasTextContent && (
-                <RichText style={[st.bubbleText, { color: textColor, marginTop: 6 }]} linkColor={isMe ? "#FFFFFF" : "#00BCD4"}>{displayText}</RichText>
+                <RichText style={[st.bubbleText, { color: textColor, marginTop: 6, fontSize: chatPrefsLocal.font_size, lineHeight: chatPrefsLocal.font_size + 5 }]} linkColor={isMe ? "#FFFFFF" : "#00BCD4"}>{displayText}</RichText>
               )}
             </TouchableOpacity>
           ) : hasVideo ? (
@@ -607,7 +609,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
                 </TouchableOpacity>
               )}
               {showTranscript && transcript && (
-                <Text style={[st.bubbleText, { color: textColor, marginTop: 6, fontStyle: "italic" }]}>{transcript}</Text>
+                <Text style={[st.bubbleText, { color: textColor, marginTop: 6, fontStyle: "italic", fontSize: chatPrefsLocal.font_size, lineHeight: chatPrefsLocal.font_size + 5 }]}>{transcript}</Text>
               )}
             </View>
           ) : hasFile ? (
@@ -622,7 +624,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
             </TouchableOpacity>
           ) : (
             <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
-              <RichText style={[st.bubbleText, { color: textColor }]} linkColor={isMe ? "#FFFFFF" : "#00BCD4"}>{displayText}</RichText>
+              <RichText style={[st.bubbleText, { color: textColor, fontSize: chatPrefsLocal.font_size, lineHeight: chatPrefsLocal.font_size + 5 }]} linkColor={isMe ? "#FFFFFF" : "#00BCD4"}>{displayText}</RichText>
             </TouchableOpacity>
           )}
 
@@ -720,6 +722,7 @@ export default function ChatScreen() {
   const isDraft = id === "new";
   const { user, profile, isPremium } = useAuth();
   const { colors } = useTheme();
+  const { prefs: chatPrefs, themeColors: chatThemeColors, bubbleRadius: chatBubbleRadius } = useChatPreferences();
   const { statsMap, getDynamicPrice } = useGiftPrices();
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -1064,7 +1067,7 @@ export default function ChatScreen() {
       cacheMessages(chatId, mapped);
 
       const unreadFromOthers = data.filter((m: any) => m.sender_id !== user.id);
-      if (unreadFromOthers.length > 0) {
+      if (unreadFromOthers.length > 0 && chatPrefs.read_receipts) {
         const now = new Date().toISOString();
         const unreadIds = unreadFromOthers.map((m: any) => m.id);
         const { data: myReadRows } = unreadIds.length > 0
@@ -1184,7 +1187,7 @@ export default function ChatScreen() {
             setNewMsgCount((c) => c + 1);
           }
 
-          if (user) {
+          if (user && chatPrefs.read_receipts) {
             await supabase.from("message_status").upsert({ message_id: newMsg.id, user_id: user.id, delivered_at: new Date().toISOString(), read_at: new Date().toISOString() }, { onConflict: "message_id,user_id" });
           }
         }
@@ -1217,6 +1220,7 @@ export default function ChatScreen() {
 
   function handleTyping() {
     if (!user || !id || isDraft) return;
+    if (!chatPrefs.typing_indicators) return;
     if (typingTimeout.current) clearTimeout(typingTimeout.current);
     supabase.from("typing_indicators").upsert({ chat_id: id, user_id: user.id, is_typing: true }, { onConflict: "chat_id,user_id" });
     typingTimeout.current = setTimeout(() => {
