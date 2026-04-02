@@ -931,8 +931,18 @@ export default function VideoPlayerScreen() {
 }
 
 const ms = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#000" },
-  center: { flex: 1, backgroundColor: "#000", alignItems: "center", justifyContent: "center" },
+  root: {
+    flex: 1,
+    backgroundColor: "#000",
+    ...(Platform.OS === "web" ? { position: "absolute" as any, top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 } : {}),
+  } as any,
+  center: {
+    flex: 1,
+    backgroundColor: "#000",
+    alignItems: "center",
+    justifyContent: "center",
+    ...(Platform.OS === "web" ? { position: "absolute" as any, top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 } : {}),
+  } as any,
 
   headerRow: {
     position: "absolute",

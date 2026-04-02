@@ -137,6 +137,7 @@ function RootLayoutNav() {
       <Stack.Screen name="linked-accounts" />
       <Stack.Screen name="terms" options={bottomSheetAnim} />
       <Stack.Screen name="privacy" options={bottomSheetAnim} />
+      <Stack.Screen name="video/[id]" options={{ headerShown: false, animation: "fade", contentStyle: { backgroundColor: "#000" } }} />
       <Stack.Screen name="[handle]" options={{ animation: "fade" }} />
     </Stack>
   );
