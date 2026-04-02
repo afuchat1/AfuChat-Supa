@@ -232,14 +232,6 @@ function StoriesBar({ userId, colors }: { userId: string; colors: any }) {
 
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={storyBarStyles.list}>
-      {Platform.OS !== "web" && (
-        <TouchableOpacity style={storyBarStyles.item} onPress={() => router.push("/stories/create")}>
-          <View style={[storyBarStyles.addCircle, { backgroundColor: colors.inputBg, borderColor: colors.accent }]}>
-            <Ionicons name="add" size={28} color={colors.accent} />
-          </View>
-          <Text style={[storyBarStyles.name, { color: colors.textSecondary }]} numberOfLines={1}>My Story</Text>
-        </TouchableOpacity>
-      )}
       {storyUsers.map((u) => (
         <TouchableOpacity
           key={u.userId}
