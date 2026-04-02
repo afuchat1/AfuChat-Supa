@@ -200,7 +200,7 @@ export default function ArticleDetailScreen() {
   if (loading) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={Colors.brand} size="large" />
+        <ActivityIndicator color={colors.accent} size="large" />
       </View>
     );
   }
@@ -210,7 +210,7 @@ export default function ArticleDetailScreen() {
       <View style={[styles.center, { backgroundColor: colors.background }]}>
         <Text style={[styles.notFound, { color: colors.textMuted }]}>Article not found.</Text>
         <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 16 }}>
-          <Text style={{ color: Colors.brand, fontFamily: "Inter_500Medium" }}>Go back</Text>
+          <Text style={{ color: colors.accent, fontFamily: "Inter_500Medium" }}>Go back</Text>
         </TouchableOpacity>
       </View>
     );
@@ -252,9 +252,9 @@ export default function ArticleDetailScreen() {
 
       <View style={styles.articleContent}>
         <View style={styles.topMeta}>
-          <View style={[styles.articleBadge, { backgroundColor: Colors.brand + "15" }]}>
-            <Ionicons name="document-text" size={12} color={Colors.brand} />
-            <Text style={[styles.articleBadgeText, { color: Colors.brand }]}>Article</Text>
+          <View style={[styles.articleBadge, { backgroundColor: colors.accent + "15" }]}>
+            <Ionicons name="document-text" size={12} color={colors.accent} />
+            <Text style={[styles.articleBadgeText, { color: colors.accent }]}>Article</Text>
           </View>
           <View style={styles.readTimeBadge}>
             <Ionicons name="time-outline" size={12} color={colors.textMuted} />
@@ -279,7 +279,7 @@ export default function ArticleDetailScreen() {
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                 <Text style={[styles.authorName, { color: colors.text }]}>{article.author.display_name}</Text>
                 {article.author.is_organization_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.gold} />}
-                {!article.author.is_organization_verified && article.author.is_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.brand} />}
+                {!article.author.is_organization_verified && article.author.is_verified && <Ionicons name="checkmark-circle" size={14} color={colors.accent} />}
               </View>
               <Text style={[styles.authorHandle, { color: colors.textMuted }]}>@{article.author.handle}</Text>
             </View>
@@ -354,7 +354,7 @@ export default function ArticleDetailScreen() {
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 3 }}>
                   <Text style={[styles.replyName, { color: colors.text }]}>{item.author.display_name}</Text>
                   {item.author.is_organization_verified && <Ionicons name="checkmark-circle" size={11} color={Colors.gold} />}
-                  {!item.author.is_organization_verified && item.author.is_verified && <Ionicons name="checkmark-circle" size={11} color={Colors.brand} />}
+                  {!item.author.is_organization_verified && item.author.is_verified && <Ionicons name="checkmark-circle" size={11} color={colors.accent} />}
                   <Text style={[styles.replyTime, { color: colors.textMuted }]}>{timeAgo(item.created_at)}</Text>
                 </View>
                 <RichText style={[styles.replyContent, { color: colors.text }]}>{item.content}</RichText>
@@ -384,7 +384,7 @@ export default function ArticleDetailScreen() {
             <TouchableOpacity
               onPress={submitReply}
               disabled={replying || !replyText.trim()}
-              style={[styles.sendBtn, { backgroundColor: replyText.trim() ? Colors.brand : colors.backgroundTertiary }]}
+              style={[styles.sendBtn, { backgroundColor: replyText.trim() ? colors.accent : colors.backgroundTertiary }]}
             >
               {replying
                 ? <ActivityIndicator size="small" color="#fff" />
@@ -397,7 +397,7 @@ export default function ArticleDetailScreen() {
             style={[styles.signInBar, { borderTopColor: colors.border, backgroundColor: colors.surface, paddingBottom: insets.bottom + 8 }]}
             onPress={() => router.push("/(auth)/login")}
           >
-            <Text style={[styles.signInText, { color: Colors.brand }]}>Sign in to comment</Text>
+            <Text style={[styles.signInText, { color: colors.accent }]}>Sign in to comment</Text>
           </TouchableOpacity>
         )}
       </KeyboardAvoidingView>

@@ -90,7 +90,7 @@ export default function CreateArticleScreen() {
         <TouchableOpacity
           onPress={publish}
           disabled={loading || !canPublish}
-          style={[styles.publishBtn, { backgroundColor: canPublish ? Colors.brand : colors.backgroundTertiary, opacity: loading ? 0.7 : 1 }]}
+          style={[styles.publishBtn, { backgroundColor: canPublish ? colors.accent : colors.backgroundTertiary, opacity: loading ? 0.7 : 1 }]}
         >
           {loading
             ? <ActivityIndicator size="small" color="#fff" />
@@ -177,15 +177,15 @@ export default function CreateArticleScreen() {
             {AUDIENCE_OPTIONS.map((opt) => (
               <TouchableOpacity
                 key={opt.key}
-                style={[styles.audienceOption, { borderColor: audience === opt.key ? Colors.brand : colors.border }]}
+                style={[styles.audienceOption, { borderColor: audience === opt.key ? colors.accent : colors.border }]}
                 onPress={() => { setAudience(opt.key); setShowAudienceModal(false); }}
               >
-                <Ionicons name={opt.icon as any} size={22} color={audience === opt.key ? Colors.brand : colors.textSecondary} />
+                <Ionicons name={opt.icon as any} size={22} color={audience === opt.key ? colors.accent : colors.textSecondary} />
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.audienceLabel, { color: colors.text }]}>{opt.label}</Text>
                   <Text style={[styles.audienceDesc, { color: colors.textMuted }]}>{opt.desc}</Text>
                 </View>
-                {audience === opt.key && <Ionicons name="checkmark-circle" size={20} color={Colors.brand} />}
+                {audience === opt.key && <Ionicons name="checkmark-circle" size={20} color={colors.accent} />}
               </TouchableOpacity>
             ))}
           </View>

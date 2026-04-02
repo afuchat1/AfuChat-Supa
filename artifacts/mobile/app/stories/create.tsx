@@ -25,6 +25,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
 
 import Colors from "@/constants/colors";
+import { useAppAccent } from "@/context/AppAccentContext";
 import { showAlert } from "@/lib/alert";
 import { uploadToStorage } from "@/lib/mediaUpload";
 
@@ -38,6 +39,7 @@ const PRIVACY_OPTIONS: { id: Privacy; label: string; icon: React.ComponentProps<
 ];
 
 export default function CreateStoryScreen() {
+  const { accent } = useAppAccent();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
@@ -60,7 +62,7 @@ export default function CreateStoryScreen() {
         <Ionicons name="phone-portrait-outline" size={56} color="#fff" />
         <Text style={{ color: "#fff", fontSize: 20, fontWeight: "700", marginTop: 16, textAlign: "center" }}>Stories are app only</Text>
         <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 14, marginTop: 8, textAlign: "center" }}>Create and share stories using the AfuChat mobile app.</Text>
-        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 24, paddingHorizontal: 24, paddingVertical: 12, backgroundColor: Colors.brand, borderRadius: 20 }}>
+        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 24, paddingHorizontal: 24, paddingVertical: 12, backgroundColor: accent, borderRadius: 20 }}>
           <Text style={{ color: "#fff", fontSize: 15, fontWeight: "600" }}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -161,7 +163,7 @@ export default function CreateStoryScreen() {
       {loading && uploadProgress > 0 && (
         <View style={[styles.progressBar, { top: insets.top }]}>
           <LinearGradient
-            colors={[Colors.brand, "#26C6DA"]}
+            colors={[accent, "#26C6DA"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={[styles.progressFill, { width: `${Math.round(uploadProgress * 100)}%` }]}
@@ -322,7 +324,7 @@ export default function CreateStoryScreen() {
               ]}
             >
               <LinearGradient
-                colors={[Colors.brand, "#0097A7"]}
+                colors={[accent, "#0097A7"]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.shareBtnGradient}
@@ -374,12 +376,12 @@ export default function CreateStoryScreen() {
               >
                 <View style={[
                   styles.privacyIconWrap,
-                  privacy === opt.id && { backgroundColor: Colors.brand + "20" },
+                  privacy === opt.id && { backgroundColor: accent + "20" },
                 ]}>
                   <Ionicons
                     name={opt.icon}
                     size={20}
-                    color={privacy === opt.id ? Colors.brand : "#999"}
+                    color={privacy === opt.id ? accent : "#999"}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
@@ -392,7 +394,7 @@ export default function CreateStoryScreen() {
                   <Text style={styles.privacyDesc}>{opt.desc}</Text>
                 </View>
                 {privacy === opt.id && (
-                  <Ionicons name="checkmark-circle" size={22} color={Colors.brand} />
+                  <Ionicons name="checkmark-circle" size={22} color={accent} />
                 )}
               </TouchableOpacity>
             ))}

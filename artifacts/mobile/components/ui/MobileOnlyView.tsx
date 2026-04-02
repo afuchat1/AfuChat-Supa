@@ -26,8 +26,8 @@ export function MobileOnlyView({ title, description }: Props) {
       </View>
 
       <View style={styles.body}>
-        <View style={[styles.iconWrap, { backgroundColor: Colors.brand + "15" }]}>
-          <Ionicons name="phone-portrait-outline" size={52} color={Colors.brand} />
+        <View style={[styles.iconWrap, { backgroundColor: colors.accent + "15" }]}>
+          <Ionicons name="phone-portrait-outline" size={52} color={colors.accent} />
         </View>
         <Text style={[styles.headline, { color: colors.text }]}>
           Mobile App Required

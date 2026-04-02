@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
-import Colors from "@/constants/colors";
+import { useAppAccent } from "@/context/AppAccentContext";
 
 type Props = {
   size: number;
@@ -9,6 +9,7 @@ type Props = {
 };
 
 export function PremiumRing({ size, children }: Props) {
+  const { accent } = useAppAccent();
   const spin = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(1)).current;
 
@@ -74,7 +75,7 @@ export function PremiumRing({ size, children }: Props) {
             cx={center}
             cy={center}
             r={radius}
-            stroke={Colors.brand}
+            stroke={accent}
             strokeWidth={ring}
             fill="none"
             strokeDasharray={`${halfCirc - arcGap} ${halfCirc + arcGap}`}

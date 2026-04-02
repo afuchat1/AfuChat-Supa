@@ -75,7 +75,7 @@ export default function PrivacyDownloadScreen() {
         ) : (
           <>
             <View style={[styles.infoCard, { backgroundColor: colors.surface, marginHorizontal: 16, marginTop: 20 }]}>
-              <Ionicons name="shield-checkmark" size={22} color={Colors.brand} />
+              <Ionicons name="shield-checkmark" size={22} color={colors.accent} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.infoTitle, { color: colors.text }]}>Your data is yours</Text>
                 <Text style={[styles.infoText, { color: colors.textMuted }]}>
@@ -103,7 +103,7 @@ export default function PrivacyDownloadScreen() {
                         <Text style={[styles.rowLabel, { color: colors.text }]}>{item.label}</Text>
                         <Text style={[styles.rowDesc, { color: colors.textMuted }]}>{item.description}</Text>
                       </View>
-                      <View style={[styles.checkbox, { borderColor: isSelected ? Colors.brand : colors.border, backgroundColor: isSelected ? Colors.brand : "transparent" }]}>
+                      <View style={[styles.checkbox, { borderColor: isSelected ? colors.accent : colors.border, backgroundColor: isSelected ? colors.accent : "transparent" }]}>
                         {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
                       </View>
                     </TouchableOpacity>

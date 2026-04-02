@@ -55,7 +55,7 @@ function WhoToFollow({ colors }: { colors: any }) {
     <View style={[panelStyles.card, { backgroundColor: colors.surface }]}>
       <Text style={[panelStyles.cardTitle, { color: colors.text }]}>Who to follow</Text>
       {loading ? (
-        <ActivityIndicator color={Colors.brand} style={{ marginVertical: 16 }} />
+        <ActivityIndicator color={colors.accent} style={{ marginVertical: 16 }} />
       ) : (
         users.map((u) => (
           <TouchableOpacity
@@ -70,7 +70,7 @@ function WhoToFollow({ colors }: { colors: any }) {
                   {u.display_name}
                 </Text>
                 {u.is_verified && (
-                  <Ionicons name="checkmark-circle" size={13} color={Colors.brand} />
+                  <Ionicons name="checkmark-circle" size={13} color={colors.accent} />
                 )}
               </View>
               <Text style={[panelStyles.userHandle, { color: colors.textMuted }]} numberOfLines={1}>
@@ -78,10 +78,10 @@ function WhoToFollow({ colors }: { colors: any }) {
               </Text>
             </View>
             <TouchableOpacity
-              style={[panelStyles.followBtn, { borderColor: Colors.brand }]}
+              style={[panelStyles.followBtn, { borderColor: colors.accent }]}
               onPress={() => router.push({ pathname: "/profile/[id]", params: { id: u.id } } as any)}
             >
-              <Text style={[panelStyles.followBtnText, { color: Colors.brand }]}>Follow</Text>
+              <Text style={[panelStyles.followBtnText, { color: colors.accent }]}>Follow</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         ))
@@ -133,7 +133,7 @@ function TrendingTopics({ colors }: { colors: any }) {
     <View style={[panelStyles.card, { backgroundColor: colors.surface }]}>
       <Text style={[panelStyles.cardTitle, { color: colors.text }]}>Trending</Text>
       {loading ? (
-        <ActivityIndicator color={Colors.brand} style={{ marginVertical: 16 }} />
+        <ActivityIndicator color={colors.accent} style={{ marginVertical: 16 }} />
       ) : (
         topics.map((t, i) => (
           <TouchableOpacity key={t.tag} style={panelStyles.topicRow}>
@@ -143,7 +143,7 @@ function TrendingTopics({ colors }: { colors: any }) {
                 {t.post_count} post{t.post_count !== 1 ? "s" : ""}
               </Text>
             </View>
-            <Ionicons name="trending-up" size={16} color={Colors.brand} />
+            <Ionicons name="trending-up" size={16} color={colors.accent} />
           </TouchableOpacity>
         ))
       )}
@@ -154,8 +154,8 @@ function TrendingTopics({ colors }: { colors: any }) {
 function EmptyConversation({ colors }: { colors: any }) {
   return (
     <View style={panelStyles.emptyConvo}>
-      <View style={[panelStyles.emptyIconWrap, { backgroundColor: Colors.brand + "18" }]}>
-        <Ionicons name="chatbubbles-outline" size={48} color={Colors.brand} />
+      <View style={[panelStyles.emptyIconWrap, { backgroundColor: colors.accent + "18" }]}>
+        <Ionicons name="chatbubbles-outline" size={48} color={colors.accent} />
       </View>
       <Text style={[panelStyles.emptyTitle, { color: colors.text }]}>Select a conversation</Text>
       <Text style={[panelStyles.emptySub, { color: colors.textMuted }]}>

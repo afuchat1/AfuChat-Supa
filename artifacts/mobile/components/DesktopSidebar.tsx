@@ -63,25 +63,25 @@ function NavButton({
       activeOpacity={0.8}
       style={[
         styles.navItem,
-        isActive && { backgroundColor: Colors.brand + "15" },
+        isActive && { backgroundColor: colors.accent + "15" },
         !isActive && hovered && { backgroundColor: colors.backgroundSecondary },
       ]}
       {...hoverProps}
     >
       <View style={[
         styles.navIconWrap,
-        isActive && { backgroundColor: Colors.brand + "20" },
+        isActive && { backgroundColor: colors.accent + "20" },
       ]}>
         <Ionicons
           name={isActive ? item.iconActive : item.icon}
           size={20}
-          color={isActive ? Colors.brand : colors.textSecondary}
+          color={isActive ? colors.accent : colors.textSecondary}
         />
       </View>
       <Text
         style={[
           styles.navLabel,
-          { color: isActive ? Colors.brand : colors.text },
+          { color: isActive ? colors.accent : colors.text },
           isActive && styles.navLabelActive,
         ]}
       >
@@ -183,7 +183,7 @@ export function DesktopSidebar({ activeTab, onTabPress }: Props) {
       <View style={styles.inner}>
         {/* Logo */}
         <View style={styles.logoRow}>
-          <View style={[styles.logoIconWrap, { backgroundColor: Colors.brand }]}>
+          <View style={[styles.logoIconWrap, { backgroundColor: colors.accent }]}>
             <Image source={afuSymbol} style={styles.logoIcon} resizeMode="contain" />
           </View>
           <View>
@@ -194,7 +194,7 @@ export function DesktopSidebar({ activeTab, onTabPress }: Props) {
 
         {/* New Chat button */}
         <TouchableOpacity
-          style={[styles.composeBtn, { backgroundColor: Colors.brand }]}
+          style={[styles.composeBtn, { backgroundColor: colors.accent }]}
           onPress={() => onTabPress("index")}
           activeOpacity={0.85}
         >
@@ -239,9 +239,9 @@ export function DesktopSidebar({ activeTab, onTabPress }: Props) {
             <TouchableOpacity
               style={[styles.profileCard, {
                 backgroundColor: activeTab === "me"
-                  ? Colors.brand + "12"
+                  ? colors.accent + "12"
                   : colors.backgroundSecondary,
-                borderColor: activeTab === "me" ? Colors.brand + "30" : "transparent",
+                borderColor: activeTab === "me" ? colors.accent + "30" : "transparent",
               }]}
               onPress={() => onTabPress("me")}
               activeOpacity={0.8}
@@ -256,7 +256,7 @@ export function DesktopSidebar({ activeTab, onTabPress }: Props) {
                     <Ionicons
                       name="checkmark-circle"
                       size={13}
-                      color={profile.is_organization_verified ? Colors.gold : Colors.brand}
+                      color={profile.is_organization_verified ? Colors.gold : colors.accent}
                     />
                   )}
                 </View>

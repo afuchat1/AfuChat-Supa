@@ -413,7 +413,7 @@ export default function GiftsScreen() {
           extraData={statsMap}
           contentContainerStyle={{ padding: 8, paddingBottom: insets.bottom + 20 }}
           columnWrapperStyle={{ gap: 8 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); refreshStats(); loadOwned(); }} tintColor={Colors.brand} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); refreshStats(); loadOwned(); }} tintColor={colors.accent} />}
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
               <View style={[styles.emptyIconWrap, { backgroundColor: "rgba(212,168,83,0.1)" }]}>
@@ -510,11 +510,11 @@ export default function GiftsScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.sendGiftBtn, { borderColor: Colors.brand }]}
+                  style={[styles.sendGiftBtn, { borderColor: colors.accent }]}
                   onPress={() => { setSendGift(selectedGift); setSelectedGift(null); }}
                 >
-                  <Ionicons name="send" size={16} color={Colors.brand} />
-                  <Text style={[styles.sendGiftBtnText, { color: Colors.brand }]}>Send</Text>
+                  <Ionicons name="send" size={16} color={colors.accent} />
+                  <Text style={[styles.sendGiftBtnText, { color: colors.accent }]}>Send</Text>
                 </TouchableOpacity>
               </View>
             )}

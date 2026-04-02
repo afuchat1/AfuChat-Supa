@@ -170,7 +170,7 @@ export default function MyPostsScreen() {
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>My Posts</Text>
         <TouchableOpacity onPress={() => router.push("/moments/create")}>
-          <Ionicons name="add-circle-outline" size={24} color={Colors.brand} />
+          <Ionicons name="add-circle-outline" size={24} color={colors.accent} />
         </TouchableOpacity>
       </View>
 
@@ -185,7 +185,7 @@ export default function MyPostsScreen() {
           )}
           contentContainerStyle={{ gap: 8, paddingVertical: 8, paddingBottom: 90 }}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={Colors.brand} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.accent} />}
           ListEmptyComponent={
             <View style={styles.center}>
               <Ionicons name="newspaper-outline" size={64} color={colors.textMuted} />

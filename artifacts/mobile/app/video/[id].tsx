@@ -26,6 +26,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
+import { useAppAccent } from "@/context/AppAccentContext";
 import { notifyPostLike, notifyPostReply } from "@/lib/notifyUser";
 
 const USE_NATIVE = Platform.OS !== "web";
@@ -121,6 +122,7 @@ function CommentsSheet({
   postId: string;
   onReplyCountChange: (postId: string, delta: number) => void;
 }) {
+  const { accent } = useAppAccent();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
   const [replies, setReplies] = useState<Reply[]>([]);
@@ -252,7 +254,7 @@ function CommentsSheet({
               </View>
 
               {loading ? (
-                <View style={cStyles.center}><ActivityIndicator color={Colors.brand} /></View>
+                <View style={cStyles.center}><ActivityIndicator color={accent} /></View>
               ) : replies.length === 0 ? (
                 <View style={cStyles.center}>
                   <Ionicons name="chatbubble-outline" size={36} color="rgba(255,255,255,0.15)" />
@@ -277,7 +279,7 @@ function CommentsSheet({
                   {replyingTo && (
                     <View style={cStyles.replyingBanner}>
                       <Text style={cStyles.replyingText}>
-                        Replying to <Text style={{ color: Colors.brand }}>@{replyingTo.profile.handle}</Text>
+                        Replying to <Text style={{ color: accent }}>@{replyingTo.profile.handle}</Text>
                       </Text>
                       <TouchableOpacity onPress={() => { setReplyingTo(null); setText(""); }} hitSlop={8}>
                         <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.35)" />
@@ -301,7 +303,7 @@ function CommentsSheet({
                     <TouchableOpacity
                       onPress={sendReply}
                       disabled={!text.trim() || sending}
-                      style={[cStyles.sendBtn, text.trim() ? cStyles.sendBtnActive : null]}
+                      style={[cStyles.sendBtn, text.trim() ? [cStyles.sendBtnActive, { backgroundColor: accent }] : null]}
                     >
                       {sending ? (
                         <ActivityIndicator size={16} color="#fff" />
@@ -313,7 +315,7 @@ function CommentsSheet({
                 </View>
               ) : (
                 <TouchableOpacity style={cStyles.signIn} onPress={() => { onClose(); router.push("/(auth)/login"); }}>
-                  <Text style={cStyles.signInText}>Sign in to comment</Text>
+                  <Text style={[cStyles.signInText, { color: accent }]}>Sign in to comment</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -382,9 +384,9 @@ const cStyles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 2,
   },
-  sendBtnActive: { backgroundColor: Colors.brand },
+  sendBtnActive: {},
   signIn: { paddingVertical: 16, alignItems: "center" },
-  signInText: { color: Colors.brand, fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  signInText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
 });
 
 function GradientOverlay({ position, height: h }: { position: "top" | "bottom"; height: number }) {
@@ -432,6 +434,7 @@ function VideoItem({
   onFollow: (authorId: string, isFollowing: boolean) => void;
   onRecordView: (postId: string) => void;
 }) {
+  const { accent } = useAppAccent();
   const [paused, setPaused] = useState(false);
   const [buffering, setBuffering] = useState(true);
   const [progress, setProgress] = useState(0);
@@ -544,7 +547,7 @@ function VideoItem({
           onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}
           style={vStyles.authorRow}
         >
-          <View style={vStyles.avatarWrap}>
+          <View style={[vStyles.avatarWrap, { borderColor: accent }]}>
             <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={40} />
           </View>
           <View style={vStyles.authorInfo}>
@@ -585,7 +588,7 @@ function VideoItem({
           </View>
           {!isSelf && (
             <TouchableOpacity
-              style={[vStyles.followBadge, isFollowing && vStyles.followBadgeActive]}
+              style={[vStyles.followBadge, { backgroundColor: accent }, isFollowing && vStyles.followBadgeActive]}
               onPress={() => onFollow(item.author_id, isFollowing)}
               hitSlop={6}
             >
@@ -617,7 +620,7 @@ function VideoItem({
             <Ionicons
               name={item.bookmarked ? "bookmark" : "bookmark-outline"}
               size={26}
-              color={item.bookmarked ? Colors.brand : "#fff"}
+              color={item.bookmarked ? accent : "#fff"}
             />
           </TouchableOpacity>
         </View>
@@ -676,7 +679,6 @@ const vStyles = StyleSheet.create({
   authorRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 4 },
   avatarWrap: {
     borderWidth: 2,
-    borderColor: Colors.brand,
     borderRadius: 22,
     padding: 1,
   },
@@ -719,7 +721,6 @@ const vStyles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: Colors.brand,
     alignItems: "center",
     justifyContent: "center",
     marginTop: -11,
@@ -765,6 +766,7 @@ const vStyles = StyleSheet.create({
 });
 
 export default function VideoPlayerScreen() {
+  const { accent } = useAppAccent();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
@@ -1007,7 +1009,7 @@ export default function VideoPlayerScreen() {
         <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
         <View style={{ alignItems: "center", gap: 16, paddingHorizontal: 40 }}>
           <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(255,255,255,0.06)", alignItems: "center", justifyContent: "center" }}>
-            <Ionicons name="phone-portrait-outline" size={36} color={Colors.brand} />
+            <Ionicons name="phone-portrait-outline" size={36} color={accent} />
           </View>
           <Text style={{ color: "#fff", fontSize: 20, fontFamily: "Inter_700Bold", textAlign: "center" }}>
             Videos are only available in the app
@@ -1015,7 +1017,7 @@ export default function VideoPlayerScreen() {
           <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 }}>
             Download the AfuChat app to watch videos, interact with creators, and discover trending content.
           </Text>
-          <TouchableOpacity onPress={() => router.back()} style={{ backgroundColor: Colors.brand, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 24, marginTop: 8 }}>
+          <TouchableOpacity onPress={() => router.back()} style={{ backgroundColor: accent, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 24, marginTop: 8 }}>
             <Text style={{ color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" }}>Go Back</Text>
           </TouchableOpacity>
         </View>

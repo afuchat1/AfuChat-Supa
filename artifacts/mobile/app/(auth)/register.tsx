@@ -354,7 +354,7 @@ export default function RegisterScreen() {
     return (
       <View style={[styles.root, { flexDirection: isDesktop ? "row" : "column", backgroundColor: isDesktop ? (isDark ? "#0a0a0a" : "#ffffff") : colors.background }]}>
         {isDesktop && (
-          <View style={[regSplit.brandPanel, { backgroundColor: Colors.brand }]}>
+          <View style={[regSplit.brandPanel, { backgroundColor: colors.accent }]}>
             <Image source={afuSymbol} style={{ width: 80, height: 80, tintColor: "#fff", marginBottom: 28 }} resizeMode="contain" />
             <Text style={regSplit.brandTitle}>AfuChat</Text>
             <Text style={regSplit.brandTagline}>Join the community. Connect with everyone, everywhere.</Text>
@@ -374,7 +374,7 @@ export default function RegisterScreen() {
         >
           <View style={isDesktop ? { maxWidth: 400, width: "100%" as any, alignSelf: "center" } : undefined}>
           <View style={styles.headerWrap}>
-            <Image source={afuSymbol} style={{ width: 64, height: 64, marginBottom: 12, tintColor: Colors.brand }} resizeMode="contain" />
+            <Image source={afuSymbol} style={{ width: 64, height: 64, marginBottom: 12, tintColor: colors.accent }} resizeMode="contain" />
             <Text style={[styles.title, { color: colors.text, fontSize: 24 }]}>Verify Your Email</Text>
           </View>
 
@@ -410,12 +410,12 @@ export default function RegisterScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity onPress={handleResendCode} style={styles.resendBtn} disabled={verifyLoading}>
-              <Text style={[styles.resendText, { color: Colors.brand }]}>Didn't get the code? Resend</Text>
+              <Text style={[styles.resendText, { color: colors.accent }]}>Didn't get the code? Resend</Text>
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => { setVerifyStep(false); setOtpCode(""); }} style={styles.backToFormBtn}>
-              <Ionicons name="arrow-back" size={18} color={Colors.brand} />
-              <Text style={[styles.backToFormText, { color: Colors.brand }]}>Back</Text>
+              <Ionicons name="arrow-back" size={18} color={colors.accent} />
+              <Text style={[styles.backToFormText, { color: colors.accent }]}>Back</Text>
             </TouchableOpacity>
           </View>
           </View>
@@ -428,7 +428,7 @@ export default function RegisterScreen() {
   return (
     <View style={[styles.root, { flexDirection: isDesktop ? "row" : "column", backgroundColor: isDesktop ? (isDark ? "#0a0a0a" : "#ffffff") : colors.background }]}>
       {isDesktop && (
-        <View style={[regSplit.brandPanel, { backgroundColor: Colors.brand }]}>
+        <View style={[regSplit.brandPanel, { backgroundColor: colors.accent }]}>
           <Image source={afuSymbol} style={{ width: 80, height: 80, tintColor: "#fff", marginBottom: 28 }} resizeMode="contain" />
           <Text style={regSplit.brandTitle}>AfuChat</Text>
           <Text style={regSplit.brandTagline}>Join the community. Connect with everyone, everywhere.</Text>
@@ -469,7 +469,7 @@ export default function RegisterScreen() {
         </TouchableOpacity>
 
         <View style={styles.headerWrap}>
-          <Image source={afuSymbol} style={{ width: 72, height: 72, marginBottom: 20, tintColor: Colors.brand }} resizeMode="contain" />
+          <Image source={afuSymbol} style={{ width: 72, height: 72, marginBottom: 20, tintColor: colors.accent }} resizeMode="contain" />
           <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             Join AfuChat and start connecting
@@ -566,7 +566,7 @@ export default function RegisterScreen() {
               activeOpacity={0.8}
             >
               {oauthLoading === "google" ? (
-                <ActivityIndicator color={Colors.brand} />
+                <ActivityIndicator color={colors.accent} />
               ) : (
                 <>
                   <GoogleLogo size={22} />
@@ -598,7 +598,7 @@ export default function RegisterScreen() {
           >
             <Text style={[styles.loginLinkText, { color: colors.textSecondary }]}>
               Already have an account?{" "}
-              <Text style={{ color: Colors.brand, fontFamily: "Inter_600SemiBold" }}>
+              <Text style={{ color: colors.accent, fontFamily: "Inter_600SemiBold" }}>
                 Log in
               </Text>
             </Text>
@@ -642,7 +642,7 @@ export default function RegisterScreen() {
                 userAgent="Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
                 renderLoading={() => (
                   <View style={oauthModalStyles.loadingOverlay}>
-                    <ActivityIndicator size="large" color={Colors.brand} />
+                    <ActivityIndicator size="large" color={colors.accent} />
                   </View>
                 )}
                 onNavigationStateChange={(navState) => {

@@ -104,7 +104,7 @@ function TransactionDetailModal({ tx, visible, onClose, colors }: { tx: Transact
           {tx.counterparty && (
             <>
               <View style={[detailStyles.divider, { backgroundColor: colors.border }]} />
-              <DetailRow label={isPositive || tx.type === "gift_received" || tx.type === "nexa_received" ? "From" : "To"} value={tx.counterparty} valueColor={Colors.brand} colors={colors} />
+              <DetailRow label={isPositive || tx.type === "gift_received" || tx.type === "nexa_received" ? "From" : "To"} value={tx.counterparty} valueColor={colors.accent} colors={colors} />
             </>
           )}
           {tx.message && (
@@ -198,7 +198,7 @@ export default function WalletScreen() {
     (xpReceived || []).forEach((t: any) => {
       const senderProfile = t.profiles;
       const counterparty = senderProfile ? `@${senderProfile.handle}` : undefined;
-      all.push({ id: t.id, type: "nexa_received", amount: t.amount, created_at: t.created_at, label: "Nexa Received", icon: "arrow-down-circle", color: Colors.brand, currency: "nexa", counterparty, message: t.message || undefined, status: t.status || "completed" });
+      all.push({ id: t.id, type: "nexa_received", amount: t.amount, created_at: t.created_at, label: "Nexa Received", icon: "arrow-down-circle", color: colors.accent, currency: "nexa", counterparty, message: t.message || undefined, status: t.status || "completed" });
     });
 
     const acoinLabelMap: Record<string, { label: string; icon: string }> = {
@@ -383,7 +383,7 @@ export default function WalletScreen() {
   })();
 
   const BalanceCard = (
-    <View style={[styles.balanceCard, { backgroundColor: Colors.brand, margin: isDesktop ? 0 : 16, borderRadius: isDesktop ? 0 : 20 }]}>
+    <View style={[styles.balanceCard, { backgroundColor: colors.accent, margin: isDesktop ? 0 : 16, borderRadius: isDesktop ? 0 : 20 }]}>
       <View style={styles.balanceRow}>
         <View style={styles.balanceItem}>
           <Ionicons name="flash" size={isDesktop ? 32 : 24} color="rgba(255,255,255,0.9)" />
@@ -403,11 +403,11 @@ export default function WalletScreen() {
           <Text style={[styles.actionBtnText, { color: Colors.gold }]}>Buy ACoin</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn} onPress={() => setShowTransfer(true)}>
-          <Ionicons name="send" size={16} color={Colors.brand} />
+          <Ionicons name="send" size={16} color={colors.accent} />
           <Text style={styles.actionBtnText}>Send</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn} onPress={() => setShowConvert(true)}>
-          <Ionicons name="swap-horizontal" size={16} color={Colors.brand} />
+          <Ionicons name="swap-horizontal" size={16} color={colors.accent} />
           <Text style={styles.actionBtnText}>Convert</Text>
         </TouchableOpacity>
       </View>
@@ -432,7 +432,7 @@ export default function WalletScreen() {
   const TabFilters = (
     <View style={[styles.tabRow, isDesktop && { marginHorizontal: 16, marginTop: 16 }]}>
       {(["all", "nexa", "acoin", "gifts"] as const).map((tab) => (
-        <TouchableOpacity key={tab} style={[styles.tab, activeTab === tab && { backgroundColor: Colors.brand }]} onPress={() => setActiveTab(tab)}>
+        <TouchableOpacity key={tab} style={[styles.tab, activeTab === tab && { backgroundColor: colors.accent }]} onPress={() => setActiveTab(tab)}>
           <Text style={[styles.tabText, activeTab === tab && { color: "#fff" }]}>
             {tab === "all" ? "All" : tab === "nexa" ? "Nexa" : tab === "acoin" ? "ACoin" : "Gifts"}
           </Text>
@@ -481,7 +481,7 @@ export default function WalletScreen() {
           </TouchableOpacity>
         )}
         contentContainerStyle={{ paddingBottom: 90 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={Colors.brand} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={colors.accent} />}
         ListEmptyComponent={<Text style={[styles.emptyText, { color: colors.textMuted }]}>No transactions yet</Text>}
       />
     )
@@ -509,11 +509,11 @@ export default function WalletScreen() {
         </Text>
         {isDesktop ? (
           <TouchableOpacity
-            style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.brand + "15", paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20 }}
+            style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.accent + "15", paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20 }}
             onPress={() => router.push("/wallet/topup")}
           >
-            <Ionicons name="add" size={16} color={Colors.brand} />
-            <Text style={{ color: Colors.brand, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>Top Up</Text>
+            <Ionicons name="add" size={16} color={colors.accent} />
+            <Text style={{ color: colors.accent, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>Top Up</Text>
           </TouchableOpacity>
         ) : (
           <View style={{ width: 24 }} />
@@ -557,14 +557,14 @@ export default function WalletScreen() {
                 <Text style={[dwStyles.statLabel, { color: colors.textMuted }]}>Total Sent</Text>
               </View>
               <View style={[dwStyles.statCard, { backgroundColor: colors.surface }]}>
-                <Ionicons name="receipt-outline" size={20} color={Colors.brand} />
+                <Ionicons name="receipt-outline" size={20} color={colors.accent} />
                 <Text style={[dwStyles.statValue, { color: colors.text }]}>{transactions.length}</Text>
                 <Text style={[dwStyles.statLabel, { color: colors.textMuted }]}>Transactions</Text>
               </View>
             </View>
 
             <TouchableOpacity
-              style={[dwStyles.requestsBtn, { backgroundColor: Colors.brand }]}
+              style={[dwStyles.requestsBtn, { backgroundColor: colors.accent }]}
               onPress={() => router.push("/wallet/requests")}
             >
               <Ionicons name="receipt-outline" size={18} color="#fff" />
@@ -649,7 +649,7 @@ export default function WalletScreen() {
               <View style={[styles.previewBox, { backgroundColor: colors.inputBg }]}>
                 <View style={styles.previewRow}>
                   <Text style={[styles.previewLabel, { color: colors.textSecondary }]}>You'll receive</Text>
-                  <Text style={[styles.previewValue, { color: Colors.brand }]}>{previewAcoin.acoin} ACoin</Text>
+                  <Text style={[styles.previewValue, { color: colors.accent }]}>{previewAcoin.acoin} ACoin</Text>
                 </View>
                 <View style={styles.previewRow}>
                   <Text style={[styles.previewLabel, { color: colors.textMuted }]}>Fee ({currencySettings?.conversion_fee_percent}%)</Text>

@@ -138,12 +138,12 @@ function SummaryBar({ achievements }: { achievements: Achievement[] }) {
           <Text style={[styles.summaryTitle, { color: colors.text }]}>🏆 {unlocked} / {total} Unlocked</Text>
           <Text style={[styles.summaryXp, { color: colors.textMuted }]}>Keep earning to collect them all</Text>
         </View>
-        <View style={[styles.pctBadge, { backgroundColor: Colors.brand + "22" }]}>
-          <Text style={[styles.pctText, { color: Colors.brand }]}>{Math.round(pct * 100)}%</Text>
+        <View style={[styles.pctBadge, { backgroundColor: colors.accent + "22" }]}>
+          <Text style={[styles.pctText, { color: colors.accent }]}>{Math.round(pct * 100)}%</Text>
         </View>
       </View>
       <View style={[styles.progressTrack, { backgroundColor: colors.backgroundTertiary }]}>
-        <View style={[styles.progressFill, { width: `${pct * 100}%`, backgroundColor: Colors.brand }]} />
+        <View style={[styles.progressFill, { width: `${pct * 100}%`, backgroundColor: colors.accent }]} />
       </View>
     </View>
   );
@@ -184,7 +184,7 @@ export default function AchievementsScreen() {
               onPress={() => setSelectedCategory(cat)}
               style={[
                 styles.categoryChip,
-                { backgroundColor: selectedCategory === cat ? Colors.brand : colors.surface, borderColor: selectedCategory === cat ? Colors.brand : colors.border },
+                { backgroundColor: selectedCategory === cat ? colors.accent : colors.surface, borderColor: selectedCategory === cat ? colors.accent : colors.border },
               ]}
             >
               <Text style={[styles.categoryText, { color: selectedCategory === cat ? "#fff" : colors.textSecondary }]}>

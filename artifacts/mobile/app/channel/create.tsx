@@ -148,19 +148,19 @@ export default function CreateChannelScreen() {
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           {creating ? (
-            <ActivityIndicator color={Colors.brand} size="small" />
+            <ActivityIndicator color={colors.accent} size="small" />
           ) : (
             <Ionicons
               name="checkmark"
               size={24}
-              color={channelName.trim() ? Colors.brand : colors.textMuted}
+              color={channelName.trim() ? colors.accent : colors.textMuted}
             />
           )}
         </TouchableOpacity>
       </View>
 
       <View style={[styles.nameSection, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity style={[styles.avatarBtn, { backgroundColor: Colors.brand }]} onPress={pickAvatar} activeOpacity={0.8}>
+        <TouchableOpacity style={[styles.avatarBtn, { backgroundColor: colors.accent }]} onPress={pickAvatar} activeOpacity={0.8}>
           {avatarUri ? (
             <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
           ) : (
@@ -175,7 +175,7 @@ export default function CreateChannelScreen() {
 
         <View style={styles.nameInputWrap}>
           <TextInput
-            style={[styles.nameInput, { color: colors.text, borderBottomColor: Colors.brand }]}
+            style={[styles.nameInput, { color: colors.text, borderBottomColor: colors.accent }]}
             placeholder="Channel name"
             placeholderTextColor={colors.textMuted}
             value={channelName}

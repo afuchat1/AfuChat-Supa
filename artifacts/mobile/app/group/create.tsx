@@ -121,9 +121,9 @@ export default function CreateGroupScreen() {
         <Text style={[styles.headerTitle, { color: colors.text }]}>New Group</Text>
         <TouchableOpacity onPress={createGroup} disabled={creating}>
           {creating ? (
-            <ActivityIndicator color={Colors.brand} />
+            <ActivityIndicator color={colors.accent} />
           ) : (
-            <Text style={[styles.createText, { color: Colors.brand }]}>Create</Text>
+            <Text style={[styles.createText, { color: colors.accent }]}>Create</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -173,8 +173,8 @@ export default function CreateGroupScreen() {
                 <View
                   style={[
                     styles.checkbox,
-                    { borderColor: isSelected ? Colors.brand : colors.border },
-                    isSelected && { backgroundColor: Colors.brand },
+                    { borderColor: isSelected ? colors.accent : colors.border },
+                    isSelected && { backgroundColor: colors.accent },
                   ]}
                 >
                   {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}

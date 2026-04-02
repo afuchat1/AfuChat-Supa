@@ -340,7 +340,7 @@ export default function ScanScreen() {
   if (!permission) {
     return (
       <View style={[styles.root, { backgroundColor: "#000" }]}>
-        <ActivityIndicator size="large" color={Colors.brand} />
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
@@ -350,7 +350,7 @@ export default function ScanScreen() {
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <View style={[styles.permBox, { paddingTop: insets.top + 20 }]}>
           <View style={styles.permIconCircle}>
-            <Ionicons name="camera-outline" size={48} color={Colors.brand} />
+            <Ionicons name="camera-outline" size={48} color={colors.accent} />
           </View>
           <Text style={[styles.permTitle, { color: colors.text }]}>Camera Access Required</Text>
           <Text style={[styles.permSub, { color: colors.textSecondary }]}>
@@ -409,7 +409,7 @@ export default function ScanScreen() {
       {lookingUp && (
         <View style={styles.resultOverlay}>
           <View style={[styles.resultCard, { backgroundColor: colors.surface, alignItems: "center", paddingVertical: 48 }]}>
-            <ActivityIndicator size="large" color={Colors.brand} />
+            <ActivityIndicator size="large" color={colors.accent} />
             <Text style={{ color: colors.textSecondary, fontSize: 14, marginTop: 14, fontFamily: "Inter_400Regular" }}>
               Looking up user...
             </Text>
@@ -424,21 +424,21 @@ export default function ScanScreen() {
               {scannedProfile.avatar ? (
                 <Image source={{ uri: scannedProfile.avatar }} style={styles.resultAvatar} />
               ) : (
-                <View style={[styles.resultAvatar, { backgroundColor: Colors.brand + "22", justifyContent: "center", alignItems: "center" }]}>
-                  <Text style={{ fontSize: 22, color: Colors.brand }}>{(scannedProfile.name || "?")[0].toUpperCase()}</Text>
+                <View style={[styles.resultAvatar, { backgroundColor: colors.accent + "22", justifyContent: "center", alignItems: "center" }]}>
+                  <Text style={{ fontSize: 22, color: colors.accent }}>{(scannedProfile.name || "?")[0].toUpperCase()}</Text>
                 </View>
               )}
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
                   <Text style={[styles.resultName, { color: colors.text }]} numberOfLines={1}>{scannedProfile.name}</Text>
                   {scannedProfile.verified && (
-                    <Ionicons name="checkmark-circle" size={16} color={scannedProfile.orgVerified ? Colors.gold : Colors.brand} />
+                    <Ionicons name="checkmark-circle" size={16} color={scannedProfile.orgVerified ? Colors.gold : colors.accent} />
                   )}
                 </View>
                 <Text style={[styles.resultHandle, { color: colors.textMuted }]}>@{scannedProfile.handle}</Text>
                 {(scannedProfile.region || scannedProfile.country) && (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 }}>
-                    <Ionicons name="location-outline" size={11} color={Colors.brand} />
+                    <Ionicons name="location-outline" size={11} color={colors.accent} />
                     <Text style={{ color: colors.textMuted, fontSize: 11, fontFamily: "Inter_400Regular" }}>
                       {[scannedProfile.region, scannedProfile.country].filter(Boolean).join(", ")}
                     </Text>
@@ -454,7 +454,7 @@ export default function ScanScreen() {
             ) : null}
 
             <View style={[styles.idPill, { backgroundColor: colors.backgroundTertiary || colors.backgroundSecondary }]}>
-              <Ionicons name="card-outline" size={13} color={Colors.brand} />
+              <Ionicons name="card-outline" size={13} color={colors.accent} />
               <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_400Regular" }}>AFU ID</Text>
               <Text style={{ color: colors.text, fontSize: 15, fontFamily: "Inter_700Bold", letterSpacing: 2 }}>
                 {scannedProfile.afu_id.slice(0, 4)} {scannedProfile.afu_id.slice(4)}
@@ -470,7 +470,7 @@ export default function ScanScreen() {
                 <Text style={styles.actionBtnText}>Pay</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: Colors.brand }]}
+                style={[styles.actionBtn, { backgroundColor: colors.accent }]}
                 onPress={() => openAction("request")}
               >
                 <Ionicons name="arrow-down-circle" size={20} color="#fff" />
@@ -479,8 +479,8 @@ export default function ScanScreen() {
             </View>
 
             <TouchableOpacity style={styles.scanAgainBtn} onPress={resetScanner}>
-              <Ionicons name="scan-outline" size={16} color={Colors.brand} />
-              <Text style={{ color: Colors.brand, fontSize: 14, fontFamily: "Inter_600SemiBold" }}>Scan Again</Text>
+              <Ionicons name="scan-outline" size={16} color={colors.accent} />
+              <Text style={{ color: colors.accent, fontSize: 14, fontFamily: "Inter_600SemiBold" }}>Scan Again</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -504,8 +504,8 @@ export default function ScanScreen() {
                 {scannedProfile?.avatar ? (
                   <Image source={{ uri: scannedProfile.avatar }} style={styles.recipientAvatar} />
                 ) : (
-                  <View style={[styles.recipientAvatar, { backgroundColor: Colors.brand + "22", alignItems: "center", justifyContent: "center" }]}>
-                    <Text style={{ color: Colors.brand }}>{(scannedProfile?.name || "?")[0].toUpperCase()}</Text>
+                  <View style={[styles.recipientAvatar, { backgroundColor: colors.accent + "22", alignItems: "center", justifyContent: "center" }]}>
+                    <Text style={{ color: colors.accent }}>{(scannedProfile?.name || "?")[0].toUpperCase()}</Text>
                   </View>
                 )}
                 <View>
@@ -543,7 +543,7 @@ export default function ScanScreen() {
               <TouchableOpacity
                 style={[
                   styles.sendBtn,
-                  { backgroundColor: isPay ? Colors.gold || "#D4A853" : Colors.brand },
+                  { backgroundColor: isPay ? Colors.gold || "#D4A853" : colors.accent },
                   (sending || !amount.trim()) && { opacity: 0.55 },
                 ]}
                 onPress={isPay ? submitPay : submitRequest}

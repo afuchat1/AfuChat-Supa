@@ -3,8 +3,10 @@ import { useLocalSearchParams } from "expo-router";
 import { router } from "expo-router";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import Colors from "@/constants/colors";
+import { useAppAccent } from "@/context/AppAccentContext";
 
 export default function PostShortLink() {
+  const { accent } = useAppAccent();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   useEffect(() => {
@@ -14,7 +16,7 @@ export default function PostShortLink() {
 
   return (
     <View style={styles.root}>
-      <ActivityIndicator size="large" color={Colors.brand} />
+      <ActivityIndicator size="large" color={accent} />
     </View>
   );
 }

@@ -1,0 +1,1129 @@
+› Reloading apps
+Android Bundled 2660ms node_modules/.pnpm/expo-router@6.0.23_@types+react-dom@19.1.11_@types+react@19.1.17__@types+react@19.1.17__abd38177f532ddff11e5834956475527/node_modules/expo-router/entry.js (2548 modules)
+ WARN  `expo-notifications` functionality is not fully supported in Expo Go:
+We recommend you instead use a development build to avoid limitations. Learn more: https://expo.fyi/dev-client.
+ WARN  [expo-av]: Expo AV has been deprecated and will be removed in SDK 54. Use the `expo-audio` and `expo-video` packages to replace the required functionality.
+ LOG  [PushNotif] Token registered: ExponentPushToken[KvmHAYAJwxgG
+ WARN  Value being stored in SecureStore is larger than 2048 bytes and it may not be stored successfully. In a future SDK version, this call may throw an error.
+ WARN  Value being stored in SecureStore is larger than 2048 bytes and it may not be stored successfully. In a future SDK version, this call may throw an error.
+Android Bundled 446ms artifacts/mobile/lib/rewardXp.ts (518 modules)
+ LOG  [PushNotif] Token registered: ExponentPushToken[KvmHAYAJwxgG
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.
+ WARN  [Worklets] Tried to modify key `current` of an object which has been already passed to a worklet. See
+        https://docs.swmansion.com/react-native-reanimated/docs/guides/troubleshooting#tried-to-modify-key-of-an-object-which-has-been-converted-to-a-serializable
+        for more details.

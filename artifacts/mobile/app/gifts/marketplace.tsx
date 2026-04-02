@@ -345,7 +345,7 @@ export default function GiftMarketplaceScreen() {
         {["all", "rare", "epic", "legendary"].map((r) => (
           <TouchableOpacity
             key={r}
-            style={[styles.filterChip, filterRarity === r && { backgroundColor: rarityColors[r] || Colors.brand }]}
+            style={[styles.filterChip, filterRarity === r && { backgroundColor: rarityColors[r] || colors.accent }]}
             onPress={() => { setFilterRarity(r); setLoading(true); }}
           >
             <Text style={[styles.filterText, filterRarity === r && { color: "#fff" }]}>
@@ -369,7 +369,7 @@ export default function GiftMarketplaceScreen() {
           renderItem={renderListing}
           contentContainerStyle={{ padding: 8, paddingBottom: insets.bottom + 20 }}
           columnWrapperStyle={{ gap: 8 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadListings(); }} tintColor={Colors.brand} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadListings(); }} tintColor={colors.accent} />}
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
               <View style={[styles.emptyIconWrap, { backgroundColor: "rgba(255,149,0,0.1)" }]}>

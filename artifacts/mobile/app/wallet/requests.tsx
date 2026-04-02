@@ -109,7 +109,7 @@ function PINVerifyModal({
       <View style={pinStyles.overlay}>
         <View style={[pinStyles.sheet, { backgroundColor: colors.surface }]}>
           <View style={pinStyles.lockIcon}>
-            <Ionicons name="lock-closed" size={28} color={Colors.brand} />
+            <Ionicons name="lock-closed" size={28} color={colors.accent} />
           </View>
           <Text style={[pinStyles.title, { color: colors.text }]}>Security Verification</Text>
           <Text style={[pinStyles.sub, { color: colors.textMuted }]}>Enter your PIN to confirm this transaction</Text>
@@ -122,10 +122,10 @@ function PINVerifyModal({
                   pinStyles.dot,
                   {
                     backgroundColor: i < pin.length
-                      ? (error ? "#FF3B30" : Colors.brand)
+                      ? (error ? "#FF3B30" : colors.accent)
                       : colors.inputBg,
                     borderColor: i < pin.length
-                      ? (error ? "#FF3B30" : Colors.brand)
+                      ? (error ? "#FF3B30" : colors.accent)
                       : colors.border,
                     transform: shake ? [{ translateX: (i % 2 === 0 ? -4 : 4) }] : [],
                   },
@@ -443,7 +443,7 @@ export default function RequestsScreen() {
 
       <View style={styles.tabRow}>
         <TouchableOpacity
-          style={[styles.tab, tab === "incoming" && { backgroundColor: Colors.brand }]}
+          style={[styles.tab, tab === "incoming" && { backgroundColor: colors.accent }]}
           onPress={() => setTab("incoming")}
         >
           <Text style={[styles.tabText, tab === "incoming" && { color: "#fff" }]}>
@@ -451,7 +451,7 @@ export default function RequestsScreen() {
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, tab === "outgoing" && { backgroundColor: Colors.brand }]}
+          style={[styles.tab, tab === "outgoing" && { backgroundColor: colors.accent }]}
           onPress={() => { setTab("outgoing"); setSentUpdated(false); }}
         >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -465,7 +465,7 @@ export default function RequestsScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.brand} />
+          <ActivityIndicator size="large" color={colors.accent} />
         </View>
       ) : (
         <FlatList
@@ -496,7 +496,7 @@ export default function RequestsScreen() {
                       <Text style={[styles.reqName, { color: colors.text }]} numberOfLines={1}>
                         {person?.display_name || "Unknown"}
                       </Text>
-                      {person?.is_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.brand} />}
+                      {person?.is_verified && <Ionicons name="checkmark-circle" size={14} color={colors.accent} />}
                     </View>
                     <Text style={{ color: colors.textMuted, fontSize: 12 }}>
                       @{person?.handle || "?"} · {timeAgo(item.created_at)}
@@ -527,7 +527,7 @@ export default function RequestsScreen() {
                       <Text style={{ color: "#FF3B30", fontSize: 14, fontFamily: "Inter_600SemiBold" }}>Decline</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.reqActionBtn, { backgroundColor: Colors.brand }]}
+                      style={[styles.reqActionBtn, { backgroundColor: colors.accent }]}
                       onPress={() => handleAccept(item)}
                     >
                       <Ionicons name="checkmark" size={18} color="#fff" />
@@ -548,7 +548,7 @@ export default function RequestsScreen() {
 
                 {isProcessing && (
                   <View style={{ paddingVertical: 8, alignItems: "center" }}>
-                    <ActivityIndicator size="small" color={Colors.brand} />
+                    <ActivityIndicator size="small" color={colors.accent} />
                     <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 4 }}>Processing…</Text>
                   </View>
                 )}
@@ -586,7 +586,7 @@ export default function RequestsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => { setRefreshing(true); loadRequests(); }}
-              tintColor={Colors.brand}
+              tintColor={colors.accent}
             />
           }
           ListEmptyComponent={

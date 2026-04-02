@@ -86,8 +86,8 @@ export default function HotelsScreen() {
           <TouchableOpacity
             key={h.id}
             style={[styles.hotelCard, {
-              backgroundColor: selectedHotel === h.id ? Colors.brand + "10" : colors.surface,
-              borderColor: selectedHotel === h.id ? Colors.brand : colors.border,
+              backgroundColor: selectedHotel === h.id ? colors.accent + "10" : colors.surface,
+              borderColor: selectedHotel === h.id ? colors.accent : colors.border,
             }]}
             onPress={() => { setSelectedHotel(h.id); Haptics.selectionAsync(); }}
           >
@@ -103,7 +103,7 @@ export default function HotelsScreen() {
               </View>
             </View>
             <View style={{ alignItems: "flex-end" }}>
-              <Text style={[styles.hotelPrice, { color: Colors.brand }]}>{h.price} 🪙</Text>
+              <Text style={[styles.hotelPrice, { color: colors.accent }]}>{h.price} 🪙</Text>
               <Text style={[styles.perNight, { color: colors.textMuted }]}>per night</Text>
             </View>
           </TouchableOpacity>
@@ -117,7 +117,7 @@ export default function HotelsScreen() {
                 <TouchableOpacity
                   key={r.id}
                   style={[styles.roomBtn, {
-                    backgroundColor: roomType === r.id ? Colors.brand : colors.surface,
+                    backgroundColor: roomType === r.id ? colors.accent : colors.surface,
                   }]}
                   onPress={() => { setRoomType(r.id); Haptics.selectionAsync(); }}
                 >
@@ -170,22 +170,22 @@ export default function HotelsScreen() {
                   params: { service: "hotel_booking", amount: fee.subtotal.toString(), fee: fee.feeAmount.toString(), total: fee.total.toString() },
                 })}
               >
-                <Text style={[styles.feeLinkText, { color: Colors.brand }]}>Booking Fee ({fee.feePercent}%)</Text>
-                <Ionicons name="information-circle-outline" size={14} color={Colors.brand} />
+                <Text style={[styles.feeLinkText, { color: colors.accent }]}>Booking Fee ({fee.feePercent}%)</Text>
+                <Ionicons name="information-circle-outline" size={14} color={colors.accent} />
               </TouchableOpacity>
               <Text style={[styles.feeValue, { color: "#FF9800" }]}>+{fee.feeAmount} 🪙</Text>
             </View>
             <View style={[styles.feeDivider, { backgroundColor: colors.border }]} />
             <View style={styles.feeRow}>
               <Text style={[styles.feeTotalLabel, { color: colors.text }]}>Total</Text>
-              <Text style={[styles.feeTotalValue, { color: Colors.brand }]}>{fee.total} ACoins</Text>
+              <Text style={[styles.feeTotalValue, { color: colors.accent }]}>{fee.total} ACoins</Text>
             </View>
           </View>
         )}
 
         {hotel && (
           <TouchableOpacity
-            style={[styles.bookBtn, { backgroundColor: Colors.brand, opacity: loading ? 0.5 : 1 }]}
+            style={[styles.bookBtn, { backgroundColor: colors.accent, opacity: loading ? 0.5 : 1 }]}
             onPress={handleBook}
             disabled={loading}
           >

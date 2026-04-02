@@ -24,6 +24,7 @@ import {
   restoreScreenshotProtection,
 } from "@/lib/appLock";
 import Colors from "@/constants/colors";
+import { useAppAccent } from "@/context/AppAccentContext";
 
 let LocalAuthentication: typeof import("expo-local-authentication") | null = null;
 if (Platform.OS !== "web") {
@@ -152,6 +153,7 @@ function LockScreen({
   onBioPress: () => Promise<boolean>;
   onUnlock: () => void;
 }) {
+  const { accent } = useAppAccent();
   const [digits, setDigits] = useState<string[]>([]);
   const [error, setError] = useState(false);
   const [attempts, setAttempts] = useState(0);
@@ -206,8 +208,8 @@ function LockScreen({
   return (
     <View style={styles.root}>
       <View style={styles.logoArea}>
-        <View style={styles.logoCircle}>
-          <Ionicons name="shield-checkmark" size={38} color={Colors.brand} />
+        <View style={[styles.logoCircle, { backgroundColor: accent + "1A", borderColor: accent + "44" }]}>
+          <Ionicons name="shield-checkmark" size={38} color={accent} />
         </View>
         <Text style={styles.logoTitle}>AfuChat is locked</Text>
         <Text style={styles.logoSub}>
@@ -230,7 +232,7 @@ function LockScreen({
                 key={i}
                 style={[
                   styles.dot,
-                  i < digits.length && styles.dotFilled,
+                  i < digits.length && [styles.dotFilled, { backgroundColor: accent, borderColor: accent }],
                   error && styles.dotError,
                 ]}
               />
@@ -279,7 +281,7 @@ function LockScreen({
 
       {!pinEnabled && bioEnabled && (
         <TouchableOpacity style={styles.bioOnlyBtn} onPress={onBioPress} activeOpacity={0.75}>
-          <Ionicons name="finger-print" size={72} color={Colors.brand} />
+          <Ionicons name="finger-print" size={72} color={accent} />
           <Text style={styles.bioOnlyText}>Tap to authenticate</Text>
         </TouchableOpacity>
       )}
@@ -300,9 +302,7 @@ const styles = StyleSheet.create({
     width: 84,
     height: 84,
     borderRadius: 42,
-    backgroundColor: Colors.brand + "1A",
     borderWidth: 1.5,
-    borderColor: Colors.brand + "44",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "rgba(255,255,255,0.3)",
   },
-  dotFilled: { backgroundColor: Colors.brand, borderColor: Colors.brand },
+  dotFilled: {},
   dotError: { backgroundColor: "#FF3B30", borderColor: "#FF3B30" },
   keypad: { gap: 18 },
   keypadRow: { flexDirection: "row", gap: 26 },

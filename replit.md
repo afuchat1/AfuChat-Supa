@@ -45,6 +45,7 @@ The project is structured as a pnpm monorepo using TypeScript, with distinct pac
 - **Branding**: AfuChat blue-green (`#00BCD4`) and gold (`#D4A853`).
 - **Typography**: Inter font family.
 - **Theming**: Dark/light theme support (dark uses Google-style warm greys, light uses cream tones), persisted via `AsyncStorage`.
+- **App Accent Color**: User-selectable accent color via `AppAccentContext` (AsyncStorage key `app_color_theme`). Six options: Teal (#00BCD4, default), Blue (#2196F3), Purple (#9C27B0), Rose (#E91E63), Amber (#FF9800), Emerald (#4CAF50). The `useTheme()` hook returns `accent` and overrides `colors.accent/tint/tabIconSelected/online/unread`. Color picker is in the Me tab under Appearance. Static StyleSheet references use `Colors.brand` (the constant default teal); dynamic theming is applied via inline styles.
 - **Responsive Design**: Utilizes `useWindowDimensions()` and custom `useResponsive()` hooks for dynamic layouts across web, mobile, and desktop.
 - **UI Components**: Reusable components for avatars, verified badges, skeletons, offline banners, and swipeable bottom sheets.
 - **Input Styling**: Consistent rounded `borderRadius: 12` for all input fields.

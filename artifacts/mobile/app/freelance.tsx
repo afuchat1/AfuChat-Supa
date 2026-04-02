@@ -150,8 +150,8 @@ export default function FreelanceScreen() {
           <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
           <Text style={[styles.cardSeller, { color: colors.textMuted }]}>@{item.seller_handle}</Text>
         </View>
-        <View style={[styles.catTag, { backgroundColor: Colors.brand + "18" }]}>
-          <Text style={[styles.catTagText, { color: Colors.brand }]}>{item.category}</Text>
+        <View style={[styles.catTag, { backgroundColor: colors.accent + "18" }]}>
+          <Text style={[styles.catTagText, { color: colors.accent }]}>{item.category}</Text>
         </View>
       </View>
       <Text style={[styles.cardDesc, { color: colors.textSecondary }]} numberOfLines={3}>{item.description}</Text>
@@ -173,7 +173,7 @@ export default function FreelanceScreen() {
           <Text style={[styles.priceText, { color: Colors.gold }]}>{item.price} 🪙</Text>
         </View>
         <TouchableOpacity
-          style={[styles.orderBtn, { backgroundColor: item.seller_id === user?.id ? colors.backgroundTertiary : Colors.brand }]}
+          style={[styles.orderBtn, { backgroundColor: item.seller_id === user?.id ? colors.backgroundTertiary : colors.accent }]}
           onPress={() => placeOrder(item)}
           disabled={item.seller_id === user?.id || ordering === item.id}
         >
@@ -203,8 +203,8 @@ export default function FreelanceScreen() {
 
       <View style={[styles.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         {(["browse", "mine", "create"] as const).map((t) => (
-          <TouchableOpacity key={t} style={[styles.tab, tab === t && { borderBottomColor: Colors.brand, borderBottomWidth: 2 }]} onPress={() => setTab(t)}>
-            <Text style={[styles.tabText, { color: tab === t ? Colors.brand : colors.textMuted }]}>
+          <TouchableOpacity key={t} style={[styles.tab, tab === t && { borderBottomColor: colors.accent, borderBottomWidth: 2 }]} onPress={() => setTab(t)}>
+            <Text style={[styles.tabText, { color: tab === t ? colors.accent : colors.textMuted }]}>
               {t === "browse" ? "Browse" : t === "mine" ? "My Services" : "+ List Service"}
             </Text>
           </TouchableOpacity>
@@ -216,7 +216,7 @@ export default function FreelanceScreen() {
           {CATEGORIES.map((cat) => (
             <TouchableOpacity
               key={cat}
-              style={[styles.catFilter, { backgroundColor: selectedCat === cat ? Colors.brand : colors.surface, borderColor: selectedCat === cat ? Colors.brand : colors.border }]}
+              style={[styles.catFilter, { backgroundColor: selectedCat === cat ? colors.accent : colors.surface, borderColor: selectedCat === cat ? colors.accent : colors.border }]}
               onPress={() => setSelectedCat(cat)}
             >
               <Text style={[styles.catFilterText, { color: selectedCat === cat ? "#fff" : colors.textMuted }]}>{cat}</Text>
@@ -246,12 +246,12 @@ export default function FreelanceScreen() {
           <View style={[styles.field, { backgroundColor: colors.surface, height: 100, alignItems: "flex-start", paddingTop: 12 }]}>
             <TextInput style={[styles.fieldInput, { color: colors.text }]} placeholder="Describe your service in detail…" placeholderTextColor={colors.textMuted} value={createDesc} onChangeText={setCreateDesc} multiline />
           </View>
-          <TouchableOpacity style={[styles.createBtn, { backgroundColor: Colors.brand, opacity: creating ? 0.7 : 1 }]} onPress={createListing} disabled={creating}>
+          <TouchableOpacity style={[styles.createBtn, { backgroundColor: colors.accent, opacity: creating ? 0.7 : 1 }]} onPress={createListing} disabled={creating}>
             {creating ? <ActivityIndicator color="#fff" /> : <Text style={styles.createBtnText}>List Service</Text>}
           </TouchableOpacity>
         </ScrollView>
       ) : loading ? (
-        <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} />
+        <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={tab === "mine" ? myListings : filtered}
@@ -263,7 +263,7 @@ export default function FreelanceScreen() {
             <View style={styles.emptyState}>
               <Text style={{ fontSize: 48 }}>💼</Text>
               <Text style={[styles.emptyTitle, { color: colors.text }]}>No services yet</Text>
-              <TouchableOpacity style={[styles.createBtn, { backgroundColor: Colors.brand }]} onPress={() => setTab("create")}>
+              <TouchableOpacity style={[styles.createBtn, { backgroundColor: colors.accent }]} onPress={() => setTab("create")}>
                 <Text style={styles.createBtnText}>List a Service</Text>
               </TouchableOpacity>
             </View>

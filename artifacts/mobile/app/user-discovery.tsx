@@ -310,7 +310,7 @@ export default function UserDiscoveryScreen() {
             {item.avatar_url ? (
               <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
             ) : (
-              <View style={[styles.avatarPlaceholder, { backgroundColor: Colors.brand + "22" }]}>
+              <View style={[styles.avatarPlaceholder, { backgroundColor: colors.accent + "22" }]}>
                 <Text style={styles.avatarInitial}>{(item.display_name || "@")[0].toUpperCase()}</Text>
               </View>
             )}
@@ -325,7 +325,7 @@ export default function UserDiscoveryScreen() {
           <View style={{ flex: 1 }}>
             <View style={styles.nameRow}>
               <Text style={[styles.displayName, { color: colors.text }]} numberOfLines={1}>{item.display_name}</Text>
-              {item.is_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.brand} />}
+              {item.is_verified && <Ionicons name="checkmark-circle" size={14} color={colors.accent} />}
             </View>
             <Text style={[styles.handle, { color: colors.textMuted }]}>@{item.handle}</Text>
             {item.bio ? (
@@ -353,8 +353,8 @@ export default function UserDiscoveryScreen() {
             {item.interests.length > 0 && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
                 {item.interests.slice(0, 5).map((tag) => (
-                  <View key={tag} style={[styles.tag, { backgroundColor: Colors.brand + "18" }]}>
-                    <Text style={[styles.tagText, { color: Colors.brand }]}>{tag}</Text>
+                  <View key={tag} style={[styles.tag, { backgroundColor: colors.accent + "18" }]}>
+                    <Text style={[styles.tagText, { color: colors.accent }]}>{tag}</Text>
                   </View>
                 ))}
               </ScrollView>
@@ -364,9 +364,9 @@ export default function UserDiscoveryScreen() {
 
         <View style={styles.cardFooter}>
           {isNearby && item.distance_km != null ? (
-            <View style={[styles.distanceBadge, { backgroundColor: Colors.brand + "18" }]}>
-              <Ionicons name="navigate-circle-outline" size={13} color={Colors.brand} />
-              <Text style={[styles.distanceText, { color: Colors.brand }]}>{formatDistance(item.distance_km)} away</Text>
+            <View style={[styles.distanceBadge, { backgroundColor: colors.accent + "18" }]}>
+              <Ionicons name="navigate-circle-outline" size={13} color={colors.accent} />
+              <Text style={[styles.distanceText, { color: colors.accent }]}>{formatDistance(item.distance_km)} away</Text>
             </View>
           ) : (
             <View />
@@ -375,8 +375,8 @@ export default function UserDiscoveryScreen() {
             style={[
               styles.followBtn,
               {
-                backgroundColor: following.has(item.id) ? "transparent" : Colors.brand,
-                borderColor: following.has(item.id) ? colors.border : Colors.brand,
+                backgroundColor: following.has(item.id) ? "transparent" : colors.accent,
+                borderColor: following.has(item.id) ? colors.border : colors.accent,
               }
             ]}
             onPress={() => toggleFollow(item)}
@@ -399,14 +399,14 @@ export default function UserDiscoveryScreen() {
     if (locationGranted === false) {
       return (
         <View style={styles.emptyState}>
-          <View style={[styles.emptyIcon, { backgroundColor: Colors.brand + "18" }]}>
-            <Ionicons name="location-outline" size={36} color={Colors.brand} />
+          <View style={[styles.emptyIcon, { backgroundColor: colors.accent + "18" }]}>
+            <Ionicons name="location-outline" size={36} color={colors.accent} />
           </View>
           <Text style={[styles.emptyTitle, { color: colors.text }]}>Location Access Needed</Text>
           <Text style={[styles.emptySub, { color: colors.textMuted }]}>
             Allow AfuChat to access your location to discover people around you.
           </Text>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: Colors.brand }]} onPress={requestLocation}>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.accent }]} onPress={requestLocation}>
             <Text style={styles.actionBtnText}>Allow Location</Text>
           </TouchableOpacity>
         </View>
@@ -415,7 +415,7 @@ export default function UserDiscoveryScreen() {
     if (locating) {
       return (
         <View style={styles.emptyState}>
-          <RadarAnimation color={Colors.brand} />
+          <RadarAnimation color={colors.accent} />
           <Text style={[styles.emptyTitle, { color: colors.text, marginTop: 24 }]}>Finding your location…</Text>
           <Text style={[styles.emptySub, { color: colors.textMuted }]}>Looking for AfuChat users nearby</Text>
         </View>
@@ -426,7 +426,7 @@ export default function UserDiscoveryScreen() {
         <View style={styles.emptyState}>
           <Ionicons name="alert-circle-outline" size={48} color={colors.textMuted} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>{nearbyError}</Text>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: Colors.brand }]} onPress={() => loadNearbyUsers()}>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.accent }]} onPress={() => loadNearbyUsers()}>
             <Text style={styles.actionBtnText}>Try Again</Text>
           </TouchableOpacity>
         </View>
@@ -434,7 +434,7 @@ export default function UserDiscoveryScreen() {
     }
     return (
       <View style={styles.emptyState}>
-        <RadarAnimation color={Colors.brand} />
+        <RadarAnimation color={colors.accent} />
         <Text style={[styles.emptyTitle, { color: colors.text, marginTop: 24 }]}>No one nearby</Text>
         <Text style={[styles.emptySub, { color: colors.textMuted }]}>
           No AfuChat users found within {radiusKm} km. Try expanding the radius.
@@ -472,21 +472,21 @@ export default function UserDiscoveryScreen() {
 
       <View style={[styles.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity
-          style={[styles.tabItem, tab === "discover" && [styles.tabItemActive, { borderBottomColor: Colors.brand }]]}
+          style={[styles.tabItem, tab === "discover" && [styles.tabItemActive, { borderBottomColor: colors.accent }]]}
           onPress={() => setTab("discover")}
         >
-          <Ionicons name="compass-outline" size={16} color={tab === "discover" ? Colors.brand : colors.textMuted} />
-          <Text style={[styles.tabText, { color: tab === "discover" ? Colors.brand : colors.textMuted }]}>Discover</Text>
+          <Ionicons name="compass-outline" size={16} color={tab === "discover" ? colors.accent : colors.textMuted} />
+          <Text style={[styles.tabText, { color: tab === "discover" ? colors.accent : colors.textMuted }]}>Discover</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tabItem, tab === "nearby" && [styles.tabItemActive, { borderBottomColor: Colors.brand }]]}
+          style={[styles.tabItem, tab === "nearby" && [styles.tabItemActive, { borderBottomColor: colors.accent }]]}
           onPress={() => {
             setTab("nearby");
             if (!userCoords) requestLocation();
           }}
         >
-          <Ionicons name="navigate-outline" size={16} color={tab === "nearby" ? Colors.brand : colors.textMuted} />
-          <Text style={[styles.tabText, { color: tab === "nearby" ? Colors.brand : colors.textMuted }]}>Nearby</Text>
+          <Ionicons name="navigate-outline" size={16} color={tab === "nearby" ? colors.accent : colors.textMuted} />
+          <Text style={[styles.tabText, { color: tab === "nearby" ? colors.accent : colors.textMuted }]}>Nearby</Text>
           {tab === "nearby" && userCoords && (
             <View style={[styles.liveChip, { backgroundColor: "#4CAF50" }]}>
               <Text style={styles.liveChipText}>LIVE</Text>
@@ -502,8 +502,8 @@ export default function UserDiscoveryScreen() {
               <TouchableOpacity
                 key={tag}
                 style={[styles.chip, {
-                  backgroundColor: selectedInterest === tag ? Colors.brand : colors.surface,
-                  borderColor: selectedInterest === tag ? Colors.brand : colors.border,
+                  backgroundColor: selectedInterest === tag ? colors.accent : colors.surface,
+                  borderColor: selectedInterest === tag ? colors.accent : colors.border,
                 }]}
                 onPress={() => setSelectedInterest(tag)}
               >
@@ -519,8 +519,8 @@ export default function UserDiscoveryScreen() {
               <TouchableOpacity
                 key={opt.value}
                 style={[styles.chip, {
-                  backgroundColor: radiusKm === opt.value ? Colors.brand : colors.surface,
-                  borderColor: radiusKm === opt.value ? Colors.brand : colors.border,
+                  backgroundColor: radiusKm === opt.value ? colors.accent : colors.surface,
+                  borderColor: radiusKm === opt.value ? colors.accent : colors.border,
                 }]}
                 onPress={() => setRadiusKm(opt.value)}
               >
@@ -533,8 +533,8 @@ export default function UserDiscoveryScreen() {
                 style={[styles.chip, { backgroundColor: colors.surface, borderColor: colors.border }]}
                 onPress={requestLocation}
               >
-                <Ionicons name="refresh-outline" size={13} color={Colors.brand} />
-                <Text style={[styles.chipText, { color: Colors.brand }]}>Refresh</Text>
+                <Ionicons name="refresh-outline" size={13} color={colors.accent} />
+                <Text style={[styles.chipText, { color: colors.accent }]}>Refresh</Text>
               </TouchableOpacity>
             )}
           </ScrollView>
@@ -544,7 +544,7 @@ export default function UserDiscoveryScreen() {
       {loading && !refreshing ? (
         tab === "nearby" && locating ? null : (
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-            <ActivityIndicator color={Colors.brand} size="large" />
+            <ActivityIndicator color={colors.accent} size="large" />
           </View>
         )
       ) : (
@@ -554,7 +554,7 @@ export default function UserDiscoveryScreen() {
           renderItem={renderUserCard}
           contentContainerStyle={{ gap: 10, padding: 14, paddingBottom: 60 }}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.brand} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
           ListEmptyComponent={tab === "nearby" ? renderNearbyEmpty() : renderDiscoverEmpty()}
         />
       )}

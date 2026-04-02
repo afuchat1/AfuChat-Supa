@@ -60,7 +60,7 @@ export default function TransferScreen() {
 
       <KeyboardAwareScrollViewCompat contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
         <View style={styles.iconWrap}>
-          <View style={[styles.iconCircle, { backgroundColor: Colors.brand + "15" }]}>
+          <View style={[styles.iconCircle, { backgroundColor: colors.accent + "15" }]}>
             <Text style={styles.iconEmoji}>💸</Text>
           </View>
         </View>
@@ -117,21 +117,21 @@ export default function TransferScreen() {
                   params: { service: "money_transfer", amount: fee.subtotal.toString(), fee: fee.feeAmount.toString(), total: fee.total.toString() },
                 })}
               >
-                <Text style={[styles.feeLinkText, { color: Colors.brand }]}>Transfer Fee ({fee.feePercent}%)</Text>
-                <Ionicons name="information-circle-outline" size={14} color={Colors.brand} />
+                <Text style={[styles.feeLinkText, { color: colors.accent }]}>Transfer Fee ({fee.feePercent}%)</Text>
+                <Ionicons name="information-circle-outline" size={14} color={colors.accent} />
               </TouchableOpacity>
               <Text style={[styles.feeValue, { color: "#FF9800" }]}>+{fee.feeAmount} ACoins</Text>
             </View>
             <View style={[styles.feeDivider, { backgroundColor: colors.border }]} />
             <View style={styles.feeRow}>
               <Text style={[styles.feeTotalLabel, { color: colors.text }]}>Total Charged</Text>
-              <Text style={[styles.feeTotalValue, { color: Colors.brand }]}>{fee.total} ACoins</Text>
+              <Text style={[styles.feeTotalValue, { color: colors.accent }]}>{fee.total} ACoins</Text>
             </View>
           </View>
         )}
 
         <TouchableOpacity
-          style={[styles.sendBtn, { backgroundColor: Colors.brand, opacity: (!recipient || numAmount <= 0 || loading) ? 0.5 : 1 }]}
+          style={[styles.sendBtn, { backgroundColor: colors.accent, opacity: (!recipient || numAmount <= 0 || loading) ? 0.5 : 1 }]}
           onPress={handleTransfer}
           disabled={!recipient || numAmount <= 0 || loading}
         >

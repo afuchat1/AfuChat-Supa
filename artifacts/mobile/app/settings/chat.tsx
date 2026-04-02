@@ -52,7 +52,7 @@ export default function ChatSettingsScreen() {
   const [clearing, setClearing] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
 
-  const themeAccent = CHAT_THEME_COLORS[prefs.chat_theme]?.accent || Colors.brand;
+  const themeAccent = CHAT_THEME_COLORS[prefs.chat_theme]?.accent || colors.accent;
 
   async function handleClearAllChats() {
     showAlert(
@@ -162,7 +162,7 @@ export default function ChatSettingsScreen() {
   if (loading) {
     return (
       <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, justifyContent: "center", alignItems: "center" }]}>
-        <ActivityIndicator color={Colors.brand} />
+        <ActivityIndicator color={colors.accent} />
       </View>
     );
   }

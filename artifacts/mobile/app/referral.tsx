@@ -109,7 +109,7 @@ export default function ReferralScreen() {
       </View>
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
-        <View style={[styles.heroCard, { backgroundColor: Colors.brand }]}>
+        <View style={[styles.heroCard, { backgroundColor: colors.accent }]}>
           <Ionicons name="gift" size={40} color="rgba(255,255,255,0.9)" />
           <Text style={styles.heroTitle}>Invite Friends, Earn Rewards</Text>
           <Text style={styles.heroSub}>
@@ -122,7 +122,7 @@ export default function ReferralScreen() {
           <View style={[styles.linkRow, { backgroundColor: colors.inputBg }]}>
             <Text style={[styles.linkText, { color: colors.text }]} numberOfLines={1}>{referralLink}</Text>
             <TouchableOpacity style={styles.copyBtn} onPress={handleCopyLink}>
-              <Ionicons name="copy-outline" size={18} color={Colors.brand} />
+              <Ionicons name="copy-outline" size={18} color={colors.accent} />
             </TouchableOpacity>
           </View>
           <TouchableOpacity style={styles.shareBtn} onPress={handleShare}>
@@ -133,7 +133,7 @@ export default function ReferralScreen() {
 
         <View style={styles.statsRow}>
           <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
-            <Ionicons name="people" size={24} color={Colors.brand} />
+            <Ionicons name="people" size={24} color={colors.accent} />
             <Text style={[styles.statValue, { color: colors.text }]}>{stats.total_referrals}</Text>
             <Text style={[styles.statLabel, { color: colors.textMuted }]}>Friends Joined</Text>
           </View>
@@ -153,8 +153,8 @@ export default function ReferralScreen() {
             { icon: "flash-outline", text: "You receive 2,000 Nexa bonus" },
           ].map((step, i) => (
             <View key={i} style={styles.stepRow}>
-              <View style={[styles.stepIcon, { backgroundColor: Colors.brand + "18" }]}>
-                <Ionicons name={step.icon as any} size={18} color={Colors.brand} />
+              <View style={[styles.stepIcon, { backgroundColor: colors.accent + "18" }]}>
+                <Ionicons name={step.icon as any} size={18} color={colors.accent} />
               </View>
               <Text style={[styles.stepText, { color: colors.textSecondary }]}>{step.text}</Text>
             </View>

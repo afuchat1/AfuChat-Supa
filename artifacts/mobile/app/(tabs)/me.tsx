@@ -31,6 +31,8 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import Colors from "@/constants/colors";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { PrestigeBadge } from "@/components/ui/PrestigeBadge";
+import { useAppAccent } from "@/context/AppAccentContext";
+import { CHAT_THEME_COLORS, type ChatTheme } from "@/context/ChatPreferencesContext";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -122,11 +124,11 @@ function ProfileCompletionBar({ profile, isPremium }: { profile: ProfileFields |
     >
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>Profile Completion</Text>
-        <Text style={{ color: Colors.brand, fontFamily: "Inter_700Bold", fontSize: 13 }}>{Math.round(pct * 100)}%</Text>
+        <Text style={{ color: colors.accent, fontFamily: "Inter_700Bold", fontSize: 13 }}>{Math.round(pct * 100)}%</Text>
       </View>
       <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.backgroundTertiary, overflow: "hidden" }}>
         <Animated.View style={[{ height: "100%", borderRadius: 3, overflow: "hidden" }, fillStyle]}>
-          <LinearGradient colors={[Colors.brand, Colors.gold]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+          <LinearGradient colors={[colors.accent, Colors.gold]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
         </Animated.View>
       </View>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
@@ -185,6 +187,7 @@ function XpLevelBar({ xp }: { xp: number }) {
 
 export default function MeScreen() {
   const { colors, isDark, themeMode, setThemeMode } = useTheme();
+  const { accent, appTheme, setAppTheme } = useAppAccent();
   const { profile, isPremium, subscription } = useAuth();
   const isAdmin = !!profile?.is_admin;
   const { langLabel } = useLanguage();
@@ -263,7 +266,7 @@ export default function MeScreen() {
         </View>
         <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
         <View style={styles.statItem}>
-          <Ionicons name={gradeIcon as any} size={20} color={Colors.brand} />
+          <Ionicons name={gradeIcon as any} size={20} color={colors.accent} />
           <Text style={[styles.statValue, { color: colors.text }]}>{profile?.current_grade || "Newcomer"}</Text>
           <Text style={[styles.statLabel, { color: colors.textMuted }]}>Grade</Text>
         </View>
@@ -348,6 +351,41 @@ export default function MeScreen() {
           onPress={cycleTheme}
         />
         <Separator indent={54} />
+        <View style={{ paddingHorizontal: 16, paddingVertical: 14 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
+            <View style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: accent, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+              <Ionicons name="color-palette-outline" size={18} color="#fff" />
+            </View>
+            <Text style={{ fontSize: 16, fontFamily: "Inter_500Medium", color: colors.text, flex: 1 }}>App Color</Text>
+            <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.secondaryText }}>{appTheme}</Text>
+          </View>
+          <View style={{ flexDirection: "row", gap: 12, justifyContent: "center" }}>
+            {(Object.keys(CHAT_THEME_COLORS) as ChatTheme[]).map((name) => {
+              const themeObj = CHAT_THEME_COLORS[name];
+              const selected = appTheme === name;
+              return (
+                <TouchableOpacity
+                  key={name}
+                  onPress={() => { Haptics.selectionAsync(); setAppTheme(name); }}
+                  activeOpacity={0.7}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: themeObj.accent,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderWidth: selected ? 3 : 0,
+                    borderColor: isDark ? "#fff" : "#000",
+                  }}
+                >
+                  {selected && <Ionicons name="checkmark" size={18} color="#fff" />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+        <Separator indent={54} />
         <MenuItem
           icon="language-outline"
           iconBg="#007AFF"
@@ -427,7 +465,7 @@ export default function MeScreen() {
               <Separator indent={54} />
               <MenuItem
                 icon="shield-checkmark"
-                iconBg={Colors.brand}
+                iconBg={colors.accent}
                 label="Admin Dashboard"
                 onPress={() => router.push("/admin")}
                 badge="Admin"
@@ -438,7 +476,7 @@ export default function MeScreen() {
       )}
 
       <View style={styles.versionRow}>
-        <Image source={afuSymbol} style={{ width: 22, height: 22, tintColor: Colors.brand }} resizeMode="contain" />
+        <Image source={afuSymbol} style={{ width: 22, height: 22, tintColor: colors.accent }} resizeMode="contain" />
         <Text style={[styles.version, { color: colors.textMuted }]}>AfuChat v1.0.0</Text>
       </View>
     </ScrollView>

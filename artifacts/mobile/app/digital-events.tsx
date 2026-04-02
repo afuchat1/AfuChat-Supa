@@ -154,12 +154,12 @@ export default function DigitalEventsScreen() {
       <View style={[styles.card, { backgroundColor: colors.surface }]}>
         <View style={styles.cardTop}>
           <Text style={styles.cardEmoji}>{item.emoji}</Text>
-          <View style={[styles.catBadge, { backgroundColor: Colors.brand + "18" }]}>
-            <Text style={[styles.catText, { color: Colors.brand }]}>{item.category}</Text>
+          <View style={[styles.catBadge, { backgroundColor: colors.accent + "18" }]}>
+            <Text style={[styles.catText, { color: colors.accent }]}>{item.category}</Text>
           </View>
         </View>
         <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
-        <Text style={[styles.cardDate, { color: Colors.brand }]}>
+        <Text style={[styles.cardDate, { color: colors.accent }]}>
           <Ionicons name="calendar-outline" size={13} /> {formatEventDate(item.event_date)}
         </Text>
         {item.description ? <Text style={[styles.cardDesc, { color: colors.textSecondary }]} numberOfLines={2}>{item.description}</Text> : null}
@@ -175,7 +175,7 @@ export default function DigitalEventsScreen() {
             <Text style={[styles.priceText, { color: Colors.gold }]}>{item.price > 0 ? `${item.price} 🪙` : "Free"}</Text>
           </View>
           <TouchableOpacity
-            style={[styles.ticketBtn, { backgroundColor: item.has_ticket ? colors.backgroundTertiary : isSoldOut ? colors.backgroundTertiary : Colors.brand }]}
+            style={[styles.ticketBtn, { backgroundColor: item.has_ticket ? colors.backgroundTertiary : isSoldOut ? colors.backgroundTertiary : colors.accent }]}
             onPress={() => buyTicket(item)}
             disabled={item.has_ticket || isSoldOut || buying === item.id}
           >
@@ -206,8 +206,8 @@ export default function DigitalEventsScreen() {
 
       <View style={[styles.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         {(["browse", "mine", "create"] as const).map((t) => (
-          <TouchableOpacity key={t} style={[styles.tab, tab === t && { borderBottomColor: Colors.brand, borderBottomWidth: 2 }]} onPress={() => setTab(t)}>
-            <Text style={[styles.tabText, { color: tab === t ? Colors.brand : colors.textMuted }]}>
+          <TouchableOpacity key={t} style={[styles.tab, tab === t && { borderBottomColor: colors.accent, borderBottomWidth: 2 }]} onPress={() => setTab(t)}>
+            <Text style={[styles.tabText, { color: tab === t ? colors.accent : colors.textMuted }]}>
               {t === "browse" ? "Browse" : t === "mine" ? "My Tickets" : "+ Host Event"}
             </Text>
           </TouchableOpacity>
@@ -236,12 +236,12 @@ export default function DigitalEventsScreen() {
           <View style={[styles.field, { backgroundColor: colors.surface, height: 90, alignItems: "flex-start", paddingTop: 12 }]}>
             <TextInput style={[styles.fieldInput, { color: colors.text }]} placeholder="Describe your event…" placeholderTextColor={colors.textMuted} value={createDesc} onChangeText={setCreateDesc} multiline />
           </View>
-          <TouchableOpacity style={[styles.createBtn, { backgroundColor: Colors.brand, opacity: creating ? 0.7 : 1 }]} onPress={createEvent} disabled={creating}>
+          <TouchableOpacity style={[styles.createBtn, { backgroundColor: colors.accent, opacity: creating ? 0.7 : 1 }]} onPress={createEvent} disabled={creating}>
             {creating ? <ActivityIndicator color="#fff" /> : <Text style={styles.createBtnText}>Create Event</Text>}
           </TouchableOpacity>
         </ScrollView>
       ) : loading ? (
-        <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} />
+        <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={tab === "mine" ? myEvents : events}
@@ -253,7 +253,7 @@ export default function DigitalEventsScreen() {
             <View style={styles.emptyState}>
               <Text style={{ fontSize: 48 }}>🎫</Text>
               <Text style={[styles.emptyTitle, { color: colors.text }]}>{tab === "mine" ? "No events yet" : "No upcoming events"}</Text>
-              <TouchableOpacity style={[styles.createBtn, { backgroundColor: Colors.brand }]} onPress={() => setTab("create")}>
+              <TouchableOpacity style={[styles.createBtn, { backgroundColor: colors.accent }]} onPress={() => setTab("create")}>
                 <Text style={styles.createBtnText}>Host an Event</Text>
               </TouchableOpacity>
             </View>

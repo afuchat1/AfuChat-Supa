@@ -76,7 +76,7 @@ export default function PrivacyRestrictedScreen() {
       </View>
 
       <View style={[styles.infoCard, { backgroundColor: colors.surface, marginHorizontal: 16, marginTop: 16 }]}>
-        <Ionicons name="information-circle" size={20} color={Colors.brand} />
+        <Ionicons name="information-circle" size={20} color={colors.accent} />
         <Text style={[styles.infoText, { color: colors.textSecondary }]}>
           Restricted accounts can still see your posts but their comments are only visible to them. They can't see when you're online or when you've read their messages.
         </Text>
@@ -95,7 +95,7 @@ export default function PrivacyRestrictedScreen() {
       </View>
 
       {loading ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={Colors.brand} /></View>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={colors.accent} /></View>
       ) : (
         <FlatList
           data={filtered}
@@ -113,7 +113,7 @@ export default function PrivacyRestrictedScreen() {
                 onPress={() => unrestrict(item)}
                 disabled={removing === item.id}
               >
-                {removing === item.id ? <ActivityIndicator size="small" color={Colors.brand} /> : <Text style={styles.unrestrictText}>Unrestrict</Text>}
+                {removing === item.id ? <ActivityIndicator size="small" color={colors.accent} /> : <Text style={styles.unrestrictText}>Unrestrict</Text>}
               </TouchableOpacity>
             </View>
           )}

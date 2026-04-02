@@ -62,7 +62,7 @@ export default function PrivacyMessagesScreen() {
         <Text style={[styles.headerTitle, { color: colors.text }]}>Messages & Calls</Text>
         <View style={{ width: 24 }} />
       </View>
-      {loading ? <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={Colors.brand} /></View> : (
+      {loading ? <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={colors.accent} /></View> : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>WHO CAN MESSAGE YOU</Text>
           <View style={styles.group}>
@@ -83,8 +83,8 @@ export default function PrivacyMessagesScreen() {
                       <Text style={[styles.optLabel, { color: colors.text }]}>{opt.label}</Text>
                       <Text style={[styles.optDesc, { color: colors.textMuted }]}>{opt.description}</Text>
                     </View>
-                    <View style={[styles.radio, { borderColor: selected ? Colors.brand : colors.border }]}>
-                      {selected && <View style={[styles.radioDot, { backgroundColor: Colors.brand }]} />}
+                    <View style={[styles.radio, { borderColor: selected ? colors.accent : colors.border }]}>
+                      {selected && <View style={[styles.radioDot, { backgroundColor: colors.accent }]} />}
                     </View>
                   </TouchableOpacity>
                 </View>

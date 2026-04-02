@@ -191,7 +191,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
           <View style={[
             styles.bubble,
             isMe
-              ? { backgroundColor: Colors.brand, borderBottomRightRadius: 4 }
+              ? { backgroundColor: colors.accent, borderBottomRightRadius: 4 }
               : { backgroundColor: isDark ? "#2a2a2e" : "#f0f0f5", borderBottomLeftRadius: 4 },
           ]}>
             {!isMe && chatInfo?.is_group && (
@@ -245,7 +245,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
 
       {loading ? (
         <View style={styles.loadingCenter}>
-          <ActivityIndicator color={Colors.brand} />
+          <ActivityIndicator color={colors.accent} />
         </View>
       ) : (
         <FlatList
@@ -282,7 +282,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
             />
           </View>
           <TouchableOpacity
-            style={[styles.sendBtn, { backgroundColor: text.trim() ? Colors.brand : colors.backgroundSecondary }]}
+            style={[styles.sendBtn, { backgroundColor: text.trim() ? colors.accent : colors.backgroundSecondary }]}
             onPress={sendMessage}
             disabled={!text.trim() || sending}
           >

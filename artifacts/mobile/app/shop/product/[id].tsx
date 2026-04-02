@@ -127,7 +127,7 @@ export default function ProductDetailScreen() {
   if (loading) {
     return (
       <View style={[st.loadingWrap, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-        <ActivityIndicator color={Colors.brand} size="large" />
+        <ActivityIndicator color={colors.accent} size="large" />
       </View>
     );
   }
@@ -136,7 +136,7 @@ export default function ProductDetailScreen() {
     return (
       <View style={[st.loadingWrap, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <Text style={[st.notFoundText, { color: colors.textMuted }]}>Product not found.</Text>
-        <TouchableOpacity style={[st.backBtnCenter, { backgroundColor: Colors.brand }]} onPress={() => router.back()}>
+        <TouchableOpacity style={[st.backBtnCenter, { backgroundColor: colors.accent }]} onPress={() => router.back()}>
           <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold" }}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -158,7 +158,7 @@ export default function ProductDetailScreen() {
           <TouchableOpacity style={[st.topBarBtn, { backgroundColor: "rgba(0,0,0,0.35)" }]} onPress={() => router.push("/shop/cart")}>
             <Ionicons name="cart-outline" size={20} color="#fff" />
             {cartCount > 0 && (
-              <View style={[st.cartBadge, { backgroundColor: Colors.brand }]}>
+              <View style={[st.cartBadge, { backgroundColor: colors.accent }]}>
                 <Text style={st.cartBadgeText}>{cartCount > 9 ? "9+" : cartCount}</Text>
               </View>
             )}
@@ -204,15 +204,15 @@ export default function ProductDetailScreen() {
         <View style={[st.infoCard, { backgroundColor: colors.surface }]}>
           {/* Price + name */}
           <View style={st.priceRow}>
-            <Text style={[st.priceMain, { color: Colors.brand }]}>{formatShopAcoin(product.price_acoin)}</Text>
+            <Text style={[st.priceMain, { color: colors.accent }]}>{formatShopAcoin(product.price_acoin)}</Text>
             <Text style={[st.priceUgx, { color: colors.textMuted }]}>≈ UGX {(product.price_acoin * 100).toLocaleString()}</Text>
           </View>
           <Text style={[st.productTitle, { color: colors.text }]}>{product.name}</Text>
 
           {/* Tags & category */}
           <View style={st.tagsRow}>
-            <View style={[st.catTag, { backgroundColor: Colors.brand + "18", borderColor: Colors.brand + "30" }]}>
-              <Text style={[st.catTagText, { color: Colors.brand }]}>{product.category}</Text>
+            <View style={[st.catTag, { backgroundColor: colors.accent + "18", borderColor: colors.accent + "30" }]}>
+              <Text style={[st.catTagText, { color: colors.accent }]}>{product.category}</Text>
             </View>
             {product.sales_count > 0 && (
               <View style={[st.catTag, { backgroundColor: colors.backgroundSecondary }]}>
@@ -254,7 +254,7 @@ export default function ProductDetailScreen() {
               </TouchableOpacity>
               <View style={{ flex: 1 }} />
               <Text style={[st.subtotalText, { color: colors.text }]}>
-                Subtotal: <Text style={{ color: Colors.brand, fontFamily: "Inter_700Bold" }}>{formatShopAcoin(product.price_acoin * qty)}</Text>
+                Subtotal: <Text style={{ color: colors.accent, fontFamily: "Inter_700Bold" }}>{formatShopAcoin(product.price_acoin * qty)}</Text>
               </Text>
             </View>
           </View>
@@ -274,9 +274,9 @@ export default function ProductDetailScreen() {
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
                   <Text style={[st.storeName, { color: colors.text }]}>{shop.name}</Text>
                   {seller.is_organization_verified && (
-                    <View style={[st.orgBadge, { backgroundColor: Colors.brand + "18" }]}>
-                      <Ionicons name="checkmark-circle" size={12} color={Colors.brand} />
-                      <Text style={[st.orgBadgeText, { color: Colors.brand }]}>Verified Org</Text>
+                    <View style={[st.orgBadge, { backgroundColor: colors.accent + "18" }]}>
+                      <Ionicons name="checkmark-circle" size={12} color={colors.accent} />
+                      <Text style={[st.orgBadgeText, { color: colors.accent }]}>Verified Org</Text>
                     </View>
                   )}
                 </View>
@@ -303,8 +303,8 @@ export default function ProductDetailScreen() {
             { icon: "refresh-outline", label: "Easy Returns", desc: "Hassle-free return process" },
           ].map((g) => (
             <View key={g.label} style={st.guaranteeRow}>
-              <View style={[st.guaranteeIcon, { backgroundColor: Colors.brand + "18" }]}>
-                <Ionicons name={g.icon as any} size={18} color={Colors.brand} />
+              <View style={[st.guaranteeIcon, { backgroundColor: colors.accent + "18" }]}>
+                <Ionicons name={g.icon as any} size={18} color={colors.accent} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[st.guaranteeLabel, { color: colors.text }]}>{g.label}</Text>
@@ -323,22 +323,22 @@ export default function ProductDetailScreen() {
           <Ionicons name="storefront-outline" size={20} color={colors.textMuted} />
           <Text style={{ fontFamily: "Inter_500Medium", fontSize: 14, color: colors.textMuted }}>This is your listing</Text>
           <TouchableOpacity onPress={() => router.push("/shop/manage" as any)}>
-            <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 13, color: Colors.brand }}>Go to Store Manager</Text>
+            <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 13, color: colors.accent }}>Go to Store Manager</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <View style={[st.ctaBar, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom + 8 }]}>
           <TouchableOpacity
-            style={[st.cartCta, { backgroundColor: colors.surface, borderColor: Colors.brand, opacity: !inStock || addingCart ? 0.5 : 1 }]}
+            style={[st.cartCta, { backgroundColor: colors.surface, borderColor: colors.accent, opacity: !inStock || addingCart ? 0.5 : 1 }]}
             onPress={handleAddToCart}
             disabled={!inStock || addingCart}
           >
             {addingCart ? (
-              <ActivityIndicator size="small" color={Colors.brand} />
+              <ActivityIndicator size="small" color={colors.accent} />
             ) : (
               <>
-                <Ionicons name="cart-outline" size={18} color={Colors.brand} />
-                <Text style={[st.cartCtaText, { color: Colors.brand }]}>Add to Cart</Text>
+                <Ionicons name="cart-outline" size={18} color={colors.accent} />
+                <Text style={[st.cartCtaText, { color: colors.accent }]}>Add to Cart</Text>
               </>
             )}
           </TouchableOpacity>
@@ -367,7 +367,7 @@ export default function ProductDetailScreen() {
             </View>
             <Text style={[st.successTitle, { color: colors.text }]}>Order Placed!</Text>
             <Text style={[st.successSub, { color: colors.textMuted }]}>Your order has been placed successfully. The store will process it shortly.</Text>
-            <TouchableOpacity style={[st.successBtn, { backgroundColor: Colors.brand }]} onPress={() => { setOrderDone(null); router.back(); }}>
+            <TouchableOpacity style={[st.successBtn, { backgroundColor: colors.accent }]} onPress={() => { setOrderDone(null); router.back(); }}>
               <Text style={st.successBtnText}>Continue Shopping</Text>
             </TouchableOpacity>
           </View>
@@ -406,8 +406,8 @@ export default function ProductDetailScreen() {
                 <View style={st.feeRow}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                     <Text style={[st.feeLabel, { color: colors.textMuted }]}>Platform fee ({PLATFORM_FEE_PCT}%)</Text>
-                    <View style={[st.feeBadge, { backgroundColor: Colors.brand + "18" }]}>
-                      <Text style={[st.feeBadgeText, { color: Colors.brand }]}>AfuMarket</Text>
+                    <View style={[st.feeBadge, { backgroundColor: colors.accent + "18" }]}>
+                      <Text style={[st.feeBadgeText, { color: colors.accent }]}>AfuMarket</Text>
                     </View>
                   </View>
                   <Text style={[st.feeValue, { color: colors.text }]}>{formatShopAcoin(fee)}</Text>
@@ -415,7 +415,7 @@ export default function ProductDetailScreen() {
                 <View style={[st.feeDivider, { backgroundColor: colors.border }]} />
                 <View style={st.feeRow}>
                   <Text style={[st.feeTotalLabel, { color: colors.text }]}>Total</Text>
-                  <Text style={[st.feeTotalValue, { color: Colors.brand }]}>{formatShopAcoin(total)}</Text>
+                  <Text style={[st.feeTotalValue, { color: colors.accent }]}>{formatShopAcoin(total)}</Text>
                 </View>
               </View>
 
@@ -430,7 +430,7 @@ export default function ProductDetailScreen() {
                 </View>
                 {!canAfford && (
                   <TouchableOpacity onPress={() => { setShowCheckout(false); router.push("/wallet"); }}>
-                    <Text style={[st.topUpText, { color: Colors.brand }]}>Top Up</Text>
+                    <Text style={[st.topUpText, { color: colors.accent }]}>Top Up</Text>
                   </TouchableOpacity>
                 )}
               </View>

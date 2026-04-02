@@ -292,14 +292,14 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
 
           {/* ── ARTICLE: distinctive card ── */}
           {item.post_type === "article" ? (
-            <View style={[styles.articleCard, { backgroundColor: colors.backgroundSecondary, borderColor: Colors.brand + "20" }]}>
+            <View style={[styles.articleCard, { backgroundColor: colors.backgroundSecondary, borderColor: colors.accent + "20" }]}>
               {allImages.length > 0 && (
                 <Image source={{ uri: allImages[0] }} style={styles.articleCover} resizeMode="cover" />
               )}
               <View style={styles.articleCardBody}>
-                <View style={[styles.articleBadgeRow, { backgroundColor: Colors.brand + "15" }]}>
-                  <Ionicons name="document-text" size={11} color={Colors.brand} />
-                  <Text style={[styles.articleBadgeText, { color: Colors.brand }]}>Article</Text>
+                <View style={[styles.articleBadgeRow, { backgroundColor: colors.accent + "15" }]}>
+                  <Ionicons name="document-text" size={11} color={colors.accent} />
+                  <Text style={[styles.articleBadgeText, { color: colors.accent }]}>Article</Text>
                   {item.article_title && (
                     <Text style={{ color: colors.textMuted, fontSize: 10, fontFamily: "Inter_400Regular", marginLeft: 4 }}>
                       {Math.max(1, Math.ceil((item.content?.length || 0) / 200))} min read
@@ -314,7 +314,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
                     {displayContent}
                   </Text>
                 )}
-                <TouchableOpacity onPress={openPost} style={[styles.articleReadBtn, { backgroundColor: Colors.brand }]}>
+                <TouchableOpacity onPress={openPost} style={[styles.articleReadBtn, { backgroundColor: colors.accent }]}>
                   <Ionicons name="book-outline" size={13} color="#fff" />
                   <Text style={styles.articleReadBtnText}>Read article</Text>
                 </TouchableOpacity>
@@ -410,13 +410,13 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
               style={styles.menuItem}
               onPress={() => { setMenuVisible(false); sharePost({ postId: item.id, authorName: item.profile.display_name, content: item.content }); }}
             >
-              <Ionicons name="share-outline" size={22} color={Colors.brand} />
+              <Ionicons name="share-outline" size={22} color={colors.accent} />
               <Text style={[styles.menuItemText, { color: colors.text }]}>Share Post</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={capturePostImage} disabled={capturing}>
               {capturing
-                ? <ActivityIndicator size={22} color={Colors.brand} />
-                : <Ionicons name="image-outline" size={22} color={Colors.brand} />
+                ? <ActivityIndicator size={22} color={colors.accent} />
+                : <Ionicons name="image-outline" size={22} color={colors.accent} />
               }
               <Text style={[styles.menuItemText, { color: colors.text }]}>Save as Image</Text>
             </TouchableOpacity>
@@ -981,7 +981,7 @@ export default function DiscoverScreen() {
         {/* Tab switcher */}
         <View style={[styles.tabRow, { backgroundColor: colors.backgroundTertiary }]}>
           <TouchableOpacity
-            style={[styles.tabPill, feedTab === "for_you" && { backgroundColor: Colors.brand }]}
+            style={[styles.tabPill, feedTab === "for_you" && { backgroundColor: colors.accent }]}
             onPress={() => setFeedTab("for_you")}
           >
             <Text style={[styles.tabPillText, { color: feedTab === "for_you" ? "#fff" : colors.textMuted }]}>
@@ -989,7 +989,7 @@ export default function DiscoverScreen() {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tabPill, feedTab === "following" && { backgroundColor: Colors.brand }]}
+            style={[styles.tabPill, feedTab === "following" && { backgroundColor: colors.accent }]}
             onPress={() => {
               if (!user) { router.push("/(auth)/login"); return; }
               setFeedTab("following");
@@ -1004,7 +1004,7 @@ export default function DiscoverScreen() {
         {!user && (
           <TouchableOpacity
             onPress={() => router.push("/(auth)/login")}
-            style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.brand, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20 }}
+            style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.accent, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20 }}
           >
             <Ionicons name="log-in-outline" size={16} color="#fff" />
             <Text style={{ color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" }}>Sign In</Text>
@@ -1015,7 +1015,7 @@ export default function DiscoverScreen() {
       {/* New posts indicator */}
       {newPostAuthors.length > 0 && (
         <TouchableOpacity
-          style={[styles.newPostsPill, { backgroundColor: Colors.brand }]}
+          style={[styles.newPostsPill, { backgroundColor: colors.accent }]}
           onPress={handleShowNewPosts}
           activeOpacity={0.85}
         >
@@ -1033,9 +1033,9 @@ export default function DiscoverScreen() {
 
       {/* Background refresh indicator */}
       {bgRefreshing && newPostAuthors.length === 0 && (
-        <View style={[styles.bgRefreshBar, { backgroundColor: Colors.brand + "18" }]}>
-          <ActivityIndicator size={10} color={Colors.brand} />
-          <Text style={[styles.bgRefreshText, { color: Colors.brand }]}>Updating feed…</Text>
+        <View style={[styles.bgRefreshBar, { backgroundColor: colors.accent + "18" }]}>
+          <ActivityIndicator size={10} color={colors.accent} />
+          <Text style={[styles.bgRefreshText, { color: colors.accent }]}>Updating feed…</Text>
         </View>
       )}
 
@@ -1088,13 +1088,13 @@ export default function DiscoverScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => { setRefreshing(true); setHasMore(true); setNewPostAuthors([]); newPostAuthorIdsRef.current.clear(); loadPosts(feedTab); }}
-              tintColor={Colors.brand}
+              tintColor={colors.accent}
             />
           }
           ListFooterComponent={
             loadingMore ? (
               <View style={{ paddingVertical: 20, alignItems: "center" }}>
-                <ActivityIndicator color={Colors.brand} />
+                <ActivityIndicator color={colors.accent} />
               </View>
             ) : null
           }
@@ -1102,7 +1102,7 @@ export default function DiscoverScreen() {
       )}
       {user && (
         <TouchableOpacity
-          style={[styles.fab, { backgroundColor: Colors.brand, bottom: insets.bottom + 52 + 16 }]}
+          style={[styles.fab, { backgroundColor: colors.accent, bottom: insets.bottom + 52 + 16 }]}
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowCreatePicker(true); }}
           activeOpacity={0.85}
         >
@@ -1126,7 +1126,7 @@ export default function DiscoverScreen() {
             <View style={[styles.createPickerHandle, { backgroundColor: colors.border }]} />
             <Text style={[styles.createPickerTitle, { color: colors.text }]}>What would you like to create?</Text>
             {[
-              { icon: "create-outline", label: "Post", desc: "Share a thought, photo, or link", route: "/moments/create", color: Colors.brand },
+              { icon: "create-outline", label: "Post", desc: "Share a thought, photo, or link", route: "/moments/create", color: colors.accent },
               { icon: "document-text-outline", label: "Article", desc: "Write a long-form article", route: "/moments/create-article", color: "#007AFF" },
               ...(Platform.OS !== "web" ? [{ icon: "videocam-outline", label: "Video", desc: "Share a short video clip", route: "/moments/create-video", color: "#FF3B30" }] : []),
             ].map((opt) => (

@@ -115,7 +115,7 @@ export default function TicketsScreen() {
               {TICKET_TYPES.map((t) => (
                 <TouchableOpacity
                   key={t.id}
-                  style={[styles.typeBtn, { backgroundColor: ticketType === t.id ? Colors.brand : colors.surface }]}
+                  style={[styles.typeBtn, { backgroundColor: ticketType === t.id ? colors.accent : colors.surface }]}
                   onPress={() => { setTicketType(t.id); Haptics.selectionAsync(); }}
                 >
                   <Text style={[styles.typeName, { color: ticketType === t.id ? "#fff" : colors.text }]}>{t.name}</Text>
@@ -153,22 +153,22 @@ export default function TicketsScreen() {
                   params: { service: "event_ticket", amount: fee.subtotal.toString(), fee: fee.feeAmount.toString(), total: fee.total.toString() },
                 })}
               >
-                <Text style={[styles.feeLinkText, { color: Colors.brand }]}>Service Fee ({fee.feePercent}%)</Text>
-                <Ionicons name="information-circle-outline" size={14} color={Colors.brand} />
+                <Text style={[styles.feeLinkText, { color: colors.accent }]}>Service Fee ({fee.feePercent}%)</Text>
+                <Ionicons name="information-circle-outline" size={14} color={colors.accent} />
               </TouchableOpacity>
               <Text style={[styles.feeValue, { color: "#FF9800" }]}>+{fee.feeAmount} ACoins</Text>
             </View>
             <View style={[styles.feeDivider, { backgroundColor: colors.border }]} />
             <View style={styles.feeRow}>
               <Text style={[styles.feeTotalLabel, { color: colors.text }]}>Total</Text>
-              <Text style={[styles.feeTotalValue, { color: Colors.brand }]}>{fee.total} ACoins</Text>
+              <Text style={[styles.feeTotalValue, { color: colors.accent }]}>{fee.total} ACoins</Text>
             </View>
           </View>
         )}
 
         {event && (
           <TouchableOpacity
-            style={[styles.buyBtn, { backgroundColor: Colors.brand, opacity: loading ? 0.5 : 1 }]}
+            style={[styles.buyBtn, { backgroundColor: colors.accent, opacity: loading ? 0.5 : 1 }]}
             onPress={handleBuy}
             disabled={loading}
           >

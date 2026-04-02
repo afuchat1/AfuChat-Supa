@@ -2676,8 +2676,8 @@ export default function ChatScreen() {
               <>
                 <View style={[st.reactModalDivider, { backgroundColor: colors.border }]} />
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 }}>
-                  <Ionicons name="sparkles" size={12} color={Colors.brand} />
-                  <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: Colors.brand, textTransform: "uppercase", letterSpacing: 0.5 }}>AI Features</Text>
+                  <Ionicons name="sparkles" size={12} color={colors.accent} />
+                  <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: colors.accent, textTransform: "uppercase", letterSpacing: 0.5 }}>AI Features</Text>
                 </View>
                 {showReactions && showReactions.encrypted_content.length >= 500 && (
                   <TouchableOpacity
@@ -2685,9 +2685,9 @@ export default function ChatScreen() {
                     disabled={aiLoading}
                     onPress={() => { if (showReactions) handleAiSummarize(showReactions); }}
                   >
-                    <Ionicons name="document-text-outline" size={20} color={Colors.brand} />
+                    <Ionicons name="document-text-outline" size={20} color={colors.accent} />
                     <Text style={[st.reactModalActionText, { color: colors.text }]}>Summarize Message</Text>
-                    {aiLoading && aiResultType === "summary" && <ActivityIndicator color={Colors.brand} size="small" style={{ marginLeft: "auto" }} />}
+                    {aiLoading && aiResultType === "summary" && <ActivityIndicator color={colors.accent} size="small" style={{ marginLeft: "auto" }} />}
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -2701,10 +2701,10 @@ export default function ChatScreen() {
                 </TouchableOpacity>
 
                 {aiResult && aiResultType === "summary" && (
-                  <View style={{ marginTop: 6, backgroundColor: Colors.brand + "0A", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.brand + "18" }}>
+                  <View style={{ marginTop: 6, backgroundColor: colors.accent + "0A", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: colors.accent + "18" }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                      <Ionicons name="sparkles" size={12} color={Colors.brand} />
-                      <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: Colors.brand, textTransform: "uppercase", letterSpacing: 0.5 }}>Summary</Text>
+                      <Ionicons name="sparkles" size={12} color={colors.accent} />
+                      <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: colors.accent, textTransform: "uppercase", letterSpacing: 0.5 }}>Summary</Text>
                     </View>
                     <Text style={{ fontSize: 14, color: colors.text, fontFamily: "Inter_400Regular", lineHeight: 20 }}>{aiResult}</Text>
                   </View>
@@ -2741,10 +2741,10 @@ export default function ChatScreen() {
             <TouchableOpacity onPress={() => { setShowLangPicker(false); setTranslateMsg(null); setAiResult(null); setAiResultType(null); }} hitSlop={12}>
               <Ionicons name="chevron-back" size={22} color={colors.text} />
             </TouchableOpacity>
-            <Ionicons name="language-outline" size={20} color={Colors.brand} />
+            <Ionicons name="language-outline" size={20} color={colors.accent} />
             <Text style={{ fontSize: 16, fontFamily: "Inter_700Bold", color: colors.text }}>Translate to</Text>
           </View>
-          {translatingLang && <ActivityIndicator color={Colors.brand} size="small" />}
+          {translatingLang && <ActivityIndicator color={colors.accent} size="small" />}
         </View>
         {translateMsg && (
           <View style={{ marginHorizontal: 16, marginTop: 10, marginBottom: 6, backgroundColor: colors.inputBg, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
@@ -2752,10 +2752,10 @@ export default function ChatScreen() {
           </View>
         )}
         {aiResult && aiResultType === "translate" && (
-          <View style={{ marginHorizontal: 16, marginTop: 6, marginBottom: 6, backgroundColor: Colors.brand + "0A", borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.brand + "18" }}>
+          <View style={{ marginHorizontal: 16, marginTop: 6, marginBottom: 6, backgroundColor: colors.accent + "0A", borderRadius: 10, padding: 12, borderWidth: 1, borderColor: colors.accent + "18" }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 6 }}>
-              <Ionicons name="checkmark-circle" size={14} color={Colors.brand} />
-              <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: Colors.brand, textTransform: "uppercase", letterSpacing: 0.4 }}>Translation</Text>
+              <Ionicons name="checkmark-circle" size={14} color={colors.accent} />
+              <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: colors.accent, textTransform: "uppercase", letterSpacing: 0.4 }}>Translation</Text>
             </View>
             <Text style={{ fontSize: 14, color: colors.text, fontFamily: "Inter_400Regular", lineHeight: 20 }}>{aiResult}</Text>
           </View>

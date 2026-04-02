@@ -190,7 +190,7 @@ function RichInlineText({ text, colors, isUser }: { text: string; colors: any; i
       parts.push(<Text key={key++} style={{ color: textColor, fontStyle: "italic" }}>{match[4]}</Text>);
     } else if (match[5]) {
       parts.push(
-        <Text key={key++} style={{ color: Colors.brand, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", fontSize: 13, backgroundColor: colors.inputBg || "#f0f0f0", borderRadius: 4 }}>
+        <Text key={key++} style={{ color: colors.accent, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", fontSize: 13, backgroundColor: colors.inputBg || "#f0f0f0", borderRadius: 4 }}>
           {" "}{match[5]}{" "}
         </Text>
       );
@@ -226,14 +226,14 @@ function RichMessageContent({ content, colors, isUser }: { content: string; colo
               <View key={i} style={[s.codeBlock, { backgroundColor: colors.inputBg || "#1e1e1e" }]}>
                 {seg.lang ? <Text style={[s.codeLang, { color: colors.textMuted }]}>{seg.lang}</Text> : null}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <Text style={[s.codeText, { color: Colors.brand }]}>{seg.text}</Text>
+                  <Text style={[s.codeText, { color: colors.accent }]}>{seg.text}</Text>
                 </ScrollView>
               </View>
             );
           case "bullet":
             return (
               <View key={i} style={[s.bulletRow, { paddingLeft: seg.indent * 16 }]}>
-                <Text style={{ color: Colors.brand, fontSize: 14, lineHeight: 22 }}>●</Text>
+                <Text style={{ color: colors.accent, fontSize: 14, lineHeight: 22 }}>●</Text>
                 <Text style={[s.bubbleText, { color: colors.text, flex: 1 }]}>
                   <RichInlineText text={seg.text} colors={colors} />
                 </Text>
@@ -242,7 +242,7 @@ function RichMessageContent({ content, colors, isUser }: { content: string; colo
           case "numbered":
             return (
               <View key={i} style={s.bulletRow}>
-                <Text style={{ color: Colors.brand, fontSize: 14, fontWeight: "600", lineHeight: 22, minWidth: 20 }}>{seg.num}.</Text>
+                <Text style={{ color: colors.accent, fontSize: 14, fontWeight: "600", lineHeight: 22, minWidth: 20 }}>{seg.num}.</Text>
                 <Text style={[s.bubbleText, { color: colors.text, flex: 1 }]}>
                   <RichInlineText text={seg.text} colors={colors} />
                 </Text>
@@ -288,16 +288,16 @@ function ThinkingIndicator({ colors }: { colors: any }) {
 
   return (
     <View style={[s.thinkingRow]}>
-      <View style={[s.aiBubbleIcon, { backgroundColor: Colors.brand }]}>
+      <View style={[s.aiBubbleIcon, { backgroundColor: colors.accent }]}>
         <Ionicons name="sparkles" size={12} color="#fff" />
       </View>
       <View style={[s.thinkingBubble, { backgroundColor: colors.surface }]}>
         <View style={s.thinkingContent}>
-          <Ionicons name="sparkles-outline" size={14} color={Colors.brand} />
+          <Ionicons name="sparkles-outline" size={14} color={colors.accent} />
           <Text style={[s.thinkingLabel, { color: colors.textMuted }]}>Thinking</Text>
           <View style={s.dotsRow}>
             {[dot1, dot2, dot3].map((dot, i) => (
-              <Animated.View key={i} style={[s.dot, { backgroundColor: Colors.brand, opacity: dot }]} />
+              <Animated.View key={i} style={[s.dot, { backgroundColor: colors.accent, opacity: dot }]} />
             ))}
           </View>
         </View>
@@ -337,7 +337,7 @@ function InvoiceCard({ invoice, colors }: { invoice: InvoiceData; colors: any })
   return (
     <View style={[invS.card, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
       <View style={invS.cardHeader}>
-        <Ionicons name="receipt-outline" size={16} color={Colors.brand} />
+        <Ionicons name="receipt-outline" size={16} color={colors.accent} />
         <Text style={[invS.cardTitle, { color: colors.text }]}>Invoice</Text>
         <TouchableOpacity onPress={handleCopy} hitSlop={8}>
           <Ionicons name="copy-outline" size={14} color={colors.textMuted} />
@@ -347,7 +347,7 @@ function InvoiceCard({ invoice, colors }: { invoice: InvoiceData; colors: any })
       {rows.map((row, i) => (
         <View key={i} style={invS.row}>
           <Text style={[invS.rowLabel, { color: colors.textMuted }]}>{row.label}</Text>
-          <Text style={[invS.rowValue, { color: row.highlight ? Colors.brand : colors.text }]}>{row.value}</Text>
+          <Text style={[invS.rowValue, { color: row.highlight ? colors.accent : colors.text }]}>{row.value}</Text>
         </View>
       ))}
       <View style={[invS.divider, { backgroundColor: colors.border }]} />
@@ -387,7 +387,7 @@ function ConfirmationCard({ execAction, colors, onConfirm, onCancel }: {
   const colorMap: Record<string, string> = {
     send_nexa: "#FF9500",
     send_acoin: "#34C759",
-    follow: Colors.brand,
+    follow: colors.accent,
     unfollow: "#FF3B30",
     subscribe: "#D4A853",
     cancel_subscription: "#FF3B30",
@@ -395,7 +395,7 @@ function ConfirmationCard({ execAction, colors, onConfirm, onCancel }: {
   };
 
   const icon = iconMap[execAction.actionType] || "flash";
-  const accentColor = colorMap[execAction.actionType] || Colors.brand;
+  const accentColor = colorMap[execAction.actionType] || colors.accent;
 
   if (execAction.status === "executing") {
     return (
@@ -960,7 +960,7 @@ When the user asks for a receipt, invoice, or transaction details, generate an i
 
     return (
       <View style={[s.msgRow, s.msgRowAi]}>
-        <View style={[s.aiBubbleIcon, { backgroundColor: Colors.brand }]}>
+        <View style={[s.aiBubbleIcon, { backgroundColor: colors.accent }]}>
           <Ionicons name="sparkles" size={12} color="#fff" />
         </View>
         <View style={{ flex: 1 }}>
@@ -987,8 +987,8 @@ When the user asks for a receipt, invoice, or transaction details, generate an i
               <Text style={[s.timestamp, { color: colors.textMuted }]}>{formatTime(item.timestamp)}</Text>
             )}
             <TouchableOpacity onPress={() => copyMessage(item)} style={s.metaBtn} hitSlop={8}>
-              <Ionicons name={isCopied ? "checkmark-circle" : "copy-outline"} size={14} color={isCopied ? Colors.brand : colors.textMuted} />
-              {isCopied && <Text style={[s.metaBtnText, { color: Colors.brand }]}>Copied</Text>}
+              <Ionicons name={isCopied ? "checkmark-circle" : "copy-outline"} size={14} color={isCopied ? colors.accent : colors.textMuted} />
+              {isCopied && <Text style={[s.metaBtnText, { color: colors.accent }]}>Copied</Text>}
             </TouchableOpacity>
             {item.id === lastAiMsgId && !loading && (
               <TouchableOpacity onPress={regenerateLastResponse} style={s.metaBtn} hitSlop={8}>
@@ -1001,11 +1001,11 @@ When the user asks for a receipt, invoice, or transaction details, generate an i
               {item.actions.map((action, i) => (
                 <TouchableOpacity
                   key={i}
-                  style={[s.actionBtn, { backgroundColor: Colors.brand + "15", borderColor: Colors.brand + "30" }]}
+                  style={[s.actionBtn, { backgroundColor: colors.accent + "15", borderColor: colors.accent + "30" }]}
                   onPress={() => executeAction(action)}
                 >
-                  <Ionicons name={action.icon as any} size={14} color={Colors.brand} />
-                  <Text style={[s.actionBtnText, { color: Colors.brand }]}>{action.label}</Text>
+                  <Ionicons name={action.icon as any} size={14} color={colors.accent} />
+                  <Text style={[s.actionBtnText, { color: colors.accent }]}>{action.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -1015,11 +1015,11 @@ When the user asks for a receipt, invoice, or transaction details, generate an i
               {item.suggestions!.map((sug, i) => (
                 <TouchableOpacity
                   key={i}
-                  style={[s.suggestionChip, { borderColor: Colors.brand + "40" }]}
+                  style={[s.suggestionChip, { borderColor: colors.accent + "40" }]}
                   onPress={() => sendMessage(sug)}
                 >
-                  <Ionicons name="chatbubble-outline" size={12} color={Colors.brand} />
-                  <Text style={[s.suggestionText, { color: Colors.brand }]}>{sug}</Text>
+                  <Ionicons name="chatbubble-outline" size={12} color={colors.accent} />
+                  <Text style={[s.suggestionText, { color: colors.accent }]}>{sug}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -1040,12 +1040,12 @@ When the user asks for a receipt, invoice, or transaction details, generate an i
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <View style={s.headerCenter}>
-          <View style={[s.headerIcon, { backgroundColor: Colors.brand }]}>
+          <View style={[s.headerIcon, { backgroundColor: colors.accent }]}>
             <Ionicons name="sparkles" size={16} color="#fff" />
           </View>
           <View>
             <Text style={[s.headerTitle, { color: colors.text }]}>AfuAi</Text>
-            <Text style={[s.headerSub, { color: Colors.brand }]}>● Online</Text>
+            <Text style={[s.headerSub, { color: colors.accent }]}>● Online</Text>
           </View>
         </View>
         {messages.length > 0 ? (
@@ -1068,8 +1068,8 @@ When the user asks for a receipt, invoice, or transaction details, generate an i
         maintainVisibleContentPosition={Platform.OS !== "web" ? { minIndexForVisible: 0 } : undefined}
         ListEmptyComponent={
           <View style={s.emptyWrap}>
-            <View style={[s.emptyIcon, { backgroundColor: Colors.brand + "20" }]}>
-              <Ionicons name="sparkles" size={40} color={Colors.brand} />
+            <View style={[s.emptyIcon, { backgroundColor: colors.accent + "20" }]}>
+              <Ionicons name="sparkles" size={40} color={colors.accent} />
             </View>
             <Text style={[s.emptyTitle, { color: colors.text }]}>AfuAi</Text>
             <Text style={[s.emptySub, { color: colors.textMuted }]}>
@@ -1082,7 +1082,7 @@ When the user asks for a receipt, invoice, or transaction details, generate an i
                   style={[s.quickBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
                   onPress={() => sendMessage(p.prompt)}
                 >
-                  <Ionicons name={p.icon} size={16} color={Colors.brand} />
+                  <Ionicons name={p.icon} size={16} color={colors.accent} />
                   <Text style={[s.quickBtnText, { color: colors.text }]}>{p.label}</Text>
                 </TouchableOpacity>
               ))}
@@ -1113,7 +1113,7 @@ When the user asks for a receipt, invoice, or transaction details, generate an i
           )}
         </View>
         <TouchableOpacity
-          style={[s.sendBtn, { backgroundColor: input.trim() && !loading ? Colors.brand : colors.border }]}
+          style={[s.sendBtn, { backgroundColor: input.trim() && !loading ? colors.accent : colors.border }]}
           onPress={() => sendMessage()}
           disabled={!input.trim() || loading}
         >
@@ -1132,7 +1132,7 @@ When the user asks for a receipt, invoice, or transaction details, generate an i
           container: colors.surface,
           header: colors.text,
           skinTonesContainer: colors.surface,
-          category: { icon: colors.textMuted, iconActive: Colors.brand, container: colors.surface, containerActive: colors.inputBg },
+          category: { icon: colors.textMuted, iconActive: colors.accent, container: colors.surface, containerActive: colors.inputBg },
           search: { text: colors.text, placeholder: colors.textMuted, icon: colors.textMuted, background: colors.inputBg },
           emoji: { selected: colors.inputBg },
         }}

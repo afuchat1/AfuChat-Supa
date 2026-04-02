@@ -50,15 +50,15 @@ function RadioGroup({
           <Text style={[styles.groupLabel, { color: colors.text }]}>{label}</Text>
           <Text style={[styles.groupDesc, { color: colors.textMuted }]}>{description}</Text>
         </View>
-        {saving && <ActivityIndicator size="small" color={Colors.brand} />}
+        {saving && <ActivityIndicator size="small" color={colors.accent} />}
       </View>
       <View style={[styles.optRow, { borderTopColor: colors.border }]}>
         {opts.map((o) => (
           <TouchableOpacity key={o.v} style={styles.optItem} onPress={() => onChange(o.v)} activeOpacity={0.7}>
-            <View style={[styles.radio, { borderColor: value === o.v ? Colors.brand : colors.border }]}>
-              {value === o.v && <View style={[styles.radioDot, { backgroundColor: Colors.brand }]} />}
+            <View style={[styles.radio, { borderColor: value === o.v ? colors.accent : colors.border }]}>
+              {value === o.v && <View style={[styles.radioDot, { backgroundColor: colors.accent }]} />}
             </View>
-            <Text style={[styles.optLabel, { color: value === o.v ? Colors.brand : colors.textSecondary }]}>{o.l}</Text>
+            <Text style={[styles.optLabel, { color: value === o.v ? colors.accent : colors.textSecondary }]}>{o.l}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -100,7 +100,7 @@ export default function PrivacyInteractionsScreen() {
         <Text style={[styles.headerTitle, { color: colors.text }]}>Reactions & Tags</Text>
         <View style={{ width: 24 }} />
       </View>
-      {loading ? <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={Colors.brand} /></View> : (
+      {loading ? <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={colors.accent} /></View> : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>INTERACTIONS</Text>
           <View style={{ paddingHorizontal: 16, gap: 12 }}>

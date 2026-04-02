@@ -127,7 +127,7 @@ export default function SellerApplyScreen() {
           <View style={{ width: 24 }} />
         </View>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator color={Colors.brand} />
+          <ActivityIndicator color={colors.accent} />
         </View>
       </View>
     );
@@ -150,7 +150,7 @@ export default function SellerApplyScreen() {
             Your account is already organization-verified. Go to your Store Manager to list products.
           </Text>
           <TouchableOpacity
-            style={{ backgroundColor: Colors.brand, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14, marginTop: 8 }}
+            style={{ backgroundColor: colors.accent, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14, marginTop: 8 }}
             onPress={() => router.replace("/shop/manage")}
           >
             <Text style={{ color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold" }}>Go to My Store</Text>
@@ -218,7 +218,7 @@ export default function SellerApplyScreen() {
             </Text>
           )}
           <TouchableOpacity
-            style={{ backgroundColor: Colors.brand, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14, marginTop: 8 }}
+            style={{ backgroundColor: colors.accent, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14, marginTop: 8 }}
             onPress={() => setPageStatus("idle")}
           >
             <Text style={{ color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold" }}>Re-apply</Text>
@@ -241,10 +241,10 @@ export default function SellerApplyScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
           {/* Intro Banner */}
-          <View style={[st.introBanner, { backgroundColor: Colors.brand + "12", borderColor: Colors.brand + "30" }]}>
-            <Ionicons name="storefront-outline" size={24} color={Colors.brand} />
+          <View style={[st.introBanner, { backgroundColor: colors.accent + "12", borderColor: colors.accent + "30" }]}>
+            <Ionicons name="storefront-outline" size={24} color={colors.accent} />
             <View style={{ flex: 1 }}>
-              <Text style={[st.introTitle, { color: Colors.brand }]}>Join AfuMarket</Text>
+              <Text style={[st.introTitle, { color: colors.accent }]}>Join AfuMarket</Text>
               <Text style={[st.introSub, { color: colors.textMuted }]}>
                 Fill in your business details below. Our team will review your application within 2–5 business days.
               </Text>
@@ -269,10 +269,10 @@ export default function SellerApplyScreen() {
               {BUSINESS_TYPES.map((t) => (
                 <TouchableOpacity
                   key={t}
-                  style={[st.chip, { borderColor: form.business_type === t ? Colors.brand : colors.border, backgroundColor: form.business_type === t ? Colors.brand + "15" : colors.inputBg }]}
+                  style={[st.chip, { borderColor: form.business_type === t ? colors.accent : colors.border, backgroundColor: form.business_type === t ? colors.accent + "15" : colors.inputBg }]}
                   onPress={() => set("business_type", t)}
                 >
-                  <Text style={[st.chipText, { color: form.business_type === t ? Colors.brand : colors.textSecondary }]}>{t}</Text>
+                  <Text style={[st.chipText, { color: form.business_type === t ? colors.accent : colors.textSecondary }]}>{t}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -282,10 +282,10 @@ export default function SellerApplyScreen() {
               {CATEGORIES.map((c) => (
                 <TouchableOpacity
                   key={c}
-                  style={[st.chip, { borderColor: form.category === c ? Colors.brand : colors.border, backgroundColor: form.category === c ? Colors.brand + "15" : colors.inputBg }]}
+                  style={[st.chip, { borderColor: form.category === c ? colors.accent : colors.border, backgroundColor: form.category === c ? colors.accent + "15" : colors.inputBg }]}
                   onPress={() => set("category", c)}
                 >
-                  <Text style={[st.chipText, { color: form.category === c ? Colors.brand : colors.textSecondary }]}>{c}</Text>
+                  <Text style={[st.chipText, { color: form.category === c ? colors.accent : colors.textSecondary }]}>{c}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -400,17 +400,17 @@ export default function SellerApplyScreen() {
             onPress={() => router.push({ pathname: "/terms", params: { section: "marketplace" } } as any)}
             activeOpacity={0.8}
           >
-            <Ionicons name="shield-checkmark-outline" size={15} color={Colors.brand} />
+            <Ionicons name="shield-checkmark-outline" size={15} color={colors.accent} />
             <Text style={[st.termsText, { color: colors.textMuted }]}>
               By submitting you agree to AfuChat's{" "}
-              <Text style={{ color: Colors.brand, fontFamily: "Inter_500Medium" }}>Marketplace Terms</Text>
+              <Text style={{ color: colors.accent, fontFamily: "Inter_500Medium" }}>Marketplace Terms</Text>
               {" "}and Seller Policies. Providing false information will result in permanent disqualification.
             </Text>
           </TouchableOpacity>
 
           {/* Submit */}
           <TouchableOpacity
-            style={[st.submitBtn, { backgroundColor: Colors.brand, opacity: submitting ? 0.7 : 1 }]}
+            style={[st.submitBtn, { backgroundColor: colors.accent, opacity: submitting ? 0.7 : 1 }]}
             onPress={handleSubmit}
             disabled={submitting}
           >

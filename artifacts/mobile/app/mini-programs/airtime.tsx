@@ -109,7 +109,7 @@ export default function AirtimeScreen() {
             <TouchableOpacity
               key={a}
               style={[styles.quickBtn, {
-                backgroundColor: numAmount === a ? Colors.brand : colors.surface,
+                backgroundColor: numAmount === a ? colors.accent : colors.surface,
               }]}
               onPress={() => { setAmount(a.toString()); Haptics.selectionAsync(); }}
             >
@@ -143,21 +143,21 @@ export default function AirtimeScreen() {
                   params: { service: "airtime", amount: fee.subtotal.toString(), fee: fee.feeAmount.toString(), total: fee.total.toString() },
                 })}
               >
-                <Text style={[styles.feeLinkText, { color: Colors.brand }]}>Fee ({fee.feePercent}%)</Text>
-                <Ionicons name="information-circle-outline" size={14} color={Colors.brand} />
+                <Text style={[styles.feeLinkText, { color: colors.accent }]}>Fee ({fee.feePercent}%)</Text>
+                <Ionicons name="information-circle-outline" size={14} color={colors.accent} />
               </TouchableOpacity>
               <Text style={[styles.feeValue, { color: "#FF9800" }]}>+{fee.feeAmount} ACoins</Text>
             </View>
             <View style={[styles.feeDivider, { backgroundColor: colors.border }]} />
             <View style={styles.feeRow}>
               <Text style={[styles.feeTotalLabel, { color: colors.text }]}>Total</Text>
-              <Text style={[styles.feeTotalValue, { color: Colors.brand }]}>{fee.total} ACoins</Text>
+              <Text style={[styles.feeTotalValue, { color: colors.accent }]}>{fee.total} ACoins</Text>
             </View>
           </View>
         )}
 
         <TouchableOpacity
-          style={[styles.buyBtn, { backgroundColor: Colors.brand, opacity: (!provider || !phone || numAmount <= 0 || loading) ? 0.5 : 1 }]}
+          style={[styles.buyBtn, { backgroundColor: colors.accent, opacity: (!provider || !phone || numAmount <= 0 || loading) ? 0.5 : 1 }]}
           onPress={handlePurchase}
           disabled={!provider || !phone || numAmount <= 0 || loading}
         >

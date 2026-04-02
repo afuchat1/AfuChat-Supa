@@ -52,7 +52,7 @@ export default function NotificationSettingsScreen() {
     return (
       <View style={[styles.row, { backgroundColor: colors.surface }]}>
         <Text style={[styles.rowLabel, { color: colors.text }]}>{label}</Text>
-        <Switch value={prefs[field]} onValueChange={() => toggle(field)} trackColor={{ true: Colors.brand, false: colors.border }} />
+        <Switch value={prefs[field]} onValueChange={() => toggle(field)} trackColor={{ true: colors.accent, false: colors.border }} />
       </View>
     );
   }

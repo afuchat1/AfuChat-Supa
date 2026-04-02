@@ -74,7 +74,7 @@ function ReplyCard({ item, colors, depth, onReplyTo }: { item: Reply; colors: an
           <View style={styles.replyHeader}>
             <Text style={[styles.replyName, { color: colors.text }]}>{item.author.display_name}</Text>
             {item.author.is_organization_verified && <Ionicons name="checkmark-circle" size={12} color={Colors.gold} style={{ marginLeft: 3 }} />}
-            {!item.author.is_organization_verified && item.author.is_verified && <Ionicons name="checkmark-circle" size={12} color={Colors.brand} style={{ marginLeft: 3 }} />}
+            {!item.author.is_organization_verified && item.author.is_verified && <Ionicons name="checkmark-circle" size={12} color={colors.accent} style={{ marginLeft: 3 }} />}
             <Text style={[styles.replyTime, { color: colors.textMuted }]}> {timeAgo(item.created_at)}</Text>
           </View>
           <RichText style={[styles.replyContent, { color: colors.text }]}>{displayText}</RichText>
@@ -424,7 +424,7 @@ export default function PostDetailScreen() {
                   <View style={styles.nameRow}>
                     <Text style={[styles.authorName, { color: colors.text }]}>{post.author.display_name}</Text>
                     {post.author.is_organization_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.gold} style={{ marginLeft: 4 }} />}
-                    {!post.author.is_organization_verified && post.author.is_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.brand} style={{ marginLeft: 4 }} />}
+                    {!post.author.is_organization_verified && post.author.is_verified && <Ionicons name="checkmark-circle" size={14} color={colors.accent} style={{ marginLeft: 4 }} />}
                   </View>
                   <Text style={[styles.authorHandle, { color: colors.textSecondary }]}>@{post.author.handle}</Text>
                 </View>
@@ -448,7 +448,7 @@ export default function PostDetailScreen() {
                       <Text style={[styles.editBtnText, { color: colors.text }]}>Cancel</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.editBtn, { backgroundColor: Colors.brand }]}
+                      style={[styles.editBtn, { backgroundColor: colors.accent }]}
                       onPress={handleEdit}
                       disabled={editSaving}
                     >
@@ -501,7 +501,7 @@ export default function PostDetailScreen() {
 
               {replies.length >= 2 && (
                 <TouchableOpacity
-                  style={[styles.aiSummaryBtn, { backgroundColor: Colors.brand + "12", borderColor: Colors.brand + "30" }]}
+                  style={[styles.aiSummaryBtn, { backgroundColor: colors.accent + "12", borderColor: colors.accent + "30" }]}
                   onPress={async () => {
                     setAiSummarizing(true);
                     setAiSummary(null);
@@ -517,20 +517,20 @@ export default function PostDetailScreen() {
                   disabled={aiSummarizing}
                 >
                   {aiSummarizing ? (
-                    <ActivityIndicator size="small" color={Colors.brand} />
+                    <ActivityIndicator size="small" color={colors.accent} />
                   ) : (
-                    <Ionicons name="sparkles" size={14} color={Colors.brand} />
+                    <Ionicons name="sparkles" size={14} color={colors.accent} />
                   )}
-                  <Text style={[styles.aiSummaryBtnText, { color: Colors.brand }]}>
+                  <Text style={[styles.aiSummaryBtnText, { color: colors.accent }]}>
                     {aiSummarizing ? "Summarizing..." : "AI Summarize Thread"}
                   </Text>
                 </TouchableOpacity>
               )}
               {aiSummary && (
-                <View style={[styles.aiSummaryCard, { backgroundColor: Colors.brand + "10", borderColor: Colors.brand + "25" }]}>
+                <View style={[styles.aiSummaryCard, { backgroundColor: colors.accent + "10", borderColor: colors.accent + "25" }]}>
                   <View style={styles.aiSummaryHeader}>
-                    <Ionicons name="sparkles" size={14} color={Colors.brand} />
-                    <Text style={[styles.aiSummaryTitle, { color: Colors.brand }]}>AI Summary</Text>
+                    <Ionicons name="sparkles" size={14} color={colors.accent} />
+                    <Text style={[styles.aiSummaryTitle, { color: colors.accent }]}>AI Summary</Text>
                     <TouchableOpacity onPress={() => setAiSummary(null)} hitSlop={8} style={{ marginLeft: "auto" }}>
                       <Ionicons name="close" size={16} color={colors.textMuted} />
                     </TouchableOpacity>
@@ -554,7 +554,7 @@ export default function PostDetailScreen() {
             <View style={[styles.replyingBanner, { backgroundColor: colors.backgroundSecondary, borderTopColor: colors.border }]}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.replyingText, { color: colors.textMuted }]}>
-                  Replying to <Text style={{ color: Colors.brand, fontFamily: "Inter_600SemiBold" }}>@{replyingTo.author.handle}</Text>
+                  Replying to <Text style={{ color: colors.accent, fontFamily: "Inter_600SemiBold" }}>@{replyingTo.author.handle}</Text>
                 </Text>
               </View>
               <TouchableOpacity onPress={() => { setReplyingTo(null); setReplyText(""); }} hitSlop={8}>
@@ -581,7 +581,7 @@ export default function PostDetailScreen() {
             <TouchableOpacity
               onPress={sendReply}
               disabled={!replyText.trim() || sending}
-              style={[styles.replySendBtn, { backgroundColor: replyText.trim() && !sending ? Colors.brand : colors.border }]}
+              style={[styles.replySendBtn, { backgroundColor: replyText.trim() && !sending ? colors.accent : colors.border }]}
             >
               {sending ? <ActivityIndicator color="#fff" size="small" /> : (
                 <Ionicons name="send" size={18} color={replyText.trim() ? "#fff" : colors.textMuted} />
@@ -593,7 +593,7 @@ export default function PostDetailScreen() {
         <View style={[styles.replyBar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 8 }]}>
           <TouchableOpacity
             onPress={() => router.push("/(auth)/login")}
-            style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.brand, paddingVertical: 10, borderRadius: 24 }}
+            style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.accent, paddingVertical: 10, borderRadius: 24 }}
           >
             <Ionicons name="log-in-outline" size={18} color="#fff" />
             <Text style={{ color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" }}>Sign in to reply</Text>
@@ -608,13 +608,13 @@ export default function PostDetailScreen() {
             <View style={[styles.menuHandle, { backgroundColor: colors.border }]} />
 
             <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); sharePost({ postId: post.id, authorName: post.author.display_name, content: post.content }); }}>
-              <Ionicons name="share-outline" size={22} color={Colors.brand} />
+              <Ionicons name="share-outline" size={22} color={colors.accent} />
               <Text style={[styles.menuText, { color: colors.text }]}>Share Post</Text>
             </TouchableOpacity>
 
             {isOwner && (
               <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); setEditContent(post.content); setEditMode(true); }}>
-                <Ionicons name="create-outline" size={22} color={Colors.brand} />
+                <Ionicons name="create-outline" size={22} color={colors.accent} />
                 <Text style={[styles.menuText, { color: colors.text }]}>Edit Post</Text>
               </TouchableOpacity>
             )}
@@ -654,12 +654,12 @@ export default function PostDetailScreen() {
                   key={r}
                   style={[
                     styles.reportChip,
-                    { borderColor: reportReason === r ? Colors.brand : colors.border,
-                      backgroundColor: reportReason === r ? Colors.brand + "15" : "transparent" }
+                    { borderColor: reportReason === r ? colors.accent : colors.border,
+                      backgroundColor: reportReason === r ? colors.accent + "15" : "transparent" }
                   ]}
                   onPress={() => setReportReason(r)}
                 >
-                  <Text style={[styles.reportChipText, { color: reportReason === r ? Colors.brand : colors.text }]}>{r}</Text>
+                  <Text style={[styles.reportChipText, { color: reportReason === r ? colors.accent : colors.text }]}>{r}</Text>
                 </TouchableOpacity>
               ))}
             </View>

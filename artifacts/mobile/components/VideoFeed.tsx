@@ -19,6 +19,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
+import { useAppAccent } from "@/context/AppAccentContext";
 import { notifyPostLike, notifyNewFollow } from "@/lib/notifyUser";
 
 const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get("window");
@@ -56,6 +57,7 @@ function VideoItem({
   onFollow: (authorId: string) => void;
   currentUserId?: string;
 }) {
+  const { accent } = useAppAccent();
   const videoRef = useRef<Video>(null);
   const [muted, setMuted] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -114,7 +116,7 @@ function VideoItem({
           <View style={styles.avatarWrapper}>
             <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={40} />
             {showFollowButton && (
-              <Animated.View style={[styles.followPlusBadge, { transform: [{ scale: followScale }] }]}>
+              <Animated.View style={[styles.followPlusBadge, { backgroundColor: accent, transform: [{ scale: followScale }] }]}>
                 <TouchableOpacity onPress={handleFollow} hitSlop={6}>
                   <Ionicons name="add" size={14} color="#fff" />
                 </TouchableOpacity>
@@ -167,6 +169,7 @@ type Props = {
 };
 
 export default function VideoFeed({ tabBarHeight = 52 }: Props) {
+  const { accent } = useAppAccent();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
 
@@ -266,7 +269,7 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
   if (loading) {
     return (
       <View style={[styles.center, { height: SCREEN_H }]}>
-        <ActivityIndicator color={Colors.brand} size="large" />
+        <ActivityIndicator color={accent} size="large" />
       </View>
     );
   }
@@ -280,7 +283,7 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
         </Text>
         {user && (
           <TouchableOpacity
-            style={{ marginTop: 24, backgroundColor: Colors.brand, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 }}
+            style={{ marginTop: 24, backgroundColor: accent, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 }}
             onPress={() => router.push("/moments/create-video")}
           >
             <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold" }}>Post a Video</Text>
@@ -338,7 +341,6 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: Colors.brand,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1.5,

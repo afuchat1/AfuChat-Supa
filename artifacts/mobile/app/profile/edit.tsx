@@ -134,9 +134,9 @@ export default function EditProfileScreen() {
         <Text style={[styles.headerTitle, { color: colors.text }]}>Edit Profile</Text>
         <TouchableOpacity onPress={save} disabled={loading}>
           {loading ? (
-            <ActivityIndicator color={Colors.brand} />
+            <ActivityIndicator color={colors.accent} />
           ) : (
-            <Text style={[styles.saveText, { color: Colors.brand }]}>Save</Text>
+            <Text style={[styles.saveText, { color: colors.accent }]}>Save</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -158,7 +158,7 @@ export default function EditProfileScreen() {
             </View>
           </TouchableOpacity>
           <TouchableOpacity onPress={pickAvatar}>
-            <Text style={[styles.changePhotoText, { color: Colors.brand }]}>Change Photo</Text>
+            <Text style={[styles.changePhotoText, { color: colors.accent }]}>Change Photo</Text>
           </TouchableOpacity>
         </View>
 
@@ -185,7 +185,7 @@ export default function EditProfileScreen() {
           />
           <View style={styles.aiBioRow}>
             <TouchableOpacity
-              style={[styles.aiBioBtn, { backgroundColor: Colors.brand + "12", borderColor: Colors.brand + "30" }]}
+              style={[styles.aiBioBtn, { backgroundColor: colors.accent + "12", borderColor: colors.accent + "30" }]}
               onPress={async () => {
                 setAiGenerating(true);
                 try {
@@ -204,11 +204,11 @@ export default function EditProfileScreen() {
               disabled={aiGenerating}
             >
               {aiGenerating ? (
-                <ActivityIndicator size="small" color={Colors.brand} />
+                <ActivityIndicator size="small" color={colors.accent} />
               ) : (
-                <Ionicons name="sparkles" size={14} color={Colors.brand} />
+                <Ionicons name="sparkles" size={14} color={colors.accent} />
               )}
-              <Text style={[styles.aiBioBtnText, { color: Colors.brand }]}>
+              <Text style={[styles.aiBioBtnText, { color: colors.accent }]}>
                 {aiGenerating ? "Generating..." : "AI Generate Bio"}
               </Text>
             </TouchableOpacity>

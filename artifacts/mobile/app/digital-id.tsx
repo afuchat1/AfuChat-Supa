@@ -130,9 +130,9 @@ function CardFront({ profile, grade, isPremium, scale, cardW }: { profile: any; 
   return (
     <View style={StyleSheet.absoluteFill}>
       <LinearGradient colors={["#080E18", "#0C1929", "#0A1220"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-      <FloatingOrb delay={0} x="8%" y="15%" size={90 * s} color={Colors.brand} />
+      <FloatingOrb delay={0} x="8%" y="15%" size={90 * s} color={colors.accent} />
       <FloatingOrb delay={600} x="70%" y="8%" size={55 * s} color={grade.colors[0]} />
-      <FloatingOrb delay={1200} x="75%" y="65%" size={35 * s} color={Colors.brand} />
+      <FloatingOrb delay={1200} x="75%" y="65%" size={35 * s} color={colors.accent} />
       <MicroPattern />
       <HoloShimmer cardW={cardW} />
       <LinearGradient colors={[`${grade.colors[0]}08`, `${grade.colors[0]}18`, `${grade.colors[1]}30`]} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 1 }} pointerEvents="none" />
@@ -213,7 +213,7 @@ function CardBack({ profile, grade, isPremium, qrValue, scale, cardW }: { profil
   const qrBoxSize = qrSize + 16;
 
   const cardStats = [
-    { label: "NEXA", value: xp.toLocaleString(), icon: "flash" as const, color: Colors.brand },
+    { label: "NEXA", value: xp.toLocaleString(), icon: "flash" as const, color: colors.accent },
     { label: "LEVEL", value: level.toString(), icon: "trending-up" as const, color: "#FF9500" },
     { label: "ACOIN", value: acoin.toLocaleString(), icon: "diamond" as const, color: Colors.gold },
   ];
@@ -222,7 +222,7 @@ function CardBack({ profile, grade, isPremium, qrValue, scale, cardW }: { profil
     <View style={StyleSheet.absoluteFill}>
       <LinearGradient colors={["#0A1220", "#080E18", "#0F0A1E"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
       <FloatingOrb delay={300} x="5%" y="60%" size={50 * s} color={grade.colors[0]} />
-      <FloatingOrb delay={900} x="80%" y="20%" size={40 * s} color={Colors.brand} />
+      <FloatingOrb delay={900} x="80%" y="20%" size={40 * s} color={colors.accent} />
       <MicroPattern />
       <HoloShimmer cardW={cardW} />
 
@@ -258,7 +258,7 @@ function CardBack({ profile, grade, isPremium, qrValue, scale, cardW }: { profil
             <Text style={[styles.idLabel, { fontSize: Math.max(6, 8 * s) }]}>AFU ID</Text>
             <Text style={[styles.idNumber, { fontSize: Math.max(11, 15 * s), letterSpacing: 2 * s }]}>{afuId}</Text>
             <Text style={[styles.idLabel, { marginTop: 4 * s, fontSize: Math.max(6, 8 * s) }]}>SCAN TO PAY</Text>
-            <Text style={[styles.idNumber, { color: Colors.brand, fontSize: Math.max(10, 12 * s) }]}>@{handle}</Text>
+            <Text style={[styles.idNumber, { color: colors.accent, fontSize: Math.max(10, 12 * s) }]}>@{handle}</Text>
           </View>
         </View>
       </View>
@@ -421,7 +421,7 @@ export default function DigitalIdScreen() {
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Digital ID</Text>
         <TouchableOpacity onPress={handleShare} style={styles.shareBtn}>
-          <Ionicons name="share-outline" size={22} color={Colors.brand} />
+          <Ionicons name="share-outline" size={22} color={colors.accent} />
         </TouchableOpacity>
       </View>
 
@@ -452,7 +452,7 @@ export default function DigitalIdScreen() {
               disabled={saving || printing}
               activeOpacity={0.8}
             >
-              <LinearGradient colors={[Colors.brand, "#00ACC1"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.saveCardGradient}>
+              <LinearGradient colors={[colors.accent, "#00ACC1"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.saveCardGradient}>
                 {saving ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
@@ -470,17 +470,17 @@ export default function DigitalIdScreen() {
             >
               <View style={styles.printCardInner}>
                 {printing ? (
-                  <ActivityIndicator size="small" color={Colors.brand} />
+                  <ActivityIndicator size="small" color={colors.accent} />
                 ) : (
-                  <Ionicons name="print-outline" size={20} color={Colors.brand} />
+                  <Ionicons name="print-outline" size={20} color={colors.accent} />
                 )}
                 <Text style={styles.printCardText}>{printing ? "..." : "Print"}</Text>
               </View>
             </TouchableOpacity>
           </View>
 
-          <View style={[styles.securityCard, { backgroundColor: isDark ? "#0D1B2A" : `${Colors.brand}08`, borderColor: isDark ? "#1A3040" : `${Colors.brand}20`, borderWidth: 1 }]}>
-            <Ionicons name="qr-code-outline" size={18} color={Colors.brand} />
+          <View style={[styles.securityCard, { backgroundColor: isDark ? "#0D1B2A" : `${colors.accent}08`, borderColor: isDark ? "#1A3040" : `${colors.accent}20`, borderWidth: 1 }]}>
+            <Ionicons name="qr-code-outline" size={18} color={colors.accent} />
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={[styles.securityTitle, { color: colors.text }]}>Scannable QR Code</Text>
               <Text style={[styles.securitySub, { color: colors.textMuted }]}>Flip the card to reveal your QR code. Others can scan it to send you ACoin instantly.</Text>
@@ -488,7 +488,7 @@ export default function DigitalIdScreen() {
           </View>
 
           <View style={[styles.idChip, { backgroundColor: isDark ? "#111827" : colors.surface, borderColor: isDark ? "#1E2D3D" : colors.border, borderWidth: isDark ? 0 : StyleSheet.hairlineWidth }]}>
-            <Ionicons name="finger-print" size={20} color={Colors.brand} />
+            <Ionicons name="finger-print" size={20} color={colors.accent} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.idChipLabel, { color: colors.textMuted }]}>Your Afu ID</Text>
               <Text style={[styles.idChipValue, { color: colors.text }]}>{formatAfuId(toAfuId(profile?.id || "00000000"))}</Text>

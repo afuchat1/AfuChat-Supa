@@ -29,6 +29,7 @@ import { setBaseUrl } from "@/lib/api-client-react/src";
 import { AppLockGate } from "@/components/AppLockGate";
 import { SplashOverlay } from "@/components/SplashOverlay";
 import { ChatPreferencesProvider } from "@/context/ChatPreferencesContext";
+import { AppAccentProvider } from "@/context/AppAccentContext";
 
 try { setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`); } catch (_) {}
 
@@ -213,6 +214,7 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <ThemeProvider>
+                <AppAccentProvider>
                 <StatusBarManager />
                 <AuthProvider>
                   <ThemeSyncManager />
@@ -234,6 +236,7 @@ export default function RootLayout() {
                     </LanguageProvider>
                   </DesktopWrapper>
                 </AuthProvider>
+              </AppAccentProvider>
               </ThemeProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>

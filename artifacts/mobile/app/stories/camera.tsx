@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import Colors from "@/constants/colors";
+import { useAppAccent } from "@/context/AppAccentContext";
 import { showAlert } from "@/lib/alert";
 
 type CameraMode = "photo" | "video";
@@ -72,6 +73,7 @@ function useWebCamera() {
 }
 
 function WebCameraScreen() {
+  const { accent } = useAppAccent();
   const insets = useSafeAreaInsets();
   const { videoRef, ready, start, stop, capture, flip } = useWebCamera();
   const [processing, setProcessing] = useState(false);
@@ -135,7 +137,7 @@ function WebCameraScreen() {
         <View style={st.permWrap}>
           <Ionicons name="camera-outline" size={56} color="rgba(255,255,255,0.5)" />
           <Text style={st.permText}>Camera access is needed to take photos for stories.</Text>
-          <TouchableOpacity style={st.permBtn} onPress={() => { setPermDenied(false); start("environment"); }}>
+          <TouchableOpacity style={[st.permBtn, { backgroundColor: accent }]} onPress={() => { setPermDenied(false); start("environment"); }}>
             <Text style={st.permBtnText}>Try Again</Text>
           </TouchableOpacity>
           <TouchableOpacity style={st.permSecondary} onPress={openGallery}>
@@ -215,6 +217,7 @@ if (Platform.OS !== "web") {
 }
 
 function NativeCameraScreen() {
+  const { accent } = useAppAccent();
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<any>(null);
 
@@ -310,7 +313,7 @@ function NativeCameraScreen() {
         <View style={st.permWrap}>
           <Ionicons name="camera-outline" size={56} color="rgba(255,255,255,0.5)" />
           <Text style={st.permText}>Camera access is needed to take photos and videos for stories.</Text>
-          <TouchableOpacity style={st.permBtn} onPress={requestCamPermission}>
+          <TouchableOpacity style={[st.permBtn, { backgroundColor: accent }]} onPress={requestCamPermission}>
             <Text style={st.permBtnText}>Allow Camera</Text>
           </TouchableOpacity>
           <TouchableOpacity style={st.permSecondary} onPress={openGallery}>
@@ -405,7 +408,7 @@ export default function StoryCameraScreen() {
         <Ionicons name="phone-portrait-outline" size={56} color="#fff" />
         <Text style={{ color: "#fff", fontSize: 20, fontWeight: "700", marginTop: 16, textAlign: "center" }}>Stories are app only</Text>
         <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 14, marginTop: 8, textAlign: "center" }}>Create stories using the AfuChat mobile app.</Text>
-        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 24, paddingHorizontal: 24, paddingVertical: 12, backgroundColor: Colors.brand, borderRadius: 20 }}>
+        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 24, paddingHorizontal: 24, paddingVertical: 12, backgroundColor: accent, borderRadius: 20 }}>
           <Text style={{ color: "#fff", fontSize: 15, fontWeight: "600" }}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -533,7 +536,6 @@ const st = StyleSheet.create({
     textAlign: "center",
   },
   permBtn: {
-    backgroundColor: Colors.brand,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 24,

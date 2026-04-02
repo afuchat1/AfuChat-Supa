@@ -117,11 +117,11 @@ function ChatRow({ item, onPress }: { item: ChatItem; onPress: () => void }) {
               <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={14} />
             )}
             {item.is_channel && (
-              <Ionicons name="megaphone" size={12} color={Colors.brand} style={{ marginLeft: 4 }} />
+              <Ionicons name="megaphone" size={12} color={colors.accent} style={{ marginLeft: 4 }} />
             )}
           </View>
           <View style={styles.rowTopRight}>
-            <Text style={[styles.time, { color: hasUnread ? Colors.brand : colors.textMuted }]}>
+            <Text style={[styles.time, { color: hasUnread ? colors.accent : colors.textMuted }]}>
               {item.last_message_at ? formatTime(item.last_message_at) : ""}
             </Text>
           </View>
@@ -134,7 +134,7 @@ function ChatRow({ item, onPress }: { item: ChatItem; onPress: () => void }) {
             {item.last_message || "No messages yet"}
           </Text>
           {hasUnread && (
-            <Animated.View style={[styles.unreadBadge, { backgroundColor: Colors.brand, transform: [{ scale: pulse }] }]}>
+            <Animated.View style={[styles.unreadBadge, { backgroundColor: colors.accent, transform: [{ scale: pulse }] }]}>
               <Text style={styles.unreadBadgeText}>
                 {item.unread_count > 99 ? "99+" : item.unread_count}
               </Text>
@@ -235,7 +235,7 @@ function StoriesBar({ userId, colors }: { userId: string; colors: any }) {
       {Platform.OS !== "web" && (
         <TouchableOpacity style={storyBarStyles.item} onPress={() => router.push("/stories/create")}>
           <View style={[storyBarStyles.addCircle, { backgroundColor: colors.inputBg }]}>
-            <Ionicons name="add" size={28} color={Colors.brand} />
+            <Ionicons name="add" size={28} color={colors.accent} />
           </View>
           <Text style={[storyBarStyles.name, { color: colors.textSecondary }]} numberOfLines={1}>My Story</Text>
         </TouchableOpacity>
@@ -562,7 +562,7 @@ export default function ChatsScreen() {
           <Ionicons
             name={searchFocused ? "search" : "search-outline"}
             size={19}
-            color={searchFocused ? Colors.brand : colors.textMuted}
+            color={searchFocused ? colors.accent : colors.textMuted}
           />
           <TextInput
             style={[styles.searchInput, { color: colors.text }]}
@@ -621,7 +621,7 @@ export default function ChatsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => { setRefreshing(true); loadChats(); }}
-              tintColor={Colors.brand}
+              tintColor={colors.accent}
             />
           }
           contentContainerStyle={{ paddingBottom: insets.bottom + 52 + 80 + 50 }}
@@ -645,7 +645,7 @@ export default function ChatsScreen() {
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/stories/camera"); }}
               activeOpacity={0.7}
             >
-              <Ionicons name="camera" size={20} color={Colors.brand} />
+              <Ionicons name="camera" size={20} color={colors.accent} />
             </TouchableOpacity>
           )}
         </>

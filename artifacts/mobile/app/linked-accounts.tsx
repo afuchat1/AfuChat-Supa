@@ -93,8 +93,8 @@ export default function LinkedAccountsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        <View style={[styles.infoCard, { backgroundColor: Colors.brand + "10" }]}>
-          <Ionicons name="swap-horizontal" size={20} color={Colors.brand} />
+        <View style={[styles.infoCard, { backgroundColor: colors.accent + "10" }]}>
+          <Ionicons name="swap-horizontal" size={20} color={colors.accent} />
           <Text style={[styles.infoText, { color: colors.textSecondary }]}>
             Add accounts with their email and password. Switch instantly without logging out.
           </Text>
@@ -108,7 +108,7 @@ export default function LinkedAccountsScreen() {
           return (
             <TouchableOpacity
               key={account.userId}
-              style={[styles.accountCard, { backgroundColor: colors.surface, borderColor: isCurrent ? Colors.brand : colors.border }]}
+              style={[styles.accountCard, { backgroundColor: colors.surface, borderColor: isCurrent ? colors.accent : colors.border }]}
               onPress={() => handleSwitch(account.userId)}
               disabled={isCurrent || !!switching}
               activeOpacity={0.7}
@@ -127,11 +127,11 @@ export default function LinkedAccountsScreen() {
                 <Text style={[styles.accountEmail, { color: colors.textMuted }]}>{account.email}</Text>
               </View>
               {isSwitching ? (
-                <ActivityIndicator color={Colors.brand} />
+                <ActivityIndicator color={colors.accent} />
               ) : isCurrent ? null : (
                 <View style={styles.switchActions}>
                   <TouchableOpacity style={styles.switchBtn} onPress={() => handleSwitch(account.userId)}>
-                    <Ionicons name="swap-horizontal" size={18} color={Colors.brand} />
+                    <Ionicons name="swap-horizontal" size={18} color={colors.accent} />
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => handleRemove(account.userId)}>
                     <Ionicons name="close-circle" size={22} color={colors.textMuted} />
@@ -143,7 +143,7 @@ export default function LinkedAccountsScreen() {
         })}
 
         {linkedAccounts.length === 0 && user && profile && (
-          <View style={[styles.accountCard, { backgroundColor: colors.surface, borderColor: Colors.brand }]}>
+          <View style={[styles.accountCard, { backgroundColor: colors.surface, borderColor: colors.accent }]}>
             <Avatar uri={profile.avatar_url} name={profile.display_name} size={48} />
             <View style={{ flex: 1 }}>
               <View style={styles.accountNameRow}>
@@ -162,8 +162,8 @@ export default function LinkedAccountsScreen() {
             style={[styles.addBtn, { borderColor: colors.border }]}
             onPress={() => setShowAdd(true)}
           >
-            <Ionicons name="add-circle-outline" size={22} color={Colors.brand} />
-            <Text style={[styles.addBtnText, { color: Colors.brand }]}>Add Another Account</Text>
+            <Ionicons name="add-circle-outline" size={22} color={colors.accent} />
+            <Text style={[styles.addBtnText, { color: colors.accent }]}>Add Another Account</Text>
           </TouchableOpacity>
         ) : (
           <View style={[styles.addForm, { backgroundColor: colors.surface }]}>

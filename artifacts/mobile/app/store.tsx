@@ -87,7 +87,7 @@ function ProductCard({ item, cardW, onPress }: { item: ProductWithShop; cardW: n
           </Text>
         </View>
         <View style={st.priceRow}>
-          <Text style={[st.priceText, { color: Colors.brand }]}>{formatShopAcoin(item.price_acoin)}</Text>
+          <Text style={[st.priceText, { color: colors.accent }]}>{formatShopAcoin(item.price_acoin)}</Text>
           {item.sales_count > 0 && (
             <Text style={[st.salesText, { color: colors.textMuted }]}>{item.sales_count} sold</Text>
           )}
@@ -106,7 +106,7 @@ function StoreChip({ store, onPress }: { store: FeaturedStore; onPress: () => vo
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
           <Text style={[st.storeChipName, { color: colors.text }]} numberOfLines={1}>{store.name}</Text>
           {store.profiles?.is_organization_verified && (
-            <Ionicons name="checkmark-circle" size={13} color={Colors.brand} />
+            <Ionicons name="checkmark-circle" size={13} color={colors.accent} />
           )}
         </View>
         <Text style={[st.storeChipCategory, { color: colors.textMuted }]}>{store.category || "General"}</Text>
@@ -224,9 +224,9 @@ export default function MarketplaceScreen() {
           </View>
           <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
             {isOrg && (
-              <TouchableOpacity style={[st.manageBtn, { backgroundColor: Colors.brand + "18", borderColor: Colors.brand + "40" }]} onPress={() => router.push("/shop/manage")}>
-                <Ionicons name="storefront-outline" size={15} color={Colors.brand} />
-                <Text style={[st.manageBtnText, { color: Colors.brand }]}>My Store</Text>
+              <TouchableOpacity style={[st.manageBtn, { backgroundColor: colors.accent + "18", borderColor: colors.accent + "40" }]} onPress={() => router.push("/shop/manage")}>
+                <Ionicons name="storefront-outline" size={15} color={colors.accent} />
+                <Text style={[st.manageBtnText, { color: colors.accent }]}>My Store</Text>
               </TouchableOpacity>
             )}
             {user && !isOrg && (
@@ -238,7 +238,7 @@ export default function MarketplaceScreen() {
             <TouchableOpacity style={[st.cartBtn, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => router.push("/shop/cart")}>
               <Ionicons name="cart-outline" size={22} color={colors.text} />
               {cartCount > 0 && (
-                <View style={[st.cartBadge, { backgroundColor: Colors.brand }]}>
+                <View style={[st.cartBadge, { backgroundColor: colors.accent }]}>
                   <Text style={st.cartBadgeText}>{cartCount > 9 ? "9+" : cartCount}</Text>
                 </View>
               )}
@@ -271,8 +271,8 @@ export default function MarketplaceScreen() {
                 key={cat}
                 onPress={() => setActiveCategory(cat)}
                 style={[st.catChip, {
-                  backgroundColor: active ? Colors.brand : colors.surface,
-                  borderColor: active ? Colors.brand : colors.border,
+                  backgroundColor: active ? colors.accent : colors.surface,
+                  borderColor: active ? colors.accent : colors.border,
                 }]}
               >
                 <Text style={[st.catChipText, { color: active ? "#fff" : colors.textSecondary }]}>{cat}</Text>
@@ -287,7 +287,7 @@ export default function MarketplaceScreen() {
         keyExtractor={(i) => i.id}
         numColumns={2}
         renderItem={renderProductItem}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.brand} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
         onEndReached={onEndReached}
         onEndReachedThreshold={0.4}
         showsVerticalScrollIndicator={false}
@@ -325,7 +325,7 @@ export default function MarketplaceScreen() {
                 <View style={st.sectionHeader}>
                   <Text style={[st.sectionTitle, { color: colors.text }]}>Top Stores</Text>
                   <TouchableOpacity onPress={() => {}} hitSlop={8}>
-                    <Text style={[st.sectionLink, { color: Colors.brand }]}>See all</Text>
+                    <Text style={[st.sectionLink, { color: colors.accent }]}>See all</Text>
                   </TouchableOpacity>
                 </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}>
@@ -365,7 +365,7 @@ export default function MarketplaceScreen() {
         }
         ListFooterComponent={
           loadingMore ? (
-            <ActivityIndicator color={Colors.brand} style={{ margin: 20 }} />
+            <ActivityIndicator color={colors.accent} style={{ margin: 20 }} />
           ) : !hasMore && products.length > 0 ? (
             <Text style={[st.endText, { color: colors.textMuted }]}>You've seen everything ✨</Text>
           ) : null
@@ -376,18 +376,18 @@ export default function MarketplaceScreen() {
       {/* ── Seller action bar for non-org users ── */}
       {!isOrg && user && (
         <TouchableOpacity
-          style={[st.sellerBar, { backgroundColor: Colors.brand + "12", borderTopColor: Colors.brand + "30" }]}
+          style={[st.sellerBar, { backgroundColor: colors.accent + "12", borderTopColor: colors.accent + "30" }]}
           onPress={() => router.push("/shop/apply")}
           activeOpacity={0.85}
         >
-          <View style={[st.sellerBarIcon, { backgroundColor: Colors.brand + "20" }]}>
-            <Ionicons name="storefront-outline" size={18} color={Colors.brand} />
+          <View style={[st.sellerBarIcon, { backgroundColor: colors.accent + "20" }]}>
+            <Ionicons name="storefront-outline" size={18} color={colors.accent} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[st.sellerBarTitle, { color: Colors.brand }]}>Want to sell on AfuMarket?</Text>
+            <Text style={[st.sellerBarTitle, { color: colors.accent }]}>Want to sell on AfuMarket?</Text>
             <Text style={[st.sellerBarSub, { color: colors.textMuted }]}>Submit your business details to get verified</Text>
           </View>
-          <Ionicons name="chevron-forward" size={16} color={Colors.brand} />
+          <Ionicons name="chevron-forward" size={16} color={colors.accent} />
         </TouchableOpacity>
       )}
     </View>

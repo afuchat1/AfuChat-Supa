@@ -212,8 +212,8 @@ export default function UsernameMarketScreen() {
 
       <View style={[styles.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         {(["browse", "mine", "list"] as const).map((t) => (
-          <TouchableOpacity key={t} style={[styles.tab, tab === t && { borderBottomColor: Colors.brand, borderBottomWidth: 2 }]} onPress={() => setTab(t)}>
-            <Text style={[styles.tabText, { color: tab === t ? Colors.brand : colors.textMuted }]}>
+          <TouchableOpacity key={t} style={[styles.tab, tab === t && { borderBottomColor: colors.accent, borderBottomWidth: 2 }]} onPress={() => setTab(t)}>
+            <Text style={[styles.tabText, { color: tab === t ? colors.accent : colors.textMuted }]}>
               {t === "browse" ? "Browse" : t === "mine" ? "My Listings" : "+ List Handle"}
             </Text>
           </TouchableOpacity>
@@ -247,12 +247,12 @@ export default function UsernameMarketScreen() {
               <TextInput style={[styles.fieldInput, { color: colors.text }]} placeholder="Why is this handle valuable?" placeholderTextColor={colors.textMuted} value={listDesc} onChangeText={setListDesc} />
             </View>
           </View>
-          <TouchableOpacity style={[styles.createBtn, { backgroundColor: Colors.brand, opacity: listing ? 0.7 : 1 }]} onPress={submitListing} disabled={listing}>
+          <TouchableOpacity style={[styles.createBtn, { backgroundColor: colors.accent, opacity: listing ? 0.7 : 1 }]} onPress={submitListing} disabled={listing}>
             {listing ? <ActivityIndicator color="#fff" /> : <Text style={styles.createBtnText}>List for Sale</Text>}
           </TouchableOpacity>
         </ScrollView>
       ) : loading ? (
-        <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} />
+        <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={tab === "mine" ? myListings : listings}
@@ -264,7 +264,7 @@ export default function UsernameMarketScreen() {
             <View style={styles.emptyState}>
               <Text style={{ fontSize: 48 }}>🏷️</Text>
               <Text style={[styles.emptyTitle, { color: colors.text }]}>No handles for sale</Text>
-              <TouchableOpacity style={[styles.createBtn, { backgroundColor: Colors.brand }]} onPress={() => setTab("list")}>
+              <TouchableOpacity style={[styles.createBtn, { backgroundColor: colors.accent }]} onPress={() => setTab("list")}>
                 <Text style={styles.createBtnText}>List Your Handle</Text>
               </TouchableOpacity>
             </View>

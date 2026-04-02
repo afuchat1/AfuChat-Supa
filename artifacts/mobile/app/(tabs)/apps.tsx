@@ -285,7 +285,7 @@ function FeaturedBanner({ app, onTap }: { app: AppItem; onTap: (id: string) => v
           </View>
           <View style={styles.featuredCta}>
             <Text style={styles.featuredCtaText}>Open</Text>
-            <Ionicons name="arrow-forward" size={14} color={Colors.brand} />
+            <Ionicons name="arrow-forward" size={14} color={colors.accent} />
           </View>
         </View>
       </LinearGradient>

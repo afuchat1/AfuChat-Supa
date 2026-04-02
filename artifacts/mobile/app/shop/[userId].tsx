@@ -47,9 +47,9 @@ function ProductCard({ item, cardW, onPress, onAddCart, adding }: { item: ShopPr
       </View>
       <View style={st.cardInfo}>
         <Text style={[st.cardName, { color: colors.text }]} numberOfLines={2}>{item.name}</Text>
-        <Text style={[st.cardPrice, { color: Colors.brand }]}>{formatShopAcoin(item.price_acoin)}</Text>
+        <Text style={[st.cardPrice, { color: colors.accent }]}>{formatShopAcoin(item.price_acoin)}</Text>
         <TouchableOpacity
-          style={[st.addBtn, { backgroundColor: Colors.brand, opacity: adding ? 0.6 : 1 }]}
+          style={[st.addBtn, { backgroundColor: colors.accent, opacity: adding ? 0.6 : 1 }]}
           onPress={onAddCart}
           disabled={adding || (!item.is_unlimited_stock && item.stock === 0)}
         >
@@ -142,7 +142,7 @@ export default function StoreStorefront() {
         <TouchableOpacity style={[st.floatBtn, { backgroundColor: "rgba(0,0,0,0.35)" }]} onPress={() => router.push("/shop/cart")}>
           <Ionicons name="cart-outline" size={20} color="#fff" />
           {cartCount > 0 && (
-            <View style={[st.cartBadge, { backgroundColor: Colors.brand }]}>
+            <View style={[st.cartBadge, { backgroundColor: colors.accent }]}>
               <Text style={st.cartBadgeText}>{cartCount > 9 ? "9+" : cartCount}</Text>
             </View>
           )}
@@ -150,11 +150,11 @@ export default function StoreStorefront() {
       </View>
 
       {loading ? (
-        <View style={st.loadingWrap}><ActivityIndicator color={Colors.brand} size="large" /></View>
+        <View style={st.loadingWrap}><ActivityIndicator color={colors.accent} size="large" /></View>
       ) : !shop ? (
         <View style={st.loadingWrap}>
           <Text style={[st.notFoundText, { color: colors.textMuted }]}>Store not found.</Text>
-          <TouchableOpacity onPress={() => router.back()} style={[st.backBtn, { backgroundColor: Colors.brand }]}>
+          <TouchableOpacity onPress={() => router.back()} style={[st.backBtn, { backgroundColor: colors.accent }]}>
             <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold" }}>Go Back</Text>
           </TouchableOpacity>
         </View>
@@ -164,7 +164,7 @@ export default function StoreStorefront() {
           keyExtractor={(i) => i.id}
           numColumns={2}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={Colors.brand} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.accent} />}
           renderItem={({ item, index }) => (
             <View style={{ marginLeft: index % 2 === 0 ? 16 : 5, marginRight: index % 2 !== 0 ? 16 : 5, marginBottom: 10 }}>
               <ProductCard
@@ -198,9 +198,9 @@ export default function StoreStorefront() {
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       <Text style={[st.shopName, { color: colors.text }]}>{shop.name}</Text>
                       {seller?.is_organization_verified && (
-                        <View style={[st.orgBadge, { backgroundColor: Colors.brand + "18" }]}>
-                          <Ionicons name="checkmark-circle" size={12} color={Colors.brand} />
-                          <Text style={[st.orgBadgeText, { color: Colors.brand }]}>Verified Org</Text>
+                        <View style={[st.orgBadge, { backgroundColor: colors.accent + "18" }]}>
+                          <Ionicons name="checkmark-circle" size={12} color={colors.accent} />
+                          <Text style={[st.orgBadgeText, { color: colors.accent }]}>Verified Org</Text>
                         </View>
                       )}
                     </View>
@@ -252,8 +252,8 @@ export default function StoreStorefront() {
                       key={cat}
                       onPress={() => setActiveCategory(cat)}
                       style={[st.catChip, {
-                        backgroundColor: active ? Colors.brand : colors.surface,
-                        borderColor: active ? Colors.brand : colors.border,
+                        backgroundColor: active ? colors.accent : colors.surface,
+                        borderColor: active ? colors.accent : colors.border,
                       }]}
                     >
                       <Text style={[st.catChipText, { color: active ? "#fff" : colors.textSecondary }]}>{cat}</Text>

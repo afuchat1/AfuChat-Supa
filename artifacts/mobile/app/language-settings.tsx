@@ -68,9 +68,9 @@ export default function LanguageSettingsScreen() {
             </View>
             <View style={styles.rowRight}>
               {saving === "none" ? (
-                <ActivityIndicator size="small" color={Colors.brand} />
+                <ActivityIndicator size="small" color={colors.accent} />
               ) : !preferredLang ? (
-                <Ionicons name="checkmark-circle" size={22} color={Colors.brand} />
+                <Ionicons name="checkmark-circle" size={22} color={colors.accent} />
               ) : (
                 <View style={styles.unselectedDot} />
               )}
@@ -92,14 +92,14 @@ export default function LanguageSettingsScreen() {
                   <Text style={styles.flagText}>{FLAG[lang.code] ?? "🌐"}</Text>
                 </View>
                 <View style={styles.rowInfo}>
-                  <Text style={[styles.rowName, { color: isSelected ? Colors.brand : colors.text }]}>{lang.name}</Text>
+                  <Text style={[styles.rowName, { color: isSelected ? colors.accent : colors.text }]}>{lang.name}</Text>
                   <Text style={[styles.rowSub, { color: colors.textMuted }]}>{lang.code.toUpperCase()}</Text>
                 </View>
                 <View style={styles.rowRight}>
                   {isSaving ? (
-                    <ActivityIndicator size="small" color={Colors.brand} />
+                    <ActivityIndicator size="small" color={colors.accent} />
                   ) : isSelected ? (
-                    <Ionicons name="checkmark-circle" size={22} color={Colors.brand} />
+                    <Ionicons name="checkmark-circle" size={22} color={colors.accent} />
                   ) : (
                     <View style={styles.unselectedDot} />
                   )}

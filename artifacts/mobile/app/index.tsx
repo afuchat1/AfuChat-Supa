@@ -3,10 +3,12 @@ import { ActivityIndicator, Image, StyleSheet, View, Text } from "react-native";
 import { router } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import Colors from "@/constants/colors";
+import { useAppAccent } from "@/context/AppAccentContext";
 
 const afuLogo = require("@/assets/images/afu-symbol.png");
 
 export default function IndexScreen() {
+  const { accent } = useAppAccent();
   const { session, profile, loading } = useAuth();
   const redirected = useRef(false);
 
@@ -49,7 +51,7 @@ export default function IndexScreen() {
   }, []);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: accent }]}>
       <Image source={afuLogo} style={styles.logo} resizeMode="contain" />
       <Text style={styles.brandText}>AfuChat</Text>
       <ActivityIndicator size="small" color="#fff" style={styles.loader} />
@@ -62,7 +64,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: Colors.brand,
   },
   logo: {
     width: 100,

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useAppAccent } from "@/context/AppAccentContext";
 import {
   ActivityIndicator,
   Image,
@@ -34,6 +35,7 @@ function safeNavigate(path: string, params?: Record<string, string>) {
 }
 
 export default function HandleScreen() {
+  const { accent } = useAppAccent();
   const { handle: rawHandle } = useLocalSearchParams<{ handle: string }>();
   const { session, loading: authLoading } = useAuth();
   const insets = useSafeAreaInsets();
@@ -116,7 +118,7 @@ export default function HandleScreen() {
   }, [isProfileLink, dataReady]);
 
   return (
-    <View style={[styles.container, { backgroundColor: Colors.brand, paddingTop: insets.top }]}>
+    <View style={[styles.container, { backgroundColor: accent, paddingTop: insets.top }]}>
       <Image source={afuSymbol} style={styles.logo} resizeMode="contain" />
       <Text style={styles.brandText}>AfuChat</Text>
       <ActivityIndicator size="small" color="#fff" style={styles.loader} />

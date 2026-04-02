@@ -178,7 +178,7 @@ export default function SavedPostsScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator color={Colors.brand} size="large" />
+          <ActivityIndicator color={colors.accent} size="large" />
         </View>
       ) : (
         <FlatList
@@ -190,7 +190,7 @@ export default function SavedPostsScreen() {
           contentContainerStyle={{ gap: 8, paddingVertical: 12, paddingHorizontal: 8, paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadSaved(); }} tintColor={Colors.brand} />
+            <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadSaved(); }} tintColor={colors.accent} />
           }
           ListEmptyComponent={
             <View style={styles.center}>

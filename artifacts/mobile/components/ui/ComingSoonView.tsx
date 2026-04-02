@@ -26,11 +26,11 @@ export function ComingSoonView({ title, description }: Props) {
       </View>
 
       <View style={styles.body}>
-        <View style={[styles.iconWrap, { backgroundColor: Colors.brand + "15" }]}>
-          <Ionicons name="hourglass-outline" size={52} color={Colors.brand} />
+        <View style={[styles.iconWrap, { backgroundColor: colors.accent + "15" }]}>
+          <Ionicons name="hourglass-outline" size={52} color={colors.accent} />
         </View>
-        <View style={[styles.badge, { backgroundColor: Colors.brand + "20" }]}>
-          <Text style={[styles.badgeText, { color: Colors.brand }]}>COMING SOON</Text>
+        <View style={[styles.badge, { backgroundColor: colors.accent + "20" }]}>
+          <Text style={[styles.badgeText, { color: colors.accent }]}>COMING SOON</Text>
         </View>
         <Text style={[styles.headline, { color: colors.text }]}>
           {title} on Web

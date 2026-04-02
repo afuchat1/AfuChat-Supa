@@ -268,13 +268,13 @@ export default function CreatePostScreen() {
                 {profile?.display_name || "You"}
               </Text>
               <TouchableOpacity
-                style={[styles.audiencePill, { backgroundColor: Colors.brand + "14", borderColor: Colors.brand + "30" }]}
+                style={[styles.audiencePill, { backgroundColor: colors.accent + "14", borderColor: colors.accent + "30" }]}
                 onPress={() => setShowAudienceModal(true)}
                 activeOpacity={0.7}
               >
-                <Ionicons name={audienceOption.icon as any} size={12} color={Colors.brand} />
-                <Text style={[styles.audienceText, { color: Colors.brand }]}>{audienceOption.label}</Text>
-                <Ionicons name="chevron-down" size={10} color={Colors.brand} />
+                <Ionicons name={audienceOption.icon as any} size={12} color={colors.accent} />
+                <Text style={[styles.audienceText, { color: colors.accent }]}>{audienceOption.label}</Text>
+                <Ionicons name="chevron-down" size={10} color={colors.accent} />
               </TouchableOpacity>
             </View>
             <TextInput
@@ -298,7 +298,7 @@ export default function CreatePostScreen() {
                 style={[styles.tagChip, { backgroundColor: colors.inputBg }]}
                 onPress={() => { setLocationTag(""); }}
               >
-                <Ionicons name="location" size={12} color={Colors.brand} />
+                <Ionicons name="location" size={12} color={colors.accent} />
                 <Text style={[styles.tagText, { color: colors.text }]} numberOfLines={1}>{locationTag}</Text>
                 <Ionicons name="close" size={12} color={colors.textMuted} />
               </TouchableOpacity>
@@ -308,7 +308,7 @@ export default function CreatePostScreen() {
                 style={[styles.tagChip, { backgroundColor: colors.inputBg }]}
                 onPress={() => setLangCode(null)}
               >
-                <Ionicons name="language" size={12} color={Colors.brand} />
+                <Ionicons name="language" size={12} color={colors.accent} />
                 <Text style={[styles.tagText, { color: colors.text }]} numberOfLines={1}>{LANG_LABELS[langCode] || langCode}</Text>
                 <Ionicons name="close" size={12} color={colors.textMuted} />
               </TouchableOpacity>
@@ -385,22 +385,22 @@ export default function CreatePostScreen() {
         </View>
 
         {aiLoading && (
-          <View style={[styles.aiLoadingBar, { backgroundColor: Colors.brand + "12" }]}>
-            <ActivityIndicator size="small" color={Colors.brand} />
-            <Text style={[styles.aiLoadingText, { color: Colors.brand }]}>
+          <View style={[styles.aiLoadingBar, { backgroundColor: colors.accent + "12" }]}>
+            <ActivityIndicator size="small" color={colors.accent} />
+            <Text style={[styles.aiLoadingText, { color: colors.accent }]}>
               {aiLoading === "enhance" ? "Enhancing your post..." : aiLoading === "hashtags" ? "Generating hashtags..." : "Writing a caption..."}
             </Text>
           </View>
         )}
 
         <TouchableOpacity
-          style={[styles.aiToggle, { backgroundColor: Colors.brand + "0A", borderColor: Colors.brand + "20" }]}
+          style={[styles.aiToggle, { backgroundColor: colors.accent + "0A", borderColor: colors.accent + "20" }]}
           onPress={() => setShowAiPanel(!showAiPanel)}
           activeOpacity={0.7}
         >
-          <Ionicons name="sparkles" size={16} color={Colors.brand} />
-          <Text style={[styles.aiToggleText, { color: Colors.brand }]}>AI Writing Tools</Text>
-          <Ionicons name={showAiPanel ? "chevron-up" : "chevron-down"} size={14} color={Colors.brand} />
+          <Ionicons name="sparkles" size={16} color={colors.accent} />
+          <Text style={[styles.aiToggleText, { color: colors.accent }]}>AI Writing Tools</Text>
+          <Ionicons name={showAiPanel ? "chevron-up" : "chevron-down"} size={14} color={colors.accent} />
         </TouchableOpacity>
 
         {showAiPanel && (
@@ -482,16 +482,16 @@ export default function CreatePostScreen() {
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 6, backgroundColor: colors.surface, borderTopColor: colors.border }]}>
         <TouchableOpacity style={styles.bottomAction} onPress={pickImage}>
-          <Ionicons name="image-outline" size={22} color={images.length > 0 ? Colors.brand : colors.textSecondary} />
+          <Ionicons name="image-outline" size={22} color={images.length > 0 ? colors.accent : colors.textSecondary} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.bottomAction} onPress={() => setShowMentionModal(true)}>
           <Ionicons name="at-outline" size={22} color={colors.textSecondary} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.bottomAction} onPress={() => setShowLocationModal(true)}>
-          <Ionicons name="location-outline" size={22} color={locationTag ? Colors.brand : colors.textSecondary} />
+          <Ionicons name="location-outline" size={22} color={locationTag ? colors.accent : colors.textSecondary} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.bottomAction} onPress={() => setShowLangModal(true)}>
-          <Ionicons name="globe-outline" size={22} color={langCode ? Colors.brand : colors.textSecondary} />
+          <Ionicons name="globe-outline" size={22} color={langCode ? colors.accent : colors.textSecondary} />
         </TouchableOpacity>
         <View style={{ flex: 1 }} />
         {images.length > 0 && (
@@ -507,17 +507,17 @@ export default function CreatePostScreen() {
             {AUDIENCE_OPTIONS.map((opt) => (
               <TouchableOpacity
                 key={opt.key}
-                style={[styles.audienceRow, audience === opt.key && { backgroundColor: Colors.brand + "10" }]}
+                style={[styles.audienceRow, audience === opt.key && { backgroundColor: colors.accent + "10" }]}
                 onPress={() => { setAudience(opt.key); setShowAudienceModal(false); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
               >
-                <View style={[styles.audienceIconCircle, { backgroundColor: audience === opt.key ? Colors.brand + "20" : colors.inputBg }]}>
-                  <Ionicons name={opt.icon as any} size={20} color={audience === opt.key ? Colors.brand : colors.textMuted} />
+                <View style={[styles.audienceIconCircle, { backgroundColor: audience === opt.key ? colors.accent + "20" : colors.inputBg }]}>
+                  <Ionicons name={opt.icon as any} size={20} color={audience === opt.key ? colors.accent : colors.textMuted} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.audienceLabel, { color: colors.text }]}>{opt.label}</Text>
                   <Text style={[styles.audienceDesc, { color: colors.textMuted }]}>{opt.desc}</Text>
                 </View>
-                {audience === opt.key && <Ionicons name="checkmark-circle" size={22} color={Colors.brand} />}
+                {audience === opt.key && <Ionicons name="checkmark-circle" size={22} color={colors.accent} />}
               </TouchableOpacity>
             ))}
           </View>
@@ -541,23 +541,23 @@ export default function CreatePostScreen() {
               />
             </View>
             <TouchableOpacity
-              style={[styles.langRow, !langCode && { backgroundColor: Colors.brand + "10" }]}
+              style={[styles.langRow, !langCode && { backgroundColor: colors.accent + "10" }]}
               onPress={() => { setLangCode(null); setShowLangModal(false); setLangSearch(""); }}
             >
               <Text style={[styles.langLabel, { color: colors.text }]}>Auto-detect</Text>
-              {!langCode && <Ionicons name="checkmark-circle" size={20} color={Colors.brand} />}
+              {!langCode && <Ionicons name="checkmark-circle" size={20} color={colors.accent} />}
             </TouchableOpacity>
             <FlatList
               data={filteredLangs}
               keyExtractor={(item) => item.code}
               renderItem={({ item }) => (
                 <TouchableOpacity
-                  style={[styles.langRow, langCode === item.code && { backgroundColor: Colors.brand + "10" }]}
+                  style={[styles.langRow, langCode === item.code && { backgroundColor: colors.accent + "10" }]}
                   onPress={() => { setLangCode(item.code); setShowLangModal(false); setLangSearch(""); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
                 >
                   <Text style={[styles.langLabel, { color: colors.text }]}>{item.label}</Text>
                   <Text style={[styles.langCode, { color: colors.textMuted }]}>{item.code}</Text>
-                  {langCode === item.code && <Ionicons name="checkmark-circle" size={20} color={Colors.brand} />}
+                  {langCode === item.code && <Ionicons name="checkmark-circle" size={20} color={colors.accent} />}
                 </TouchableOpacity>
               )}
               style={{ maxHeight: 300 }}
@@ -573,7 +573,7 @@ export default function CreatePostScreen() {
             <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
             <Text style={[styles.modalTitle, { color: colors.text }]}>Add Location</Text>
             <View style={[styles.searchBar, { backgroundColor: colors.inputBg }]}>
-              <Ionicons name="location" size={16} color={Colors.brand} />
+              <Ionicons name="location" size={16} color={colors.accent} />
               <TextInput
                 style={[styles.searchInput, { color: colors.text }]}
                 placeholder="Type a location..."
@@ -593,7 +593,7 @@ export default function CreatePostScreen() {
               />
             </View>
             <TouchableOpacity
-              style={[styles.locationDone, { backgroundColor: Colors.brand, opacity: locationInput.trim() ? 1 : 0.5 }]}
+              style={[styles.locationDone, { backgroundColor: colors.accent, opacity: locationInput.trim() ? 1 : 0.5 }]}
               disabled={!locationInput.trim()}
               onPress={() => {
                 setLocationTag(locationInput.trim());
@@ -622,7 +622,7 @@ export default function CreatePostScreen() {
             <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
             <Text style={[styles.modalTitle, { color: colors.text }]}>Mention Someone</Text>
             <View style={[styles.searchBar, { backgroundColor: colors.inputBg }]}>
-              <Ionicons name="at" size={16} color={Colors.brand} />
+              <Ionicons name="at" size={16} color={colors.accent} />
               <TextInput
                 style={[styles.searchInput, { color: colors.text }]}
                 placeholder="Search by name or handle..."
@@ -631,7 +631,7 @@ export default function CreatePostScreen() {
                 onChangeText={searchMentions}
                 autoFocus
               />
-              {mentionLoading && <ActivityIndicator size={14} color={Colors.brand} />}
+              {mentionLoading && <ActivityIndicator size={14} color={colors.accent} />}
             </View>
             <FlatList
               data={mentionResults}

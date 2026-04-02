@@ -388,7 +388,7 @@ export default function LoginScreen() {
     return (
       <View style={[styles.root, { flexDirection: isDesktop ? "row" : "column", backgroundColor: isDesktop ? (isDark ? "#0a0a0a" : "#ffffff") : colors.background }]}>
         {isDesktop && (
-          <View style={[authSplit.brandPanel, { backgroundColor: Colors.brand }]}>
+          <View style={[authSplit.brandPanel, { backgroundColor: colors.accent }]}>
             <Image source={afuSymbol} style={{ width: 80, height: 80, tintColor: "#fff", marginBottom: 28 }} resizeMode="contain" />
             <Text style={authSplit.brandTitle}>AfuChat</Text>
             <Text style={authSplit.brandTagline}>Connect with everyone, everywhere.</Text>
@@ -408,7 +408,7 @@ export default function LoginScreen() {
         >
           <View style={isDesktop ? { maxWidth: 400, width: "100%" as any, alignSelf: "center" } : undefined}>
           <View style={styles.logoWrap}>
-            <Image source={afuSymbol} style={{ width: 64, height: 64, marginBottom: 12, tintColor: Colors.brand }} resizeMode="contain" />
+            <Image source={afuSymbol} style={{ width: 64, height: 64, marginBottom: 12, tintColor: colors.accent }} resizeMode="contain" />
             <Text style={[styles.appName, { color: colors.text, fontSize: 24 }]}>Reset Password</Text>
           </View>
 
@@ -432,7 +432,7 @@ export default function LoginScreen() {
               </View>
 
               <TouchableOpacity
-                style={[styles.loginBtn, resetLoading && styles.btnDisabled]}
+                style={[styles.loginBtn, { backgroundColor: colors.accent }, resetLoading && styles.btnDisabled]}
                 onPress={handleSendResetCode}
                 disabled={resetLoading}
               >
@@ -442,8 +442,8 @@ export default function LoginScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity onPress={() => { setResetStep("idle"); setResetEmail(""); }} style={styles.backBtn}>
-                <Ionicons name="arrow-back" size={18} color={Colors.brand} />
-                <Text style={[styles.backBtnText, { color: Colors.brand }]}>Back to login</Text>
+                <Ionicons name="arrow-back" size={18} color={colors.accent} />
+                <Text style={[styles.backBtnText, { color: colors.accent }]}>Back to login</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -496,7 +496,7 @@ export default function LoginScreen() {
               </View>
 
               <TouchableOpacity
-                style={[styles.loginBtn, resetLoading && styles.btnDisabled]}
+                style={[styles.loginBtn, { backgroundColor: colors.accent }, resetLoading && styles.btnDisabled]}
                 onPress={handleVerifyAndReset}
                 disabled={resetLoading}
               >
@@ -506,12 +506,12 @@ export default function LoginScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity onPress={handleSendResetCode} style={styles.resendBtn} disabled={resetLoading}>
-                <Text style={[styles.resendText, { color: Colors.brand }]}>Didn't get the code? Resend</Text>
+                <Text style={[styles.resendText, { color: colors.accent }]}>Didn't get the code? Resend</Text>
               </TouchableOpacity>
 
               <TouchableOpacity onPress={() => { setResetStep("idle"); setResetCode(""); setNewPassword(""); setConfirmPassword(""); }} style={styles.backBtn}>
-                <Ionicons name="arrow-back" size={18} color={Colors.brand} />
-                <Text style={[styles.backBtnText, { color: Colors.brand }]}>Back to login</Text>
+                <Ionicons name="arrow-back" size={18} color={colors.accent} />
+                <Text style={[styles.backBtnText, { color: colors.accent }]}>Back to login</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -525,7 +525,7 @@ export default function LoginScreen() {
   return (
     <View style={[styles.root, { flexDirection: isDesktop ? "row" : "column", backgroundColor: isDesktop ? (isDark ? "#0a0a0a" : "#ffffff") : colors.background }]}>
       {isDesktop && (
-        <View style={[authSplit.brandPanel, { backgroundColor: Colors.brand }]}>
+        <View style={[authSplit.brandPanel, { backgroundColor: colors.accent }]}>
           <Image source={afuSymbol} style={{ width: 80, height: 80, tintColor: "#fff", marginBottom: 28 }} resizeMode="contain" />
           <Text style={authSplit.brandTitle}>AfuChat</Text>
           <Text style={authSplit.brandTagline}>Connect with everyone, everywhere.</Text>
@@ -564,7 +564,7 @@ export default function LoginScreen() {
           </View>
         ) : (
           <View style={[styles.logoWrap, { marginTop: 20 }]}>
-            <Image source={afuSymbol} style={{ width: 88, height: 88, marginBottom: 16, tintColor: Colors.brand }} resizeMode="contain" />
+            <Image source={afuSymbol} style={{ width: 88, height: 88, marginBottom: 16, tintColor: colors.accent }} resizeMode="contain" />
             <Text style={[styles.appName, { color: colors.text }]}>AfuChat</Text>
             <Text style={[styles.tagline, { color: colors.textSecondary }]}>Connect with everyone</Text>
           </View>
@@ -606,11 +606,11 @@ export default function LoginScreen() {
           </View>
 
           <TouchableOpacity onPress={() => { setResetStep("email"); setResetEmail(email); }} style={styles.forgotBtn}>
-            <Text style={[styles.forgotText, { color: Colors.brand }]}>Forgot password?</Text>
+            <Text style={[styles.forgotText, { color: colors.accent }]}>Forgot password?</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.loginBtn, loading && styles.btnDisabled]}
+            style={[styles.loginBtn, { backgroundColor: colors.accent }, loading && styles.btnDisabled]}
             onPress={handleLogin}
             disabled={loading}
             activeOpacity={0.85}
@@ -635,7 +635,7 @@ export default function LoginScreen() {
             activeOpacity={0.8}
           >
             {oauthLoading === "google" ? (
-              <ActivityIndicator color={Colors.brand} />
+              <ActivityIndicator color={colors.accent} />
             ) : (
               <>
                 <GoogleLogo size={22} />
@@ -718,7 +718,7 @@ export default function LoginScreen() {
                 userAgent="Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
                 renderLoading={() => (
                   <View style={oauthModalStyles.loadingOverlay}>
-                    <ActivityIndicator size="large" color={Colors.brand} />
+                    <ActivityIndicator size="large" color={colors.accent} />
                   </View>
                 )}
                 onNavigationStateChange={(navState) => {
@@ -839,7 +839,6 @@ const styles = StyleSheet.create({
   forgotText: { fontSize: 14, fontFamily: "Inter_500Medium" },
   resetDesc: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20, marginBottom: 4 },
   loginBtn: {
-    backgroundColor: Colors.brand,
     height: 52,
     borderRadius: 14,
     alignItems: "center",

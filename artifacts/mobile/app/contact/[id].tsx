@@ -320,7 +320,7 @@ export default function ContactProfileScreen() {
             </View>
           )}
           {!profile?.is_organization_verified && profile?.is_verified && (
-            <View style={[styles.verifiedBadge, { backgroundColor: Colors.brand }]}>
+            <View style={[styles.verifiedBadge, { backgroundColor: colors.accent }]}>
               <Ionicons name="checkmark-circle" size={14} color="#fff" />
               <Text style={styles.verifiedBadgeText}>Verified</Text>
             </View>
@@ -347,11 +347,11 @@ export default function ContactProfileScreen() {
             <View style={[styles.badgeInfoCard, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
               <Text style={[styles.badgeInfoTitle, { color: colors.text }]}>Verification Details</Text>
               <View style={styles.badgeInfoRow}>
-                <Ionicons name="checkmark-circle" size={14} color={Colors.brand} />
+                <Ionicons name="checkmark-circle" size={14} color={colors.accent} />
                 <Text style={[styles.badgeInfoText, { color: colors.textSecondary }]}>Verified Account</Text>
               </View>
               <View style={styles.badgeInfoRow}>
-                <Ionicons name="diamond" size={14} color={Colors.brand} />
+                <Ionicons name="diamond" size={14} color={colors.accent} />
                 <Text style={[styles.badgeInfoText, { color: colors.textSecondary }]}>Premium Subscription Verified</Text>
               </View>
             </View>
@@ -375,7 +375,7 @@ export default function ContactProfileScreen() {
             {profile?.website_url ? (
               <View style={styles.detailRow}>
                 <Ionicons name="link-outline" size={15} color={colors.textMuted} />
-                <Text style={[styles.detailText, { color: Colors.brand }]}>{profile.website_url}</Text>
+                <Text style={[styles.detailText, { color: colors.accent }]}>{profile.website_url}</Text>
               </View>
             ) : null}
           </View>
@@ -412,8 +412,8 @@ export default function ContactProfileScreen() {
           {!isOwnProfile && (
             <View style={styles.profileActions}>
               <TouchableOpacity style={[styles.followBtn, isFollowing && styles.followBtnActive]} onPress={toggleFollow}>
-                <Ionicons name={isFollowing ? "checkmark" : "person-add-outline"} size={16} color={isFollowing ? Colors.brand : "#fff"} />
-                <Text style={[styles.followBtnText, isFollowing && { color: Colors.brand }]}>
+                <Ionicons name={isFollowing ? "checkmark" : "person-add-outline"} size={16} color={isFollowing ? colors.accent : "#fff"} />
+                <Text style={[styles.followBtnText, isFollowing && { color: colors.accent }]}>
                   {isFollowing ? "Following" : "Follow"}
                 </Text>
               </TouchableOpacity>
@@ -429,7 +429,7 @@ export default function ContactProfileScreen() {
 
         <View style={[styles.actions, { backgroundColor: colors.surface }]}>
           <TouchableOpacity style={styles.actionBtn} onPress={startChat}>
-            <View style={[styles.actionIcon, { backgroundColor: Colors.brand }]}>
+            <View style={[styles.actionIcon, { backgroundColor: colors.accent }]}>
               <Ionicons name="chatbubble" size={22} color="#fff" />
             </View>
             <Text style={[styles.actionLabel, { color: colors.text }]}>Message</Text>
@@ -464,7 +464,7 @@ export default function ContactProfileScreen() {
 
         <View style={[styles.postsSection, { backgroundColor: colors.surface }]}>
           <View style={styles.postsSectionHeader}>
-            <Ionicons name="newspaper-outline" size={18} color={Colors.brand} />
+            <Ionicons name="newspaper-outline" size={18} color={colors.accent} />
             <Text style={[styles.postsSectionTitle, { color: colors.text }]}>Posts</Text>
             <Text style={[styles.postsSectionCount, { color: colors.textMuted }]}>{posts.length}</Text>
           </View>
@@ -495,14 +495,14 @@ export default function ContactProfileScreen() {
                   activeOpacity={0.7}
                 >
                   {isArticle ? (
-                    <View style={[styles.articleCardInner, { backgroundColor: colors.backgroundSecondary || colors.surface, borderColor: Colors.brand + "20" }]}>
+                    <View style={[styles.articleCardInner, { backgroundColor: colors.backgroundSecondary || colors.surface, borderColor: colors.accent + "20" }]}>
                       {images.length > 0 && (
                         <Image source={{ uri: images[0] }} style={styles.articleCoverImg} resizeMode="cover" />
                       )}
                       <View style={{ padding: 12, gap: 6 }}>
-                        <View style={[styles.articleBadge, { backgroundColor: Colors.brand + "15" }]}>
-                          <Ionicons name="document-text" size={11} color={Colors.brand} />
-                          <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: Colors.brand }}>Article</Text>
+                        <View style={[styles.articleBadge, { backgroundColor: colors.accent + "15" }]}>
+                          <Ionicons name="document-text" size={11} color={colors.accent} />
+                          <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: colors.accent }}>Article</Text>
                         </View>
                         {p.article_title ? (
                           <Text style={[styles.articleTitleText, { color: colors.text }]} numberOfLines={2}>{p.article_title}</Text>
@@ -510,7 +510,7 @@ export default function ContactProfileScreen() {
                         {!!p.content && (
                           <Text style={{ color: colors.textSecondary, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 }} numberOfLines={2}>{p.content}</Text>
                         )}
-                        <View style={[styles.articleReadCta, { backgroundColor: Colors.brand }]}>
+                        <View style={[styles.articleReadCta, { backgroundColor: colors.accent }]}>
                           <Ionicons name="book-outline" size={12} color="#fff" />
                           <Text style={{ color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Read article</Text>
                         </View>
@@ -543,7 +543,7 @@ export default function ContactProfileScreen() {
                   )}
                   <View style={styles.postMeta}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      {isVideo && <Ionicons name="videocam" size={12} color={Colors.brand} />}
+                      {isVideo && <Ionicons name="videocam" size={12} color={colors.accent} />}
                       <Text style={[styles.postTime, { color: colors.textMuted }]}>{timeAgo(p.created_at)}</Text>
                     </View>
                     <View style={styles.postStats}>

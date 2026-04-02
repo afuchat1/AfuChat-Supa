@@ -52,7 +52,7 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors.brand,
+        tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.tabIconDefault,
         headerShown: false,
         tabBarStyle: hideTabs

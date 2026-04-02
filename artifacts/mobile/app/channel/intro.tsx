@@ -82,7 +82,7 @@ export default function ChannelIntroScreen() {
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
         <TouchableOpacity
-          style={[styles.createBtn, { backgroundColor: Colors.brand }]}
+          style={[styles.createBtn, { backgroundColor: colors.accent }]}
           onPress={() => router.push("/channel/create" as any)}
           activeOpacity={0.85}
         >

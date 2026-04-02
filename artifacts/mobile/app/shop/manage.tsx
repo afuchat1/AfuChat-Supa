@@ -258,25 +258,25 @@ export default function ShopManage() {
 
   function renderOverview() {
     return (
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} tintColor={Colors.brand} />}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} tintColor={colors.accent} />}>
         {!shop ? (
           <View style={[styles.setupCard, { backgroundColor: colors.surface }]}>
             <Text style={{ fontSize: 48 }}>🏪</Text>
             <Text style={[styles.setupTitle, { color: colors.text }]}>Set Up Your Shop</Text>
             <Text style={[styles.setupSub, { color: colors.textMuted }]}>Create your AfuChat shop to sell products and earn ACoin from your followers.</Text>
-            <TouchableOpacity style={[styles.setupBtn, { backgroundColor: Colors.brand }]} onPress={() => setEditShopModal(true)}>
+            <TouchableOpacity style={[styles.setupBtn, { backgroundColor: colors.accent }]} onPress={() => setEditShopModal(true)}>
               <Ionicons name="storefront-outline" size={18} color="#fff" />
               <Text style={styles.setupBtnText}>Create Shop</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <>
-            <LinearGradient colors={[Colors.brand + "22", Colors.brandDark ? Colors.brandDark + "11" : "#0097A722"]} style={[styles.shopOverviewCard, { borderColor: Colors.brand + "44" }]}>
+            <LinearGradient colors={[colors.accent + "22", colors.accentDark ? colors.accentDark + "11" : "#0097A722"]} style={[styles.shopOverviewCard, { borderColor: colors.accent + "44" }]}>
               <View style={styles.shopOverviewHeader}>
                 {shop.logo_url ? (
                   <Image source={{ uri: shop.logo_url }} style={styles.shopOverviewLogo} />
                 ) : (
-                  <View style={[styles.shopOverviewLogo, { backgroundColor: Colors.brand + "22", alignItems: "center", justifyContent: "center" }]}>
+                  <View style={[styles.shopOverviewLogo, { backgroundColor: colors.accent + "22", alignItems: "center", justifyContent: "center" }]}>
                     <Text style={{ fontSize: 28 }}>🏪</Text>
                   </View>
                 )}
@@ -284,9 +284,9 @@ export default function ShopManage() {
                   <Text style={[styles.shopOverviewName, { color: colors.text }]}>{shop.name}</Text>
                   {shop.category && <Text style={[styles.shopOverviewCat, { color: colors.textMuted }]}>{shop.category}</Text>}
                 </View>
-                <TouchableOpacity onPress={() => setEditShopModal(true)} style={[styles.editShopBtn, { borderColor: Colors.brand }]}>
-                  <Ionicons name="pencil-outline" size={14} color={Colors.brand} />
-                  <Text style={[styles.editShopBtnText, { color: Colors.brand }]}>Edit</Text>
+                <TouchableOpacity onPress={() => setEditShopModal(true)} style={[styles.editShopBtn, { borderColor: colors.accent }]}>
+                  <Ionicons name="pencil-outline" size={14} color={colors.accent} />
+                  <Text style={[styles.editShopBtnText, { color: colors.accent }]}>Edit</Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.overviewStats}>
@@ -304,7 +304,7 @@ export default function ShopManage() {
               </View>
             </LinearGradient>
 
-            <TouchableOpacity style={[styles.viewShopBtn, { backgroundColor: Colors.brand }]} onPress={() => router.push({ pathname: "/shop/[userId]", params: { userId: user!.id } })}>
+            <TouchableOpacity style={[styles.viewShopBtn, { backgroundColor: colors.accent }]} onPress={() => router.push({ pathname: "/shop/[userId]", params: { userId: user!.id } })}>
               <Ionicons name="eye-outline" size={16} color="#fff" />
               <Text style={styles.viewShopBtnText}>Preview My Store</Text>
             </TouchableOpacity>
@@ -321,8 +321,8 @@ export default function ShopManage() {
                 <Switch
                   value={!!shop?.pin_to_profile}
                   onValueChange={togglePinToProfile}
-                  trackColor={{ false: colors.border, true: Colors.brand + "80" }}
-                  thumbColor={shop?.pin_to_profile ? Colors.brand : colors.textMuted}
+                  trackColor={{ false: colors.border, true: colors.accent + "80" }}
+                  thumbColor={shop?.pin_to_profile ? colors.accent : colors.textMuted}
                 />
               </View>
               {shop?.pin_to_profile && (
@@ -339,7 +339,7 @@ export default function ShopManage() {
               <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Actions</Text>
               {[
                 { icon: "add-circle-outline", label: "Add Product", color: "#34C759", action: () => { setEditingProduct({ is_available: true, is_unlimited_stock: false, stock: 10, price_acoin: 50, category: "General", images: [] }); setProductModal(true); } },
-                { icon: "list-outline", label: "Manage Products", color: Colors.brand, action: () => setTab("products") },
+                { icon: "list-outline", label: "Manage Products", color: colors.accent, action: () => setTab("products") },
                 { icon: "receipt-outline", label: "View Orders", color: "#FF9500", action: () => setTab("orders") },
                 { icon: "wallet-outline", label: "My Wallet", color: "#AF52DE", action: () => router.push("/wallet" as any) },
               ].map((a) => (
@@ -365,10 +365,10 @@ export default function ShopManage() {
         keyExtractor={(p) => p.id}
         contentContainerStyle={{ padding: 14, gap: 10, paddingBottom: 80 }}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} tintColor={Colors.brand} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} tintColor={colors.accent} />}
         ListHeaderComponent={
           <TouchableOpacity
-            style={[styles.addProductBtn, { backgroundColor: Colors.brand }]}
+            style={[styles.addProductBtn, { backgroundColor: colors.accent }]}
             onPress={() => { setEditingProduct({ is_available: true, is_unlimited_stock: false, stock: 10, price_acoin: 50, category: "General", images: [] }); setProductModal(true); }}
           >
             <Ionicons name="add-circle-outline" size={18} color="#fff" />
@@ -387,13 +387,13 @@ export default function ShopManage() {
             {item.images?.[0] ? (
               <Image source={{ uri: item.images[0] }} style={styles.productRowImg} resizeMode="cover" />
             ) : (
-              <View style={[styles.productRowImg, { backgroundColor: Colors.brand + "18", alignItems: "center", justifyContent: "center" }]}>
-                <Ionicons name="cube-outline" size={22} color={Colors.brand} />
+              <View style={[styles.productRowImg, { backgroundColor: colors.accent + "18", alignItems: "center", justifyContent: "center" }]}>
+                <Ionicons name="cube-outline" size={22} color={colors.accent} />
               </View>
             )}
             <View style={{ flex: 1 }}>
               <Text style={[styles.productRowName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
-              <Text style={[styles.productRowPrice, { color: Colors.brand }]}>{formatShopAcoin(item.price_acoin)}</Text>
+              <Text style={[styles.productRowPrice, { color: colors.accent }]}>{formatShopAcoin(item.price_acoin)}</Text>
               <View style={styles.productRowMeta}>
                 <View style={[styles.stockBadge, { backgroundColor: (!item.is_unlimited_stock && item.stock <= 0) ? "#FF3B3018" : "#34C75918" }]}>
                   <Text style={[styles.stockBadgeText, { color: (!item.is_unlimited_stock && item.stock <= 0) ? "#FF3B30" : "#34C759" }]}>
@@ -405,7 +405,7 @@ export default function ShopManage() {
             </View>
             <View style={styles.productRowActions}>
               <TouchableOpacity onPress={() => { setEditingProduct(item); setProductModal(true); }} hitSlop={8}>
-                <Ionicons name="pencil-outline" size={20} color={Colors.brand} />
+                <Ionicons name="pencil-outline" size={20} color={colors.accent} />
               </TouchableOpacity>
               {deletingId === item.id
                 ? <ActivityIndicator size="small" color="#FF3B30" />
@@ -427,11 +427,11 @@ export default function ShopManage() {
         keyExtractor={(o) => o.id}
         contentContainerStyle={{ paddingBottom: 60 }}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} tintColor={Colors.brand} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} tintColor={colors.accent} />}
         ListHeaderComponent={
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ padding: 14, gap: 8 }}>
             {(["all", "pending", "paid", "processing", "shipped", "delivered"] as const).map((s) => (
-              <TouchableOpacity key={s} style={[styles.orderFilter, { backgroundColor: orderFilter === s ? Colors.brand : colors.surface, borderColor: orderFilter === s ? Colors.brand : colors.border }]} onPress={() => setOrderFilter(s)}>
+              <TouchableOpacity key={s} style={[styles.orderFilter, { backgroundColor: orderFilter === s ? colors.accent : colors.surface, borderColor: orderFilter === s ? colors.accent : colors.border }]} onPress={() => setOrderFilter(s)}>
                 <Text style={[styles.orderFilterText, { color: orderFilter === s ? "#fff" : colors.textMuted }]}>{s === "all" ? "All" : ORDER_STATUS_LABELS[s]?.label}</Text>
               </TouchableOpacity>
             ))}
@@ -533,22 +533,22 @@ export default function ShopManage() {
           <View style={{ width: 24 }} />
         </View>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 16 }}>
-          <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.brand + "18", alignItems: "center", justifyContent: "center" }}>
-            <Ionicons name="lock-closed" size={36} color={Colors.brand} />
+          <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: colors.accent + "18", alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name="lock-closed" size={36} color={colors.accent} />
           </View>
           <Text style={{ fontSize: 22, fontFamily: "Inter_700Bold", color: colors.text, textAlign: "center" }}>Verified Organizations Only</Text>
           <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.textMuted, textAlign: "center", lineHeight: 22 }}>
             Only verified organizations can list and sell products on AfuMarket. Get your account verified to open your store and reach customers across the platform.
           </Text>
           <TouchableOpacity
-            style={{ backgroundColor: Colors.brand, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14, flexDirection: "row", alignItems: "center", gap: 8 }}
+            style={{ backgroundColor: colors.accent, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14, flexDirection: "row", alignItems: "center", gap: 8 }}
             onPress={() => router.push("/shop/apply" as any)}
           >
             <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
             <Text style={{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: "#fff" }}>Apply for Verification</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => router.push("/store")}>
-            <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: Colors.brand }}>Browse Marketplace</Text>
+            <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.accent }}>Browse Marketplace</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -566,15 +566,15 @@ export default function ShopManage() {
           <View style={{ width: 24 }} />
         </View>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 16 }}>
-          <View style={{ width: 80, height: 80, borderRadius: 24, backgroundColor: Colors.brand + "15", alignItems: "center", justifyContent: "center" }}>
-            <Ionicons name="lock-closed-outline" size={36} color={Colors.brand} />
+          <View style={{ width: 80, height: 80, borderRadius: 24, backgroundColor: colors.accent + "15", alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name="lock-closed-outline" size={36} color={colors.accent} />
           </View>
           <Text style={{ fontSize: 20, fontFamily: "Inter_700Bold", color: colors.text, textAlign: "center" }}>Verified Orgs Only</Text>
           <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.textMuted, textAlign: "center", lineHeight: 21 }}>
             Only organization-verified accounts can manage a store and list products. Submit a seller application to get started.
           </Text>
           <TouchableOpacity
-            style={{ backgroundColor: Colors.brand, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14, marginTop: 8 }}
+            style={{ backgroundColor: colors.accent, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14, marginTop: 8 }}
             onPress={() => router.replace("/shop/apply")}
           >
             <Text style={{ color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold" }}>Apply to Become a Seller</Text>
@@ -593,7 +593,7 @@ export default function ShopManage() {
         <Text style={[styles.headerTitle, { color: colors.text }]}>Store Manager</Text>
         {shop && (
           <TouchableOpacity onPress={() => router.push({ pathname: "/shop/[userId]", params: { userId: user!.id } })} hitSlop={10}>
-            <Ionicons name="eye-outline" size={22} color={Colors.brand} />
+            <Ionicons name="eye-outline" size={22} color={colors.accent} />
           </TouchableOpacity>
         )}
       </View>
@@ -604,14 +604,14 @@ export default function ShopManage() {
           { key: "products", label: "Products", icon: "cube-outline" },
           { key: "orders", label: "Orders", icon: "receipt-outline" },
         ] as const).map((t) => (
-          <TouchableOpacity key={t.key} style={[styles.tab, tab === t.key && { borderBottomColor: Colors.brand, borderBottomWidth: 2 }]} onPress={() => setTab(t.key)}>
-            <Ionicons name={t.icon} size={15} color={tab === t.key ? Colors.brand : colors.textMuted} />
-            <Text style={[styles.tabText, { color: tab === t.key ? Colors.brand : colors.textMuted }]}>{t.label}</Text>
+          <TouchableOpacity key={t.key} style={[styles.tab, tab === t.key && { borderBottomColor: colors.accent, borderBottomWidth: 2 }]} onPress={() => setTab(t.key)}>
+            <Ionicons name={t.icon} size={15} color={tab === t.key ? colors.accent : colors.textMuted} />
+            <Text style={[styles.tabText, { color: tab === t.key ? colors.accent : colors.textMuted }]}>{t.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {loading ? <ActivityIndicator color={Colors.brand} style={{ marginTop: 60 }} size="large" /> : (
+      {loading ? <ActivityIndicator color={colors.accent} style={{ marginTop: 60 }} size="large" /> : (
         <View style={{ flex: 1 }}>
           {tab === "overview" && renderOverview()}
           {tab === "products" && renderProducts()}
@@ -626,11 +626,11 @@ export default function ShopManage() {
             <Text style={[styles.modalTitle, { color: colors.text }]}>{shop ? "Edit Shop" : "Create Shop"}</Text>
 
             <TouchableOpacity style={styles.bannerPicker} onPress={() => pickShopImage("banner")}>
-              {shopBanner ? <Image source={{ uri: shopBanner }} style={styles.bannerPreview} resizeMode="cover" /> : <View style={[styles.bannerPreview, { backgroundColor: Colors.brand + "18", alignItems: "center", justifyContent: "center" }]}><Ionicons name="image-outline" size={32} color={Colors.brand} /><Text style={[styles.pickerHint, { color: Colors.brand }]}>Tap to add banner</Text></View>}
+              {shopBanner ? <Image source={{ uri: shopBanner }} style={styles.bannerPreview} resizeMode="cover" /> : <View style={[styles.bannerPreview, { backgroundColor: colors.accent + "18", alignItems: "center", justifyContent: "center" }]}><Ionicons name="image-outline" size={32} color={colors.accent} /><Text style={[styles.pickerHint, { color: colors.accent }]}>Tap to add banner</Text></View>}
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.logoPicker} onPress={() => pickShopImage("logo")}>
-              {shopLogo ? <Image source={{ uri: shopLogo }} style={styles.logoPreview} resizeMode="cover" /> : <View style={[styles.logoPreview, { backgroundColor: Colors.brand + "18", alignItems: "center", justifyContent: "center" }]}><Text style={{ fontSize: 24 }}>🏪</Text></View>}
+              {shopLogo ? <Image source={{ uri: shopLogo }} style={styles.logoPreview} resizeMode="cover" /> : <View style={[styles.logoPreview, { backgroundColor: colors.accent + "18", alignItems: "center", justifyContent: "center" }]}><Text style={{ fontSize: 24 }}>🏪</Text></View>}
               <View style={styles.logoEditBadge}><Ionicons name="camera-outline" size={12} color="#fff" /></View>
             </TouchableOpacity>
 
@@ -656,7 +656,7 @@ export default function ShopManage() {
             <Text style={[styles.formLabel, { color: colors.textMuted }]}>Category</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
               {SHOP_CATEGORIES.map((c) => (
-                <TouchableOpacity key={c} style={[styles.catChip, { backgroundColor: shopForm.category === c ? Colors.brand : colors.surface, borderColor: shopForm.category === c ? Colors.brand : colors.border }]} onPress={() => setShopForm((p) => ({ ...p, category: c }))}>
+                <TouchableOpacity key={c} style={[styles.catChip, { backgroundColor: shopForm.category === c ? colors.accent : colors.surface, borderColor: shopForm.category === c ? colors.accent : colors.border }]} onPress={() => setShopForm((p) => ({ ...p, category: c }))}>
                   <Text style={[styles.catChipText, { color: shopForm.category === c ? "#fff" : colors.textMuted }]}>{c}</Text>
                 </TouchableOpacity>
               ))}
@@ -666,7 +666,7 @@ export default function ShopManage() {
               <TouchableOpacity style={[styles.cancelBtn, { borderColor: colors.border }]} onPress={() => setEditShopModal(false)}>
                 <Text style={[styles.cancelText, { color: colors.text }]}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: Colors.brand }]} onPress={saveShop} disabled={savingShop}>
+              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.accent }]} onPress={saveShop} disabled={savingShop}>
                 {savingShop ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveBtnText}>{shop ? "Save Changes" : "Create Shop"}</Text>}
               </TouchableOpacity>
             </View>
@@ -691,8 +691,8 @@ export default function ShopManage() {
               ))}
               {(editingProduct?.images?.length || 0) < 5 && (
                 <TouchableOpacity style={[styles.addImgBtn, { backgroundColor: colors.backgroundTertiary, borderColor: colors.border }]} onPress={addProductImage}>
-                  <Ionicons name="camera-outline" size={22} color={Colors.brand} />
-                  <Text style={[styles.addImgText, { color: Colors.brand }]}>Add Photo</Text>
+                  <Ionicons name="camera-outline" size={22} color={colors.accent} />
+                  <Text style={[styles.addImgText, { color: colors.accent }]}>Add Photo</Text>
                 </TouchableOpacity>
               )}
             </ScrollView>
@@ -719,7 +719,7 @@ export default function ShopManage() {
               <Text style={[styles.formLabel, { color: colors.textMuted }]}>Price (ACoin) *</Text>
               <View style={[styles.priceRow, { backgroundColor: colors.backgroundTertiary, borderColor: colors.border }]}>
                 <TouchableOpacity onPress={() => setEditingProduct((p) => ({ ...p, price_acoin: Math.max(1, (p?.price_acoin || 1) - 10) }))} hitSlop={10}>
-                  <Ionicons name="remove-circle-outline" size={28} color={Colors.brand} />
+                  <Ionicons name="remove-circle-outline" size={28} color={colors.accent} />
                 </TouchableOpacity>
                 <TextInput
                   style={[styles.priceInput, { color: colors.text }]}
@@ -730,7 +730,7 @@ export default function ShopManage() {
                 />
                 <Text style={[styles.priceUnit, { color: colors.textMuted }]}>ACoin</Text>
                 <TouchableOpacity onPress={() => setEditingProduct((p) => ({ ...p, price_acoin: (p?.price_acoin || 0) + 10 }))} hitSlop={10}>
-                  <Ionicons name="add-circle-outline" size={28} color={Colors.brand} />
+                  <Ionicons name="add-circle-outline" size={28} color={colors.accent} />
                 </TouchableOpacity>
               </View>
               <Text style={[styles.priceHint, { color: colors.textMuted }]}>= {formatShopUGX(editingProduct?.price_acoin || 0)}</Text>
@@ -739,7 +739,7 @@ export default function ShopManage() {
             <Text style={[styles.formLabel, { color: colors.textMuted }]}>Category</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
               {PRODUCT_CATEGORIES.filter((c) => c !== "All").map((c) => (
-                <TouchableOpacity key={c} style={[styles.catChip, { backgroundColor: editingProduct?.category === c ? Colors.brand : colors.surface, borderColor: editingProduct?.category === c ? Colors.brand : colors.border }]} onPress={() => setEditingProduct((p) => ({ ...p, category: c }))}>
+                <TouchableOpacity key={c} style={[styles.catChip, { backgroundColor: editingProduct?.category === c ? colors.accent : colors.surface, borderColor: editingProduct?.category === c ? colors.accent : colors.border }]} onPress={() => setEditingProduct((p) => ({ ...p, category: c }))}>
                   <Text style={[styles.catChipText, { color: editingProduct?.category === c ? "#fff" : colors.textMuted }]}>{c}</Text>
                 </TouchableOpacity>
               ))}
@@ -747,7 +747,7 @@ export default function ShopManage() {
 
             <View style={[styles.stockRow, { backgroundColor: colors.backgroundTertiary, borderRadius: 12, padding: 14 }]}>
               <Text style={[styles.formLabel, { color: colors.text }]}>Unlimited Stock</Text>
-              <Switch value={editingProduct?.is_unlimited_stock ?? false} onValueChange={(v) => setEditingProduct((p) => ({ ...p, is_unlimited_stock: v }))} trackColor={{ false: colors.border, true: Colors.brand }} thumbColor="#fff" />
+              <Switch value={editingProduct?.is_unlimited_stock ?? false} onValueChange={(v) => setEditingProduct((p) => ({ ...p, is_unlimited_stock: v }))} trackColor={{ false: colors.border, true: colors.accent }} thumbColor="#fff" />
             </View>
 
             {!editingProduct?.is_unlimited_stock && (
@@ -766,14 +766,14 @@ export default function ShopManage() {
 
             <View style={[styles.stockRow, { backgroundColor: colors.backgroundTertiary, borderRadius: 12, padding: 14 }]}>
               <Text style={[styles.formLabel, { color: colors.text }]}>Available for Sale</Text>
-              <Switch value={editingProduct?.is_available ?? true} onValueChange={(v) => setEditingProduct((p) => ({ ...p, is_available: v }))} trackColor={{ false: colors.border, true: Colors.brand }} thumbColor="#fff" />
+              <Switch value={editingProduct?.is_available ?? true} onValueChange={(v) => setEditingProduct((p) => ({ ...p, is_available: v }))} trackColor={{ false: colors.border, true: colors.accent }} thumbColor="#fff" />
             </View>
 
             <View style={styles.modalBtns}>
               <TouchableOpacity style={[styles.cancelBtn, { borderColor: colors.border }]} onPress={() => { setProductModal(false); setEditingProduct(null); }}>
                 <Text style={[styles.cancelText, { color: colors.text }]}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: Colors.brand }]} onPress={saveProduct} disabled={savingProduct}>
+              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.accent }]} onPress={saveProduct} disabled={savingProduct}>
                 {savingProduct ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveBtnText}>{editingProduct?.id ? "Save Changes" : "Add Product"}</Text>}
               </TouchableOpacity>
             </View>

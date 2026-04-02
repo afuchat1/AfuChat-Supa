@@ -120,7 +120,7 @@ export default function PhoneContactsScreen() {
         </Text>
       </View>
       <TouchableOpacity
-        style={[styles.msgBtn, { backgroundColor: Colors.brand }]}
+        style={[styles.msgBtn, { backgroundColor: colors.accent }]}
         onPress={async () => {
           const { data } = await supabase.rpc("get_or_create_direct_chat", { other_user_id: item.id });
           if (data) router.push({ pathname: "/chat/[id]", params: { id: data } });
@@ -148,13 +148,13 @@ export default function PhoneContactsScreen() {
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Contacts on AfuChat</Text>
         <TouchableOpacity onPress={findContacts} hitSlop={12}>
-          <Ionicons name="refresh" size={22} color={Colors.brand} />
+          <Ionicons name="refresh" size={22} color={colors.accent} />
         </TouchableOpacity>
       </View>
 
       {state === "loading" && (
         <View style={styles.center}>
-          <ActivityIndicator color={Colors.brand} size="large" />
+          <ActivityIndicator color={colors.accent} size="large" />
           <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Scanning your contacts…</Text>
         </View>
       )}
@@ -166,7 +166,7 @@ export default function PhoneContactsScreen() {
           <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
             Allow contacts permission to find your friends on AfuChat
           </Text>
-          <TouchableOpacity style={[styles.retryBtn, { backgroundColor: Colors.brand }]} onPress={findContacts}>
+          <TouchableOpacity style={[styles.retryBtn, { backgroundColor: colors.accent }]} onPress={findContacts}>
             <Text style={styles.retryBtnText}>Try Again</Text>
           </TouchableOpacity>
         </View>
@@ -184,9 +184,9 @@ export default function PhoneContactsScreen() {
 
       {state === "done" && contacts.length > 0 && (
         <>
-          <View style={[styles.foundBanner, { backgroundColor: Colors.brand + "18" }]}>
-            <Ionicons name="checkmark-circle" size={16} color={Colors.brand} />
-            <Text style={[styles.foundText, { color: Colors.brand }]}>
+          <View style={[styles.foundBanner, { backgroundColor: colors.accent + "18" }]}>
+            <Ionicons name="checkmark-circle" size={16} color={colors.accent} />
+            <Text style={[styles.foundText, { color: colors.accent }]}>
               Found {contacts.length} contact{contacts.length !== 1 ? "s" : ""} on AfuChat
             </Text>
           </View>

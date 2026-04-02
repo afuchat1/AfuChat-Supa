@@ -43,7 +43,7 @@ export default function CreateVideoScreen() {
       <View style={[styles.root, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }]}>
         <Ionicons name="phone-portrait-outline" size={48} color={colors.textMuted} />
         <Text style={{ color: colors.text, fontSize: 18, fontFamily: "Inter_600SemiBold", marginTop: 16 }}>Video posting is only available in the app</Text>
-        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 20, backgroundColor: Colors.brand, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20 }}>
+        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 20, backgroundColor: colors.accent, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20 }}>
           <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -128,7 +128,7 @@ export default function CreateVideoScreen() {
         <TouchableOpacity
           onPress={post}
           disabled={!canPost}
-          style={[styles.postBtn, { backgroundColor: canPost ? Colors.brand : colors.backgroundTertiary }]}
+          style={[styles.postBtn, { backgroundColor: canPost ? colors.accent : colors.backgroundTertiary }]}
         >
           {loading
             ? <ActivityIndicator size="small" color="#fff" />
@@ -146,8 +146,8 @@ export default function CreateVideoScreen() {
           {/* Video picker / preview */}
           {!videoUri ? (
             <TouchableOpacity style={[styles.pickerArea, { backgroundColor: colors.backgroundTertiary, borderColor: colors.border }]} onPress={pickVideo}>
-              <View style={[styles.pickerIcon, { backgroundColor: Colors.brand + "20" }]}>
-                <Ionicons name="videocam" size={40} color={Colors.brand} />
+              <View style={[styles.pickerIcon, { backgroundColor: colors.accent + "20" }]}>
+                <Ionicons name="videocam" size={40} color={colors.accent} />
               </View>
               <Text style={[styles.pickerTitle, { color: colors.text }]}>Tap to select a video</Text>
               <Text style={[styles.pickerSub, { color: colors.textMuted }]}>MP4, MOV, WebM · max {MAX_DURATION_SECONDS}s</Text>
@@ -201,7 +201,7 @@ export default function CreateVideoScreen() {
               "Add hashtags to reach more people",
             ].map((tip, i) => (
               <View key={i} style={styles.tipRow}>
-                <View style={[styles.tipDot, { backgroundColor: Colors.brand }]} />
+                <View style={[styles.tipDot, { backgroundColor: colors.accent }]} />
                 <Text style={[styles.tipText, { color: colors.textMuted }]}>{tip}</Text>
               </View>
             ))}
@@ -210,7 +210,7 @@ export default function CreateVideoScreen() {
           {/* Upload progress */}
           {uploadProgress ? (
             <View style={styles.progressRow}>
-              <ActivityIndicator size="small" color={Colors.brand} />
+              <ActivityIndicator size="small" color={colors.accent} />
               <Text style={[styles.progressText, { color: colors.textSecondary }]}>{uploadProgress}</Text>
             </View>
           ) : null}

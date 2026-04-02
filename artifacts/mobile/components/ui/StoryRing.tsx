@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
-import Colors from "@/constants/colors";
+import { useAppAccent } from "@/context/AppAccentContext";
 
 type Props = {
   size: number;
@@ -11,6 +11,7 @@ type Props = {
 };
 
 export function StoryRing({ size, storyCount, seenCount, children }: Props) {
+  const { accent } = useAppAccent();
   const strokeWidth = 2.5;
   const maxSegments = Math.min(storyCount, 30);
   const gap = maxSegments > 1 ? Math.min(6, (2 * Math.PI * ((size + strokeWidth * 2 + 4 - strokeWidth) / 2)) / (maxSegments * 3)) : 0;
@@ -55,7 +56,7 @@ export function StoryRing({ size, storyCount, seenCount, children }: Props) {
         cx={center}
         cy={center}
         r={radius}
-        stroke={isSeen ? "#8E8E93" : Colors.brand}
+        stroke={isSeen ? "#8E8E93" : accent}
         strokeWidth={strokeWidth}
         fill="none"
         strokeDasharray={`${segmentLength} ${circumference - segmentLength}`}

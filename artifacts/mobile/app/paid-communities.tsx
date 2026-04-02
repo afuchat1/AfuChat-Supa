@@ -171,12 +171,12 @@ export default function PaidCommunitiesScreen() {
           <Text style={[styles.memberText, { color: colors.textMuted }]}>{item.member_count} members</Text>
         </View>
         {item.tags.slice(0, 3).map((tag) => (
-          <View key={tag} style={[styles.tag, { backgroundColor: Colors.brand + "18" }]}>
-            <Text style={[styles.tagText, { color: Colors.brand }]}>{tag}</Text>
+          <View key={tag} style={[styles.tag, { backgroundColor: colors.accent + "18" }]}>
+            <Text style={[styles.tagText, { color: colors.accent }]}>{tag}</Text>
           </View>
         ))}
         <TouchableOpacity
-          style={[styles.joinBtn, { backgroundColor: item.is_member ? colors.backgroundTertiary : Colors.brand }]}
+          style={[styles.joinBtn, { backgroundColor: item.is_member ? colors.backgroundTertiary : colors.accent }]}
           onPress={() => joinCommunity(item)}
           disabled={item.is_member || joining === item.id}
         >
@@ -204,10 +204,10 @@ export default function PaidCommunitiesScreen() {
         {(["browse", "mine", "create"] as const).map((t) => (
           <TouchableOpacity
             key={t}
-            style={[styles.tab, tab === t && { borderBottomColor: Colors.brand, borderBottomWidth: 2 }]}
+            style={[styles.tab, tab === t && { borderBottomColor: colors.accent, borderBottomWidth: 2 }]}
             onPress={() => setTab(t)}
           >
-            <Text style={[styles.tabText, { color: tab === t ? Colors.brand : colors.textMuted }]}>
+            <Text style={[styles.tabText, { color: tab === t ? colors.accent : colors.textMuted }]}>
               {t === "browse" ? "Browse" : t === "mine" ? "My Communities" : "+ Create"}
             </Text>
           </TouchableOpacity>
@@ -234,12 +234,12 @@ export default function PaidCommunitiesScreen() {
           <View style={[styles.field, { backgroundColor: colors.surface }]}>
             <TextInput style={[styles.fieldInput, { color: colors.text }]} placeholder="Tags (comma-separated)" placeholderTextColor={colors.textMuted} value={createTags} onChangeText={setCreateTags} />
           </View>
-          <TouchableOpacity style={[styles.createBtn, { backgroundColor: Colors.brand, opacity: creating ? 0.7 : 1 }]} onPress={createCommunity} disabled={creating}>
+          <TouchableOpacity style={[styles.createBtn, { backgroundColor: colors.accent, opacity: creating ? 0.7 : 1 }]} onPress={createCommunity} disabled={creating}>
             {creating ? <ActivityIndicator color="#fff" /> : <Text style={styles.createBtnText}>Launch Community</Text>}
           </TouchableOpacity>
         </ScrollView>
       ) : loading ? (
-        <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} />
+        <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={tab === "mine" ? myCommunities : communities}
@@ -256,7 +256,7 @@ export default function PaidCommunitiesScreen() {
               <Text style={[styles.emptySub, { color: colors.textMuted }]}>
                 {tab === "mine" ? "Create or join a community" : "Be the first to create one"}
               </Text>
-              <TouchableOpacity style={[styles.createBtn, { backgroundColor: Colors.brand }]} onPress={() => setTab("create")}>
+              <TouchableOpacity style={[styles.createBtn, { backgroundColor: colors.accent }]} onPress={() => setTab("create")}>
                 <Text style={styles.createBtnText}>Create Community</Text>
               </TouchableOpacity>
             </View>

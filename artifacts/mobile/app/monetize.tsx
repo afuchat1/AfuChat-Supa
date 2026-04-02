@@ -279,7 +279,7 @@ export default function MonetizeScreen() {
         {availableUGX > 0 && (
           <View style={[styles.withdrawCard, { backgroundColor: colors.surface, borderColor: Colors.brand + "44" }]}>
             <View style={[styles.withdrawIconWrap, { backgroundColor: Colors.brand + "18" }]}>
-              <Ionicons name="wallet-outline" size={22} color={Colors.brand} />
+              <Ionicons name="wallet-outline" size={22} color={colors.accent} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.withdrawTitle, { color: colors.text }]}>Available to Withdraw</Text>
@@ -371,15 +371,15 @@ export default function MonetizeScreen() {
   }
 
   function renderFeatures() {
-    if (loadingSettings) return <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} />;
+    if (loadingSettings) return <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />;
     return (
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 60, paddingTop: 8 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.brand} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
         <View style={[styles.infoBanner, { backgroundColor: Colors.brand + "14" }]}>
-          <Ionicons name="information-circle-outline" size={16} color={Colors.brand} />
+          <Ionicons name="information-circle-outline" size={16} color={colors.accent} />
           <Text style={[styles.infoBannerText, { color: Colors.brand }]}>
             {activeFeatures} of {MONETIZE_FEATURES.length} features active · Payments are in ACoin (1 ACoin = UGX {ACOIN_TO_UGX})
           </Text>
@@ -427,7 +427,7 @@ export default function MonetizeScreen() {
                           )}
                         </View>
                         {savingId === feature.id ? (
-                          <ActivityIndicator size="small" color={Colors.brand} />
+                          <ActivityIndicator size="small" color={colors.accent} />
                         ) : isMarket ? (
                           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
                         ) : (
@@ -451,7 +451,7 @@ export default function MonetizeScreen() {
   }
 
   function renderMarket() {
-    if (loadingMarket) return <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} />;
+    if (loadingMarket) return <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />;
     if (marketListings.length === 0) {
       return (
         <View style={styles.emptyFull}>
@@ -470,7 +470,7 @@ export default function MonetizeScreen() {
         keyExtractor={(item, i) => `${item.user_id}-${item.feature_id}-${i}`}
         contentContainerStyle={{ padding: 14, gap: 10, paddingBottom: insets.bottom + 60 }}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.brand} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
         renderItem={({ item }) => {
           const feature = MONETIZE_FEATURES.find((f) => f.id === item.feature_id);
           if (!feature) return null;
@@ -531,10 +531,10 @@ export default function MonetizeScreen() {
         ] as const).map((t) => (
           <TouchableOpacity
             key={t.key}
-            style={[styles.tab, tab === t.key && { borderBottomColor: Colors.brand, borderBottomWidth: 2 }]}
+            style={[styles.tab, tab === t.key && { borderBottomColor: colors.accent, borderBottomWidth: 2 }]}
             onPress={() => setTab(t.key)}
           >
-            <Ionicons name={t.icon} size={15} color={tab === t.key ? Colors.brand : colors.textMuted} />
+            <Ionicons name={t.icon} size={15} color={tab === t.key ? colors.accent : colors.textMuted} />
             <Text style={[styles.tabText, { color: tab === t.key ? Colors.brand : colors.textMuted }]}>{t.label}</Text>
           </TouchableOpacity>
         ))}

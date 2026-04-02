@@ -191,12 +191,12 @@ export default function AdvancedFeaturesScreen() {
         <View style={{ flex: 1 }}>
           <Text style={[styles.prefLabel, { color: colors.text }]}>{label}</Text>
           {desc && <Text style={[styles.prefDesc, { color: colors.textMuted }]}>{desc}</Text>}
-          {note && <View style={[styles.betaBadge, { backgroundColor: Colors.brand + "22" }]}><Text style={[styles.betaText, { color: Colors.brand }]}>{note}</Text></View>}
+          {note && <View style={[styles.betaBadge, { backgroundColor: colors.accent + "22" }]}><Text style={[styles.betaText, { color: colors.accent }]}>{note}</Text></View>}
         </View>
         <Switch
           value={prefs[field] as boolean}
           onValueChange={(v) => setPref(field, v as any)}
-          trackColor={{ true: Colors.brand, false: colors.backgroundTertiary }}
+          trackColor={{ true: colors.accent, false: colors.backgroundTertiary }}
           thumbColor="#fff"
         />
       </View>
@@ -353,7 +353,7 @@ export default function AdvancedFeaturesScreen() {
     }
   }
 
-  if (loading) return <ActivityIndicator color={Colors.brand} style={{ flex: 1, justifyContent: "center" }} />;
+  if (loading) return <ActivityIndicator color={colors.accent} style={{ flex: 1, justifyContent: "center" }} />;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
@@ -362,7 +362,7 @@ export default function AdvancedFeaturesScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Advanced Features</Text>
-        {saving ? <ActivityIndicator color={Colors.brand} size="small" /> : <View style={{ width: 24 }} />}
+        {saving ? <ActivityIndicator color={colors.accent} size="small" /> : <View style={{ width: 24 }} />}
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 60 }}>
@@ -419,7 +419,7 @@ export default function AdvancedFeaturesScreen() {
                 <Text style={[styles.cancelBtnText, { color: colors.text }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.saveBtn, { backgroundColor: Colors.brand }]}
+                style={[styles.saveBtn, { backgroundColor: colors.accent }]}
                 onPress={() => {
                   if (showAutoReplyEditor) {
                     setPref("auto_reply_message", tempAutoReply);
@@ -449,7 +449,7 @@ export default function AdvancedFeaturesScreen() {
                 onPress={() => { setPref("translation_language", lang.code); setShowLangPicker(false); }}
               >
                 <Text style={[styles.pickerLabel, { color: colors.text }]}>{lang.label}</Text>
-                {prefs.translation_language === lang.code && <Ionicons name="checkmark" size={20} color={Colors.brand} />}
+                {prefs.translation_language === lang.code && <Ionicons name="checkmark" size={20} color={colors.accent} />}
               </TouchableOpacity>
             ))}
             <TouchableOpacity style={[styles.cancelBtn, { borderColor: colors.border, marginTop: 12 }]} onPress={() => setShowLangPicker(false)}>
@@ -472,7 +472,7 @@ export default function AdvancedFeaturesScreen() {
               >
                 <Text style={{ fontSize: 20 }}>{s.emoji}</Text>
                 <Text style={[styles.pickerLabel, { color: s.color, flex: 1 }]}>{s.label}</Text>
-                {prefs.activity_status === s.value && <Ionicons name="checkmark" size={20} color={Colors.brand} />}
+                {prefs.activity_status === s.value && <Ionicons name="checkmark" size={20} color={colors.accent} />}
               </TouchableOpacity>
             ))}
             <TouchableOpacity style={[styles.cancelBtn, { borderColor: colors.border, marginTop: 12 }]} onPress={() => setShowStatusPicker(false)}>

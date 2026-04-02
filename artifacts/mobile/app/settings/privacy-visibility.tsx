@@ -36,8 +36,8 @@ function ToggleRow({ icon, iconBg, label, description, value, onToggle, saving }
         <Text style={[styles.rowLabel, { color: colors.text }]}>{label}</Text>
         <Text style={[styles.rowDesc, { color: colors.textMuted }]}>{description}</Text>
       </View>
-      {saving ? <ActivityIndicator size="small" color={Colors.brand} /> : (
-        <Switch value={value} onValueChange={onToggle} trackColor={{ true: Colors.brand, false: colors.border }} />
+      {saving ? <ActivityIndicator size="small" color={colors.accent} /> : (
+        <Switch value={value} onValueChange={onToggle} trackColor={{ true: colors.accent, false: colors.border }} />
       )}
     </View>
   );
@@ -78,7 +78,7 @@ export default function PrivacyVisibilityScreen() {
         <Text style={[styles.headerTitle, { color: colors.text }]}>Visibility</Text>
         <View style={{ width: 24 }} />
       </View>
-      {loading ? <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={Colors.brand} /></View> : (
+      {loading ? <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={colors.accent} /></View> : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>CONNECTIONS</Text>
           <View style={styles.group}>

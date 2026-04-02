@@ -113,14 +113,14 @@ export default function DataBundlesScreen() {
             <TouchableOpacity
               key={b.id}
               style={[styles.bundleCard, {
-                backgroundColor: selectedBundle === b.id ? Colors.brand + "15" : colors.surface,
-                borderColor: selectedBundle === b.id ? Colors.brand : colors.border,
+                backgroundColor: selectedBundle === b.id ? colors.accent + "15" : colors.surface,
+                borderColor: selectedBundle === b.id ? colors.accent : colors.border,
               }]}
               onPress={() => { setSelectedBundle(b.id); Haptics.selectionAsync(); }}
             >
-              <Text style={[styles.bundleData, { color: selectedBundle === b.id ? Colors.brand : colors.text }]}>{b.data}</Text>
+              <Text style={[styles.bundleData, { color: selectedBundle === b.id ? colors.accent : colors.text }]}>{b.data}</Text>
               <Text style={[styles.bundleValidity, { color: colors.textMuted }]}>{b.validity}</Text>
-              <Text style={[styles.bundlePrice, { color: selectedBundle === b.id ? Colors.brand : colors.text }]}>{b.price} 🪙</Text>
+              <Text style={[styles.bundlePrice, { color: selectedBundle === b.id ? colors.accent : colors.text }]}>{b.price} 🪙</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -139,21 +139,21 @@ export default function DataBundlesScreen() {
                   params: { service: "data_bundle", amount: fee.subtotal.toString(), fee: fee.feeAmount.toString(), total: fee.total.toString() },
                 })}
               >
-                <Text style={[styles.feeLinkText, { color: Colors.brand }]}>Fee ({fee.feePercent}%)</Text>
-                <Ionicons name="information-circle-outline" size={14} color={Colors.brand} />
+                <Text style={[styles.feeLinkText, { color: colors.accent }]}>Fee ({fee.feePercent}%)</Text>
+                <Ionicons name="information-circle-outline" size={14} color={colors.accent} />
               </TouchableOpacity>
               <Text style={[styles.feeValue, { color: "#FF9800" }]}>+{fee.feeAmount} ACoins</Text>
             </View>
             <View style={[styles.feeDivider, { backgroundColor: colors.border }]} />
             <View style={styles.feeRow}>
               <Text style={[styles.feeTotalLabel, { color: colors.text }]}>Total</Text>
-              <Text style={[styles.feeTotalValue, { color: Colors.brand }]}>{fee.total} ACoins</Text>
+              <Text style={[styles.feeTotalValue, { color: colors.accent }]}>{fee.total} ACoins</Text>
             </View>
           </View>
         )}
 
         <TouchableOpacity
-          style={[styles.buyBtn, { backgroundColor: Colors.brand, opacity: (!provider || !phone || !bundle || loading) ? 0.5 : 1 }]}
+          style={[styles.buyBtn, { backgroundColor: colors.accent, opacity: (!provider || !phone || !bundle || loading) ? 0.5 : 1 }]}
           onPress={handlePurchase}
           disabled={!provider || !phone || !bundle || loading}
         >

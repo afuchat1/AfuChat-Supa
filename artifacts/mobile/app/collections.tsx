@@ -73,7 +73,7 @@ function CreateSheet({
 }) {
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("📁");
-  const [color, setColor] = useState(Colors.brand);
+  const [color, setColor] = useState(colors.accent);
   const [isPrivate, setIsPrivate] = useState(false);
   const [creating, setCreating] = useState(false);
 
@@ -274,7 +274,7 @@ export default function CollectionsScreen() {
 
         {loadingItems ? (
           <View style={styles.center}>
-            <ActivityIndicator color={Colors.brand} />
+            <ActivityIndicator color={colors.accent} />
           </View>
         ) : collectionItems.length === 0 ? (
           <View style={styles.center}>
@@ -335,7 +335,7 @@ export default function CollectionsScreen() {
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Collections</Text>
         <TouchableOpacity
-          style={[styles.newBtn, { backgroundColor: Colors.brand }]}
+          style={[styles.newBtn, { backgroundColor: colors.accent }]}
           onPress={() => setShowCreate(true)}
         >
           <Ionicons name="add" size={18} color="#fff" />
@@ -345,18 +345,18 @@ export default function CollectionsScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator color={Colors.brand} />
+          <ActivityIndicator color={colors.accent} />
         </View>
       ) : collections.length === 0 ? (
         <View style={styles.center}>
-          <View style={[styles.emptyIconWrap, { backgroundColor: Colors.brand + "18" }]}>
-            <Ionicons name="bookmark-outline" size={44} color={Colors.brand} />
+          <View style={[styles.emptyIconWrap, { backgroundColor: colors.accent + "18" }]}>
+            <Ionicons name="bookmark-outline" size={44} color={colors.accent} />
           </View>
           <Text style={[styles.emptyTitle, { color: colors.text }]}>No collections yet</Text>
           <Text style={[styles.emptySub, { color: colors.textMuted }]}>
             Organize your saved posts, links, and media into themed folders
           </Text>
-          <TouchableOpacity style={[styles.emptyAction, { backgroundColor: Colors.brand }]} onPress={() => setShowCreate(true)}>
+          <TouchableOpacity style={[styles.emptyAction, { backgroundColor: colors.accent }]} onPress={() => setShowCreate(true)}>
             <Ionicons name="add" size={18} color="#fff" />
             <Text style={styles.emptyActionText}>Create your first collection</Text>
           </TouchableOpacity>

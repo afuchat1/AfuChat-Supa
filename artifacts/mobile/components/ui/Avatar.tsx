@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Image, StyleSheet, Text, View, ViewStyle } from "react-native";
-import Colors from "@/constants/colors";
+import { useAppAccent } from "@/context/AppAccentContext";
 import { PremiumRing } from "./PremiumRing";
 
 type Props = {
@@ -31,6 +31,7 @@ function hashColor(name?: string): string {
 }
 
 export function Avatar({ uri, name, size = 44, style, online, premium }: Props) {
+  const { accent } = useAppAccent();
   const initials = getInitials(name);
   const bgColor = hashColor(name);
   const [imgError, setImgError] = useState(false);
@@ -67,6 +68,7 @@ export function Avatar({ uri, name, size = 44, style, online, premium }: Props) 
           style={[
             styles.onlineDot,
             {
+              backgroundColor: accent,
               width: size * 0.28,
               height: size * 0.28,
               borderRadius: size * 0.14,
@@ -107,7 +109,6 @@ const styles = StyleSheet.create({
   },
   onlineDot: {
     position: "absolute",
-    backgroundColor: Colors.brand,
     borderWidth: 2,
     borderColor: "#FFFFFF",
   },

@@ -332,7 +332,7 @@ export default function FileManagerScreen() {
         activeOpacity={0.85}
       >
         {selectMode && (
-          <View style={[styles.selectCircle, isSelected && { backgroundColor: Colors.brand, borderColor: Colors.brand }]}>
+          <View style={[styles.selectCircle, isSelected && { backgroundColor: colors.accent, borderColor: colors.accent }]}>
             {isSelected && <Ionicons name="checkmark" size={13} color="#fff" />}
           </View>
         )}
@@ -362,7 +362,7 @@ export default function FileManagerScreen() {
         </View>
         <View style={styles.listActions}>
           {downloading === item.id
-            ? <ActivityIndicator size="small" color={Colors.brand} />
+            ? <ActivityIndicator size="small" color={colors.accent} />
             : !selectMode && (
               <>
                 <TouchableOpacity hitSlop={10} onPress={() => downloadFile(item)}>
@@ -370,8 +370,8 @@ export default function FileManagerScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity hitSlop={10} onPress={() => item.is_pinned ? unpinItem(item) : pinItem(item)} disabled={pinning === item.id}>
                   {pinning === item.id
-                    ? <ActivityIndicator size="small" color={Colors.brand} />
-                    : <Ionicons name={item.is_pinned ? "pin" : "pin-outline"} size={20} color={item.is_pinned ? Colors.brand : colors.textMuted} />}
+                    ? <ActivityIndicator size="small" color={colors.accent} />
+                    : <Ionicons name={item.is_pinned ? "pin" : "pin-outline"} size={20} color={item.is_pinned ? colors.accent : colors.textMuted} />}
                 </TouchableOpacity>
               </>
             )}
@@ -408,8 +408,8 @@ export default function FileManagerScreen() {
               onPress={() => setSortBy((s) => s === "date" ? "name" : s === "name" ? "size" : "date")}
               style={[styles.sortBtn, { borderColor: colors.border }]}
             >
-              <Ionicons name="swap-vertical-outline" size={14} color={Colors.brand} />
-              <Text style={[styles.sortBtnText, { color: Colors.brand }]}>
+              <Ionicons name="swap-vertical-outline" size={14} color={colors.accent} />
+              <Text style={[styles.sortBtnText, { color: colors.accent }]}>
                 {sortBy === "date" ? "Date" : sortBy === "name" ? "Name" : "Size"}
               </Text>
             </TouchableOpacity>
@@ -443,7 +443,7 @@ export default function FileManagerScreen() {
           return (
             <TouchableOpacity
               key={t.key}
-              style={[styles.tab, { backgroundColor: isActive ? Colors.brand : colors.surface, borderColor: isActive ? Colors.brand : colors.border }]}
+              style={[styles.tab, { backgroundColor: isActive ? colors.accent : colors.surface, borderColor: isActive ? colors.accent : colors.border }]}
               onPress={() => setActiveTab(t.key)}
             >
               <Ionicons name={t.icon as any} size={13} color={isActive ? "#fff" : colors.textMuted} />
@@ -460,12 +460,12 @@ export default function FileManagerScreen() {
 
       {loading ? (
         <View style={styles.loadingWrap}>
-          <ActivityIndicator color={Colors.brand} size="large" />
+          <ActivityIndicator color={colors.accent} size="large" />
         </View>
       ) : filtered.length === 0 ? (
         <View style={styles.empty}>
-          <View style={[styles.emptyIcon, { backgroundColor: Colors.brand + "18" }]}>
-            <Ionicons name={TABS.find((t) => t.key === activeTab)?.icon as any || "folder-outline"} size={36} color={Colors.brand} />
+          <View style={[styles.emptyIcon, { backgroundColor: colors.accent + "18" }]}>
+            <Ionicons name={TABS.find((t) => t.key === activeTab)?.icon as any || "folder-outline"} size={36} color={colors.accent} />
           </View>
           <Text style={[styles.emptyTitle, { color: colors.text }]}>
             {search ? "No results" : `No ${activeTab === "all" ? "files" : activeTab} yet`}
@@ -483,7 +483,7 @@ export default function FileManagerScreen() {
           renderItem={renderGrid}
           contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadMedia(); setRefreshing(false); }} tintColor={Colors.brand} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadMedia(); setRefreshing(false); }} tintColor={colors.accent} />}
         />
       ) : (
         <FlatList
@@ -493,7 +493,7 @@ export default function FileManagerScreen() {
           renderItem={renderList}
           contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadMedia(); setRefreshing(false); }} tintColor={Colors.brand} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadMedia(); setRefreshing(false); }} tintColor={colors.accent} />}
         />
       )}
 

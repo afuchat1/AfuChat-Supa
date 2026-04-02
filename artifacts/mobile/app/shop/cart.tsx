@@ -128,7 +128,7 @@ export default function CartScreen() {
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>My Cart</Text>
         </View>
-        <ActivityIndicator color={Colors.brand} style={{ marginTop: 60 }} size="large" />
+        <ActivityIndicator color={colors.accent} style={{ marginTop: 60 }} size="large" />
       </View>
     );
   }
@@ -148,7 +148,7 @@ export default function CartScreen() {
           <Text style={{ fontSize: 72 }}>🛒</Text>
           <Text style={[styles.emptyTitle, { color: colors.text }]}>Your cart is empty</Text>
           <Text style={[styles.emptySub, { color: colors.textMuted }]}>Browse shops and add products to your cart</Text>
-          <TouchableOpacity style={[styles.browseBtn, { backgroundColor: Colors.brand }]} onPress={() => router.back()}>
+          <TouchableOpacity style={[styles.browseBtn, { backgroundColor: colors.accent }]} onPress={() => router.back()}>
             <Text style={styles.browseBtnText}>Start Shopping</Text>
           </TouchableOpacity>
         </View>
@@ -166,7 +166,7 @@ export default function CartScreen() {
                     {shop?.logo_url ? (
                       <Image source={{ uri: shop.logo_url }} style={styles.shopGroupLogo} />
                     ) : (
-                      <View style={[styles.shopGroupLogo, { backgroundColor: Colors.brand + "18", alignItems: "center", justifyContent: "center" }]}>
+                      <View style={[styles.shopGroupLogo, { backgroundColor: colors.accent + "18", alignItems: "center", justifyContent: "center" }]}>
                         <Text>🏪</Text>
                       </View>
                     )}
@@ -182,13 +182,13 @@ export default function CartScreen() {
                         {prod?.images?.[0] ? (
                           <Image source={{ uri: prod.images[0] }} style={styles.cartItemImg} resizeMode="cover" />
                         ) : (
-                          <View style={[styles.cartItemImg, { backgroundColor: Colors.brand + "18", alignItems: "center", justifyContent: "center" }]}>
-                            <Ionicons name="cube-outline" size={24} color={Colors.brand} />
+                          <View style={[styles.cartItemImg, { backgroundColor: colors.accent + "18", alignItems: "center", justifyContent: "center" }]}>
+                            <Ionicons name="cube-outline" size={24} color={colors.accent} />
                           </View>
                         )}
                         <View style={{ flex: 1 }}>
                           <Text style={[styles.cartItemName, { color: colors.text }]} numberOfLines={2}>{prod?.name || "Product"}</Text>
-                          <Text style={[styles.cartItemPrice, { color: Colors.brand }]}>{formatShopAcoin(prod?.price_acoin || 0)}</Text>
+                          <Text style={[styles.cartItemPrice, { color: colors.accent }]}>{formatShopAcoin(prod?.price_acoin || 0)}</Text>
                           <View style={styles.cartItemControls}>
                             <TouchableOpacity
                               style={[styles.qtyBtn, { borderColor: colors.border }]}
@@ -198,7 +198,7 @@ export default function CartScreen() {
                               <Ionicons name={item.quantity === 1 ? "trash-outline" : "remove"} size={14} color={item.quantity === 1 ? "#FF3B30" : colors.text} />
                             </TouchableOpacity>
                             {updatingId === item.product_id
-                              ? <ActivityIndicator size="small" color={Colors.brand} style={{ width: 28 }} />
+                              ? <ActivityIndicator size="small" color={colors.accent} style={{ width: 28 }} />
                               : <Text style={[styles.qtyValue, { color: colors.text }]}>{item.quantity}</Text>
                             }
                             <TouchableOpacity
@@ -249,7 +249,7 @@ export default function CartScreen() {
               </View>
               <View style={[styles.summaryRow, styles.totalSummaryRow]}>
                 <Text style={[styles.totalLabel, { color: colors.text }]}>Total</Text>
-                <Text style={[styles.totalVal, { color: Colors.brand }]}>{formatShopAcoin(total)}</Text>
+                <Text style={[styles.totalVal, { color: colors.accent }]}>{formatShopAcoin(total)}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>AfuPay Balance</Text>
@@ -260,7 +260,7 @@ export default function CartScreen() {
             </View>
 
             <TouchableOpacity
-              style={[styles.checkoutBtn, { backgroundColor: items.length === 0 ? colors.backgroundTertiary : Colors.brand }]}
+              style={[styles.checkoutBtn, { backgroundColor: items.length === 0 ? colors.backgroundTertiary : colors.accent }]}
               onPress={handleCheckout}
               disabled={confirming || items.length === 0}
             >
@@ -275,7 +275,7 @@ export default function CartScreen() {
             </TouchableOpacity>
             {!canAfford && items.length > 0 && (
               <TouchableOpacity onPress={() => router.push("/wallet" as any)} style={styles.topUpLink}>
-                <Text style={[styles.topUpText, { color: Colors.brand }]}>Insufficient balance — Top up wallet</Text>
+                <Text style={[styles.topUpText, { color: colors.accent }]}>Insufficient balance — Top up wallet</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
@@ -284,9 +284,9 @@ export default function CartScreen() {
             >
               <Text style={[styles.topUpText, { color: colors.textMuted, fontSize: 11, textDecorationLine: "none" }]}>
                 By placing an order you agree to our{" "}
-                <Text style={{ color: Colors.brand }}>Marketplace Terms</Text>
+                <Text style={{ color: colors.accent }}>Marketplace Terms</Text>
                 {" "}and{" "}
-                <Text style={{ color: Colors.brand }}
+                <Text style={{ color: colors.accent }}
                   onPress={() => router.push({ pathname: "/terms", params: { section: "acoins" } } as any)}
                 >
                   AfuPay Terms
@@ -305,7 +305,7 @@ export default function CartScreen() {
             <Text style={[styles.successSub, { color: colors.textMuted }]}>
               Your order has been placed and the seller will process it shortly.
             </Text>
-            <TouchableOpacity style={[styles.successBtn, { backgroundColor: Colors.brand }]} onPress={() => { setOrderDone(false); router.back(); }}>
+            <TouchableOpacity style={[styles.successBtn, { backgroundColor: colors.accent }]} onPress={() => { setOrderDone(false); router.back(); }}>
               <Text style={styles.successBtnText}>Continue Shopping</Text>
             </TouchableOpacity>
           </View>

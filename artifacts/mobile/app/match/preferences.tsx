@@ -68,10 +68,10 @@ export default function MatchPreferencesScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Match Preferences</Text>
-        {saving ? <ActivityIndicator size="small" color={Colors.brand} /> : <View style={{ width: 24 }} />}
+        {saving ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={{ width: 24 }} />}
       </View>
 
-      {loading ? <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={Colors.brand} /></View> : (
+      {loading ? <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={colors.accent} /></View> : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
           {/* Discovery toggle */}
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>DISCOVERY</Text>

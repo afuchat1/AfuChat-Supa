@@ -84,7 +84,7 @@ function ContactRow({ item }: { item: Contact }) {
           @{item.handle}
         </Text>
       </View>
-      <Ionicons name="chatbubble-outline" size={18} color={Colors.brand} />
+      <Ionicons name="chatbubble-outline" size={18} color={colors.accent} />
     </TouchableOpacity>
   );
 }
@@ -190,7 +190,7 @@ export default function ContactsScreen() {
       <View
         style={[
           styles.header,
-          { paddingTop: insets.top + 8, backgroundColor: Colors.brand },
+          { paddingTop: insets.top + 8, backgroundColor: colors.accent },
         ]}
       >
         <Text style={styles.headerTitle}>New Message</Text>
@@ -240,10 +240,10 @@ export default function ContactsScreen() {
               autoCapitalize="none"
             />
             <TouchableOpacity onPress={searchUser}>
-              <Ionicons name="search" size={18} color={Colors.brand} />
+              <Ionicons name="search" size={18} color={colors.accent} />
             </TouchableOpacity>
           </View>
-          {addLoading && <ActivityIndicator color={Colors.brand} style={{ marginTop: 12 }} />}
+          {addLoading && <ActivityIndicator color={colors.accent} style={{ marginTop: 12 }} />}
           {addResult && (
             <View style={styles.addResultRow}>
               <Avatar uri={addResult.avatar_url} name={addResult.display_name} size={44} />
@@ -302,7 +302,7 @@ export default function ContactsScreen() {
                     onPress={() => router.push("/phone-contacts")}
                     activeOpacity={0.7}
                   >
-                    <View style={[styles.actionIcon, { backgroundColor: Colors.brand }]}>
+                    <View style={[styles.actionIcon, { backgroundColor: colors.accent }]}>
                       <Ionicons name="call" size={20} color="#fff" />
                     </View>
                     <Text style={[styles.actionLabel, { color: colors.text }]}>Find Contacts on AfuChat</Text>
@@ -318,7 +318,7 @@ export default function ContactsScreen() {
 
             {!loading && filtered.length > 0 && (
               <View style={styles.sectionLabel}>
-                <Text style={[styles.sectionLabelText, { color: Colors.brand }]}>
+                <Text style={[styles.sectionLabelText, { color: colors.accent }]}>
                   {filtered.length} {filtered.length === 1 ? "contact" : "contacts"}
                 </Text>
               </View>
@@ -354,7 +354,7 @@ export default function ContactsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => { setRefreshing(true); loadContacts(); }}
-            tintColor={Colors.brand}
+            tintColor={colors.accent}
           />
         }
         contentContainerStyle={{ paddingBottom: 90 }}

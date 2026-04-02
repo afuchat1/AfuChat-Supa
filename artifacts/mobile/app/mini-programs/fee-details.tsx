@@ -51,8 +51,8 @@ export default function FeeDetailsScreen() {
         {hasTransaction && (
           <>
             <View style={[styles.serviceCard, { backgroundColor: colors.surface }]}>
-              <View style={[styles.serviceIconWrap, { backgroundColor: (FEE_COLOR_MAP[serviceType] || Colors.brand) + "15" }]}>
-                <Ionicons name={FEE_ICON_MAP[serviceType] || "receipt-outline"} size={32} color={FEE_COLOR_MAP[serviceType] || Colors.brand} />
+              <View style={[styles.serviceIconWrap, { backgroundColor: (FEE_COLOR_MAP[serviceType] || colors.accent) + "15" }]}>
+                <Ionicons name={FEE_ICON_MAP[serviceType] || "receipt-outline"} size={32} color={FEE_COLOR_MAP[serviceType] || colors.accent} />
               </View>
               <Text style={[styles.serviceName, { color: colors.text }]}>{SERVICE_LABELS[serviceType]}</Text>
             </View>
@@ -71,7 +71,7 @@ export default function FeeDetailsScreen() {
               <View style={[styles.divider, { backgroundColor: colors.border }]} />
               <View style={styles.row}>
                 <Text style={[styles.totalLabel, { color: colors.text }]}>Total Charged</Text>
-                <Text style={[styles.totalValue, { color: Colors.brand }]}>{total} ACoins</Text>
+                <Text style={[styles.totalValue, { color: colors.accent }]}>{total} ACoins</Text>
               </View>
             </View>
           </>
@@ -79,8 +79,8 @@ export default function FeeDetailsScreen() {
 
         {!hasTransaction && (
           <View style={[styles.heroCard, { backgroundColor: colors.surface }]}>
-            <View style={[styles.heroIcon, { backgroundColor: Colors.brand + "15" }]}>
-              <Ionicons name="receipt-outline" size={36} color={Colors.brand} />
+            <View style={[styles.heroIcon, { backgroundColor: colors.accent + "15" }]}>
+              <Ionicons name="receipt-outline" size={36} color={colors.accent} />
             </View>
             <Text style={[styles.heroTitle, { color: colors.text }]}>Service Fee Schedule</Text>
             <Text style={[styles.heroSub, { color: colors.textSecondary }]}>
@@ -107,10 +107,10 @@ export default function FeeDetailsScreen() {
           ))}
         </View>
 
-        <View style={[styles.infoCard, { backgroundColor: Colors.brand + "08", borderColor: Colors.brand + "20" }]}>
-          <Ionicons name="shield-checkmark" size={20} color={Colors.brand} />
+        <View style={[styles.infoCard, { backgroundColor: colors.accent + "08", borderColor: colors.accent + "20" }]}>
+          <Ionicons name="shield-checkmark" size={20} color={colors.accent} />
           <View style={{ flex: 1 }}>
-            <Text style={[styles.infoTitle, { color: Colors.brand }]}>Secure & Transparent</Text>
+            <Text style={[styles.infoTitle, { color: colors.accent }]}>Secure & Transparent</Text>
             <Text style={[styles.infoText, { color: colors.textSecondary }]}>
               All transactions are securely processed and recorded. Fees cover payment processing and service delivery costs.
             </Text>

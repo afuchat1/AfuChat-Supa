@@ -103,7 +103,7 @@ export default function PayAndServicesScreen() {
       </View>
 
       <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
-        <View style={[styles.topBanner, { backgroundColor: Colors.brand }]}>
+        <View style={[styles.topBanner, { backgroundColor: colors.accent }]}>
           <TouchableOpacity style={styles.topBtn} activeOpacity={0.7} onPress={() => router.push("/mini-programs/transfer" as any)}>
             <View style={styles.topIconWrap}>
               <Ionicons name="swap-horizontal" size={28} color="#fff" />

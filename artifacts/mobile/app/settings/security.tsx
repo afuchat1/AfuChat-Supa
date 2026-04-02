@@ -216,7 +216,7 @@ export default function SecuritySettingsScreen() {
         <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>YOUR DATA</Text>
         <View style={[styles.section, { backgroundColor: colors.surface }]}>
           <TouchableOpacity style={styles.menuItem} onPress={handleDownloadData} disabled={downloading}>
-            <View style={[styles.menuIcon, { backgroundColor: Colors.brand }]}>
+            <View style={[styles.menuIcon, { backgroundColor: colors.accent }]}>
               {downloading ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (

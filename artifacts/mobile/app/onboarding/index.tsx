@@ -572,7 +572,7 @@ export default function OnboardingScreen() {
               <TouchableOpacity
                 style={[
                   styles.genderBtn,
-                  { backgroundColor: gender === "male" ? Colors.brand : colors.inputBg },
+                  { backgroundColor: gender === "male" ? colors.accent : colors.inputBg },
                 ]}
                 onPress={() => { setGender("male"); Haptics.selectionAsync(); }}
               >
@@ -582,7 +582,7 @@ export default function OnboardingScreen() {
               <TouchableOpacity
                 style={[
                   styles.genderBtn,
-                  { backgroundColor: gender === "female" ? Colors.brand : colors.inputBg },
+                  { backgroundColor: gender === "female" ? colors.accent : colors.inputBg },
                 ]}
                 onPress={() => { setGender("female"); Haptics.selectionAsync(); }}
               >
@@ -616,8 +616,8 @@ export default function OnboardingScreen() {
                 style={[
                   styles.interestChip,
                   {
-                    backgroundColor: isSelected ? Colors.brand : colors.inputBg,
-                    borderColor: isSelected ? Colors.brand : colors.border,
+                    backgroundColor: isSelected ? colors.accent : colors.inputBg,
+                    borderColor: isSelected ? colors.accent : colors.border,
                   },
                 ]}
                 onPress={() => toggleInterest(item.id)}
@@ -641,7 +641,7 @@ export default function OnboardingScreen() {
           })}
         </View>
 
-        <Text style={[styles.interestCount, { color: selectedInterests.size >= 3 ? Colors.brand : colors.textMuted }]}>
+        <Text style={[styles.interestCount, { color: selectedInterests.size >= 3 ? colors.accent : colors.textMuted }]}>
           {selectedInterests.size} of 3 minimum selected
         </Text>
       </View>
@@ -670,12 +670,12 @@ export default function OnboardingScreen() {
                 </View>
               )}
               <View style={styles.avatarBadge}>
-                <Ionicons name="add-circle" size={28} color={Colors.brand} />
+                <Ionicons name="add-circle" size={28} color={colors.accent} />
               </View>
             </View>
           </TouchableOpacity>
           <TouchableOpacity onPress={pickAvatar}>
-            <Text style={[styles.photoActionText, { color: Colors.brand }]}>
+            <Text style={[styles.photoActionText, { color: colors.accent }]}>
               {avatarUri ? "Change Photo" : "Choose from Gallery"}
             </Text>
           </TouchableOpacity>
@@ -755,7 +755,7 @@ export default function OnboardingScreen() {
                 <Text style={[styles.countryItemName, { color: colors.text }]}>{item.name}</Text>
                 <Text style={[styles.countryItemDial, { color: colors.textMuted }]}>{item.dial}</Text>
                 {selectedCountry?.code === item.code && (
-                  <Ionicons name="checkmark-circle" size={20} color={Colors.brand} style={{ marginLeft: 8 }} />
+                  <Ionicons name="checkmark-circle" size={20} color={colors.accent} style={{ marginLeft: 8 }} />
                 )}
               </TouchableOpacity>
             )}
@@ -816,7 +816,7 @@ export default function OnboardingScreen() {
                   }}
                 >
                   <Text style={[styles.pickerItemText, { color: colors.text }]}>{item.label}</Text>
-                  {selected && <Ionicons name="checkmark-circle" size={20} color={Colors.brand} />}
+                  {selected && <Ionicons name="checkmark-circle" size={20} color={colors.accent} />}
                 </TouchableOpacity>
               );
             }}

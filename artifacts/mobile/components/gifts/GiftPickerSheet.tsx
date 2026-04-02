@@ -342,7 +342,7 @@ export default function GiftPickerSheet({
             >
               {rarities.map((r) => {
                 const active = filter === r;
-                const rColor = r === "all" ? Colors.brand : (RARITY_COLORS[r] ?? Colors.brand);
+                const rColor = r === "all" ? colors.accent : (RARITY_COLORS[r] ?? colors.accent);
                 return (
                   <TouchableOpacity
                     key={r}
@@ -365,7 +365,7 @@ export default function GiftPickerSheet({
 
             {loading ? (
               <View style={styles.loadingWrap}>
-                <ActivityIndicator color={Colors.brand} size="large" />
+                <ActivityIndicator color={colors.accent} size="large" />
                 <Text style={[styles.loadingText, { color: colors.textMuted }]}>Loading gifts…</Text>
               </View>
             ) : filtered.length === 0 ? (

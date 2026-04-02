@@ -106,7 +106,7 @@ export default function MemoryMatchScreen() {
           <Text style={styles.resultStars}>{"⭐".repeat(stars)}</Text>
           <Text style={[styles.resultTitle, { color: colors.text }]}>Complete!</Text>
           <Text style={[styles.resultStat, { color: colors.textSecondary }]}>{moves} moves in {formatTime(timer)}</Text>
-          <TouchableOpacity style={[styles.restartBtn, { backgroundColor: Colors.brand }]} onPress={restart}>
+          <TouchableOpacity style={[styles.restartBtn, { backgroundColor: colors.accent }]} onPress={restart}>
             <Ionicons name="refresh" size={18} color="#fff" />
             <Text style={styles.restartText}>Play Again</Text>
           </TouchableOpacity>
@@ -125,15 +125,15 @@ export default function MemoryMatchScreen() {
 
       <View style={styles.statsRow}>
         <View style={[styles.statChip, { backgroundColor: colors.surface }]}>
-          <Ionicons name="swap-horizontal" size={16} color={Colors.brand} />
+          <Ionicons name="swap-horizontal" size={16} color={colors.accent} />
           <Text style={[styles.statVal, { color: colors.text }]}>{moves}</Text>
         </View>
         <View style={[styles.statChip, { backgroundColor: colors.surface }]}>
-          <Ionicons name="time-outline" size={16} color={Colors.brand} />
+          <Ionicons name="time-outline" size={16} color={colors.accent} />
           <Text style={[styles.statVal, { color: colors.text }]}>{formatTime(timer)}</Text>
         </View>
         <View style={[styles.statChip, { backgroundColor: colors.surface }]}>
-          <Ionicons name="checkmark-circle" size={16} color={Colors.brand} />
+          <Ionicons name="checkmark-circle" size={16} color={colors.accent} />
           <Text style={[styles.statVal, { color: colors.text }]}>{matches}/{EMOJIS.length}</Text>
         </View>
       </View>
@@ -144,7 +144,7 @@ export default function MemoryMatchScreen() {
             key={card.id}
             style={[
               styles.card,
-              { backgroundColor: card.matched ? Colors.brand + "20" : card.flipped ? colors.surface : Colors.brand },
+              { backgroundColor: card.matched ? colors.accent + "20" : card.flipped ? colors.surface : colors.accent },
             ]}
             onPress={() => handleFlip(card.id)}
             activeOpacity={0.7}

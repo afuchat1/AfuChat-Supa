@@ -139,7 +139,7 @@ function PinKeypad({
               if (!k) return <View key={ki} style={pkStyles.keyBtn} />;
               if (k === "del") return (
                 <TouchableOpacity key="del" style={pkStyles.keyBtn} onPress={backspace}>
-                  <Ionicons name="backspace-outline" size={22} color={Colors.brand} />
+                  <Ionicons name="backspace-outline" size={22} color={colors.accent} />
                 </TouchableOpacity>
               );
               return (
@@ -422,15 +422,15 @@ export default function DeviceSecurityScreen() {
         {(["devices", "security"] as const).map((t) => (
           <TouchableOpacity
             key={t}
-            style={[styles.tab, activeTab === t && { borderBottomColor: Colors.brand, borderBottomWidth: 2 }]}
+            style={[styles.tab, activeTab === t && { borderBottomColor: colors.accent, borderBottomWidth: 2 }]}
             onPress={() => setActiveTab(t)}
           >
             <Ionicons
               name={t === "devices" ? "phone-portrait-outline" : "shield-checkmark-outline"}
               size={16}
-              color={activeTab === t ? Colors.brand : colors.textMuted}
+              color={activeTab === t ? colors.accent : colors.textMuted}
             />
-            <Text style={[styles.tabText, { color: activeTab === t ? Colors.brand : colors.textMuted }]}>
+            <Text style={[styles.tabText, { color: activeTab === t ? colors.accent : colors.textMuted }]}>
               {t === "devices" ? "Devices" : "Security"}
             </Text>
             {t === "devices" && otherDeviceCount > 0 && (
@@ -444,7 +444,7 @@ export default function DeviceSecurityScreen() {
 
       {activeTab === "devices" ? (
         loading ? (
-          <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} />
+          <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
         ) : (
           <FlatList
             data={sessions}
@@ -461,24 +461,24 @@ export default function DeviceSecurityScreen() {
             renderItem={({ item }) => (
               <View style={[styles.deviceCard, {
                 backgroundColor: colors.surface,
-                borderColor: item.is_current ? Colors.brand + "55" : colors.border,
+                borderColor: item.is_current ? colors.accent + "55" : colors.border,
               }]}>
                 <View style={[styles.platformIconWrap, {
-                  backgroundColor: item.is_current ? Colors.brand + "18" : colors.backgroundTertiary,
+                  backgroundColor: item.is_current ? colors.accent + "18" : colors.backgroundTertiary,
                 }]}>
                   <Ionicons
                     name={(PLATFORM_ICON[item.platform] || PLATFORM_ICON.default) as any}
                     size={24}
-                    color={item.is_current ? Colors.brand : colors.textMuted}
+                    color={item.is_current ? colors.accent : colors.textMuted}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
                   <View style={styles.deviceNameRow}>
                     <Text style={[styles.deviceName, { color: colors.text }]}>{item.device_name}</Text>
                     {item.is_current && (
-                      <View style={[styles.currentBadge, { backgroundColor: Colors.brand + "20" }]}>
-                        <Ionicons name="checkmark-circle" size={11} color={Colors.brand} />
-                        <Text style={[styles.currentBadgeText, { color: Colors.brand }]}>This device</Text>
+                      <View style={[styles.currentBadge, { backgroundColor: colors.accent + "20" }]}>
+                        <Ionicons name="checkmark-circle" size={11} color={colors.accent} />
+                        <Text style={[styles.currentBadgeText, { color: colors.accent }]}>This device</Text>
                       </View>
                     )}
                   </View>
@@ -557,7 +557,7 @@ export default function DeviceSecurityScreen() {
           <View style={[styles.prefCard, { backgroundColor: colors.surface }]}>
             <PrefRow
               icon="notifications-outline"
-              iconColor={Colors.brand}
+              iconColor={colors.accent}
               label="Login Alerts"
               desc="Get a push notification when a new device signs in to your account"
               value={prefs.login_alerts}
@@ -621,12 +621,12 @@ function PrefRow({
         {desc && <Text style={[styles.prefDesc, { color: colors.textMuted }]}>{desc}</Text>}
       </View>
       {loading
-        ? <ActivityIndicator size="small" color={Colors.brand} />
+        ? <ActivityIndicator size="small" color={colors.accent} />
         : <Switch
             value={value}
             onValueChange={onToggle}
             disabled={disabled}
-            trackColor={{ true: Colors.brand, false: colors.backgroundTertiary }}
+            trackColor={{ true: colors.accent, false: colors.backgroundTertiary }}
             thumbColor="#fff"
           />}
     </View>

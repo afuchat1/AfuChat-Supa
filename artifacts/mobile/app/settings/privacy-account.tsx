@@ -52,12 +52,12 @@ function ToggleRow({
         <Text style={[styles.rowDesc, { color: colors.textMuted }]}>{description}</Text>
       </View>
       {saving ? (
-        <ActivityIndicator size="small" color={Colors.brand} />
+        <ActivityIndicator size="small" color={colors.accent} />
       ) : (
         <Switch
           value={value}
           onValueChange={onToggle}
-          trackColor={{ true: Colors.brand, false: colors.border }}
+          trackColor={{ true: colors.accent, false: colors.border }}
         />
       )}
     </View>
@@ -126,7 +126,7 @@ export default function PrivacyAccountScreen() {
 
       {loading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator color={Colors.brand} />
+          <ActivityIndicator color={colors.accent} />
         </View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>

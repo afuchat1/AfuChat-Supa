@@ -193,14 +193,14 @@ export default function PrestigeScreen() {
         </TouchableOpacity>
         <Text style={[s.headerTitle, { color: colors.text }]}>Prestige Status</Text>
         <TouchableOpacity onPress={() => router.push("/wallet")} hitSlop={12}>
-          <Ionicons name="wallet-outline" size={22} color={Colors.brand} />
+          <Ionicons name="wallet-outline" size={22} color={colors.accent} />
         </TouchableOpacity>
       </View>
 
       <FlatList
         data={[1]}
         keyExtractor={() => "main"}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={Colors.brand} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={colors.accent} />}
         renderItem={() => (
           <View style={{ paddingBottom: insets.bottom + 40 }}>
 
@@ -284,7 +284,7 @@ export default function PrestigeScreen() {
 
             <View style={s.sectionTabs}>
               {(["status", "history", "rich"] as const).map((tab) => (
-                <TouchableOpacity key={tab} style={[s.sTab, activeSection === tab && { backgroundColor: Colors.brand }]} onPress={() => setActiveSection(tab)}>
+                <TouchableOpacity key={tab} style={[s.sTab, activeSection === tab && { backgroundColor: colors.accent }]} onPress={() => setActiveSection(tab)}>
                   <Text style={[s.sTabText, activeSection === tab && { color: "#fff" }]}>
                     {tab === "status" ? "Status Goods" : tab === "history" ? "Transactions" : "Rich List"}
                   </Text>
@@ -300,7 +300,7 @@ export default function PrestigeScreen() {
                     {purchases.map((p) => {
                       const good = STATUS_GOODS.find((g) => g.id === p.good_id);
                       return (
-                        <View key={p.id} style={[s.ownedCard, { backgroundColor: colors.surface, borderColor: p.equipped ? Colors.brand + "55" : colors.border }]}>
+                        <View key={p.id} style={[s.ownedCard, { backgroundColor: colors.surface, borderColor: p.equipped ? colors.accent + "55" : colors.border }]}>
                           <Text style={s.goodEmoji}>{p.good_emoji}</Text>
                           <View style={{ flex: 1 }}>
                             <Text style={[s.goodName, { color: colors.text }]}>{p.good_name}</Text>
@@ -309,7 +309,7 @@ export default function PrestigeScreen() {
                             </Text>
                           </View>
                           <TouchableOpacity
-                            style={[s.equipBtn, { backgroundColor: p.equipped ? Colors.brand : colors.backgroundTertiary }]}
+                            style={[s.equipBtn, { backgroundColor: p.equipped ? colors.accent : colors.backgroundTertiary }]}
                             onPress={() => toggleEquip(p)}
                           >
                             <Text style={[s.equipBtnText, { color: p.equipped ? "#fff" : colors.textSecondary }]}>
@@ -354,7 +354,7 @@ export default function PrestigeScreen() {
                       </View>
                       {tierUnlocked && !owned && (
                         <TouchableOpacity
-                          style={[s.goodBtn, { backgroundColor: canAfford ? Colors.brand : colors.backgroundTertiary }]}
+                          style={[s.goodBtn, { backgroundColor: canAfford ? colors.accent : colors.backgroundTertiary }]}
                           onPress={() => purchaseGood(item)}
                           disabled={purchasing === item.id}
                         >
@@ -413,7 +413,7 @@ export default function PrestigeScreen() {
             {activeSection === "rich" && (
               <View style={{ paddingHorizontal: 16 }}>
                 {loadingList ? (
-                  <ActivityIndicator color={Colors.brand} style={{ marginVertical: 20 }} />
+                  <ActivityIndicator color={colors.accent} style={{ marginVertical: 20 }} />
                 ) : (
                   <View style={[s.richListCard, { backgroundColor: colors.surface }]}>
                     {richList.map((u, idx) => {
@@ -430,7 +430,7 @@ export default function PrestigeScreen() {
                           </Text>
                           <Text style={{ fontSize: 18 }}>{uTier.emoji}</Text>
                           <View style={{ flex: 1 }}>
-                            <Text style={[s.richName, { color: isMe ? Colors.brand : colors.text }]}>
+                            <Text style={[s.richName, { color: isMe ? colors.accent : colors.text }]}>
                               {u.display_name} {isMe ? "(You)" : ""}
                             </Text>
                             <Text style={[s.richHandle, { color: colors.textMuted }]}>@{u.handle}</Text>

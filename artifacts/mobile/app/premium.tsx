@@ -324,7 +324,7 @@ export default function PremiumScreen() {
           <Text style={[styles.headerTitle, { color: colors.text }]}>Premium</Text>
           <View style={{ width: 24 }} />
         </View>
-        <ActivityIndicator color={Colors.brand} style={{ flex: 1 }} />
+        <ActivityIndicator color={colors.accent} style={{ flex: 1 }} />
       </View>
     );
   }
@@ -342,8 +342,8 @@ export default function PremiumScreen() {
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
         {/* Hero */}
         <View style={styles.hero}>
-          <View style={[styles.heroBadge, { backgroundColor: Colors.brand + "18" }]}>
-            <Image source={afuSymbol} style={{ width: 36, height: 36, tintColor: Colors.brand }} resizeMode="contain" />
+          <View style={[styles.heroBadge, { backgroundColor: colors.accent + "18" }]}>
+            <Image source={afuSymbol} style={{ width: 36, height: 36, tintColor: colors.accent }} resizeMode="contain" />
           </View>
           <Text style={[styles.heroTitle, { color: colors.text }]}>AfuChat Premium</Text>
           <Text style={[styles.heroSub, { color: colors.textMuted }]}>
@@ -353,19 +353,19 @@ export default function PremiumScreen() {
 
         {/* Active subscription card */}
         {isPremium && subscription && (
-          <View style={[styles.activeCard, { backgroundColor: colors.surface, borderColor: TIER_CONFIG[subscription.plan_tier]?.color ?? Colors.brand }]}>
-            <View style={[styles.activeCardTop, { backgroundColor: (TIER_CONFIG[subscription.plan_tier]?.color ?? Colors.brand) + "18" }]}>
+          <View style={[styles.activeCard, { backgroundColor: colors.surface, borderColor: TIER_CONFIG[subscription.plan_tier]?.color ?? colors.accent }]}>
+            <View style={[styles.activeCardTop, { backgroundColor: (TIER_CONFIG[subscription.plan_tier]?.color ?? colors.accent) + "18" }]}>
               <Text style={styles.activePlanEmoji}>{TIER_CONFIG[subscription.plan_tier]?.icon ?? "💎"}</Text>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.activePlanName, { color: TIER_CONFIG[subscription.plan_tier]?.color ?? Colors.brand }]}>
+                <Text style={[styles.activePlanName, { color: TIER_CONFIG[subscription.plan_tier]?.color ?? colors.accent }]}>
                   {subscription.plan_name}
                 </Text>
                 <Text style={[styles.activePlanSub, { color: colors.textSecondary }]}>
                   Active plan
                 </Text>
               </View>
-              <View style={[styles.daysChip, { backgroundColor: (TIER_CONFIG[subscription.plan_tier]?.color ?? Colors.brand) + "22" }]}>
-                <Text style={[styles.daysChipText, { color: TIER_CONFIG[subscription.plan_tier]?.color ?? Colors.brand }]}>
+              <View style={[styles.daysChip, { backgroundColor: (TIER_CONFIG[subscription.plan_tier]?.color ?? colors.accent) + "22" }]}>
+                <Text style={[styles.daysChipText, { color: TIER_CONFIG[subscription.plan_tier]?.color ?? colors.accent }]}>
                   {daysLeft}d left
                 </Text>
               </View>
@@ -387,7 +387,7 @@ export default function PremiumScreen() {
         <Text style={[styles.sectionLabel, { color: colors.text }]}>Choose a Plan</Text>
         {plans.map((plan) => {
           const cfg = TIER_CONFIG[plan.tier];
-          const tierColor = cfg?.color ?? Colors.brand;
+          const tierColor = cfg?.color ?? colors.accent;
           const isSelected = selectedPlanId === plan.id;
           const isCurrentPlan = isPremium && subscription?.plan_id === plan.id;
           const isExpanded = expandedTier === plan.tier;
@@ -518,7 +518,7 @@ export default function PremiumScreen() {
             <TouchableOpacity
               style={[
                 styles.subscribeBtn,
-                { backgroundColor: TIER_CONFIG[selectedPlan.tier]?.color ?? Colors.brand },
+                { backgroundColor: TIER_CONFIG[selectedPlan.tier]?.color ?? colors.accent },
                 (subscribing || cancelling) && { opacity: 0.6 },
               ]}
               onPress={handleSubscribe}
@@ -545,7 +545,7 @@ export default function PremiumScreen() {
 
         {/* Wallet shortcut */}
         <TouchableOpacity style={[styles.walletRow, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => router.push("/wallet")}>
-          <Ionicons name="wallet-outline" size={18} color={Colors.brand} />
+          <Ionicons name="wallet-outline" size={18} color={colors.accent} />
           <Text style={[styles.walletText, { color: colors.text }]}>Manage ACoin in Wallet</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>

@@ -126,21 +126,21 @@ export default function BillsScreen() {
                   params: { service: "bill_payment", amount: fee.subtotal.toString(), fee: fee.feeAmount.toString(), total: fee.total.toString() },
                 })}
               >
-                <Text style={[styles.feeLinkText, { color: Colors.brand }]}>Fee ({fee.feePercent}%)</Text>
-                <Ionicons name="information-circle-outline" size={14} color={Colors.brand} />
+                <Text style={[styles.feeLinkText, { color: colors.accent }]}>Fee ({fee.feePercent}%)</Text>
+                <Ionicons name="information-circle-outline" size={14} color={colors.accent} />
               </TouchableOpacity>
               <Text style={[styles.feeValue, { color: "#FF9800" }]}>+{fee.feeAmount} ACoins</Text>
             </View>
             <View style={[styles.feeDivider, { backgroundColor: colors.border }]} />
             <View style={styles.feeRow}>
               <Text style={[styles.feeTotalLabel, { color: colors.text }]}>Total</Text>
-              <Text style={[styles.feeTotalValue, { color: Colors.brand }]}>{fee.total} ACoins</Text>
+              <Text style={[styles.feeTotalValue, { color: colors.accent }]}>{fee.total} ACoins</Text>
             </View>
           </View>
         )}
 
         <TouchableOpacity
-          style={[styles.payBtn, { backgroundColor: Colors.brand, opacity: (!billType || !accountNumber || numAmount <= 0 || loading) ? 0.5 : 1 }]}
+          style={[styles.payBtn, { backgroundColor: colors.accent, opacity: (!billType || !accountNumber || numAmount <= 0 || loading) ? 0.5 : 1 }]}
           onPress={handlePay}
           disabled={!billType || !accountNumber || numAmount <= 0 || loading}
         >
