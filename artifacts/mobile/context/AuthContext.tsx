@@ -7,6 +7,7 @@ import { cacheProfile, getCachedProfile, isOnline, onConnectivityChange } from "
 import { startOfflineSync } from "@/lib/offlineSync";
 import { clearPushToken } from "@/lib/pushNotifications";
 import { registerDeviceSession } from "@/lib/deviceSession";
+import { ensureAfuAiChat } from "@/lib/afuAiBot";
 
 type Profile = {
   id: string;
@@ -254,6 +255,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session?.user) {
         fetchProfile(session.user.id).finally(() => setLoading(false));
         startOfflineSync();
+        supabase.from("profiles").select("display_name").eq("id", session.user.id).single().then(({ data }) => {
+          ensureAfuAiChat(session.user.id, data?.display_name).catch(() => {});
+        });
       } else {
         getCachedProfile().then((cached) => {
           if (cached) setProfile(cached as Profile);
@@ -273,6 +277,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Register device on first sign-in to detect new devices
           if (event === "SIGNED_IN") {
             registerDeviceSession(session.user.id).catch(() => {});
+            fetchProfile(session.user.id).then(() => {
+              supabase.from("profiles").select("display_name").eq("id", session.user.id).single().then(({ data }) => {
+                ensureAfuAiChat(session.user.id, data?.display_name).catch(() => {});
+              });
+            }).catch(() => {});
           }
         } else {
           setProfile(null);

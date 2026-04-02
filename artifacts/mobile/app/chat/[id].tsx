@@ -56,6 +56,7 @@ import { translateText, LANG_LABELS } from "@/lib/translate";
 import { useLanguage } from "@/context/LanguageContext";
 import { useChatPreferences, CHAT_THEME_COLORS, BUBBLE_RADIUS } from "@/context/ChatPreferencesContext";
 import { askAi, aiSuggestReply, transcribeAudio } from "@/lib/aiHelper";
+import { AFUAI_BOT_ID, getAfuAiReply } from "@/lib/afuAiBot";
 import { EmojiKeyboard } from "rn-emoji-keyboard";
 import GiftPickerSheet, { DbGift } from "@/components/gifts/GiftPickerSheet";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -1089,6 +1090,7 @@ export default function ChatScreen() {
         status: m.sender_id === user.id
           ? (readSet.has(m.id) ? "read" : deliveredSet.has(m.id) ? "delivered" : "sent")
           : undefined,
+        _isAi: m.sender_id === AFUAI_BOT_ID || undefined,
       }));
 
       setMessages(mapped);
@@ -1146,7 +1148,7 @@ export default function ChatScreen() {
   const checkMessageGating = useCallback(async () => {
     if (!user) return;
     const info = chatInfo;
-    if (!info || info.is_group || info.is_channel || !info.other_id) {
+    if (!info || info.is_group || info.is_channel || !info.other_id || info.other_id === AFUAI_BOT_ID) {
       setMessageLimited(false);
       return;
     }
@@ -1210,7 +1212,7 @@ export default function ChatScreen() {
           const newMsg = payload.new as any;
           if (newMsg.sender_id === user?.id) return;
           const { data: senderProfile } = await supabase.from("profiles").select("display_name, avatar_url, handle").eq("id", newMsg.sender_id).single();
-          setMessages((prev) => [{ ...newMsg, sender: senderProfile as any, reactions: [], status: undefined }, ...prev]);
+          setMessages((prev) => [{ ...newMsg, sender: senderProfile as any, reactions: [], status: undefined, _isAi: newMsg.sender_id === AFUAI_BOT_ID || undefined }, ...prev]);
           playNotificationSound();
           if (showScrollBtnRef.current) {
             setNewMsgCount((c) => c + 1);
@@ -1346,24 +1348,16 @@ export default function ChatScreen() {
   async function handleAfuAiResponse(userText: string, currentMessages: Message[]) {
     setIsAfuAiTyping(true);
     try {
-      const history = currentMessages
+      const recent = currentMessages
         .slice(0, 12)
         .reverse()
-        .map((m) => {
-          const isMe = m.sender_id === user?.id;
-          const name = isMe ? (profile?.display_name || "User") : (m.sender?.display_name || "User");
-          return `${name}: ${m.encrypted_content}`;
-        })
-        .join("\n");
+        .map((m) => ({
+          sender: m.sender_id === user?.id ? (profile?.display_name || "User") : (m.sender?.display_name || "AfuAI"),
+          content: m.encrypted_content,
+        }));
 
       const prompt = userText.replace(/@afuai/gi, "").trim() || userText;
-      const contextBlock = history ? `Recent conversation:\n${history}\n\n` : "";
-
-      const reply = await askAi(
-        `${contextBlock}User: ${prompt}`,
-        `You are AfuAI, a friendly and capable AI assistant built into AfuChat — a social super app from Uganda. Help the user with anything they ask: questions, writing, analysis, coding, creative tasks, advice, translations, and more. Respond in the same language the user writes in. Keep replies conversational and concise for a chat context — be thorough when depth is needed. Never mention that you are an AI language model built by another company; you are AfuAI.`,
-        { fast: false, maxTokens: 600 }
-      );
+      const reply = await getAfuAiReply(prompt, recent, profile?.display_name);
 
       const aiMessage: Message = {
         id: `afuai_${Date.now()}`,
@@ -1579,7 +1573,7 @@ export default function ChatScreen() {
           const newMsg = payload.new as any;
           if (newMsg.sender_id === user.id) return;
           const { data: senderProfile } = await supabase.from("profiles").select("display_name, avatar_url, handle").eq("id", newMsg.sender_id).single();
-          setMessages((prev) => [{ ...newMsg, sender: senderProfile as any, reactions: [], status: undefined }, ...prev]);
+          setMessages((prev) => [{ ...newMsg, sender: senderProfile as any, reactions: [], status: undefined, _isAi: newMsg.sender_id === AFUAI_BOT_ID || undefined }, ...prev]);
         }
       )
       .subscribe();
@@ -1664,7 +1658,8 @@ export default function ChatScreen() {
     try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("message_sent"); } catch (_) {}
     setSending(false);
 
-    if (/@afuai/i.test(text)) {
+    const isAfuAiDirectChat = chatInfo?.other_id === AFUAI_BOT_ID;
+    if (isAfuAiDirectChat || /@afuai/i.test(text)) {
       const snapshot = messages;
       handleAfuAiResponse(text, snapshot);
     }
