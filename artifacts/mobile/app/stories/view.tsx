@@ -183,14 +183,15 @@ export default function ViewStoryScreen() {
 
   const dims = mediaDims[story.id];
   const isVideo = story.media_type === "video";
-  const availW = screenW;
-  const availH = screenH - insets.top - insets.bottom;
+  const PADDING = 24;
+  const availW = screenW - PADDING * 2;
+  const availH = screenH - insets.top - insets.bottom - 100;
 
   let mediaW = availW;
   let mediaH = availH;
-  let mediaRadius = 0;
+  let mediaRadius = 16;
 
-  if (!isVideo && dims && dims.w > 0 && dims.h > 0 && isFinite(dims.w) && isFinite(dims.h)) {
+  if (dims && dims.w > 0 && dims.h > 0 && isFinite(dims.w) && isFinite(dims.h)) {
     const imgAspect = dims.w / dims.h;
 
     mediaW = dims.w;
@@ -206,16 +207,14 @@ export default function ViewStoryScreen() {
     }
 
     const MIN_SIZE = 200;
-    if (mediaW < MIN_SIZE && dims.w < availW) {
+    if (mediaW < MIN_SIZE) {
       mediaW = Math.min(MIN_SIZE, availW);
       mediaH = mediaW / imgAspect;
     }
-    if (mediaH < MIN_SIZE && dims.h < availH) {
+    if (mediaH < MIN_SIZE) {
       mediaH = Math.min(MIN_SIZE, availH);
       mediaW = mediaH * imgAspect;
     }
-
-    mediaRadius = mediaW < availW || mediaH < availH ? 16 : 0;
   }
 
   return (
@@ -224,11 +223,21 @@ export default function ViewStoryScreen() {
         {isVideo ? (
           <Video
             source={{ uri: story.media_url }}
-            style={styles.media}
+            style={{
+              width: mediaW,
+              height: mediaH,
+              borderRadius: mediaRadius,
+            }}
             resizeMode={ResizeMode.CONTAIN}
             shouldPlay={!paused}
             isLooping={false}
             isMuted={false}
+            onReadyForDisplay={(event: any) => {
+              const ns = event?.naturalSize;
+              if (ns?.width && ns?.height && !mediaDims[story.id]) {
+                setMediaDims((prev) => ({ ...prev, [story.id]: { w: ns.width, h: ns.height } }));
+              }
+            }}
             onPlaybackStatusUpdate={(status: any) => {
               if (status.isLoaded && status.durationMillis) {
                 progressAnim.setValue(status.positionMillis / status.durationMillis);
