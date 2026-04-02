@@ -239,16 +239,28 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
             </TouchableOpacity>
           </View>
 
-          {/* ── VIDEO: fullscreen preview card ── */}
+          {/* ── VIDEO: thumbnail preview card ── */}
           {item.post_type === "video" && item.video_url && (
             Platform.OS === "web" ? (
               <View style={styles.videoCard}>
                 <View style={styles.videoThumb}>
-                  <View style={{ alignItems: "center", gap: 8 }}>
-                    <Ionicons name="phone-portrait-outline" size={28} color="rgba(255,255,255,0.7)" />
-                    <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, fontFamily: "Inter_600SemiBold", textAlign: "center" }}>
-                      Videos are only available in the app
-                    </Text>
+                  {/* @ts-ignore: HTML video element for web thumbnail extraction */}
+                  <video
+                    src={item.video_url}
+                    preload="metadata"
+                    muted
+                    playsInline
+                    style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" } as any}
+                  />
+                  <View style={StyleSheet.absoluteFill}>
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                      <View style={styles.playCircle}>
+                        <Ionicons name="play" size={22} color="#fff" />
+                      </View>
+                    </View>
+                    <View style={{ position: "absolute", top: 8, right: 10, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                      <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 10, fontFamily: "Inter_600SemiBold" }}>App only</Text>
+                    </View>
                   </View>
                   <View style={styles.videoBadge}>
                     <Ionicons name="videocam" size={11} color="#fff" />
@@ -263,6 +275,11 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
                 style={styles.videoCard}
               >
                 <View style={styles.videoThumb}>
+                  <Image
+                    source={{ uri: item.image_url || item.video_url }}
+                    style={StyleSheet.absoluteFill}
+                    resizeMode="cover"
+                  />
                   <View style={styles.playCircle}>
                     <Ionicons name="play" size={22} color="#fff" />
                   </View>
@@ -1028,7 +1045,7 @@ export default function DiscoverScreen() {
             {[
               { icon: "create-outline", label: "Post", desc: "Share a thought, photo, or link", route: "/moments/create", color: Colors.brand },
               { icon: "document-text-outline", label: "Article", desc: "Write a long-form article", route: "/moments/create-article", color: "#007AFF" },
-              { icon: "videocam-outline", label: "Video", desc: "Share a short video clip", route: "/moments/create-video", color: "#FF3B30" },
+              ...(Platform.OS !== "web" ? [{ icon: "videocam-outline", label: "Video", desc: "Share a short video clip", route: "/moments/create-video", color: "#FF3B30" }] : []),
             ].map((opt) => (
               <TouchableOpacity
                 key={opt.label}
@@ -1117,6 +1134,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#0a0a0a",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
   playCircle: {
     width: 60,

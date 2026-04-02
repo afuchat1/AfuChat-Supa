@@ -38,6 +38,18 @@ export default function CreateVideoScreen() {
   const [uploadProgress, setUploadProgress] = useState("");
   const videoRef = useRef<Video>(null);
 
+  if (Platform.OS === "web") {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }]}>
+        <Ionicons name="phone-portrait-outline" size={48} color={colors.textMuted} />
+        <Text style={{ color: colors.text, fontSize: 18, fontFamily: "Inter_600SemiBold", marginTop: 16 }}>Video posting is only available in the app</Text>
+        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 20, backgroundColor: Colors.brand, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20 }}>
+          <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   async function pickVideo() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Videos,
