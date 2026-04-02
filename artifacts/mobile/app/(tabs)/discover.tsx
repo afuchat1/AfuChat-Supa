@@ -444,6 +444,9 @@ export default function DiscoverScreen() {
   const learnedWeightsRef = useRef<Record<string, number>>({});
   const postsRef = useRef<PostItem[]>([]);
   const feedTabRef = useRef<"for_you" | "following">("for_you");
+  const flatListRef = useRef<FlatList>(null);
+  const [newPostAuthors, setNewPostAuthors] = useState<{ id: string; avatar_url: string | null; display_name: string }[]>([]);
+  const newPostAuthorIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => { postsRef.current = posts; }, [posts]);
   useEffect(() => { feedTabRef.current = feedTab; }, [feedTab]);
@@ -754,6 +757,8 @@ export default function DiscoverScreen() {
     setPosts([]);
     setHasMore(true);
     setFollowingEmpty(false);
+    setNewPostAuthors([]);
+    newPostAuthorIdsRef.current.clear();
 
     if (cached.length > 0 && cacheAge < STALE_MS) {
       setPosts(cached);
@@ -813,33 +818,78 @@ export default function DiscoverScreen() {
   useEffect(() => {
     const channel = supabase
       .channel("discover-posts-realtime")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" }, () => {
-        const hasPosts = postsRef.current.length > 0;
-        loadPostsRef.current(feedTabRef.current, hasPosts);
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" }, (payload: any) => {
+        const newPost = payload.new;
+        if (!newPost) return;
+        const authorId = newPost.author_id;
+        if (!authorId || authorId === user?.id) return;
+        if (newPostAuthorIdsRef.current.has(authorId)) return;
+        newPostAuthorIdsRef.current.add(authorId);
+        supabase.from("profiles").select("display_name, avatar_url").eq("id", authorId).single()
+          .then(({ data: prof }) => {
+            setNewPostAuthors((prev) => {
+              if (prev.length >= 5) return prev;
+              return [...prev, { id: authorId, avatar_url: prof?.avatar_url || null, display_name: prof?.display_name || "User" }];
+            });
+          });
       })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "posts" }, () => {
-        const hasPosts = postsRef.current.length > 0;
-        loadPostsRef.current(feedTabRef.current, hasPosts);
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "posts" }, (payload: any) => {
+        const deletedId = payload.old?.id;
+        if (deletedId) {
+          setPosts((prev) => prev.filter((p) => p.id !== deletedId));
+        }
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "post_acknowledgments" }, (payload: any) => {
         const postId = payload.new?.post_id || payload.old?.post_id;
         if (!postId) return;
-        supabase.from("post_acknowledgments").select("id", { count: "exact", head: true }).eq("post_id", postId)
-          .then(({ count }) => {
-            setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, likeCount: count || 0 } : p));
-          });
+        const evType = payload.eventType;
+        if (evType !== "INSERT" && evType !== "DELETE") return;
+        const isOwnAction = (evType === "INSERT" && payload.new?.user_id === user?.id) || (evType === "DELETE" && payload.old?.user_id === user?.id);
+        if (isOwnAction) return;
+        const delta = evType === "INSERT" ? 1 : -1;
+        setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, likeCount: Math.max(0, p.likeCount + delta) } : p));
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "post_replies" }, (payload: any) => {
         const postId = payload.new?.post_id || payload.old?.post_id;
         if (!postId) return;
-        supabase.from("post_replies").select("id", { count: "exact", head: true }).eq("post_id", postId)
-          .then(({ count }) => {
-            setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, replyCount: count || 0 } : p));
-          });
+        const evType = payload.eventType;
+        const delta = evType === "INSERT" ? 1 : evType === "DELETE" ? -1 : 0;
+        if (delta !== 0) {
+          setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, replyCount: Math.max(0, p.replyCount + delta) } : p));
+        }
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "post_views" }, (payload: any) => {
+        const postId = payload.new?.post_id;
+        if (!postId || payload.new?.viewer_id === user?.id) return;
+        setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, view_count: p.view_count + 1 } : p));
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "follows" }, (payload: any) => {
+        const followerId = payload.new?.follower_id;
+        const followingId = payload.new?.following_id;
+        if (followerId === user?.id && followingId) {
+          setPosts((prev) => prev.map((p) => p.author_id === followingId ? { ...p, isFollowing: true } : p));
+        }
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "follows" }, (payload: any) => {
+        const followerId = payload.old?.follower_id;
+        const followingId = payload.old?.following_id;
+        if (followerId === user?.id && followingId) {
+          setPosts((prev) => prev.map((p) => p.author_id === followingId ? { ...p, isFollowing: false } : p));
+        }
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [user?.id]);
+
+  function handleShowNewPosts() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setNewPostAuthors([]);
+    newPostAuthorIdsRef.current.clear();
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    setRefreshing(true);
+    setHasMore(true);
+    loadPosts(feedTab);
+  }
 
   async function toggleBookmark(postId: string) {
     if (!user) { router.push("/(auth)/login"); return; }
@@ -947,8 +997,27 @@ export default function DiscoverScreen() {
         )}
       </View>
 
+      {/* New posts indicator */}
+      {newPostAuthors.length > 0 && (
+        <TouchableOpacity
+          style={[styles.newPostsPill, { backgroundColor: Colors.brand }]}
+          onPress={handleShowNewPosts}
+          activeOpacity={0.85}
+        >
+          <View style={styles.newPostsAvatars}>
+            {newPostAuthors.slice(0, 3).map((a, i) => (
+              <View key={a.id} style={[styles.newPostsAvatarWrap, { marginLeft: i > 0 ? -8 : 0, zIndex: 3 - i }]}>
+                <Avatar uri={a.avatar_url} name={a.display_name} size={22} />
+              </View>
+            ))}
+          </View>
+          <Ionicons name="arrow-up" size={14} color="#fff" style={{ marginLeft: 2 }} />
+          <Text style={styles.newPostsPillText}>New posts</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Background refresh indicator */}
-      {bgRefreshing && (
+      {bgRefreshing && newPostAuthors.length === 0 && (
         <View style={[styles.bgRefreshBar, { backgroundColor: Colors.brand + "18" }]}>
           <ActivityIndicator size={10} color={Colors.brand} />
           <Text style={[styles.bgRefreshText, { color: Colors.brand }]}>Updating feed…</Text>
@@ -978,6 +1047,7 @@ export default function DiscoverScreen() {
         <View style={{ padding: 8, gap: 8 }}>{[1,2,3].map(i => <PostSkeleton key={i} />)}</View>
       ) : (
         <FlatList
+          ref={flatListRef}
           key={isDesktop ? "desktop-2col" : "mobile-1col"}
           data={posts}
           numColumns={isDesktop ? 2 : 1}
@@ -1002,7 +1072,7 @@ export default function DiscoverScreen() {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => { setRefreshing(true); setHasMore(true); loadPosts(feedTab); }}
+              onRefresh={() => { setRefreshing(true); setHasMore(true); setNewPostAuthors([]); newPostAuthorIdsRef.current.clear(); loadPosts(feedTab); }}
               tintColor={Colors.brand}
             />
           }
@@ -1303,4 +1373,34 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   bgRefreshText: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  newPostsPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 24,
+    marginVertical: 8,
+    gap: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  newPostsPillText: {
+    color: "#fff",
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+  },
+  newPostsAvatars: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  newPostsAvatarWrap: {
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "#fff",
+    overflow: "hidden",
+  },
 });

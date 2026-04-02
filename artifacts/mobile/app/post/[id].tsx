@@ -187,11 +187,13 @@ export default function PostDetailScreen() {
       .select("id", { count: "exact", head: true })
       .eq("post_id", id);
 
+    let viewCount = data.view_count || 0;
     if (user) {
       const { data: existingView } = await supabase.from("post_views").select("id").eq("post_id", id).eq("viewer_id", user.id).maybeSingle();
       if (!existingView) {
         await supabase.from("post_views").insert({ post_id: id, viewer_id: user.id });
-        await supabase.from("posts").update({ view_count: (data.view_count || 0) + 1 }).eq("id", id);
+        viewCount += 1;
+        await supabase.from("posts").update({ view_count: viewCount }).eq("id", id);
       }
     }
 
@@ -201,7 +203,7 @@ export default function PostDetailScreen() {
       image_url: data.image_url,
       images: ((data as any).post_images || []).sort((a: any, b: any) => a.display_order - b.display_order).map((i: any) => i.image_url),
       created_at: data.created_at,
-      view_count: (data.view_count || 0) + (user ? 1 : 0),
+      view_count: viewCount,
       visibility: (data as any).visibility || "public",
       author: (data as any).profiles,
       liked: !!myLike,
@@ -240,15 +242,21 @@ export default function PostDetailScreen() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "post_acknowledgments", filter: `post_id=eq.${id}` },
-        () => {
-          if (!user) return;
-          supabase
-            .from("post_acknowledgments")
-            .select("id", { count: "exact", head: true })
-            .eq("post_id", id)
-            .then(({ count }) => {
-              setPost((p) => p ? { ...p, likeCount: count || 0 } : p);
-            });
+        (payload: any) => {
+          const evType = payload.eventType;
+          if (evType !== "INSERT" && evType !== "DELETE") return;
+          const isOwnAction = (evType === "INSERT" && payload.new?.user_id === user?.id) || (evType === "DELETE" && payload.old?.user_id === user?.id);
+          if (isOwnAction) return;
+          const delta = evType === "INSERT" ? 1 : -1;
+          setPost((p) => p ? { ...p, likeCount: Math.max(0, p.likeCount + delta) } : p);
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "post_views", filter: `post_id=eq.${id}` },
+        (payload: any) => {
+          if (payload.new?.viewer_id === user?.id) return;
+          setPost((p) => p ? { ...p, view_count: (p.view_count || 0) + 1 } : p);
         }
       )
       .subscribe();
