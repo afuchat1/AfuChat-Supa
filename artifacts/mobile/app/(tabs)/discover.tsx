@@ -31,7 +31,7 @@ import { PostSkeleton } from "@/components/ui/Skeleton";
 import { VideoThumbnail } from "@/components/ui/VideoThumbnail";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import OfflineBanner from "@/components/ui/OfflineBanner";
-import { cacheMoments, getCachedMoments, cacheFeedTab, getCachedFeedTab, isOnline, onConnectivityChange } from "@/lib/offlineStore";
+import { cacheMoments, getCachedMoments, cacheFeedTab, getCachedFeedTab, cacheFeedCursor, isOnline, onConnectivityChange } from "@/lib/offlineStore";
 import { notifyPostLike } from "@/lib/notifyUser";
 import { sharePost } from "@/lib/share";
 import { matchInterestsWeighted, recordInteraction, getLearnedInterestBoosts, computeFeedScore, diversifyFeed, type FeedSignals } from "@/lib/feedAlgorithm";
@@ -399,6 +399,14 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
             </View>
             <BookmarkButton bookmarked={item.bookmarked} onPress={() => onToggleBookmark(item.id)} />
           </View>
+
+          {/* AfuChat watermark — only rendered during image capture */}
+          {capturing && (
+            <View style={styles.watermarkBar}>
+              <Ionicons name="chatbubble-ellipses" size={13} color="#fff" />
+              <Text style={styles.watermarkText}>AfuChat · afuchat.com</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </ViewShot>
 
@@ -514,7 +522,10 @@ export default function DiscoverScreen() {
       }
       setFollowingEmpty(false);
 
-      const { data } = await supabase
+      const followOlderThan = !isRefresh && postsRef.current.length > 0
+        ? postsRef.current[postsRef.current.length - 1]?.created_at
+        : null;
+      const followBaseQ = supabase
         .from("posts")
         .select(`
           id, author_id, content, image_url, created_at, view_count, visibility, language_code,
@@ -525,8 +536,10 @@ export default function DiscoverScreen() {
         .eq("is_blocked", false)
         .in("author_id", followingIds)
         .in("visibility", ["public", "followers"])
-        .order("created_at", { ascending: false })
-        .range(offset, offset + PAGE_SIZE - 1);
+        .order("created_at", { ascending: false });
+      const { data } = await (followOlderThan
+        ? followBaseQ.lt("created_at", followOlderThan).limit(PAGE_SIZE)
+        : followBaseQ.limit(PAGE_SIZE));
 
       if (data) {
         if (data.length < PAGE_SIZE) setHasMore(false); else setHasMore(true);
@@ -577,7 +590,10 @@ export default function DiscoverScreen() {
     const userInterests: string[] = profile?.interests || [];
     const userCountry: string = profile?.country || "";
 
-    const { data } = await supabase
+    const fyOlderThan = !isRefresh && postsRef.current.length > 0
+      ? postsRef.current[postsRef.current.length - 1]?.created_at
+      : null;
+    const fyBaseQ = supabase
       .from("posts")
       .select(`
         id, author_id, content, image_url, created_at, view_count, visibility, language_code,
@@ -587,8 +603,10 @@ export default function DiscoverScreen() {
       `)
       .eq("is_blocked", false)
       .eq("visibility", "public")
-      .order("created_at", { ascending: false })
-      .range(offset, offset + PAGE_SIZE - 1);
+      .order("created_at", { ascending: false });
+    const { data } = await (fyOlderThan
+      ? fyBaseQ.lt("created_at", fyOlderThan).limit(PAGE_SIZE)
+      : fyBaseQ.limit(PAGE_SIZE));
 
     if (data) {
       if (data.length < PAGE_SIZE) setHasMore(false);
@@ -755,30 +773,33 @@ export default function DiscoverScreen() {
   );
 
   const loadMore = useCallback(() => {
-    if (loadingMore || !hasMore) return;
+    if (loadingMore || !hasMore || postsRef.current.length === 0) return;
     setLoadingMore(true);
-    fetchPosts(postsRef.current.length, false, feedTabRef.current);
+    fetchPosts(0, false, feedTabRef.current);
   }, [fetchPosts, loadingMore, hasMore]);
 
   const loadPostsRef = useRef(loadPosts);
   useEffect(() => { loadPostsRef.current = loadPosts; }, [loadPosts]);
 
-  // Tab switch — show loading, then load fresh data (use cache as quick fallback)
+  // Tab switch — show cached posts immediately, background-refresh if stale
   useEffect(() => {
     const STALE_MS = 3 * 60 * 1000;
     const cached = tabPostsCache.current[feedTab];
     const cacheAge = Date.now() - tabCacheTimestamp.current[feedTab];
 
-    setPosts([]);
     setHasMore(true);
     setFollowingEmpty(false);
     setNewPostAuthors([]);
     newPostAuthorIdsRef.current.clear();
 
-    if (cached.length > 0 && cacheAge < STALE_MS) {
+    if (cached.length > 0) {
       setPosts(cached);
       setLoading(false);
+      if (cacheAge >= STALE_MS) {
+        loadPostsRef.current(feedTab, true);
+      }
     } else {
+      setPosts([]);
       setLoading(true);
       loadPostsRef.current(feedTab, false);
     }
@@ -1083,7 +1104,12 @@ export default function DiscoverScreen() {
           contentContainerStyle={{ gap: isDesktop ? 0 : 8, paddingVertical: 8, paddingBottom: insets.bottom + 52 + 80 + 50 }}
           showsVerticalScrollIndicator={false}
           onEndReached={loadMore}
-          onEndReachedThreshold={0.5}
+          onEndReachedThreshold={0.3}
+          initialNumToRender={8}
+          maxToRenderPerBatch={6}
+          windowSize={8}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews={Platform.OS !== "web"}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -1211,6 +1237,21 @@ const styles = StyleSheet.create({
   actionText: { fontSize: 13, fontFamily: "Inter_500Medium" },
   viewCount: { flexDirection: "row", alignItems: "center", gap: 4 },
   viewText: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  watermarkBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    backgroundColor: "#00BCD4",
+  },
+  watermarkText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.5,
+  },
   videoCard: { marginBottom: 2 },
   videoThumb: {
     height: 220,

@@ -26,6 +26,7 @@ import { RichText } from "@/components/ui/RichText";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { notifyPostLike, notifyPostReply } from "@/lib/notifyUser";
+import { setPageMeta, resetPageMeta } from "@/lib/webMeta";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const COVER_H = SCREEN_W * 0.56;
@@ -148,6 +149,22 @@ export default function ArticleDetailScreen() {
   }, [id, user]);
 
   useEffect(() => { fetchArticle(); }, [fetchArticle]);
+
+  useEffect(() => {
+    if (!article) return;
+    const title = `${article.article_title} — by ${article.author.display_name} on AfuChat`;
+    const description = (article.content || "").slice(0, 200) || "Read this article on AfuChat.";
+    setPageMeta({
+      title,
+      description,
+      image: article.article_cover_url ?? undefined,
+      url: `https://afuchat.com/post/${article.id}`,
+      type: "article",
+      publishedAt: article.created_at,
+      author: article.author.display_name,
+    });
+    return resetPageMeta;
+  }, [article]);
 
   async function toggleLike() {
     if (!user) { router.push("/(auth)/login"); return; }

@@ -3,6 +3,7 @@ import { showAlert } from "./alert";
 import { encodeId } from "./shortId";
 
 const APP_BASE_URL = "https://afuchat.com";
+const WATERMARK = "AfuChat · Connect Everyone, Everywhere";
 
 export function getPostUrl(postId: string): string {
   return `${APP_BASE_URL}/p/${encodeId(postId)}`;
@@ -18,14 +19,15 @@ export async function sharePost(params: {
   content: string;
 }) {
   const url = getPostUrl(params.postId);
-  const preview = params.content.length > 100 ? params.content.slice(0, 97) + "..." : params.content;
-  const message = `${params.authorName} on AfuChat: "${preview}"`;
+  const preview = params.content.length > 120 ? params.content.slice(0, 117) + "..." : params.content;
+  const message =
+    `${params.authorName} on AfuChat:\n"${preview}"\n\n${WATERMARK}\n${url}`;
 
   try {
     await Share.share(
       Platform.OS === "ios"
-        ? { message, url }
-        : { message: `${message}\n${url}` },
+        ? { message: `${params.authorName} on AfuChat:\n"${preview}"\n\n${WATERMARK}`, url }
+        : { message },
       { dialogTitle: "Share Post" }
     );
   } catch (e: any) {
@@ -39,16 +41,41 @@ export async function shareProfile(params: {
   bio?: string | null;
 }) {
   const url = getProfileUrl(params.handle);
-  const message = params.bio
-    ? `Check out ${params.displayName} on AfuChat: "${params.bio.slice(0, 80)}"`
+  const intro = params.bio
+    ? `${params.displayName} on AfuChat:\n"${params.bio.slice(0, 100)}"`
     : `Check out ${params.displayName} on AfuChat`;
+  const message = `${intro}\n\n${WATERMARK}\n${url}`;
 
   try {
     await Share.share(
       Platform.OS === "ios"
-        ? { message, url }
-        : { message: `${message}\n${url}` },
+        ? { message: intro + `\n\n${WATERMARK}`, url }
+        : { message },
       { dialogTitle: "Share Profile" }
+    );
+  } catch (e: any) {
+    if (e?.message !== "User did not share") showAlert("Share failed", "Could not open share menu. Please try again.");
+  }
+}
+
+export async function shareArticle(params: {
+  postId: string;
+  authorName: string;
+  title: string;
+  excerpt?: string;
+}) {
+  const url = getPostUrl(params.postId);
+  const body = params.excerpt
+    ? `"${params.excerpt.slice(0, 120)}${params.excerpt.length > 120 ? "..." : ""}"`
+    : "";
+  const message = `${params.authorName} wrote: ${params.title}${body ? "\n" + body : ""}\n\nRead on AfuChat · ${WATERMARK}\n${url}`;
+
+  try {
+    await Share.share(
+      Platform.OS === "ios"
+        ? { message: `${params.title}${body ? "\n" + body : ""}\nRead on AfuChat`, url }
+        : { message },
+      { dialogTitle: "Share Article" }
     );
   } catch (e: any) {
     if (e?.message !== "User did not share") showAlert("Share failed", "Could not open share menu. Please try again.");
@@ -60,13 +87,13 @@ export async function shareStory(params: {
   userId: string;
 }) {
   const url = `${APP_BASE_URL}/stories/${encodeId(params.userId)}`;
-  const message = `Check out ${params.userName}'s story on AfuChat`;
+  const message = `Watch ${params.userName}'s story on AfuChat\n\n${WATERMARK}\n${url}`;
 
   try {
     await Share.share(
       Platform.OS === "ios"
-        ? { message, url }
-        : { message: `${message}\n${url}` },
+        ? { message: `Watch ${params.userName}'s story on AfuChat\n\n${WATERMARK}`, url }
+        : { message },
       { dialogTitle: "Share Story" }
     );
   } catch (e: any) {
@@ -79,13 +106,13 @@ export async function shareRedEnvelope(params: {
   senderName: string;
 }) {
   const url = `${APP_BASE_URL}/red-envelope/${encodeId(params.envelopeId)}`;
-  const message = `${params.senderName} sent you a Red Envelope on AfuChat!`;
+  const message = `🧧 ${params.senderName} sent you a Red Envelope on AfuChat!\n\nOpen it before time runs out!\n\n${WATERMARK}\n${url}`;
 
   try {
     await Share.share(
       Platform.OS === "ios"
-        ? { message, url }
-        : { message: `${message}\n${url}` },
+        ? { message: `🧧 ${params.senderName} sent you a Red Envelope on AfuChat! Open it before time runs out!`, url }
+        : { message },
       { dialogTitle: "Share Red Envelope" }
     );
   } catch (e: any) {

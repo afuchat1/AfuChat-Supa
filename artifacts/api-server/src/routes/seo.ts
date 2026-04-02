@@ -112,4 +112,107 @@ router.get("/sitemap.xml", async (_req, res) => {
 </urlset>`);
 });
 
+function ogHtml(params: {
+  title: string;
+  description: string;
+  image?: string;
+  url: string;
+  type?: string;
+  author?: string;
+  publishedAt?: string;
+}): string {
+  const { title, description, image = `${SITE_URL}/logo.png`, url, type = "article", author, publishedAt } = params;
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>${esc(title)}</title>
+  <meta name="description" content="${esc(description)}"/>
+  <meta name="robots" content="index,follow"/>
+  <link rel="canonical" href="${esc(url)}"/>
+  <meta property="og:site_name" content="AfuChat"/>
+  <meta property="og:type" content="${type}"/>
+  <meta property="og:title" content="${esc(title)}"/>
+  <meta property="og:description" content="${esc(description)}"/>
+  <meta property="og:image" content="${esc(image)}"/>
+  <meta property="og:url" content="${esc(url)}"/>
+  ${author ? `<meta property="article:author" content="${esc(author)}"/>` : ""}
+  ${publishedAt ? `<meta property="article:published_time" content="${publishedAt}"/>` : ""}
+  <meta name="twitter:card" content="${image !== `${SITE_URL}/logo.png` ? "summary_large_image" : "summary"}"/>
+  <meta name="twitter:site" content="@afuchat"/>
+  <meta name="twitter:title" content="${esc(title)}"/>
+  <meta name="twitter:description" content="${esc(description)}"/>
+  <meta name="twitter:image" content="${esc(image)}"/>
+  <script>
+    // Redirect to app for non-bot visitors
+    var ua = navigator.userAgent;
+    var isBot = /bot|crawler|spider|facebookexternalhit|Twitterbot|Slackbot|WhatsApp|Discordbot/i.test(ua);
+    if (!isBot) { window.location.replace(${JSON.stringify(url)}); }
+  </script>
+</head>
+<body>
+  <h1>${esc(title)}</h1>
+  <p>${esc(description)}</p>
+  <p><a href="${esc(url)}">View on AfuChat</a></p>
+</body>
+</html>`;
+}
+
+router.get("/og/post/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data } = await supabase
+      .from("posts")
+      .select("id, content, image_url, created_at, article_title, post_images(image_url, display_order), profiles!posts_author_id_fkey(display_name, handle)")
+      .eq("id", id)
+      .eq("is_blocked", false)
+      .single();
+
+    if (!data) { res.status(404).send("Not found"); return; }
+
+    const p = data as any;
+    const images: string[] = (p.post_images || []).sort((a: any, b: any) => a.display_order - b.display_order).map((i: any) => i.image_url);
+    const coverImage = images[0] || p.image_url || undefined;
+    const content = (p.article_title || p.content || "").slice(0, 200);
+    const author = p.profiles?.display_name || "AfuChat User";
+    const handle = p.profiles?.handle || "user";
+    const title = p.article_title
+      ? `${p.article_title} — by ${author} on AfuChat`
+      : `${author} on AfuChat: "${content.slice(0, 80)}${content.length > 80 ? "…" : ""}"`;
+    const url = `${SITE_URL}/p/${encodeUuidToShort(p.id)}`;
+
+    res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+    res.type("text/html").send(ogHtml({ title, description: content, image: coverImage, url, author: `${SITE_URL}/@${handle}`, publishedAt: p.created_at }));
+  } catch (err) {
+    res.status(500).send("Error");
+  }
+});
+
+router.get("/og/profile/:handle", async (req, res) => {
+  try {
+    const { handle } = req.params;
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, display_name, handle, bio, avatar_url")
+      .eq("handle", handle)
+      .eq("is_private", false)
+      .single();
+
+    if (!data) { res.status(404).send("Not found"); return; }
+
+    const p = data as any;
+    const title = `${p.display_name} (@${p.handle}) — AfuChat`;
+    const description = p.bio ? p.bio.slice(0, 200) : `Follow ${p.display_name} on AfuChat.`;
+    const url = `${SITE_URL}/@${p.handle}`;
+
+    res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+    res.type("text/html").send(ogHtml({ title, description, image: p.avatar_url || undefined, url, type: "profile", author: p.display_name }));
+  } catch (err) {
+    res.status(500).send("Error");
+  }
+});
+
 export default router;

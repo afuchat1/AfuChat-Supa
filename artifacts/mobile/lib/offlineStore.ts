@@ -1,6 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
+const FEED_CACHE_TTL_MS = 30 * 60 * 1000;
+
 const CACHE_KEYS = {
   PROFILE: "offline_profile",
   CONVERSATIONS: "offline_conversations",
@@ -9,11 +11,11 @@ const CACHE_KEYS = {
   MOMENTS: "offline_moments",
   NOTIFICATIONS: "offline_notifications",
   PENDING_MESSAGES: "offline_pending_messages",
-  FEED_FOR_YOU: "feed_tab_cache_for_you_v2",
-  FEED_FOLLOWING: "feed_tab_cache_following_v2",
+  FEED_FOR_YOU: "feed_tab_cache_for_you_v3",
+  FEED_FOLLOWING: "feed_tab_cache_following_v3",
+  FEED_CURSOR_FOR_YOU: "feed_cursor_for_you_v3",
+  FEED_CURSOR_FOLLOWING: "feed_cursor_following_v3",
 };
-
-const FEED_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export type PendingMessage = {
   id: string;
@@ -207,6 +209,22 @@ export async function getCachedFeedTab(tab: "for_you" | "following"): Promise<{ 
     if (!parsed?.posts?.length) return null;
     const isStale = Date.now() - (parsed.cachedAt || 0) > FEED_CACHE_TTL_MS;
     return { posts: parsed.posts, cachedAt: parsed.cachedAt || 0, isStale };
+  } catch {
+    return null;
+  }
+}
+
+export async function cacheFeedCursor(tab: "for_you" | "following", oldestCreatedAt: string): Promise<void> {
+  try {
+    const key = tab === "for_you" ? CACHE_KEYS.FEED_CURSOR_FOR_YOU : CACHE_KEYS.FEED_CURSOR_FOLLOWING;
+    await AsyncStorage.setItem(key, oldestCreatedAt);
+  } catch {}
+}
+
+export async function getFeedCursor(tab: "for_you" | "following"): Promise<string | null> {
+  try {
+    const key = tab === "for_you" ? CACHE_KEYS.FEED_CURSOR_FOR_YOU : CACHE_KEYS.FEED_CURSOR_FOLLOWING;
+    return await AsyncStorage.getItem(key);
   } catch {
     return null;
   }
