@@ -724,6 +724,21 @@ export default function ChatScreen() {
   const { colors } = useTheme();
   const { prefs: chatPrefs, themeColors: chatThemeColors, bubbleRadius: chatBubbleRadius } = useChatPreferences();
   const { statsMap, getDynamicPrice } = useGiftPrices();
+
+  const playNotificationSound = useCallback(async () => {
+    if (!chatPrefs.sounds_enabled) return;
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        require("../../assets/sounds/notification.wav"),
+        { shouldPlay: true, volume: 1.0 }
+      );
+      sound.setOnPlaybackStatusUpdate((status: any) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync().catch(() => {});
+        }
+      });
+    } catch (_) {}
+  }, [chatPrefs.sounds_enabled]);
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -1183,6 +1198,7 @@ export default function ChatScreen() {
           if (newMsg.sender_id === user?.id) return;
           const { data: senderProfile } = await supabase.from("profiles").select("display_name, avatar_url, handle").eq("id", newMsg.sender_id).single();
           setMessages((prev) => [{ ...newMsg, sender: senderProfile as any, reactions: [], status: undefined }, ...prev]);
+          playNotificationSound();
           if (showScrollBtnRef.current) {
             setNewMsgCount((c) => c + 1);
           }
@@ -1721,7 +1737,8 @@ export default function ChatScreen() {
     setShowAttachMenu(false);
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") { showAlert("Permission needed", "Camera access is required to take photos."); return; }
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.8 });
+    const pickerQuality = chatPrefs.media_quality === "High" ? 1.0 : chatPrefs.media_quality === "Low" ? 0.4 : 0.8;
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: pickerQuality });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
       setAttachmentPreview({ uri: asset.uri, type: "image" });
@@ -1732,7 +1749,8 @@ export default function ChatScreen() {
     setShowAttachMenu(false);
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") { showAlert("Permission needed", "Gallery access is required."); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8, allowsMultipleSelection: false });
+    const pickerQuality = chatPrefs.media_quality === "High" ? 1.0 : chatPrefs.media_quality === "Low" ? 0.4 : 0.8;
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: pickerQuality, allowsMultipleSelection: false });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
       setAttachmentPreview({ uri: asset.uri, type: "image" });
@@ -2497,6 +2515,9 @@ export default function ChatScreen() {
                       onFocus={() => { if (showEmojiPicker) setShowEmojiPicker(false); }}
                       multiline
                       maxLength={4000}
+                      returnKeyType={chatPrefs.enter_to_send ? "send" : "default"}
+                      blurOnSubmit={false}
+                      onSubmitEditing={chatPrefs.enter_to_send ? () => sendMessage() : undefined}
                     />
                     {!input.trim() && (
                       <>
