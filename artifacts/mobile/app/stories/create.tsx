@@ -82,9 +82,17 @@ export default function CreateStoryScreen() {
     setLoading(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    const ext = mediaUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
+    let ext: string;
+    let mime: string;
+    if (mediaUri.startsWith("data:")) {
+      const dataMime = mediaUri.match(/data:([^;]+)/)?.[1] || "";
+      ext = dataMime.includes("png") ? "png" : dataMime.includes("webp") ? "webp" : "jpg";
+      mime = dataMime || "image/jpeg";
+    } else {
+      ext = mediaUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
+      mime = mediaType === "video" ? `video/${ext === "mov" ? "quicktime" : "mp4"}` : `image/${ext === "jpg" ? "jpeg" : ext}`;
+    }
     const fileName = `${user.id}/${Date.now()}.${ext}`;
-    const mime = mediaType === "video" ? `video/${ext === "mov" ? "quicktime" : "mp4"}` : `image/${ext === "jpg" ? "jpeg" : ext}`;
     const { publicUrl, error: uploadErr } = await uploadToStorage("stories", fileName, mediaUri, mime);
 
     if (uploadErr || !publicUrl) {

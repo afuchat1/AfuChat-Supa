@@ -89,27 +89,37 @@ export async function uploadToStorage(
       if (!result.ok) return { publicUrl: null, error: result.error };
     } else {
       let blob: Blob;
-      try {
-        const response = await fetch(fileUri);
-        blob = await response.blob();
-      } catch {
+
+      if (fileUri.startsWith("data:")) {
+        const [header, b64] = fileUri.split(",");
+        const dataMime = header?.match(/data:([^;]+)/)?.[1] || mime;
+        const byteStr = atob(b64);
+        const bytes = new Uint8Array(byteStr.length);
+        for (let i = 0; i < byteStr.length; i++) bytes[i] = byteStr.charCodeAt(i);
+        blob = new Blob([bytes], { type: dataMime });
+      } else {
         try {
-          blob = await new Promise<Blob>((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open("GET", fileUri, true);
-            xhr.responseType = "blob";
-            xhr.onload = () => {
-              if (xhr.status === 200 || xhr.status === 0) {
-                resolve(xhr.response as Blob);
-              } else {
-                reject(new Error(`XHR failed: ${xhr.status}`));
-              }
-            };
-            xhr.onerror = () => reject(new Error("XHR network error"));
-            xhr.send();
-          });
+          const response = await fetch(fileUri);
+          blob = await response.blob();
         } catch {
-          return { publicUrl: null, error: "Could not read selected file. Please try again." };
+          try {
+            blob = await new Promise<Blob>((resolve, reject) => {
+              const xhr = new XMLHttpRequest();
+              xhr.open("GET", fileUri, true);
+              xhr.responseType = "blob";
+              xhr.onload = () => {
+                if (xhr.status === 200 || xhr.status === 0) {
+                  resolve(xhr.response as Blob);
+                } else {
+                  reject(new Error(`XHR failed: ${xhr.status}`));
+                }
+              };
+              xhr.onerror = () => reject(new Error("XHR network error"));
+              xhr.send();
+            });
+          } catch {
+            return { publicUrl: null, error: "Could not read selected file. Please try again." };
+          }
         }
       }
 
