@@ -27,6 +27,8 @@ import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { notifyPostLike, notifyPostReply } from "@/lib/notifyUser";
 import { setPageMeta, resetPageMeta } from "@/lib/webMeta";
+import { useAutoTranslate } from "@/context/LanguageContext";
+import { LANG_LABELS } from "@/lib/translate";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const COVER_H = SCREEN_W * 0.56;
@@ -83,6 +85,10 @@ export default function ArticleDetailScreen() {
   const [replyText, setReplyText] = useState("");
   const [replying, setReplying] = useState(false);
   const [liking, setLiking] = useState(false);
+
+  const { displayText: displayBody, isTranslated: bodyTranslated, lang: bodyLang } = useAutoTranslate(
+    article?.article_body || article?.content
+  );
 
   const fetchArticle = useCallback(async () => {
     if (!id) return;
@@ -308,7 +314,16 @@ export default function ArticleDetailScreen() {
 
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-        <RichText style={[styles.body, { color: colors.text }]}>{bodyText}</RichText>
+        {bodyTranslated && (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginBottom: 8 }}>
+            <Ionicons name="language" size={11} color={colors.textMuted} />
+            <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.textMuted }}>
+              {`Translated · ${LANG_LABELS[bodyLang || ""] ?? bodyLang}`}
+            </Text>
+          </View>
+        )}
+
+        <RichText style={[styles.body, { color: colors.text }]}>{displayBody || bodyText}</RichText>
 
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
 

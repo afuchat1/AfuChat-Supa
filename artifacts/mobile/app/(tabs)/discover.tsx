@@ -59,6 +59,7 @@ type PostItem = {
   bookmarked: boolean;
   post_type: string;
   article_title: string | null;
+  article_body: string | null;
   video_url: string | null;
   isFollowing: boolean;
 };
@@ -302,7 +303,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
                   <Text style={[styles.articleBadgeText, { color: colors.accent }]}>Article</Text>
                   {item.article_title && (
                     <Text style={{ color: colors.textMuted, fontSize: 10, fontFamily: "Inter_400Regular", marginLeft: 4 }}>
-                      {Math.max(1, Math.ceil((item.content?.length || 0) / 200))} min read
+                      {Math.max(1, Math.round((item.article_body || item.content || "").trim().split(/\s+/).filter(Boolean).length / 200))} min read
                     </Text>
                   )}
                 </View>
@@ -529,7 +530,7 @@ export default function DiscoverScreen() {
         .from("posts")
         .select(`
           id, author_id, content, image_url, created_at, view_count, visibility, language_code,
-          post_type, article_title, video_url,
+          post_type, article_title, article_body, video_url,
           profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified),
           post_images(image_url, display_order)
         `)
@@ -569,7 +570,7 @@ export default function DiscoverScreen() {
           is_organization_verified: p.profiles?.is_organization_verified || false,
           profile: { display_name: p.profiles?.display_name || "User", handle: p.profiles?.handle || "user", avatar_url: p.profiles?.avatar_url || null },
           liked: myLikeSet.has(p.id), likeCount: likeMap[p.id] || 0, replyCount: replyMap[p.id] || 0, score: 0, bookmarked: myBookmarkSet.has(p.id),
-          post_type: p.post_type || "post", article_title: p.article_title || null, video_url: p.video_url || null,
+          post_type: p.post_type || "post", article_title: p.article_title || null, article_body: p.article_body || null, video_url: p.video_url || null,
           isFollowing: true,
         }));
 
@@ -597,7 +598,7 @@ export default function DiscoverScreen() {
       .from("posts")
       .select(`
         id, author_id, content, image_url, created_at, view_count, visibility, language_code,
-        post_type, article_title, video_url,
+        post_type, article_title, article_body, video_url,
         profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified, country, interests),
         post_images(image_url, display_order)
       `)
@@ -734,6 +735,7 @@ export default function DiscoverScreen() {
           bookmarked: myBookmarkSet.has(p.id),
           post_type: p.post_type || "post",
           article_title: p.article_title || null,
+          article_body: p.article_body || null,
           video_url: p.video_url || null,
           isFollowing: followingSet.has(p.author_id),
         };

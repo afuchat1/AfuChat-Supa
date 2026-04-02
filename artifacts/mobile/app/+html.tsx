@@ -12,36 +12,42 @@ export default function Root({ children }: PropsWithChildren) {
           content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, shrink-to-fit=no, viewport-fit=cover"
         />
 
-        <title>AfuChat — Connect, Chat, Discover</title>
+        <title>AfuChat — Uganda's Super App | Chat, Discover, Connect</title>
 
         <meta name="application-name" content="AfuChat" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="AfuChat" />
-        <meta name="description" content="AfuChat is your all-in-one social platform. Connect with friends, chat in real time, discover trending content, share moments, and build your community. Available on Android, iOS, and Web." />
+        <meta name="description" content="AfuChat is Uganda's #1 super app — built in Entebbe, Kitooro. Chat in real time, discover trending content, share moments, send money, and build your community. The all-in-one social platform for Uganda and Africa." />
         <meta name="theme-color" content="#00897B" />
-        <meta name="keywords" content="AfuChat, social media, chat app, messaging, discover, connect, community, social platform, real-time chat, moments, stories" />
-        <meta name="author" content="AfuChat" />
+        <meta name="keywords" content="AfuChat, Uganda super app, Uganda social media, chat app Uganda, messaging Uganda, social platform Uganda, best app Uganda, super app Africa, Entebbe app, Uganda chat, connect Uganda, Uganda community, Uganda trending, AfuChat Uganda, Uganda mobile app, Uganda fintech app, send money Uganda, Uganda social network" />
+        <meta name="author" content="AfuChat — Entebbe, Uganda" />
         <meta name="robots" content="index, follow" />
         <meta name="googlebot" content="index, follow, max-video-preview:-1, max-image-preview:large, max-snippet:-1" />
+
+        <meta name="geo.region" content="UG" />
+        <meta name="geo.placename" content="Entebbe, Kitooro, Uganda" />
+        <meta name="geo.position" content="0.0512;32.4637" />
+        <meta name="ICBM" content="0.0512, 32.4637" />
 
         <link rel="canonical" href="https://afuchat.com" />
 
         <meta property="og:site_name" content="AfuChat" />
-        <meta property="og:title" content="AfuChat — Connect, Chat, Discover" />
-        <meta property="og:description" content="Your all-in-one social platform. Chat in real time, discover trending content, share moments, and build your community." />
+        <meta property="og:title" content="AfuChat — Uganda's Super App | Chat, Discover, Connect" />
+        <meta property="og:description" content="Uganda's #1 super app. Chat in real time, discover trending content, share moments, and build your community. Built in Entebbe, Kitooro." />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://afuchat.com" />
         <meta property="og:image" content="https://afuchat.com/logo.png" />
         <meta property="og:image:width" content="512" />
         <meta property="og:image:height" content="512" />
         <meta property="og:image:alt" content="AfuChat Logo" />
-        <meta property="og:locale" content="en_US" />
+        <meta property="og:locale" content="en_UG" />
+        <meta property="og:locale:alternate" content="en_US" />
 
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:site" content="@afuchat" />
-        <meta name="twitter:title" content="AfuChat — Connect, Chat, Discover" />
-        <meta name="twitter:description" content="Your all-in-one social platform. Chat in real time, discover trending content, share moments, and build your community." />
+        <meta name="twitter:title" content="AfuChat — Uganda's Super App | Chat, Discover, Connect" />
+        <meta name="twitter:description" content="Uganda's #1 super app. Chat in real time, discover trending content, share moments, and build your community. Built in Entebbe, Kitooro." />
         <meta name="twitter:image" content="https://afuchat.com/logo.png" />
 
         <link rel="manifest" href="/manifest.json" />
@@ -57,22 +63,31 @@ export default function Root({ children }: PropsWithChildren) {
               "@type": "WebApplication",
               "name": "AfuChat",
               "url": "https://afuchat.com",
-              "description": "AfuChat is your all-in-one social platform. Connect with friends, chat in real time, discover trending content, share moments, and build your community.",
+              "description": "AfuChat is Uganda's #1 super app — built in Entebbe, Kitooro. Chat in real time, discover trending content, share moments, send money, and build your community.",
               "applicationCategory": "SocialNetworkingApplication",
               "operatingSystem": "Android, iOS, Web",
               "offers": {
                 "@type": "Offer",
                 "price": "0",
-                "priceCurrency": "USD"
+                "priceCurrency": "UGX"
               },
               "author": {
                 "@type": "Organization",
                 "name": "AfuChat",
-                "url": "https://afuchat.com"
+                "url": "https://afuchat.com",
+                "address": {
+                  "@type": "PostalAddress",
+                  "addressLocality": "Entebbe",
+                  "addressRegion": "Kitooro",
+                  "addressCountry": "UG"
+                },
+                "areaServed": ["UG", "Africa"],
+                "foundingLocation": "Entebbe, Uganda"
               },
               "sameAs": [
                 "https://play.google.com/store/apps/details?id=com.afuchat.app"
-              ]
+              ],
+              "keywords": "Uganda super app, Uganda social media, super app Uganda, chat Uganda, AfuChat"
             }),
           }}
         />

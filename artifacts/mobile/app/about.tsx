@@ -226,6 +226,9 @@ export default function AboutScreen() {
           <Text style={[st.footerMission, { color: colors.textMuted }]}>
             Built with ❤️ to connect everyone, everywhere.
           </Text>
+          <Text style={[st.footerMission, { color: colors.textMuted }]}>
+            📍 Entebbe, Kitooro — Uganda
+          </Text>
         </View>
 
       </ScrollView>
