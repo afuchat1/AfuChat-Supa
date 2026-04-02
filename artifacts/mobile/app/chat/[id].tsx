@@ -1679,8 +1679,9 @@ export default function ChatScreen() {
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, _aiExecAction: { ...m._aiExecAction!, status: "failed" as const, result: "Cancelled" } } : m));
   }
 
-  async function handleAfuAiResponse(userText: string, currentMessages: Message[]) {
+  async function handleAfuAiResponse(userText: string, currentMessages: Message[], activeChatId?: string) {
     setIsAfuAiTyping(true);
+    const chatId = activeChatId || (isDraft ? realChatId : id) || id;
     try {
       const userContext = await getAfuAiUserContext();
       const systemPrompt = `You are AfuAi, the official AI assistant for AfuChat — a social messaging super app from Uganda. You are friendly, knowledgeable, and professional.\n\n${userContext}\n\nRESPONSE GUIDELINES:\n- Be concise but helpful. Use the user's name naturally.\n- Reference their actual data when relevant.\n- Write plain conversational text. No markdown formatting, no bullet points, no headings.\n- Keep replies short and natural, like a knowledgeable friend texting back.`;
@@ -1699,20 +1700,30 @@ export default function ChatScreen() {
       });
       const data = await res.json();
       const reply = (data.reply || "Sorry, I couldn't process that. Please try again.").trim();
+      const sentAt = new Date().toISOString();
+
+      let savedId: string | null = null;
+      try {
+        const { data: rpcId } = await supabase.rpc("insert_afuai_message", {
+          p_chat_id: chatId,
+          p_content: reply,
+        });
+        if (typeof rpcId === "string") savedId = rpcId;
+      } catch (_) {}
 
       setMessages((prev) => [{
-        id: `afuai_${Date.now()}`,
-        chat_id: id,
+        id: savedId || `afuai_${Date.now()}`,
+        chat_id: chatId,
         sender_id: AFUAI_BOT_ID,
         encrypted_content: reply,
-        sent_at: new Date().toISOString(),
+        sent_at: sentAt,
         sender: { display_name: "AfuAI", avatar_url: null, handle: "afuai" },
         reactions: [],
       }, ...prev]);
     } catch {
       setMessages((prev) => [{
         id: `afuai_err_${Date.now()}`,
-        chat_id: id,
+        chat_id: chatId,
         sender_id: AFUAI_BOT_ID,
         encrypted_content: "Sorry, I couldn't respond right now. Please try again.",
         sent_at: new Date().toISOString(),
@@ -1962,8 +1973,22 @@ export default function ChatScreen() {
     setSending(false);
 
     if (isAfuAiDirectChat) {
+      const insertPayload: any = {
+        chat_id: activeChatId,
+        sender_id: user.id,
+        encrypted_content: text,
+      };
+      if (userMsg.reply_to_message_id) insertPayload.reply_to_message_id = userMsg.reply_to_message_id;
+
+      const { data: inserted } = await supabase.from("messages").insert(insertPayload).select("id").single();
+      if (inserted) {
+        setMessages((prev) =>
+          prev.map((m) => m.id === msgId ? { ...m, id: inserted.id } : m)
+        );
+      }
+
       const snapshot = messages;
-      handleAfuAiResponse(text, snapshot);
+      handleAfuAiResponse(text, snapshot, activeChatId);
       try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("message_sent"); } catch (_) {}
       return;
     }
