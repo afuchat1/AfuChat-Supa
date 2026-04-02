@@ -12,12 +12,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 
-const LAST_UPDATED = "March 25, 2026";
+const LAST_UPDATED = "April 2, 2026";
 
 const sections = [
   {
     title: "1. Information We Collect",
-    body: `We collect information you provide directly to us, including:\n\n• Account information: email address, display name, username (handle), password, date of birth, gender, and country\n• Profile information: avatar, banner image, bio, phone number, website URL, and interests\n• Content you create: posts, messages, stories, comments, and media uploads\n• Communications: messages you send and receive through the Platform\n• Usage data: interactions with content, features used, and preferences\n• Device information: device type, operating system, and push notification tokens`,
+    body: `We collect information you provide directly to us, including:\n\n• Account information: email address, display name, username (handle), password, date of birth, gender, and country\n• Profile information: avatar, banner image, bio, phone number, website URL, and interests\n• Content you create: posts, stories, comments, and media uploads\n• Communications: messages you send through the Platform (note: private 1-on-1 messages are end-to-end encrypted and their content is not accessible to AfuChat)\n• Usage data: interactions with content, features used, and preferences\n• Device information: device type, operating system, and push notification tokens`,
   },
   {
     title: "2. How We Use Your Information",
@@ -32,31 +32,39 @@ const sections = [
     body: `Your data is stored securely using industry-standard practices. We use Supabase as our backend infrastructure, which provides encryption at rest and in transit. While we implement reasonable security measures, no method of transmission over the Internet or electronic storage is 100% secure. We cannot guarantee absolute security of your data.`,
   },
   {
-    title: "5. Your Rights and Choices",
+    title: "5. End-to-End Encrypted Messaging",
+    body: `All private one-to-one messages on AfuChat are protected with end-to-end encryption. This means:\n\n• Only you and the person you are messaging can read your private chat messages\n• AfuChat's servers store messages in encrypted form that we cannot decrypt\n• No AfuChat employee, system, automated process, or AI can read your private messages\n• AfuAi (our AI assistant) is technically and programmatically unable to access or retrieve any private chat content\n• Even if compelled, AfuChat cannot produce the plaintext of your private messages\n\nEnd-to-end encryption applies to all direct (1-on-1) conversations automatically. Group channels and public posts are not end-to-end encrypted and may be subject to content moderation.`,
+  },
+  {
+    title: "6. AfuAi (AI Assistant) & Your Data",
+    body: `AfuAi is an AI assistant built into AfuChat to help you navigate the platform. When you use AfuAi, it may access the following data to provide relevant responses:\n\n• Your public profile information (name, handle, bio, grade)\n• Your wallet balances and transaction history\n• Your posts, bookmarks, and social activity\n• Public platform data (trending posts, events, marketplace listings, channels)\n• Your follower and following connections\n\nAI Processing: AfuAi uses third-party AI language model providers to generate responses. Your prompts and the platform context described above may be sent to these providers for processing. These providers are bound by data processing agreements and do not use your data for training.\n\nConversation History: Your AfuAi conversations are stored to provide continuity within and across sessions. You can delete your AI conversation history at any time from within the AI assistant screen.\n\nAfuAi will NEVER:\n\n• Read, access, retrieve, or summarize any private chat messages\n• Bypass end-to-end encryption on your conversations\n• Make transactions or changes without your explicit confirmation\n\nAfuAi can send a message on your behalf only when you explicitly approve the action through a confirmation prompt. It cannot read or display existing chat conversations.`,
+  },
+  {
+    title: "7. Your Rights and Choices",
     body: `You have the following rights regarding your personal data:\n\n• Access: You can view your profile and account information at any time\n• Update: You can edit your profile, preferences, and settings\n• Delete: You can request account deletion through the app settings, which will schedule your account and associated data for permanent deletion\n• Data portability: You may request a copy of your data\n• Opt-out: You can disable push notifications and adjust privacy settings (private account, online status visibility)\n• Blocking: You can block users to prevent them from seeing your content or contacting you`,
   },
   {
-    title: "6. Cookies and Tracking",
+    title: "8. Cookies and Tracking",
     body: `On the web version of AfuChat, we use local storage and session cookies to maintain your login state and preferences. We do not use third-party advertising cookies or cross-site tracking technologies. Analytics data is collected in aggregate form to improve the Platform.`,
   },
   {
-    title: "7. Children's Privacy",
+    title: "9. Children's Privacy",
     body: `AfuChat is not intended for children under the age of 13. We do not knowingly collect personal information from children under 13. If we discover that a child under 13 has provided us with personal information, we will promptly delete that information. If you believe a child under 13 may have provided us with personal data, please contact us.`,
   },
   {
-    title: "8. International Data Transfers",
+    title: "10. International Data Transfers",
     body: `Your information may be transferred to, stored, and processed in countries other than your country of residence. By using the Platform, you consent to the transfer of your information to countries that may have different data protection laws than your country.`,
   },
   {
-    title: "9. Data Retention",
-    body: `We retain your personal information for as long as your account is active or as needed to provide services. When you delete your account, we will delete or anonymize your personal data within 30 days, except where we are required to retain it for legal, regulatory, or legitimate business purposes.`,
+    title: "11. Data Retention",
+    body: `We retain your personal information for as long as your account is active or as needed to provide services. When you delete your account, we will delete or anonymize your personal data within 30 days, except where we are required to retain it for legal, regulatory, or legitimate business purposes. End-to-end encrypted messages are purged when both parties delete their accounts.`,
   },
   {
-    title: "10. Changes to This Policy",
+    title: "12. Changes to This Policy",
     body: `We may update this Privacy Policy from time to time. We will notify you of any material changes by posting the updated policy on the Platform and updating the "Last updated" date. Your continued use of the Platform after changes are posted constitutes acceptance of the updated policy.`,
   },
   {
-    title: "11. Contact Us",
+    title: "13. Contact Us",
     body: `If you have any questions, concerns, or requests regarding this Privacy Policy or our data practices, please contact us at:\n\nEmail: support@afuchat.com\nWebsite: https://afuchat.com`,
   },
 ];

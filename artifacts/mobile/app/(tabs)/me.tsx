@@ -24,6 +24,7 @@ import * as Haptics from "@/lib/haptics";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { showAlert } from "@/lib/alert";
+import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { Separator } from "@/components/ui/Separator";
@@ -188,10 +189,18 @@ function XpLevelBar({ xp }: { xp: number }) {
 export default function MeScreen() {
   const { colors, isDark, themeMode, setThemeMode } = useTheme();
   const { accent, appTheme, setAppTheme } = useAppAccent();
-  const { profile, isPremium, subscription } = useAuth();
+  const { profile, isPremium, subscription, user } = useAuth();
   const isAdmin = !!profile?.is_admin;
   const { langLabel } = useLanguage();
   const insets = useSafeAreaInsets();
+  const [followerCount, setFollowerCount] = React.useState(0);
+  const [followingCount, setFollowingCount] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!user) return;
+    supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", user.id).then(({ count }) => setFollowerCount(count || 0));
+    supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", user.id).then(({ count }) => setFollowingCount(count || 0));
+  }, [user]);
 
   function cycleTheme() {
     Haptics.selectionAsync();
@@ -270,6 +279,20 @@ export default function MeScreen() {
           <Text style={[styles.statValue, { color: colors.text }]}>{profile?.current_grade || "Newcomer"}</Text>
           <Text style={[styles.statLabel, { color: colors.textMuted }]}>Grade</Text>
         </View>
+      </View>
+
+      <View style={[styles.statsRow, { backgroundColor: colors.surface }]}>
+        <TouchableOpacity style={styles.statItem} activeOpacity={0.6} onPress={() => router.push({ pathname: "/followers", params: { userId: user?.id || "", type: "followers", ownerHandle: profile?.handle } })}>
+          <Ionicons name="people" size={20} color="#007AFF" />
+          <Text style={[styles.statValue, { color: colors.text }]}>{followerCount}</Text>
+          <Text style={[styles.statLabel, { color: colors.textMuted }]}>Followers</Text>
+        </TouchableOpacity>
+        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+        <TouchableOpacity style={styles.statItem} activeOpacity={0.6} onPress={() => router.push({ pathname: "/followers", params: { userId: user?.id || "", type: "following", ownerHandle: profile?.handle } })}>
+          <Ionicons name="person-add" size={20} color="#5856D6" />
+          <Text style={[styles.statValue, { color: colors.text }]}>{followingCount}</Text>
+          <Text style={[styles.statLabel, { color: colors.textMuted }]}>Following</Text>
+        </TouchableOpacity>
       </View>
 
       <XpLevelBar xp={profile?.xp || 0} />

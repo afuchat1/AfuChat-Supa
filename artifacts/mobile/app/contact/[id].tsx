@@ -381,15 +381,15 @@ export default function ContactProfileScreen() {
           </View>
 
           <View style={styles.followStats}>
-            <View style={styles.followStat}>
+            <TouchableOpacity style={styles.followStat} activeOpacity={0.6} onPress={() => router.push({ pathname: "/followers", params: { userId: id, type: "followers", ownerHandle: profile?.handle } })}>
               <Text style={[styles.followNum, { color: colors.text }]}>{followerCount}</Text>
               <Text style={[styles.followLabel, { color: colors.textMuted }]}>Followers</Text>
-            </View>
+            </TouchableOpacity>
             <View style={[styles.followDivider, { backgroundColor: colors.border }]} />
-            <View style={styles.followStat}>
+            <TouchableOpacity style={styles.followStat} activeOpacity={0.6} onPress={() => router.push({ pathname: "/followers", params: { userId: id, type: "following", ownerHandle: profile?.handle } })}>
               <Text style={[styles.followNum, { color: colors.text }]}>{followingCount}</Text>
               <Text style={[styles.followLabel, { color: colors.textMuted }]}>Following</Text>
-            </View>
+            </TouchableOpacity>
             {mutualCount > 0 && (
               <>
                 <View style={[styles.followDivider, { backgroundColor: colors.border }]} />

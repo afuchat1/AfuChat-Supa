@@ -3,8 +3,9 @@
 This project is a pnpm workspace monorepo utilizing TypeScript to develop AfuChat, a WeChat-style chat super app. AfuChat aims to provide a comprehensive communication and lifestyle platform, connecting users through chat, social features, and integrated services. The platform is designed for cross-platform compatibility, running on mobile (iOS/Android), web, and desktop.
 
 Key capabilities include:
-- Real-time chat and social networking features (posts, stories, follows).
-- Advanced AI integrations for chat, image generation, and intelligent features.
+- Real-time chat and social networking features (posts, stories, follows) with end-to-end encrypted direct messaging.
+- Advanced AI integrations for chat, image generation, and intelligent features (AfuAi cannot access private messages).
+- Clickable followers/following lists with privacy enforcement (`hide_followers_list`/`hide_following_list` settings respected).
 - In-app wallet with custom currencies (Nexa/ACoin) for virtual goods, gifts, and services.
 - Gamified user experience with XP rewards and in-app games.
 - A marketplace for unique digital gifts.

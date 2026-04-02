@@ -11,7 +11,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
 
-const LAST_UPDATED = "March 30, 2026";
+const LAST_UPDATED = "April 2, 2026";
 
 type Clause = { heading: string; body: string };
 type Section = { title: string; clauses: Clause[] };
@@ -156,19 +156,27 @@ const SECTIONS: Section[] = [
         body: "Your data is stored on Supabase-managed PostgreSQL servers with encryption at rest and in transit. We implement industry-standard security practices including row-level security policies. No system is 100% secure; we will notify you of any significant data breach within 72 hours.",
       },
       {
-        heading: "4.5 Your Rights",
+        heading: "4.5 End-to-End Encrypted Messaging",
+        body: "All private one-to-one chat messages on AfuChat are end-to-end encrypted. This means:\n\n• Only you and the person you're chatting with can read your messages\n• AfuChat cannot read, access, or decrypt private chat messages\n• AfuAi (our AI assistant) cannot access or retrieve any private message content\n• Messages are stored in encrypted form and are unreadable to any AfuChat employee, system, or service\n• Group channels and public posts are not end-to-end encrypted and are subject to moderation\n\nEnd-to-end encryption is always on for direct messages and cannot be disabled.",
+      },
+      {
+        heading: "4.6 AfuAi & Your Privacy",
+        body: "AfuAi is AfuChat's built-in AI assistant. To provide helpful responses, AfuAi may access:\n\n• Your public profile information (display name, handle, bio)\n• Your wallet balances and transaction history\n• Your posts and social activity\n• Platform-wide public data (trending posts, events, marketplace)\n\nAfuAi uses third-party AI language model providers to process your requests. Your prompts and relevant platform context may be sent to these providers, which are bound by data processing agreements. Your AfuAi conversation history is stored and can be deleted at any time.\n\nAfuAi is explicitly prohibited from:\n\n• Reading, accessing, or retrieving any private chat messages\n• Bypassing end-to-end encryption\n• Performing any action without your explicit confirmation\n\nAfuAi can send messages on your behalf only with your explicit confirmation. It cannot read or summarize existing conversations.",
+      },
+      {
+        heading: "4.7 Your Rights",
         body: "You have the right to:\n\n• Access a copy of your personal data\n• Correct inaccurate information\n• Delete your account and associated data\n• Opt out of marketing communications\n• Object to certain types of processing\n\nTo exercise these rights, contact privacy@afuchat.com. Account deletion requests are processed within 30 days.",
       },
       {
-        heading: "4.6 Cookies & Web Tracking",
+        heading: "4.8 Cookies & Web Tracking",
         body: "On web, we use local storage and session cookies to maintain your session. We do not use third-party advertising cookies or tracking pixels. You may disable cookies in your browser settings, but some features may not function correctly.",
       },
       {
-        heading: "4.7 Children's Privacy",
+        heading: "4.9 Children's Privacy",
         body: "AfuChat is not intended for children under 13. We do not knowingly collect personal information from children under 13. If we discover we have collected data from a child under 13, we will delete it promptly. If you believe a child under 13 has created an account, contact privacy@afuchat.com.",
       },
       {
-        heading: "4.8 Changes to This Policy",
+        heading: "4.10 Changes to This Policy",
         body: "We may update this Privacy Policy from time to time. We will notify you of significant changes via in-app notification or email. Your continued use of the Platform after changes constitutes acceptance of the updated policy.",
       },
     ],
