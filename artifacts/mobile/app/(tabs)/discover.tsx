@@ -38,7 +38,6 @@ import { useLanguage } from "@/context/LanguageContext";
 import { translateText, LANG_LABELS } from "@/lib/translate";
 import { useDesktopDetail } from "@/context/DesktopDetailContext";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
-import VideoFeed from "@/components/VideoFeed";
 
 type PostItem = {
   id: string;
@@ -126,6 +125,10 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress, colWidth
       router.push({ pathname: "/article/[id]", params: { id: item.id } });
       return;
     }
+    if (item.post_type === "video") {
+      router.push({ pathname: "/video/[id]", params: { id: item.id } });
+      return;
+    }
     if (isDesktop) {
       openDetail({ type: "post", id: item.id });
     } else {
@@ -167,98 +170,110 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress, colWidth
     <>
       <ViewShot ref={cardRef} options={{ format: "png", quality: 1, result: "tmpfile" }}>
         <TouchableOpacity
-          style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, shadowColor: colors.text }]}
+          style={[styles.card, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}
           onPress={openPost}
-          activeOpacity={0.92}
+          activeOpacity={0.97}
         >
           {/* ── Header ── */}
           <View style={styles.cardHeader}>
-            <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })} activeOpacity={0.8}>
-              <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={34} />
+            <TouchableOpacity
+              onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}
+              activeOpacity={0.8}
+            >
+              <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={40} />
             </TouchableOpacity>
-            <View style={{ flex: 1, gap: 1 }}>
+            <View style={{ flex: 1, gap: 2 }}>
               <View style={styles.nameRow}>
-                <Text style={[styles.cardName, { color: colors.text }]} numberOfLines={1}>{item.profile.display_name}</Text>
-                <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={12} />
+                <Text style={[styles.cardName, { color: colors.text }]} numberOfLines={1}>
+                  {item.profile.display_name}
+                </Text>
+                <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={13} />
               </View>
               <Text style={[styles.cardMeta, { color: colors.textMuted }]} numberOfLines={1}>
                 @{item.profile.handle} · {formatRelative(item.created_at)}
               </Text>
             </View>
-            <View style={styles.headerRight}>
-              <View style={[styles.platformBadge, { borderColor: Colors.brand + "40", backgroundColor: Colors.brand + "12" }]}>
-                <Text style={[styles.platformBadgeText, { color: Colors.brand }]}>AfuChat</Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => { Haptics.impact?.(); setMenuVisible(true); }}
-                hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
-                style={styles.ellipsisBtn}
-              >
-                <Ionicons name="ellipsis-horizontal" size={16} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              onPress={() => { Haptics.impact?.(); setMenuVisible(true); }}
+              hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
+            >
+              <Ionicons name="ellipsis-horizontal" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
           </View>
 
-          {/* ── Article badge ── */}
+          {/* ── VIDEO: fullscreen preview card ── */}
+          {item.post_type === "video" && item.video_url && (
+            <TouchableOpacity
+              activeOpacity={0.88}
+              onPress={() => router.push({ pathname: "/video/[id]", params: { id: item.id } })}
+              style={styles.videoCard}
+            >
+              <View style={styles.videoThumb}>
+                <View style={styles.playCircle}>
+                  <Ionicons name="play" size={22} color="#fff" />
+                </View>
+                <View style={styles.videoBadge}>
+                  <Ionicons name="videocam" size={11} color="#fff" />
+                  <Text style={styles.videoBadgeText}>Video</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          )}
+
+          {/* ── ARTICLE: type badge + title ── */}
           {item.post_type === "article" && (
-            <View style={[styles.postTypeBadge, { backgroundColor: Colors.brand + "15" }]}>
-              <Ionicons name="document-text-outline" size={12} color={Colors.brand} />
-              <Text style={[styles.postTypeBadgeText, { color: Colors.brand }]}>Article</Text>
+            <View style={[styles.articleBadgeRow, { backgroundColor: Colors.brand + "12" }]}>
+              <Ionicons name="document-text" size={12} color={Colors.brand} />
+              <Text style={[styles.articleBadgeText, { color: Colors.brand }]}>Article</Text>
             </View>
           )}
-
-          {/* ── Video badge ── */}
-          {item.post_type === "video" && (
-            <View style={[styles.postTypeBadge, { backgroundColor: "#FF3B3015" }]}>
-              <Ionicons name="videocam-outline" size={12} color="#FF3B30" />
-              <Text style={[styles.postTypeBadgeText, { color: "#FF3B30" }]}>Video</Text>
-            </View>
-          )}
-
-          {/* ── Article title ── */}
-          {item.post_type === "article" && item.article_title && (
+          {item.post_type === "article" && item.article_title ? (
             <Text style={[styles.articleTitle, { color: colors.text }]}>{item.article_title}</Text>
-          )}
+          ) : null}
 
-          {/* ── Content ── */}
-          <RichText
-            style={[styles.cardContent, { color: colors.text }]}
-            numberOfLines={item.post_type === "article" ? 3 : undefined}
-          >{displayContent}</RichText>
+          {/* ── Content text ── */}
+          {(displayContent || "").trim().length > 0 && (
+            <RichText
+              style={[styles.cardContent, { color: colors.text }]}
+              numberOfLines={item.post_type === "article" ? 3 : undefined}
+            >
+              {displayContent}
+            </RichText>
+          )}
 
           {isTranslated && (
             <View style={styles.translatedBadge}>
-              <Ionicons name="language" size={10} color={colors.textMuted} />
+              <Ionicons name="language" size={11} color={colors.textMuted} />
               <Text style={[styles.translatedText, { color: colors.textMuted }]}>
                 {`Translated · ${LANG_LABELS[preferredLang || ""] ?? preferredLang}`}
               </Text>
             </View>
           )}
 
-          {/* ── Read Article CTA ── */}
+          {/* ── Article: read CTA ── */}
           {item.post_type === "article" && (
-            <TouchableOpacity
-              onPress={openPost}
-              style={[styles.readArticleBtn, { borderColor: Colors.brand }]}
-            >
-              <Text style={[styles.readArticleText, { color: Colors.brand }]}>Read Article</Text>
-              <Ionicons name="arrow-forward" size={14} color={Colors.brand} />
+            <TouchableOpacity onPress={openPost} style={styles.readMore}>
+              <Text style={[styles.readMoreText, { color: Colors.brand }]}>Read article</Text>
+              <Ionicons name="arrow-forward" size={13} color={Colors.brand} />
             </TouchableOpacity>
           )}
 
-          {/* ── Images — edge-to-edge inside card ── */}
-          {allImages.length > 0 && (
-            <View style={styles.images}>
+          {/* ── Images ── */}
+          {allImages.length > 0 && item.post_type !== "video" && (
+            <View style={[styles.images, allImages.length > 1 && { flexDirection: "row", flexWrap: "wrap", gap: 2 }]}>
               {allImages.map((uri, i) => (
                 <TouchableOpacity
                   key={i}
                   activeOpacity={0.9}
                   onPress={(e) => { e.stopPropagation(); onImagePress?.(allImages, i); }}
-                  style={{ flex: allImages.length === 1 ? undefined : 1 }}
+                  style={allImages.length > 1 ? { flex: 1 } : undefined}
                 >
                   <Image
                     source={{ uri }}
-                    style={[styles.img, { width: imgW, height: imgW * 0.6 }]}
+                    style={{
+                      width: allImages.length === 1 ? effectiveW : multiImgW,
+                      height: allImages.length === 1 ? Math.round(effectiveW * 0.56) : Math.round(multiImgW * 0.75),
+                    }}
                     resizeMode="cover"
                   />
                 </TouchableOpacity>
@@ -267,25 +282,34 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress, colWidth
           )}
 
           {/* ── Footer ── */}
-          <View style={[styles.cardFooter, { borderTopColor: colors.separator }]}>
+          <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
             <TouchableOpacity style={styles.action} onPress={() => onToggleLike(item.id)}>
-              <Ionicons name={item.liked ? "heart" : "heart-outline"} size={16} color={item.liked ? "#FF3B30" : colors.textMuted} />
+              <Ionicons
+                name={item.liked ? "heart" : "heart-outline"}
+                size={18}
+                color={item.liked ? "#FF3B30" : colors.textMuted}
+              />
               {item.likeCount > 0 && (
-                <Text style={[styles.actionText, { color: item.liked ? "#FF3B30" : colors.textMuted }]}>{item.likeCount}</Text>
+                <Text style={[styles.actionText, { color: item.liked ? "#FF3B30" : colors.textMuted }]}>
+                  {item.likeCount}
+                </Text>
               )}
             </TouchableOpacity>
             <TouchableOpacity style={styles.action} onPress={openPost}>
-              <Ionicons name="chatbubble-outline" size={16} color={colors.textMuted} />
+              <Ionicons name="chatbubble-outline" size={17} color={colors.textMuted} />
               {item.replyCount > 0 && (
                 <Text style={[styles.actionText, { color: colors.textMuted }]}>{item.replyCount}</Text>
               )}
             </TouchableOpacity>
-            <TouchableOpacity style={styles.action} onPress={() => sharePost({ postId: item.id, authorName: item.profile.display_name, content: item.content })}>
-              <Ionicons name="arrow-redo-outline" size={16} color={colors.textMuted} />
+            <TouchableOpacity
+              style={styles.action}
+              onPress={() => sharePost({ postId: item.id, authorName: item.profile.display_name, content: item.content })}
+            >
+              <Ionicons name="arrow-redo-outline" size={17} color={colors.textMuted} />
             </TouchableOpacity>
             <View style={{ flex: 1 }} />
             <View style={styles.viewCount}>
-              <Ionicons name="eye-outline" size={13} color={colors.textMuted} />
+              <Ionicons name="eye-outline" size={14} color={colors.textMuted} />
               <Text style={[styles.viewText, { color: colors.textMuted }]}>{item.view_count}</Text>
             </View>
             <BookmarkButton bookmarked={item.bookmarked} onPress={() => onToggleBookmark(item.id)} />
@@ -332,7 +356,7 @@ export default function DiscoverScreen() {
   const RIGHT_PANEL_W = screenWidth >= 1280 ? 380 : 0;
   const centerW = isDesktop ? screenWidth - SIDEBAR_W - RIGHT_PANEL_W : screenWidth;
   const desktopColWidth = isDesktop ? Math.floor((centerW - 32) / 2) : undefined;
-  const [feedTab, setFeedTab] = useState<"for_you" | "following" | "videos">("for_you");
+  const [feedTab, setFeedTab] = useState<"for_you" | "following">("for_you");
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -594,18 +618,17 @@ export default function DiscoverScreen() {
   const loadPosts = useCallback((tab?: "for_you" | "following") => fetchPosts(0, true, tab), [fetchPosts]);
 
   const loadMore = useCallback(() => {
-    if (loadingMore || !hasMore || feedTab === "videos") return;
+    if (loadingMore || !hasMore) return;
     setLoadingMore(true);
-    fetchPosts(posts.length, false, feedTab as "for_you" | "following");
+    fetchPosts(posts.length, false, feedTab);
   }, [fetchPosts, posts.length, loadingMore, hasMore, feedTab]);
 
   useEffect(() => {
-    if (feedTab === "videos") return;
     setLoading(true);
     setPosts([]);
     setHasMore(true);
     setFollowingEmpty(false);
-    loadPosts(feedTab as "for_you" | "following");
+    loadPosts(feedTab);
   }, [feedTab]);
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
@@ -704,15 +727,6 @@ export default function DiscoverScreen() {
               Following
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tabPill, feedTab === "videos" && { backgroundColor: "#FF3B30" }]}
-            onPress={() => setFeedTab("videos")}
-          >
-            <Ionicons name="videocam" size={13} color={feedTab === "videos" ? "#fff" : colors.textMuted} style={{ marginRight: 3 }} />
-            <Text style={[styles.tabPillText, { color: feedTab === "videos" ? "#fff" : colors.textMuted }]}>
-              Videos
-            </Text>
-          </TouchableOpacity>
         </View>
 
         {!user && (
@@ -726,11 +740,8 @@ export default function DiscoverScreen() {
         )}
       </View>
 
-      {/* ── Videos tab ── */}
-      {feedTab === "videos" ? (
-        <VideoFeed />
-      ) : /* Following tab — not signed in */
-      feedTab === "following" && !user ? (
+      {/* Following tab — not signed in */}
+      {feedTab === "following" && !user ? (
         <View style={styles.center}>
           <Ionicons name="lock-closed-outline" size={56} color={colors.textMuted} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>Sign in to see Following</Text>
@@ -861,72 +872,92 @@ const styles = StyleSheet.create({
   tabPill: { flex: 1, paddingVertical: 7, borderRadius: 19, alignItems: "center" },
   tabPillText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   card: {
-    marginHorizontal: 14,
-    marginBottom: 10,
-    borderRadius: 10,
-    borderWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.07,
-    shadowRadius: 4,
-    elevation: 2,
   },
   cardHeader: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 13,
-    paddingTop: 13,
-    paddingBottom: 9,
-    gap: 9,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
+    gap: 10,
   },
-  headerRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  platformBadge: {
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  platformBadgeText: {
-    fontSize: 10,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: 0.2,
-  },
-  nameRow: { flexDirection: "row", alignItems: "center", gap: 3 },
-  cardName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  cardName: { fontSize: 15, fontFamily: "Inter_700Bold", letterSpacing: -0.1 },
   cardMeta: { fontSize: 12, fontFamily: "Inter_400Regular" },
   cardContent: {
     fontSize: 15,
     fontFamily: "Inter_400Regular",
-    paddingHorizontal: 13,
-    paddingBottom: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
     lineHeight: 23,
-    letterSpacing: 0.1,
   },
-  translatedBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 13, marginBottom: 8 },
-  translatedText: { fontSize: 10, fontFamily: "Inter_400Regular" },
-  images: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 3,
-    marginBottom: 0,
-  },
-  img: { borderRadius: 0 },
+  translatedBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 16, marginBottom: 8 },
+  translatedText: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  images: { marginBottom: 0 },
   cardFooter: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 13,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 16,
+    gap: 18,
   },
   action: { flexDirection: "row", alignItems: "center", gap: 5 },
-  actionText: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  viewCount: { flexDirection: "row", alignItems: "center", gap: 3 },
+  actionText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  viewCount: { flexDirection: "row", alignItems: "center", gap: 4 },
   viewText: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  videoCard: { marginBottom: 2 },
+  videoThumb: {
+    height: 220,
+    backgroundColor: "#0a0a0a",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  playCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  videoBadge: {
+    position: "absolute",
+    bottom: 10,
+    left: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  videoBadgeText: { color: "#fff", fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  articleBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    alignSelf: "flex-start",
+    marginHorizontal: 16,
+    marginBottom: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  articleBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  readMore: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  readMoreText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingTop: 80 },
   emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   emptySub: { fontSize: 14, fontFamily: "Inter_400Regular" },
