@@ -26,28 +26,24 @@ async function transcribeWithGroq(audioUrl: string, apiKey: string): Promise<str
 
 // ── Groq text chat (Llama) ────────────────────────────────────────────────────
 async function chatWithGroq(messages: any[], maxTokens: number, apiKey: string): Promise<string> {
-  const models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it", "mixtral-8x7b-32768"];
-  for (const model of models) {
-    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        max_tokens: maxTokens,
-        temperature: 0.7,
-      }),
-    });
-    if (res.status === 429) { console.log(`${model} rate limited, trying next...`); continue; }
-    if (!res.ok) { console.error(`${model} error: ${res.status}`); continue; }
-    const data = await res.json();
-    const text = data.choices?.[0]?.message?.content ?? "";
-    if (text) return text;
-  }
-  throw new Error("All models rate limited");
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "llama-3.3-70b-versatile",
+      messages,
+      max_tokens: maxTokens,
+      temperature: 0.7,
+    }),
+  });
+  if (!res.ok) throw new Error(`Groq ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  const text = data.choices?.[0]?.message?.content ?? "";
+  if (!text) throw new Error("Groq returned empty response");
+  return text;
 }
 
 function json(data: unknown, status = 200): Response {
