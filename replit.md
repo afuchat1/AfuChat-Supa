@@ -69,6 +69,7 @@ The project is structured as a pnpm monorepo using TypeScript, with distinct pac
   - Date separator pills with subtle background and shadow.
   - Empty chat state with icon + prompt text.
   - Read receipt checkmarks: single (sent), double (delivered), blue double (read).
+- **Story Camera**: Full-screen camera screen (`app/stories/camera.tsx`) for story posting with Photo/Video modes, flash toggle, front/back camera flip, and gallery picker. Camera FAB on chats tab navigates to camera, which pushes to story create screen after capture. Uses `expo-camera` CameraView with mic permission gating for video recording.
 - **Cross-Platform Adaptations**: Platform-specific guards for features like push notifications, haptics, blur effects, keyboard handling, and camera access.
 - **Premium Tiering**: Features gated by subscription tiers (Silver, Gold) using `LockedToggle`/`LockedLink` components, accessible via the `app/advanced-features.tsx` screen.
 - **Onboarding**: A forced 5-step onboarding flow for new users covering display name, handle, country, phone number, date of birth, gender, interests, and profile photo.

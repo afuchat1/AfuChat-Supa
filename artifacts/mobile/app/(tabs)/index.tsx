@@ -596,7 +596,7 @@ export default function ChatsScreen() {
               tintColor={Colors.brand}
             />
           }
-          contentContainerStyle={{ paddingBottom: insets.bottom + 52 + 80 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 52 + 80 + 66 }}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -607,6 +607,14 @@ export default function ChatsScreen() {
         activeOpacity={0.85}
       >
         <Ionicons name="create-outline" size={24} color="#fff" />
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.fab, { backgroundColor: Colors.brand, bottom: insets.bottom + 52 + 16 + 54 + 12, opacity: 0.92 }]}
+        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/stories/camera"); }}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="camera" size={24} color="#fff" />
       </TouchableOpacity>
     </View>
   );

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -9,7 +9,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -27,8 +27,11 @@ export default function CreateStoryScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: screenW } = useWindowDimensions();
-  const [mediaUri, setMediaUri] = useState<string | null>(null);
-  const [mediaType, setMediaType] = useState<"image" | "video">("image");
+  const params = useLocalSearchParams<{ mediaUri?: string; mediaType?: string }>();
+  const [mediaUri, setMediaUri] = useState<string | null>(params.mediaUri ?? null);
+  const [mediaType, setMediaType] = useState<"image" | "video">(
+    params.mediaType === "video" ? "video" : "image"
+  );
   const [mediaDims, setMediaDims] = useState<{ w: number; h: number } | null>(null);
   const [caption, setCaption] = useState("");
   const [loading, setLoading] = useState(false);
