@@ -67,7 +67,15 @@ export default function ViewStoryScreen() {
       .order("created_at", { ascending: true })
       .then(({ data }) => {
         if (data) {
-          setStories(data.map((s: any) => ({ ...s, profile: s.profiles })));
+          const visible = data.filter((s: any) => {
+            const cap = s.caption || "";
+            const m = cap.match(/🔒(everyone|close_friends|only_me)$/);
+            const p = m ? m[1] : "everyone";
+            if (p === "only_me" && s.user_id !== user?.id) return false;
+            if (p === "close_friends" && s.user_id !== user?.id) return false;
+            return true;
+          });
+          setStories(visible.map((s: any) => ({ ...s, profile: s.profiles })));
         }
       });
   }, [userId]);
@@ -244,11 +252,14 @@ export default function ViewStoryScreen() {
         </View>
       )}
 
-      {story.caption ? (
-        <View style={[styles.captionBar, { paddingBottom: insets.bottom + (isOwner ? 56 : 16) }]}>
-          <Text style={styles.captionText}>{story.caption}</Text>
-        </View>
-      ) : null}
+      {story.caption ? (() => {
+        const displayCaption = story.caption.replace(/\n?🔒(everyone|close_friends|only_me)$/, "").trim();
+        return displayCaption ? (
+          <View style={[styles.captionBar, { paddingBottom: insets.bottom + (isOwner ? 56 : 16) }]}>
+            <Text style={styles.captionText}>{displayCaption}</Text>
+          </View>
+        ) : null;
+      })() : null}
 
       {isOwner ? (
         <TouchableOpacity

@@ -103,11 +103,15 @@ export default function CreateStoryScreen() {
 
       setUploadProgress(0.7);
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      let finalCaption = caption.trim() || "";
+      if (privacy !== "everyone") {
+        finalCaption = finalCaption ? `${finalCaption}\n🔒${privacy}` : `🔒${privacy}`;
+      }
       const { error } = await supabase.from("stories").insert({
         user_id: user.id,
         media_url: publicUrl,
         media_type: mediaType,
-        caption: caption.trim() || null,
+        caption: finalCaption || null,
         expires_at: expiresAt,
       });
 

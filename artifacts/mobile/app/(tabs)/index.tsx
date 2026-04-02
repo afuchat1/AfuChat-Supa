@@ -152,7 +152,7 @@ function StoriesBar({ userId, colors }: { userId: string; colors: any }) {
     const now = new Date().toISOString();
     const { data: storiesData } = await supabase
       .from("stories")
-      .select("id, user_id, created_at, profiles!stories_user_id_fkey(display_name, avatar_url)")
+      .select("id, user_id, caption, created_at, profiles!stories_user_id_fkey(display_name, avatar_url)")
       .gt("expires_at", now)
       .order("created_at", { ascending: true })
       .limit(100);
@@ -162,7 +162,21 @@ function StoriesBar({ userId, colors }: { userId: string; colors: any }) {
       return;
     }
 
-    const storyIds = storiesData.map((s: any) => s.id);
+    const filtered = storiesData.filter((s: any) => {
+      const cap = s.caption || "";
+      const privacyMatch = cap.match(/🔒(everyone|close_friends|only_me)$/);
+      const privacy = privacyMatch ? privacyMatch[1] : "everyone";
+      if (privacy === "only_me" && s.user_id !== userId) return false;
+      if (privacy === "close_friends" && s.user_id !== userId) return false;
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      setStoryUsers([]);
+      return;
+    }
+
+    const storyIds = filtered.map((s: any) => s.id);
     const { data: viewsData } = await supabase
       .from("story_views")
       .select("story_id")
@@ -172,7 +186,7 @@ function StoriesBar({ userId, colors }: { userId: string; colors: any }) {
     const viewedSet = new Set((viewsData || []).map((v: any) => v.story_id));
 
     const userMap = new Map<string, StoryUser>();
-    for (const s of storiesData as any[]) {
+    for (const s of filtered as any[]) {
       const existing = userMap.get(s.user_id);
       const isSeen = viewedSet.has(s.id);
       if (existing) {
