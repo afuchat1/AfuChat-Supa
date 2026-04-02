@@ -7,6 +7,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -25,10 +26,36 @@ export default function CreateStoryScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const { width: screenW } = useWindowDimensions();
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<"image" | "video">("image");
+  const [mediaDims, setMediaDims] = useState<{ w: number; h: number } | null>(null);
   const [caption, setCaption] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const availW = screenW - 32;
+  const maxPreviewH = 420;
+  const minPreviewH = 180;
+
+  let previewW = availW;
+  let previewH = 300;
+
+  if (mediaDims && mediaDims.w > 0 && mediaDims.h > 0) {
+    const aspect = mediaDims.w / mediaDims.h;
+    previewW = availW;
+    previewH = availW / aspect;
+
+    if (previewH > maxPreviewH) {
+      previewH = maxPreviewH;
+      previewW = previewH * aspect;
+      if (previewW > availW) previewW = availW;
+    }
+    if (previewH < minPreviewH) {
+      previewH = minPreviewH;
+      previewW = previewH * aspect;
+      if (previewW > availW) previewW = availW;
+    }
+  }
 
   async function pickMedia() {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -36,8 +63,14 @@ export default function CreateStoryScreen() {
       quality: 0.8,
     });
     if (!result.canceled && result.assets[0]) {
-      setMediaUri(result.assets[0].uri);
-      setMediaType(result.assets[0].type === "video" ? "video" : "image");
+      const asset = result.assets[0];
+      setMediaUri(asset.uri);
+      setMediaType(asset.type === "video" ? "video" : "image");
+      if (asset.width && asset.height) {
+        setMediaDims({ w: asset.width, h: asset.height });
+      } else {
+        setMediaDims(null);
+      }
     }
   }
 
@@ -91,17 +124,17 @@ export default function CreateStoryScreen() {
 
       <View style={styles.body}>
         {mediaUri ? (
-          <View style={styles.previewWrap}>
+          <View style={[styles.previewWrap, { width: previewW, height: previewH, alignSelf: "center", backgroundColor: "#0D0D0D" }]}>
             {mediaType === "video" ? (
               <Video
                 source={{ uri: mediaUri }}
-                style={styles.preview}
-                resizeMode={ResizeMode.COVER}
+                style={{ width: "100%", height: "100%" }}
+                resizeMode={ResizeMode.CONTAIN}
                 useNativeControls
                 isLooping
               />
             ) : (
-              <Image source={{ uri: mediaUri }} style={styles.preview} resizeMode="cover" />
+              <Image source={{ uri: mediaUri }} style={{ width: "100%", height: "100%" }} resizeMode="contain" />
             )}
             <TouchableOpacity style={styles.changeBtn} onPress={pickMedia}>
               <Ionicons name="camera-outline" size={20} color="#fff" />
@@ -138,8 +171,7 @@ const styles = StyleSheet.create({
   body: { flex: 1, padding: 16, gap: 16 },
   pickArea: { height: 300, borderRadius: 16, alignItems: "center", justifyContent: "center", gap: 12 },
   pickText: { fontSize: 15, fontFamily: "Inter_400Regular" },
-  previewWrap: { height: 300, borderRadius: 16, overflow: "hidden", position: "relative" },
-  preview: { width: "100%", height: "100%" },
+  previewWrap: { borderRadius: 16, overflow: "hidden", position: "relative" },
   changeBtn: { position: "absolute", bottom: 12, right: 12, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   changeBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_500Medium" },
   captionInput: { borderRadius: 12, padding: 14, fontSize: 15, fontFamily: "Inter_400Regular", minHeight: 60 },
