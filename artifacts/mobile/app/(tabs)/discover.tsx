@@ -130,6 +130,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
       return;
     }
     if (item.post_type === "video") {
+      if (Platform.OS === "web") return;
       router.push({ pathname: "/video/[id]", params: { id: item.id } });
       return;
     }
@@ -240,21 +241,38 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
 
           {/* ── VIDEO: fullscreen preview card ── */}
           {item.post_type === "video" && item.video_url && (
-            <TouchableOpacity
-              activeOpacity={0.88}
-              onPress={() => router.push({ pathname: "/video/[id]", params: { id: item.id } })}
-              style={styles.videoCard}
-            >
-              <View style={styles.videoThumb}>
-                <View style={styles.playCircle}>
-                  <Ionicons name="play" size={22} color="#fff" />
-                </View>
-                <View style={styles.videoBadge}>
-                  <Ionicons name="videocam" size={11} color="#fff" />
-                  <Text style={styles.videoBadgeText}>Video</Text>
+            Platform.OS === "web" ? (
+              <View style={styles.videoCard}>
+                <View style={styles.videoThumb}>
+                  <View style={{ alignItems: "center", gap: 8 }}>
+                    <Ionicons name="phone-portrait-outline" size={28} color="rgba(255,255,255,0.7)" />
+                    <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, fontFamily: "Inter_600SemiBold", textAlign: "center" }}>
+                      Videos are only available in the app
+                    </Text>
+                  </View>
+                  <View style={styles.videoBadge}>
+                    <Ionicons name="videocam" size={11} color="#fff" />
+                    <Text style={styles.videoBadgeText}>Video</Text>
+                  </View>
                 </View>
               </View>
-            </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.88}
+                onPress={() => router.push({ pathname: "/video/[id]", params: { id: item.id } })}
+                style={styles.videoCard}
+              >
+                <View style={styles.videoThumb}>
+                  <View style={styles.playCircle}>
+                    <Ionicons name="play" size={22} color="#fff" />
+                  </View>
+                  <View style={styles.videoBadge}>
+                    <Ionicons name="videocam" size={11} color="#fff" />
+                    <Text style={styles.videoBadgeText}>Video</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            )
           )}
 
           {/* ── ARTICLE: type badge + title ── */}

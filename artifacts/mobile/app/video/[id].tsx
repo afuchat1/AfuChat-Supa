@@ -26,7 +26,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
-import { notifyPostLike } from "@/lib/notifyUser";
+import { notifyPostLike, notifyPostReply } from "@/lib/notifyUser";
 
 const USE_NATIVE = Platform.OS !== "web";
 
@@ -185,7 +185,7 @@ function CommentsSheet({
 
   function handleReplyTo(reply: Reply) {
     setReplyingTo(reply);
-    setText(`@${reply.profile.handle} `);
+    setText("");
     setTimeout(() => inputRef.current?.focus(), 100);
   }
 
@@ -214,6 +214,15 @@ function CommentsSheet({
       };
       setReplies((prev) => [...prev, newReply]);
       onReplyCountChange(postId, 1);
+      if (replyingTo && replyingTo.author_id !== user.id) {
+        notifyPostReply({
+          postAuthorId: replyingTo.author_id,
+          replierName: profile?.display_name || "Someone",
+          replierUserId: user.id,
+          postId,
+          replyPreview: data.content,
+        });
+      }
       const wasThreaded = !!replyingTo;
       setText("");
       setReplyingTo(null);
@@ -408,6 +417,7 @@ function VideoItem({
   onOpenComments,
   onShare,
   onFollow,
+  onRecordView,
 }: {
   item: VideoPost;
   isActive: boolean;
@@ -420,9 +430,9 @@ function VideoItem({
   onOpenComments: (id: string) => void;
   onShare: (item: VideoPost) => void;
   onFollow: (authorId: string, isFollowing: boolean) => void;
+  onRecordView: (postId: string) => void;
 }) {
   const [paused, setPaused] = useState(false);
-  const [muted, setMuted] = useState(false);
   const [buffering, setBuffering] = useState(true);
   const [progress, setProgress] = useState(0);
   const [expanded, setExpanded] = useState(false);
@@ -432,11 +442,16 @@ function VideoItem({
   const insets = useSafeAreaInsets();
   const videoRef = useRef<Video>(null);
 
+  const viewRecorded = useRef(false);
+
   useEffect(() => {
     if (!isActive) {
       setPaused(false);
       setProgress(0);
       setExpanded(false);
+    } else if (!viewRecorded.current) {
+      viewRecorded.current = true;
+      onRecordView(item.id);
     }
   }, [isActive]);
 
@@ -490,7 +505,7 @@ function VideoItem({
           resizeMode={ResizeMode.CONTAIN}
           shouldPlay={isActive && !paused}
           isLooping
-          isMuted={muted}
+          isMuted={false}
           onPlaybackStatusUpdate={onPlaybackStatus}
         />
       </Pressable>
@@ -613,9 +628,6 @@ function VideoItem({
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity onPress={() => setMuted((m) => !m)} hitSlop={10} style={vStyles.muteBtn}>
-          <Ionicons name={muted ? "volume-mute" : "volume-high-outline"} size={18} color="#fff" />
-        </TouchableOpacity>
       </View>
 
       <View style={[vStyles.musicRow, { bottom: (insets.bottom > 0 ? insets.bottom : 0) + 6 }]}>
@@ -723,16 +735,6 @@ const vStyles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
   },
 
-  muteBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 4,
-  },
-
   musicRow: {
     position: "absolute",
     left: 16,
@@ -797,7 +799,7 @@ export default function VideoPlayerScreen() {
     let query = supabase
       .from("posts")
       .select(`
-        id, author_id, content, video_url, created_at, view_count, audio_name,
+        id, author_id, content, video_url, created_at, audio_name,
         profiles!posts_author_id_fkey(display_name, handle, avatar_url)
       `)
       .eq("post_type", "video")
@@ -827,9 +829,10 @@ export default function VideoPlayerScreen() {
     if (data && data.length > 0) {
       const postIds = data.map((p: any) => p.id);
       const authorIds = [...new Set(data.map((p: any) => p.author_id))];
-      const [{ data: likesData }, { data: repliesData }, { data: myLikes }, { data: myBookmarks }, { data: myFollows }] = await Promise.all([
+      const [{ data: likesData }, { data: repliesData }, { data: viewsData }, { data: myLikes }, { data: myBookmarks }, { data: myFollows }] = await Promise.all([
         supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds),
         supabase.from("post_replies").select("post_id").in("post_id", postIds),
+        supabase.from("post_views").select("post_id").in("post_id", postIds),
         user
           ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id)
           : { data: [] },
@@ -846,6 +849,8 @@ export default function VideoPlayerScreen() {
       for (const l of (likesData || [])) likeMap[l.post_id] = (likeMap[l.post_id] || 0) + 1;
       const replyMap: Record<string, number> = {};
       for (const r of (repliesData || [])) replyMap[r.post_id] = (replyMap[r.post_id] || 0) + 1;
+      const viewMap: Record<string, number> = {};
+      for (const v of (viewsData || [])) viewMap[v.post_id] = (viewMap[v.post_id] || 0) + 1;
       const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
       const myBookmarkSet = new Set((myBookmarks || []).map((b: any) => b.post_id));
 
@@ -855,7 +860,7 @@ export default function VideoPlayerScreen() {
         content: p.content || "",
         video_url: p.video_url,
         created_at: p.created_at,
-        view_count: p.view_count || 0,
+        view_count: viewMap[p.id] || 0,
         audio_name: p.audio_name || null,
         profile: {
           display_name: p.profiles?.display_name || "User",
@@ -983,6 +988,41 @@ export default function VideoPlayerScreen() {
 
   const indicatorLeft = tabAnim.interpolate({ inputRange: [0, 1], outputRange: ["25%", "75%"] });
 
+  const recordedViews = useRef(new Set<string>());
+
+  const handleRecordView = useCallback(async (postId: string) => {
+    if (!user || recordedViews.current.has(postId)) return;
+    recordedViews.current.add(postId);
+    const { error } = await supabase.from("post_views").insert(
+      { post_id: postId, viewer_id: user.id }
+    );
+    if (!error) {
+      setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, view_count: v.view_count + 1 } : v));
+    }
+  }, [user]);
+
+  if (Platform.OS === "web") {
+    return (
+      <View style={mStyles.center}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <View style={{ alignItems: "center", gap: 16, paddingHorizontal: 40 }}>
+          <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(255,255,255,0.06)", alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name="phone-portrait-outline" size={36} color={Colors.brand} />
+          </View>
+          <Text style={{ color: "#fff", fontSize: 20, fontFamily: "Inter_700Bold", textAlign: "center" }}>
+            Videos are only available in the app
+          </Text>
+          <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 }}>
+            Download the AfuChat app to watch videos, interact with creators, and discover trending content.
+          </Text>
+          <TouchableOpacity onPress={() => router.back()} style={{ backgroundColor: Colors.brand, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 24, marginTop: 8 }}>
+            <Text style={{ color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" }}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   if (loading) {
     return (
       <View style={mStyles.center}>
@@ -1045,6 +1085,7 @@ export default function VideoPlayerScreen() {
               onOpenComments={setCommentPostId}
               onShare={handleShare}
               onFollow={handleFollow}
+              onRecordView={handleRecordView}
             />
           )}
           pagingEnabled
