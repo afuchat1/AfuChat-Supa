@@ -27,6 +27,7 @@ import { supabase } from "@/lib/supabase";
 import { registerAlertListener, unregisterAlertListener } from "@/lib/alert";
 import { setBaseUrl } from "@/lib/api-client-react/src";
 import { AppLockGate } from "@/components/AppLockGate";
+import { SplashOverlay } from "@/components/SplashOverlay";
 
 try { setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`); } catch (_) {}
 
@@ -151,6 +152,8 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
+  const [showSplash, setShowSplash] = useState(true);
+
   const [alertState, setAlertState] = useState<{
     visible: boolean;
     title: string;
@@ -232,6 +235,9 @@ export default function RootLayout() {
             </KeyboardProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>
+        {showSplash && (
+          <SplashOverlay onFinish={() => setShowSplash(false)} />
+        )}
       </ErrorBoundary>
     </SafeAreaProvider>
   );
