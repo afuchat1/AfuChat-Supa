@@ -258,220 +258,215 @@ export default function ContactProfileScreen() {
   }
 
   if (loading) {
-    return <View style={[styles.center, { backgroundColor: colors.background }]}><ProfileSkeleton /></View>;
+    return <View style={[st.center, { backgroundColor: colors.background }]}><ProfileSkeleton /></View>;
   }
 
   const isOwnProfile = user?.id === id;
-  const seoTitle = profile ? `${profile.display_name} (@${profile.handle}) - AfuChat` : "Profile - AfuChat";
-  const seoDesc = profile?.bio || `Check out ${profile?.display_name || "this user"}'s profile on AfuChat`;
+
+  const onlineStatus = (() => {
+    if (!profile?.show_online_status || !profile?.last_seen) return null;
+    const diff = Date.now() - new Date(profile.last_seen).getTime();
+    const isOnline = diff < 2 * 60 * 1000;
+    const text = isOnline ? "Online" :
+      diff < 3600000 ? `Active ${Math.floor(diff / 60000)}m ago` :
+      diff < 86400000 ? `Active ${Math.floor(diff / 3600000)}h ago` :
+      `Last seen ${new Date(profile.last_seen).toLocaleDateString()}`;
+    return { isOnline, text };
+  })();
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+    <View style={[st.root, { backgroundColor: colors.inputBg || colors.background }]}>
+      <View style={[st.header, { paddingTop: insets.top, backgroundColor: "transparent" }]}>
+        <TouchableOpacity onPress={() => router.back()} style={st.headerBtn}>
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Profile</Text>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+        <View style={{ flexDirection: "row", gap: 8 }}>
           {profile?.handle ? (
-            <TouchableOpacity onPress={() => shareProfile({ handle: profile.handle, displayName: profile.display_name, bio: profile.bio })}>
-              <Ionicons name="share-outline" size={22} color={colors.textMuted} />
+            <TouchableOpacity style={st.headerBtn} onPress={() => shareProfile({ handle: profile.handle, displayName: profile.display_name, bio: profile.bio })}>
+              <Ionicons name="share-outline" size={20} color={colors.text} />
             </TouchableOpacity>
           ) : null}
           {!isOwnProfile && (
-            <TouchableOpacity onPress={reportUser}>
-              <Ionicons name="flag-outline" size={22} color={colors.textMuted} />
+            <TouchableOpacity style={st.headerBtn} onPress={reportUser}>
+              <Ionicons name="ellipsis-horizontal" size={20} color={colors.text} />
             </TouchableOpacity>
           )}
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.body}>
-        <View style={[styles.profileHeader, { backgroundColor: colors.surface }]}>
-          <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={90} />
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
+        <View style={[st.heroCard, { backgroundColor: colors.surface }]}>
+          <View style={st.avatarSection}>
+            <View style={st.avatarWrap}>
+              <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={96} />
+              {onlineStatus?.isOnline && <View style={st.onlineDot} />}
+            </View>
+          </View>
 
-          <TouchableOpacity style={styles.nameRow} onPress={() => (profile?.is_verified || profile?.is_organization_verified) && setShowBadgeInfo(!showBadgeInfo)}>
-            <Text style={[styles.displayName, { color: colors.text }]}>{profile?.display_name}</Text>
+          <TouchableOpacity style={st.nameRow} activeOpacity={0.8} onPress={() => (profile?.is_verified || profile?.is_organization_verified) && setShowBadgeInfo(!showBadgeInfo)}>
+            <Text style={[st.displayName, { color: colors.text }]}>{profile?.display_name}</Text>
             <VerifiedBadge isVerified={profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={20} />
           </TouchableOpacity>
-          <PrestigeBadge acoin={profile?.acoin || 0} size="md" showLabel />
 
-          <Text style={[styles.handle, { color: colors.textSecondary }]}>@{profile?.handle}</Text>
+          <View style={st.handleRow}>
+            <Text style={[st.handle, { color: colors.textSecondary }]}>@{profile?.handle}</Text>
+            <PrestigeBadge acoin={profile?.acoin || 0} size="sm" showLabel />
+          </View>
 
-          {profile?.show_online_status && profile?.last_seen && (() => {
-            const diff = Date.now() - new Date(profile.last_seen).getTime();
-            const isOnline = diff < 2 * 60 * 1000;
-            const lastSeenText = isOnline ? "Online" :
-              diff < 3600000 ? `Last seen ${Math.floor(diff / 60000)}m ago` :
-              diff < 86400000 ? `Last seen ${Math.floor(diff / 3600000)}h ago` :
-              `Last seen ${new Date(profile.last_seen).toLocaleDateString()}`;
-            return (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isOnline ? "#34C759" : colors.textMuted }} />
-                <Text style={{ fontSize: 12, color: isOnline ? "#34C759" : colors.textMuted, fontFamily: "Inter_400Regular" }}>{lastSeenText}</Text>
-              </View>
-            );
-          })()}
-
-          {profile?.is_organization_verified && (
-            <View style={styles.verifiedBadge}>
-              <Ionicons name="shield-checkmark" size={14} color="#fff" />
-              <Text style={styles.verifiedBadgeText}>Verified Business</Text>
-            </View>
+          {onlineStatus && !onlineStatus.isOnline && (
+            <Text style={[st.statusText, { color: colors.textMuted }]}>{onlineStatus.text}</Text>
           )}
-          {!profile?.is_organization_verified && profile?.is_verified && (
-            <View style={[styles.verifiedBadge, { backgroundColor: colors.accent }]}>
-              <Ionicons name="checkmark-circle" size={14} color="#fff" />
-              <Text style={styles.verifiedBadgeText}>Verified</Text>
+
+          {(profile?.is_organization_verified || profile?.is_verified) && (
+            <View style={[st.verifiedPill, { backgroundColor: profile?.is_organization_verified ? "#D4A853" : colors.accent }]}>
+              <Ionicons name={profile?.is_organization_verified ? "shield-checkmark" : "checkmark-circle"} size={12} color="#fff" />
+              <Text style={st.verifiedPillText}>{profile?.is_organization_verified ? "Verified Business" : "Verified"}</Text>
             </View>
           )}
 
-          {showBadgeInfo && profile?.is_organization_verified && (
-            <View style={[styles.badgeInfoCard, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
-              <Text style={[styles.badgeInfoTitle, { color: colors.text }]}>Verification Details</Text>
-              <View style={styles.badgeInfoRow}>
-                <Ionicons name="shield-checkmark" size={14} color={Colors.gold} />
-                <Text style={[styles.badgeInfoText, { color: colors.textSecondary }]}>Verified Business Account</Text>
-              </View>
-              <View style={styles.badgeInfoRow}>
-                <Ionicons name="briefcase" size={14} color={Colors.gold} />
-                <Text style={[styles.badgeInfoText, { color: colors.textSecondary }]}>Official Business Profile</Text>
-              </View>
-              <View style={styles.badgeInfoRow}>
-                <Ionicons name="checkmark-done" size={14} color={Colors.gold} />
-                <Text style={[styles.badgeInfoText, { color: colors.textSecondary }]}>Identity Confirmed by AfuChat</Text>
-              </View>
-            </View>
-          )}
-          {showBadgeInfo && !profile?.is_organization_verified && profile?.is_verified && (
-            <View style={[styles.badgeInfoCard, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
-              <Text style={[styles.badgeInfoTitle, { color: colors.text }]}>Verification Details</Text>
-              <View style={styles.badgeInfoRow}>
-                <Ionicons name="checkmark-circle" size={14} color={colors.accent} />
-                <Text style={[styles.badgeInfoText, { color: colors.textSecondary }]}>Verified Account</Text>
-              </View>
-              <View style={styles.badgeInfoRow}>
-                <Ionicons name="diamond" size={14} color={colors.accent} />
-                <Text style={[styles.badgeInfoText, { color: colors.textSecondary }]}>Premium Subscription Verified</Text>
-              </View>
+          {showBadgeInfo && (
+            <View style={[st.badgeInfoCard, { backgroundColor: colors.inputBg || colors.background, borderColor: colors.border }]}>
+              <Text style={[st.badgeInfoTitle, { color: colors.text }]}>Verification Details</Text>
+              {profile?.is_organization_verified ? (
+                <>
+                  <View style={st.badgeInfoRow}><Ionicons name="shield-checkmark" size={14} color={Colors.gold} /><Text style={[st.badgeInfoText, { color: colors.textSecondary }]}>Verified Business Account</Text></View>
+                  <View style={st.badgeInfoRow}><Ionicons name="briefcase" size={14} color={Colors.gold} /><Text style={[st.badgeInfoText, { color: colors.textSecondary }]}>Official Business Profile</Text></View>
+                  <View style={st.badgeInfoRow}><Ionicons name="checkmark-done" size={14} color={Colors.gold} /><Text style={[st.badgeInfoText, { color: colors.textSecondary }]}>Identity Confirmed by AfuChat</Text></View>
+                </>
+              ) : (
+                <>
+                  <View style={st.badgeInfoRow}><Ionicons name="checkmark-circle" size={14} color={colors.accent} /><Text style={[st.badgeInfoText, { color: colors.textSecondary }]}>Verified Account</Text></View>
+                  <View style={st.badgeInfoRow}><Ionicons name="diamond" size={14} color={colors.accent} /><Text style={[st.badgeInfoText, { color: colors.textSecondary }]}>Premium Subscription</Text></View>
+                </>
+              )}
             </View>
           )}
 
           {profile?.bio ? (
-            <Text style={[styles.bio, { color: colors.text }]}>{profile.bio}</Text>
+            <Text style={[st.bio, { color: colors.text }]}>{profile.bio}</Text>
           ) : null}
 
-          <View style={styles.detailsSection}>
+          <View style={st.metaRow}>
             {profile?.country ? (
-              <View style={styles.detailRow}>
-                <Ionicons name="location-outline" size={15} color={colors.textMuted} />
-                <Text style={[styles.detailText, { color: colors.textSecondary }]}>{profile.country}</Text>
+              <View style={[st.metaChip, { backgroundColor: colors.inputBg || colors.background }]}>
+                <Ionicons name="location" size={12} color={colors.textMuted} />
+                <Text style={[st.metaChipText, { color: colors.textSecondary }]}>{profile.country}</Text>
               </View>
             ) : null}
-            <View style={styles.detailRow}>
-              <Ionicons name="calendar-outline" size={15} color={colors.textMuted} />
-              <Text style={[styles.detailText, { color: colors.textSecondary }]}>Joined {formatJoinDate(profile?.created_at || null)}</Text>
+            <View style={[st.metaChip, { backgroundColor: colors.inputBg || colors.background }]}>
+              <Ionicons name="calendar" size={12} color={colors.textMuted} />
+              <Text style={[st.metaChipText, { color: colors.textSecondary }]}>Joined {formatJoinDate(profile?.created_at || null)}</Text>
             </View>
             {profile?.website_url ? (
-              <View style={styles.detailRow}>
-                <Ionicons name="link-outline" size={15} color={colors.textMuted} />
-                <Text style={[styles.detailText, { color: colors.accent }]}>{profile.website_url}</Text>
+              <View style={[st.metaChip, { backgroundColor: colors.accent + "12" }]}>
+                <Ionicons name="link" size={12} color={colors.accent} />
+                <Text style={[st.metaChipText, { color: colors.accent }]} numberOfLines={1}>{profile.website_url.replace(/^https?:\/\//, "")}</Text>
               </View>
             ) : null}
           </View>
 
-          <View style={styles.followStats}>
-            <TouchableOpacity style={styles.followStat} activeOpacity={0.6} onPress={() => router.push({ pathname: "/followers", params: { userId: id, type: "followers", ownerHandle: profile?.handle } })}>
-              <Text style={[styles.followNum, { color: colors.text }]}>{followerCount}</Text>
-              <Text style={[styles.followLabel, { color: colors.textMuted }]}>Followers</Text>
+          <View style={[st.statsBar, { backgroundColor: colors.inputBg || colors.background }]}>
+            <TouchableOpacity style={st.statBlock} activeOpacity={0.6} onPress={() => router.push({ pathname: "/followers", params: { userId: id, type: "followers", ownerHandle: profile?.handle } })}>
+              <Text style={[st.statNum, { color: colors.text }]}>{followerCount.toLocaleString()}</Text>
+              <Text style={[st.statLabel, { color: colors.textMuted }]}>Followers</Text>
             </TouchableOpacity>
-            <View style={[styles.followDivider, { backgroundColor: colors.border }]} />
-            <TouchableOpacity style={styles.followStat} activeOpacity={0.6} onPress={() => router.push({ pathname: "/followers", params: { userId: id, type: "following", ownerHandle: profile?.handle } })}>
-              <Text style={[styles.followNum, { color: colors.text }]}>{followingCount}</Text>
-              <Text style={[styles.followLabel, { color: colors.textMuted }]}>Following</Text>
+            <View style={[st.statDiv, { backgroundColor: colors.border }]} />
+            <TouchableOpacity style={st.statBlock} activeOpacity={0.6} onPress={() => router.push({ pathname: "/followers", params: { userId: id, type: "following", ownerHandle: profile?.handle } })}>
+              <Text style={[st.statNum, { color: colors.text }]}>{followingCount.toLocaleString()}</Text>
+              <Text style={[st.statLabel, { color: colors.textMuted }]}>Following</Text>
             </TouchableOpacity>
             {mutualCount > 0 && (
               <>
-                <View style={[styles.followDivider, { backgroundColor: colors.border }]} />
-                <View style={styles.followStat}>
-                  <Text style={[styles.followNum, { color: colors.text }]}>{mutualCount}</Text>
-                  <Text style={[styles.followLabel, { color: colors.textMuted }]}>Mutual</Text>
+                <View style={[st.statDiv, { backgroundColor: colors.border }]} />
+                <View style={st.statBlock}>
+                  <Text style={[st.statNum, { color: colors.text }]}>{mutualCount}</Text>
+                  <Text style={[st.statLabel, { color: colors.textMuted }]}>Mutual</Text>
                 </View>
               </>
             )}
-          </View>
-
-          <View style={styles.infoRow}>
-            <View style={styles.infoItem}>
-              <Ionicons name="flash" size={16} color="#FFD60A" />
-              <Text style={[styles.infoValue, { color: colors.text }]}>{profile?.xp || 0} Nexa</Text>
+            <View style={[st.statDiv, { backgroundColor: colors.border }]} />
+            <View style={st.statBlock}>
+              <Text style={[st.statNum, { color: "#FFD60A" }]}>{(profile?.xp || 0).toLocaleString()}</Text>
+              <Text style={[st.statLabel, { color: colors.textMuted }]}>{profile?.current_grade || "Nexa"}</Text>
             </View>
-            <Text style={[styles.infoDot, { color: colors.textMuted }]}>{profile?.current_grade}</Text>
           </View>
 
           {!isOwnProfile && (
-            <View style={styles.profileActions}>
-              <TouchableOpacity style={[styles.followBtn, { backgroundColor: colors.accent }, isFollowing && [styles.followBtnActive, { backgroundColor: "transparent", borderColor: colors.accent }]]} onPress={toggleFollow}>
+            <View style={st.ctaRow}>
+              <TouchableOpacity
+                style={[st.primaryCta, { backgroundColor: isFollowing ? "transparent" : colors.accent, borderColor: colors.accent, borderWidth: isFollowing ? 1.5 : 0 }]}
+                onPress={toggleFollow}
+                activeOpacity={0.7}
+              >
                 <Ionicons name={isFollowing ? "checkmark" : "person-add-outline"} size={16} color={isFollowing ? colors.accent : "#fff"} />
-                <Text style={[styles.followBtnText, isFollowing && { color: colors.accent }]}>
+                <Text style={[st.primaryCtaText, { color: isFollowing ? colors.accent : "#fff" }]}>
                   {isFollowing ? "Following" : "Follow"}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.blockBtn, isBlocked && styles.blockBtnActive]} onPress={toggleBlock}>
-                <Ionicons name={isBlocked ? "ban" : "ban-outline"} size={16} color={isBlocked ? "#fff" : "#FF3B30"} />
-                <Text style={[styles.blockBtnText, isBlocked && { color: "#fff" }]}>
-                  {isBlocked ? "Blocked" : "Block"}
-                </Text>
+              <TouchableOpacity style={[st.secondaryCta, { backgroundColor: colors.accent + "12" }]} onPress={startChat} activeOpacity={0.7}>
+                <Ionicons name="chatbubble" size={16} color={colors.accent} />
+                <Text style={[st.secondaryCtaText, { color: colors.accent }]}>Message</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[st.iconCta, { backgroundColor: colors.inputBg || colors.background }]} onPress={sendWave} activeOpacity={0.7}>
+                <Text style={{ fontSize: 18 }}>👋</Text>
               </TouchableOpacity>
             </View>
           )}
         </View>
 
-        <View style={[styles.actions, { backgroundColor: colors.surface }]}>
-          <TouchableOpacity style={styles.actionBtn} onPress={startChat}>
-            <View style={[styles.actionIcon, { backgroundColor: colors.accent }]}>
-              <Ionicons name="chatbubble" size={22} color="#fff" />
+        <View style={[st.quickActions, { backgroundColor: colors.surface }]}>
+          <TouchableOpacity style={st.qAction} onPress={startChat}>
+            <View style={[st.qIcon, { backgroundColor: colors.accent }]}>
+              <Ionicons name="chatbubble" size={20} color="#fff" />
             </View>
-            <Text style={[styles.actionLabel, { color: colors.text }]}>Message</Text>
+            <Text style={[st.qLabel, { color: colors.text }]}>Message</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={sendWave}>
-            <View style={[styles.actionIcon, { backgroundColor: "#FF9500" }]}>
-              <Text style={{ fontSize: 20 }}>👋</Text>
+          <TouchableOpacity style={st.qAction}>
+            <View style={[st.qIcon, { backgroundColor: "#007AFF" }]}>
+              <Ionicons name="call" size={20} color="#fff" />
             </View>
-            <Text style={[styles.actionLabel, { color: colors.text }]}>Wave</Text>
+            <Text style={[st.qLabel, { color: colors.text }]}>Call</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn}>
-            <View style={[styles.actionIcon, { backgroundColor: "#007AFF" }]}>
-              <Ionicons name="call" size={22} color="#fff" />
+          <TouchableOpacity style={st.qAction} onPress={() => router.push({ pathname: "/gifts", params: { userId: profile?.id, userName: profile?.display_name } })}>
+            <View style={[st.qIcon, { backgroundColor: "#AF52DE" }]}>
+              <Ionicons name="gift" size={20} color="#fff" />
             </View>
-            <Text style={[styles.actionLabel, { color: colors.text }]}>Call</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push({ pathname: "/gifts", params: { userId: profile?.id, userName: profile?.display_name } })}>
-            <View style={[styles.actionIcon, { backgroundColor: "#AF52DE" }]}>
-              <Ionicons name="gift" size={22} color="#fff" />
-            </View>
-            <Text style={[styles.actionLabel, { color: colors.text }]}>Gift</Text>
+            <Text style={[st.qLabel, { color: colors.text }]}>Gift</Text>
           </TouchableOpacity>
           {hasShop && (
-            <TouchableOpacity style={styles.actionBtn} onPress={() => router.push({ pathname: "/shop/[userId]", params: { userId: profile?.id || "" } })}>
-              <View style={[styles.actionIcon, { backgroundColor: "#FF9500" }]}>
-                <Ionicons name="storefront" size={22} color="#fff" />
+            <TouchableOpacity style={st.qAction} onPress={() => router.push({ pathname: "/shop/[userId]", params: { userId: profile?.id || "" } })}>
+              <View style={[st.qIcon, { backgroundColor: "#FF9500" }]}>
+                <Ionicons name="storefront" size={20} color="#fff" />
               </View>
-              <Text style={[styles.actionLabel, { color: colors.text }]}>Store</Text>
+              <Text style={[st.qLabel, { color: colors.text }]}>Store</Text>
+            </TouchableOpacity>
+          )}
+          {!isOwnProfile && (
+            <TouchableOpacity style={st.qAction} onPress={toggleBlock}>
+              <View style={[st.qIcon, { backgroundColor: isBlocked ? "#FF3B30" : colors.inputBg || colors.background }]}>
+                <Ionicons name={isBlocked ? "ban" : "ban-outline"} size={20} color={isBlocked ? "#fff" : "#FF3B30"} />
+              </View>
+              <Text style={[st.qLabel, { color: isBlocked ? "#FF3B30" : colors.text }]}>{isBlocked ? "Blocked" : "Block"}</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        <View style={[styles.postsSection, { backgroundColor: colors.surface }]}>
-          <View style={styles.postsSectionHeader}>
+        <View style={[st.postsSection, { backgroundColor: colors.surface }]}>
+          <View style={st.postsSectionHeader}>
             <Ionicons name="newspaper-outline" size={18} color={colors.accent} />
-            <Text style={[styles.postsSectionTitle, { color: colors.text }]}>Posts</Text>
-            <Text style={[styles.postsSectionCount, { color: colors.textMuted }]}>{posts.length}</Text>
+            <Text style={[st.postsSectionTitle, { color: colors.text }]}>Posts</Text>
+            <View style={[st.postCountBadge, { backgroundColor: colors.accent + "15" }]}>
+              <Text style={[st.postCountText, { color: colors.accent }]}>{posts.length}</Text>
+            </View>
           </View>
           {postsLoading ? (
             <View style={{ gap: 8 }}>{[1, 2].map((i) => <PostSkeleton key={i} />)}</View>
           ) : posts.length === 0 ? (
-            <Text style={[styles.emptyPosts, { color: colors.textMuted }]}>No posts yet</Text>
+            <View style={st.emptyPostsWrap}>
+              <Ionicons name="document-text-outline" size={40} color={colors.textMuted} />
+              <Text style={[st.emptyPostsTitle, { color: colors.text }]}>No posts yet</Text>
+              <Text style={[st.emptyPostsSub, { color: colors.textMuted }]}>{profile?.display_name} hasn't shared anything yet.</Text>
+            </View>
           ) : (
             posts.map((p) => {
               const isVideo = p.post_type === "video" && p.video_url;
@@ -482,77 +477,55 @@ export default function ContactProfileScreen() {
               return (
                 <TouchableOpacity
                   key={p.id}
-                  style={[styles.postCard, { borderTopColor: colors.border }]}
+                  style={[st.postCard, { borderTopColor: colors.border }]}
                   onPress={() => {
-                    if (isArticle) {
-                      router.push({ pathname: "/article/[id]", params: { id: p.id } });
-                    } else if (isVideo) {
-                      router.push({ pathname: "/video/[id]", params: { id: p.id } });
-                    } else {
-                      router.push({ pathname: "/post/[id]", params: { id: p.id } });
-                    }
+                    if (isArticle) router.push({ pathname: "/article/[id]", params: { id: p.id } });
+                    else if (isVideo) router.push({ pathname: "/video/[id]", params: { id: p.id } });
+                    else router.push({ pathname: "/post/[id]", params: { id: p.id } });
                   }}
-                  activeOpacity={0.7}
+                  activeOpacity={0.65}
                 >
                   {isArticle ? (
-                    <View style={[styles.articleCardInner, { backgroundColor: colors.backgroundSecondary || colors.surface, borderColor: colors.accent + "20" }]}>
-                      {images.length > 0 && (
-                        <Image source={{ uri: images[0] }} style={styles.articleCoverImg} resizeMode="cover" />
-                      )}
-                      <View style={{ padding: 12, gap: 6 }}>
-                        <View style={[styles.articleBadge, { backgroundColor: colors.accent + "15" }]}>
+                    <View style={[st.articleCard, { backgroundColor: colors.inputBg || colors.background, borderColor: colors.accent + "20" }]}>
+                      {images.length > 0 && <Image source={{ uri: images[0] }} style={st.articleCover} resizeMode="cover" />}
+                      <View style={{ padding: 14, gap: 6 }}>
+                        <View style={[st.articleBadge, { backgroundColor: colors.accent + "15" }]}>
                           <Ionicons name="document-text" size={11} color={colors.accent} />
                           <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: colors.accent }}>Article</Text>
                         </View>
-                        {p.article_title ? (
-                          <Text style={[styles.articleTitleText, { color: colors.text }]} numberOfLines={2}>{p.article_title}</Text>
-                        ) : null}
-                        {!!p.content && (
-                          <Text style={{ color: colors.textSecondary, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 }} numberOfLines={2}>{p.content}</Text>
-                        )}
-                        <View style={[styles.articleReadCta, { backgroundColor: colors.accent }]}>
-                          <Ionicons name="book-outline" size={12} color="#fff" />
-                          <Text style={{ color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Read article</Text>
-                        </View>
+                        {p.article_title ? <Text style={[st.articleTitle, { color: colors.text }]} numberOfLines={2}>{p.article_title}</Text> : null}
+                        {!!p.content && <Text style={{ color: colors.textSecondary, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 }} numberOfLines={2}>{p.content}</Text>}
                       </View>
                     </View>
                   ) : (
                     <>
-                      {!!p.content && (
-                        <Text style={[styles.postContent, { color: colors.text }]} numberOfLines={3}>{p.content}</Text>
-                      )}
+                      {!!p.content && <Text style={[st.postContent, { color: colors.text }]} numberOfLines={3}>{p.content}</Text>}
                       {isVideo ? (
-                        <View style={styles.videoThumbWrap}>
-                          <View style={[styles.postThumb, styles.videoPlaceholder]}>
-                            <View style={styles.videoPlayIcon}>
-                              <Ionicons name="play" size={28} color="#fff" />
-                            </View>
-                            <Text style={styles.videoLabel}>Video</Text>
+                        <View style={[st.postThumb, { backgroundColor: "#1a1a1d", alignItems: "center", justifyContent: "center" }]}>
+                          <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" }}>
+                            <Ionicons name="play" size={24} color="#fff" />
                           </View>
                         </View>
                       ) : images.length === 1 ? (
-                        <Image source={{ uri: images[0] }} style={styles.postThumb} resizeMode="cover" />
+                        <Image source={{ uri: images[0] }} style={st.postThumb} resizeMode="cover" />
                       ) : images.length > 1 ? (
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageRow}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
                           {images.map((url: string, i: number) => (
-                            <Image key={i} source={{ uri: url }} style={styles.postThumbSmall} resizeMode="cover" />
+                            <Image key={i} source={{ uri: url }} style={st.postThumbSmall} resizeMode="cover" />
                           ))}
                         </ScrollView>
                       ) : null}
                     </>
                   )}
-                  <View style={styles.postMeta}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      {isVideo && <Ionicons name="videocam" size={12} color={colors.accent} />}
-                      <Text style={[styles.postTime, { color: colors.textMuted }]}>{timeAgo(p.created_at)}</Text>
-                    </View>
-                    <View style={styles.postStats}>
+                  <View style={st.postMeta}>
+                    <Text style={[st.postTime, { color: colors.textMuted }]}>{timeAgo(p.created_at)}</Text>
+                    <View style={st.postStats}>
                       <Ionicons name="heart-outline" size={13} color={colors.textMuted} />
-                      <Text style={[styles.postStatNum, { color: colors.textMuted }]}>{p.likeCount}</Text>
-                      <Ionicons name="chatbubble-outline" size={13} color={colors.textMuted} style={{ marginLeft: 10 }} />
-                      <Text style={[styles.postStatNum, { color: colors.textMuted }]}>{p.replyCount}</Text>
-                      <Ionicons name="eye-outline" size={13} color={colors.textMuted} style={{ marginLeft: 10 }} />
-                      <Text style={[styles.postStatNum, { color: colors.textMuted }]}>{p.view_count || 0}</Text>
+                      <Text style={[st.postStatNum, { color: colors.textMuted }]}>{p.likeCount}</Text>
+                      <Ionicons name="chatbubble-outline" size={13} color={colors.textMuted} style={{ marginLeft: 8 }} />
+                      <Text style={[st.postStatNum, { color: colors.textMuted }]}>{p.replyCount}</Text>
+                      <Ionicons name="eye-outline" size={13} color={colors.textMuted} style={{ marginLeft: 8 }} />
+                      <Text style={[st.postStatNum, { color: colors.textMuted }]}>{p.view_count || 0}</Text>
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -565,66 +538,74 @@ export default function ContactProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const st = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  header: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  body: { gap: 12, paddingVertical: 12 },
-  profileHeader: { alignItems: "center", paddingVertical: 28, paddingHorizontal: 24, gap: 8 },
-  nameRow: { flexDirection: "row", alignItems: "center" },
-  displayName: { fontSize: 22, fontFamily: "Inter_700Bold" },
-  handle: { fontSize: 14, fontFamily: "Inter_400Regular" },
-  goldBadge: { marginLeft: 6 },
-  verifiedBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#D4A853", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, marginTop: 4 },
-  verifiedBadgeText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  badgeInfoCard: { width: "100%", borderRadius: 12, padding: 16, gap: 10, marginTop: 8, borderWidth: 1 },
+
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 12, paddingBottom: 8, zIndex: 10 },
+  headerBtn: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+
+  heroCard: { marginHorizontal: 16, marginTop: 4, borderRadius: 24, paddingTop: 28, paddingBottom: 24, paddingHorizontal: 24, alignItems: "center", gap: 6 },
+  avatarSection: { marginBottom: 8 },
+  avatarWrap: { position: "relative" },
+  onlineDot: { position: "absolute", bottom: 4, right: 4, width: 16, height: 16, borderRadius: 8, backgroundColor: "#34C759", borderWidth: 3, borderColor: "#fff" },
+
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  displayName: { fontSize: 24, fontFamily: "Inter_700Bold", letterSpacing: -0.3 },
+  handleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  handle: { fontSize: 15, fontFamily: "Inter_400Regular" },
+  statusText: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+
+  verifiedPill: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, marginTop: 4 },
+  verifiedPillText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
+
+  badgeInfoCard: { width: "100%", borderRadius: 14, padding: 16, gap: 10, marginTop: 8, borderWidth: 1 },
   badgeInfoTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", marginBottom: 4 },
   badgeInfoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   badgeInfoText: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  bio: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", marginTop: 4, lineHeight: 20 },
-  detailsSection: { gap: 6, marginTop: 8, alignItems: "center" },
-  detailRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  detailText: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  infoRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 },
-  infoItem: { flexDirection: "row", alignItems: "center", gap: 4 },
-  infoValue: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  infoDot: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  actions: { flexDirection: "row", justifyContent: "space-around", paddingVertical: 20, paddingHorizontal: 16 },
-  actionBtn: { alignItems: "center", gap: 8 },
-  actionIcon: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center" },
-  actionLabel: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  followStats: { flexDirection: "row", alignItems: "center", marginTop: 12, gap: 0 },
-  followStat: { alignItems: "center", paddingHorizontal: 20 },
-  followNum: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  followLabel: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  followDivider: { width: StyleSheet.hairlineWidth, height: 30 },
-  profileActions: { flexDirection: "row", gap: 10, marginTop: 12 },
-  followBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.brand, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 24 },
-  followBtnActive: { backgroundColor: "transparent", borderWidth: 1, borderColor: Colors.brand },
-  followBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  blockBtn: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: "#FF3B30", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24 },
-  blockBtnActive: { backgroundColor: "#FF3B30" },
-  blockBtnText: { color: "#FF3B30", fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  postsSection: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
-  postsSectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+
+  bio: { fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22, marginTop: 8, paddingHorizontal: 8 },
+
+  metaRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 6, marginTop: 12 },
+  metaChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  metaChipText: { fontSize: 12, fontFamily: "Inter_500Medium" },
+
+  statsBar: { flexDirection: "row", alignItems: "center", borderRadius: 16, marginTop: 16, paddingVertical: 14, width: "100%" },
+  statBlock: { flex: 1, alignItems: "center" },
+  statNum: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  statLabel: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2, textTransform: "uppercase", letterSpacing: 0.3 },
+  statDiv: { width: StyleSheet.hairlineWidth, height: 28 },
+
+  ctaRow: { flexDirection: "row", gap: 8, marginTop: 16, width: "100%" },
+  primaryCta: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderRadius: 14 },
+  primaryCtaText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  secondaryCta: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderRadius: 14 },
+  secondaryCtaText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  iconCta: { width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+
+  quickActions: { flexDirection: "row", justifyContent: "space-around", marginHorizontal: 16, marginTop: 12, borderRadius: 20, paddingVertical: 18, paddingHorizontal: 12 },
+  qAction: { alignItems: "center", gap: 6 },
+  qIcon: { width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  qLabel: { fontSize: 12, fontFamily: "Inter_500Medium" },
+
+  postsSection: { marginHorizontal: 16, marginTop: 12, borderRadius: 20, paddingHorizontal: 16, paddingTop: 18, paddingBottom: 12 },
+  postsSectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14 },
   postsSectionTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", flex: 1 },
-  postsSectionCount: { fontSize: 14, fontFamily: "Inter_500Medium" },
-  emptyPosts: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", paddingVertical: 24 },
+  postCountBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10 },
+  postCountText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+
+  emptyPostsWrap: { alignItems: "center", paddingVertical: 32, gap: 8 },
+  emptyPostsTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  emptyPostsSub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
+
   postCard: { paddingVertical: 14, borderTopWidth: StyleSheet.hairlineWidth },
-  articleCardInner: { borderRadius: 12, borderWidth: 1, overflow: "hidden", marginBottom: 8 },
-  articleCoverImg: { width: "100%", height: 120 },
+  articleCard: { borderRadius: 14, borderWidth: 1, overflow: "hidden", marginBottom: 8 },
+  articleCover: { width: "100%", height: 130, borderTopLeftRadius: 14, borderTopRightRadius: 14 },
   articleBadge: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
-  articleTitleText: { fontSize: 16, fontFamily: "Inter_700Bold", lineHeight: 22 },
-  articleReadCta: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderRadius: 8, marginTop: 4 },
-  postContent: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22, marginBottom: 8 },
-  postThumb: { width: "100%", height: 160, borderRadius: 10, marginBottom: 8, backgroundColor: "#e0e0e0" },
-  videoThumbWrap: { marginBottom: 8 },
-  videoPlaceholder: { backgroundColor: "#1a1a1d", alignItems: "center", justifyContent: "center" },
-  videoPlayIcon: { width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
-  videoLabel: { color: "rgba(255,255,255,0.5)", fontSize: 12, fontFamily: "Inter_600SemiBold", marginTop: 6 },
-  imageRow: { marginBottom: 8 },
-  postThumbSmall: { width: 130, height: 130, borderRadius: 10, marginRight: 8, backgroundColor: "#e0e0e0" },
+  articleTitle: { fontSize: 16, fontFamily: "Inter_700Bold", lineHeight: 22 },
+  postContent: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22, marginBottom: 10 },
+  postThumb: { width: "100%", height: 180, borderRadius: 14, marginBottom: 10, backgroundColor: "#e0e0e0" },
+  postThumbSmall: { width: 130, height: 130, borderRadius: 12, marginRight: 8, backgroundColor: "#e0e0e0" },
   postMeta: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   postTime: { fontSize: 12, fontFamily: "Inter_400Regular" },
   postStats: { flexDirection: "row", alignItems: "center", gap: 4 },

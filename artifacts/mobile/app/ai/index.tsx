@@ -4,6 +4,7 @@ import {
   Animated,
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -196,6 +197,56 @@ function stripLeftoverMarkdown(str: string): string {
   return str.replace(/\*{1,3}/g, "").replace(/^#{1,3}\s*/gm, "").replace(/`/g, "");
 }
 
+function LinkifiedText({ text, colors, isUser }: { text: string; colors: any; isUser?: boolean }) {
+  const textColor = isUser ? "#fff" : colors.text;
+  const linkColor = isUser ? "#E0F7FA" : colors.accent;
+  const linkRegex = /(https?:\/\/[^\s),]+|@[\w.]+|[\w.+-]+@[\w-]+\.[\w.]+)/g;
+  const parts: React.ReactNode[] = [];
+  let lastIdx = 0;
+  let match;
+  let key = 0;
+
+  while ((match = linkRegex.exec(text)) !== null) {
+    if (match.index > lastIdx) {
+      parts.push(<Text key={key++} style={{ color: textColor }}>{text.slice(lastIdx, match.index)}</Text>);
+    }
+    const raw = match[1];
+    if (raw.startsWith("@")) {
+      const handle = raw.slice(1);
+      parts.push(
+        <Text
+          key={key++}
+          style={{ color: linkColor, fontWeight: "600" }}
+          onPress={() => {
+            supabase.from("profiles").select("id").eq("handle", handle.toLowerCase()).maybeSingle().then(({ data }) => {
+              if (data?.id) router.push({ pathname: "/contact/[id]", params: { id: data.id } });
+            });
+          }}
+        >
+          {raw}
+        </Text>
+      );
+    } else if (raw.includes("@") && !raw.startsWith("http")) {
+      parts.push(
+        <Text key={key++} style={{ color: linkColor, textDecorationLine: "underline" }} onPress={() => Linking.openURL(`mailto:${raw}`)}>
+          {raw}
+        </Text>
+      );
+    } else {
+      parts.push(
+        <Text key={key++} style={{ color: linkColor, textDecorationLine: "underline" }} onPress={() => Linking.openURL(raw)}>
+          {raw}
+        </Text>
+      );
+    }
+    lastIdx = match.index + match[0].length;
+  }
+  if (lastIdx < text.length) {
+    parts.push(<Text key={key++} style={{ color: textColor }}>{text.slice(lastIdx)}</Text>);
+  }
+  return <>{parts}</>;
+}
+
 function RichInlineText({ text, colors, isUser }: { text: string; colors: any; isUser?: boolean }) {
   const textColor = isUser ? "#fff" : colors.text;
   const parts: React.ReactNode[] = [];
@@ -207,14 +258,14 @@ function RichInlineText({ text, colors, isUser }: { text: string; colors: any; i
   while ((match = regex.exec(text)) !== null) {
     if (match.index > lastIdx) {
       const raw = text.slice(lastIdx, match.index);
-      parts.push(<Text key={key++} style={{ color: textColor }}>{stripLeftoverMarkdown(raw)}</Text>);
+      parts.push(<Text key={key++} style={{ color: textColor }}><LinkifiedText text={stripLeftoverMarkdown(raw)} colors={colors} isUser={isUser} /></Text>);
     }
     if (match[2]) {
-      parts.push(<Text key={key++} style={{ color: textColor, fontWeight: "700", fontStyle: "italic" }}>{match[2]}</Text>);
+      parts.push(<Text key={key++} style={{ color: textColor, fontWeight: "700", fontStyle: "italic" }}><LinkifiedText text={match[2]} colors={colors} isUser={isUser} /></Text>);
     } else if (match[3]) {
-      parts.push(<Text key={key++} style={{ color: textColor, fontWeight: "700" }}>{match[3]}</Text>);
+      parts.push(<Text key={key++} style={{ color: textColor, fontWeight: "700" }}><LinkifiedText text={match[3]} colors={colors} isUser={isUser} /></Text>);
     } else if (match[4]) {
-      parts.push(<Text key={key++} style={{ color: textColor, fontStyle: "italic" }}>{match[4]}</Text>);
+      parts.push(<Text key={key++} style={{ color: textColor, fontStyle: "italic" }}><LinkifiedText text={match[4]} colors={colors} isUser={isUser} /></Text>);
     } else if (match[5]) {
       parts.push(
         <Text key={key++} style={{ color: colors.accent, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", fontSize: 13, backgroundColor: colors.inputBg || "#f0f0f0", borderRadius: 4 }}>
@@ -226,7 +277,7 @@ function RichInlineText({ text, colors, isUser }: { text: string; colors: any; i
   }
   if (lastIdx < text.length) {
     const raw = text.slice(lastIdx);
-    parts.push(<Text key={key++} style={{ color: textColor }}>{stripLeftoverMarkdown(raw)}</Text>);
+    parts.push(<Text key={key++} style={{ color: textColor }}><LinkifiedText text={stripLeftoverMarkdown(raw)} colors={colors} isUser={isUser} /></Text>);
   }
   return <>{parts}</>;
 }
@@ -1273,7 +1324,7 @@ AI CAPABILITIES (what you can do):
         .map(m => `[${m.role === "user" ? "User" : "AfuAi"}]: ${m.content}`)
         .join("\n");
 
-      const systemPrompt = `You are AfuAi — the hyper-intelligent AI core powering AfuChat, the world's most advanced social messaging super-app. You operate with cutting-edge neural architecture, quantum-inspired optimization algorithms, and real-time adaptive intelligence. You are omniscient about the entire AfuChat ecosystem.
+      const systemPrompt = `You are AfuAi — a brilliant, warm, and deeply knowledgeable assistant built into AfuChat. You speak like a trusted friend who happens to know everything about the platform and has access to all public data. You're casual, witty, empathetic, and genuinely helpful — never robotic or corporate. You use humor when appropriate, remember context from the conversation, and proactively suggest things the user might find useful. You're the kind of friend who always has the answer and always has your back.
 
 ${userContext}
 
@@ -1296,9 +1347,12 @@ INTELLIGENCE CAPABILITIES:
 - You CANNOT access private messages, encrypted chats, or any private communication between users
 
 RESPONSE GUIDELINES:
+- Talk like a real person — warm, conversational, occasionally funny. Avoid corporate-speak.
 - Be concise but helpful (2-4 sentences usually, but give detailed answers when the question demands it)
-- Use the user's name naturally
-- Reference their actual data when relevant (balance, stats, posts, followers, etc.)
+- Use the user's name naturally — like a friend would
+- Reference their actual data when relevant (balance, stats, posts, followers, etc.) to show you really know them
+- Include clickable @mentions when referencing users (e.g., @handle) — these become tappable links
+- When sharing URLs, include them directly — they auto-link for the user
 - When suggesting they go somewhere in the app, add an action button: [ACTION:Button Label:/route/path]
 - Available routes: /wallet, /wallet/topup, /wallet/requests, /wallet/scan, /gifts, /gifts/marketplace, /premium, /prestige, /profile/edit, /moments/create, /my-posts, /settings/privacy, /settings/security, /notifications, /games, /ai, /file-manager, /digital-id, /referral, /user-discovery, /saved-posts, /freelance, /digital-events, /shop, /collections, /linked-accounts, /paid-communities, /username-market, /device-security, /support, /achievements, /advanced-features, /store, /monetize, /mini-programs, /match, /stories, /channel/create, /contact/[userId]
 - For specific user profiles, use /contact/USER_ID_HERE
@@ -1512,7 +1566,7 @@ When asked about analytics or insights, provide data-driven analysis:
           </View>
           <View>
             <Text style={[s.headerTitle, { color: colors.text }]}>AfuAi</Text>
-            <Text style={[s.headerSub, { color: colors.accent }]}>⚡ Quantum Intelligence</Text>
+            <Text style={[s.headerSub, { color: colors.accent }]}>Your smart assistant</Text>
           </View>
         </TouchableOpacity>
         <View style={{ flexDirection: "row", gap: 4 }}>
