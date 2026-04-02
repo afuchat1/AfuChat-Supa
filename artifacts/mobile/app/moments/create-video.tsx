@@ -31,6 +31,7 @@ export default function CreateVideoScreen() {
   const insets = useSafeAreaInsets();
 
   const [videoUri, setVideoUri] = useState<string | null>(null);
+  const [videoMime, setVideoMime] = useState<string | undefined>(undefined);
   const [duration, setDuration] = useState<number>(0);
   const [caption, setCaption] = useState("");
   const [loading, setLoading] = useState(false);
@@ -52,6 +53,7 @@ export default function CreateVideoScreen() {
         return;
       }
       setVideoUri(asset.uri);
+      setVideoMime(asset.mimeType || undefined);
       setDuration(dur);
     }
   }
@@ -62,9 +64,11 @@ export default function CreateVideoScreen() {
     setLoading(true);
     setUploadProgress("Uploading video…");
     try {
-      const ext = videoUri.split(".").pop()?.split("?")[0] || "mp4";
+      const rawExt = videoUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "";
+      const ext = ["mp4", "mov", "avi", "webm", "mkv", "m4v"].includes(rawExt) ? rawExt : "mp4";
       const filePath = `${user.id}/${Date.now()}.${ext}`;
-      const { publicUrl, error: uploadError } = await uploadToStorage("videos", filePath, videoUri);
+      const resolvedMime = videoMime || (ext === "mov" ? "video/quicktime" : `video/${ext}`);
+      const { publicUrl, error: uploadError } = await uploadToStorage("videos", filePath, videoUri, resolvedMime);
       if (uploadError || !publicUrl) throw new Error(uploadError || "Upload failed");
 
       setUploadProgress("Publishing…");

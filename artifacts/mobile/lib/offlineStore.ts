@@ -9,7 +9,11 @@ const CACHE_KEYS = {
   MOMENTS: "offline_moments",
   NOTIFICATIONS: "offline_notifications",
   PENDING_MESSAGES: "offline_pending_messages",
+  FEED_FOR_YOU: "feed_tab_cache_for_you_v2",
+  FEED_FOLLOWING: "feed_tab_cache_following_v2",
 };
+
+const FEED_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export type PendingMessage = {
   id: string;
@@ -185,4 +189,25 @@ export async function removePendingMessage(id: string): Promise<void> {
     const filtered = pending.filter((m) => m.id !== id);
     await AsyncStorage.setItem(CACHE_KEYS.PENDING_MESSAGES, JSON.stringify(filtered));
   } catch {}
+}
+
+export async function cacheFeedTab(tab: "for_you" | "following", posts: any[]): Promise<void> {
+  try {
+    const key = tab === "for_you" ? CACHE_KEYS.FEED_FOR_YOU : CACHE_KEYS.FEED_FOLLOWING;
+    await AsyncStorage.setItem(key, JSON.stringify({ posts, cachedAt: Date.now() }));
+  } catch {}
+}
+
+export async function getCachedFeedTab(tab: "for_you" | "following"): Promise<{ posts: any[]; cachedAt: number; isStale: boolean } | null> {
+  try {
+    const key = tab === "for_you" ? CACHE_KEYS.FEED_FOR_YOU : CACHE_KEYS.FEED_FOLLOWING;
+    const raw = await AsyncStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.posts?.length) return null;
+    const isStale = Date.now() - (parsed.cachedAt || 0) > FEED_CACHE_TTL_MS;
+    return { posts: parsed.posts, cachedAt: parsed.cachedAt || 0, isStale };
+  } catch {
+    return null;
+  }
 }

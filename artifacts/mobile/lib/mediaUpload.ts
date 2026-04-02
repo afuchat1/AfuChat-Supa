@@ -15,7 +15,7 @@ const MIME_MAP: Record<string, string> = {
   mp3: "audio/mpeg",
   wav: "audio/wav",
   ogg: "audio/ogg",
-  webm: "audio/webm",
+  webm: "video/webm",
   caf: "audio/x-caf",
   pdf: "application/pdf",
   doc: "application/msword",

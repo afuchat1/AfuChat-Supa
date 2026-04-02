@@ -30,10 +30,10 @@ import Colors from "@/constants/colors";
 import { PostSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import OfflineBanner from "@/components/ui/OfflineBanner";
-import { cacheMoments, getCachedMoments, isOnline } from "@/lib/offlineStore";
+import { cacheMoments, getCachedMoments, cacheFeedTab, getCachedFeedTab, isOnline, onConnectivityChange } from "@/lib/offlineStore";
 import { notifyPostLike } from "@/lib/notifyUser";
 import { sharePost } from "@/lib/share";
-import { matchInterests, computeFeedScore, diversifyFeed, type FeedSignals } from "@/lib/feedAlgorithm";
+import { matchInterestsWeighted, recordInteraction, getLearnedInterestBoosts, computeFeedScore, diversifyFeed, type FeedSignals } from "@/lib/feedAlgorithm";
 import { useLanguage } from "@/context/LanguageContext";
 import { translateText, LANG_LABELS } from "@/lib/translate";
 import { useDesktopDetail } from "@/context/DesktopDetailContext";
@@ -365,20 +365,45 @@ export default function DiscoverScreen() {
   const [showCreatePicker, setShowCreatePicker] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [followingEmpty, setFollowingEmpty] = useState(false);
+  const [bgRefreshing, setBgRefreshing] = useState(false);
   const PAGE_SIZE = 30;
   const imgViewer = useImageViewer();
 
-  const fetchPosts = useCallback(async (offset: number, isRefresh: boolean, tab?: "for_you" | "following") => {
-    const activeTab = tab ?? feedTab;
+  const tabPostsCache = useRef<Record<"for_you" | "following", PostItem[]>>({ for_you: [], following: [] });
+  const tabCacheTimestamp = useRef<Record<"for_you" | "following", number>>({ for_you: 0, following: 0 });
+  const learnedWeightsRef = useRef<Record<string, number>>({});
+  const postsRef = useRef<PostItem[]>([]);
+  const feedTabRef = useRef<"for_you" | "following">("for_you");
+
+  useEffect(() => { postsRef.current = posts; }, [posts]);
+  useEffect(() => { feedTabRef.current = feedTab; }, [feedTab]);
+
+  useEffect(() => {
+    getLearnedInterestBoosts().then((w) => { learnedWeightsRef.current = w; });
+  }, []);
+
+  const fetchPosts = useCallback(async (offset: number, isRefresh: boolean, tab?: "for_you" | "following", background?: boolean) => {
+    const activeTab = tab ?? feedTabRef.current;
+    if (background) setBgRefreshing(true);
     try {
     if (!isOnline()) {
-      if (isRefresh && user) {
-        const cached = await getCachedMoments();
-        if (cached.length > 0) setPosts(cached);
+      if (!background) {
+        if (isRefresh) {
+          const cached = await getCachedFeedTab(activeTab);
+          if (cached?.posts?.length) {
+            const p = cached.posts as PostItem[];
+            setPosts(p);
+            tabPostsCache.current[activeTab] = p;
+            tabCacheTimestamp.current[activeTab] = cached.cachedAt;
+          } else {
+            const legacyCached = await getCachedMoments();
+            if (legacyCached.length > 0) setPosts(legacyCached as PostItem[]);
+          }
+        }
+        setLoading(false);
+        setRefreshing(false);
+        setLoadingMore(false);
       }
-      setLoading(false);
-      setRefreshing(false);
-      setLoadingMore(false);
       return;
     }
 
@@ -446,9 +471,16 @@ export default function DiscoverScreen() {
           post_type: p.post_type || "post", article_title: p.article_title || null, video_url: p.video_url || null,
         }));
 
-        if (isRefresh) setPosts(mapped); else setPosts((prev) => { const ids = new Set(prev.map((p) => p.id)); return [...prev, ...mapped.filter((i) => !ids.has(i.id))]; });
+        if (isRefresh) {
+          setPosts(mapped);
+          tabPostsCache.current[activeTab] = mapped;
+          tabCacheTimestamp.current[activeTab] = Date.now();
+          cacheFeedTab(activeTab, mapped);
+        } else {
+          setPosts((prev) => { const ids = new Set(prev.map((p) => p.id)); return [...prev, ...mapped.filter((i) => !ids.has(i.id))]; });
+        }
       }
-      setLoading(false); setRefreshing(false); setLoadingMore(false);
+      if (!background) { setLoading(false); setRefreshing(false); setLoadingMore(false); }
       return;
     }
 
@@ -550,7 +582,7 @@ export default function DiscoverScreen() {
         const content = p.content || "";
         const authorCountry = p.profiles?.country || "";
 
-        const interestMatches = matchInterests(content, userInterests);
+        const interestMatches = matchInterestsWeighted(content, userInterests, learnedWeightsRef.current);
 
         const signals: FeedSignals = {
           likeCount,
@@ -603,6 +635,9 @@ export default function DiscoverScreen() {
 
       if (isRefresh) {
         setPosts(diversified as PostItem[]);
+        tabPostsCache.current[activeTab] = diversified as PostItem[];
+        tabCacheTimestamp.current[activeTab] = Date.now();
+        cacheFeedTab(activeTab, diversified);
         cacheMoments(diversified as PostItem[]);
       } else {
         setPosts((prev) => {
@@ -615,58 +650,117 @@ export default function DiscoverScreen() {
     } catch (err) {
       console.error("[Discover] fetchPosts error:", err);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
-      setLoadingMore(false);
+      if (!background) {
+        setLoading(false);
+        setRefreshing(false);
+        setLoadingMore(false);
+      }
+      setBgRefreshing(false);
     }
   }, [user, profile]);
 
-  const loadPosts = useCallback((tab?: "for_you" | "following") => fetchPosts(0, true, tab), [fetchPosts]);
+  const loadPosts = useCallback(
+    (tab?: "for_you" | "following", background?: boolean) => fetchPosts(0, true, tab, background),
+    [fetchPosts]
+  );
 
   const loadMore = useCallback(() => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
-    fetchPosts(posts.length, false, feedTab);
-  }, [fetchPosts, posts.length, loadingMore, hasMore, feedTab]);
+    fetchPosts(postsRef.current.length, false, feedTabRef.current);
+  }, [fetchPosts, loadingMore, hasMore]);
 
-  // Stable ref so the feedTab effect never captures loadPosts as a reactive dep
-  // (React Compiler would otherwise add loadPosts to [feedTab] deps, causing
-  // setLoading(true) to fire on every user/profile change)
   const loadPostsRef = useRef(loadPosts);
   useEffect(() => { loadPostsRef.current = loadPosts; }, [loadPosts]);
 
+  // Tab switch — serve in-memory cache instantly, background-refresh if stale
   useEffect(() => {
-    setLoading(true);
-    setPosts([]);
-    setHasMore(true);
-    setFollowingEmpty(false);
-    loadPostsRef.current(feedTab);
+    const STALE_MS = 5 * 60 * 1000;
+    const cached = tabPostsCache.current[feedTab];
+    const cacheAge = Date.now() - tabCacheTimestamp.current[feedTab];
+    if (cached.length > 0) {
+      setPosts(cached);
+      setLoading(false);
+      setFollowingEmpty(false);
+      setHasMore(true);
+      if (cacheAge > STALE_MS) {
+        loadPostsRef.current(feedTab, true);
+      }
+    } else {
+      setLoading(true);
+      setPosts([]);
+      setHasMore(true);
+      setFollowingEmpty(false);
+      loadPostsRef.current(feedTab, false);
+    }
   }, [feedTab]);
 
-  useEffect(() => { loadPosts(); }, [loadPosts]);
+  // Mount: preload both tabs from AsyncStorage, then background-refresh For You
+  useEffect(() => {
+    (async () => {
+      const [fyCache, flCache] = await Promise.all([
+        getCachedFeedTab("for_you"),
+        getCachedFeedTab("following"),
+      ]);
+      if (fyCache?.posts?.length) {
+        const p = fyCache.posts as PostItem[];
+        tabPostsCache.current.for_you = p;
+        tabCacheTimestamp.current.for_you = fyCache.cachedAt;
+        if (feedTabRef.current === "for_you") {
+          setPosts(p);
+          setLoading(false);
+        }
+      }
+      if (flCache?.posts?.length) {
+        tabPostsCache.current.following = flCache.posts as PostItem[];
+        tabCacheTimestamp.current.following = flCache.cachedAt;
+      }
+      const hasFyCache = (fyCache?.posts?.length ?? 0) > 0;
+      if (isOnline()) {
+        loadPostsRef.current("for_you", hasFyCache);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  // Auth/profile change — refresh active tab in background if posts already showing
+  useEffect(() => {
+    if (!user && !profile) return;
+    const hasPosts = tabPostsCache.current[feedTabRef.current].length > 0;
+    loadPostsRef.current(feedTabRef.current, hasPosts);
+  }, [user, profile]);
+
+  // Auto-refresh on reconnect
+  useEffect(() => {
+    const unsub = onConnectivityChange((online) => {
+      if (online) {
+        const hasPosts = tabPostsCache.current[feedTabRef.current].length > 0;
+        loadPostsRef.current(feedTabRef.current, hasPosts);
+      }
+    });
+    return unsub;
+  }, []);
+
+  // Realtime new/deleted posts — background refresh to not disrupt reading
   useEffect(() => {
     const channel = supabase
       .channel("discover-posts-realtime")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "posts" },
-        () => loadPosts()
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "posts" },
-        () => loadPosts()
-      )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" }, () => {
+        const hasPosts = postsRef.current.length > 0;
+        loadPostsRef.current(feedTabRef.current, hasPosts);
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "posts" }, () => {
+        const hasPosts = postsRef.current.length > 0;
+        loadPostsRef.current(feedTabRef.current, hasPosts);
+      })
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
-  }, [loadPosts]);
+  }, []);
 
   async function toggleBookmark(postId: string) {
     if (!user) { router.push("/(auth)/login"); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const post = posts.find((p) => p.id === postId);
+    const post = postsRef.current.find((p) => p.id === postId);
     if (!post) return;
     if (post.bookmarked) {
       await supabase.from("post_bookmarks").delete().eq("post_id", postId).eq("user_id", user.id);
@@ -674,13 +768,17 @@ export default function DiscoverScreen() {
     } else {
       await supabase.from("post_bookmarks").upsert({ post_id: postId, user_id: user.id }, { onConflict: "post_id,user_id" });
       setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, bookmarked: true } : p));
+      const content = [post.content, post.article_title].filter(Boolean).join(" ");
+      recordInteraction(content, "bookmark").then(async () => {
+        learnedWeightsRef.current = await getLearnedInterestBoosts();
+      });
     }
   }
 
   async function toggleLike(postId: string) {
     if (!user) { router.push("/(auth)/login"); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const post = posts.find((p) => p.id === postId);
+    const post = postsRef.current.find((p) => p.id === postId);
     if (!post) return;
 
     if (post.liked) {
@@ -696,6 +794,10 @@ export default function DiscoverScreen() {
         setPosts((prev) =>
           prev.map((p) => p.id === postId ? { ...p, liked: true, likeCount: p.likeCount + 1 } : p)
         );
+        const content = [post.content, post.article_title].filter(Boolean).join(" ");
+        recordInteraction(content, "like").then(async () => {
+          learnedWeightsRef.current = await getLearnedInterestBoosts();
+        });
         if (post.author_id !== user.id) {
           notifyPostLike({
             postAuthorId: post.author_id,
@@ -751,6 +853,14 @@ export default function DiscoverScreen() {
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Background refresh indicator */}
+      {bgRefreshing && (
+        <View style={[styles.bgRefreshBar, { backgroundColor: Colors.brand + "18" }]}>
+          <ActivityIndicator size={10} color={Colors.brand} />
+          <Text style={[styles.bgRefreshText, { color: Colors.brand }]}>Updating feed…</Text>
+        </View>
+      )}
 
       {/* Following tab — not signed in */}
       {feedTab === "following" && !user ? (
@@ -1088,4 +1198,12 @@ const styles = StyleSheet.create({
   },
   createPickerLabel: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   createPickerDesc: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
+  bgRefreshBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 5,
+  },
+  bgRefreshText: { fontSize: 11, fontFamily: "Inter_500Medium" },
 });

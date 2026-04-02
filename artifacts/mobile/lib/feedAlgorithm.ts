@@ -1,3 +1,9 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const INTERACTION_WEIGHTS_KEY = "feed_interaction_weights_v1";
+const DECAY_FACTOR = 0.97;
+const MAX_WEIGHT = 120;
+
 const INTEREST_KEYWORDS: Record<string, string[]> = {
   technology: ["tech", "code", "software", "app", "ai", "robot", "computer", "programming", "developer", "startup", "digital", "gadget", "phone", "laptop", "internet", "algorithm", "data", "cloud", "machine learning", "api", "hack", "cyber", "silicon", "ios", "android"],
   music: ["music", "song", "album", "artist", "concert", "guitar", "piano", "beat", "melody", "hip hop", "rap", "jazz", "rock", "pop", "dj", "producer", "playlist", "spotify", "singing", "band", "vinyl", "studio", "lyric"],
@@ -94,6 +100,63 @@ export function computeFeedScore(signals: FeedSignals): number {
   const randomJitter = Math.random() * 5;
 
   return freshnessScore + trendingScore + engagementScore + interestScore + affinityScore + qualityScore + diversityPenalty + randomJitter;
+}
+
+export async function recordInteraction(
+  content: string,
+  action: "like" | "bookmark" | "reply" | "view",
+): Promise<void> {
+  try {
+    const multiplier = action === "reply" ? 5 : action === "bookmark" ? 4 : action === "like" ? 3 : 0.4;
+    const raw = await AsyncStorage.getItem(INTERACTION_WEIGHTS_KEY);
+    const weights: Record<string, number> = raw ? JSON.parse(raw) : {};
+    const lower = (content || "").toLowerCase();
+    for (const [category, keywords] of Object.entries(INTEREST_KEYWORDS)) {
+      if (keywords.some((kw) => lower.includes(kw))) {
+        weights[category] = Math.min(MAX_WEIGHT, ((weights[category] || 0) * DECAY_FACTOR) + multiplier);
+      }
+    }
+    await AsyncStorage.setItem(INTERACTION_WEIGHTS_KEY, JSON.stringify(weights));
+  } catch {}
+}
+
+export async function getLearnedInterestBoosts(): Promise<Record<string, number>> {
+  try {
+    const raw = await AsyncStorage.getItem(INTERACTION_WEIGHTS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function matchInterestsWeighted(
+  content: string,
+  userInterests: string[],
+  learnedWeights: Record<string, number>,
+): number {
+  if (!content) return 0;
+  const lower = content.toLowerCase();
+  let totalScore = 0;
+
+  for (const interest of (userInterests || [])) {
+    const keywords = INTEREST_KEYWORDS[interest];
+    if (!keywords) continue;
+    if (keywords.some((kw) => lower.includes(kw))) {
+      const boost = (learnedWeights[interest] || 0) / 20;
+      totalScore += 1 + boost;
+    }
+  }
+
+  for (const [category, weight] of Object.entries(learnedWeights)) {
+    if ((userInterests || []).includes(category)) continue;
+    const keywords = INTEREST_KEYWORDS[category];
+    if (!keywords || weight < 5) continue;
+    if (keywords.some((kw) => lower.includes(kw))) {
+      totalScore += weight / 30;
+    }
+  }
+
+  return totalScore;
 }
 
 export function diversifyFeed(posts: { id: string; author_id: string; score: number }[]): typeof posts {
