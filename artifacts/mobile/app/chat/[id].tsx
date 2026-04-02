@@ -1138,7 +1138,7 @@ export default function ChatScreen() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiReplies, setAiReplies] = useState<string[]>([]);
   const [showLangPicker, setShowLangPicker] = useState(false);
-  const [lastAiMsgId, setLastAiMsgId] = useState<string | null>(null);
+
   const [translateMsg, setTranslateMsg] = useState<Message | null>(null);
   const [translatingLang, setTranslatingLang] = useState(false);
   const flatListRef = useRef<FlatList>(null);
@@ -1670,7 +1670,7 @@ export default function ChatScreen() {
     setIsAfuAiTyping(true);
     try {
       const userContext = await getAfuAiUserContext();
-      const systemPrompt = `You are AfuAi, the official AI assistant for AfuChat — a social messaging super app from Uganda. You are friendly, knowledgeable, and professional.\n\n${userContext}\n\nRESPONSE GUIDELINES:\n- Be concise but helpful. Use the user's name naturally.\n- Reference their actual data when relevant.\n- When suggesting they go somewhere, add: [ACTION:Button Label:/route]\n- Available routes: /wallet, /wallet/topup, /gifts, /gifts/marketplace, /premium, /profile/edit, /moments/create, /settings/privacy, /settings/security, /notifications, /games\n- Use rich formatting: **bold**, *italic*, \`code\`, bullet lists with -, numbered lists, ### headings\n- At the end of EVERY response add 2-3 suggestions: [SUGGEST:suggestion text]\n\nEXECUTABLE ACTIONS (use ONE when the user asks to perform an action):\n- [EXEC:send_nexa:{"handle":"username","amount":100}]\n- [EXEC:send_acoin:{"handle":"username","amount":50}]\n- [EXEC:follow:{"handle":"username"}]\n- [EXEC:unfollow:{"handle":"username"}]\n- [EXEC:subscribe:{"tier":"silver"}]\n- [EXEC:cancel_subscription:{}]\n- [EXEC:convert_nexa:{"amount":500}]\n\nINVOICES: For receipts use [INVOICE:{...json...}] with the ref from RECENT TRANSACTIONS.`;
+      const systemPrompt = `You are AfuAi, the official AI assistant for AfuChat — a social messaging super app from Uganda. You are friendly, knowledgeable, and professional.\n\n${userContext}\n\nRESPONSE GUIDELINES:\n- Be concise but helpful. Use the user's name naturally.\n- Reference their actual data when relevant.\n- Write plain conversational text. No markdown formatting, no bullet points, no headings.\n- Keep replies short and natural, like a knowledgeable friend texting back.`;
 
       const conversationMessages = currentMessages
         .filter(m => !m._pending)
@@ -1685,43 +1685,27 @@ export default function ChatScreen() {
         body: JSON.stringify({ messages: [{ role: "system", content: systemPrompt }, ...conversationMessages] }),
       });
       const data = await res.json();
-      const rawReply = data.reply || "Sorry, I couldn't process that. Please try again.";
-      const { text: cleanText, actions, suggestions, invoices, execAction } = parseAfuAiTags(rawReply);
+      const reply = (data.reply || "Sorry, I couldn't process that. Please try again.").trim();
 
-      const msgId = `afuai_${Date.now()}`;
-      const aiMessage: Message = {
-        id: msgId,
+      setMessages((prev) => [{
+        id: `afuai_${Date.now()}`,
         chat_id: id,
-        sender_id: "afuai",
-        encrypted_content: cleanText,
+        sender_id: AFUAI_BOT_ID,
+        encrypted_content: reply,
         sent_at: new Date().toISOString(),
         sender: { display_name: "AfuAI", avatar_url: null, handle: "afuai" },
         reactions: [],
-        _isAi: true,
-        _aiActions: actions.length > 0 ? actions : undefined,
-        _aiSuggestions: suggestions.length > 0 ? suggestions : undefined,
-        _aiInvoices: invoices.length > 0 ? invoices : undefined,
-        _aiExecAction: execAction ? {
-          id: `exec_${Date.now()}`,
-          actionType: execAction.actionType,
-          params: execAction.params,
-          label: AI_EXEC_LABELS[execAction.actionType] || execAction.actionType,
-          description: buildAiExecDesc(execAction.actionType, execAction.params),
-          status: "pending",
-        } : undefined,
-      };
-      setMessages((prev) => [aiMessage, ...prev]);
-      setLastAiMsgId(msgId);
+      }, ...prev]);
     } catch {
-      const errId = `afuai_err_${Date.now()}`;
       setMessages((prev) => [{
-        id: errId, chat_id: id, sender_id: "afuai",
+        id: `afuai_err_${Date.now()}`,
+        chat_id: id,
+        sender_id: AFUAI_BOT_ID,
         encrypted_content: "Sorry, I couldn't respond right now. Please try again.",
         sent_at: new Date().toISOString(),
         sender: { display_name: "AfuAI", avatar_url: null, handle: "afuai" },
-        reactions: [], _isAi: true,
+        reactions: [],
       }, ...prev]);
-      setLastAiMsgId(errId);
     } finally {
       setIsAfuAiTyping(false);
     }
@@ -2677,57 +2661,10 @@ export default function ChatScreen() {
     return current.sender_id === prev.sender_id ? 2 : 8;
   }, [messages]);
 
-  const isAfuAiDirectChat = chatInfo?.other_id === AFUAI_BOT_ID;
-
   const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
     const isMe = item.sender_id === user?.id;
     const showDate = shouldShowDate(index);
     const spacing = getMessageSpacing(index);
-
-    if (isAfuAiDirectChat && item._isAi) {
-      const showSuggestions = item.id === lastAiMsgId && item._aiSuggestions && item._aiSuggestions.length > 0 && !isAfuAiTyping;
-      const ALLOWED_ROUTES = new Set(["/wallet", "/wallet/topup", "/gifts", "/gifts/marketplace", "/premium", "/profile/edit", "/moments/create", "/settings/privacy", "/settings/security", "/notifications", "/games"]);
-      return (
-        <View style={{ marginTop: showDate ? 0 : spacing, paddingHorizontal: 12, paddingBottom: 4 }}>
-          {showDate && <View style={st.dateBadge}><View style={[st.datePill, { backgroundColor: colors.surface }]}><Text style={[st.dateBadgeText, { color: colors.textMuted }]}>{formatDateHeader(item.sent_at)}</Text></View></View>}
-          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
-            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#00BCD4", alignItems: "center", justifyContent: "center", marginTop: 2, flexShrink: 0 }}>
-              <Ionicons name="sparkles" size={13} color="#fff" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={[{ backgroundColor: colors.surface, borderRadius: 16, borderTopLeftRadius: 4, padding: 12 }]}>
-                <AiRichContent content={item.encrypted_content} colors={colors} />
-              </View>
-              {item._aiInvoices && item._aiInvoices.length > 0 && item._aiInvoices.map((inv, i) => <AiInvoiceCard key={i} invoice={inv} colors={colors} />)}
-              {item._aiExecAction && <AiConfirmationCard exec={item._aiExecAction} colors={colors} onConfirm={() => handleConfirmAiExec(item.id)} onCancel={() => handleCancelAiExec(item.id)} />}
-              {item._aiActions && item._aiActions.length > 0 && (
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-                  {item._aiActions.map((a, i) => (
-                    <TouchableOpacity key={i} onPress={() => { if (a.action === "navigate" && a.params?.route && ALLOWED_ROUTES.has(a.params.route)) router.push(a.params.route as any); }} style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, backgroundColor: "#00BCD4" + "15", borderWidth: 1, borderColor: "#00BCD4" + "30" }}>
-                      <Ionicons name={(a.icon || "arrow-forward-circle") as any} size={13} color="#00BCD4" />
-                      <Text style={{ fontSize: 12, color: "#00BCD4", fontFamily: "Inter_500Medium" }}>{a.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-              <Text style={{ fontSize: 11, color: colors.textMuted, fontFamily: "Inter_400Regular", marginTop: 4, alignSelf: "flex-start" }}>
-                {new Date(item.sent_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-              </Text>
-              {showSuggestions && (
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-                  {item._aiSuggestions!.map((sug, i) => (
-                    <TouchableOpacity key={i} onPress={() => { sendMessage(sug); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }} style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: "#00BCD4" + "40" }}>
-                      <Ionicons name="chatbubble-outline" size={11} color="#00BCD4" />
-                      <Text style={{ fontSize: 12, color: "#00BCD4", fontFamily: "Inter_400Regular" }}>{sug}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-      );
-    }
 
     return (
       <View style={{ marginTop: showDate ? 0 : spacing }}>
@@ -2753,7 +2690,7 @@ export default function ChatScreen() {
         />
       </View>
     );
-  }, [messages, user, colors, isAfuAiDirectChat, lastAiMsgId, isAfuAiTyping]);
+  }, [messages, user, colors]);
 
   return (
     <View style={[st.root, { backgroundColor: colors.background }]}>
