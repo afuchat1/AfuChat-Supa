@@ -275,7 +275,7 @@ export default function ContactProfileScreen() {
   })();
 
   return (
-    <View style={[st.root, { backgroundColor: colors.inputBg || colors.background }]}>
+    <View style={[st.root, { backgroundColor: colors.backgroundSecondary }]}>
       <View style={[st.header, { paddingTop: insets.top, backgroundColor: "transparent" }]}>
         <TouchableOpacity onPress={() => router.back()} style={st.headerBtn}>
           <Ionicons name="arrow-back" size={22} color={colors.text} />
@@ -325,7 +325,7 @@ export default function ContactProfileScreen() {
           )}
 
           {showBadgeInfo && (
-            <View style={[st.badgeInfoCard, { backgroundColor: colors.inputBg || colors.background, borderColor: colors.border }]}>
+            <View style={[st.badgeInfoCard, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
               <Text style={[st.badgeInfoTitle, { color: colors.text }]}>Verification Details</Text>
               {profile?.is_organization_verified ? (
                 <>
@@ -348,12 +348,12 @@ export default function ContactProfileScreen() {
 
           <View style={st.metaRow}>
             {profile?.country ? (
-              <View style={[st.metaChip, { backgroundColor: colors.inputBg || colors.background }]}>
+              <View style={[st.metaChip, { backgroundColor: colors.backgroundSecondary }]}>
                 <Ionicons name="location" size={12} color={colors.textMuted} />
                 <Text style={[st.metaChipText, { color: colors.textSecondary }]}>{profile.country}</Text>
               </View>
             ) : null}
-            <View style={[st.metaChip, { backgroundColor: colors.inputBg || colors.background }]}>
+            <View style={[st.metaChip, { backgroundColor: colors.backgroundSecondary }]}>
               <Ionicons name="calendar" size={12} color={colors.textMuted} />
               <Text style={[st.metaChipText, { color: colors.textSecondary }]}>Joined {formatJoinDate(profile?.created_at || null)}</Text>
             </View>
@@ -365,7 +365,7 @@ export default function ContactProfileScreen() {
             ) : null}
           </View>
 
-          <View style={[st.statsBar, { backgroundColor: colors.inputBg || colors.background }]}>
+          <View style={[st.statsBar, { backgroundColor: colors.backgroundSecondary }]}>
             <TouchableOpacity style={st.statBlock} activeOpacity={0.6} onPress={() => router.push({ pathname: "/followers", params: { userId: id, type: "followers", ownerHandle: profile?.handle } })}>
               <Text style={[st.statNum, { color: colors.text }]}>{followerCount.toLocaleString()}</Text>
               <Text style={[st.statLabel, { color: colors.textMuted }]}>Followers</Text>
@@ -407,7 +407,7 @@ export default function ContactProfileScreen() {
                 <Ionicons name="chatbubble" size={16} color={colors.accent} />
                 <Text style={[st.secondaryCtaText, { color: colors.accent }]}>Message</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[st.iconCta, { backgroundColor: colors.inputBg || colors.background }]} onPress={sendWave} activeOpacity={0.7}>
+              <TouchableOpacity style={[st.iconCta, { backgroundColor: colors.backgroundSecondary }]} onPress={sendWave} activeOpacity={0.7}>
                 <Text style={{ fontSize: 18 }}>👋</Text>
               </TouchableOpacity>
             </View>
@@ -443,7 +443,7 @@ export default function ContactProfileScreen() {
           )}
           {!isOwnProfile && (
             <TouchableOpacity style={st.qAction} onPress={toggleBlock}>
-              <View style={[st.qIcon, { backgroundColor: isBlocked ? "#FF3B30" : colors.inputBg || colors.background }]}>
+              <View style={[st.qIcon, { backgroundColor: isBlocked ? "#FF3B30" : colors.backgroundSecondary }]}>
                 <Ionicons name={isBlocked ? "ban" : "ban-outline"} size={20} color={isBlocked ? "#fff" : "#FF3B30"} />
               </View>
               <Text style={[st.qLabel, { color: isBlocked ? "#FF3B30" : colors.text }]}>{isBlocked ? "Blocked" : "Block"}</Text>
@@ -486,7 +486,7 @@ export default function ContactProfileScreen() {
                   activeOpacity={0.65}
                 >
                   {isArticle ? (
-                    <View style={[st.articleCard, { backgroundColor: colors.inputBg || colors.background, borderColor: colors.accent + "20" }]}>
+                    <View style={[st.articleCard, { backgroundColor: colors.backgroundSecondary, borderColor: colors.accent + "20" }]}>
                       {images.length > 0 && <Image source={{ uri: images[0] }} style={st.articleCover} resizeMode="cover" />}
                       <View style={{ padding: 14, gap: 6 }}>
                         <View style={[st.articleBadge, { backgroundColor: colors.accent + "15" }]}>

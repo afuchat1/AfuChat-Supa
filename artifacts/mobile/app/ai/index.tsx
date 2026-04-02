@@ -1192,7 +1192,7 @@ AI CAPABILITIES (what you can do):
           author_id: user.id,
           content: postContent,
           visibility: visibility || "public",
-          post_type: "text",
+          post_type: "post",
         });
         if (error) return { success: false, message: `Could not create post: ${error.message}` };
         try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("create_post"); } catch {}
