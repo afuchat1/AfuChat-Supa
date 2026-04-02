@@ -347,6 +347,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress, colWidth
 }
 
 export default function DiscoverScreen() {
+  "use no memo";
   const { colors } = useTheme();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
@@ -369,6 +370,7 @@ export default function DiscoverScreen() {
 
   const fetchPosts = useCallback(async (offset: number, isRefresh: boolean, tab?: "for_you" | "following") => {
     const activeTab = tab ?? feedTab;
+    try {
     if (!isOnline()) {
       if (isRefresh && user) {
         const cached = await getCachedMoments();
@@ -610,9 +612,13 @@ export default function DiscoverScreen() {
         });
       }
     }
-    setLoading(false);
-    setRefreshing(false);
-    setLoadingMore(false);
+    } catch (err) {
+      console.error("[Discover] fetchPosts error:", err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+      setLoadingMore(false);
+    }
   }, [user, profile]);
 
   const loadPosts = useCallback((tab?: "for_you" | "following") => fetchPosts(0, true, tab), [fetchPosts]);
@@ -623,12 +629,18 @@ export default function DiscoverScreen() {
     fetchPosts(posts.length, false, feedTab);
   }, [fetchPosts, posts.length, loadingMore, hasMore, feedTab]);
 
+  // Stable ref so the feedTab effect never captures loadPosts as a reactive dep
+  // (React Compiler would otherwise add loadPosts to [feedTab] deps, causing
+  // setLoading(true) to fire on every user/profile change)
+  const loadPostsRef = useRef(loadPosts);
+  useEffect(() => { loadPostsRef.current = loadPosts; }, [loadPosts]);
+
   useEffect(() => {
     setLoading(true);
     setPosts([]);
     setHasMore(true);
     setFollowingEmpty(false);
-    loadPosts(feedTab);
+    loadPostsRef.current(feedTab);
   }, [feedTab]);
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
