@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from "react";
-import { Animated, Easing, Image, StyleSheet, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, Easing, Image, Platform, StyleSheet, View } from "react-native";
 
 const afuIcon = require("@/assets/images/icon.png");
 const BRAND = "#00BCD4";
@@ -8,39 +8,47 @@ export function SplashOverlay({ onFinish }: { onFinish: () => void }) {
   const logoScale = useRef(new Animated.Value(0.5)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const textOpacity = useRef(new Animated.Value(0)).current;
+  const [fading, setFading] = useState(false);
   const overlayOpacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    const anim = Animated.sequence([
-      Animated.parallel([
-        Animated.timing(logoScale, {
-          toValue: 1,
-          duration: 500,
-          easing: Easing.out(Easing.back(1.4)),
-          useNativeDriver: true,
-        }),
-        Animated.timing(logoOpacity, {
-          toValue: 1,
-          duration: 350,
-          useNativeDriver: true,
-        }),
-      ]),
+    Animated.parallel([
+      Animated.timing(logoScale, {
+        toValue: 1,
+        duration: 500,
+        easing: Easing.out(Easing.back(1.4)),
+        useNativeDriver: Platform.OS !== "web",
+      }),
+      Animated.timing(logoOpacity, {
+        toValue: 1,
+        duration: 350,
+        useNativeDriver: Platform.OS !== "web",
+      }),
+    ]).start(() => {
       Animated.timing(textOpacity, {
         toValue: 1,
         duration: 250,
-        useNativeDriver: true,
-      }),
-      Animated.delay(800),
+        useNativeDriver: Platform.OS !== "web",
+      }).start();
+    });
+
+    const fadeTimer = setTimeout(() => {
+      setFading(true);
       Animated.timing(overlayOpacity, {
         toValue: 0,
         duration: 350,
-        useNativeDriver: true,
-      }),
-    ]);
-    anim.start(({ finished }) => {
-      if (finished) onFinish();
-    });
-    return () => anim.stop();
+        useNativeDriver: Platform.OS !== "web",
+      }).start(() => {
+        onFinish();
+      });
+    }, 2000);
+
+    const fallback = setTimeout(onFinish, 4000);
+
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(fallback);
+    };
   }, []);
 
   return (
