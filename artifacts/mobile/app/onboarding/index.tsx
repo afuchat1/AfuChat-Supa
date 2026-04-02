@@ -130,7 +130,21 @@ export default function OnboardingScreen() {
     }).start();
   }
 
-  function goNext() {
+  async function goNext() {
+    if (step === 2 && selectedCountry && validatePhone()) {
+      const fullPhone = `${selectedCountry.dial}${phoneNumber.replace(/\D/g, "")}`;
+      const { data: existingPhone } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("phone_number", fullPhone)
+        .neq("id", userId || "")
+        .limit(1)
+        .maybeSingle();
+      if (existingPhone) {
+        showAlert("Phone number taken", "This phone number is already linked to another account. Please use a different number.");
+        return;
+      }
+    }
     if (step < TOTAL_STEPS) {
       const next = step + 1;
       setStep(next);
@@ -242,6 +256,22 @@ export default function OnboardingScreen() {
 
     const fullPhone = selectedCountry ? `${selectedCountry.dial}${phoneNumber.replace(/\D/g, "")}` : null;
 
+    if (fullPhone) {
+      const { data: existingPhone } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("phone_number", fullPhone)
+        .neq("id", userId)
+        .limit(1)
+        .maybeSingle();
+
+      if (existingPhone) {
+        setLoading(false);
+        showAlert("Phone number taken", "This phone number is already linked to another account. Please use a different number or leave it blank.");
+        return;
+      }
+    }
+
     const profileData: any = {
       id: userId,
       handle: cleanHandle,
@@ -264,9 +294,14 @@ export default function OnboardingScreen() {
       console.error("[Onboarding] Profile save error:", JSON.stringify(profileError));
       setLoading(false);
       if (profileError.code === "23505") {
-        showAlert("Handle taken", "This handle is already in use. Please choose another.");
-        setStep(1);
-        animateProgress(1);
+        const constraint = (profileError as any).details || profileError.message || "";
+        if (constraint.includes("phone_number") || constraint.includes("profiles_phone_number")) {
+          showAlert("Phone number taken", "This phone number is already linked to another account. Please use a different number or leave it blank.");
+        } else {
+          showAlert("Handle taken", "This handle is already in use. Please choose another.");
+          setStep(1);
+          animateProgress(1);
+        }
       } else {
         showAlert("Error", profileError.message || "Could not save your profile. Please try again.");
       }
