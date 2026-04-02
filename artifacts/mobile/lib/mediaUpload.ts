@@ -93,18 +93,35 @@ export async function uploadToStorage(
         const response = await fetch(fileUri);
         blob = await response.blob();
       } catch {
-        return { publicUrl: null, error: "Could not read selected file. Please try selecting again." };
+        try {
+          blob = await new Promise<Blob>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open("GET", fileUri, true);
+            xhr.responseType = "blob";
+            xhr.onload = () => {
+              if (xhr.status === 200 || xhr.status === 0) {
+                resolve(xhr.response as Blob);
+              } else {
+                reject(new Error(`XHR failed: ${xhr.status}`));
+              }
+            };
+            xhr.onerror = () => reject(new Error("XHR network error"));
+            xhr.send();
+          });
+        } catch {
+          return { publicUrl: null, error: "Could not read selected file. Please try again." };
+        }
       }
 
-      const file = new File([blob], filePath.split("/").pop() || "file", { type: mime });
+      const fileName = filePath.split("/").pop() || "file";
+      const file = new File([blob], fileName, { type: mime });
 
-      const sdkResult = await supabase.storage
-        .from(bucket)
-        .upload(filePath, file, { contentType: mime, upsert: true });
-
-      if (sdkResult.error) {
-        const restResult = await uploadViaRestApi(bucket, filePath, file, session.access_token, false);
-        if (!restResult.ok) return { publicUrl: null, error: sdkResult.error.message };
+      const restResult = await uploadViaRestApi(bucket, filePath, file, session.access_token, false);
+      if (!restResult.ok) {
+        const sdkResult = await supabase.storage
+          .from(bucket)
+          .upload(filePath, file, { contentType: mime, upsert: true });
+        if (sdkResult.error) return { publicUrl: null, error: sdkResult.error.message };
       }
     }
 
