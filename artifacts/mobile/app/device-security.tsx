@@ -139,7 +139,7 @@ function PinKeypad({
               if (!k) return <View key={ki} style={pkStyles.keyBtn} />;
               if (k === "del") return (
                 <TouchableOpacity key="del" style={pkStyles.keyBtn} onPress={backspace}>
-                  <Ionicons name="backspace-outline" size={22} color={colors.accent} />
+                  <Ionicons name="backspace-outline" size={22} color={Colors.brand} />
                 </TouchableOpacity>
               );
               return (
