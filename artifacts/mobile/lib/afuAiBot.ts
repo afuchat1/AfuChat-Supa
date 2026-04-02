@@ -22,12 +22,12 @@ export async function ensureAfuAiChat(userId: string, displayName?: string): Pro
     let greeting: string;
     try {
       greeting = await askAi(
-        `Write a warm, brief welcome message (2-3 sentences) from AfuAI to a new AfuChat user named "${name}". Introduce yourself as AfuAI, their personal AI assistant inside AfuChat. Tell them they can ask you anything — questions, writing, translations, advice, or just chat. Be friendly and human, no bullet points, no markdown.`,
-        "You are AfuAI, a helpful AI assistant built into AfuChat — Uganda's social super app. Write only the greeting message, nothing else.",
-        { fast: true, maxTokens: 150 }
+        `Write a warm welcome message (3-4 sentences) from AfuAI to a brand-new AfuChat user named "${name}". Do ALL of the following in a natural, conversational way: 1) Introduce yourself as AfuAI, their personal AI assistant. 2) Tell them you're always here — they can ask you anything: questions, writing, advice, translations, or just a chat. 3) Encourage them to also explore AfuChat — discover posts on the feed, find and follow interesting people, and join conversations. Be warm, human, and encouraging. No bullet points, no markdown.`,
+        "You are AfuAI, a friendly AI assistant built into AfuChat — Uganda's social super app. Write only the welcome message, nothing else.",
+        { fast: true, maxTokens: 200 }
       );
     } catch {
-      greeting = `Hey ${name}! 👋 I'm AfuAI — your personal AI assistant right here in AfuChat. Feel free to ask me anything: questions, writing help, translations, advice, or just a good chat. I'm always here for you!`;
+      greeting = `Welcome to AfuChat, ${name}! 🎉 I'm AfuAI — your personal AI assistant, always here whenever you need me. Ask me anything: questions, writing help, translations, advice, or just a good conversation. And don't forget to explore the app — discover posts on your feed, find interesting people to follow, and join the conversation! 🚀`;
     }
 
     await supabase.from("messages").insert({

@@ -30,6 +30,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { showAlert } from "@/lib/alert";
 import { COUNTRIES, type Country } from "@/constants/countries";
 import { Avatar } from "@/components/ui/Avatar";
+import { ensureAfuAiChat } from "@/lib/afuAiBot";
 
 const TOTAL_STEPS = 5;
 
@@ -372,6 +373,7 @@ export default function OnboardingScreen() {
     } catch (_) {}
 
     await refreshProfile();
+    ensureAfuAiChat(userId, displayName.trim()).catch(() => {});
     setLoading(false);
     router.replace("/(tabs)");
   }
