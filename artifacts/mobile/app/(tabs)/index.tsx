@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { router, useFocusEffect, useNavigation } from "expo-router";
+import { Redirect, router, useFocusEffect, useNavigation } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
@@ -245,6 +245,7 @@ export default function ChatsScreen() {
   const { openDetail } = useDesktopDetail();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+
   const [chats, setChats] = useState<ChatItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -501,6 +502,8 @@ export default function ChatsScreen() {
     });
   }, [navigation, totalUnread]);
 
+  if (!user) return <Redirect href="/(tabs)/discover" />;
+
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
       <OfflineBanner />
@@ -596,7 +599,7 @@ export default function ChatsScreen() {
               tintColor={Colors.brand}
             />
           }
-          contentContainerStyle={{ paddingBottom: insets.bottom + 52 + 80 + 66 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 52 + 80 + 50 }}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -612,11 +615,11 @@ export default function ChatsScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.fab, { backgroundColor: Colors.brand, bottom: insets.bottom + 52 + 16 + 54 + 12 }]}
+            style={[styles.cameraFab, { bottom: insets.bottom + 52 + 16 + 54 + 12 }]}
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/stories/camera"); }}
-            activeOpacity={0.85}
+            activeOpacity={0.7}
           >
-            <Ionicons name="camera" size={24} color="#fff" />
+            <Ionicons name="camera" size={20} color={Colors.brand} />
           </TouchableOpacity>
         </>
       )}
@@ -722,5 +725,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 6,
+  },
+  cameraFab: {
+    position: "absolute",
+    right: 24,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
