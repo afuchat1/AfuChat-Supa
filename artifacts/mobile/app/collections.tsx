@@ -333,12 +333,7 @@ export default function CollectionsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
           <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Collections</Text>
-          <Text style={[styles.headerSub, { color: colors.textMuted }]}>
-            {collections.length} collection{collections.length !== 1 ? "s" : ""}
-          </Text>
-        </View>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Collections</Text>
         <TouchableOpacity
           style={[styles.newBtn, { backgroundColor: Colors.brand }]}
           onPress={() => setShowCreate(true)}
@@ -426,8 +421,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   backBtn: { padding: 2 },
-  headerTitle: { fontSize: 20, fontFamily: "Inter_700Bold" },
-  headerSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
+  headerTitle: { flex: 1, fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center" },
   newBtn: {
     flexDirection: "row",
     alignItems: "center",

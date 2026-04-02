@@ -361,11 +361,8 @@ export default function AdvancedFeaturesScreen() {
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Advanced Features</Text>
-          <Text style={[styles.headerSub, { color: colors.textMuted }]}>38 AI-powered & smart features</Text>
-        </View>
-        {saving && <ActivityIndicator color={Colors.brand} size="small" />}
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Advanced Features</Text>
+        {saving ? <ActivityIndicator color={Colors.brand} size="small" /> : <View style={{ width: 24 }} />}
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 60 }}>
@@ -491,8 +488,7 @@ export default function AdvancedFeaturesScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  headerSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  headerTitle: { flex: 1, fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center" },
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, borderBottomWidth: StyleSheet.hairlineWidth, marginTop: 8 },
   sectionIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   sectionTitle: { fontSize: 15, fontFamily: "Inter_700Bold", marginBottom: 1 },

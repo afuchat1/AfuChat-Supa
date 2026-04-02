@@ -515,10 +515,7 @@ export default function MonetizeScreen() {
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Creator Studio</Text>
-          <Text style={[styles.headerSub, { color: colors.textMuted }]}>{MONETIZE_FEATURES.length} ways to earn with AfuChat</Text>
-        </View>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Creator Studio</Text>
         <TouchableOpacity onPress={() => router.push("/wallet" as any)} hitSlop={10}>
           <View style={[styles.balancePill, { backgroundColor: GOLD + "20" }]}>
             <Text style={[styles.balancePillText, { color: GOLD }]}>{formatAcoin(acoinBalance)} 🪙</Text>
@@ -626,8 +623,7 @@ export default function MonetizeScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  headerSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  headerTitle: { flex: 1, fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center" },
   balancePill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 },
   balancePillText: { fontSize: 13, fontFamily: "Inter_700Bold" },
   tabBar: { flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth },

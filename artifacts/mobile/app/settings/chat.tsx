@@ -13,7 +13,6 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -175,21 +174,13 @@ export default function ChatSettingsScreen() {
       showsVerticalScrollIndicator={false}
     >
       {/* Header */}
-      <LinearGradient
-        colors={[themeAccent + "22", colors.backgroundSecondary]}
-        style={[styles.header, { paddingTop: insets.top + 8 }]}
-      >
-        <TouchableOpacity onPress={() => router.back()} hitSlop={8} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
+      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <View style={[styles.headerIcon, { backgroundColor: themeAccent }]}>
-            <Ionicons name="chatbubbles" size={22} color="#fff" />
-          </View>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Chat Settings</Text>
-          <Text style={[styles.headerSub, { color: colors.textMuted }]}>Customize your messaging experience</Text>
-        </View>
-      </LinearGradient>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Chat Settings</Text>
+        <View style={{ width: 24 }} />
+      </View>
 
       {/* ── APPEARANCE ─────────────────────────────── */}
       <Section title="APPEARANCE" />
@@ -403,12 +394,9 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
 
   /* Header */
-  header: { paddingBottom: 24, paddingHorizontal: 16, gap: 16 },
-  backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
-  headerCenter: { alignItems: "center", gap: 8 },
-  headerIcon: { width: 52, height: 52, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
-  headerSub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  backBtn: { marginRight: 4 },
+  headerTitle: { flex: 1, fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center" },
 
   /* Section */
   section: { fontSize: 11, fontFamily: "Inter_700Bold", paddingHorizontal: 20, paddingTop: 22, paddingBottom: 8, letterSpacing: 0.8 },

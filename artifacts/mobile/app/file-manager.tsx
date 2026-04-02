@@ -392,18 +392,9 @@ export default function FileManagerScreen() {
         <TouchableOpacity onPress={() => { if (selectMode) { setSelectMode(false); setSelected(new Set()); } else router.back(); }} hitSlop={12}>
           <Ionicons name={selectMode ? "close" : "arrow-back"} size={24} color={colors.text} />
         </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          {selectMode ? (
-            <Text style={[styles.headerTitle, { color: colors.text }]}>{selected.size} selected</Text>
-          ) : (
-            <>
-              <Text style={[styles.headerTitle, { color: colors.text }]}>File Manager</Text>
-              <Text style={[styles.headerSub, { color: colors.textMuted }]}>
-                {filtered.length} files{totalSize > 0 ? ` · ${formatSize(totalSize)}` : ""}
-              </Text>
-            </>
-          )}
-        </View>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
+          {selectMode ? `${selected.size} selected` : "File Manager"}
+        </Text>
         {selectMode ? (
           <>
             <TouchableOpacity hitSlop={10} onPress={deleteSelected} disabled={selected.size === 0}>
@@ -514,8 +505,7 @@ export default function FileManagerScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  headerSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
+  headerTitle: { flex: 1, fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center" },
   sortBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, borderWidth: 1 },
   sortBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   searchBar: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
