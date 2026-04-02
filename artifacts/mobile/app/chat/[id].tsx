@@ -92,6 +92,7 @@ type Message = {
   attachment_type?: string | null;
   edited_at?: string | null;
   _pending?: boolean;
+  _isAi?: boolean;
 };
 
 type ChatInfo = {
@@ -488,8 +489,9 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   const isGiftMsg = msg.encrypted_content.startsWith("🎁");
   const meBubbleColor = chatTheme?.bubble || BRAND;
   const otherBubbleColor = colors.bubbleIncoming;
-  const bubbleColor = isMe ? meBubbleColor : otherBubbleColor;
-  const textColor = isMe ? "#FFFFFF" : colors.bubbleIncomingText;
+  const isAi = !!msg._isAi;
+  const bubbleColor = isAi ? "#004D5C" : (isMe ? meBubbleColor : otherBubbleColor);
+  const textColor = isAi ? "#E0F7FA" : (isMe ? "#FFFFFF" : colors.bubbleIncomingText);
   const isPending = msg._pending || msg.status === "sending";
 
   const fadeIn = useRef(new Animated.Value(0)).current;
@@ -552,11 +554,15 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
           isPending && { opacity: 0.6 },
         ]}>
           {isPremiumSender && <PremiumBubbleShimmer />}
-          {!isMe && showName && (
+          {isAi ? (
+            <Text style={[st.senderName, { color: "#00BCD4", fontFamily: "Inter_600SemiBold", letterSpacing: 0.3 }]}>
+              ✦ AfuAI
+            </Text>
+          ) : (!isMe && showName && (
             <Text style={[st.senderName, { color: BRAND }]}>
               {msg.sender?.display_name}
             </Text>
-          )}
+          ))}
 
           {replyPreview && (
             <View style={[st.replyPreview, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.06)" }]}>
@@ -764,6 +770,7 @@ export default function ChatScreen() {
       : null
   );
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [isAfuAiTyping, setIsAfuAiTyping] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [showReactions, setShowReactions] = useState<Message | null>(null);
@@ -1336,6 +1343,56 @@ export default function ChatScreen() {
     }
   }
 
+  async function handleAfuAiResponse(userText: string, currentMessages: Message[]) {
+    setIsAfuAiTyping(true);
+    try {
+      const history = currentMessages
+        .slice(0, 12)
+        .reverse()
+        .map((m) => {
+          const isMe = m.sender_id === user?.id;
+          const name = isMe ? (profile?.display_name || "User") : (m.sender?.display_name || "User");
+          return `${name}: ${m.encrypted_content}`;
+        })
+        .join("\n");
+
+      const prompt = userText.replace(/@afuai/gi, "").trim() || userText;
+      const contextBlock = history ? `Recent conversation:\n${history}\n\n` : "";
+
+      const reply = await askAi(
+        `${contextBlock}User: ${prompt}`,
+        `You are AfuAI, a friendly and capable AI assistant built into AfuChat — a social super app from Uganda. Help the user with anything they ask: questions, writing, analysis, coding, creative tasks, advice, translations, and more. Respond in the same language the user writes in. Keep replies conversational and concise for a chat context — be thorough when depth is needed. Never mention that you are an AI language model built by another company; you are AfuAI.`,
+        { fast: false, maxTokens: 600 }
+      );
+
+      const aiMessage: Message = {
+        id: `afuai_${Date.now()}`,
+        chat_id: id,
+        sender_id: "afuai",
+        encrypted_content: reply,
+        sent_at: new Date().toISOString(),
+        sender: { display_name: "AfuAI", avatar_url: null, handle: "afuai" },
+        reactions: [],
+        _isAi: true,
+      };
+      setMessages((prev) => [aiMessage, ...prev]);
+    } catch {
+      const errMsg: Message = {
+        id: `afuai_err_${Date.now()}`,
+        chat_id: id,
+        sender_id: "afuai",
+        encrypted_content: "Sorry, I couldn't respond right now. Please try again.",
+        sent_at: new Date().toISOString(),
+        sender: { display_name: "AfuAI", avatar_url: null, handle: "afuai" },
+        reactions: [],
+        _isAi: true,
+      };
+      setMessages((prev) => [errMsg, ...prev]);
+    } finally {
+      setIsAfuAiTyping(false);
+    }
+  }
+
   function openTranslatePicker(msg: Message) {
     setTranslateMsg(msg);
     setShowLangPicker(true);
@@ -1606,6 +1663,11 @@ export default function ChatScreen() {
 
     try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("message_sent"); } catch (_) {}
     setSending(false);
+
+    if (/@afuai/i.test(text)) {
+      const snapshot = messages;
+      handleAfuAiResponse(text, snapshot);
+    }
   }
 
   async function sendRedEnvelope() {
@@ -2333,9 +2395,13 @@ export default function ChatScreen() {
               <Text style={[st.headerName, { color: colors.text }]} numberOfLines={1}>{headerTitle}</Text>
               <VerifiedBadge isVerified={chatInfo?.is_verified} isOrganizationVerified={chatInfo?.is_organization_verified} size={16} />
             </View>
-            {typingUsers.length > 0 ? (
-              <Text style={[st.headerSub, { color: BRAND }]}>
-                {typingUsers.join(", ")} typing...
+            {(typingUsers.length > 0 || isAfuAiTyping) ? (
+              <Text style={[st.headerSub, { color: isAfuAiTyping && typingUsers.length === 0 ? "#00BCD4" : BRAND }]}>
+                {isAfuAiTyping
+                  ? typingUsers.length > 0
+                    ? `AfuAI & ${typingUsers.join(", ")} typing...`
+                    : "✦ AfuAI is thinking..."
+                  : `${typingUsers.join(", ")} typing...`}
               </Text>
             ) : !networkOnline ? (
               <Text style={[st.headerSub, { color: "#FF9500" }]}>Waiting for network...</Text>
@@ -2378,7 +2444,9 @@ export default function ChatScreen() {
               onScroll={handleScroll}
               scrollEventThrottle={16}
               ListFooterComponent={
-                typingUsers.length > 0 ? <TypingBubble names={typingUsers} colors={colors} /> : null
+                (typingUsers.length > 0 || isAfuAiTyping)
+                  ? <TypingBubble names={isAfuAiTyping ? ["AfuAI", ...typingUsers] : typingUsers} colors={{ ...colors, bubbleIncoming: isAfuAiTyping && typingUsers.length === 0 ? "#004D5C" : colors.bubbleIncoming, bubbleIncomingText: isAfuAiTyping && typingUsers.length === 0 ? "#E0F7FA" : colors.bubbleIncomingText }} />
+                  : null
               }
             />
             <Animated.View
