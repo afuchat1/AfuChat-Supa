@@ -1,17 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   Dimensions,
-  FlatList,
-  Image,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -21,11 +15,9 @@ import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "@/lib/haptics";
 import { useTheme } from "@/hooks/useTheme";
-import { Avatar } from "@/components/ui/Avatar";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
-import { supabase } from "@/lib/supabase";
 
 const USAGE_KEY = "afu_app_usage";
 const { width: SW } = Dimensions.get("window");
@@ -60,6 +52,14 @@ const CATEGORIES: Category[] = [
         route: "/ai",
         badge: "AI",
         featuredSub: "Your intelligent assistant. Ask anything, do everything.",
+      },
+      {
+        id: "search",
+        label: "Search",
+        icon: "search",
+        gradient: ["#5856D6", "#6E6CD3"],
+        route: "/search",
+        featuredSub: "Find people, posts, channels, events and more.",
       },
     ],
   },
@@ -377,19 +377,11 @@ function AppTileInner({ app, usageCount, onTap, colors }: { app: AppItem; usageC
   );
 }
 
-type PersonResult = { id: string; handle: string; display_name: string; avatar_url: string | null };
-type PostResult = { id: string; content: string; author_name: string; created_at: string };
-
 export default function AppsScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const [search, setSearch] = useState("");
   const [usageCounts, setUsageCounts] = useState<Record<string, number>>({});
   const { isPremium } = useAuth();
-  const [people, setPeople] = useState<PersonResult[]>([]);
-  const [posts, setPosts] = useState<PostResult[]>([]);
-  const [searching, setSearching] = useState(false);
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(USAGE_KEY).then((raw) => {
@@ -398,39 +390,6 @@ export default function AppsScreen() {
       }
     });
   }, []);
-
-  useEffect(() => {
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-    const q = search.trim();
-    if (q.length < 2) { setPeople([]); setPosts([]); setSearching(false); return; }
-    setSearching(true);
-    searchTimer.current = setTimeout(async () => {
-      const [{ data: ppl }, { data: pst }] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("id, handle, display_name, avatar_url")
-          .or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`)
-          .limit(6),
-        supabase
-          .from("posts")
-          .select("id, content, created_at, profiles!posts_author_id_fkey(display_name)")
-          .ilike("content", `%${q}%`)
-          .order("created_at", { ascending: false })
-          .limit(5),
-      ]);
-      setPeople(ppl || []);
-      setPosts(
-        (pst || []).map((p: any) => ({
-          id: p.id,
-          content: p.content,
-          author_name: p.profiles?.display_name || "User",
-          created_at: p.created_at,
-        }))
-      );
-      setSearching(false);
-    }, 350);
-    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
-  }, [search]);
 
   function trackTap(appId: string) {
     setUsageCounts((prev) => {
@@ -450,18 +409,6 @@ export default function AppsScreen() {
     ALL_APPS.find((a) => a.id === DEFAULT_FEATURED_ID) ??
     ALL_APPS[0];
 
-  const q = search.trim().toLowerCase();
-  const isSearching = q.length >= 2;
-
-  const filteredApps = q
-    ? CATEGORIES.map((cat) => ({
-        ...cat,
-        apps: cat.apps.filter((a) =>
-          a.label.toLowerCase().includes(q)
-        ),
-      })).filter((cat) => cat.apps.length > 0)
-    : CATEGORIES;
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
@@ -472,7 +419,6 @@ export default function AppsScreen() {
           paddingBottom: insets.bottom + 72,
         }}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Apps</Text>
@@ -484,127 +430,32 @@ export default function AppsScreen() {
           )}
         </View>
 
-        <View style={[styles.searchBar, { backgroundColor: colors.surface }]}>
-          <Ionicons name="search" size={16} color={colors.textMuted} />
-          <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Search people, posts, apps..."
-            placeholderTextColor={colors.textMuted}
-            value={search}
-            onChangeText={setSearch}
-            returnKeyType="search"
-            autoCapitalize="none"
-          />
-          {search.length > 0 && (
-            <Pressable onPress={() => setSearch("")}>
-              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
-            </Pressable>
-          )}
-        </View>
+        <FeaturedBanner app={featuredApp} onTap={trackTap} />
+        <TrendingSection
+          apps={trendingApps}
+          usageCounts={usageCounts}
+          onTap={trackTap}
+          colors={colors}
+        />
 
-        {isSearching && searching && (
-          <View style={{ paddingVertical: 20, alignItems: "center" }}>
-            <ActivityIndicator color={Colors.brand} />
-          </View>
-        )}
-
-        {isSearching && !searching && people.length > 0 && (
-          <View style={{ marginBottom: 16 }}>
-            <Text style={[styles.categoryTitle, { color: colors.textSecondary, marginBottom: 8, paddingHorizontal: 20 }]}>
-              PEOPLE
+        {CATEGORIES.map((cat) => (
+          <View key={cat.id} style={styles.category}>
+            <Text style={[styles.categoryTitle, { color: colors.textSecondary }]}>
+              {cat.title.toUpperCase()}
             </Text>
-            <View style={[styles.categoryCard, { backgroundColor: colors.surface, marginHorizontal: 16 }]}>
-              {people.map((p, i) => (
-                <TouchableOpacity
-                  key={p.id}
-                  style={[styles.personRow, i < people.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.separator }]}
-                  onPress={() => router.push({ pathname: "/contact/[id]", params: { id: p.id } })}
-                  activeOpacity={0.7}
-                >
-                  <Avatar uri={p.avatar_url} name={p.display_name} size={36} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.personName, { color: colors.text }]}>{p.display_name}</Text>
-                    <Text style={[styles.personHandle, { color: colors.textMuted }]}>@{p.handle}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {isSearching && !searching && posts.length > 0 && (
-          <View style={{ marginBottom: 16 }}>
-            <Text style={[styles.categoryTitle, { color: colors.textSecondary, marginBottom: 8, paddingHorizontal: 20 }]}>
-              POSTS
-            </Text>
-            <View style={[styles.categoryCard, { backgroundColor: colors.surface, marginHorizontal: 16 }]}>
-              {posts.map((p, i) => (
-                <TouchableOpacity
-                  key={p.id}
-                  style={[styles.postRow, i < posts.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.separator }]}
-                  onPress={() => router.push({ pathname: "/post/[id]", params: { id: p.id } })}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="document-text-outline" size={18} color={Colors.brand} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.postContent, { color: colors.text }]} numberOfLines={2}>{p.content}</Text>
-                    <Text style={[styles.postMeta, { color: colors.textMuted }]}>by {p.author_name}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {isSearching && !searching && people.length === 0 && posts.length === 0 && filteredApps.length === 0 && (
-          <View style={styles.empty}>
-            <Ionicons name="search-outline" size={40} color={colors.textMuted} />
-            <Text style={[styles.emptyText, { color: colors.textMuted }]}>No results found</Text>
-          </View>
-        )}
-
-        {!isSearching && (
-          <>
-            <FeaturedBanner app={featuredApp} onTap={trackTap} />
-            <TrendingSection
-              apps={trendingApps}
-              usageCounts={usageCounts}
-              onTap={trackTap}
-              colors={colors}
-            />
-          </>
-        )}
-
-        {(isSearching ? filteredApps.length > 0 : true) && (
-          <>
-            {isSearching && filteredApps.length > 0 && (
-              <Text style={[styles.categoryTitle, { color: colors.textSecondary, marginBottom: 8, paddingHorizontal: 20 }]}>
-                APPS
-              </Text>
-            )}
-            {(isSearching ? filteredApps : CATEGORIES).map((cat) => (
-              <View key={cat.id} style={styles.category}>
-                {!isSearching && (
-                  <Text style={[styles.categoryTitle, { color: colors.textSecondary }]}>
-                    {cat.title.toUpperCase()}
-                  </Text>
-                )}
-                <View style={[styles.categoryCard, { backgroundColor: colors.surface }]}>
-                  <View style={styles.appGrid}>
-                    {cat.apps.map((app) => (
-                      <AppTile key={app.id} app={app} onTap={trackTap} />
-                    ))}
-                    {cat.apps.length % 4 !== 0 &&
-                      Array.from({ length: 4 - (cat.apps.length % 4) }).map((_, i) => (
-                        <View key={`pad-${i}`} style={{ width: TILE_WIDTH }} />
-                      ))}
-                  </View>
-                </View>
+            <View style={[styles.categoryCard, { backgroundColor: colors.surface }]}>
+              <View style={styles.appGrid}>
+                {cat.apps.map((app) => (
+                  <AppTile key={app.id} app={app} onTap={trackTap} />
+                ))}
+                {cat.apps.length % 4 !== 0 &&
+                  Array.from({ length: 4 - (cat.apps.length % 4) }).map((_, i) => (
+                    <View key={`pad-${i}`} style={{ width: TILE_WIDTH }} />
+                  ))}
               </View>
-            ))}
-          </>
-        )}
+            </View>
+          </View>
+        ))}
       </ScrollView>
     </View>
   );
@@ -637,22 +488,6 @@ const styles = StyleSheet.create({
     color: "#FFD60A",
     fontSize: 11,
     fontFamily: "Inter_600SemiBold",
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: 16,
-    marginBottom: 20,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: Platform.OS === "ios" ? 10 : 8,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-    padding: 0,
   },
   featuredGradient: {
     borderRadius: 20,
@@ -761,31 +596,4 @@ const styles = StyleSheet.create({
     textAlign: "center",
     maxWidth: 64,
   },
-  empty: {
-    alignItems: "center",
-    paddingVertical: 60,
-    gap: 12,
-  },
-  emptyText: {
-    fontSize: 16,
-    fontFamily: "Inter_400Regular",
-  },
-  personRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  personName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  personHandle: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  postRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  postContent: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
-  postMeta: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
 });
