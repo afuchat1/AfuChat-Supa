@@ -86,10 +86,8 @@ function CommentsSheet({
   const [sending, setSending] = useState(false);
   const listRef = useRef<FlatList>(null);
 
-  useEffect(() => {
-    if (!visible || !postId) return;
-    setReplies([]);
-    setLoading(true);
+  const loadReplies = useCallback(() => {
+    if (!postId) return;
     supabase
       .from("post_replies")
       .select("id, author_id, content, created_at, profiles!post_replies_author_id_fkey(display_name, handle, avatar_url)")
@@ -114,7 +112,28 @@ function CommentsSheet({
         }
         setLoading(false);
       });
-  }, [visible, postId]);
+  }, [postId]);
+
+  useEffect(() => {
+    if (!visible || !postId) return;
+    setReplies([]);
+    setLoading(true);
+    loadReplies();
+  }, [visible, postId, loadReplies]);
+
+  useEffect(() => {
+    if (!visible || !postId) return;
+    const channel = supabase
+      .channel(`video-comments:${postId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "post_replies", filter: `post_id=eq.${postId}` }, () => {
+        loadReplies();
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "post_replies", filter: `post_id=eq.${postId}` }, () => {
+        loadReplies();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [visible, postId, loadReplies]);
 
   async function sendReply() {
     if (!user || !text.trim()) return;
@@ -773,6 +792,29 @@ export default function VideoPlayerScreen() {
       initialScrollDone.current = true;
     }
   }, [loading, videos, id]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("video-feed-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "post_acknowledgments" }, (payload: any) => {
+        const postId = payload.new?.post_id || payload.old?.post_id;
+        if (!postId) return;
+        supabase.from("post_acknowledgments").select("id", { count: "exact", head: true }).eq("post_id", postId)
+          .then(({ count }) => {
+            setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, likeCount: count || 0 } : v));
+          });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "post_replies" }, (payload: any) => {
+        const postId = payload.new?.post_id || payload.old?.post_id;
+        if (!postId) return;
+        supabase.from("post_replies").select("id", { count: "exact", head: true }).eq("post_id", postId)
+          .then(({ count }) => {
+            setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, replyCount: count || 0 } : v));
+          });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 

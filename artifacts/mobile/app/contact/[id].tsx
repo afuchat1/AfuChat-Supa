@@ -153,6 +153,20 @@ export default function ContactProfileScreen() {
 
   useEffect(() => { loadPosts(); }, [loadPosts]);
 
+  useEffect(() => {
+    if (!id) return;
+    const channel = supabase
+      .channel(`contact-posts:${id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts", filter: `author_id=eq.${id}` }, () => {
+        loadPosts();
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "posts", filter: `author_id=eq.${id}` }, () => {
+        loadPosts();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [id, loadPosts]);
+
   async function sendWave() {
     if (!user || !id) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);

@@ -59,6 +59,7 @@ type PostItem = {
   post_type: string;
   article_title: string | null;
   video_url: string | null;
+  isFollowing: boolean;
 };
 
 function formatRelative(iso: string): string {
@@ -87,18 +88,21 @@ function BookmarkButton({ bookmarked, onPress }: { bookmarked: boolean; onPress:
   );
 }
 
-function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress, colWidth }: { item: PostItem; onToggleLike: (postId: string) => void; onToggleBookmark: (postId: string) => void; onImagePress?: (images: string[], index: number) => void; colWidth?: number }) {
+function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImagePress, colWidth }: { item: PostItem; onToggleLike: (postId: string) => void; onToggleBookmark: (postId: string) => void; onToggleFollow: (authorId: string) => void; onImagePress?: (images: string[], index: number) => void; colWidth?: number }) {
   const { colors } = useTheme();
   const { preferredLang } = useLanguage();
   const { width: screenW } = useWindowDimensions();
   const cardInsets = useCardInsets();
   const isDesktop = useIsDesktop();
   const { openDetail } = useDesktopDetail();
+  const { user: currentUser } = useAuth();
   const [displayContent, setDisplayContent] = useState(item.content);
   const [isTranslated, setIsTranslated] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const cardRef = useRef<ViewShot>(null);
+  const isOwnPost = currentUser?.id === item.author_id;
+  const showFollowBtn = !isOwnPost && !item.isFollowing;
 
   const allImages = item.images.length > 0 ? item.images : item.image_url ? [item.image_url] : [];
   const effectiveW = colWidth ?? screenW;
@@ -216,6 +220,16 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress, colWidth
                 @{item.profile.handle} · {formatRelative(item.created_at)}
               </Text>
             </View>
+            {showFollowBtn && (
+              <TouchableOpacity
+                style={styles.followBtn}
+                onPress={() => onToggleFollow(item.author_id)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="add" size={15} color="#fff" />
+                <Text style={styles.followBtnText}>Follow</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               onPress={() => { Haptics.impact?.(); setMenuVisible(true); }}
               hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
@@ -492,6 +506,7 @@ export default function DiscoverScreen() {
           profile: { display_name: p.profiles?.display_name || "User", handle: p.profiles?.handle || "user", avatar_url: p.profiles?.avatar_url || null },
           liked: myLikeSet.has(p.id), likeCount: likeMap[p.id] || 0, replyCount: replyMap[p.id] || 0, score: 0, bookmarked: myBookmarkSet.has(p.id),
           post_type: p.post_type || "post", article_title: p.article_title || null, video_url: p.video_url || null,
+          isFollowing: true,
         }));
 
         if (isRefresh) {
@@ -651,6 +666,7 @@ export default function DiscoverScreen() {
           post_type: p.post_type || "post",
           article_title: p.article_title || null,
           video_url: p.video_url || null,
+          isFollowing: followingSet.has(p.author_id),
         };
       });
 
@@ -761,7 +777,6 @@ export default function DiscoverScreen() {
     return unsub;
   }, []);
 
-  // Realtime new/deleted posts — background refresh to not disrupt reading
   useEffect(() => {
     const channel = supabase
       .channel("discover-posts-realtime")
@@ -772,6 +787,22 @@ export default function DiscoverScreen() {
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "posts" }, () => {
         const hasPosts = postsRef.current.length > 0;
         loadPostsRef.current(feedTabRef.current, hasPosts);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "post_acknowledgments" }, (payload: any) => {
+        const postId = payload.new?.post_id || payload.old?.post_id;
+        if (!postId) return;
+        supabase.from("post_acknowledgments").select("id", { count: "exact", head: true }).eq("post_id", postId)
+          .then(({ count }) => {
+            setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, likeCount: count || 0 } : p));
+          });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "post_replies" }, (payload: any) => {
+        const postId = payload.new?.post_id || payload.old?.post_id;
+        if (!postId) return;
+        supabase.from("post_replies").select("id", { count: "exact", head: true }).eq("post_id", postId)
+          .then(({ count }) => {
+            setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, replyCount: count || 0 } : p));
+          });
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -828,6 +859,15 @@ export default function DiscoverScreen() {
         }
         try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("post_liked"); } catch (_) {}
       }
+    }
+  }
+
+  async function toggleFollow(authorId: string) {
+    if (!user) { router.push("/(auth)/login"); return; }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const { error } = await supabase.from("follows").upsert({ follower_id: user.id, following_id: authorId }, { onConflict: "follower_id,following_id" });
+    if (!error) {
+      setPosts((prev) => prev.map((p) => p.author_id === authorId ? { ...p, isFollowing: true } : p));
     }
   }
 
@@ -915,6 +955,7 @@ export default function DiscoverScreen() {
                 item={item}
                 onToggleLike={toggleLike}
                 onToggleBookmark={toggleBookmark}
+                onToggleFollow={toggleFollow}
                 onImagePress={imgViewer.openViewer}
                 colWidth={desktopColWidth}
               />
@@ -1028,6 +1069,8 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   cardName: { fontSize: 15, fontFamily: "Inter_700Bold", letterSpacing: -0.1 },
   cardMeta: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  followBtn: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: Colors.brand, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14 },
+  followBtnText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
   cardContent: {
     fontSize: 15,
     fontFamily: "Inter_400Regular",
