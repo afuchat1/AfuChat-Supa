@@ -92,7 +92,6 @@ const EXEC_LABELS: Record<string, string> = {
   buy_gift: "Buy Gift",
   delete_post: "Delete Post",
   update_bio: "Update Bio",
-  update_status: "Update Status",
 };
 
 function buildExecDescription(actionType: string, params: Record<string, any>): string {
@@ -114,7 +113,6 @@ function buildExecDescription(actionType: string, params: Record<string, any>): 
     case "buy_gift": return `Buy gift "${params.gift_name || "?"}" for ${params.cost || "?"} Nexa`;
     case "delete_post": return `Delete your post`;
     case "update_bio": return `Update your bio to: "${(params.bio || "").slice(0, 60)}..."`;
-    case "update_status": return `Update your status to: "${params.status || "?"}"`;
     default: return `Execute ${actionType}`;
   }
 }
@@ -418,7 +416,6 @@ function ConfirmationCard({ execAction, colors, onConfirm, onCancel }: {
     buy_gift: "gift",
     delete_post: "trash",
     update_bio: "person-circle",
-    update_status: "happy",
   };
 
   const colorMap: Record<string, string> = {
@@ -436,7 +433,6 @@ function ConfirmationCard({ execAction, colors, onConfirm, onCancel }: {
     buy_gift: "#9C27B0",
     delete_post: "#FF3B30",
     update_bio: colors.accent,
-    update_status: "#34C759",
   };
 
   const icon = iconMap[execAction.actionType] || "flash";
@@ -710,8 +706,8 @@ export default function AiChatScreen() {
       supabase.from("xp_transfers").select("id, amount, created_at, status, sender:profiles!xp_transfers_sender_id_fkey(handle, display_name)").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(5),
       supabase.from("gift_transactions").select("id, xp_cost, created_at, message, gifts(name, rarity), receiver:profiles!gift_transactions_receiver_id_fkey(handle, display_name)").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(5),
       supabase.from("gift_transactions").select("id, xp_cost, created_at, message, gifts(name, rarity), sender:profiles!gift_transactions_sender_id_fkey(handle, display_name)").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(5),
-      supabase.from("posts").select("id, content, images, likes, comments, view_count, created_at, post_type, article_title").eq("author_id", user.id).order("created_at", { ascending: false }).limit(5),
-      supabase.from("posts").select("id, content, likes, comments, view_count, author:profiles!posts_author_id_fkey(handle, display_name), post_type, article_title").order("likes", { ascending: false }).limit(8),
+      supabase.from("posts").select("id, content, image_url, view_count, created_at, post_type, article_title").eq("author_id", user.id).order("created_at", { ascending: false }).limit(5),
+      supabase.from("posts").select("id, content, view_count, author:profiles!posts_author_id_fkey(handle, display_name), post_type, article_title").order("view_count", { ascending: false }).limit(8),
       supabase.from("channel_subscriptions").select("channels(id, name, description, member_count)").eq("user_id", user.id).limit(10),
       supabase.from("digital_events").select("id, title, date, location, event_type, organizer_id").gte("date", new Date().toISOString()).order("date", { ascending: true }).limit(5),
       supabase.from("gift_marketplace").select("id, price, gifts(name, rarity, emoji), seller:profiles!gift_marketplace_seller_id_fkey(handle)").eq("is_active", true).order("created_at", { ascending: false }).limit(10),
@@ -753,13 +749,13 @@ export default function AiChatScreen() {
     const myPostLines = (recentPosts || []).map((p: any) => {
       const date = new Date(p.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
       const type = p.post_type === "article" ? `Article: "${p.article_title}"` : `Post`;
-      return `  - [post:${p.id}] ${date}: ${type} — "${(p.content || "").slice(0, 60)}..." (${p.likes || 0} likes, ${p.comments || 0} comments, ${p.view_count || 0} views)`;
+      return `  - [post:${p.id}] ${date}: ${type} — "${(p.content || "").slice(0, 60)}..." (${p.view_count || 0} views)`;
     }).join("\n");
 
     const trendingLines = (trendingPosts || []).map((p: any) => {
       const author = p.author;
       const type = p.post_type === "article" ? `Article: "${p.article_title}"` : "Post";
-      return `  - @${author?.handle || "?"}: ${type} — "${(p.content || "").slice(0, 50)}..." (${p.likes || 0} likes, ${p.view_count || 0} views)`;
+      return `  - @${author?.handle || "?"}: ${type} — "${(p.content || "").slice(0, 50)}..." (${p.view_count || 0} views)`;
     }).join("\n");
 
     const channelLines = (channelsData || []).map((c: any) => `  - ${c.channels?.name || "?"} (${c.channels?.member_count || 0} members)`).join("\n");
@@ -793,7 +789,7 @@ USER CONTEXT (current user data — LIVE from database):
 - Premium: ${premium}
 - Gifts owned: ${gifts || "None"}
 - Bio: ${profile.bio || "Not set"}
-- Status: ${profile.status || "Not set"}
+- Tipping enabled: ${profile.tipping_enabled ? "Yes" : "No"}
 
 SOCIAL NETWORK:
 - Following: ${followingList || "None"}
@@ -865,7 +861,7 @@ AI CAPABILITIES (what you can do):
 - Bookmark/unbookmark posts
 - Subscribe/cancel premium plans
 - Convert currencies
-- Update user bio and status
+- Update user bio
 - Search the web for real-time information
 - Navigate user to any screen in the app
 - Write content, translate, code, analyze, brainstorm
@@ -999,8 +995,8 @@ AI CAPABILITIES (what you can do):
     if (!user || !profile) return { success: false, message: "Not logged in" };
 
     const freshProfile = async () => {
-      const { data } = await supabase.from("profiles").select("xp, acoin, handle, bio, status").eq("id", user.id).single();
-      return data as { xp: number; acoin: number; handle: string; bio: string; status: string } | null;
+      const { data } = await supabase.from("profiles").select("xp, acoin, handle, bio").eq("id", user.id).single();
+      return data as { xp: number; acoin: number; handle: string; bio: string } | null;
     };
 
     switch (action.actionType) {
@@ -1154,7 +1150,7 @@ AI CAPABILITIES (what you can do):
       case "bookmark_post": {
         const { post_id } = action.params;
         if (!post_id) return { success: false, message: "Missing post ID" };
-        const { data: existing } = await supabase.from("post_bookmarks").select("id").eq("user_id", user.id).eq("post_id", post_id).maybeSingle();
+        const { data: existing } = await supabase.from("post_bookmarks").select("post_id").eq("user_id", user.id).eq("post_id", post_id).maybeSingle();
         if (existing) return { success: false, message: "Post already bookmarked" };
         const { error } = await supabase.from("post_bookmarks").insert({ user_id: user.id, post_id });
         if (error) return { success: false, message: error.message };
@@ -1175,14 +1171,6 @@ AI CAPABILITIES (what you can do):
         refreshProfile();
         return { success: true, message: `Bio updated to: "${bio}"` };
       }
-      case "update_status": {
-        const { status } = action.params;
-        if (!status) return { success: false, message: "Missing status" };
-        const { error } = await supabase.from("profiles").update({ status }).eq("id", user.id);
-        if (error) return { success: false, message: error.message };
-        refreshProfile();
-        return { success: true, message: `Status updated to: "${status}"` };
-      }
       case "search_users": {
         const { query } = action.params;
         if (!query) return { success: false, message: "Missing search query" };
@@ -1198,14 +1186,9 @@ AI CAPABILITIES (what you can do):
         if (!recipient) return { success: false, message: `User @${handle} not found` };
         if (recipient.id === user.id) return { success: false, message: "Cannot send to yourself" };
         const recipientId = (recipient as { id: string }).id;
-        const { data: existingChat } = await supabase.from("chats").select("id").or(`and(user1_id.eq.${user.id},user2_id.eq.${recipientId}),and(user1_id.eq.${recipientId},user2_id.eq.${user.id})`).maybeSingle();
-        let chatId = existingChat?.id;
-        if (!chatId) {
-          const { data: newChat, error: chatErr } = await supabase.from("chats").insert({ user1_id: user.id, user2_id: recipientId }).select("id").single();
-          if (chatErr || !newChat) return { success: false, message: "Could not create chat" };
-          chatId = newChat.id;
-        }
-        const { error: msgErr } = await supabase.from("messages").insert({ chat_id: chatId, sender_id: user.id, content: chatMsg });
+        const { data: chatId, error: rpcErr } = await supabase.rpc("get_or_create_direct_chat", { other_user_id: recipientId });
+        if (rpcErr || !chatId) return { success: false, message: "Could not create or find chat" };
+        const { error: msgErr } = await supabase.from("messages").insert({ chat_id: chatId, sender_id: user.id, encrypted_content: chatMsg });
         if (msgErr) return { success: false, message: `Could not send message: ${msgErr.message}` };
         return { success: true, message: `Message sent to ${(recipient as { id: string; display_name: string }).display_name} (@${handle})` };
       }
@@ -1331,7 +1314,6 @@ When the user asks you to perform an action, include ONE [EXEC:action_type:{"par
 - [EXEC:bookmark_post:{"post_id":"uuid"}] — Bookmark a post (use post IDs from context)
 - [EXEC:delete_post:{"post_id":"uuid"}] — Delete user's own post
 - [EXEC:update_bio:{"bio":"new bio text"}] — Update user's bio
-- [EXEC:update_status:{"status":"new status"}] — Update user's status
 - [EXEC:search_users:{"query":"search term"}] — Search for users on the platform
 - [EXEC:buy_gift:{"gift_name":"gift name"}] — Buy a gift from the shop
 Always explain what you're about to do before the EXEC tag. Handle must be WITHOUT @. JSON on single line.
@@ -1342,7 +1324,7 @@ For receipts/transaction details, use [INVOICE:{"type":"...","date":"...","amoun
 INTELLIGENCE & ANALYTICS:
 When asked about analytics or insights, provide data-driven analysis:
 - Spending patterns from transaction history
-- Engagement metrics from post data (likes, comments, views)
+- Engagement metrics from post data (views)
 - Network growth from follower trends
 - Gift collection analysis by rarity
 - Marketplace price trends
