@@ -80,11 +80,11 @@ export default function Root({ children }: PropsWithChildren) {
         <ScrollViewStyleReset />
 
         <style dangerouslySetInnerHTML={{ __html: `
-          html, body { height: 100%; margin: 0; padding: 0; }
-          body { overflow: hidden; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+          html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; width: 100%; max-width: 100vw; }
+          body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
           * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; box-sizing: border-box; }
           input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
-          #root { display: flex; height: 100%; flex: 1; }
+          #root { display: flex; height: 100%; flex: 1; width: 100%; max-width: 100vw; overflow: hidden; }
 
           /* Polished thin scrollbars on web */
           ::-webkit-scrollbar { width: 5px; height: 5px; }

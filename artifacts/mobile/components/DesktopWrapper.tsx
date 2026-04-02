@@ -127,7 +127,6 @@ const styles = StyleSheet.create({
   },
   centerPanel: {
     flex: 1,
-    minWidth: 360,
     overflow: "hidden",
   },
   rightPanel: {
