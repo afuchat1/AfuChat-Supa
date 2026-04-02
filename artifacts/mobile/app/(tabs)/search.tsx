@@ -113,7 +113,7 @@ const QUICK_CATEGORIES = [
 const TRENDING_TAGS = ["gaming","photography","music","travel","coding","fitness","cooking","art","fashion","tech","crypto","design","startup","afuchat","movies"];
 
 type PersonResult   = { id:string; handle:string; display_name:string; avatar_url:string|null; bio:string|null; is_verified:boolean; is_organization_verified:boolean; current_grade:string; country:string|null; xp?:number };
-type PostResult     = { id:string; content:string; image_url:string|null; author_id:string; author_handle:string; author_name:string; author_avatar:string|null; view_count:number; created_at:string };
+type PostResult     = { id:string; content:string; image_url:string|null; author_id:string; author_handle:string; author_name:string; author_avatar:string|null; view_count:number; created_at:string; post_type:string; article_title:string|null };
 type ChannelResult  = { id:string; name:string; description:string|null; avatar_url:string|null; subscriber_count:number };
 type EventResult    = { id:string; title:string; description:string|null; emoji:string; price:number; event_date:string; capacity:number; tickets_sold:number; category:string|null; creator_name:string; creator_handle:string };
 type GiftResult     = { id:string; name:string; emoji:string; base_xp_cost:number; rarity:string; description:string|null };
@@ -304,7 +304,7 @@ export default function SearchScreen() {
 
       if (all || currentTab === "posts") {
         let pq = supabase.from("posts")
-          .select("id, content, image_url, author_id, view_count, visibility, created_at")
+          .select("id, content, image_url, author_id, view_count, visibility, created_at, post_type, article_title")
           .ilike("content", pat)
           .eq("visibility", "public");
         if (sort === "recent") pq = pq.order("created_at", { ascending: false });
@@ -372,7 +372,7 @@ export default function SearchScreen() {
         const amap = new Map((authors || []).map((a: any) => [a.id, a]));
         posts = postsRes.data.map((p: any) => {
           const a = amap.get(p.author_id) || {} as any;
-          return { id: p.id, content: p.content, image_url: p.image_url || null, author_id: p.author_id, author_handle: a.handle || "", author_name: a.display_name || "", author_avatar: a.avatar_url || null, view_count: p.view_count || 0, created_at: p.created_at };
+          return { id: p.id, content: p.content, image_url: p.image_url || null, author_id: p.author_id, author_handle: a.handle || "", author_name: a.display_name || "", author_avatar: a.avatar_url || null, view_count: p.view_count || 0, created_at: p.created_at, post_type: p.post_type || "text", article_title: p.article_title || null };
         });
       }
 
@@ -536,9 +536,11 @@ export default function SearchScreen() {
 
   function PostCard({ p, i }: { p: PostResult; i: number }) {
     const hasImage = !!p.image_url;
+    const isArticle = p.post_type === "article";
+    const route = isArticle ? `/article/${p.id}` : `/p/${p.id}`;
     return (
       <Animated.View entering={FadeInDown.delay(i*25).duration(220)}>
-        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface, flexDirection:"column", gap:10 }]} onPress={() => { Haptics.selectionAsync(); router.push(`/p/${p.id}` as any); }} activeOpacity={0.75}>
+        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface, flexDirection:"column", gap:10 }]} onPress={() => { Haptics.selectionAsync(); router.push(route as any); }} activeOpacity={0.75}>
           <View style={{ flexDirection:"row", alignItems:"center", gap:10 }}>
             <TouchableOpacity onPress={(e) => { e.stopPropagation(); Haptics.selectionAsync(); router.push(`/contact/${p.author_id}` as any); }} activeOpacity={0.8} hitSlop={{ top:4, bottom:4, left:4, right:4 }}>
               {p.author_avatar
@@ -553,11 +555,35 @@ export default function SearchScreen() {
               <Text style={{ color:colors.textMuted, fontSize:10, fontFamily:"Inter_500Medium" }}>{timeAgo(p.created_at)}</Text>
             </View>
           </View>
-          <Text style={{ color:colors.text, fontSize:14, fontFamily:"Inter_400Regular", lineHeight:22 }} numberOfLines={hasImage ? 2 : 4}>
-            {p.content}
-          </Text>
-          {hasImage && (
-            <Image source={{ uri: p.image_url! }} style={{ width:"100%", height:150, borderRadius:12 }} resizeMode="cover" />
+          {isArticle ? (
+            <View style={{ borderRadius: 12, borderWidth: 1, borderColor: BRAND + "20", overflow: "hidden", backgroundColor: colors.backgroundSecondary }}>
+              {hasImage && (
+                <Image source={{ uri: p.image_url! }} style={{ width:"100%", height:120 }} resizeMode="cover" />
+              )}
+              <View style={{ padding: 12, gap: 6 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", backgroundColor: BRAND + "15", paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 }}>
+                  <Ionicons name="document-text" size={11} color={BRAND} />
+                  <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: BRAND }}>Article</Text>
+                </View>
+                {p.article_title ? (
+                  <Text style={{ fontSize: 16, fontFamily: "Inter_700Bold", color: colors.text, lineHeight: 22 }} numberOfLines={2}>{p.article_title}</Text>
+                ) : null}
+                <Text style={{ color: colors.textSecondary, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 }} numberOfLines={2}>{p.content}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderRadius: 8, backgroundColor: BRAND, marginTop: 4 }}>
+                  <Ionicons name="book-outline" size={12} color="#fff" />
+                  <Text style={{ color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Read article</Text>
+                </View>
+              </View>
+            </View>
+          ) : (
+            <>
+              <Text style={{ color:colors.text, fontSize:14, fontFamily:"Inter_400Regular", lineHeight:22 }} numberOfLines={hasImage ? 2 : 4}>
+                {p.content}
+              </Text>
+              {hasImage && (
+                <Image source={{ uri: p.image_url! }} style={{ width:"100%", height:150, borderRadius:12 }} resizeMode="cover" />
+              )}
+            </>
           )}
           <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
             <View style={{ flexDirection:"row", alignItems:"center", gap:3 }}>

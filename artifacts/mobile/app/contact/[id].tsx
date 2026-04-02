@@ -49,6 +49,7 @@ type UserPost = {
   image_url: string | null;
   post_type: string;
   video_url: string | null;
+  article_title: string | null;
   post_images: { image_url: string; display_order: number }[];
   created_at: string;
   view_count: number;
@@ -117,7 +118,7 @@ export default function ContactProfileScreen() {
     setPostsLoading(true);
     const { data } = await supabase
       .from("posts")
-      .select("id, content, image_url, created_at, view_count, visibility, post_type, video_url, post_images(image_url, display_order)")
+      .select("id, content, image_url, created_at, view_count, visibility, post_type, video_url, article_title, post_images(image_url, display_order)")
       .eq("author_id", id)
       .in("visibility", ["public", "followers"])
       .order("created_at", { ascending: false })
@@ -139,6 +140,7 @@ export default function ContactProfileScreen() {
         image_url: p.image_url,
         post_type: p.post_type || "text",
         video_url: p.video_url || null,
+        article_title: p.article_title || null,
         post_images: (p.post_images || []).sort((a: any, b: any) => a.display_order - b.display_order),
         created_at: p.created_at,
         view_count: p.view_count || 0,
@@ -473,6 +475,7 @@ export default function ContactProfileScreen() {
           ) : (
             posts.map((p) => {
               const isVideo = p.post_type === "video" && p.video_url;
+              const isArticle = p.post_type === "article";
               const images = p.post_images?.length > 0
                 ? p.post_images.map((img: any) => img.image_url)
                 : p.image_url ? [p.image_url] : [];
@@ -481,7 +484,9 @@ export default function ContactProfileScreen() {
                   key={p.id}
                   style={[styles.postCard, { borderTopColor: colors.border }]}
                   onPress={() => {
-                    if (isVideo) {
+                    if (isArticle) {
+                      router.push({ pathname: "/article/[id]", params: { id: p.id } });
+                    } else if (isVideo) {
                       router.push({ pathname: "/video/[id]", params: { id: p.id } });
                     } else {
                       router.push({ pathname: "/post/[id]", params: { id: p.id } });
@@ -489,27 +494,53 @@ export default function ContactProfileScreen() {
                   }}
                   activeOpacity={0.7}
                 >
-                  {!!p.content && (
-                    <Text style={[styles.postContent, { color: colors.text }]} numberOfLines={3}>{p.content}</Text>
-                  )}
-                  {isVideo ? (
-                    <View style={styles.videoThumbWrap}>
-                      <View style={[styles.postThumb, styles.videoPlaceholder]}>
-                        <View style={styles.videoPlayIcon}>
-                          <Ionicons name="play" size={28} color="#fff" />
+                  {isArticle ? (
+                    <View style={[styles.articleCardInner, { backgroundColor: colors.backgroundSecondary || colors.surface, borderColor: Colors.brand + "20" }]}>
+                      {images.length > 0 && (
+                        <Image source={{ uri: images[0] }} style={styles.articleCoverImg} resizeMode="cover" />
+                      )}
+                      <View style={{ padding: 12, gap: 6 }}>
+                        <View style={[styles.articleBadge, { backgroundColor: Colors.brand + "15" }]}>
+                          <Ionicons name="document-text" size={11} color={Colors.brand} />
+                          <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: Colors.brand }}>Article</Text>
                         </View>
-                        <Text style={styles.videoLabel}>Video</Text>
+                        {p.article_title ? (
+                          <Text style={[styles.articleTitleText, { color: colors.text }]} numberOfLines={2}>{p.article_title}</Text>
+                        ) : null}
+                        {!!p.content && (
+                          <Text style={{ color: colors.textSecondary, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 }} numberOfLines={2}>{p.content}</Text>
+                        )}
+                        <View style={[styles.articleReadCta, { backgroundColor: Colors.brand }]}>
+                          <Ionicons name="book-outline" size={12} color="#fff" />
+                          <Text style={{ color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Read article</Text>
+                        </View>
                       </View>
                     </View>
-                  ) : images.length === 1 ? (
-                    <Image source={{ uri: images[0] }} style={styles.postThumb} resizeMode="cover" />
-                  ) : images.length > 1 ? (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageRow}>
-                      {images.map((url: string, i: number) => (
-                        <Image key={i} source={{ uri: url }} style={styles.postThumbSmall} resizeMode="cover" />
-                      ))}
-                    </ScrollView>
-                  ) : null}
+                  ) : (
+                    <>
+                      {!!p.content && (
+                        <Text style={[styles.postContent, { color: colors.text }]} numberOfLines={3}>{p.content}</Text>
+                      )}
+                      {isVideo ? (
+                        <View style={styles.videoThumbWrap}>
+                          <View style={[styles.postThumb, styles.videoPlaceholder]}>
+                            <View style={styles.videoPlayIcon}>
+                              <Ionicons name="play" size={28} color="#fff" />
+                            </View>
+                            <Text style={styles.videoLabel}>Video</Text>
+                          </View>
+                        </View>
+                      ) : images.length === 1 ? (
+                        <Image source={{ uri: images[0] }} style={styles.postThumb} resizeMode="cover" />
+                      ) : images.length > 1 ? (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageRow}>
+                          {images.map((url: string, i: number) => (
+                            <Image key={i} source={{ uri: url }} style={styles.postThumbSmall} resizeMode="cover" />
+                          ))}
+                        </ScrollView>
+                      ) : null}
+                    </>
+                  )}
                   <View style={styles.postMeta}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                       {isVideo && <Ionicons name="videocam" size={12} color={Colors.brand} />}
@@ -581,6 +612,11 @@ const styles = StyleSheet.create({
   postsSectionCount: { fontSize: 14, fontFamily: "Inter_500Medium" },
   emptyPosts: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", paddingVertical: 24 },
   postCard: { paddingVertical: 14, borderTopWidth: StyleSheet.hairlineWidth },
+  articleCardInner: { borderRadius: 12, borderWidth: 1, overflow: "hidden", marginBottom: 8 },
+  articleCoverImg: { width: "100%", height: 120 },
+  articleBadge: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
+  articleTitleText: { fontSize: 16, fontFamily: "Inter_700Bold", lineHeight: 22 },
+  articleReadCta: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderRadius: 8, marginTop: 4 },
   postContent: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22, marginBottom: 8 },
   postThumb: { width: "100%", height: 160, borderRadius: 10, marginBottom: 8, backgroundColor: "#e0e0e0" },
   videoThumbWrap: { marginBottom: 8 },

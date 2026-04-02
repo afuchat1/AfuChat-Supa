@@ -45,78 +45,63 @@ The project is structured as a pnpm monorepo using TypeScript, with distinct pac
 - **Branding**: AfuChat blue-green (`#00BCD4`) and gold (`#D4A853`).
 - **Typography**: Inter font family.
 - **Theming**: Dark/light theme support (dark uses Google-style warm greys, light uses cream tones), persisted via `AsyncStorage`.
-- **Responsive Design**: Utilizes `useWindowDimensions()` and custom `useResponsive()` hooks for dynamic layouts across web, mobile, and desktop, avoiding static `Dimensions.get('window')`.
+- **Responsive Design**: Utilizes `useWindowDimensions()` and custom `useResponsive()` hooks for dynamic layouts across web, mobile, and desktop.
 - **UI Components**: Reusable components for avatars, verified badges, skeletons, offline banners, and swipeable bottom sheets.
 - **Input Styling**: Consistent rounded `borderRadius: 12` for all input fields.
 
 **Technical Implementations:**
-- **Authentication**: Supabase Auth with email/password, Google/GitHub OAuth, OTP-based password reset, email confirmation. Supports multi-account switching via `expo-secure-store`/`AsyncStorage`.
-- **Navigation**: Expo Router with tab-based navigation and deep linking support. Tabs: AfuChat (chats, auth-gated), Discover (feed), Apps (with built-in search for people/posts/apps), Me (profile, auth-gated). Post creation via FAB on discover page.
-- **Post Visibility**: Posts have a `visibility` column (`public`, `followers`, `private`, default `public`). Create screen saves the audience selection to DB. Discover feed "For You" shows only public posts; "Following" shows public + followers posts. Search only returns public posts. Profile pages show public + followers posts. My Posts page shows all with visibility badges. Post detail page includes visibility field.
-- **Offline Support**: Offline-first architecture with `AsyncStorage` caching for critical data, message queuing, and auto-sync on reconnect. Includes network status banners.
-- **Real-time**: Supabase Realtime for chat, notifications, presence, and discover feed. Discover feed has real-time updates for: likes (post_acknowledgments), comments (post_replies), views (post_views), follows (follows table), and new posts. Uses `payload.eventType` for event classification. Own actions are filtered out from realtime to prevent double-counting with optimistic updates. New posts trigger a Twitter/X-style "New posts" pill with stacked author avatars (up to 3 shown, max 5 tracked) — tapping scrolls to top and refreshes the feed. Post detail page also has real-time likes and view counts.
+- **Authentication**: Supabase Auth with email/password, Google/GitHub OAuth, OTP-based password reset, email confirmation. Supports multi-account switching.
+- **Navigation**: Expo Router with tab-based navigation and deep linking support. Tabs: AfuChat, Discover, Apps, Me. Post creation via FAB on discover page.
+- **Post Visibility**: Posts have `public`, `followers`, `private` visibility. Discover feed shows posts based on visibility. Search only returns public posts.
+- **Offline Support**: Offline-first architecture with `AsyncStorage` caching, message queuing, and auto-sync on reconnect. Includes network status banners.
+- **Real-time**: Supabase Realtime for chat, notifications, presence, and discover feed updates (likes, comments, views, follows, new posts). Twitter/X-style "New posts" pill for feed updates.
 - **Notifications**: Expo Push Notifications with custom sound, token management, and authenticated edge function triggers.
-- **Media Handling**: Centralized media upload utility to Supabase Storage buckets for various content types.
-- **AI Features**: Multi-provider AI assistant and image generation with cascading fallbacks via Supabase Edge Functions. Includes rich markdown rendering, actionable responses, and executable actions.
-- **Monetization**: `ACoin` and `Nexa` (XP) in-app currencies. Dynamic gift pricing, subscription plans, and in-app purchases for services.
-- **Gamification**: XP rewards for user activities, tracked via DB functions with cooldowns.
-- **Account Management**: Soft-delete with a 30-day grace period, followed by permanent purge via an authenticated API endpoint.
+- **Media Handling**: Centralized media upload utility to Supabase Storage.
+- **AI Features**: Multi-provider AI assistant and image generation with cascading fallbacks via Supabase Edge Functions. Includes rich markdown rendering and actionable responses.
+- **Monetization**: `ACoin` and `Nexa` (XP) in-app currencies, dynamic gift pricing, subscription plans, and in-app purchases.
+- **Gamification**: XP rewards for user activities with cooldowns.
+- **Account Management**: Soft-delete with a 30-day grace period, followed by permanent purge.
 - **SEO & Deep Linking**: API server routes for public profiles and posts with SEO-friendly short IDs, `sitemap.xml`, `robots.txt`, and app link configurations.
-- **Chat UX (Telegram/WhatsApp/Signal patterns)**:
-  - Swipe-to-record voice messages with direction-locked gestures (Telegram pattern: 10pt deadzone, horizontal=cancel at -120px, vertical=lock at -100px).
-  - 60fps native-thread animations via `react-native-reanimated` + `react-native-gesture-handler` (Gesture.Pan, useSharedValue, withSpring).
-  - Scroll-to-bottom FAB with unread message count badge (uses ref to avoid stale closures in realtime subscriptions).
-  - Telegram-style message spacing: 2px same-sender, 8px different-sender for visual grouping.
-  - Date separator pills with subtle background and shadow.
-  - Empty chat state with icon + prompt text.
-  - Read receipt checkmarks: single (sent), double (delivered), blue double (read).
-- **Story Camera**: Full-screen camera screen (`app/stories/camera.tsx`) for story posting with Photo/Video modes, flash toggle, front/back camera flip, and gallery picker. Camera FAB on chats tab navigates to camera, which pushes to story create screen after capture. Uses `expo-camera` CameraView with mic permission gating for video recording.
-- **Story Privacy**: Privacy levels (Everyone/Close Friends/Only Me) stored in a `privacy` column on the `stories` table (values: `everyone`, `close_friends`, `only_me`, default `everyone`). RLS policy enforces server-side filtering (only `everyone` stories or own stories visible). Client-side filtering also applied in story listing and viewer for defense in depth.
-- **Articles & Videos (post_type system)**: Posts table extended with `post_type` (`post`|`article`|`video`), `article_title`, and `video_url` columns. Supabase project ref: `rhnsjqqtdzlkvqazfcbg` (ACTIVE_HEALTHY, eu-north-1). Migration applied directly via Management API — no manual SQL step needed. Article creation screen (`app/moments/create-article.tsx`) with title + body + audience picker + word count. Video creation screen (`app/moments/create-video.tsx`) with expo-image-picker, expo-av preview, 90-second max, upload to Supabase `videos` storage bucket (200MB limit, public). Article detail screen (`app/article/[id].tsx`) with full reading view, estimated read time, likes, comments. TikTok-style fullscreen video player at `app/video/[id].tsx` — paginated FlatList with autoplay, like/comment/mute overlay. Discover FAB opens a creation type picker (Post/Article/Video). Discover feed has only "For You" and "Following" tabs — videos appear inline as cards; tapping navigates to `/video/[id]`. Article cards show badge, title, excerpt, "Read Article" CTA. Flat card design: no shadows, hairline border-bottom separator, 40px avatar.
-- **Discover feed skeleton fix**: Root cause was React Compiler (enabled globally) silently adding `loadPosts` to the `[feedTab]` useEffect's dependency array, causing `setLoading(true)` to fire on every `user`/`profile` change and permanently re-hiding loaded posts behind skeleton loaders. Fixed with: (1) `"use no memo"` directive on `DiscoverScreen` to opt out of React Compiler memoization, (2) `loadPostsRef` pattern so the feedTab effect reads `loadPostsRef.current(feedTab)` rather than `loadPosts(feedTab)` — refs are stable and not tracked as reactive deps, (3) `try-finally` wrapping `fetchPosts` body to guarantee `setLoading(false)` fires even if an exception is thrown mid-fetch.
-- **Feed performance + offline**: (1) Per-tab in-memory cache (`tabPostsCache` ref) — switching "For You"↔"Following" is instantaneous with zero network requests. (2) AsyncStorage persistence via `cacheFeedTab`/`getCachedFeedTab` (TTL 5 min) — both tabs preloaded on mount, so feed is visible immediately even offline. (3) `background` fetch mode — silent refresh when cache is stale or auth/connectivity changes, without any skeleton or loading flash. (4) Auto-refresh on reconnect via `onConnectivityChange` listener. (5) Subtle "Updating feed…" pill shown during background refreshes.
-- **Adaptive feed algorithm (interest learning)**: `recordInteraction(content, action)` in `feedAlgorithm.ts` writes per-category interaction weights to AsyncStorage (boosted by action: view 0.4×, like 3×, bookmark 4×, reply 5×, with 0.97 decay factor). `matchInterestsWeighted` combines declared interests with learned weights — the more a user engages with technology/sports/etc posts, the higher those posts rank in future feeds. Weights updated in-place after every like/bookmark action.
-- **Video MIME type fix**: `webm` was incorrectly mapped to `audio/webm` in `mediaUpload.ts` (changed to `video/webm`). `create-video.tsx` now stores `asset.mimeType` from expo-image-picker and passes it directly to `uploadToStorage`, preventing the "mime type application/octet-stream is not supported" error on blob URLs without file extensions.
-- **Threaded replies (video comments)**: `VideoReplyItem` component renders recursive threaded replies with depth-based indentation (max 3 levels, 24px per level) in the video CommentsSheet. Each reply has a "Reply" button to start a thread. `replyingTo` state shows a banner above the input with "@handle" and close button. No auto-tagging of @handle in text input. Composer state (text + replyingTo) resets when sheet closes or postId changes. Reply owner is notified via `notifyPostReply` when someone replies to their comment.
-- **Music marquee (video player)**: Bottom of video player shows a music row with musical note icon + audio name. Uses `audio_name` column from `posts` table; falls back to "Original audio · displayName". Positioned above the progress bar. Mute button removed entirely.
-- **Video web-not-supported**: Video features are app-only. On web, video cards in discover feed show "Videos are only available in the app" message with phone icon. Video player page shows full-screen app-only message with "Go Back" button. `openPost` blocks video navigation on web.
-- **Unique per-user video views**: Views recorded in `post_views` table (columns: `post_id`, `viewer_id`, unique constraint on both). Uses `insert` (not upsert) — only increments count on first view per user. View counts in video player pulled from `post_views` count, not `view_count` column on `posts`.
-- **Cross-Platform Adaptations**: Platform-specific guards for features like push notifications, haptics, blur effects, keyboard handling, and camera access.
-- **Premium Tiering**: Features gated by subscription tiers (Silver, Gold) using `LockedToggle`/`LockedLink` components, accessible via the `app/advanced-features.tsx` screen.
-- **Onboarding**: A forced 5-step onboarding flow for new users covering display name, handle, country, phone number, date of birth, gender, interests, and profile photo.
-- **Referral System**: Deep link-based referral system for user acquisition, applying referrer handles during onboarding.
+- **Chat UX**: Telegram/WhatsApp/Signal patterns for voice messages, 60fps animations, scroll-to-bottom FAB with unread count, message spacing, date separators, empty chat state, and read receipts.
+- **Story Camera**: Full-screen camera for story posting with Photo/Video modes, flash, camera flip, and gallery picker.
+- **Story Privacy**: Privacy levels (`everyone`, `close_friends`, `only_me`) enforced by RLS and client-side filtering.
+- **Story Comments**: `story_replies` table with text input at bottom of story viewer. Comments pause story timer while composing. RLS: anyone can read, authenticated users can insert/delete own.
+- **Real-time Stories**: StoriesBar subscribes to Supabase Realtime INSERT events on `stories` table. New story rings appear immediately without refresh.
+- **Articles & Videos (post_type system)**: Posts table supports `post`, `article`, `video` types. Article creation with title, body, audience, word count. Video creation with `expo-image-picker`, `expo-av` preview, upload to Supabase storage. Detail screens for articles and TikTok-style full-screen video player with inline autoplay.
+- **Distinctive Article Cards**: Articles render with a unique card design across discover feed, profile pages, and search results. Features: cover image, badge with read time estimate, bold title, excerpt, branded "Read article" CTA button. Visually distinct from regular posts.
+- **Feed Performance & Offline**: Per-tab in-memory cache, `AsyncStorage` persistence with TTL, background fetching for silent refreshes, and auto-refresh on reconnect.
+- **Adaptive Feed Algorithm**: Records user interaction weights per category to learn interests and rank posts accordingly.
+- **Threaded Replies (Video Comments)**: Recursive threaded replies with indentation, "Reply" button, and `@handle` banner.
+- **Music Marquee (Video Player)**: Displays audio name at the bottom of the video player.
+- **Video Web Not Supported**: Video features are app-only; web shows "Videos are only available in the app" message.
+- **Unique Per-User Video Views**: Views recorded in `post_views` table with unique constraint per user.
+- **Cross-Platform Adaptations**: Platform-specific guards for various features.
+- **Premium Tiering**: Features gated by subscription tiers (Silver, Gold) using `LockedToggle`/`LockedLink` components.
+- **Onboarding**: A forced 5-step onboarding flow for new users.
+- **Referral System**: Deep link-based referral system for user acquisition.
 
 # External Dependencies
 
-- **Supabase**: Primary backend for database (PostgreSQL), authentication, real-time, and storage. Uses an existing Supabase project.
-- **Drizzle ORM**: PostgreSQL ORM integrated via `@workspace/db`.
-- **Express 5**: API framework for the `api-server`.
-- **Expo**: Framework for building universal React applications (mobile, web, desktop).
-  - `expo-router`: File-system based router.
-  - `expo-secure-store`: Secure key-value storage for native platforms.
-  - `expo-image-picker`: Access to device's image library.
-  - `expo-av`: Audio and video playback.
-  - `expo-notifications`: Push notifications.
-  - `expo-device`: Device information.
-  - `expo-location`: Geolocation services.
-- **Zod**: Schema declaration and validation library.
+- **Supabase**: Primary backend for database (PostgreSQL), authentication, real-time, and storage.
+- **Drizzle ORM**: PostgreSQL ORM.
+- **Express 5**: API framework.
+- **Expo**: Universal React framework.
+  - `expo-router`
+  - `expo-secure-store`
+  - `expo-image-picker`
+  - `expo-av`
+  - `expo-notifications`
+  - `expo-device`
+  - `expo-location`
+- **Zod**: Schema declaration and validation.
 - **Orval**: OpenAPI code generator.
-- **React Query**: Data fetching and caching library for React.
+- **React Query**: Data fetching and caching.
 - **pnpm**: Monorepo package manager.
-- **esbuild**: Fast JavaScript bundler.
-- **Resend**: Email API for transactional and marketing emails (used by Supabase Edge Functions for auth emails).
-- **GROQ API**: AI chat features (optional, via API key).
-- **Pesapal**: Payment gateway for Nexa/ACoin top-ups (M-Pesa, Visa, Mastercard).
-- **NetInfo**: React Native community library for network connectivity status.
-- **React Native Share API**: For sharing content from the app.
-- **`react-native-view-shot`**: Capturing post content as images.
-- **AI Providers (via Supabase Edge Functions)**:
-  - Gemini 2.5 Flash
-  - Lovable AI
-  - DeepSeek
-  - GPT-4o Mini
-  - AIML API
-  - DALL-E 3
-  - Runware
-  - AIML Flux
-  - Freepik AI
+- **esbuild**: JavaScript bundler.
+- **Resend**: Email API for transactional emails.
+- **GROQ API**: AI chat features.
+- **Pesapal**: Payment gateway for Nexa/ACoin top-ups.
+- **NetInfo**: Network connectivity status.
+- **React Native Share API**: Content sharing.
+- **`react-native-view-shot`**: Capturing post content.
+- **AI Providers (via Supabase Edge Functions)**: Gemini 2.5 Flash, Lovable AI, DeepSeek, GPT-4o Mini, AIML API, DALL-E 3, Runware, AIML Flux, Freepik AI.

@@ -3,9 +3,11 @@ import {
   Animated,
   FlatList,
   Image,
+  KeyboardAvoidingView,
   Platform,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
@@ -70,6 +72,23 @@ export default function ViewStoryScreen() {
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   const isOwner = user?.id === userId;
+  const [commentText, setCommentText] = useState("");
+  const [sendingComment, setSendingComment] = useState(false);
+
+  const sendComment = useCallback(async () => {
+    const s = stories[index];
+    if (!s || !user || !commentText.trim()) return;
+    setSendingComment(true);
+    setPaused(true);
+    await supabase.from("story_replies").insert({
+      story_id: s.id,
+      user_id: user.id,
+      content: commentText.trim(),
+    });
+    setCommentText("");
+    setSendingComment(false);
+    setPaused(false);
+  }, [index, stories, user, commentText]);
 
   useEffect(() => {
     if (!userId) return;
@@ -265,14 +284,14 @@ export default function ViewStoryScreen() {
       )}
 
       {story.caption ? (
-        <View style={[styles.captionBar, { paddingBottom: insets.bottom + (isOwner ? 56 : 16) }]}>
+        <View style={[styles.captionBar, { paddingBottom: insets.bottom + (isOwner ? 56 : 56) }]}>
           <Text style={styles.captionText}>{story.caption}</Text>
         </View>
       ) : null}
 
       {isOwner ? (
         <TouchableOpacity
-          style={[styles.viewersTrigger, { bottom: insets.bottom + 12 }]}
+          style={[styles.viewersTrigger, { bottom: insets.bottom + 52 }]}
           onPress={openViewers}
           activeOpacity={0.7}
         >
@@ -281,6 +300,34 @@ export default function ViewStoryScreen() {
           <Ionicons name="chevron-up" size={16} color="rgba(255,255,255,0.6)" />
         </TouchableOpacity>
       ) : null}
+
+      {!showViewers && (
+        <KeyboardAvoidingView
+          behavior="padding"
+          keyboardVerticalOffset={0}
+          style={[styles.commentBar, { paddingBottom: insets.bottom + 8 }]}
+        >
+          <TextInput
+            style={styles.commentInput}
+            placeholder="Send a comment..."
+            placeholderTextColor="rgba(255,255,255,0.4)"
+            value={commentText}
+            onChangeText={setCommentText}
+            onFocus={() => setPaused(true)}
+            onBlur={() => { if (!commentText.trim()) setPaused(false); }}
+            returnKeyType="send"
+            onSubmitEditing={sendComment}
+            maxLength={500}
+          />
+          <TouchableOpacity
+            onPress={sendComment}
+            disabled={!commentText.trim() || sendingComment}
+            style={[styles.commentSendBtn, (!commentText.trim() || sendingComment) && { opacity: 0.4 }]}
+          >
+            <Ionicons name="send" size={18} color="#fff" />
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      )}
 
       {showViewers && (
         <>
@@ -405,4 +452,33 @@ const styles = StyleSheet.create({
   viewerName: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
   viewerHandle: { color: "rgba(255,255,255,0.5)", fontSize: 13, fontFamily: "Inter_400Regular" },
   viewerTime: { color: "rgba(255,255,255,0.4)", fontSize: 12, fontFamily: "Inter_400Regular" },
+  commentBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    gap: 8,
+  },
+  commentInput: {
+    flex: 1,
+    height: 40,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    color: "#fff",
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+  },
+  commentSendBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#00BCD4",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });

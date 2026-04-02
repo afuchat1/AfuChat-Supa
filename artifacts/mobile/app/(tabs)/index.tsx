@@ -218,6 +218,16 @@ function StoriesBar({ userId, colors }: { userId: string; colors: any }) {
 
   useFocusEffect(useCallback(() => { loadStories(); }, [loadStories]));
 
+  useEffect(() => {
+    const channel = supabase
+      .channel("stories-bar-realtime")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "stories" }, () => {
+        loadStories();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [loadStories]);
+
   if (storyUsers.length === 0) return null;
 
   return (

@@ -290,25 +290,48 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
             )
           )}
 
-          {/* ── ARTICLE: type badge + title ── */}
-          {item.post_type === "article" && (
-            <View style={[styles.articleBadgeRow, { backgroundColor: Colors.brand + "12" }]}>
-              <Ionicons name="document-text" size={12} color={Colors.brand} />
-              <Text style={[styles.articleBadgeText, { color: Colors.brand }]}>Article</Text>
+          {/* ── ARTICLE: distinctive card ── */}
+          {item.post_type === "article" ? (
+            <View style={[styles.articleCard, { backgroundColor: colors.backgroundSecondary, borderColor: Colors.brand + "20" }]}>
+              {allImages.length > 0 && (
+                <Image source={{ uri: allImages[0] }} style={styles.articleCover} resizeMode="cover" />
+              )}
+              <View style={styles.articleCardBody}>
+                <View style={[styles.articleBadgeRow, { backgroundColor: Colors.brand + "15" }]}>
+                  <Ionicons name="document-text" size={11} color={Colors.brand} />
+                  <Text style={[styles.articleBadgeText, { color: Colors.brand }]}>Article</Text>
+                  {item.article_title && (
+                    <Text style={{ color: colors.textMuted, fontSize: 10, fontFamily: "Inter_400Regular", marginLeft: 4 }}>
+                      {Math.max(1, Math.ceil((item.content?.length || 0) / 200))} min read
+                    </Text>
+                  )}
+                </View>
+                {item.article_title ? (
+                  <Text style={[styles.articleTitle, { color: colors.text }]} numberOfLines={2}>{item.article_title}</Text>
+                ) : null}
+                {(displayContent || "").trim().length > 0 && (
+                  <Text style={[styles.articleExcerpt, { color: colors.textSecondary }]} numberOfLines={2}>
+                    {displayContent}
+                  </Text>
+                )}
+                <TouchableOpacity onPress={openPost} style={[styles.articleReadBtn, { backgroundColor: Colors.brand }]}>
+                  <Ionicons name="book-outline" size={13} color="#fff" />
+                  <Text style={styles.articleReadBtnText}>Read article</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          )}
-          {item.post_type === "article" && item.article_title ? (
-            <Text style={[styles.articleTitle, { color: colors.text }]}>{item.article_title}</Text>
-          ) : null}
-
-          {/* ── Content text ── */}
-          {(displayContent || "").trim().length > 0 && (
-            <RichText
-              style={[styles.cardContent, { color: colors.text }]}
-              numberOfLines={item.post_type === "article" ? 3 : undefined}
-            >
-              {displayContent}
-            </RichText>
+          ) : (
+            <>
+              {/* ── Content text ── */}
+              {(displayContent || "").trim().length > 0 && (
+                <RichText
+                  style={[styles.cardContent, { color: colors.text }]}
+                  numberOfLines={undefined}
+                >
+                  {displayContent}
+                </RichText>
+              )}
+            </>
           )}
 
           {isTranslated && (
@@ -320,16 +343,8 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
             </View>
           )}
 
-          {/* ── Article: read CTA ── */}
-          {item.post_type === "article" && (
-            <TouchableOpacity onPress={openPost} style={styles.readMore}>
-              <Text style={[styles.readMoreText, { color: Colors.brand }]}>Read article</Text>
-              <Ionicons name="arrow-forward" size={13} color={Colors.brand} />
-            </TouchableOpacity>
-          )}
-
           {/* ── Images ── */}
-          {allImages.length > 0 && item.post_type !== "video" && (
+          {allImages.length > 0 && item.post_type !== "video" && item.post_type !== "article" && (
             <View style={[styles.images, allImages.length > 1 && { flexDirection: "row", flexWrap: "wrap", gap: 2 }]}>
               {allImages.map((uri, i) => (
                 <TouchableOpacity
@@ -1227,26 +1242,46 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   videoBadgeText: { color: "#fff", fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  articleCard: {
+    marginHorizontal: 12,
+    marginVertical: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  articleCover: {
+    width: "100%",
+    height: 140,
+  },
+  articleCardBody: {
+    padding: 14,
+    gap: 8,
+  },
   articleBadgeRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
     alignSelf: "flex-start",
-    marginHorizontal: 16,
-    marginBottom: 6,
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 8,
   },
   articleBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
-  readMore: {
+  articleExcerpt: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 19,
+  },
+  articleReadBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 16,
-    paddingBottom: 10,
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 4,
   },
-  readMoreText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  articleReadBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingTop: 80 },
   emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   emptySub: { fontSize: 14, fontFamily: "Inter_400Regular" },
@@ -1311,11 +1346,9 @@ const styles = StyleSheet.create({
   },
   postTypeBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   articleTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontFamily: "Inter_700Bold",
-    paddingHorizontal: 13,
-    marginBottom: 6,
-    lineHeight: 24,
+    lineHeight: 23,
   },
   readArticleBtn: {
     flexDirection: "row",
