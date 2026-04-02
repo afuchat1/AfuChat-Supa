@@ -453,10 +453,10 @@ export default function MeScreen() {
         />
         <Separator indent={54} />
         <MenuItem
-          icon="document-text-outline"
+          icon="information-circle-outline"
           iconBg="#007AFF"
-          label="Terms & Policies"
-          onPress={() => router.push("/terms")}
+          label="About AfuChat"
+          onPress={() => router.push("/about" as any)}
         />
       </MenuGroup>
 
