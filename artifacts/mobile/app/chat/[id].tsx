@@ -17,7 +17,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { KeyboardStickyView } from "react-native-keyboard-controller";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -56,7 +55,7 @@ import OfflineBanner from "@/components/ui/OfflineBanner";
 import { translateText, LANG_LABELS } from "@/lib/translate";
 import { useLanguage } from "@/context/LanguageContext";
 import { askAi, aiSuggestReply, transcribeAudio } from "@/lib/aiHelper";
-import EmojiPicker from "rn-emoji-keyboard";
+import { EmojiKeyboard } from "rn-emoji-keyboard";
 import GiftPickerSheet, { DbGift } from "@/components/gifts/GiftPickerSheet";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import ReAnimated, {
@@ -751,6 +750,16 @@ export default function ChatScreen() {
   const [envelopeMsg, setEnvelopeMsg] = useState("");
   const [envelopeCount, setEnvelopeCount] = useState("1");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [emojiKeyboardHeight, setEmojiKeyboardHeight] = useState(280);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const sub = Keyboard.addListener(showEvent, (e) => {
+      const h = e.endCoordinates.height;
+      if (h > 100) setEmojiKeyboardHeight(h);
+    });
+    return () => sub.remove();
+  }, []);
   const [showGiftPicker, setShowGiftPicker] = useState(false);
   const [giftSending, setGiftSending] = useState(false);
   const [giftReveal, setGiftReveal] = useState<{ content: string; isReceiver: boolean } | null>(null);
@@ -957,6 +966,7 @@ export default function ChatScreen() {
   const [translateMsg, setTranslateMsg] = useState<Message | null>(null);
   const [translatingLang, setTranslatingLang] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  const chatInputRef = useRef<TextInput>(null);
   const typingTimeout = useRef<any>(null);
   const draftSaveTimer = useRef<any>(null);
 
@@ -2458,15 +2468,26 @@ export default function ChatScreen() {
                   </>
                 ) : (
                   <View style={[st.inputPill, { backgroundColor: colors.inputBg }]}>
-                    <TouchableOpacity hitSlop={8} style={st.pillIcon} onPress={() => { Keyboard.dismiss(); setShowEmojiPicker(true); }}>
-                      <Ionicons name="happy-outline" size={24} color={colors.textMuted} />
+                    <TouchableOpacity hitSlop={8} style={st.pillIcon} onPress={() => {
+                      if (showEmojiPicker) {
+                        setShowEmojiPicker(false);
+                        setTimeout(() => chatInputRef.current?.focus(), 50);
+                      } else {
+                        chatInputRef.current?.blur();
+                        Keyboard.dismiss();
+                        setShowEmojiPicker(true);
+                      }
+                    }}>
+                      <Ionicons name={showEmojiPicker ? "keypad-outline" : "happy-outline"} size={24} color={colors.textMuted} />
                     </TouchableOpacity>
                     <TextInput
+                      ref={chatInputRef}
                       style={[st.input, { color: colors.text }]}
                       placeholder="Message"
                       placeholderTextColor={colors.textMuted}
                       value={input}
                       onChangeText={(t) => { setInput(t); handleTyping(); saveDraft(t); }}
+                      onFocus={() => { if (showEmojiPicker) setShowEmojiPicker(false); }}
                       multiline
                       maxLength={4000}
                     />
@@ -2524,6 +2545,28 @@ export default function ChatScreen() {
               )}
             </View>
           </>
+        )}
+        {showEmojiPicker && (
+          <View style={{ height: emojiKeyboardHeight, backgroundColor: colors.surface }}>
+            <EmojiKeyboard
+              onEmojiSelected={(emojiObject: { emoji: string }) => {
+                setInput((prev) => prev + emojiObject.emoji);
+              }}
+              enableRecentlyUsed
+              enableSearchBar
+              enableCategoryChangeGesture
+              categoryPosition="top"
+              theme={{
+                knob: colors.textMuted,
+                container: colors.surface,
+                header: colors.text,
+                skinTonesContainer: colors.surface,
+                category: { icon: colors.textMuted, iconActive: BRAND, container: colors.surface, containerActive: colors.inputBg },
+                search: { text: colors.text, placeholder: colors.textMuted, icon: colors.textMuted, background: colors.inputBg },
+                emoji: { selected: colors.inputBg },
+              }}
+            />
+          </View>
         )}
       </KeyboardAvoidingView>
 
@@ -2873,23 +2916,6 @@ export default function ChatScreen() {
           </View>
         </View>
       </Modal>
-      <EmojiPicker
-        onEmojiSelected={(emojiObject: { emoji: string }) => {
-          setInput((prev) => prev + emojiObject.emoji);
-        }}
-        open={showEmojiPicker}
-        onClose={() => setShowEmojiPicker(false)}
-        theme={{
-          backdrop: "#00000070",
-          knob: colors.textMuted,
-          container: colors.surface,
-          header: colors.text,
-          skinTonesContainer: colors.surface,
-          category: { icon: colors.textMuted, iconActive: BRAND, container: colors.surface, containerActive: colors.inputBg },
-          search: { text: colors.text, placeholder: colors.textMuted, icon: colors.textMuted, background: colors.inputBg },
-          emoji: { selected: colors.inputBg },
-        }}
-      />
       <ImageViewer
         images={imgViewer.images}
         initialIndex={imgViewer.index}
