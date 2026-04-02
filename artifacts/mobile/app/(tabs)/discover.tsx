@@ -138,31 +138,6 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress, colWidth
 
   async function capturePostImage() {
     setMenuVisible(false);
-
-    if (Platform.OS === "web") {
-      try {
-        const postUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/post/${item.id}`;
-        const shareData = {
-          title: `${item.profile.display_name} on AfuChat`,
-          text: item.content ? item.content.slice(0, 200) : "Check out this post on AfuChat",
-          url: postUrl,
-        };
-        if (typeof navigator !== "undefined" && navigator.share) {
-          await navigator.share(shareData);
-        } else if (typeof navigator !== "undefined" && navigator.clipboard) {
-          await navigator.clipboard.writeText(postUrl);
-          showAlert("Copied", "Post link copied to clipboard.");
-        } else {
-          showAlert("Share", postUrl);
-        }
-      } catch (e: any) {
-        if (e?.name !== "AbortError") {
-          showAlert("Error", "Could not share this post.");
-        }
-      }
-      return;
-    }
-
     if (!cardRef.current) return;
     setCapturing(true);
     try {
@@ -172,14 +147,35 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress, colWidth
         return;
       }
       const uri = await cardRef.current.capture();
-      const Sharing = require("expo-sharing");
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: "Save Post Image" });
+      if (Platform.OS === "web") {
+        const link = document.createElement("a");
+        link.href = uri;
+        link.download = `afuchat-post-${Date.now()}.png`;
+        link.click();
       } else {
-        showAlert("Not available", "Sharing is not available on this device.");
+        const Sharing = require("expo-sharing");
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: "Save Post Image" });
+        } else {
+          showAlert("Not available", "Sharing is not available on this device.");
+        }
       }
     } catch {
-      showAlert("Error", "Could not capture post image.");
+      if (Platform.OS === "web") {
+        try {
+          const postUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/post/${item.id}`;
+          if (typeof navigator !== "undefined" && navigator.clipboard) {
+            await navigator.clipboard.writeText(postUrl);
+            showAlert("Saved", "Post link copied to clipboard.");
+          } else {
+            showAlert("Error", "Could not capture post image.");
+          }
+        } catch {
+          showAlert("Error", "Could not capture post image.");
+        }
+      } else {
+        showAlert("Error", "Could not capture post image.");
+      }
     }
     setCapturing(false);
   }
@@ -349,9 +345,9 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress, colWidth
             <TouchableOpacity style={styles.menuItem} onPress={capturePostImage} disabled={capturing}>
               {capturing
                 ? <ActivityIndicator size={22} color={Colors.brand} />
-                : <Ionicons name={Platform.OS === "web" ? "link-outline" : "image-outline"} size={22} color={Colors.brand} />
+                : <Ionicons name="image-outline" size={22} color={Colors.brand} />
               }
-              <Text style={[styles.menuItemText, { color: colors.text }]}>{Platform.OS === "web" ? "Copy Link" : "Save as Image"}</Text>
+              <Text style={[styles.menuItemText, { color: colors.text }]}>Save as Image</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => setMenuVisible(false)}>
               <Ionicons name="close-outline" size={22} color={colors.textMuted} />

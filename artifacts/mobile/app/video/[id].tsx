@@ -6,11 +6,13 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  Share,
   StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
   ViewToken,
   useWindowDimensions,
@@ -18,7 +20,7 @@ import {
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { Video, ResizeMode } from "expo-av";
+import { Video, ResizeMode, AVPlaybackStatus } from "expo-av";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
@@ -34,6 +36,7 @@ type VideoPost = {
   view_count: number;
   profile: { display_name: string; handle: string; avatar_url: string | null };
   liked: boolean;
+  bookmarked: boolean;
   likeCount: number;
   replyCount: number;
 };
@@ -57,20 +60,19 @@ function formatRelative(iso: string): string {
   if (diff < 60000) return "now";
   if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
-  return `${Math.floor(diff / 86400000)}d`;
+  if (diff < 2592000000) return `${Math.floor(diff / 86400000)}d`;
+  return `${Math.floor(diff / 2592000000)}mo`;
 }
 
 function CommentsSheet({
   visible,
   onClose,
   postId,
-  replyCount,
   onReplyCountChange,
 }: {
   visible: boolean;
   onClose: () => void;
   postId: string;
-  replyCount: number;
   onReplyCountChange: (postId: string, delta: number) => void;
 }) {
   const { user, profile } = useAuth();
@@ -79,6 +81,7 @@ function CommentsSheet({
   const [loading, setLoading] = useState(false);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const listRef = useRef<FlatList>(null);
 
   useEffect(() => {
     if (!visible || !postId) return;
@@ -88,7 +91,7 @@ function CommentsSheet({
       .select("id, author_id, content, created_at, profiles!post_replies_author_id_fkey(display_name, handle, avatar_url)")
       .eq("post_id", postId)
       .order("created_at", { ascending: true })
-      .limit(100)
+      .limit(200)
       .then(({ data }) => {
         if (data) {
           setReplies(
@@ -118,66 +121,67 @@ function CommentsSheet({
       .select("id, author_id, content, created_at")
       .single();
     if (!error && data) {
-      setReplies((prev) => [
-        ...prev,
-        {
-          id: data.id,
-          author_id: data.author_id,
-          content: data.content,
-          created_at: data.created_at,
-          profile: {
-            display_name: profile?.display_name || "You",
-            handle: profile?.handle || "you",
-            avatar_url: profile?.avatar_url || null,
-          },
+      const newReply: Reply = {
+        id: data.id,
+        author_id: data.author_id,
+        content: data.content,
+        created_at: data.created_at,
+        profile: {
+          display_name: profile?.display_name || "You",
+          handle: profile?.handle || "you",
+          avatar_url: profile?.avatar_url || null,
         },
-      ]);
+      };
+      setReplies((prev) => [...prev, newReply]);
       onReplyCountChange(postId, 1);
       setText("");
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     }
     setSending(false);
   }
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={s.sheetOverlay} activeOpacity={1} onPress={onClose}>
+      <TouchableOpacity style={cs.overlay} activeOpacity={1} onPress={onClose}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={s.sheetKeyboard}
+          style={cs.keyboard}
         >
           <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-            <View style={[s.sheetContainer, { paddingBottom: insets.bottom || 12 }]}>
-              <View style={s.sheetHandle} />
-              <View style={s.sheetHeader}>
-                <Text style={s.sheetTitle}>Comments</Text>
+            <View style={[cs.container, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+              <View style={cs.handle} />
+              <View style={cs.header}>
+                <View style={{ width: 28 }} />
+                <Text style={cs.title}>Comments</Text>
                 <TouchableOpacity onPress={onClose} hitSlop={12}>
-                  <Ionicons name="close" size={22} color="#fff" />
+                  <Ionicons name="close" size={22} color="rgba(255,255,255,0.7)" />
                 </TouchableOpacity>
               </View>
 
               {loading ? (
-                <View style={s.sheetLoading}>
-                  <ActivityIndicator color={Colors.brand} />
-                </View>
+                <View style={cs.center}><ActivityIndicator color={Colors.brand} /></View>
               ) : replies.length === 0 ? (
-                <View style={s.sheetEmpty}>
-                  <Text style={s.sheetEmptyText}>No comments yet. Be the first!</Text>
+                <View style={cs.center}>
+                  <Ionicons name="chatbubble-outline" size={36} color="rgba(255,255,255,0.15)" />
+                  <Text style={cs.emptyText}>No comments yet</Text>
+                  <Text style={cs.emptySubtext}>Start the conversation</Text>
                 </View>
               ) : (
                 <FlatList
+                  ref={listRef}
                   data={replies}
                   keyExtractor={(r) => r.id}
-                  style={s.sheetList}
+                  style={cs.list}
                   showsVerticalScrollIndicator={false}
                   renderItem={({ item: r }) => (
-                    <View style={s.replyRow}>
-                      <Avatar uri={r.profile.avatar_url} name={r.profile.display_name} size={32} />
-                      <View style={s.replyBody}>
-                        <View style={s.replyMeta}>
-                          <Text style={s.replyHandle}>@{r.profile.handle}</Text>
-                          <Text style={s.replyTime}>{formatRelative(r.created_at)}</Text>
+                    <View style={cs.replyRow}>
+                      <Avatar uri={r.profile.avatar_url} name={r.profile.display_name} size={34} />
+                      <View style={cs.replyBody}>
+                        <View style={cs.replyMeta}>
+                          <Text style={cs.replyName}>{r.profile.display_name}</Text>
+                          <Text style={cs.replyTime}>{formatRelative(r.created_at)}</Text>
                         </View>
-                        <Text style={s.replyContent}>{r.content}</Text>
+                        <Text style={cs.replyContent}>{r.content}</Text>
                       </View>
                     </View>
                   )}
@@ -185,36 +189,34 @@ function CommentsSheet({
               )}
 
               {user ? (
-                <View style={s.sheetInputRow}>
-                  <Avatar uri={profile?.avatar_url} name={profile?.display_name || "You"} size={28} />
-                  <TextInput
-                    style={s.sheetInput}
-                    placeholder="Add a comment…"
-                    placeholderTextColor="rgba(255,255,255,0.4)"
-                    value={text}
-                    onChangeText={setText}
-                    multiline
-                    maxLength={500}
-                  />
+                <View style={cs.inputRow}>
+                  <Avatar uri={profile?.avatar_url} name={profile?.display_name || "You"} size={30} />
+                  <View style={cs.inputWrap}>
+                    <TextInput
+                      style={cs.input}
+                      placeholder="Add a comment..."
+                      placeholderTextColor="rgba(255,255,255,0.3)"
+                      value={text}
+                      onChangeText={setText}
+                      multiline
+                      maxLength={500}
+                    />
+                  </View>
                   <TouchableOpacity
                     onPress={sendReply}
                     disabled={!text.trim() || sending}
-                    hitSlop={8}
+                    style={[cs.sendBtn, text.trim() ? cs.sendBtnActive : null]}
                   >
                     {sending ? (
-                      <ActivityIndicator size={18} color={Colors.brand} />
+                      <ActivityIndicator size={16} color="#fff" />
                     ) : (
-                      <Ionicons
-                        name="send"
-                        size={20}
-                        color={text.trim() ? Colors.brand : "rgba(255,255,255,0.25)"}
-                      />
+                      <Ionicons name="arrow-up" size={18} color={text.trim() ? "#fff" : "rgba(255,255,255,0.3)"} />
                     )}
                   </TouchableOpacity>
                 </View>
               ) : (
-                <TouchableOpacity style={s.sheetSignIn} onPress={() => { onClose(); router.push("/(auth)/login"); }}>
-                  <Text style={s.sheetSignInText}>Sign in to comment</Text>
+                <TouchableOpacity style={cs.signIn} onPress={() => { onClose(); router.push("/(auth)/login"); }}>
+                  <Text style={cs.signInText}>Sign in to comment</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -225,97 +227,426 @@ function CommentsSheet({
   );
 }
 
+const cs = StyleSheet.create({
+  overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.55)" },
+  keyboard: { justifyContent: "flex-end" },
+  container: {
+    backgroundColor: "#1a1a1d",
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    maxHeight: "60%",
+    minHeight: 340,
+    paddingHorizontal: 16,
+  },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.15)", alignSelf: "center", marginTop: 10, marginBottom: 6 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(255,255,255,0.08)" },
+  title: { color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold", letterSpacing: 0.2 },
+  center: { paddingVertical: 48, alignItems: "center", gap: 8 },
+  emptyText: { color: "rgba(255,255,255,0.45)", fontSize: 15, fontFamily: "Inter_600SemiBold", marginTop: 8 },
+  emptySubtext: { color: "rgba(255,255,255,0.25)", fontSize: 13, fontFamily: "Inter_400Regular" },
+  list: { flex: 1, marginTop: 4 },
+  replyRow: { flexDirection: "row", gap: 12, paddingVertical: 12 },
+  replyBody: { flex: 1 },
+  replyMeta: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
+  replyName: { color: "rgba(255,255,255,0.85)", fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  replyTime: { color: "rgba(255,255,255,0.3)", fontSize: 11, fontFamily: "Inter_400Regular" },
+  replyContent: { color: "rgba(255,255,255,0.9)", fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 10,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.08)",
+  },
+  inputWrap: { flex: 1 },
+  input: {
+    color: "#fff",
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    maxHeight: 88,
+  },
+  sendBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 2,
+  },
+  sendBtnActive: { backgroundColor: Colors.brand },
+  signIn: { paddingVertical: 16, alignItems: "center" },
+  signInText: { color: Colors.brand, fontSize: 14, fontFamily: "Inter_600SemiBold" },
+});
+
 function VideoItem({
   item,
   isActive,
   screenH,
   screenW,
+  isFollowing,
+  isSelf,
   onLike,
+  onBookmark,
   onOpenComments,
+  onShare,
+  onFollow,
 }: {
   item: VideoPost;
   isActive: boolean;
   screenH: number;
   screenW: number;
+  isFollowing: boolean;
+  isSelf: boolean;
   onLike: (id: string, liked: boolean) => void;
+  onBookmark: (id: string, bookmarked: boolean) => void;
   onOpenComments: (id: string) => void;
+  onShare: (item: VideoPost) => void;
+  onFollow: (authorId: string, isFollowing: boolean) => void;
 }) {
   const [paused, setPaused] = useState(false);
   const [muted, setMuted] = useState(false);
+  const [buffering, setBuffering] = useState(true);
+  const [progress, setProgress] = useState(0);
+  const [expanded, setExpanded] = useState(false);
   const heartScale = useRef(new Animated.Value(1)).current;
+  const doubleTapHeart = useRef(new Animated.Value(0)).current;
+  const lastTap = useRef(0);
   const insets = useSafeAreaInsets();
+  const videoRef = useRef<Video>(null);
+
+  function onPlaybackStatus(status: AVPlaybackStatus) {
+    if (!status.isLoaded) return;
+    setBuffering(status.isBuffering);
+    if (status.durationMillis && status.durationMillis > 0) {
+      setProgress(status.positionMillis / status.durationMillis);
+    }
+  }
+
+  function handleTap() {
+    const now = Date.now();
+    if (now - lastTap.current < 300) {
+      if (!item.liked) {
+        onLike(item.id, false);
+      }
+      Animated.sequence([
+        Animated.timing(doubleTapHeart, { toValue: 1, duration: 150, useNativeDriver: true }),
+        Animated.delay(600),
+        Animated.timing(doubleTapHeart, { toValue: 0, duration: 250, useNativeDriver: true }),
+      ]).start();
+      lastTap.current = 0;
+    } else {
+      lastTap.current = now;
+      setTimeout(() => {
+        if (lastTap.current === now) {
+          setPaused((p) => !p);
+        }
+      }, 300);
+    }
+  }
 
   function handleLike() {
     Animated.sequence([
-      Animated.timing(heartScale, { toValue: 0.65, duration: 80, useNativeDriver: true }),
+      Animated.timing(heartScale, { toValue: 0.6, duration: 80, useNativeDriver: true }),
       Animated.spring(heartScale, { toValue: 1, tension: 300, friction: 7, useNativeDriver: true }),
     ]).start();
     onLike(item.id, item.liked);
   }
 
-  return (
-    <View style={[s.item, { width: screenW, height: screenH }]}>
-      <TouchableOpacity activeOpacity={1} style={StyleSheet.absoluteFill} onPress={() => setPaused((p) => !p)}>
-        <Video
-          source={{ uri: item.video_url }}
-          style={StyleSheet.absoluteFill}
-          resizeMode={ResizeMode.CONTAIN}
-          shouldPlay={isActive && !paused}
-          isLooping
-          isMuted={muted}
-        />
-      </TouchableOpacity>
+  const captionLines = item.content ? item.content.split("\n").length : 0;
+  const showExpand = captionLines > 2 || (item.content && item.content.length > 100);
 
-      {paused && (
-        <View style={s.pauseOverlay} pointerEvents="none">
-          <View style={s.pauseCircle}>
-            <Ionicons name="play" size={28} color="#fff" />
+  return (
+    <View style={[vs.item, { width: screenW, height: screenH }]}>
+      <TouchableWithoutFeedback onPress={handleTap}>
+        <View style={StyleSheet.absoluteFill}>
+          <Video
+            ref={videoRef}
+            source={{ uri: item.video_url }}
+            style={StyleSheet.absoluteFill}
+            resizeMode={ResizeMode.CONTAIN}
+            shouldPlay={isActive && !paused}
+            isLooping
+            isMuted={muted}
+            onPlaybackStatusUpdate={onPlaybackStatus}
+          />
+        </View>
+      </TouchableWithoutFeedback>
+
+      {buffering && isActive && (
+        <View style={vs.bufferOverlay} pointerEvents="none">
+          <ActivityIndicator color="rgba(255,255,255,0.7)" size="small" />
+        </View>
+      )}
+
+      {paused && !buffering && (
+        <View style={vs.pauseOverlay} pointerEvents="none">
+          <View style={vs.pauseCircle}>
+            <Ionicons name="play" size={32} color="#fff" style={{ marginLeft: 3 }} />
           </View>
         </View>
       )}
 
-      <View style={s.overlay} pointerEvents="none" />
+      <Animated.View
+        style={[vs.doubleTapHeart, {
+          opacity: doubleTapHeart,
+          transform: [{
+            scale: doubleTapHeart.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.3, 1.3, 1] }),
+          }],
+        }]}
+        pointerEvents="none"
+      >
+        <Ionicons name="heart" size={90} color="#FF3B30" />
+      </Animated.View>
 
-      <View style={[s.bottomArea, { bottom: insets.bottom + 16 }]}>
+      <View style={vs.gradientBottom} pointerEvents="none" />
+      <View style={vs.gradientTop} pointerEvents="none" />
+
+      <View style={[vs.bottomArea, { bottom: insets.bottom + 20 }]}>
         <TouchableOpacity
           onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}
-          style={s.authorRow}
+          style={vs.authorRow}
         >
-          <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={36} />
-          <View>
-            <Text style={s.authorHandle}>@{item.profile.handle}</Text>
-            <Text style={s.authorName}>{item.profile.display_name}</Text>
+          <View style={vs.avatarWrap}>
+            <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={40} />
+          </View>
+          <View style={vs.authorInfo}>
+            <Text style={vs.authorHandle}>@{item.profile.handle}</Text>
+            <Text style={vs.authorName}>{item.profile.display_name}</Text>
           </View>
         </TouchableOpacity>
+
         {!!item.content && (
-          <Text style={s.caption} numberOfLines={3}>{item.content}</Text>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => showExpand && setExpanded((e) => !e)}
+            disabled={!showExpand}
+          >
+            <Text style={vs.caption} numberOfLines={expanded ? undefined : 2}>
+              {item.content}
+            </Text>
+            {showExpand && !expanded && (
+              <Text style={vs.seeMore}>more</Text>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {item.view_count > 0 && (
+          <View style={vs.viewRow}>
+            <Ionicons name="eye-outline" size={13} color="rgba(255,255,255,0.4)" />
+            <Text style={vs.viewText}>{formatCount(item.view_count)} views</Text>
+          </View>
         )}
       </View>
 
-      <View style={[s.rightCol, { bottom: insets.bottom + 24 }]}>
-        <Animated.View style={[s.actionItem, { transform: [{ scale: heartScale }] }]}>
-          <TouchableOpacity onPress={handleLike} hitSlop={10}>
+      <View style={[vs.rightCol, { bottom: insets.bottom + 28 }]}>
+        <View style={vs.rightAvatarContainer}>
+          <View style={vs.rightAvatarWrap}>
+            <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}>
+              <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={44} />
+            </TouchableOpacity>
+          </View>
+          {!isSelf && (
+            <TouchableOpacity
+              style={[vs.followBadge, isFollowing && vs.followBadgeActive]}
+              onPress={() => onFollow(item.author_id, isFollowing)}
+              hitSlop={6}
+            >
+              <Ionicons name={isFollowing ? "checkmark" : "add"} size={14} color="#fff" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <Animated.View style={[vs.actionItem, { transform: [{ scale: heartScale }] }]}>
+          <TouchableOpacity onPress={handleLike} hitSlop={10} style={vs.actionBtn}>
             <Ionicons
               name={item.liked ? "heart" : "heart-outline"}
-              size={30}
+              size={28}
               color={item.liked ? "#FF3B30" : "#fff"}
             />
           </TouchableOpacity>
-          <Text style={s.actionLabel}>{formatCount(item.likeCount)}</Text>
+          <Text style={vs.actionLabel}>{formatCount(item.likeCount)}</Text>
         </Animated.View>
 
-        <TouchableOpacity style={s.actionItem} onPress={() => onOpenComments(item.id)} hitSlop={10}>
-          <Ionicons name="chatbubble-ellipses-outline" size={28} color="#fff" />
-          <Text style={s.actionLabel}>{formatCount(item.replyCount)}</Text>
-        </TouchableOpacity>
+        <View style={vs.actionItem}>
+          <TouchableOpacity onPress={() => onOpenComments(item.id)} hitSlop={10} style={vs.actionBtn}>
+            <Ionicons name="chatbubble-ellipses" size={26} color="#fff" />
+          </TouchableOpacity>
+          <Text style={vs.actionLabel}>{formatCount(item.replyCount)}</Text>
+        </View>
 
-        <TouchableOpacity style={s.actionItem} onPress={() => setMuted((m) => !m)} hitSlop={10}>
-          <Ionicons name={muted ? "volume-mute" : "volume-high"} size={26} color="#fff" />
+        <View style={vs.actionItem}>
+          <TouchableOpacity onPress={() => onBookmark(item.id, item.bookmarked)} hitSlop={10} style={vs.actionBtn}>
+            <Ionicons
+              name={item.bookmarked ? "bookmark" : "bookmark-outline"}
+              size={26}
+              color={item.bookmarked ? Colors.brand : "#fff"}
+            />
+          </TouchableOpacity>
+        </View>
+
+        <View style={vs.actionItem}>
+          <TouchableOpacity onPress={() => onShare(item)} hitSlop={10} style={vs.actionBtn}>
+            <Ionicons name="share-social-outline" size={26} color="#fff" />
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity onPress={() => setMuted((m) => !m)} hitSlop={10} style={vs.muteBtn}>
+          <Ionicons name={muted ? "volume-mute" : "volume-high-outline"} size={18} color="#fff" />
         </TouchableOpacity>
+      </View>
+
+      <View style={[vs.progressBar, { bottom: insets.bottom > 0 ? insets.bottom : 0 }]}>
+        <View style={[vs.progressFill, { width: `${progress * 100}%` }]} />
       </View>
     </View>
   );
 }
+
+const vs = StyleSheet.create({
+  item: { backgroundColor: "#000" },
+
+  gradientBottom: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 360,
+    ...(Platform.OS === "web"
+      ? { backgroundImage: "linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.3) 40%, transparent 100%)" }
+      : { backgroundColor: "transparent" }),
+  } as any,
+  gradientTop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 120,
+    ...(Platform.OS === "web"
+      ? { backgroundImage: "linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 100%)" }
+      : { backgroundColor: "transparent" }),
+  } as any,
+
+  bufferOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
+  pauseOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
+  pauseCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  doubleTapHeart: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  bottomArea: { position: "absolute", left: 16, right: 76, gap: 8 },
+  authorRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 4 },
+  avatarWrap: {
+    borderWidth: 2,
+    borderColor: Colors.brand,
+    borderRadius: 22,
+    padding: 1,
+  },
+  authorInfo: { flex: 1 },
+  authorHandle: {
+    color: "#fff",
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
+    ...(Platform.OS === "web" ? { textShadow: "0 1px 4px rgba(0,0,0,0.5)" } : {}),
+  } as any,
+  authorName: {
+    color: "rgba(255,255,255,0.65)",
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    marginTop: 1,
+    ...(Platform.OS === "web" ? { textShadow: "0 1px 3px rgba(0,0,0,0.5)" } : {}),
+  } as any,
+  caption: {
+    color: "rgba(255,255,255,0.92)",
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 19,
+    ...(Platform.OS === "web" ? { textShadow: "0 1px 3px rgba(0,0,0,0.4)" } : {}),
+  } as any,
+  seeMore: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    marginTop: 2,
+  },
+  viewRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
+  viewText: { color: "rgba(255,255,255,0.4)", fontSize: 11, fontFamily: "Inter_400Regular" },
+
+  rightCol: { position: "absolute", right: 10, gap: 18, alignItems: "center" },
+  rightAvatarContainer: { alignItems: "center", marginBottom: 6 },
+  rightAvatarWrap: {
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.3)",
+    borderRadius: 24,
+    padding: 1,
+  },
+  followBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.brand,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: -11,
+    borderWidth: 2,
+    borderColor: "#000",
+  },
+  followBadgeActive: { backgroundColor: "rgba(255,255,255,0.25)" },
+  actionItem: { alignItems: "center", gap: 2 },
+  actionBtn: { padding: 2 },
+  actionLabel: {
+    color: "#fff",
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    ...(Platform.OS === "web" ? { textShadow: "0 1px 2px rgba(0,0,0,0.5)" } : {}),
+  } as any,
+
+  muteBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+  },
+
+  progressBar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: 2.5,
+    backgroundColor: "rgba(255,255,255,0.15)",
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: "rgba(255,255,255,0.85)",
+    borderRadius: 1,
+  },
+});
 
 export default function VideoPlayerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -328,8 +659,19 @@ export default function VideoPlayerScreen() {
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
+  const [followingSet, setFollowingSet] = useState<Set<string>>(new Set());
   const listRef = useRef<FlatList>(null);
   const initialScrollDone = useRef(false);
+  const tabAnim = useRef(new Animated.Value(0)).current;
+
+  function switchTab(tab: "for_you" | "following") {
+    if (tab === "following" && !user) {
+      router.push("/(auth)/login");
+      return;
+    }
+    Animated.timing(tabAnim, { toValue: tab === "following" ? 1 : 0, duration: 200, useNativeDriver: false }).start();
+    setVideoTab(tab);
+  }
 
   const fetchVideos = useCallback(async (tab: "for_you" | "following") => {
     setLoading(true);
@@ -367,19 +709,28 @@ export default function VideoPlayerScreen() {
 
     if (data && data.length > 0) {
       const postIds = data.map((p: any) => p.id);
-      const [{ data: likesData }, { data: repliesData }, { data: myLikes }] = await Promise.all([
+      const authorIds = [...new Set(data.map((p: any) => p.author_id))];
+      const [{ data: likesData }, { data: repliesData }, { data: myLikes }, { data: myBookmarks }, { data: myFollows }] = await Promise.all([
         supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds),
         supabase.from("post_replies").select("post_id").in("post_id", postIds),
         user
           ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id)
           : { data: [] },
+        user
+          ? supabase.from("post_bookmarks").select("post_id").in("post_id", postIds).eq("user_id", user.id)
+          : { data: [] },
+        user
+          ? supabase.from("follows").select("following_id").eq("follower_id", user.id).in("following_id", authorIds)
+          : { data: [] },
       ]);
+      setFollowingSet(new Set((myFollows || []).map((f: any) => f.following_id)));
 
       const likeMap: Record<string, number> = {};
       for (const l of (likesData || [])) likeMap[l.post_id] = (likeMap[l.post_id] || 0) + 1;
       const replyMap: Record<string, number> = {};
       for (const r of (repliesData || [])) replyMap[r.post_id] = (replyMap[r.post_id] || 0) + 1;
       const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
+      const myBookmarkSet = new Set((myBookmarks || []).map((b: any) => b.post_id));
 
       const mapped: VideoPost[] = data.map((p: any) => ({
         id: p.id,
@@ -394,6 +745,7 @@ export default function VideoPlayerScreen() {
           avatar_url: p.profiles?.avatar_url || null,
         },
         liked: myLikeSet.has(p.id),
+        bookmarked: myBookmarkSet.has(p.id),
         likeCount: likeMap[p.id] || 0,
         replyCount: replyMap[p.id] || 0,
       }));
@@ -441,52 +793,98 @@ export default function VideoPlayerScreen() {
     }
   }
 
+  async function handleBookmark(postId: string, currentlyBookmarked: boolean) {
+    if (!user) { router.push("/(auth)/login"); return; }
+    if (currentlyBookmarked) {
+      await supabase.from("post_bookmarks").delete().eq("post_id", postId).eq("user_id", user.id);
+      setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, bookmarked: false } : v));
+    } else {
+      await supabase.from("post_bookmarks").upsert({ post_id: postId, user_id: user.id }, { onConflict: "post_id,user_id" });
+      setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, bookmarked: true } : v));
+    }
+  }
+
+  async function handleShare(item: VideoPost) {
+    const postUrl = Platform.OS === "web" && typeof window !== "undefined"
+      ? `${window.location.origin}/video/${item.id}`
+      : `https://afuchat.com/video/${item.id}`;
+    try {
+      if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({ title: `${item.profile.display_name} on AfuChat`, url: postUrl });
+      } else {
+        await Share.share({
+          message: `Check out this video by ${item.profile.display_name} on AfuChat ${postUrl}`,
+          url: postUrl,
+          title: `${item.profile.display_name} on AfuChat`,
+        });
+      }
+    } catch {}
+  }
+
+  async function handleFollow(authorId: string, isFollowing: boolean) {
+    if (!user) { router.push("/(auth)/login"); return; }
+    if (isFollowing) {
+      await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", authorId);
+    } else {
+      await supabase.from("follows").insert({ follower_id: user.id, following_id: authorId });
+    }
+    setFollowingSet((prev) => {
+      const next = new Set(prev);
+      if (isFollowing) next.delete(authorId);
+      else next.add(authorId);
+      return next;
+    });
+  }
+
   function handleReplyCountChange(postId: string, delta: number) {
     setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, replyCount: v.replyCount + delta } : v));
   }
 
+  const indicatorLeft = tabAnim.interpolate({ inputRange: [0, 1], outputRange: ["25%", "75%"] });
+
   if (loading) {
     return (
-      <View style={s.center}>
+      <View style={ms.center}>
         <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-        <ActivityIndicator color={Colors.brand} size="large" />
+        <ActivityIndicator color="#fff" size="large" />
       </View>
     );
   }
 
   return (
-    <View style={s.root}>
+    <View style={ms.root}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      <View style={[s.headerRow, { paddingTop: insets.top + 4 }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={10} style={s.headerBack}>
+      <View style={[ms.headerRow, { paddingTop: insets.top + 6 }]}>
+        <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={ms.headerSide}>
           <Ionicons name="arrow-back" size={22} color="#fff" />
         </TouchableOpacity>
 
-        <View style={s.tabRow}>
-          <TouchableOpacity onPress={() => setVideoTab("for_you")} style={s.tabBtn}>
-            <Text style={[s.tabText, videoTab === "for_you" && s.tabTextActive]}>For You</Text>
-            {videoTab === "for_you" && <View style={s.tabIndicator} />}
+        <View style={ms.tabRow}>
+          <TouchableOpacity onPress={() => switchTab("for_you")} style={ms.tabBtn}>
+            <Text style={[ms.tabText, videoTab === "for_you" && ms.tabTextActive]}>For You</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => {
-              if (!user) { router.push("/(auth)/login"); return; }
-              setVideoTab("following");
-            }}
-            style={s.tabBtn}
-          >
-            <Text style={[s.tabText, videoTab === "following" && s.tabTextActive]}>Following</Text>
-            {videoTab === "following" && <View style={s.tabIndicator} />}
+          <View style={ms.tabDivider} />
+          <TouchableOpacity onPress={() => switchTab("following")} style={ms.tabBtn}>
+            <Text style={[ms.tabText, videoTab === "following" && ms.tabTextActive]}>Following</Text>
           </TouchableOpacity>
+          <Animated.View style={[ms.tabIndicator, { left: indicatorLeft, transform: [{ translateX: -14 }] }]} />
         </View>
 
-        <View style={{ width: 32 }} />
+        <TouchableOpacity hitSlop={12} style={ms.headerSide} onPress={() => router.push("/search" as any)}>
+          <Ionicons name="search-outline" size={20} color="#fff" />
+        </TouchableOpacity>
       </View>
 
       {videos.length === 0 ? (
-        <View style={s.emptyState}>
-          <Ionicons name="videocam-off-outline" size={52} color="rgba(255,255,255,0.35)" />
-          <Text style={s.emptyText}>No videos yet</Text>
+        <View style={ms.emptyState}>
+          <View style={ms.emptyIcon}>
+            <Ionicons name="videocam-outline" size={44} color="rgba(255,255,255,0.25)" />
+          </View>
+          <Text style={ms.emptyTitle}>No videos yet</Text>
+          <Text style={ms.emptySubtitle}>
+            {videoTab === "following" ? "Follow creators to see their videos here" : "Videos will appear here soon"}
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -499,8 +897,13 @@ export default function VideoPlayerScreen() {
               isActive={index === activeIndex}
               screenH={SCREEN_H}
               screenW={SCREEN_W}
+              isFollowing={followingSet.has(item.author_id)}
+              isSelf={user?.id === item.author_id}
               onLike={handleLike}
+              onBookmark={handleBookmark}
               onOpenComments={setCommentPostId}
+              onShare={handleShare}
+              onFollow={handleFollow}
             />
           )}
           pagingEnabled
@@ -521,14 +924,13 @@ export default function VideoPlayerScreen() {
         visible={!!commentPostId}
         onClose={() => setCommentPostId(null)}
         postId={commentPostId || ""}
-        replyCount={videos.find((v) => v.id === commentPostId)?.replyCount || 0}
         onReplyCountChange={handleReplyCountChange}
       />
     </View>
   );
 }
 
-const s = StyleSheet.create({
+const ms = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#000" },
   center: { flex: 1, backgroundColor: "#000", alignItems: "center", justifyContent: "center" },
 
@@ -540,87 +942,39 @@ const s = StyleSheet.create({
     zIndex: 30,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingBottom: 8,
+    paddingHorizontal: 14,
+    paddingBottom: 10,
   },
-  headerBack: { width: 32, alignItems: "flex-start" },
-  tabRow: { flex: 1, flexDirection: "row", justifyContent: "center", gap: 24 },
-  tabBtn: { alignItems: "center", paddingVertical: 6 },
-  tabText: { color: "rgba(255,255,255,0.55)", fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  tabTextActive: { color: "#fff" },
-  tabIndicator: { width: 24, height: 3, borderRadius: 1.5, backgroundColor: "#fff", marginTop: 4 },
-
-  emptyState: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 },
-  emptyText: { color: "rgba(255,255,255,0.5)", fontSize: 16, fontFamily: "Inter_500Medium" },
-
-  item: { backgroundColor: "#000" },
-  overlay: {
+  headerSide: { width: 36, alignItems: "center" },
+  tabRow: { flex: 1, flexDirection: "row", justifyContent: "center", alignItems: "center", position: "relative" },
+  tabBtn: { paddingVertical: 8, paddingHorizontal: 14 },
+  tabDivider: { width: 1, height: 14, backgroundColor: "rgba(255,255,255,0.2)" },
+  tabText: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+    ...(Platform.OS === "web" ? { textShadow: "0 1px 3px rgba(0,0,0,0.5)" } : {}),
+  } as any,
+  tabTextActive: { color: "#fff", fontSize: 17, fontFamily: "Inter_700Bold" },
+  tabIndicator: {
     position: "absolute",
     bottom: 0,
-    left: 0,
-    right: 0,
-    height: 280,
-    ...(Platform.OS === "web"
-      ? { backgroundImage: "linear-gradient(to top, rgba(0,0,0,0.70) 0%, transparent 100%)" }
-      : { backgroundColor: "transparent" }),
-  } as any,
-  pauseOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
-  pauseCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center" },
-
-  bottomArea: { position: "absolute", left: 14, right: 72, gap: 8 },
-  authorRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  authorHandle: { color: "#fff", fontSize: 14, fontFamily: "Inter_700Bold" },
-  authorName: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontFamily: "Inter_400Regular" },
-  caption: { color: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 },
-
-  rightCol: { position: "absolute", right: 10, gap: 20, alignItems: "center" },
-  actionItem: { alignItems: "center", gap: 3 },
-  actionLabel: { color: "#fff", fontSize: 11, fontFamily: "Inter_600SemiBold" },
-
-  sheetOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" },
-  sheetKeyboard: { justifyContent: "flex-end" },
-  sheetContainer: {
-    backgroundColor: "#1c1c1e",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    maxHeight: "65%",
-    minHeight: 320,
-    paddingHorizontal: 14,
+    width: 28,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: "#fff",
   },
-  sheetHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.2)", alignSelf: "center", marginTop: 10, marginBottom: 8 },
-  sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(255,255,255,0.1)" },
-  sheetTitle: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  sheetLoading: { paddingVertical: 40, alignItems: "center" },
-  sheetEmpty: { paddingVertical: 40, alignItems: "center" },
-  sheetEmptyText: { color: "rgba(255,255,255,0.45)", fontSize: 14, fontFamily: "Inter_400Regular" },
-  sheetList: { flex: 1, marginTop: 8 },
 
-  replyRow: { flexDirection: "row", gap: 10, paddingVertical: 10 },
-  replyBody: { flex: 1 },
-  replyMeta: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 3 },
-  replyHandle: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  replyTime: { color: "rgba(255,255,255,0.35)", fontSize: 11, fontFamily: "Inter_400Regular" },
-  replyContent: { color: "#fff", fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 },
-
-  sheetInputRow: {
-    flexDirection: "row",
+  emptyState: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 40 },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(255,255,255,0.05)",
     alignItems: "center",
-    gap: 10,
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(255,255,255,0.1)",
+    justifyContent: "center",
+    marginBottom: 8,
   },
-  sheetInput: {
-    flex: 1,
-    color: "#fff",
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 20,
-    maxHeight: 80,
-  },
-  sheetSignIn: { paddingVertical: 14, alignItems: "center" },
-  sheetSignInText: { color: Colors.brand, fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  emptyTitle: { color: "rgba(255,255,255,0.6)", fontSize: 18, fontFamily: "Inter_700Bold" },
+  emptySubtitle: { color: "rgba(255,255,255,0.3)", fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
 });
