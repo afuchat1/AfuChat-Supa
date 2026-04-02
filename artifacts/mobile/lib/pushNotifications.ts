@@ -9,8 +9,14 @@ let Device: typeof import("expo-device") | null = null;
 
 if (Platform.OS !== "web") {
   try {
+    const origError = console.error;
+    console.error = (...args: any[]) => {
+      if (typeof args[0] === "string" && args[0].includes("removed from Expo Go")) return;
+      origError(...args);
+    };
     Notifications = require("expo-notifications");
     Device = require("expo-device");
+    console.error = origError;
 
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
@@ -100,38 +106,38 @@ export async function setupNotificationChannels(): Promise<void> {
 
 export async function registerForPushNotifications(userId: string): Promise<string | null> {
   if (Platform.OS === "web" || !Notifications || !Device) return null;
-  if (!Device.isDevice) {
-    console.log("[PushNotif] Physical device required");
-    return null;
-  }
-
-  await setupNotificationChannels();
-
-  const { status: existing } = await Notifications.getPermissionsAsync();
-  let finalStatus = existing;
-
-  if (existing !== "granted") {
-    const { status } = await Notifications.requestPermissionsAsync({
-      ios: {
-        allowAlert: true,
-        allowBadge: true,
-        allowSound: true,
-        allowDisplayInCarPlay: false,
-        allowCriticalAlerts: false,
-        provideAppNotificationSettings: false,
-        allowProvisional: false,
-        allowAnnouncements: false,
-      },
-    });
-    finalStatus = status;
-  }
-
-  if (finalStatus !== "granted") {
-    console.log("[PushNotif] Permission not granted:", finalStatus);
-    return null;
-  }
-
   try {
+    if (!Device.isDevice) {
+      console.log("[PushNotif] Physical device required");
+      return null;
+    }
+
+    await setupNotificationChannels();
+
+    const { status: existing } = await Notifications.getPermissionsAsync();
+    let finalStatus = existing;
+
+    if (existing !== "granted") {
+      const { status } = await Notifications.requestPermissionsAsync({
+        ios: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+          allowDisplayInCarPlay: false,
+          allowCriticalAlerts: false,
+          provideAppNotificationSettings: false,
+          allowProvisional: false,
+          allowAnnouncements: false,
+        },
+      });
+      finalStatus = status;
+    }
+
+    if (finalStatus !== "granted") {
+      console.log("[PushNotif] Permission not granted:", finalStatus);
+      return null;
+    }
+
     const projectId =
       process.env.EXPO_PUBLIC_EAS_PROJECT_ID || EAS_PROJECT_ID;
 
@@ -146,8 +152,12 @@ export async function registerForPushNotifications(userId: string): Promise<stri
       .eq("id", userId);
 
     return token;
-  } catch (error) {
-    console.error("[PushNotif] Token registration failed:", error);
+  } catch (error: any) {
+    if (error?.message?.includes?.("removed from Expo Go")) {
+      console.log("[PushNotif] Push notifications not available in Expo Go");
+    } else {
+      console.warn("[PushNotif] Registration failed:", error?.message || error);
+    }
     return null;
   }
 }

@@ -258,11 +258,18 @@ export default function OnboardingScreen() {
       profileData.avatar_url = avatarUrl;
     }
 
-    const { error: profileError } = await supabase.from("profiles").upsert(profileData);
+    const { error: profileError } = await supabase.from("profiles").upsert(profileData, { onConflict: "id" });
 
     if (profileError) {
+      console.error("[Onboarding] Profile save error:", JSON.stringify(profileError));
       setLoading(false);
-      showAlert("Error", "Could not save your profile. Please try again.");
+      if (profileError.code === "23505") {
+        showAlert("Handle taken", "This handle is already in use. Please choose another.");
+        setStep(1);
+        animateProgress(1);
+      } else {
+        showAlert("Error", profileError.message || "Could not save your profile. Please try again.");
+      }
       return;
     }
 
