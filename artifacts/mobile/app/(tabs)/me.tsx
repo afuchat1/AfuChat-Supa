@@ -357,13 +357,6 @@ export default function MeScreen() {
         />
         <Separator indent={54} />
         <MenuItem
-          icon="chatbubble-ellipses-outline"
-          iconBg="#34C759"
-          label="Chat Settings"
-          onPress={() => router.push("/settings/chat")}
-        />
-        <Separator indent={54} />
-        <MenuItem
           icon="shield-checkmark-outline"
           iconBg="#30D158"
           label="Privacy"
