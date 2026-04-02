@@ -293,7 +293,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
 
           {/* ── ARTICLE: distinctive card ── */}
           {item.post_type === "article" ? (
-            <View style={[styles.articleCard, { backgroundColor: colors.backgroundSecondary, borderColor: colors.accent + "20" }]}>
+            <View style={[styles.articleCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
               {allImages.length > 0 && (
                 <Image source={{ uri: allImages[0] }} style={styles.articleCover} resizeMode="cover" />
               )}
@@ -1002,7 +1002,7 @@ export default function DiscoverScreen() {
         ]}
       >
         {/* Tab switcher */}
-        <View style={[styles.tabRow, { backgroundColor: colors.backgroundTertiary }]}>
+        <View style={[styles.tabRow, { backgroundColor: "transparent" }]}>
           <TouchableOpacity
             style={[styles.tabPill, feedTab === "for_you" && { backgroundColor: colors.accent }]}
             onPress={() => setFeedTab("for_you")}
