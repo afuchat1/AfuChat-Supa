@@ -31,7 +31,7 @@ import AudioPlayer from "@/components/AudioPlayer";
 import Svg, { Path } from "react-native-svg";
 import { ChatLoadingSkeleton } from "@/components/ui/Skeleton";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseUrl as SUPA_URL, supabaseAnonKey as SUPA_KEY } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useGiftPrices } from "@/hooks/useGiftPrices";
@@ -56,7 +56,7 @@ import { translateText, LANG_LABELS } from "@/lib/translate";
 import { useLanguage } from "@/context/LanguageContext";
 import { useChatPreferences, CHAT_THEME_COLORS, BUBBLE_RADIUS } from "@/context/ChatPreferencesContext";
 import { askAi, aiSuggestReply, transcribeAudio } from "@/lib/aiHelper";
-import { AFUAI_BOT_ID, getAfuAiReply } from "@/lib/afuAiBot";
+import { AFUAI_BOT_ID } from "@/lib/afuAiBot";
 import { EmojiKeyboard } from "rn-emoji-keyboard";
 import GiftPickerSheet, { DbGift } from "@/components/gifts/GiftPickerSheet";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -79,6 +79,19 @@ type Gift = {
   rarity: string;
 };
 
+type AiInvoiceData = {
+  type: string; date: string; from?: string; to?: string;
+  amount: number; currency: string; fee?: number; net?: number;
+  reference: string; status: string; description?: string;
+};
+type AiExecAction = {
+  id: string; actionType: string; params: Record<string, any>;
+  label: string; description: string;
+  status: "pending" | "executing" | "success" | "failed";
+  result?: string; invoice?: AiInvoiceData;
+};
+type AiActionButton = { label: string; icon: string; action: string; params?: Record<string, any> };
+
 type Message = {
   id: string;
   chat_id: string;
@@ -94,6 +107,10 @@ type Message = {
   edited_at?: string | null;
   _pending?: boolean;
   _isAi?: boolean;
+  _aiActions?: AiActionButton[];
+  _aiSuggestions?: string[];
+  _aiInvoices?: AiInvoiceData[];
+  _aiExecAction?: AiExecAction;
 };
 
 type ChatInfo = {
@@ -358,6 +375,139 @@ function BottomSheet({ visible, onClose, children }: { visible: boolean; onClose
       </Animated.View>
     </View>
   );
+}
+
+const AI_EXEC_LABELS: Record<string, string> = {
+  send_nexa: "Send Nexa", send_acoin: "Send ACoin",
+  follow: "Follow User", unfollow: "Unfollow User",
+  subscribe: "Subscribe to Plan", cancel_subscription: "Cancel Subscription",
+  convert_nexa: "Convert Currency",
+};
+function buildAiExecDesc(actionType: string, params: Record<string, any>): string {
+  switch (actionType) {
+    case "send_nexa": return `Send ${params.amount || "?"} Nexa to @${params.handle || "?"}${params.message ? ` — "${params.message}"` : ""}`;
+    case "send_acoin": return `Send ${params.amount || "?"} ACoin to @${params.handle || "?"}${params.message ? ` — "${params.message}"` : ""}`;
+    case "follow": return `Follow @${params.handle || "?"}`;
+    case "unfollow": return `Unfollow @${params.handle || "?"}`;
+    case "subscribe": return `Subscribe to ${params.tier ? params.tier.charAt(0).toUpperCase() + params.tier.slice(1) : "?"} plan`;
+    case "cancel_subscription": return "Cancel your current premium subscription";
+    case "convert_nexa": return `Convert ${params.amount || "?"} Nexa to ACoin`;
+    default: return `Execute ${actionType}`;
+  }
+}
+type RichSeg = { type: "text"|"heading"|"bullet"|"numbered"|"codeblock"|"divider"; text: string; level?: number; indent?: number; num?: string; lang?: string; };
+function parseAiRichText(raw: string): RichSeg[] {
+  const segs: RichSeg[] = [];
+  const lines = raw.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.startsWith("```")) {
+      const lang = line.slice(3).trim();
+      const code: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith("```")) code.push(lines[i++]);
+      segs.push({ type: "codeblock", text: code.join("\n"), lang: lang || undefined });
+      continue;
+    }
+    if (line.match(/^---+$/) || line.match(/^\*\*\*+$/)) { segs.push({ type: "divider", text: "" }); continue; }
+    const hm = line.match(/^(#{1,3})\s+(.+)$/);
+    if (hm) { segs.push({ type: "heading", text: hm[2].replace(/^#+\s*/, ""), level: hm[1].length }); continue; }
+    const bm = line.match(/^(\s*)[•\-*]\s+(.+)$/);
+    if (bm) { segs.push({ type: "bullet", text: bm[2], indent: Math.floor(bm[1].length / 2) }); continue; }
+    const nm = line.match(/^(\d+)[.)]\s+(.+)$/);
+    if (nm) { segs.push({ type: "numbered", text: nm[2], num: nm[1] }); continue; }
+    if (line.trim() === "" && segs.length > 0) { segs.push({ type: "text", text: "\n" }); continue; }
+    segs.push({ type: "text", text: line });
+  }
+  return segs;
+}
+function stripMd(s: string) { return s.replace(/\*{1,3}/g, "").replace(/^#{1,3}\s*/gm, "").replace(/`/g, ""); }
+function AiInlineText({ text, color }: { text: string; color: string }) {
+  const parts: React.ReactNode[] = [];
+  const regex = /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+?)`)/g;
+  let last = 0; let m; let k = 0;
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > last) parts.push(<Text key={k++} style={{ color }}>{stripMd(text.slice(last, m.index))}</Text>);
+    if (m[2]) parts.push(<Text key={k++} style={{ color, fontWeight: "700", fontStyle: "italic" }}>{m[2]}</Text>);
+    else if (m[3]) parts.push(<Text key={k++} style={{ color, fontWeight: "700" }}>{m[3]}</Text>);
+    else if (m[4]) parts.push(<Text key={k++} style={{ color, fontStyle: "italic" }}>{m[4]}</Text>);
+    else if (m[5]) parts.push(<Text key={k++} style={{ color: "#00BCD4", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", fontSize: 13 }}>{` ${m[5]} `}</Text>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(<Text key={k++} style={{ color }}>{stripMd(text.slice(last))}</Text>);
+  return <>{parts}</>;
+}
+function AiRichContent({ content, colors: c, isUser }: { content: string; colors: any; isUser?: boolean }) {
+  const textColor = isUser ? "#fff" : c.text;
+  if (isUser) return <Text style={{ fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 21, color: "#fff" }}>{stripMd(content)}</Text>;
+  const segs = parseAiRichText(content);
+  return (
+    <View style={{ gap: 2 }}>
+      {segs.map((seg, i) => {
+        if (seg.type === "heading") return <Text key={i} style={{ color: textColor, fontFamily: "Inter_700Bold", fontSize: seg.level === 1 ? 18 : seg.level === 2 ? 16 : 15, marginTop: 4 }}><AiInlineText text={seg.text} color={textColor} /></Text>;
+        if (seg.type === "codeblock") return <ScrollView key={i} horizontal showsHorizontalScrollIndicator={false} style={{ backgroundColor: c.inputBg || "#1e1e1e", borderRadius: 8, padding: 10, marginVertical: 4 }}><Text style={{ fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", fontSize: 13, color: "#00BCD4" }}>{seg.text}</Text></ScrollView>;
+        if (seg.type === "bullet") return <View key={i} style={{ flexDirection: "row", gap: 6, paddingLeft: (seg.indent || 0) * 16 }}><Text style={{ color: "#00BCD4", fontSize: 14, lineHeight: 22 }}>●</Text><Text style={{ color: textColor, fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 21, flex: 1 }}><AiInlineText text={seg.text} color={textColor} /></Text></View>;
+        if (seg.type === "numbered") return <View key={i} style={{ flexDirection: "row", gap: 6 }}><Text style={{ color: "#00BCD4", fontSize: 14, fontWeight: "600", lineHeight: 22, minWidth: 20 }}>{seg.num}.</Text><Text style={{ color: textColor, fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 21, flex: 1 }}><AiInlineText text={seg.text} color={textColor} /></Text></View>;
+        if (seg.type === "divider") return <View key={i} style={{ height: 1, backgroundColor: c.border, marginVertical: 6 }} />;
+        if (seg.text === "\n") return <View key={i} style={{ height: 6 }} />;
+        return <Text key={i} style={{ color: textColor, fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 21 }}><AiInlineText text={seg.text} color={textColor} /></Text>;
+      })}
+    </View>
+  );
+}
+function AiInvoiceCard({ invoice, colors: c }: { invoice: AiInvoiceData; colors: any }) {
+  const rows = [
+    { label: "Type", value: invoice.type },
+    { label: "Date", value: new Date(invoice.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) },
+    invoice.from ? { label: "From", value: invoice.from } : null,
+    invoice.to ? { label: "To", value: invoice.to } : null,
+    { label: "Amount", value: `${invoice.amount} ${invoice.currency}` },
+    invoice.fee != null ? { label: "Fee", value: `${invoice.fee} ACoin` } : null,
+    invoice.net != null ? { label: "Net", value: `${invoice.net} ACoin`, highlight: true } : null,
+  ].filter(Boolean) as { label: string; value: string; highlight?: boolean }[];
+  return (
+    <View style={{ backgroundColor: c.inputBg, borderRadius: 12, borderWidth: 1, borderColor: c.border, padding: 12, marginTop: 8 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+        <Ionicons name="receipt-outline" size={14} color="#00BCD4" />
+        <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#00BCD4", textTransform: "uppercase", letterSpacing: 0.5 }}>Invoice</Text>
+      </View>
+      {rows.map((r, i) => <View key={i} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 }}><Text style={{ fontSize: 13, color: c.textMuted, fontFamily: "Inter_400Regular" }}>{r.label}</Text><Text style={{ fontSize: 13, color: r.highlight ? "#00BCD4" : c.text, fontFamily: "Inter_600SemiBold" }}>{r.value}</Text></View>)}
+      <View style={{ height: 1, backgroundColor: c.border, marginVertical: 6 }} />
+      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+        <Text style={{ fontSize: 13, color: c.textMuted, fontFamily: "Inter_400Regular" }}>Status</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <Ionicons name={invoice.status === "Completed" ? "checkmark-circle" : "time"} size={13} color={invoice.status === "Completed" ? "#34C759" : "#FF9500"} />
+          <Text style={{ fontSize: 13, color: invoice.status === "Completed" ? "#34C759" : "#FF9500", fontFamily: "Inter_600SemiBold" }}>{invoice.status}</Text>
+        </View>
+      </View>
+      <Text style={{ fontSize: 11, color: c.textMuted, fontFamily: "Inter_400Regular", marginTop: 6 }}>Ref: {invoice.reference}</Text>
+      {invoice.description ? <Text style={{ fontSize: 12, color: c.textMuted, fontFamily: "Inter_400Regular", marginTop: 4 }}>{invoice.description}</Text> : null}
+    </View>
+  );
+}
+function AiConfirmationCard({ exec: ea, colors: c, onConfirm, onCancel }: { exec: AiExecAction; colors: any; onConfirm: () => void; onCancel: () => void }) {
+  const colorMap: Record<string, string> = { send_nexa: "#FF9500", send_acoin: "#34C759", follow: "#00BCD4", unfollow: "#FF3B30", subscribe: "#D4A853", cancel_subscription: "#FF3B30", convert_nexa: "#007AFF" };
+  const iconMap: Record<string, string> = { send_nexa: "flash", send_acoin: "cash", follow: "person-add", unfollow: "person-remove", subscribe: "diamond", cancel_subscription: "close-circle", convert_nexa: "swap-horizontal" };
+  const accent = colorMap[ea.actionType] || "#00BCD4";
+  if (ea.status === "executing") return <View style={{ backgroundColor: c.inputBg, borderRadius: 12, borderWidth: 1, borderColor: accent + "40", padding: 14, marginTop: 8, alignItems: "center" }}><ActivityIndicator color={accent} size="small" /></View>;
+  if (ea.status === "success" || ea.status === "failed") {
+    const ok = ea.status === "success";
+    return <View style={{ backgroundColor: c.inputBg, borderRadius: 12, borderWidth: 1, borderColor: (ok ? "#34C759" : "#FF3B30") + "40", padding: 14, marginTop: 8 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: ea.result ? 6 : 0 }}><Ionicons name={ok ? "checkmark-circle" : "close-circle"} size={18} color={ok ? "#34C759" : "#FF3B30"} /><Text style={{ fontSize: 14, color: ok ? "#34C759" : "#FF3B30", fontFamily: "Inter_600SemiBold" }}>{ok ? "Success" : "Failed"}</Text></View>
+      {ea.result ? <Text style={{ fontSize: 13, color: c.text, fontFamily: "Inter_400Regular" }}>{ea.result}</Text> : null}
+      {ea.invoice ? <AiInvoiceCard invoice={ea.invoice} colors={c} /> : null}
+    </View>;
+  }
+  return <View style={{ backgroundColor: c.inputBg, borderRadius: 12, borderWidth: 1, borderColor: accent + "40", padding: 14, marginTop: 8 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 }}>
+      <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: accent + "20", alignItems: "center", justifyContent: "center" }}><Ionicons name={(iconMap[ea.actionType] || "flash") as any} size={18} color={accent} /></View>
+      <View style={{ flex: 1 }}><Text style={{ fontSize: 14, color: c.text, fontFamily: "Inter_600SemiBold" }}>{ea.label}</Text><Text style={{ fontSize: 12, color: c.textMuted, fontFamily: "Inter_400Regular", marginTop: 2 }}>{ea.description}</Text></View>
+    </View>
+    <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
+      <TouchableOpacity onPress={onConfirm} style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: accent }}><Ionicons name="checkmark" size={16} color="#fff" /><Text style={{ fontSize: 14, color: "#fff", fontFamily: "Inter_600SemiBold" }}>Confirm</Text></TouchableOpacity>
+      <TouchableOpacity onPress={onCancel} style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: c.border }}><Ionicons name="close" size={16} color={c.textMuted} /><Text style={{ fontSize: 14, color: c.textMuted, fontFamily: "Inter_600SemiBold" }}>Cancel</Text></TouchableOpacity>
+    </View>
+  </View>;
 }
 
 const SWIPE_THRESHOLD = 60;
@@ -724,7 +874,7 @@ export default function ChatScreen() {
     contactAvatar?: string;
   }>();
   const isDraft = id === "new";
-  const { user, profile, isPremium } = useAuth();
+  const { user, profile, isPremium, refreshProfile } = useAuth();
   const { colors } = useTheme();
   const BRAND = colors.accent;
   const { prefs: chatPrefs, themeColors: chatThemeColors, bubbleRadius: chatBubbleRadius } = useChatPreferences();
@@ -988,6 +1138,7 @@ export default function ChatScreen() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiReplies, setAiReplies] = useState<string[]>([]);
   const [showLangPicker, setShowLangPicker] = useState(false);
+  const [lastAiMsgId, setLastAiMsgId] = useState<string | null>(null);
   const [translateMsg, setTranslateMsg] = useState<Message | null>(null);
   const [translatingLang, setTranslatingLang] = useState(false);
   const flatListRef = useRef<FlatList>(null);
@@ -1340,43 +1491,237 @@ export default function ChatScreen() {
     }
   }
 
+  async function getAfuAiUserContext(): Promise<string> {
+    if (!user || !profile) return "";
+    try {
+      const [
+        { count: followersCount }, { count: followingCount }, { count: postsCount },
+        { data: subData }, { data: recentAcoinTx }, { data: recentNexaSent }, { data: recentNexaRecv },
+      ] = await Promise.all([
+        supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", user.id),
+        supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", user.id),
+        supabase.from("posts").select("id", { count: "exact", head: true }).eq("author_id", user.id),
+        supabase.from("user_subscriptions").select("plan_id, is_active, expires_at, subscription_plans(name, tier)").eq("user_id", user.id).eq("is_active", true).maybeSingle(),
+        supabase.from("acoin_transactions").select("id, amount, transaction_type, created_at, nexa_spent, fee_charged, metadata").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
+        supabase.from("xp_transfers").select("id, amount, created_at, status, receiver:profiles!xp_transfers_receiver_id_fkey(handle, display_name)").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(5),
+        supabase.from("xp_transfers").select("id, amount, created_at, status, sender:profiles!xp_transfers_sender_id_fkey(handle, display_name)").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(5),
+      ]);
+      const premium = subData ? `${(subData as any).subscription_plans?.name} (${(subData as any).subscription_plans?.tier})` : "None";
+      const txLines: string[] = [];
+      (recentAcoinTx || []).forEach((t: any) => {
+        const date = new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        const meta = t.metadata || {};
+        txLines.push(`  - [ref:${t.id}] ${date}: ${t.transaction_type} ${t.amount > 0 ? "+" : ""}${t.amount} ACoin${meta.plan_name ? ` (${meta.plan_name})` : ""}${meta.to_handle ? ` to @${meta.to_handle}` : ""}${meta.from_handle ? ` from @${meta.from_handle}` : ""}${t.nexa_spent ? ` [${t.nexa_spent} Nexa spent]` : ""}${t.fee_charged ? ` [fee: ${t.fee_charged}]` : ""}`);
+      });
+      (recentNexaSent || []).forEach((t: any) => {
+        const recv = t.receiver;
+        txLines.push(`  - [ref:${t.id}] ${new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}: Sent ${t.amount} Nexa to @${recv?.handle || "unknown"}`);
+      });
+      (recentNexaRecv || []).forEach((t: any) => {
+        const sndr = t.sender;
+        txLines.push(`  - [ref:${t.id}] ${new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}: Received ${t.amount} Nexa from @${sndr?.handle || "unknown"}`);
+      });
+      return `USER CONTEXT:\n- Name: ${profile.display_name}\n- Handle: @${profile.handle}\n- Nexa: ${profile.xp || 0}\n- ACoin: ${profile.acoin || 0}\n- Grade: ${profile.current_grade || "Newcomer"}\n- Followers: ${followersCount || 0}, Following: ${followingCount || 0}, Posts: ${postsCount || 0}\n- Premium: ${premium}\nRECENT TRANSACTIONS:\n${txLines.join("\n") || "  None"}`;
+    } catch { return ""; }
+  }
+
+  function parseAfuAiTags(raw: string): { text: string; actions: AiActionButton[]; suggestions: string[]; invoices: AiInvoiceData[]; execAction?: { actionType: string; params: Record<string, any> } } {
+    let text = raw;
+    const actions: AiActionButton[] = [];
+    const suggestions: string[] = [];
+    const invoices: AiInvoiceData[] = [];
+    let execAction: { actionType: string; params: Record<string, any> } | undefined;
+    text = text.replace(/\[ACTION:([^\]:]+):([^\]]+)\]/g, (_, label, route) => {
+      let icon = "arrow-forward-circle";
+      if (route.includes("wallet")) icon = "wallet";
+      else if (route.includes("gift")) icon = "gift";
+      else if (route.includes("premium")) icon = "star";
+      else if (route.includes("profile")) icon = "person";
+      else if (route.includes("settings")) icon = "settings";
+      actions.push({ label: label.trim(), icon, action: "navigate", params: { route: route.trim() } });
+      return "";
+    });
+    text = text.replace(/\[SUGGEST:([^\]]+)\]/g, (_, s) => {
+      const t = s.trim();
+      if (t && suggestions.length < 3 && !suggestions.includes(t)) suggestions.push(t);
+      return "";
+    });
+    text = text.replace(/\[INVOICE:(.*?)\]/gs, (_, j) => {
+      try { invoices.push(JSON.parse(j.trim())); } catch {}
+      return "";
+    });
+    text = text.replace(/\[EXEC:(\w+):(.*?)\]/gs, (_, actionType, j) => {
+      try { execAction = { actionType, params: JSON.parse(j.trim()) }; } catch {}
+      return "";
+    });
+    return { text: text.trim(), actions, suggestions, invoices, execAction };
+  }
+
+  async function executeAfuAiAction(ea: AiExecAction): Promise<{ success: boolean; message: string; invoice?: AiInvoiceData }> {
+    if (!user || !profile) return { success: false, message: "Not logged in" };
+    const freshProfile = async () => (await supabase.from("profiles").select("xp, acoin, handle").eq("id", user.id).single()).data as { xp: number; acoin: number; handle: string } | null;
+    switch (ea.actionType) {
+      case "send_nexa": {
+        const { handle, amount, message: msg } = ea.params;
+        const amt = parseInt(amount);
+        if (!handle || isNaN(amt) || amt <= 0) return { success: false, message: "Invalid handle or amount" };
+        const live = await freshProfile();
+        if (!live || amt > (live.xp || 0)) return { success: false, message: `Insufficient Nexa. You have ${live?.xp || 0}` };
+        const { data: recipient } = await supabase.from("profiles").select("id, display_name").eq("handle", handle.toLowerCase()).single();
+        if (!recipient) return { success: false, message: `User @${handle} not found` };
+        if (recipient.id === user.id) return { success: false, message: "Cannot send to yourself" };
+        const { data: ded, error: dedErr } = await supabase.from("profiles").update({ xp: (live.xp || 0) - amt }).eq("id", user.id).gte("xp", amt).select("id").maybeSingle();
+        if (dedErr || !ded) return { success: false, message: "Could not deduct Nexa" };
+        await supabase.rpc("award_xp", { p_user_id: recipient.id, p_action_type: "nexa_transfer_received", p_xp_amount: amt, p_metadata: { from_user_id: user.id, from_handle: live.handle } });
+        await supabase.from("xp_transfers").insert({ sender_id: user.id, receiver_id: recipient.id, amount: amt, message: msg || null });
+        return { success: true, message: `Sent ${amt} Nexa to ${(recipient as any).display_name}`, invoice: { type: "Nexa Transfer", date: new Date().toISOString(), from: `@${live.handle}`, to: `@${handle}`, amount: amt, currency: "Nexa", reference: `NXA-${Date.now().toString(36).toUpperCase()}`, status: "Completed" } };
+      }
+      case "send_acoin": {
+        const { handle, amount, message: msg } = ea.params;
+        const acAmt = parseInt(amount);
+        if (!handle || isNaN(acAmt) || acAmt <= 0) return { success: false, message: "Invalid handle or amount" };
+        const live = await freshProfile();
+        if (!live || acAmt > (live.acoin || 0)) return { success: false, message: `Insufficient ACoin. You have ${live?.acoin || 0}` };
+        const { data: recip } = await supabase.from("profiles").select("id, display_name").eq("handle", handle.toLowerCase()).single();
+        if (!recip) return { success: false, message: `User @${handle} not found` };
+        if (recip.id === user.id) return { success: false, message: "Cannot send to yourself" };
+        const { error: dedErr } = await supabase.rpc("deduct_acoin", { p_user_id: user.id, p_amount: acAmt }).maybeSingle();
+        if (dedErr) return { success: false, message: "Could not deduct ACoin" };
+        await supabase.rpc("credit_acoin", { p_user_id: recip.id, p_amount: acAmt });
+        await supabase.from("acoin_transactions").insert([{ user_id: user.id, amount: -acAmt, transaction_type: "acoin_transfer_sent", metadata: { to_user_id: recip.id, to_handle: handle, message: msg || null } }, { user_id: recip.id, amount: acAmt, transaction_type: "acoin_transfer_received", metadata: { from_user_id: user.id, from_handle: live.handle, message: msg || null } }]);
+        return { success: true, message: `Sent ${acAmt} ACoin to ${(recip as any).display_name}`, invoice: { type: "ACoin Transfer", date: new Date().toISOString(), from: `@${live.handle}`, to: `@${handle}`, amount: acAmt, currency: "ACoin", reference: `ACN-${Date.now().toString(36).toUpperCase()}`, status: "Completed" } };
+      }
+      case "follow": {
+        const { handle } = ea.params;
+        if (!handle) return { success: false, message: "Missing handle" };
+        const { data: target } = await supabase.from("profiles").select("id, display_name").eq("handle", handle.toLowerCase()).single();
+        if (!target) return { success: false, message: `User @${handle} not found` };
+        if (target.id === user.id) return { success: false, message: "Cannot follow yourself" };
+        const { error } = await supabase.from("follows").insert({ follower_id: user.id, following_id: target.id });
+        if (error) return { success: false, message: error.message };
+        return { success: true, message: `You now follow ${(target as any).display_name} (@${handle})` };
+      }
+      case "unfollow": {
+        const { handle } = ea.params;
+        const { data: target } = await supabase.from("profiles").select("id, display_name").eq("handle", handle.toLowerCase()).single();
+        if (!target) return { success: false, message: `User @${handle} not found` };
+        await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", target.id);
+        return { success: true, message: `Unfollowed @${handle}` };
+      }
+      case "subscribe": {
+        const { tier } = ea.params;
+        const { data: plan } = await supabase.from("subscription_plans").select("id, name, tier, acoin_price, duration_days").eq("tier", tier.toLowerCase()).eq("is_active", true).single();
+        if (!plan) return { success: false, message: `Plan '${tier}' not found` };
+        const p = plan as any;
+        const live = await freshProfile();
+        if (!live || (live.acoin || 0) < p.acoin_price) return { success: false, message: `Insufficient ACoin. Need ${p.acoin_price}` };
+        const { data: ded, error: dedErr } = await supabase.from("profiles").update({ acoin: (live.acoin || 0) - p.acoin_price }).eq("id", user.id).gte("acoin", p.acoin_price).select("id").maybeSingle();
+        if (dedErr || !ded) return { success: false, message: "Could not deduct ACoin" };
+        const exp = new Date(); exp.setDate(exp.getDate() + p.duration_days);
+        await supabase.from("user_subscriptions").upsert({ user_id: user.id, plan_id: p.id, started_at: new Date().toISOString(), expires_at: exp.toISOString(), is_active: true, acoin_paid: p.acoin_price }, { onConflict: "user_id" });
+        await supabase.from("acoin_transactions").insert({ user_id: user.id, amount: -p.acoin_price, transaction_type: "subscription", metadata: { plan_name: p.name, plan_tier: p.tier, duration_days: p.duration_days } });
+        return { success: true, message: `Subscribed to ${p.name}! Active for ${p.duration_days} days.`, invoice: { type: "Premium Subscription", date: new Date().toISOString(), amount: p.acoin_price, currency: "ACoin", reference: `SUB-${Date.now().toString(36).toUpperCase()}`, status: "Completed", description: `${p.name} — ${p.duration_days} days` } };
+      }
+      case "cancel_subscription": {
+        const { error } = await supabase.rpc("cancel_my_subscription");
+        if (error) return { success: false, message: error.message };
+        return { success: true, message: "Subscription cancelled. You're now on the free plan." };
+      }
+      case "convert_nexa": {
+        const { amount } = ea.params;
+        const nAmt = parseInt(amount);
+        if (isNaN(nAmt) || nAmt <= 0) return { success: false, message: "Invalid amount" };
+        const live = await freshProfile();
+        if (!live || nAmt > (live.xp || 0)) return { success: false, message: `Insufficient Nexa. You have ${live?.xp || 0}` };
+        const { data: settings } = await supabase.from("currency_settings").select("nexa_to_acoin_rate, conversion_fee_percent").limit(1).single();
+        if (!settings) return { success: false, message: "Currency settings not available" };
+        const s = settings as any;
+        const raw = nAmt / s.nexa_to_acoin_rate;
+        const fee = Math.ceil(raw * (s.conversion_fee_percent / 100));
+        const net = Math.floor(raw - fee);
+        if (net <= 0) return { success: false, message: "Amount too small after fees" };
+        const { data: cv, error } = await supabase.from("profiles").update({ xp: (live.xp || 0) - nAmt, acoin: (live.acoin || 0) + net }).eq("id", user.id).gte("xp", nAmt).select("id").maybeSingle();
+        if (error || !cv) return { success: false, message: "Conversion failed — balance may have changed" };
+        await supabase.from("acoin_transactions").insert({ user_id: user.id, amount: net, transaction_type: "conversion", nexa_spent: nAmt, fee_charged: fee, metadata: { rate: s.nexa_to_acoin_rate, fee_percent: s.conversion_fee_percent } });
+        return { success: true, message: `Converted ${nAmt} Nexa → ${net} ACoin`, invoice: { type: "Currency Conversion", date: new Date().toISOString(), amount: nAmt, currency: "Nexa", fee, net, reference: `CNV-${Date.now().toString(36).toUpperCase()}`, status: "Completed", description: `Rate: ${s.nexa_to_acoin_rate} Nexa = 1 ACoin, Fee: ${s.conversion_fee_percent}%` } };
+      }
+      default: return { success: false, message: `Unknown action: ${ea.actionType}` };
+    }
+  }
+
+  function handleConfirmAiExec(msgId: string) {
+    const msg = messages.find(m => m.id === msgId);
+    if (!msg?._aiExecAction || msg._aiExecAction.status !== "pending") return;
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, _aiExecAction: { ...m._aiExecAction!, status: "executing" as const } } : m));
+    executeAfuAiAction(msg._aiExecAction).then(result => {
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, _aiExecAction: { ...m._aiExecAction!, status: result.success ? "success" as const : "failed" as const, result: result.message, invoice: result.invoice } } : m));
+      if (result.success) { refreshProfile?.(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }
+    }).catch(err => {
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, _aiExecAction: { ...m._aiExecAction!, status: "failed" as const, result: err?.message || "Something went wrong" } } : m));
+    });
+  }
+
+  function handleCancelAiExec(msgId: string) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, _aiExecAction: { ...m._aiExecAction!, status: "failed" as const, result: "Cancelled" } } : m));
+  }
+
   async function handleAfuAiResponse(userText: string, currentMessages: Message[]) {
     setIsAfuAiTyping(true);
     try {
-      const recent = currentMessages
-        .slice(0, 12)
+      const userContext = await getAfuAiUserContext();
+      const systemPrompt = `You are AfuAi, the official AI assistant for AfuChat — a social messaging super app from Uganda. You are friendly, knowledgeable, and professional.\n\n${userContext}\n\nRESPONSE GUIDELINES:\n- Be concise but helpful. Use the user's name naturally.\n- Reference their actual data when relevant.\n- When suggesting they go somewhere, add: [ACTION:Button Label:/route]\n- Available routes: /wallet, /wallet/topup, /gifts, /gifts/marketplace, /premium, /profile/edit, /moments/create, /settings/privacy, /settings/security, /notifications, /games\n- Use rich formatting: **bold**, *italic*, \`code\`, bullet lists with -, numbered lists, ### headings\n- At the end of EVERY response add 2-3 suggestions: [SUGGEST:suggestion text]\n\nEXECUTABLE ACTIONS (use ONE when the user asks to perform an action):\n- [EXEC:send_nexa:{"handle":"username","amount":100}]\n- [EXEC:send_acoin:{"handle":"username","amount":50}]\n- [EXEC:follow:{"handle":"username"}]\n- [EXEC:unfollow:{"handle":"username"}]\n- [EXEC:subscribe:{"tier":"silver"}]\n- [EXEC:cancel_subscription:{}]\n- [EXEC:convert_nexa:{"amount":500}]\n\nINVOICES: For receipts use [INVOICE:{...json...}] with the ref from RECENT TRANSACTIONS.`;
+
+      const conversationMessages = currentMessages
+        .filter(m => !m._pending)
+        .slice(0, 10)
         .reverse()
-        .map((m) => ({
-          sender: m.sender_id === user?.id ? (profile?.display_name || "User") : (m.sender?.display_name || "AfuAI"),
-          content: m.encrypted_content,
-        }));
+        .map(m => ({ role: m.sender_id === user?.id ? "user" as const : "assistant" as const, content: m.encrypted_content }));
+      conversationMessages.push({ role: "user", content: userText.replace(/@afuai/gi, "").trim() || userText });
 
-      const prompt = userText.replace(/@afuai/gi, "").trim() || userText;
-      const reply = await getAfuAiReply(prompt, recent, profile?.display_name);
+      const res = await fetch(`${SUPA_URL}/functions/v1/ai-chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPA_KEY}`, "apikey": SUPA_KEY || "" },
+        body: JSON.stringify({ messages: [{ role: "system", content: systemPrompt }, ...conversationMessages] }),
+      });
+      const data = await res.json();
+      const rawReply = data.reply || "Sorry, I couldn't process that. Please try again.";
+      const { text: cleanText, actions, suggestions, invoices, execAction } = parseAfuAiTags(rawReply);
 
+      const msgId = `afuai_${Date.now()}`;
       const aiMessage: Message = {
-        id: `afuai_${Date.now()}`,
+        id: msgId,
         chat_id: id,
         sender_id: "afuai",
-        encrypted_content: reply,
+        encrypted_content: cleanText,
         sent_at: new Date().toISOString(),
         sender: { display_name: "AfuAI", avatar_url: null, handle: "afuai" },
         reactions: [],
         _isAi: true,
+        _aiActions: actions.length > 0 ? actions : undefined,
+        _aiSuggestions: suggestions.length > 0 ? suggestions : undefined,
+        _aiInvoices: invoices.length > 0 ? invoices : undefined,
+        _aiExecAction: execAction ? {
+          id: `exec_${Date.now()}`,
+          actionType: execAction.actionType,
+          params: execAction.params,
+          label: AI_EXEC_LABELS[execAction.actionType] || execAction.actionType,
+          description: buildAiExecDesc(execAction.actionType, execAction.params),
+          status: "pending",
+        } : undefined,
       };
       setMessages((prev) => [aiMessage, ...prev]);
+      setLastAiMsgId(msgId);
     } catch {
-      const errMsg: Message = {
-        id: `afuai_err_${Date.now()}`,
-        chat_id: id,
-        sender_id: "afuai",
+      const errId = `afuai_err_${Date.now()}`;
+      setMessages((prev) => [{
+        id: errId, chat_id: id, sender_id: "afuai",
         encrypted_content: "Sorry, I couldn't respond right now. Please try again.",
         sent_at: new Date().toISOString(),
         sender: { display_name: "AfuAI", avatar_url: null, handle: "afuai" },
-        reactions: [],
-        _isAi: true,
-      };
-      setMessages((prev) => [errMsg, ...prev]);
+        reactions: [], _isAi: true,
+      }, ...prev]);
+      setLastAiMsgId(errId);
     } finally {
       setIsAfuAiTyping(false);
     }
@@ -1654,7 +1999,7 @@ export default function ChatScreen() {
     setSending(false);
 
     const isAfuAiDirectChat = chatInfo?.other_id === AFUAI_BOT_ID;
-    if (isAfuAiDirectChat) {
+    if (isAfuAiDirectChat || /@afuai/i.test(text)) {
       const snapshot = messages;
       handleAfuAiResponse(text, snapshot);
     }
@@ -2332,10 +2677,57 @@ export default function ChatScreen() {
     return current.sender_id === prev.sender_id ? 2 : 8;
   }, [messages]);
 
+  const isAfuAiDirectChat = chatInfo?.other_id === AFUAI_BOT_ID;
+
   const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
     const isMe = item.sender_id === user?.id;
     const showDate = shouldShowDate(index);
     const spacing = getMessageSpacing(index);
+
+    if (isAfuAiDirectChat && item._isAi) {
+      const showSuggestions = item.id === lastAiMsgId && item._aiSuggestions && item._aiSuggestions.length > 0 && !isAfuAiTyping;
+      const ALLOWED_ROUTES = new Set(["/wallet", "/wallet/topup", "/gifts", "/gifts/marketplace", "/premium", "/profile/edit", "/moments/create", "/settings/privacy", "/settings/security", "/notifications", "/games"]);
+      return (
+        <View style={{ marginTop: showDate ? 0 : spacing, paddingHorizontal: 12, paddingBottom: 4 }}>
+          {showDate && <View style={st.dateBadge}><View style={[st.datePill, { backgroundColor: colors.surface }]}><Text style={[st.dateBadgeText, { color: colors.textMuted }]}>{formatDateHeader(item.sent_at)}</Text></View></View>}
+          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#00BCD4", alignItems: "center", justifyContent: "center", marginTop: 2, flexShrink: 0 }}>
+              <Ionicons name="sparkles" size={13} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={[{ backgroundColor: colors.surface, borderRadius: 16, borderTopLeftRadius: 4, padding: 12 }]}>
+                <AiRichContent content={item.encrypted_content} colors={colors} />
+              </View>
+              {item._aiInvoices && item._aiInvoices.length > 0 && item._aiInvoices.map((inv, i) => <AiInvoiceCard key={i} invoice={inv} colors={colors} />)}
+              {item._aiExecAction && <AiConfirmationCard exec={item._aiExecAction} colors={colors} onConfirm={() => handleConfirmAiExec(item.id)} onCancel={() => handleCancelAiExec(item.id)} />}
+              {item._aiActions && item._aiActions.length > 0 && (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                  {item._aiActions.map((a, i) => (
+                    <TouchableOpacity key={i} onPress={() => { if (a.action === "navigate" && a.params?.route && ALLOWED_ROUTES.has(a.params.route)) router.push(a.params.route as any); }} style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, backgroundColor: "#00BCD4" + "15", borderWidth: 1, borderColor: "#00BCD4" + "30" }}>
+                      <Ionicons name={(a.icon || "arrow-forward-circle") as any} size={13} color="#00BCD4" />
+                      <Text style={{ fontSize: 12, color: "#00BCD4", fontFamily: "Inter_500Medium" }}>{a.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+              <Text style={{ fontSize: 11, color: colors.textMuted, fontFamily: "Inter_400Regular", marginTop: 4, alignSelf: "flex-start" }}>
+                {new Date(item.sent_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </Text>
+              {showSuggestions && (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                  {item._aiSuggestions!.map((sug, i) => (
+                    <TouchableOpacity key={i} onPress={() => { sendMessage(sug); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }} style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: "#00BCD4" + "40" }}>
+                      <Ionicons name="chatbubble-outline" size={11} color="#00BCD4" />
+                      <Text style={{ fontSize: 12, color: "#00BCD4", fontFamily: "Inter_400Regular" }}>{sug}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+      );
+    }
 
     return (
       <View style={{ marginTop: showDate ? 0 : spacing }}>
@@ -2361,7 +2753,7 @@ export default function ChatScreen() {
         />
       </View>
     );
-  }, [messages, user, colors]);
+  }, [messages, user, colors, isAfuAiDirectChat, lastAiMsgId, isAfuAiTyping]);
 
   return (
     <View style={[st.root, { backgroundColor: colors.background }]}>
@@ -2410,44 +2802,12 @@ export default function ChatScreen() {
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}>
         {chatInfo?.other_id === AFUAI_BOT_ID && (
-          <>
-            <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 7, backgroundColor: "#00BCD4" + "18", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#00BCD4" + "40", gap: 7 }}>
-              <Ionicons name="sparkles-outline" size={13} color="#00BCD4" />
-              <Text style={{ flex: 1, fontSize: 12, color: "#00BCD4", fontFamily: "Inter_400Regular" }}>
-                You're chatting with AfuAI — your AI assistant. Ask anything or use a quick action below.
-              </Text>
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={{ borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
-              contentContainerStyle={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, gap: 8 }}
-              keyboardShouldPersistTaps="always"
-            >
-              {[
-                { icon: "document-text-outline", label: "Summarize", prompt: "Please summarize this text for me:\n" },
-                { icon: "chatbubbles-outline", label: "Smart Replies", prompt: "Suggest 3 smart replies I can send in response to this message:\n" },
-                { icon: "create-outline", label: "Help me write", prompt: "Help me write a message about: " },
-                { icon: "language-outline", label: "Translate", prompt: "Translate the following to English:\n" },
-                { icon: "search-outline", label: "Explain", prompt: "Explain this to me in simple terms:\n" },
-                { icon: "bulb-outline", label: "Brainstorm", prompt: "Give me ideas about: " },
-              ].map((chip) => (
-                <TouchableOpacity
-                  key={chip.label}
-                  onPress={() => {
-                    setInput(chip.prompt);
-                    chatInputRef.current?.focus();
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  }}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: "#00BCD4" + "15", borderWidth: 1, borderColor: "#00BCD4" + "35" }}
-                  activeOpacity={0.65}
-                >
-                  <Ionicons name={chip.icon as any} size={13} color="#00BCD4" />
-                  <Text style={{ fontSize: 12, fontFamily: "Inter_500Medium", color: "#00BCD4" }}>{chip.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </>
+          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 7, backgroundColor: "#00BCD4" + "18", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#00BCD4" + "40", gap: 7 }}>
+            <Ionicons name="sparkles-outline" size={13} color="#00BCD4" />
+            <Text style={{ flex: 1, fontSize: 12, color: "#00BCD4", fontFamily: "Inter_400Regular" }}>
+              You're chatting with AfuAI — an AI assistant. Responses are AI-generated and may not always be accurate.
+            </Text>
+          </View>
         )}
         {loading ? (
           <ChatLoadingSkeleton />
@@ -2772,6 +3132,65 @@ export default function ChatScreen() {
               </TouchableOpacity>
             )}
 
+            {(chatInfo?.is_group || chatInfo?.is_channel) && (
+              <>
+                <View style={[st.reactModalDivider, { backgroundColor: colors.border }]} />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 }}>
+                  <Ionicons name="sparkles" size={12} color={colors.accent} />
+                  <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: colors.accent, textTransform: "uppercase", letterSpacing: 0.5 }}>AI Features</Text>
+                </View>
+                {showReactions && showReactions.encrypted_content.length >= 500 && (
+                  <TouchableOpacity
+                    style={[st.reactModalAction, { opacity: aiLoading && aiResultType === "summary" ? 0.5 : 1 }]}
+                    disabled={aiLoading}
+                    onPress={() => { if (showReactions) handleAiSummarize(showReactions); }}
+                  >
+                    <Ionicons name="document-text-outline" size={20} color={colors.accent} />
+                    <Text style={[st.reactModalActionText, { color: colors.text }]}>Summarize Message</Text>
+                    {aiLoading && aiResultType === "summary" && <ActivityIndicator color={colors.accent} size="small" style={{ marginLeft: "auto" }} />}
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[st.reactModalAction, { opacity: aiLoading && aiResultType === "replies" ? 0.5 : 1 }]}
+                  disabled={aiLoading}
+                  onPress={handleAiSuggestReply}
+                >
+                  <Ionicons name="chatbubbles-outline" size={20} color="#D4A853" />
+                  <Text style={[st.reactModalActionText, { color: colors.text }]}>Smart Replies</Text>
+                  {aiLoading && aiResultType === "replies" && <ActivityIndicator color="#D4A853" size="small" style={{ marginLeft: "auto" }} />}
+                </TouchableOpacity>
+
+                {aiResult && aiResultType === "summary" && (
+                  <View style={{ marginTop: 6, backgroundColor: colors.accent + "0A", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: colors.accent + "18" }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                      <Ionicons name="sparkles" size={12} color={colors.accent} />
+                      <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: colors.accent, textTransform: "uppercase", letterSpacing: 0.5 }}>Summary</Text>
+                    </View>
+                    <Text style={{ fontSize: 14, color: colors.text, fontFamily: "Inter_400Regular", lineHeight: 20 }}>{aiResult}</Text>
+                  </View>
+                )}
+
+                {aiReplies.length > 0 && aiResultType === "replies" && (
+                  <View style={{ marginTop: 6, gap: 6 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                      <Ionicons name="flash" size={12} color="#D4A853" />
+                      <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#D4A853", textTransform: "uppercase", letterSpacing: 0.5 }}>Tap to use</Text>
+                    </View>
+                    {aiReplies.map((reply, i) => (
+                      <TouchableOpacity
+                        key={i}
+                        onPress={() => { setInput(reply); setShowReactions(null); setAiResult(null); setAiResultType(null); setAiReplies([]); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                        style={{ backgroundColor: colors.inputBg, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: "#D4A853" + "25", flexDirection: "row", alignItems: "center", gap: 8 }}
+                        activeOpacity={0.6}
+                      >
+                        <Text style={{ flex: 1, fontSize: 14, color: colors.text, fontFamily: "Inter_400Regular", lineHeight: 19 }}>{reply}</Text>
+                        <Ionicons name="arrow-forward-circle" size={16} color="#D4A853" style={{ opacity: 0.5 }} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </>
+            )}
           </View>
         </View>
       </Modal>
