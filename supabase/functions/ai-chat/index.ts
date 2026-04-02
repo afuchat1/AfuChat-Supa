@@ -24,24 +24,57 @@ async function transcribeWithGroq(audioUrl: string, apiKey: string): Promise<str
 }
 
 async function chatWithGroq(messages: any[], maxTokens: number, apiKey: string): Promise<string> {
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
-      messages,
-      max_tokens: maxTokens,
-      temperature: 0.7,
-    }),
-  });
-  if (!res.ok) throw new Error(`Groq ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  const text = data.choices?.[0]?.message?.content ?? "";
-  if (!text) throw new Error("Groq returned empty response");
-  return text;
+  const models = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "gemma2-9b-it",
+    "mixtral-8x7b-32768",
+  ];
+
+  for (const model of models) {
+    try {
+      console.log(`Trying model: ${model}`);
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          max_tokens: maxTokens,
+          temperature: 0.7,
+        }),
+      });
+
+      if (res.status === 429) {
+        console.log(`Rate limited on ${model}, trying next model...`);
+        continue;
+      }
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error(`${model} error ${res.status}: ${errText}`);
+        continue;
+      }
+
+      const data = await res.json();
+      const text = data.choices?.[0]?.message?.content ?? "";
+      if (!text) {
+        console.log(`${model} returned empty, trying next...`);
+        continue;
+      }
+
+      console.log(`Success with ${model}`);
+      return text;
+    } catch (e: any) {
+      console.error(`${model} failed:`, e?.message || e);
+      continue;
+    }
+  }
+
+  throw new Error("All models exhausted");
 }
 
 function json(data: unknown, status = 200): Response {
