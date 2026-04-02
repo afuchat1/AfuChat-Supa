@@ -31,6 +31,7 @@ type AppItem = {
   route: string;
   badge?: string;
   featuredSub?: string;
+  adminOnly?: boolean;
 };
 
 type Category = {
@@ -82,6 +83,7 @@ const CATEGORIES: Category[] = [
         gradient: ["#AF52DE", "#BF5AF2"],
         route: "/mini-programs",
         featuredSub: "Pay bills, top up, and access local services.",
+        adminOnly: true,
       },
       {
         id: "freelance",
@@ -91,6 +93,7 @@ const CATEGORIES: Category[] = [
         route: "/freelance",
         badge: "NEW",
         featuredSub: "Hire talent or find work on AfuFreelance.",
+        adminOnly: true,
       },
     ],
   },
@@ -122,6 +125,7 @@ const CATEGORIES: Category[] = [
         route: "/store",
         badge: "NEW",
         featuredSub: "Shop from verified organization stores.",
+        adminOnly: true,
       },
     ],
   },
@@ -136,6 +140,7 @@ const CATEGORIES: Category[] = [
         gradient: ["#5856D6", "#6E6CD3"],
         route: "/file-manager",
         featuredSub: "Store and share your files securely.",
+        adminOnly: true,
       },
       {
         id: "digitalid",
@@ -161,6 +166,7 @@ const CATEGORIES: Category[] = [
         gradient: ["#BF5AF2", "#AF52DE"],
         route: "/collections",
         featuredSub: "Curate and share themed collections.",
+        adminOnly: true,
       },
     ],
   },
@@ -184,6 +190,7 @@ const CATEGORIES: Category[] = [
         gradient: ["#FF9500", "#FFCC00"],
         route: "/digital-events",
         featuredSub: "Discover local and online events near you.",
+        adminOnly: true,
       },
       {
         id: "referral",
@@ -200,6 +207,7 @@ const CATEGORIES: Category[] = [
         gradient: ["#007AFF", "#5AC8FA"],
         route: "/username-market",
         featuredSub: "Buy and sell premium @handles.",
+        adminOnly: true,
       },
     ],
   },
@@ -382,7 +390,8 @@ export default function AppsScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [usageCounts, setUsageCounts] = useState<Record<string, number>>({});
-  const { isPremium } = useAuth();
+  const { isPremium, profile } = useAuth();
+  const isAdmin = !!profile?.is_admin;
 
   useEffect(() => {
     AsyncStorage.getItem(USAGE_KEY).then((raw) => {
@@ -400,15 +409,22 @@ export default function AppsScreen() {
     });
   }
 
-  const trendingApps = [...ALL_APPS]
+  const visibleApps = ALL_APPS.filter((a) => !a.adminOnly || isAdmin);
+
+  const visibleCategories = CATEGORIES.map((cat) => ({
+    ...cat,
+    apps: cat.apps.filter((a) => !a.adminOnly || isAdmin),
+  })).filter((cat) => cat.apps.length > 0);
+
+  const trendingApps = [...visibleApps]
     .filter((a) => (usageCounts[a.id] ?? 0) > 0)
     .sort((a, b) => (usageCounts[b.id] ?? 0) - (usageCounts[a.id] ?? 0))
     .slice(0, 4);
 
   const featuredApp =
     trendingApps[0] ??
-    ALL_APPS.find((a) => a.id === DEFAULT_FEATURED_ID) ??
-    ALL_APPS[0];
+    visibleApps.find((a) => a.id === DEFAULT_FEATURED_ID) ??
+    visibleApps[0];
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -431,7 +447,7 @@ export default function AppsScreen() {
           )}
         </View>
 
-        <FeaturedBanner app={featuredApp} onTap={trackTap} />
+        {featuredApp && <FeaturedBanner app={featuredApp} onTap={trackTap} />}
         <TrendingSection
           apps={trendingApps}
           usageCounts={usageCounts}
@@ -439,7 +455,7 @@ export default function AppsScreen() {
           colors={colors}
         />
 
-        {CATEGORIES.map((cat) => (
+        {visibleCategories.map((cat) => (
           <View key={cat.id} style={styles.category}>
             <Text style={[styles.categoryTitle, { color: colors.textSecondary }]}>
               {cat.title.toUpperCase()}
