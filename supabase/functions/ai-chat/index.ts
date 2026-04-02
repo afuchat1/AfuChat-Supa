@@ -26,24 +26,42 @@ async function transcribeWithGroq(audioUrl: string, apiKey: string): Promise<str
 
 // ── Groq text chat (Llama) ────────────────────────────────────────────────────
 async function chatWithGroq(messages: any[], maxTokens: number, apiKey: string): Promise<string> {
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
-      messages,
-      max_tokens: maxTokens,
-      temperature: 0.7,
-    }),
-  });
-  if (!res.ok) throw new Error(`Groq ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  const text = data.choices?.[0]?.message?.content ?? "";
-  if (!text) throw new Error("Groq returned empty response");
-  return text;
+  const models = ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "llama-3.1-8b-instant"];
+  let lastError = "";
+
+  for (const model of models) {
+    try {
+      console.log(`Trying model: ${model}`);
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          max_tokens: maxTokens,
+          temperature: 0.7,
+        }),
+      });
+      if (!res.ok) {
+        lastError = `Groq ${model} ${res.status}: ${await res.text()}`;
+        console.error(lastError);
+        if (res.status === 401) throw new Error(lastError);
+        continue;
+      }
+      const data = await res.json();
+      const text = data.choices?.[0]?.message?.content ?? "";
+      if (!text) { lastError = `${model} returned empty`; continue; }
+      return text;
+    } catch (e: any) {
+      lastError = e?.message || String(e);
+      if (lastError.includes("401")) throw e;
+      console.error(`Model ${model} failed:`, lastError);
+    }
+  }
+  throw new Error(`All models failed. Last: ${lastError}`);
 }
 
 function json(data: unknown, status = 200): Response {
