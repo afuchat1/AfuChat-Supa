@@ -238,7 +238,7 @@ export default function SellerApplyScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
           {/* Intro Banner */}
           <View style={[st.introBanner, { backgroundColor: Colors.brand + "12", borderColor: Colors.brand + "30" }]}>

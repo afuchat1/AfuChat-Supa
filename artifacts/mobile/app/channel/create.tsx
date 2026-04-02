@@ -130,7 +130,7 @@ export default function CreateChannelScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.root, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior="padding"
     >
       <View
         style={[

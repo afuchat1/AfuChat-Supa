@@ -402,6 +402,7 @@ export default function PostDetailScreen() {
         </TouchableOpacity>
       </View>
 
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 52 : 0}>
       <FlatList
         data={buildReplyTree(replies)}
         keyExtractor={(item) => item.id}
@@ -540,7 +541,7 @@ export default function PostDetailScreen() {
       />
 
       {user ? (
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
+        <>
           {replyingTo && (
             <View style={[styles.replyingBanner, { backgroundColor: colors.backgroundSecondary, borderTopColor: colors.border }]}>
               <View style={{ flex: 1 }}>
@@ -579,7 +580,7 @@ export default function PostDetailScreen() {
               )}
             </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
+        </>
       ) : (
         <View style={[styles.replyBar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 8 }]}>
           <TouchableOpacity
@@ -591,6 +592,7 @@ export default function PostDetailScreen() {
           </TouchableOpacity>
         </View>
       )}
+      </KeyboardAvoidingView>
 
       <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
         <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setMenuVisible(false)}>

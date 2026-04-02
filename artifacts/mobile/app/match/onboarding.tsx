@@ -276,7 +276,7 @@ export default function MatchOnboarding() {
         <Ionicons name="arrow-back" size={22} color={colors.text} />
       </TouchableOpacity>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView
           contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 52 }]}
           keyboardShouldPersistTaps="handled"

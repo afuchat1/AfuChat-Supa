@@ -274,7 +274,7 @@ export default function ArticleDetailScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={insets.bottom}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 52 : 0}>
         <FlatList
           data={replies}
           keyExtractor={(r) => r.id}

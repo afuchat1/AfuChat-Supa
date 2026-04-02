@@ -1032,7 +1032,7 @@ When the user asks for a receipt, invoice, or transaction details, generate an i
   return (
     <KeyboardAvoidingView
       style={[s.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior="padding"
       keyboardVerticalOffset={0}
     >
       <View style={[s.header, { paddingTop: insets.top + 8, backgroundColor: colors.background, borderBottomColor: colors.border }]}>

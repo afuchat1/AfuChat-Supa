@@ -266,7 +266,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
         />
       )}
 
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <KeyboardAvoidingView behavior="padding">
         <View style={[styles.inputRow, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
           <View style={[styles.inputWrap, { backgroundColor: colors.inputBg }]}>
             <TextInput

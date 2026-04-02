@@ -788,7 +788,7 @@ export default function OnboardingScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.root, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior="padding"
       keyboardVerticalOffset={0}
     >
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>

@@ -617,7 +617,7 @@ export default function WalletScreen() {
       <TransactionDetailModal tx={selectedTx} visible={!!selectedTx} onClose={() => setSelectedTx(null)} colors={colors} />
 
       <SwipeableBottomSheet visible={showTransfer} onClose={() => setShowTransfer(false)} backgroundColor={colors.surface}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        <KeyboardAvoidingView behavior="padding">
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.text }]}>Send Nexa</Text>
@@ -635,7 +635,7 @@ export default function WalletScreen() {
       </SwipeableBottomSheet>
 
       <SwipeableBottomSheet visible={showConvert} onClose={() => setShowConvert(false)} backgroundColor={colors.surface}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        <KeyboardAvoidingView behavior="padding">
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.text }]}>Convert Nexa {"\u2192"} ACoin</Text>

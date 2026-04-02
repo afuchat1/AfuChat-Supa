@@ -237,7 +237,7 @@ function CommentsSheet({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={cStyles.overlay} onPress={onClose}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior="padding"
           style={cStyles.keyboard}
         >
           <Pressable onPress={() => {}}>

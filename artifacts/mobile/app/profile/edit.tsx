@@ -119,7 +119,7 @@ export default function EditProfileScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior="padding"
       style={[styles.root, { backgroundColor: colors.background }]}
     >
       <View

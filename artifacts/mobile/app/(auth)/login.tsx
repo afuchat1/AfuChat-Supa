@@ -395,7 +395,7 @@ export default function LoginScreen() {
           </View>
         )}
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          behavior="padding"
           style={{ flex: 1, backgroundColor: isDesktop ? (isDark ? "#111113" : "#ffffff") : colors.background }}
         >
         <ScrollView
@@ -545,7 +545,7 @@ export default function LoginScreen() {
         </View>
       )}
     <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior="padding"
       style={{ flex: 1, backgroundColor: isDesktop ? (isDark ? "#111113" : "#ffffff") : colors.background }}
     >
       <ScrollView
