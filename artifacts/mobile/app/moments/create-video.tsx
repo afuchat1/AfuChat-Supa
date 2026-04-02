@@ -83,11 +83,22 @@ export default function CreateVideoScreen() {
       const { publicUrl, error: uploadError } = await uploadToStorage("videos", filePath, videoUri, resolvedMime);
       if (uploadError || !publicUrl) throw new Error(uploadError || "Upload failed");
 
+      setUploadProgress("Generating thumbnail…");
+      let thumbnailPublicUrl: string | null = null;
+      try {
+        const { getThumbnailAsync } = await import("expo-video-thumbnails");
+        const { uri: thumbUri } = await getThumbnailAsync(videoUri, { time: 1000 });
+        const thumbPath = `${user.id}/${Date.now()}_thumb.jpg`;
+        const thumbResult = await uploadToStorage("videos", thumbPath, thumbUri, "image/jpeg");
+        if (thumbResult.publicUrl) thumbnailPublicUrl = thumbResult.publicUrl;
+      } catch (_) {}
+
       setUploadProgress("Publishing…");
       const { error } = await supabase.from("posts").insert({
         author_id: user.id,
         content: caption.trim(),
         video_url: publicUrl,
+        image_url: thumbnailPublicUrl,
         post_type: "video",
         visibility: "public",
         view_count: 0,

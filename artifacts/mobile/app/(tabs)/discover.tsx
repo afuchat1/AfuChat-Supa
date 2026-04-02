@@ -28,6 +28,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { RichText } from "@/components/ui/RichText";
 import Colors from "@/constants/colors";
 import { PostSkeleton } from "@/components/ui/Skeleton";
+import { VideoThumbnail } from "@/components/ui/VideoThumbnail";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { cacheMoments, getCachedMoments, cacheFeedTab, getCachedFeedTab, isOnline, onConnectivityChange } from "@/lib/offlineStore";
@@ -244,13 +245,10 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
             Platform.OS === "web" ? (
               <View style={styles.videoCard}>
                 <View style={styles.videoThumb}>
-                  {/* @ts-ignore: HTML video element for web thumbnail extraction */}
-                  <video
-                    src={item.video_url}
-                    preload="metadata"
-                    muted
-                    playsInline
-                    style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" } as any}
+                  <VideoThumbnail
+                    videoUrl={item.video_url!}
+                    fallbackImageUrl={item.image_url}
+                    style={StyleSheet.absoluteFill}
                   />
                   <View style={StyleSheet.absoluteFill}>
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
@@ -275,10 +273,10 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
                 style={styles.videoCard}
               >
                 <View style={styles.videoThumb}>
-                  <Image
-                    source={{ uri: item.image_url || item.video_url }}
+                  <VideoThumbnail
+                    videoUrl={item.video_url!}
+                    fallbackImageUrl={item.image_url}
                     style={StyleSheet.absoluteFill}
-                    resizeMode="cover"
                   />
                   <View style={styles.playCircle}>
                     <Ionicons name="play" size={22} color="#fff" />
