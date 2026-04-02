@@ -147,7 +147,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onImagePress, colWidth
           text: item.content ? item.content.slice(0, 200) : "Check out this post on AfuChat",
           url: postUrl,
         };
-        if (typeof navigator !== "undefined" && navigator.share && navigator.canShare?.(shareData)) {
+        if (typeof navigator !== "undefined" && navigator.share) {
           await navigator.share(shareData);
         } else if (typeof navigator !== "undefined" && navigator.clipboard) {
           await navigator.clipboard.writeText(postUrl);
