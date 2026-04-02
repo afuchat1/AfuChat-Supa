@@ -319,8 +319,6 @@ export default function MeScreen() {
         <Separator indent={54} />
         <MenuItem icon="person-add-outline" iconBg="#00BCD4" label="Find People" onPress={() => router.push("/user-discovery")} badge="NEW" />
         <Separator indent={54} />
-        <MenuItem icon="images-outline" iconBg="#FF9500" label="Stories" onPress={() => router.push("/stories/create")} />
-        <Separator indent={54} />
         <MenuItem icon="notifications-outline" iconBg="#007AFF" label="Notifications" onPress={() => router.push("/notifications")} />
       </MenuGroup>
 

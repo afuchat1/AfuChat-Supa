@@ -650,14 +650,7 @@ export default function DiscoverScreen() {
           </TouchableOpacity>
         </View>
 
-        {user ? (
-          <TouchableOpacity
-            onPress={() => router.push("/moments/create")}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="add-circle-outline" size={24} color={colors.text} />
-          </TouchableOpacity>
-        ) : (
+        {!user && (
           <TouchableOpacity
             onPress={() => router.push("/(auth)/login")}
             style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.brand, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20 }}
