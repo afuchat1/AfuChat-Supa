@@ -1654,7 +1654,7 @@ export default function ChatScreen() {
     setSending(false);
 
     const isAfuAiDirectChat = chatInfo?.other_id === AFUAI_BOT_ID;
-    if (isAfuAiDirectChat || /@afuai/i.test(text)) {
+    if (isAfuAiDirectChat) {
       const snapshot = messages;
       handleAfuAiResponse(text, snapshot);
     }
@@ -2410,12 +2410,44 @@ export default function ChatScreen() {
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}>
         {chatInfo?.other_id === AFUAI_BOT_ID && (
-          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 7, backgroundColor: "#00BCD4" + "18", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#00BCD4" + "40", gap: 7 }}>
-            <Ionicons name="sparkles-outline" size={13} color="#00BCD4" />
-            <Text style={{ flex: 1, fontSize: 12, color: "#00BCD4", fontFamily: "Inter_400Regular" }}>
-              You're chatting with AfuAI — an AI assistant. Responses are AI-generated and may not always be accurate.
-            </Text>
-          </View>
+          <>
+            <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 7, backgroundColor: "#00BCD4" + "18", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#00BCD4" + "40", gap: 7 }}>
+              <Ionicons name="sparkles-outline" size={13} color="#00BCD4" />
+              <Text style={{ flex: 1, fontSize: 12, color: "#00BCD4", fontFamily: "Inter_400Regular" }}>
+                You're chatting with AfuAI — your AI assistant. Ask anything or use a quick action below.
+              </Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
+              contentContainerStyle={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, gap: 8 }}
+              keyboardShouldPersistTaps="always"
+            >
+              {[
+                { icon: "document-text-outline", label: "Summarize", prompt: "Please summarize this text for me:\n" },
+                { icon: "chatbubbles-outline", label: "Smart Replies", prompt: "Suggest 3 smart replies I can send in response to this message:\n" },
+                { icon: "create-outline", label: "Help me write", prompt: "Help me write a message about: " },
+                { icon: "language-outline", label: "Translate", prompt: "Translate the following to English:\n" },
+                { icon: "search-outline", label: "Explain", prompt: "Explain this to me in simple terms:\n" },
+                { icon: "bulb-outline", label: "Brainstorm", prompt: "Give me ideas about: " },
+              ].map((chip) => (
+                <TouchableOpacity
+                  key={chip.label}
+                  onPress={() => {
+                    setInput(chip.prompt);
+                    chatInputRef.current?.focus();
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: "#00BCD4" + "15", borderWidth: 1, borderColor: "#00BCD4" + "35" }}
+                  activeOpacity={0.65}
+                >
+                  <Ionicons name={chip.icon as any} size={13} color="#00BCD4" />
+                  <Text style={{ fontSize: 12, fontFamily: "Inter_500Medium", color: "#00BCD4" }}>{chip.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </>
         )}
         {loading ? (
           <ChatLoadingSkeleton />
@@ -2740,65 +2772,6 @@ export default function ChatScreen() {
               </TouchableOpacity>
             )}
 
-            {(chatInfo?.is_group || chatInfo?.is_channel) && (
-              <>
-                <View style={[st.reactModalDivider, { backgroundColor: colors.border }]} />
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 }}>
-                  <Ionicons name="sparkles" size={12} color={colors.accent} />
-                  <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: colors.accent, textTransform: "uppercase", letterSpacing: 0.5 }}>AI Features</Text>
-                </View>
-                {showReactions && showReactions.encrypted_content.length >= 500 && (
-                  <TouchableOpacity
-                    style={[st.reactModalAction, { opacity: aiLoading && aiResultType === "summary" ? 0.5 : 1 }]}
-                    disabled={aiLoading}
-                    onPress={() => { if (showReactions) handleAiSummarize(showReactions); }}
-                  >
-                    <Ionicons name="document-text-outline" size={20} color={colors.accent} />
-                    <Text style={[st.reactModalActionText, { color: colors.text }]}>Summarize Message</Text>
-                    {aiLoading && aiResultType === "summary" && <ActivityIndicator color={colors.accent} size="small" style={{ marginLeft: "auto" }} />}
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  style={[st.reactModalAction, { opacity: aiLoading && aiResultType === "replies" ? 0.5 : 1 }]}
-                  disabled={aiLoading}
-                  onPress={handleAiSuggestReply}
-                >
-                  <Ionicons name="chatbubbles-outline" size={20} color="#D4A853" />
-                  <Text style={[st.reactModalActionText, { color: colors.text }]}>Smart Replies</Text>
-                  {aiLoading && aiResultType === "replies" && <ActivityIndicator color="#D4A853" size="small" style={{ marginLeft: "auto" }} />}
-                </TouchableOpacity>
-
-                {aiResult && aiResultType === "summary" && (
-                  <View style={{ marginTop: 6, backgroundColor: colors.accent + "0A", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: colors.accent + "18" }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                      <Ionicons name="sparkles" size={12} color={colors.accent} />
-                      <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: colors.accent, textTransform: "uppercase", letterSpacing: 0.5 }}>Summary</Text>
-                    </View>
-                    <Text style={{ fontSize: 14, color: colors.text, fontFamily: "Inter_400Regular", lineHeight: 20 }}>{aiResult}</Text>
-                  </View>
-                )}
-
-                {aiReplies.length > 0 && aiResultType === "replies" && (
-                  <View style={{ marginTop: 6, gap: 6 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                      <Ionicons name="flash" size={12} color="#D4A853" />
-                      <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#D4A853", textTransform: "uppercase", letterSpacing: 0.5 }}>Tap to use</Text>
-                    </View>
-                    {aiReplies.map((reply, i) => (
-                      <TouchableOpacity
-                        key={i}
-                        onPress={() => { setInput(reply); setShowReactions(null); setAiResult(null); setAiResultType(null); setAiReplies([]); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-                        style={{ backgroundColor: colors.inputBg, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: "#D4A853" + "25", flexDirection: "row", alignItems: "center", gap: 8 }}
-                        activeOpacity={0.6}
-                      >
-                        <Text style={{ flex: 1, fontSize: 14, color: colors.text, fontFamily: "Inter_400Regular", lineHeight: 19 }}>{reply}</Text>
-                        <Ionicons name="arrow-forward-circle" size={16} color="#D4A853" style={{ opacity: 0.5 }} />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </>
-            )}
           </View>
         </View>
       </Modal>
