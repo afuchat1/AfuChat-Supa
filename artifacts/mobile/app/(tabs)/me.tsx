@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Image,
   Platform,
@@ -24,7 +24,6 @@ import * as Haptics from "@/lib/haptics";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { showAlert } from "@/lib/alert";
-import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { Separator } from "@/components/ui/Separator";
@@ -189,18 +188,11 @@ function XpLevelBar({ xp }: { xp: number }) {
 export default function MeScreen() {
   const { colors, isDark, themeMode, setThemeMode } = useTheme();
   const { accent, appTheme, setAppTheme } = useAppAccent();
-  const { profile, isPremium, subscription, user } = useAuth();
+  const { profile, isPremium, subscription } = useAuth();
   const isAdmin = !!profile?.is_admin;
   const { langLabel } = useLanguage();
   const insets = useSafeAreaInsets();
-  const [followerCount, setFollowerCount] = React.useState(0);
-  const [followingCount, setFollowingCount] = React.useState(0);
-
-  React.useEffect(() => {
-    if (!user) return;
-    supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", user.id).then(({ count }) => setFollowerCount(count || 0));
-    supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", user.id).then(({ count }) => setFollowingCount(count || 0));
-  }, [user]);
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
 
   function cycleTheme() {
     Haptics.selectionAsync();
@@ -279,20 +271,6 @@ export default function MeScreen() {
           <Text style={[styles.statValue, { color: colors.text }]}>{profile?.current_grade || "Newcomer"}</Text>
           <Text style={[styles.statLabel, { color: colors.textMuted }]}>Grade</Text>
         </View>
-      </View>
-
-      <View style={[styles.statsRow, { backgroundColor: colors.surface }]}>
-        <TouchableOpacity style={styles.statItem} activeOpacity={0.6} onPress={() => router.push({ pathname: "/followers", params: { userId: user?.id || "", type: "followers", ownerHandle: profile?.handle } })}>
-          <Ionicons name="people" size={20} color="#007AFF" />
-          <Text style={[styles.statValue, { color: colors.text }]}>{followerCount}</Text>
-          <Text style={[styles.statLabel, { color: colors.textMuted }]}>Followers</Text>
-        </TouchableOpacity>
-        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-        <TouchableOpacity style={styles.statItem} activeOpacity={0.6} onPress={() => router.push({ pathname: "/followers", params: { userId: user?.id || "", type: "following", ownerHandle: profile?.handle } })}>
-          <Ionicons name="person-add" size={20} color="#5856D6" />
-          <Text style={[styles.statValue, { color: colors.text }]}>{followingCount}</Text>
-          <Text style={[styles.statLabel, { color: colors.textMuted }]}>Following</Text>
-        </TouchableOpacity>
       </View>
 
       <XpLevelBar xp={profile?.xp || 0} />
@@ -374,40 +352,47 @@ export default function MeScreen() {
           onPress={cycleTheme}
         />
         <Separator indent={54} />
-        <View style={{ paddingHorizontal: 16, paddingVertical: 14 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
+        <TouchableOpacity
+          style={{ paddingHorizontal: 16, paddingVertical: 14, backgroundColor: colors.surface }}
+          activeOpacity={0.7}
+          onPress={() => { Haptics.selectionAsync(); setColorPickerOpen((o) => !o); }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
             <View style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: accent, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
               <Ionicons name="color-palette-outline" size={18} color="#fff" />
             </View>
             <Text style={{ fontSize: 16, fontFamily: "Inter_500Medium", color: colors.text, flex: 1 }}>App Color</Text>
-            <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.secondaryText }}>{appTheme}</Text>
+            <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.textSecondary, marginRight: 6 }}>{appTheme}</Text>
+            <Ionicons name={colorPickerOpen ? "chevron-up" : "chevron-down"} size={15} color={colors.textMuted} />
           </View>
-          <View style={{ flexDirection: "row", gap: 12, justifyContent: "center" }}>
-            {(Object.keys(CHAT_THEME_COLORS) as ChatTheme[]).map((name) => {
-              const themeObj = CHAT_THEME_COLORS[name];
-              const selected = appTheme === name;
-              return (
-                <TouchableOpacity
-                  key={name}
-                  onPress={() => { Haptics.selectionAsync(); setAppTheme(name); }}
-                  activeOpacity={0.7}
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: themeObj.accent,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderWidth: selected ? 3 : 0,
-                    borderColor: isDark ? "#fff" : "#000",
-                  }}
-                >
-                  {selected && <Ionicons name="checkmark" size={18} color="#fff" />}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
+          {colorPickerOpen && (
+            <View style={{ flexDirection: "row", gap: 12, justifyContent: "center", marginTop: 14 }}>
+              {(Object.keys(CHAT_THEME_COLORS) as ChatTheme[]).map((name) => {
+                const themeObj = CHAT_THEME_COLORS[name];
+                const selected = appTheme === name;
+                return (
+                  <TouchableOpacity
+                    key={name}
+                    onPress={() => { Haptics.selectionAsync(); setAppTheme(name); }}
+                    activeOpacity={0.7}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: themeObj.accent,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: selected ? 3 : 0,
+                      borderColor: isDark ? "#fff" : "#000",
+                    }}
+                  >
+                    {selected && <Ionicons name="checkmark" size={18} color="#fff" />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </TouchableOpacity>
         <Separator indent={54} />
         <MenuItem
           icon="language-outline"
