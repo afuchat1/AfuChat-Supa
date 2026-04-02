@@ -696,24 +696,21 @@ export default function DiscoverScreen() {
   const loadPostsRef = useRef(loadPosts);
   useEffect(() => { loadPostsRef.current = loadPosts; }, [loadPosts]);
 
-  // Tab switch — serve in-memory cache instantly, background-refresh if stale
+  // Tab switch — show loading, then load fresh data (use cache as quick fallback)
   useEffect(() => {
-    const STALE_MS = 5 * 60 * 1000;
+    const STALE_MS = 3 * 60 * 1000;
     const cached = tabPostsCache.current[feedTab];
     const cacheAge = Date.now() - tabCacheTimestamp.current[feedTab];
-    if (cached.length > 0) {
+
+    setPosts([]);
+    setHasMore(true);
+    setFollowingEmpty(false);
+
+    if (cached.length > 0 && cacheAge < STALE_MS) {
       setPosts(cached);
       setLoading(false);
-      setFollowingEmpty(false);
-      setHasMore(true);
-      if (cacheAge > STALE_MS) {
-        loadPostsRef.current(feedTab, true);
-      }
     } else {
       setLoading(true);
-      setPosts([]);
-      setHasMore(true);
-      setFollowingEmpty(false);
       loadPostsRef.current(feedTab, false);
     }
   }, [feedTab]);

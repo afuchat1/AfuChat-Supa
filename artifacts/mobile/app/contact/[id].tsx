@@ -47,6 +47,9 @@ type UserPost = {
   id: string;
   content: string;
   image_url: string | null;
+  post_type: string;
+  video_url: string | null;
+  post_images: { image_url: string; display_order: number }[];
   created_at: string;
   view_count: number;
   likeCount: number;
@@ -114,7 +117,7 @@ export default function ContactProfileScreen() {
     setPostsLoading(true);
     const { data } = await supabase
       .from("posts")
-      .select("id, content, image_url, created_at, view_count, visibility")
+      .select("id, content, image_url, created_at, view_count, visibility, post_type, video_url, post_images(image_url, display_order)")
       .eq("author_id", id)
       .in("visibility", ["public", "followers"])
       .order("created_at", { ascending: false })
@@ -130,7 +133,18 @@ export default function ContactProfileScreen() {
       const replyCounts: Record<string, number> = {};
       (likesRes.data || []).forEach((l: any) => { likeCounts[l.post_id] = (likeCounts[l.post_id] || 0) + 1; });
       (repliesRes.data || []).forEach((r: any) => { replyCounts[r.post_id] = (replyCounts[r.post_id] || 0) + 1; });
-      setPosts(data.map((p: any) => ({ ...p, likeCount: likeCounts[p.id] || 0, replyCount: replyCounts[p.id] || 0 })));
+      setPosts(data.map((p: any) => ({
+        id: p.id,
+        content: p.content || "",
+        image_url: p.image_url,
+        post_type: p.post_type || "text",
+        video_url: p.video_url || null,
+        post_images: (p.post_images || []).sort((a: any, b: any) => a.display_order - b.display_order),
+        created_at: p.created_at,
+        view_count: p.view_count || 0,
+        likeCount: likeCounts[p.id] || 0,
+        replyCount: replyCounts[p.id] || 0,
+      })));
     } else {
       setPosts([]);
     }
@@ -443,28 +457,62 @@ export default function ContactProfileScreen() {
           ) : posts.length === 0 ? (
             <Text style={[styles.emptyPosts, { color: colors.textMuted }]}>No posts yet</Text>
           ) : (
-            posts.map((p) => (
-              <TouchableOpacity
-                key={p.id}
-                style={[styles.postCard, { borderTopColor: colors.border }]}
-                onPress={() => router.push({ pathname: "/post/[id]", params: { id: p.id } })}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.postContent, { color: colors.text }]} numberOfLines={3}>{p.content}</Text>
-                {p.image_url && <Image source={{ uri: p.image_url }} style={styles.postThumb} resizeMode="cover" />}
-                <View style={styles.postMeta}>
-                  <Text style={[styles.postTime, { color: colors.textMuted }]}>{timeAgo(p.created_at)}</Text>
-                  <View style={styles.postStats}>
-                    <Ionicons name="heart-outline" size={13} color={colors.textMuted} />
-                    <Text style={[styles.postStatNum, { color: colors.textMuted }]}>{p.likeCount}</Text>
-                    <Ionicons name="chatbubble-outline" size={13} color={colors.textMuted} style={{ marginLeft: 10 }} />
-                    <Text style={[styles.postStatNum, { color: colors.textMuted }]}>{p.replyCount}</Text>
-                    <Ionicons name="eye-outline" size={13} color={colors.textMuted} style={{ marginLeft: 10 }} />
-                    <Text style={[styles.postStatNum, { color: colors.textMuted }]}>{p.view_count || 0}</Text>
+            posts.map((p) => {
+              const isVideo = p.post_type === "video" && p.video_url;
+              const images = p.post_images?.length > 0
+                ? p.post_images.map((img: any) => img.image_url)
+                : p.image_url ? [p.image_url] : [];
+              return (
+                <TouchableOpacity
+                  key={p.id}
+                  style={[styles.postCard, { borderTopColor: colors.border }]}
+                  onPress={() => {
+                    if (isVideo) {
+                      router.push({ pathname: "/video/[id]", params: { id: p.id } });
+                    } else {
+                      router.push({ pathname: "/post/[id]", params: { id: p.id } });
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  {!!p.content && (
+                    <Text style={[styles.postContent, { color: colors.text }]} numberOfLines={3}>{p.content}</Text>
+                  )}
+                  {isVideo ? (
+                    <View style={styles.videoThumbWrap}>
+                      <View style={[styles.postThumb, styles.videoPlaceholder]}>
+                        <View style={styles.videoPlayIcon}>
+                          <Ionicons name="play" size={28} color="#fff" />
+                        </View>
+                        <Text style={styles.videoLabel}>Video</Text>
+                      </View>
+                    </View>
+                  ) : images.length === 1 ? (
+                    <Image source={{ uri: images[0] }} style={styles.postThumb} resizeMode="cover" />
+                  ) : images.length > 1 ? (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageRow}>
+                      {images.map((url: string, i: number) => (
+                        <Image key={i} source={{ uri: url }} style={styles.postThumbSmall} resizeMode="cover" />
+                      ))}
+                    </ScrollView>
+                  ) : null}
+                  <View style={styles.postMeta}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      {isVideo && <Ionicons name="videocam" size={12} color={Colors.brand} />}
+                      <Text style={[styles.postTime, { color: colors.textMuted }]}>{timeAgo(p.created_at)}</Text>
+                    </View>
+                    <View style={styles.postStats}>
+                      <Ionicons name="heart-outline" size={13} color={colors.textMuted} />
+                      <Text style={[styles.postStatNum, { color: colors.textMuted }]}>{p.likeCount}</Text>
+                      <Ionicons name="chatbubble-outline" size={13} color={colors.textMuted} style={{ marginLeft: 10 }} />
+                      <Text style={[styles.postStatNum, { color: colors.textMuted }]}>{p.replyCount}</Text>
+                      <Ionicons name="eye-outline" size={13} color={colors.textMuted} style={{ marginLeft: 10 }} />
+                      <Text style={[styles.postStatNum, { color: colors.textMuted }]}>{p.view_count || 0}</Text>
+                    </View>
                   </View>
-                </View>
-              </TouchableOpacity>
-            ))
+                </TouchableOpacity>
+              );
+            })
           )}
         </View>
       </ScrollView>
@@ -520,7 +568,13 @@ const styles = StyleSheet.create({
   emptyPosts: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", paddingVertical: 24 },
   postCard: { paddingVertical: 14, borderTopWidth: StyleSheet.hairlineWidth },
   postContent: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22, marginBottom: 8 },
-  postThumb: { width: "100%", height: 160, borderRadius: 10, marginBottom: 8 },
+  postThumb: { width: "100%", height: 160, borderRadius: 10, marginBottom: 8, backgroundColor: "#e0e0e0" },
+  videoThumbWrap: { marginBottom: 8 },
+  videoPlaceholder: { backgroundColor: "#1a1a1d", alignItems: "center", justifyContent: "center" },
+  videoPlayIcon: { width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
+  videoLabel: { color: "rgba(255,255,255,0.5)", fontSize: 12, fontFamily: "Inter_600SemiBold", marginTop: 6 },
+  imageRow: { marginBottom: 8 },
+  postThumbSmall: { width: 130, height: 130, borderRadius: 10, marginRight: 8, backgroundColor: "#e0e0e0" },
   postMeta: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   postTime: { fontSize: 12, fontFamily: "Inter_400Regular" },
   postStats: { flexDirection: "row", alignItems: "center", gap: 4 },
