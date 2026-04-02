@@ -1385,14 +1385,12 @@ INVOICES: [INVOICE:{"type":"...","date":"...","amount":100,"currency":"Nexa","fr
 
       const conversationMessages = messages
         .filter(m => m.role !== "thinking")
+        .slice(-10)
         .map(m => ({ role: m.role as string, content: m.content }));
       conversationMessages.push({ role: "user", content });
 
-      const controller = new AbortController();
-      const fetchTimeout = setTimeout(() => controller.abort(), 120000);
       const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-chat`, {
         method: "POST",
-        signal: controller.signal,
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
@@ -1400,15 +1398,8 @@ INVOICES: [INVOICE:{"type":"...","date":"...","amount":100,"currency":"Nexa","fr
         },
         body: JSON.stringify({
           messages: [{ role: "system", content: systemPrompt }, ...conversationMessages],
-          max_tokens: 8000,
         }),
       });
-      clearTimeout(fetchTimeout);
-
-      if (!res.ok) {
-        const errText = await res.text().catch(() => "");
-        throw new Error(`HTTP ${res.status}: ${errText.slice(0, 200)}`);
-      }
 
       const data = await res.json();
       clearInterval(thinkingInterval);
@@ -1447,9 +1438,7 @@ INVOICES: [INVOICE:{"type":"...","date":"...","amount":100,"currency":"Nexa","fr
       clearInterval(thinkingInterval);
       console.error("AfuAi sendMessage error:", err?.message || err);
       if (requestIdRef.current !== currentRequestId) return;
-      const errMsg = err?.name === "AbortError"
-        ? "The request took too long. Please try again."
-        : "Could not connect to AfuAi. Please check your connection and try again.";
+      const errMsg = "Could not connect to AfuAi. Please check your connection and try again.";
       setMessages(prev => prev.filter(m => m.id !== thinkingId).concat(
         { id: `e_${Date.now()}`, role: "assistant" as const, content: errMsg, timestamp: Date.now() }
       ));
