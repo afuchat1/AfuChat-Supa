@@ -73,8 +73,8 @@ function BookmarkButton({ bookmarked, onPress }: { bookmarked: boolean; onPress:
   const scale = useRef(new Animated.Value(1)).current;
   function handlePress() {
     Animated.sequence([
-      Animated.timing(scale, { toValue: 0.7, duration: 100, useNativeDriver: true }),
-      Animated.spring(scale, { toValue: 1, tension: 200, friction: 8, useNativeDriver: true }),
+      Animated.timing(scale, { toValue: 0.7, duration: 100, useNativeDriver: Platform.OS !== "web" }),
+      Animated.spring(scale, { toValue: 1, tension: 200, friction: 8, useNativeDriver: Platform.OS !== "web" }),
     ]).start();
     onPress();
   }

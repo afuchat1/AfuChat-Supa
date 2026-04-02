@@ -122,13 +122,18 @@ export default function PostDetailScreen() {
     if (!id) return;
     const { data } = await supabase
       .from("posts")
-      .select(`id, content, image_url, created_at, view_count, visibility,
+      .select(`id, content, image_url, created_at, view_count, visibility, post_type, video_url,
         profiles!posts_author_id_fkey(id, display_name, avatar_url, handle, is_verified, is_organization_verified),
         post_images(image_url, display_order)`)
       .eq("id", id)
       .single();
 
     if (!data) { setLoading(false); return; }
+
+    if (data.post_type === "video" && data.video_url) {
+      router.replace({ pathname: "/video/[id]", params: { id: data.id } });
+      return;
+    }
 
     const { count: likeCount } = await supabase
       .from("post_acknowledgments")

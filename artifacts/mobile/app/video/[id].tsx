@@ -6,13 +6,13 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  Pressable,
   Share,
   StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View,
   ViewToken,
   useWindowDimensions,
@@ -21,11 +21,14 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Video, ResizeMode, AVPlaybackStatus } from "expo-av";
+import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { notifyPostLike } from "@/lib/notifyUser";
+
+const USE_NATIVE = Platform.OS !== "web";
 
 type VideoPost = {
   id: string;
@@ -85,6 +88,7 @@ function CommentsSheet({
 
   useEffect(() => {
     if (!visible || !postId) return;
+    setReplies([]);
     setLoading(true);
     supabase
       .from("post_replies")
@@ -142,46 +146,46 @@ function CommentsSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={cs.overlay} activeOpacity={1} onPress={onClose}>
+      <Pressable style={cStyles.overlay} onPress={onClose}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={cs.keyboard}
+          style={cStyles.keyboard}
         >
-          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-            <View style={[cs.container, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-              <View style={cs.handle} />
-              <View style={cs.header}>
+          <Pressable onPress={() => {}}>
+            <View style={[cStyles.container, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+              <View style={cStyles.handle} />
+              <View style={cStyles.header}>
                 <View style={{ width: 28 }} />
-                <Text style={cs.title}>Comments</Text>
+                <Text style={cStyles.title}>Comments</Text>
                 <TouchableOpacity onPress={onClose} hitSlop={12}>
                   <Ionicons name="close" size={22} color="rgba(255,255,255,0.7)" />
                 </TouchableOpacity>
               </View>
 
               {loading ? (
-                <View style={cs.center}><ActivityIndicator color={Colors.brand} /></View>
+                <View style={cStyles.center}><ActivityIndicator color={Colors.brand} /></View>
               ) : replies.length === 0 ? (
-                <View style={cs.center}>
+                <View style={cStyles.center}>
                   <Ionicons name="chatbubble-outline" size={36} color="rgba(255,255,255,0.15)" />
-                  <Text style={cs.emptyText}>No comments yet</Text>
-                  <Text style={cs.emptySubtext}>Start the conversation</Text>
+                  <Text style={cStyles.emptyText}>No comments yet</Text>
+                  <Text style={cStyles.emptySubtext}>Start the conversation</Text>
                 </View>
               ) : (
                 <FlatList
                   ref={listRef}
                   data={replies}
                   keyExtractor={(r) => r.id}
-                  style={cs.list}
+                  style={cStyles.list}
                   showsVerticalScrollIndicator={false}
                   renderItem={({ item: r }) => (
-                    <View style={cs.replyRow}>
+                    <View style={cStyles.replyRow}>
                       <Avatar uri={r.profile.avatar_url} name={r.profile.display_name} size={34} />
-                      <View style={cs.replyBody}>
-                        <View style={cs.replyMeta}>
-                          <Text style={cs.replyName}>{r.profile.display_name}</Text>
-                          <Text style={cs.replyTime}>{formatRelative(r.created_at)}</Text>
+                      <View style={cStyles.replyBody}>
+                        <View style={cStyles.replyMeta}>
+                          <Text style={cStyles.replyName}>{r.profile.display_name}</Text>
+                          <Text style={cStyles.replyTime}>{formatRelative(r.created_at)}</Text>
                         </View>
-                        <Text style={cs.replyContent}>{r.content}</Text>
+                        <Text style={cStyles.replyContent}>{r.content}</Text>
                       </View>
                     </View>
                   )}
@@ -189,11 +193,11 @@ function CommentsSheet({
               )}
 
               {user ? (
-                <View style={cs.inputRow}>
+                <View style={cStyles.inputRow}>
                   <Avatar uri={profile?.avatar_url} name={profile?.display_name || "You"} size={30} />
-                  <View style={cs.inputWrap}>
+                  <View style={cStyles.inputWrap}>
                     <TextInput
-                      style={cs.input}
+                      style={cStyles.input}
                       placeholder="Add a comment..."
                       placeholderTextColor="rgba(255,255,255,0.3)"
                       value={text}
@@ -205,7 +209,7 @@ function CommentsSheet({
                   <TouchableOpacity
                     onPress={sendReply}
                     disabled={!text.trim() || sending}
-                    style={[cs.sendBtn, text.trim() ? cs.sendBtnActive : null]}
+                    style={[cStyles.sendBtn, text.trim() ? cStyles.sendBtnActive : null]}
                   >
                     {sending ? (
                       <ActivityIndicator size={16} color="#fff" />
@@ -215,19 +219,19 @@ function CommentsSheet({
                   </TouchableOpacity>
                 </View>
               ) : (
-                <TouchableOpacity style={cs.signIn} onPress={() => { onClose(); router.push("/(auth)/login"); }}>
-                  <Text style={cs.signInText}>Sign in to comment</Text>
+                <TouchableOpacity style={cStyles.signIn} onPress={() => { onClose(); router.push("/(auth)/login"); }}>
+                  <Text style={cStyles.signInText}>Sign in to comment</Text>
                 </TouchableOpacity>
               )}
             </View>
-          </TouchableOpacity>
+          </Pressable>
         </KeyboardAvoidingView>
-      </TouchableOpacity>
+      </Pressable>
     </Modal>
   );
 }
 
-const cs = StyleSheet.create({
+const cStyles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.55)" },
   keyboard: { justifyContent: "flex-end" },
   container: {
@@ -286,6 +290,24 @@ const cs = StyleSheet.create({
   signInText: { color: Colors.brand, fontSize: 14, fontFamily: "Inter_600SemiBold" },
 });
 
+function GradientOverlay({ position, height: h }: { position: "top" | "bottom"; height: number }) {
+  if (Platform.OS === "web") {
+    const bg = position === "bottom"
+      ? "linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.3) 40%, transparent 100%)"
+      : "linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 100%)";
+    return <View style={[{ position: "absolute", left: 0, right: 0, height: h, [position]: 0, pointerEvents: "none" as any }, { backgroundImage: bg } as any]} />;
+  }
+  const colors = position === "bottom"
+    ? ["transparent", "rgba(0,0,0,0.3)", "rgba(0,0,0,0.75)"]
+    : ["rgba(0,0,0,0.5)", "transparent"];
+  return (
+    <LinearGradient
+      colors={colors}
+      style={{ position: "absolute", left: 0, right: 0, height: h, [position]: 0, pointerEvents: "none" as any }}
+    />
+  );
+}
+
 function VideoItem({
   item,
   isActive,
@@ -322,6 +344,14 @@ function VideoItem({
   const insets = useSafeAreaInsets();
   const videoRef = useRef<Video>(null);
 
+  useEffect(() => {
+    if (!isActive) {
+      setPaused(false);
+      setProgress(0);
+      setExpanded(false);
+    }
+  }, [isActive]);
+
   function onPlaybackStatus(status: AVPlaybackStatus) {
     if (!status.isLoaded) return;
     setBuffering(status.isBuffering);
@@ -337,9 +367,9 @@ function VideoItem({
         onLike(item.id, false);
       }
       Animated.sequence([
-        Animated.timing(doubleTapHeart, { toValue: 1, duration: 150, useNativeDriver: true }),
+        Animated.timing(doubleTapHeart, { toValue: 1, duration: 150, useNativeDriver: USE_NATIVE }),
         Animated.delay(600),
-        Animated.timing(doubleTapHeart, { toValue: 0, duration: 250, useNativeDriver: true }),
+        Animated.timing(doubleTapHeart, { toValue: 0, duration: 250, useNativeDriver: USE_NATIVE }),
       ]).start();
       lastTap.current = 0;
     } else {
@@ -354,72 +384,69 @@ function VideoItem({
 
   function handleLike() {
     Animated.sequence([
-      Animated.timing(heartScale, { toValue: 0.6, duration: 80, useNativeDriver: true }),
-      Animated.spring(heartScale, { toValue: 1, tension: 300, friction: 7, useNativeDriver: true }),
+      Animated.timing(heartScale, { toValue: 0.6, duration: 80, useNativeDriver: USE_NATIVE }),
+      Animated.spring(heartScale, { toValue: 1, tension: 300, friction: 7, useNativeDriver: USE_NATIVE }),
     ]).start();
     onLike(item.id, item.liked);
   }
 
-  const captionLines = item.content ? item.content.split("\n").length : 0;
-  const showExpand = captionLines > 2 || (item.content && item.content.length > 100);
+  const showExpand = item.content && (item.content.split("\n").length > 2 || item.content.length > 100);
 
   return (
-    <View style={[vs.item, { width: screenW, height: screenH }]}>
-      <TouchableWithoutFeedback onPress={handleTap}>
-        <View style={StyleSheet.absoluteFill}>
-          <Video
-            ref={videoRef}
-            source={{ uri: item.video_url }}
-            style={StyleSheet.absoluteFill}
-            resizeMode={ResizeMode.CONTAIN}
-            shouldPlay={isActive && !paused}
-            isLooping
-            isMuted={muted}
-            onPlaybackStatusUpdate={onPlaybackStatus}
-          />
-        </View>
-      </TouchableWithoutFeedback>
+    <View style={[vStyles.item, { width: screenW, height: screenH }]}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={handleTap}>
+        <Video
+          ref={videoRef}
+          source={{ uri: item.video_url }}
+          style={StyleSheet.absoluteFill}
+          resizeMode={ResizeMode.CONTAIN}
+          shouldPlay={isActive && !paused}
+          isLooping
+          isMuted={muted}
+          onPlaybackStatusUpdate={onPlaybackStatus}
+        />
+      </Pressable>
 
       {buffering && isActive && (
-        <View style={vs.bufferOverlay} pointerEvents="none">
+        <View style={[vStyles.bufferOverlay, { pointerEvents: "none" as any }]}>
           <ActivityIndicator color="rgba(255,255,255,0.7)" size="small" />
         </View>
       )}
 
       {paused && !buffering && (
-        <View style={vs.pauseOverlay} pointerEvents="none">
-          <View style={vs.pauseCircle}>
+        <View style={[vStyles.pauseOverlay, { pointerEvents: "none" as any }]}>
+          <View style={vStyles.pauseCircle}>
             <Ionicons name="play" size={32} color="#fff" style={{ marginLeft: 3 }} />
           </View>
         </View>
       )}
 
       <Animated.View
-        style={[vs.doubleTapHeart, {
+        style={[vStyles.doubleTapHeart, {
+          pointerEvents: "none" as any,
           opacity: doubleTapHeart,
           transform: [{
             scale: doubleTapHeart.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.3, 1.3, 1] }),
           }],
         }]}
-        pointerEvents="none"
       >
         <Ionicons name="heart" size={90} color="#FF3B30" />
       </Animated.View>
 
-      <View style={vs.gradientBottom} pointerEvents="none" />
-      <View style={vs.gradientTop} pointerEvents="none" />
+      <GradientOverlay position="bottom" height={360} />
+      <GradientOverlay position="top" height={120} />
 
-      <View style={[vs.bottomArea, { bottom: insets.bottom + 20 }]}>
+      <View style={[vStyles.bottomArea, { bottom: insets.bottom + 20 }]}>
         <TouchableOpacity
           onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}
-          style={vs.authorRow}
+          style={vStyles.authorRow}
         >
-          <View style={vs.avatarWrap}>
+          <View style={vStyles.avatarWrap}>
             <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={40} />
           </View>
-          <View style={vs.authorInfo}>
-            <Text style={vs.authorHandle}>@{item.profile.handle}</Text>
-            <Text style={vs.authorName}>{item.profile.display_name}</Text>
+          <View style={vStyles.authorInfo}>
+            <Text style={vStyles.authorHandle}>@{item.profile.handle}</Text>
+            <Text style={vStyles.authorName}>{item.profile.display_name}</Text>
           </View>
         </TouchableOpacity>
 
@@ -429,33 +456,33 @@ function VideoItem({
             onPress={() => showExpand && setExpanded((e) => !e)}
             disabled={!showExpand}
           >
-            <Text style={vs.caption} numberOfLines={expanded ? undefined : 2}>
+            <Text style={vStyles.caption} numberOfLines={expanded ? undefined : 2}>
               {item.content}
             </Text>
             {showExpand && !expanded && (
-              <Text style={vs.seeMore}>more</Text>
+              <Text style={vStyles.seeMore}>more</Text>
             )}
           </TouchableOpacity>
         )}
 
         {item.view_count > 0 && (
-          <View style={vs.viewRow}>
+          <View style={vStyles.viewRow}>
             <Ionicons name="eye-outline" size={13} color="rgba(255,255,255,0.4)" />
-            <Text style={vs.viewText}>{formatCount(item.view_count)} views</Text>
+            <Text style={vStyles.viewText}>{formatCount(item.view_count)} views</Text>
           </View>
         )}
       </View>
 
-      <View style={[vs.rightCol, { bottom: insets.bottom + 28 }]}>
-        <View style={vs.rightAvatarContainer}>
-          <View style={vs.rightAvatarWrap}>
+      <View style={[vStyles.rightCol, { bottom: insets.bottom + 28 }]}>
+        <View style={vStyles.rightAvatarContainer}>
+          <View style={vStyles.rightAvatarWrap}>
             <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}>
               <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={44} />
             </TouchableOpacity>
           </View>
           {!isSelf && (
             <TouchableOpacity
-              style={[vs.followBadge, isFollowing && vs.followBadgeActive]}
+              style={[vStyles.followBadge, isFollowing && vStyles.followBadgeActive]}
               onPress={() => onFollow(item.author_id, isFollowing)}
               hitSlop={6}
             >
@@ -464,26 +491,26 @@ function VideoItem({
           )}
         </View>
 
-        <Animated.View style={[vs.actionItem, { transform: [{ scale: heartScale }] }]}>
-          <TouchableOpacity onPress={handleLike} hitSlop={10} style={vs.actionBtn}>
+        <Animated.View style={[vStyles.actionItem, { transform: [{ scale: heartScale }] }]}>
+          <TouchableOpacity onPress={handleLike} hitSlop={10} style={vStyles.actionBtn}>
             <Ionicons
               name={item.liked ? "heart" : "heart-outline"}
               size={28}
               color={item.liked ? "#FF3B30" : "#fff"}
             />
           </TouchableOpacity>
-          <Text style={vs.actionLabel}>{formatCount(item.likeCount)}</Text>
+          <Text style={vStyles.actionLabel}>{formatCount(item.likeCount)}</Text>
         </Animated.View>
 
-        <View style={vs.actionItem}>
-          <TouchableOpacity onPress={() => onOpenComments(item.id)} hitSlop={10} style={vs.actionBtn}>
+        <View style={vStyles.actionItem}>
+          <TouchableOpacity onPress={() => onOpenComments(item.id)} hitSlop={10} style={vStyles.actionBtn}>
             <Ionicons name="chatbubble-ellipses" size={26} color="#fff" />
           </TouchableOpacity>
-          <Text style={vs.actionLabel}>{formatCount(item.replyCount)}</Text>
+          <Text style={vStyles.actionLabel}>{formatCount(item.replyCount)}</Text>
         </View>
 
-        <View style={vs.actionItem}>
-          <TouchableOpacity onPress={() => onBookmark(item.id, item.bookmarked)} hitSlop={10} style={vs.actionBtn}>
+        <View style={vStyles.actionItem}>
+          <TouchableOpacity onPress={() => onBookmark(item.id, item.bookmarked)} hitSlop={10} style={vStyles.actionBtn}>
             <Ionicons
               name={item.bookmarked ? "bookmark" : "bookmark-outline"}
               size={26}
@@ -492,47 +519,26 @@ function VideoItem({
           </TouchableOpacity>
         </View>
 
-        <View style={vs.actionItem}>
-          <TouchableOpacity onPress={() => onShare(item)} hitSlop={10} style={vs.actionBtn}>
+        <View style={vStyles.actionItem}>
+          <TouchableOpacity onPress={() => onShare(item)} hitSlop={10} style={vStyles.actionBtn}>
             <Ionicons name="share-social-outline" size={26} color="#fff" />
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity onPress={() => setMuted((m) => !m)} hitSlop={10} style={vs.muteBtn}>
+        <TouchableOpacity onPress={() => setMuted((m) => !m)} hitSlop={10} style={vStyles.muteBtn}>
           <Ionicons name={muted ? "volume-mute" : "volume-high-outline"} size={18} color="#fff" />
         </TouchableOpacity>
       </View>
 
-      <View style={[vs.progressBar, { bottom: insets.bottom > 0 ? insets.bottom : 0 }]}>
-        <View style={[vs.progressFill, { width: `${progress * 100}%` }]} />
+      <View style={[vStyles.progressBar, { bottom: insets.bottom > 0 ? insets.bottom : 0 }]}>
+        <View style={[vStyles.progressFill, { width: `${progress * 100}%` }]} />
       </View>
     </View>
   );
 }
 
-const vs = StyleSheet.create({
+const vStyles = StyleSheet.create({
   item: { backgroundColor: "#000" },
-
-  gradientBottom: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 360,
-    ...(Platform.OS === "web"
-      ? { backgroundImage: "linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.3) 40%, transparent 100%)" }
-      : { backgroundColor: "transparent" }),
-  } as any,
-  gradientTop: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 120,
-    ...(Platform.OS === "web"
-      ? { backgroundImage: "linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 100%)" }
-      : { backgroundColor: "transparent" }),
-  } as any,
 
   bufferOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
   pauseOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
@@ -570,22 +576,19 @@ const vs = StyleSheet.create({
     color: "#fff",
     fontSize: 15,
     fontFamily: "Inter_700Bold",
-    ...(Platform.OS === "web" ? { textShadow: "0 1px 4px rgba(0,0,0,0.5)" } : {}),
-  } as any,
+  },
   authorName: {
     color: "rgba(255,255,255,0.65)",
     fontSize: 12,
     fontFamily: "Inter_400Regular",
     marginTop: 1,
-    ...(Platform.OS === "web" ? { textShadow: "0 1px 3px rgba(0,0,0,0.5)" } : {}),
-  } as any,
+  },
   caption: {
     color: "rgba(255,255,255,0.92)",
     fontSize: 13,
     fontFamily: "Inter_400Regular",
     lineHeight: 19,
-    ...(Platform.OS === "web" ? { textShadow: "0 1px 3px rgba(0,0,0,0.4)" } : {}),
-  } as any,
+  },
   seeMore: {
     color: "rgba(255,255,255,0.5)",
     fontSize: 13,
@@ -621,8 +624,7 @@ const vs = StyleSheet.create({
     color: "#fff",
     fontSize: 11,
     fontFamily: "Inter_600SemiBold",
-    ...(Platform.OS === "web" ? { textShadow: "0 1px 2px rgba(0,0,0,0.5)" } : {}),
-  } as any,
+  },
 
   muteBtn: {
     width: 34,
@@ -665,11 +667,14 @@ export default function VideoPlayerScreen() {
   const tabAnim = useRef(new Animated.Value(0)).current;
 
   function switchTab(tab: "for_you" | "following") {
+    if (tab === videoTab) return;
     if (tab === "following" && !user) {
       router.push("/(auth)/login");
       return;
     }
     Animated.timing(tabAnim, { toValue: tab === "following" ? 1 : 0, duration: 200, useNativeDriver: false }).start();
+    initialScrollDone.current = false;
+    setActiveIndex(0);
     setVideoTab(tab);
   }
 
@@ -844,7 +849,7 @@ export default function VideoPlayerScreen() {
 
   if (loading) {
     return (
-      <View style={ms.center}>
+      <View style={mStyles.center}>
         <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
         <ActivityIndicator color="#fff" size="large" />
       </View>
@@ -852,37 +857,37 @@ export default function VideoPlayerScreen() {
   }
 
   return (
-    <View style={ms.root}>
+    <View style={mStyles.root}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      <View style={[ms.headerRow, { paddingTop: insets.top + 6 }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={ms.headerSide}>
+      <View style={[mStyles.headerRow, { paddingTop: insets.top + 6 }]}>
+        <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={mStyles.headerSide}>
           <Ionicons name="arrow-back" size={22} color="#fff" />
         </TouchableOpacity>
 
-        <View style={ms.tabRow}>
-          <TouchableOpacity onPress={() => switchTab("for_you")} style={ms.tabBtn}>
-            <Text style={[ms.tabText, videoTab === "for_you" && ms.tabTextActive]}>For You</Text>
+        <View style={mStyles.tabRow}>
+          <TouchableOpacity onPress={() => switchTab("for_you")} style={mStyles.tabBtn}>
+            <Text style={[mStyles.tabText, videoTab === "for_you" && mStyles.tabTextActive]}>For You</Text>
           </TouchableOpacity>
-          <View style={ms.tabDivider} />
-          <TouchableOpacity onPress={() => switchTab("following")} style={ms.tabBtn}>
-            <Text style={[ms.tabText, videoTab === "following" && ms.tabTextActive]}>Following</Text>
+          <View style={mStyles.tabDivider} />
+          <TouchableOpacity onPress={() => switchTab("following")} style={mStyles.tabBtn}>
+            <Text style={[mStyles.tabText, videoTab === "following" && mStyles.tabTextActive]}>Following</Text>
           </TouchableOpacity>
-          <Animated.View style={[ms.tabIndicator, { left: indicatorLeft, transform: [{ translateX: -14 }] }]} />
+          <Animated.View style={[mStyles.tabIndicator, { left: indicatorLeft, transform: [{ translateX: -14 }] }]} />
         </View>
 
-        <TouchableOpacity hitSlop={12} style={ms.headerSide} onPress={() => router.push("/search" as any)}>
+        <TouchableOpacity hitSlop={12} style={mStyles.headerSide} onPress={() => router.push("/search" as any)}>
           <Ionicons name="search-outline" size={20} color="#fff" />
         </TouchableOpacity>
       </View>
 
       {videos.length === 0 ? (
-        <View style={ms.emptyState}>
-          <View style={ms.emptyIcon}>
+        <View style={mStyles.emptyState}>
+          <View style={mStyles.emptyIcon}>
             <Ionicons name="videocam-outline" size={44} color="rgba(255,255,255,0.25)" />
           </View>
-          <Text style={ms.emptyTitle}>No videos yet</Text>
-          <Text style={ms.emptySubtitle}>
+          <Text style={mStyles.emptyTitle}>No videos yet</Text>
+          <Text style={mStyles.emptySubtitle}>
             {videoTab === "following" ? "Follow creators to see their videos here" : "Videos will appear here soon"}
           </Text>
         </View>
@@ -912,6 +917,8 @@ export default function VideoPlayerScreen() {
           viewabilityConfig={viewabilityConfig}
           getItemLayout={(_, index) => ({ length: SCREEN_H, offset: SCREEN_H * index, index })}
           decelerationRate="fast"
+          snapToAlignment="start"
+          snapToInterval={SCREEN_H}
           onScrollToIndexFailed={(info) => {
             setTimeout(() => {
               listRef.current?.scrollToIndex({ index: info.index, animated: false });
@@ -930,7 +937,7 @@ export default function VideoPlayerScreen() {
   );
 }
 
-const ms = StyleSheet.create({
+const mStyles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: "#000",
@@ -959,12 +966,7 @@ const ms = StyleSheet.create({
   tabRow: { flex: 1, flexDirection: "row", justifyContent: "center", alignItems: "center", position: "relative" },
   tabBtn: { paddingVertical: 8, paddingHorizontal: 14 },
   tabDivider: { width: 1, height: 14, backgroundColor: "rgba(255,255,255,0.2)" },
-  tabText: {
-    color: "rgba(255,255,255,0.5)",
-    fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
-    ...(Platform.OS === "web" ? { textShadow: "0 1px 3px rgba(0,0,0,0.5)" } : {}),
-  } as any,
+  tabText: { color: "rgba(255,255,255,0.5)", fontSize: 16, fontFamily: "Inter_600SemiBold" },
   tabTextActive: { color: "#fff", fontSize: 17, fontFamily: "Inter_700Bold" },
   tabIndicator: {
     position: "absolute",
