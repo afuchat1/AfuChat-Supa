@@ -156,6 +156,18 @@ export default function RootLayout() {
   });
 
   const [showSplash, setShowSplash] = useState(true);
+  const splashDismissed = useRef(false);
+  const dismissSplash = useCallback(() => {
+    if (!splashDismissed.current) {
+      splashDismissed.current = true;
+      setShowSplash(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(dismissSplash, 5000);
+    return () => clearTimeout(t);
+  }, []);
 
   const [alertState, setAlertState] = useState<{
     visible: boolean;
@@ -245,7 +257,7 @@ export default function RootLayout() {
           </GestureHandlerRootView>
         </QueryClientProvider>
         {showSplash && (
-          <SplashOverlay onFinish={() => setShowSplash(false)} />
+          <SplashOverlay onFinish={dismissSplash} />
         )}
       </ErrorBoundary>
     </SafeAreaProvider>

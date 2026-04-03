@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import {
   Image,
   Platform,
-  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -15,27 +14,40 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import type { DesktopSection } from "./DesktopWrapper";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
+const RAIL_WIDTH = 64;
+
 type NavItem = {
-  key: string;
+  key: DesktopSection;
   icon: React.ComponentProps<typeof Ionicons>["name"];
   iconActive: React.ComponentProps<typeof Ionicons>["name"];
   label: string;
-  badge?: number;
-  section?: string;
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { key: "index", icon: "chatbubbles-outline", iconActive: "chatbubbles", label: "Chats", section: "main" },
-  { key: "discover", icon: "compass-outline", iconActive: "compass", label: "Discover", section: "main" },
-  { key: "search", icon: "search-outline", iconActive: "search", label: "Search", section: "main" },
-  { key: "notifications", icon: "notifications-outline", iconActive: "notifications", label: "Notifications", section: "main" },
-  { key: "wallet", icon: "wallet-outline", iconActive: "wallet", label: "Wallet", section: "finance" },
+  { key: "chats",         icon: "chatbubble-ellipses-outline", iconActive: "chatbubble-ellipses", label: "Chats" },
+  { key: "discover",      icon: "compass-outline",              iconActive: "compass",             label: "Discover" },
+  { key: "search",        icon: "search-outline",               iconActive: "search",              label: "Search" },
+  { key: "notifications", icon: "notifications-outline",        iconActive: "notifications",        label: "Notifications" },
+  { key: "wallet",        icon: "wallet-outline",               iconActive: "wallet",              label: "Wallet" },
 ];
 
-function NavButton({
+function Tooltip({ label, visible }: { label: string; visible: boolean }) {
+  if (!visible) return null;
+  return (
+    <View
+      style={styles.tooltip}
+      pointerEvents="none"
+    >
+      <Text style={styles.tooltipText}>{label}</Text>
+    </View>
+  );
+}
+
+function RailButton({
   item,
   isActive,
   onPress,
@@ -48,121 +60,108 @@ function NavButton({
 }) {
   const [hovered, setHovered] = useState(false);
 
-  const hoverProps = Platform.OS === "web"
-    ? {
-        // @ts-ignore
-        onMouseEnter: () => setHovered(true),
-        // @ts-ignore
-        onMouseLeave: () => setHovered(false),
-      }
-    : {};
+  const hoverProps =
+    Platform.OS === "web"
+      ? {
+          onMouseEnter: () => setHovered(true),
+          onMouseLeave: () => setHovered(false),
+        }
+      : {};
 
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.8}
-      style={[
-        styles.navItem,
-        isActive && { backgroundColor: colors.accent + "15" },
-        !isActive && hovered && { backgroundColor: colors.backgroundSecondary },
-      ]}
-      {...hoverProps}
-    >
-      <View style={[
-        styles.navIconWrap,
-        isActive && { backgroundColor: colors.accent + "20" },
-      ]}>
+    <View style={{ position: "relative" }}>
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.75}
+        style={[
+          styles.railBtn,
+          isActive && { backgroundColor: colors.accent + "18" },
+          !isActive && hovered && { backgroundColor: colors.backgroundSecondary + "88" },
+        ]}
+        {...(hoverProps as any)}
+      >
+        {isActive && (
+          <View style={[styles.activeBar, { backgroundColor: colors.accent }]} />
+        )}
         <Ionicons
           name={isActive ? item.iconActive : item.icon}
-          size={20}
-          color={isActive ? colors.accent : colors.textSecondary}
+          size={22}
+          color={isActive ? colors.accent : colors.textMuted}
         />
-      </View>
-      <Text
-        style={[
-          styles.navLabel,
-          { color: isActive ? colors.accent : colors.text },
-          isActive && styles.navLabelActive,
-        ]}
-      >
-        {item.label}
-      </Text>
-      {item.badge != null && item.badge > 0 && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{item.badge > 99 ? "99+" : item.badge}</Text>
-        </View>
-      )}
-      {isActive && <View style={[styles.activeBar, { backgroundColor: colors.accent }]} />}
-    </TouchableOpacity>
+      </TouchableOpacity>
+      {hovered && <Tooltip label={item.label} visible />}
+    </View>
   );
 }
 
-function SectionLabel({ label, colors }: { label: string; colors: any }) {
-  return (
-    <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>{label}</Text>
-  );
-}
-
-function UtilBtn({
+function RailIconBtn({
   icon,
-  onPress,
   label,
+  onPress,
   color,
   colors,
 }: {
   icon: React.ComponentProps<typeof Ionicons>["name"];
-  onPress: () => void;
   label: string;
+  onPress: () => void;
   color?: string;
   colors: any;
 }) {
   const [hovered, setHovered] = useState(false);
-  const hoverProps = Platform.OS === "web"
-    ? {
-        // @ts-ignore
-        onMouseEnter: () => setHovered(true),
-        // @ts-ignore
-        onMouseLeave: () => setHovered(false),
-      }
-    : {};
+  const hoverProps =
+    Platform.OS === "web"
+      ? {
+          onMouseEnter: () => setHovered(true),
+          onMouseLeave: () => setHovered(false),
+        }
+      : {};
 
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.75}
-      style={[styles.utilBtn, hovered && { backgroundColor: colors.backgroundSecondary }]}
-      {...hoverProps}
-    >
-      <Ionicons name={icon} size={17} color={color || colors.textSecondary} />
-      <Text style={[styles.utilLabel, { color: color || colors.textMuted }]}>{label}</Text>
-    </TouchableOpacity>
+    <View style={{ position: "relative" }}>
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.75}
+        style={[
+          styles.railBtn,
+          hovered && { backgroundColor: colors.backgroundSecondary + "88" },
+        ]}
+        {...(hoverProps as any)}
+      >
+        <Ionicons name={icon} size={20} color={color || colors.textMuted} />
+      </TouchableOpacity>
+      {hovered && <Tooltip label={label} visible />}
+    </View>
   );
 }
 
 type Props = {
-  activeTab: string;
-  onTabPress: (tab: string) => void;
+  activeSection: DesktopSection;
+  onSectionChange: (s: DesktopSection) => void;
 };
 
-export function DesktopSidebar({ activeTab, onTabPress }: Props) {
+export function DesktopIconRail({ activeSection, onSectionChange }: Props) {
   const { profile, signOut } = useAuth();
   const { colors, isDark, themeMode, setThemeMode } = useTheme();
+  const [profileHovered, setProfileHovered] = useState(false);
 
   function cycleTheme() {
-    const next = themeMode === "system" ? "dark" : themeMode === "dark" ? "light" : "system";
+    const next =
+      themeMode === "system" ? "dark" : themeMode === "dark" ? "light" : "system";
     setThemeMode(next);
   }
 
-  const themeIcon = themeMode === "dark"
-    ? ("moon" as const)
-    : themeMode === "light"
+  const themeIcon =
+    themeMode === "dark"
+      ? ("moon" as const)
+      : themeMode === "light"
       ? ("sunny" as const)
       : ("phone-portrait-outline" as const);
 
-  const themeLabel = themeMode === "dark" ? "Dark" : themeMode === "light" ? "Light" : "System";
+  const themeLabel =
+    themeMode === "dark" ? "Dark mode" : themeMode === "light" ? "Light mode" : "System";
 
   async function handleSignOut() {
-    showAlert("Sign out?", "You'll need to log back in to access AfuChat.", [
+    showAlert("Sign out?", "You'll need to log back in.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Sign Out",
@@ -175,280 +174,180 @@ export function DesktopSidebar({ activeTab, onTabPress }: Props) {
     ]);
   }
 
-  const mainItems = NAV_ITEMS.filter((i) => i.section === "main");
-  const financeItems = NAV_ITEMS.filter((i) => i.section === "finance");
-
   return (
-    <View style={[styles.container, { backgroundColor: isDark ? "#0e0e10" : "#f9fafb", borderRightColor: colors.border }]}>
-      <View style={styles.inner}>
-        {/* Logo */}
-        <View style={styles.logoRow}>
-          <View style={[styles.logoIconWrap, { backgroundColor: colors.accent }]}>
-            <Image source={afuSymbol} style={styles.logoIcon} resizeMode="contain" />
-          </View>
-          <View>
-            <Text style={[styles.logoText, { color: colors.text }]}>AfuChat</Text>
-            <Text style={[styles.logoSub, { color: colors.textMuted }]}>Stay connected</Text>
-          </View>
+    <View
+      style={[
+        styles.rail,
+        {
+          backgroundColor: isDark ? "#0a0a0d" : "#f4f5f7",
+          borderRightColor: colors.border,
+        },
+      ]}
+    >
+      {/* Logo */}
+      <View style={styles.logoWrap}>
+        <View style={[styles.logoCircle, { backgroundColor: colors.accent }]}>
+          <Image source={afuSymbol} style={styles.logoImg} resizeMode="contain" />
         </View>
+      </View>
 
-        {/* New Chat button */}
-        <TouchableOpacity
-          style={[styles.composeBtn, { backgroundColor: colors.accent }]}
-          onPress={() => onTabPress("index")}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="create-outline" size={17} color="#fff" />
-          <Text style={styles.composeBtnText}>New Chat</Text>
-        </TouchableOpacity>
+      <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
 
-        {/* Main nav */}
-        <View style={[styles.navSection, { marginTop: 20 }]}>
-          <SectionLabel label="NAVIGATION" colors={colors} />
-          {mainItems.map((item) => (
-            <NavButton
-              key={item.key}
-              item={item}
-              isActive={activeTab === item.key}
-              onPress={() => onTabPress(item.key)}
-              colors={colors}
+      {/* Main nav */}
+      <View style={styles.navGroup}>
+        {NAV_ITEMS.map((item) => (
+          <RailButton
+            key={item.key}
+            item={item}
+            isActive={activeSection === item.key}
+            onPress={() => onSectionChange(item.key)}
+            colors={colors}
+          />
+        ))}
+      </View>
+
+      {/* Spacer */}
+      <View style={{ flex: 1 }} />
+
+      {/* Bottom utilities */}
+      <View style={styles.bottomGroup}>
+        <RailIconBtn
+          icon={themeIcon}
+          label={themeLabel}
+          onPress={cycleTheme}
+          colors={colors}
+        />
+        <RailIconBtn
+          icon="settings-outline"
+          label="Settings"
+          onPress={() => router.push("/settings" as any)}
+          colors={colors}
+        />
+        <RailIconBtn
+          icon="log-out-outline"
+          label="Sign out"
+          onPress={handleSignOut}
+          color="#FF4444"
+          colors={colors}
+        />
+
+        <View style={[styles.dividerLine, { backgroundColor: colors.border, marginVertical: 6 }]} />
+
+        {/* Profile avatar */}
+        <View style={{ position: "relative" }}>
+          <TouchableOpacity
+            onPress={() => onSectionChange("profile")}
+            activeOpacity={0.8}
+            style={[
+              styles.profileBtn,
+              activeSection === "profile" && {
+                backgroundColor: colors.accent + "18",
+              },
+            ]}
+            {...({ onMouseEnter: () => setProfileHovered(true), onMouseLeave: () => setProfileHovered(false) } as any)}
+          >
+            {activeSection === "profile" && (
+              <View style={[styles.activeBar, { backgroundColor: colors.accent }]} />
+            )}
+            <Avatar
+              uri={profile?.avatar_url || null}
+              name={profile?.display_name || "Me"}
+              size={34}
             />
-          ))}
-        </View>
-
-        {/* Finance nav */}
-        <View style={[styles.navSection, { marginTop: 12 }]}>
-          <SectionLabel label="FINANCE" colors={colors} />
-          {financeItems.map((item) => (
-            <NavButton
-              key={item.key}
-              item={item}
-              isActive={activeTab === item.key}
-              onPress={() => onTabPress(item.key)}
-              colors={colors}
-            />
-          ))}
-        </View>
-
-        {/* Bottom section */}
-        <View style={styles.bottomSection}>
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-          {/* Profile card */}
-          {profile && (
-            <TouchableOpacity
-              style={[styles.profileCard, {
-                backgroundColor: activeTab === "me"
-                  ? colors.accent + "12"
-                  : colors.backgroundSecondary,
-                borderColor: activeTab === "me" ? colors.accent + "30" : "transparent",
-              }]}
-              onPress={() => onTabPress("me")}
-              activeOpacity={0.8}
-            >
-              <Avatar uri={profile.avatar_url} name={profile.display_name} size={36} />
-              <View style={styles.profileInfo}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                  <Text style={[styles.profileName, { color: colors.text }]} numberOfLines={1}>
-                    {profile.display_name || "User"}
-                  </Text>
-                  {profile.is_verified && (
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={13}
-                      color={profile.is_organization_verified ? Colors.gold : colors.accent}
-                    />
-                  )}
-                </View>
-                <Text style={[styles.profileHandle, { color: colors.textMuted }]} numberOfLines={1}>
-                  @{profile.handle || "handle"}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
-            </TouchableOpacity>
-          )}
-
-          {/* Util buttons */}
-          <View style={styles.utilRow}>
-            <UtilBtn icon={themeIcon} onPress={cycleTheme} label={themeLabel} colors={colors} />
-            <UtilBtn
-              icon="settings-outline"
-              onPress={() => onTabPress("me")}
-              label="Settings"
-              colors={colors}
-            />
-            <UtilBtn
-              icon="log-out-outline"
-              onPress={handleSignOut}
-              label="Sign out"
-              color="#FF3B30"
-              colors={colors}
-            />
-          </View>
+          </TouchableOpacity>
+          {profileHovered && <Tooltip label={profile?.display_name || "Profile"} visible />}
         </View>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    width: 280,
-    borderRightWidth: StyleSheet.hairlineWidth,
+const styles = StyleSheet.create<any>({
+  rail: {
+    width: RAIL_WIDTH,
     flexShrink: 0,
-  },
-  inner: {
-    flex: 1,
-    paddingHorizontal: 14,
-    paddingTop: 20,
-    paddingBottom: 16,
-  },
-  logoRow: {
-    flexDirection: "row",
+    flexDirection: "column",
     alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 4,
-    paddingBottom: 18,
+    paddingVertical: 12,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    gap: 0,
   },
-  logoIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 11,
+  logoWrap: {
+    width: RAIL_WIDTH,
+    alignItems: "center",
+    paddingBottom: 12,
+  },
+  logoCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
-  logoIcon: {
-    width: 22,
-    height: 22,
+  logoImg: {
+    width: 20,
+    height: 20,
     tintColor: "#fff",
   },
-  logoText: {
-    fontSize: 17,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: -0.3,
-    lineHeight: 20,
+  dividerLine: {
+    width: 28,
+    height: StyleSheet.hairlineWidth,
+    borderRadius: 1,
+    alignSelf: "center",
+    marginVertical: 2,
   },
-  logoSub: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
+  navGroup: {
+    width: "100%",
+    alignItems: "center",
+    gap: 2,
+    paddingTop: 8,
   },
-  composeBtn: {
-    flexDirection: "row",
+  bottomGroup: {
+    width: "100%",
+    alignItems: "center",
+    gap: 2,
+    paddingBottom: 4,
+  },
+  railBtn: {
+    width: RAIL_WIDTH,
+    height: 46,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    borderRadius: 24,
-    paddingVertical: 11,
-    marginHorizontal: 2,
-  },
-  composeBtnText: {
-    color: "#fff",
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-  },
-  navSection: {
-    gap: 1,
-  },
-  sectionLabel: {
-    fontSize: 10,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: 0.8,
-    paddingHorizontal: 12,
-    paddingBottom: 6,
-    paddingTop: 4,
-  },
-  navItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    borderRadius: 12,
-    gap: 10,
     position: "relative",
     overflow: "hidden",
   },
-  navIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 9,
+  profileBtn: {
+    width: RAIL_WIDTH,
+    height: 50,
     alignItems: "center",
     justifyContent: "center",
-  },
-  navLabel: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: "Inter_500Medium",
-  },
-  navLabelActive: {
-    fontFamily: "Inter_600SemiBold",
+    position: "relative",
+    overflow: "hidden",
   },
   activeBar: {
     position: "absolute",
     left: 0,
-    top: 8,
-    bottom: 8,
+    top: 10,
+    bottom: 10,
     width: 3,
     borderRadius: 2,
-    backgroundColor: Colors.brand,
   },
-  badge: {
-    backgroundColor: "#FF3B30",
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 4,
+  tooltip: {
+    position: "absolute",
+    left: RAIL_WIDTH + 6,
+    top: "50%" as any,
+    transform: [{ translateY: -10 }],
+    backgroundColor: "rgba(0,0,0,0.85)",
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    zIndex: 9999,
+    pointerEvents: "none" as any,
   },
-  badgeText: {
+  tooltipText: {
     color: "#fff",
-    fontSize: 10,
-    fontFamily: "Inter_700Bold",
-  },
-  bottomSection: {
-    marginTop: "auto" as any,
-    gap: 10,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    marginHorizontal: 4,
-    marginBottom: 4,
-  },
-  profileCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderRadius: 12,
-    padding: 10,
-    borderWidth: 1,
-  },
-  profileInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  profileName: {
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-    lineHeight: 17,
-  },
-  profileHandle: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-  },
-  utilRow: {
-    flexDirection: "row",
-    gap: 2,
-  },
-  utilBtn: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 8,
-    borderRadius: 10,
-    gap: 3,
-  },
-  utilLabel: {
-    fontSize: 9,
+    fontSize: 12,
     fontFamily: "Inter_500Medium",
+    whiteSpace: "nowrap" as any,
   },
 });

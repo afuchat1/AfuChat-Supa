@@ -1,108 +1,91 @@
-import React from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Platform, StyleSheet, View, useWindowDimensions } from "react-native";
-import { useSegments, router } from "expo-router";
-import { DesktopSidebar } from "./DesktopSidebar";
-import { DesktopRightPanel } from "./DesktopRightPanel";
+import { useSegments } from "expo-router";
 import { DesktopDetailProvider } from "@/context/DesktopDetailContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
+import { DesktopIconRail } from "./DesktopSidebar";
+import { DesktopChatsSection } from "./desktop/DesktopChatsSection";
+import { DesktopDiscoverSection } from "./desktop/DesktopDiscoverSection";
+import { DesktopNotificationsSection } from "./desktop/DesktopNotificationsSection";
+import { DesktopWalletSection } from "./desktop/DesktopWalletSection";
+import { DesktopSearchSection } from "./desktop/DesktopSearchSection";
+import { DesktopProfileSection } from "./desktop/DesktopProfileSection";
 
-const DESKTOP_BREAKPOINT = 768;
-const SIDEBAR_WIDTH = 280;
-const RIGHT_PANEL_WIDTH = 380;
-const RIGHT_PANEL_BREAKPOINT = 1280;
+const DESKTOP_BREAKPOINT = 900;
 
-type Props = {
-  children: React.ReactNode;
-};
+export type DesktopSection = "chats" | "discover" | "search" | "notifications" | "wallet" | "profile";
+
+function sectionFromSegments(segs: readonly string[]): DesktopSection {
+  const flat = segs.join("/");
+  if (flat.includes("notifications")) return "notifications";
+  if (flat.includes("wallet")) return "wallet";
+  if (flat.includes("discover")) return "discover";
+  if (flat.includes("search")) return "search";
+  if (flat.includes("me")) return "profile";
+  return "chats";
+}
 
 function DesktopShell({ children }: { children: React.ReactNode }) {
   const { colors, isDark } = useTheme();
   const { session } = useAuth();
   const segments = useSegments();
-  const { width } = useWindowDimensions();
 
-  const isLoggedIn = !!session;
+  const [activeSection, setActiveSection] = useState<DesktopSection>(() =>
+    sectionFromSegments(segments)
+  );
 
-  const activeTab = segments.includes("search")
-    ? "search"
-    : segments.includes("discover")
-      ? "discover"
-      : segments.includes("me")
-        ? "me"
-        : segments.includes("notifications")
-          ? "notifications"
-          : segments.includes("wallet")
-            ? "wallet"
-            : "index";
+  const handleSectionChange = useCallback((section: DesktopSection) => {
+    setActiveSection(section);
+  }, []);
 
-  const handleTabPress = (tab: string) => {
-    if (tab === "index") router.replace("/(tabs)");
-    else if (tab === "search") router.replace("/(tabs)/search");
-    else if (tab === "discover") router.replace("/(tabs)/discover");
-    else if (tab === "me") router.replace("/(tabs)/me");
-    else if (tab === "notifications") router.push("/notifications" as any);
-    else if (tab === "wallet") router.push("/wallet" as any);
-  };
-
-  const bg = isDark ? "#0a0a0a" : "#eef0f4";
-  const showRightPanel = isLoggedIn && width >= RIGHT_PANEL_BREAKPOINT;
+  const bg = isDark ? "#070709" : "#eef0f5";
+  const shellBg = isDark ? "#0f0f12" : "#ffffff";
+  const shellShadow = isDark
+    ? "0 0 0 1px rgba(255,255,255,0.04), 0 8px 48px rgba(0,0,0,0.6)"
+    : "0 0 0 1px rgba(0,0,0,0.06), 0 4px 32px rgba(0,0,0,0.07)";
 
   return (
     <View style={[styles.root, { backgroundColor: bg }]}>
       <View
         style={[
-          styles.appShell,
-          {
-            backgroundColor: isDark ? "#111113" : "#ffffff",
-            // @ts-ignore
-            boxShadow: isDark
-              ? "0 0 0 1px rgba(255,255,255,0.05), 0 4px 32px rgba(0,0,0,0.4)"
-              : "0 0 0 1px rgba(0,0,0,0.07), 0 4px 24px rgba(0,0,0,0.08)",
-          },
+          styles.shell,
+          { backgroundColor: shellBg },
+          Platform.OS === "web" && ({ boxShadow: shellShadow } as any),
         ]}
       >
-        {isLoggedIn && (
-          <DesktopSidebar activeTab={activeTab} onTabPress={handleTabPress} />
+        {session && (
+          <DesktopIconRail
+            activeSection={activeSection}
+            onSectionChange={handleSectionChange}
+          />
         )}
 
-        <View
-          style={[
-            styles.centerPanel,
-            {
-              borderRightWidth: showRightPanel ? StyleSheet.hairlineWidth : 0,
-              borderRightColor: colors.border,
-            },
-          ]}
-        >
+        <View style={[styles.mainArea, { borderLeftColor: colors.border }]}>
+          {activeSection === "chats" && <DesktopChatsSection />}
+          {activeSection === "discover" && <DesktopDiscoverSection />}
+          {activeSection === "search" && <DesktopSearchSection />}
+          {activeSection === "notifications" && <DesktopNotificationsSection />}
+          {activeSection === "wallet" && <DesktopWalletSection />}
+          {activeSection === "profile" && <DesktopProfileSection />}
+        </View>
+      </View>
+
+      {Platform.OS === "web" && (
+        <View style={styles.hiddenChildren} aria-hidden>
           {children}
         </View>
-
-        {showRightPanel && (
-          <View
-            style={[
-              styles.rightPanel,
-              { backgroundColor: isDark ? "#0d0d10" : "#f5f7fa", borderLeftColor: colors.border },
-            ]}
-          >
-            <DesktopRightPanel activeTab={activeTab} colors={colors} />
-          </View>
-        )}
-      </View>
+      )}
     </View>
   );
 }
 
-export function DesktopWrapper({ children }: Props) {
+export function DesktopWrapper({ children }: { children: React.ReactNode }) {
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= DESKTOP_BREAKPOINT;
 
   if (!isDesktop) {
-    return (
-      <DesktopDetailProvider>
-        {children}
-      </DesktopDetailProvider>
-    );
+    return <DesktopDetailProvider>{children}</DesktopDetailProvider>;
   }
 
   return (
@@ -118,20 +101,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  appShell: {
+  shell: {
     flex: 1,
     width: "100%" as any,
     maxWidth: 1600,
     flexDirection: "row",
     overflow: "hidden",
   },
-  centerPanel: {
+  mainArea: {
     flex: 1,
-    overflow: "hidden",
-  },
-  rightPanel: {
-    width: RIGHT_PANEL_WIDTH,
+    flexDirection: "row",
     overflow: "hidden",
     borderLeftWidth: StyleSheet.hairlineWidth,
+  },
+  hiddenChildren: {
+    position: "absolute" as any,
+    width: 0,
+    height: 0,
+    overflow: "hidden",
+    opacity: 0,
+    pointerEvents: "none" as any,
   },
 });
