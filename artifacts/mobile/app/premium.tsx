@@ -83,7 +83,7 @@ const TIER_CONFIG: Record<string, {
         items: [
           "Create up to 3 Groups",
           "Create up to 3 Channels",
-          "Post up to 20 Stories per day",
+          "Post up to 5 Stories per day",
         ],
       },
       {
@@ -137,7 +137,7 @@ const TIER_CONFIG: Record<string, {
         items: [
           "Create up to 10 Groups",
           "Create up to 10 Channels",
-          "Post up to 50 Stories per day",
+          "Post up to 15 Stories per day",
           "Creator Studio — Monetise posts",
         ],
       },
@@ -444,7 +444,7 @@ export default function PremiumScreen() {
               {[
                 { icon: "sparkles-outline", text: "10 AfuAI messages / day" },
                 { icon: "people-outline", text: "1 Group · 1 Channel" },
-                { icon: "images-outline", text: "5 Stories / day" },
+                { icon: "images-outline", text: "1 Story / day" },
                 { icon: "wallet-outline", text: "ACoins, XP & Leaderboards" },
               ].map((r, i) => (
                 <View key={i} style={styles.freeRow}>

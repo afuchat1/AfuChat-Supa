@@ -4,7 +4,7 @@ export type DailyFeatureKey = "stories_create" | "afuai_messages";
 export type Tier = "free" | "silver" | "gold" | "platinum";
 
 export const TIER_DAILY_LIMITS: Record<DailyFeatureKey, Record<Tier, number>> = {
-  stories_create: { free: 5, silver: 20, gold: 50, platinum: Infinity },
+  stories_create: { free: 1, silver: 5, gold: 15, platinum: Infinity },
   afuai_messages: { free: 10, silver: 50, gold: 200, platinum: Infinity },
 };
 
