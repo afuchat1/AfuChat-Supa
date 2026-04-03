@@ -17,6 +17,7 @@ import {
   ViewToken,
   useWindowDimensions,
 } from "react-native";
+import { useDataMode } from "@/context/DataModeContext";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -409,6 +410,7 @@ function GradientOverlay({ position, height: h }: { position: "top" | "bottom"; 
 function VideoItem({
   item,
   isActive,
+  isNearActive,
   screenH,
   screenW,
   isFollowing,
@@ -422,6 +424,7 @@ function VideoItem({
 }: {
   item: VideoPost;
   isActive: boolean;
+  isNearActive: boolean;
   screenH: number;
   screenW: number;
   isFollowing: boolean;
@@ -451,9 +454,13 @@ function VideoItem({
       setPaused(false);
       setProgress(0);
       setExpanded(false);
-    } else if (!viewRecorded.current) {
-      viewRecorded.current = true;
-      onRecordView(item.id);
+      // Release buffer and stop network I/O when scrolled away
+      videoRef.current?.unloadAsync().catch(() => {});
+    } else {
+      if (!viewRecorded.current) {
+        viewRecorded.current = true;
+        onRecordView(item.id);
+      }
     }
   }, [isActive]);
 
@@ -500,16 +507,20 @@ function VideoItem({
   return (
     <View style={[vStyles.item, { width: screenW, height: screenH }]}>
       <Pressable style={StyleSheet.absoluteFill} onPress={handleTap}>
-        <Video
-          ref={videoRef}
-          source={{ uri: item.video_url }}
-          style={StyleSheet.absoluteFill}
-          resizeMode={ResizeMode.CONTAIN}
-          shouldPlay={isActive && !paused}
-          isLooping
-          isMuted={false}
-          onPlaybackStatusUpdate={onPlaybackStatus}
-        />
+        {isNearActive ? (
+          <Video
+            ref={videoRef}
+            source={{ uri: item.video_url }}
+            style={StyleSheet.absoluteFill}
+            resizeMode={ResizeMode.CONTAIN}
+            shouldPlay={isActive && !paused}
+            isLooping
+            isMuted={false}
+            onPlaybackStatusUpdate={onPlaybackStatus}
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />
+        )}
       </Pressable>
 
       {buffering && isActive && (
@@ -770,6 +781,7 @@ export default function VideoPlayerScreen() {
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
+  const { isLowData } = useDataMode();
 
   const [videoTab, setVideoTab] = useState<"for_you" | "following">("for_you");
   const [videos, setVideos] = useState<VideoPost[]>([]);
@@ -1073,22 +1085,31 @@ export default function VideoPlayerScreen() {
           ref={listRef}
           data={videos}
           keyExtractor={(v) => v.id}
-          renderItem={({ item, index }) => (
-            <VideoItem
-              item={item}
-              isActive={index === activeIndex}
-              screenH={SCREEN_H}
-              screenW={SCREEN_W}
-              isFollowing={followingSet.has(item.author_id)}
-              isSelf={user?.id === item.author_id}
-              onLike={handleLike}
-              onBookmark={handleBookmark}
-              onOpenComments={setCommentPostId}
-              onShare={handleShare}
-              onFollow={handleFollow}
-              onRecordView={handleRecordView}
-            />
-          )}
+          renderItem={({ item, index }) => {
+            const isActive = index === activeIndex;
+            // On cellular: only mount Video for the active item
+            // On Wi-Fi: also preload the next item in queue
+            const isNearActive = isLowData
+              ? isActive
+              : isActive || index === activeIndex + 1;
+            return (
+              <VideoItem
+                item={item}
+                isActive={isActive}
+                isNearActive={isNearActive}
+                screenH={SCREEN_H}
+                screenW={SCREEN_W}
+                isFollowing={followingSet.has(item.author_id)}
+                isSelf={user?.id === item.author_id}
+                onLike={handleLike}
+                onBookmark={handleBookmark}
+                onOpenComments={setCommentPostId}
+                onShare={handleShare}
+                onFollow={handleFollow}
+                onRecordView={handleRecordView}
+              />
+            );
+          }}
           pagingEnabled
           showsVerticalScrollIndicator={false}
           onViewableItemsChanged={onViewableItemsChanged}
@@ -1097,6 +1118,9 @@ export default function VideoPlayerScreen() {
           decelerationRate="fast"
           snapToAlignment="start"
           snapToInterval={SCREEN_H}
+          windowSize={3}
+          initialNumToRender={1}
+          maxToRenderPerBatch={1}
           onScrollToIndexFailed={(info) => {
             setTimeout(() => {
               listRef.current?.scrollToIndex({ index: info.index, animated: false });
