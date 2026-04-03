@@ -1276,23 +1276,29 @@ export default function ChatScreen() {
         else if (s.delivered_at) deliveredSet.add(s.message_id);
       }
 
-      const mapped = data.map((m: any) => ({
-        id: m.id,
-        chat_id: m.chat_id,
-        sender_id: m.sender_id,
-        encrypted_content: m.encrypted_content,
-        sent_at: m.sent_at,
-        reply_to_message_id: m.reply_to_message_id,
-        attachment_url: m.attachment_url,
-        attachment_type: m.attachment_type,
-        edited_at: m.edited_at,
-        sender: m.profiles,
-        reactions: reactionMap[m.id] || [],
-        status: m.sender_id === user.id
-          ? (readSet.has(m.id) ? "read" : deliveredSet.has(m.id) ? "delivered" : "sent")
-          : undefined,
-        _isAi: m.sender_id === AFUAI_BOT_ID || undefined,
-      }));
+      const mapped = data.map((m: any) => {
+        const isBot = m.sender_id === AFUAI_BOT_ID;
+        const aiParsed = isBot ? parseAfuAiTags(m.encrypted_content || "") : null;
+        return {
+          id: m.id,
+          chat_id: m.chat_id,
+          sender_id: m.sender_id,
+          encrypted_content: aiParsed ? (aiParsed.text || m.encrypted_content) : m.encrypted_content,
+          sent_at: m.sent_at,
+          reply_to_message_id: m.reply_to_message_id,
+          attachment_url: m.attachment_url,
+          attachment_type: m.attachment_type,
+          edited_at: m.edited_at,
+          sender: m.profiles,
+          reactions: reactionMap[m.id] || [],
+          status: m.sender_id === user.id
+            ? (readSet.has(m.id) ? "read" : deliveredSet.has(m.id) ? "delivered" : "sent")
+            : undefined,
+          _isAi: isBot || undefined,
+          _aiActions: aiParsed && aiParsed.actions.length > 0 ? aiParsed.actions : undefined,
+          _aiInvoices: aiParsed && aiParsed.invoices.length > 0 ? aiParsed.invoices : undefined,
+        };
+      });
 
       setMessages((prev) => {
         const localOnly = prev.filter(
@@ -1814,7 +1820,7 @@ Rules:
       try {
         const { data: rpcId } = await supabase.rpc("insert_afuai_message", {
           p_chat_id: chatId,
-          p_content: cleanText,
+          p_content: rawReply,
         });
         if (typeof rpcId === "string") savedId = rpcId;
       } catch (_) {}
