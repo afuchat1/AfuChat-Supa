@@ -165,7 +165,7 @@ function XpLevelBar({ xp }: { xp: number }) {
           <View style={[styles.xpTrack, { backgroundColor: colors.backgroundTertiary }]}>
             <Animated.View style={[styles.xpFill, fillStyle]}>
               <LinearGradient
-                colors={[accent, "#AF52DE"]}
+                colors={[colors.accent, "#AF52DE"]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={StyleSheet.absoluteFill}
