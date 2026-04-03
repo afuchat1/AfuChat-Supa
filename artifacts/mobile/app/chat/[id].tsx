@@ -512,7 +512,7 @@ function AiConfirmationCard({ exec: ea, colors: c, onConfirm, onCancel }: { exec
 
 const SWIPE_THRESHOLD = 60;
 
-function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, replyPreview, onTapEnvelope, onTapGift, onImageTap, isPremiumSender }: {
+function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, replyPreview, onTapEnvelope, onTapGift, onImageTap, isPremiumSender, onConfirmExec, onCancelExec, onSuggestionTap }: {
   msg: Message;
   isMe: boolean;
   showTail: boolean;
@@ -524,6 +524,9 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   onTapGift?: (msg: Message) => void;
   onImageTap?: (images: string[], index: number) => void;
   isPremiumSender?: boolean;
+  onConfirmExec?: (msgId: string) => void;
+  onCancelExec?: (msgId: string) => void;
+  onSuggestionTap?: (text: string) => void;
 }) {
   const { colors } = useTheme();
   const BRAND = colors.accent;
@@ -686,6 +689,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   });
 
   return (
+    <View>
     <View {...swipePan.panHandlers} style={[st.msgRow, isMe ? st.msgRowMe : st.msgRowOther]}>
       {!isMe && (
         <Animated.View style={[st.swipeReplyIcon, { opacity: replyIconOpacity, left: 4 }]}>
@@ -778,8 +782,24 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
             </TouchableOpacity>
           ) : (
             <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
-              <RichText style={[st.bubbleText, { color: textColor, fontSize: chatPrefsLocal.font_size, lineHeight: chatPrefsLocal.font_size + 5 }]} linkColor={isMe ? "#FFFFFF" : "#00BCD4"}>{displayText}</RichText>
+              {msg._isAi
+                ? <AiRichContent content={displayText} colors={colors} isUser={isMe} />
+                : <RichText style={[st.bubbleText, { color: textColor, fontSize: chatPrefsLocal.font_size, lineHeight: chatPrefsLocal.font_size + 5 }]} linkColor={isMe ? "#FFFFFF" : "#00BCD4"}>{displayText}</RichText>
+              }
             </TouchableOpacity>
+          )}
+
+          {/* AI invoice cards */}
+          {msg._aiInvoices?.map((inv, i) => <AiInvoiceCard key={i} invoice={inv} colors={colors} />)}
+
+          {/* AI action confirmation card */}
+          {msg._aiExecAction && (
+            <AiConfirmationCard
+              exec={msg._aiExecAction}
+              colors={colors}
+              onConfirm={() => onConfirmExec?.(msg.id)}
+              onCancel={() => onCancelExec?.(msg.id)}
+            />
           )}
 
           {/* Translate chip — shown on incoming messages when translation is enabled */}
@@ -867,6 +887,35 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
           <Ionicons name="arrow-undo" size={18} color={BRAND} />
         </Animated.View>
       )}
+    </View>
+    {msg._isAi && ((msg._aiActions?.length ?? 0) > 0 || (msg._aiSuggestions?.length ?? 0) > 0) && (
+      <View style={{ paddingLeft: 10, paddingRight: 10, marginTop: 2 }}>
+        {msg._aiActions && msg._aiActions.length > 0 && (
+          <View style={{ gap: 6, marginTop: 4 }}>
+            {msg._aiActions.map((action, i) => (
+              <TouchableOpacity key={i} onPress={() => { if (action.action === "navigate" && action.params?.route) router.push(action.params.route as any); }} activeOpacity={0.7}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 11, borderRadius: 12, backgroundColor: "#00BCD410", borderWidth: 1, borderColor: "#00BCD430" }}>
+                  <Ionicons name={action.icon as any} size={16} color="#00BCD4" />
+                  <Text style={{ flex: 1, fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#00BCD4" }}>{action.label}</Text>
+                  <Ionicons name="chevron-forward" size={14} color="#00BCD4" />
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+        {msg._aiSuggestions && msg._aiSuggestions.length > 0 && (
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6, marginBottom: 4 }}>
+            {msg._aiSuggestions.map((s, i) => (
+              <TouchableOpacity key={i} onPress={() => onSuggestionTap?.(s)} activeOpacity={0.7}>
+                <View style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, borderWidth: 1, borderColor: "#00BCD450", backgroundColor: "#00BCD408" }}>
+                  <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: "#00BCD4" }}>{s}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
+    )}
     </View>
   );
 }
@@ -1711,17 +1760,37 @@ export default function ChatScreen() {
     const chatId = activeChatId || (isDraft ? realChatId : id) || id;
     try {
       const userContext = await getAfuAiUserContext();
-      const systemPrompt = `You are AfuAI, a capable and friendly AI assistant — like ChatGPT, but built into AfuChat. You can help with anything: writing, coding, math, advice, research, creative work, answering questions, and more.
+      const systemPrompt = `You are AfuAI, a capable and friendly AI assistant built into AfuChat. You can help with anything: writing, coding, math, advice, research, creative work, general questions, and more.
 
-You have access to the user's AfuChat account data below. Do NOT bring it up, reference it, or mention the platform unless the user specifically asks about their account, balance, transactions, followers, or anything related to AfuChat. Just answer naturally based on what they ask.
+You have access to the user's AfuChat account data below. Only reference it when the user asks about their account, balance, transactions, followers, or anything platform-related.
 
 ${userContext}
 
+FORMATTING — you can use rich text in your responses:
+- **bold**, *italic*, \`inline code\`
+- \`\`\`language\\ncode block\\n\`\`\`
+- ## Heading, ### Subheading
+- - bullet list items
+- 1. numbered list items
+
+SPECIAL TAGS — append these at the end of your response when relevant:
+- [SUGGEST:Follow-up question] — add up to 3 natural follow-up suggestions for the user (e.g. [SUGGEST:What is my Nexa balance?])
+- [ACTION:Button label:/route] — add a tappable button that navigates in the app. Routes: /wallet, /premium, /profile/handle, /settings
+- [EXEC:action_type:{"param":"value"}] — request to perform an in-app action. ONLY use when the user explicitly asks to do something. Always explain what you're about to do in text first, then add the tag.
+  Supported actions:
+  · send_nexa: {"handle":"username","amount":100,"message":"optional note"}
+  · send_acoin: {"handle":"username","amount":50}
+  · follow: {"handle":"username"}
+  · unfollow: {"handle":"username"}
+  · subscribe: {"tier":"basic"}
+  · cancel_subscription: {}
+  · convert_nexa: {"amount":100}
+
 Rules:
-- Answer any question or task the user asks, just like a general AI assistant would.
-- Only use the account data above if the user directly asks about it.
-- Write plain conversational text. No markdown, no bullet points, no headings.
-- Be concise, clear, and genuinely helpful. Speak like a knowledgeable friend.`;
+- Answer like a knowledgeable friend — direct, helpful, genuine.
+- Use formatting for structured answers (lists, code, headings). Keep conversational replies as plain text.
+- Only emit [EXEC:...] when explicitly asked. Never execute actions without user intent.
+- [SUGGEST:...] tags should offer natural next steps, not repeat the same question.`;
 
       const conversationMessages = currentMessages
         .filter(m => !m._pending)
@@ -1736,26 +1805,57 @@ Rules:
         body: JSON.stringify({ messages: [{ role: "system", content: systemPrompt }, ...conversationMessages] }),
       });
       const data = await res.json();
-      const reply = (data.reply || "Sorry, I couldn't process that. Please try again.").trim();
+      const rawReply = (data.reply || "Sorry, I couldn't process that. Please try again.").trim();
+      const parsed = parseAfuAiTags(rawReply);
+      const cleanText = parsed.text || rawReply;
       const sentAt = new Date().toISOString();
 
       let savedId: string | null = null;
       try {
         const { data: rpcId } = await supabase.rpc("insert_afuai_message", {
           p_chat_id: chatId,
-          p_content: reply,
+          p_content: cleanText,
         });
         if (typeof rpcId === "string") savedId = rpcId;
       } catch (_) {}
+
+      const execAction: AiExecAction | undefined = parsed.execAction ? (() => {
+        const at = parsed.execAction!.actionType;
+        const p = parsed.execAction!.params;
+        const labelMap: Record<string, string> = {
+          send_nexa: `Send ${p.amount} Nexa to @${p.handle}`,
+          send_acoin: `Send ${p.amount} ACoin to @${p.handle}`,
+          follow: `Follow @${p.handle}`,
+          unfollow: `Unfollow @${p.handle}`,
+          subscribe: `Subscribe to ${p.tier} plan`,
+          cancel_subscription: "Cancel subscription",
+          convert_nexa: `Convert ${p.amount} Nexa to ACoin`,
+        };
+        const descMap: Record<string, string> = {
+          send_nexa: p.message ? `"${p.message}"` : "Nexa transfer",
+          send_acoin: p.message ? `"${p.message}"` : "ACoin transfer",
+          follow: "Send a follow request",
+          unfollow: "Remove from your following list",
+          subscribe: "Activates your premium subscription",
+          cancel_subscription: "Downgrade to free plan",
+          convert_nexa: "Currency conversion at current rate",
+        };
+        return { id: `exec_${Date.now()}`, actionType: at, params: p, label: labelMap[at] || "Confirm action", description: descMap[at] || "", status: "pending" as const };
+      })() : undefined;
 
       setMessages((prev) => [{
         id: savedId || `afuai_${Date.now()}`,
         chat_id: chatId,
         sender_id: AFUAI_BOT_ID,
-        encrypted_content: reply,
+        encrypted_content: cleanText,
         sent_at: sentAt,
         sender: { display_name: "AfuAI", avatar_url: null, handle: "afuai" },
         reactions: [],
+        _isAi: true,
+        _aiActions: parsed.actions.length > 0 ? parsed.actions : undefined,
+        _aiSuggestions: parsed.suggestions.length > 0 ? parsed.suggestions : undefined,
+        _aiInvoices: parsed.invoices.length > 0 ? parsed.invoices : undefined,
+        _aiExecAction: execAction,
       }, ...prev]);
     } catch {
       setMessages((prev) => [{
@@ -2776,6 +2876,9 @@ Rules:
           onTapGift={handleTapGift}
           onImageTap={imgViewer.openViewer}
           isPremiumSender={isMe && isPremium}
+          onConfirmExec={handleConfirmAiExec}
+          onCancelExec={handleCancelAiExec}
+          onSuggestionTap={(text) => sendMessage(text)}
         />
       </View>
     );
