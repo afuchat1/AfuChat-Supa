@@ -23,8 +23,8 @@ type Message = {
   sender_id: string;
   encrypted_content: string;
   sent_at: string;
-  message_type: string;
-  media_url?: string;
+  attachment_type?: string;
+  attachment_url?: string;
   sender?: { id: string; display_name: string; avatar_url: string | null; is_verified?: boolean } | null;
 };
 
@@ -115,7 +115,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
           .single(),
         supabase
           .from("messages")
-          .select("id, sender_id, encrypted_content, sent_at, message_type, media_url")
+          .select("id, sender_id, encrypted_content, sent_at, attachment_type, attachment_url")
           .eq("chat_id", chatId)
           .order("sent_at", { ascending: false })
           .limit(100),
@@ -199,7 +199,6 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
       chat_id: chatId,
       sender_id: user.id,
       encrypted_content: content,
-      message_type: "text",
       sent_at: new Date().toISOString(),
     });
     if (!insertErr) {
@@ -257,8 +256,8 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
                 {item.sender.display_name}
               </Text>
             )}
-            {item.message_type === "image" && item.media_url ? (
-              <Image source={{ uri: item.media_url }} style={st.msgImage} resizeMode="cover" />
+            {item.attachment_type === "image" && item.attachment_url ? (
+              <Image source={{ uri: item.attachment_url }} style={st.msgImage} resizeMode="cover" />
             ) : (
               <View style={st.msgBody}>
                 <Text style={[st.msgText, { color: isMe ? c.bubbleOutText : c.bubbleInText }]}>
