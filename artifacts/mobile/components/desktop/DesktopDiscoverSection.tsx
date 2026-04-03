@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -25,6 +25,8 @@ import { sharePost } from "@/lib/share";
 
 const BRAND = "#00BCD4";
 
+type FeedTab = "for_you" | "following";
+
 type Post = {
   id: string;
   author_id: string;
@@ -49,7 +51,7 @@ type Post = {
 function timeAgo(iso: string) {
   const d = new Date(iso);
   const diff = Date.now() - d.getTime();
-  if (diff < 60000) return "just now";
+  if (diff < 60000) return "now";
   if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
   if (diff < 604800000) return `${Math.floor(diff / 86400000)}d`;
@@ -60,24 +62,24 @@ function LoginPrompt({ visible, onClose, colors }: { visible: boolean; onClose: 
   if (!visible) return null;
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
-      <TouchableOpacity style={loginStyles.backdrop} activeOpacity={1} onPress={onClose}>
-        <View style={[loginStyles.card, { backgroundColor: colors.card }]}>
-          <Ionicons name="person-circle-outline" size={52} color={colors.accent} style={{ marginBottom: 10 }} />
-          <Text style={[loginStyles.title, { color: colors.text }]}>Sign in to interact</Text>
-          <Text style={[loginStyles.sub, { color: colors.textMuted }]}>
+      <TouchableOpacity style={modal.backdrop} activeOpacity={1} onPress={onClose}>
+        <View style={[modal.card, { backgroundColor: colors.card }]}>
+          <Ionicons name="person-circle-outline" size={52} color={BRAND} style={{ marginBottom: 10 }} />
+          <Text style={[modal.title, { color: colors.text }]}>Sign in to interact</Text>
+          <Text style={[modal.sub, { color: colors.textMuted }]}>
             Create an account or log in to like, comment and join the conversation.
           </Text>
           <TouchableOpacity
-            style={[loginStyles.loginBtn, { backgroundColor: colors.accent }]}
+            style={[modal.loginBtn, { backgroundColor: BRAND }]}
             onPress={() => { onClose(); router.push("/(auth)/login" as any); }}
           >
-            <Text style={loginStyles.loginBtnText}>Log in</Text>
+            <Text style={modal.loginBtnText}>Log in</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[loginStyles.registerBtn, { borderColor: colors.accent }]}
+            style={[modal.registerBtn, { borderColor: BRAND }]}
             onPress={() => { onClose(); router.push("/(auth)/register" as any); }}
           >
-            <Text style={[loginStyles.registerBtnText, { color: colors.accent }]}>Create account</Text>
+            <Text style={[modal.registerBtnText, { color: BRAND }]}>Create account</Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -85,39 +87,94 @@ function LoginPrompt({ visible, onClose, colors }: { visible: boolean; onClose: 
   );
 }
 
-const loginStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  card: {
-    width: 340,
-    borderRadius: 20,
-    padding: 28,
-    alignItems: "center",
-    gap: 10,
-  },
+const modal = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" },
+  card: { width: 340, borderRadius: 20, padding: 28, alignItems: "center", gap: 10 },
   title: { fontSize: 20, fontFamily: "Inter_700Bold", textAlign: "center" },
   sub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
-  loginBtn: {
-    width: "100%" as any,
-    paddingVertical: 13,
-    borderRadius: 24,
-    alignItems: "center",
-    marginTop: 6,
-  },
+  loginBtn: { width: "100%" as any, paddingVertical: 13, borderRadius: 24, alignItems: "center", marginTop: 6 },
   loginBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  registerBtn: {
-    width: "100%" as any,
-    paddingVertical: 12,
-    borderRadius: 24,
-    alignItems: "center",
-    borderWidth: 1.5,
-  },
+  registerBtn: { width: "100%" as any, paddingVertical: 12, borderRadius: 24, alignItems: "center", borderWidth: 1.5 },
   registerBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
 });
+
+function ComposeBox({ profile, colors, isLoggedIn, onAuthRequired }: {
+  profile: any; colors: any; isLoggedIn: boolean; onAuthRequired: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const hoverProps = Platform.OS === "web"
+    ? { onMouseEnter: () => setHovered(true), onMouseLeave: () => setHovered(false) }
+    : {};
+
+  function handlePress() {
+    if (!isLoggedIn) { onAuthRequired(); return; }
+    router.push("/moments/create" as any);
+  }
+
+  return (
+    <TouchableOpacity
+      onPress={handlePress}
+      activeOpacity={0.92}
+      style={[styles.composeBox, { borderBottomColor: colors.border }]}
+      {...(hoverProps as any)}
+    >
+      <Avatar uri={isLoggedIn ? profile?.avatar_url : null} name={profile?.display_name || "G"} size={40} />
+      <View style={[styles.composePlaceholder, { borderColor: hovered ? colors.accent : colors.border }]}>
+        <Text style={[styles.composePlaceholderText, { color: colors.textMuted }]}>
+          What's on your mind?
+        </Text>
+        <TouchableOpacity
+          style={[styles.composePostBtn, { backgroundColor: BRAND }]}
+          onPress={handlePress}
+          activeOpacity={0.88}
+        >
+          <Text style={styles.composePostBtnText}>Post</Text>
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function ActionButton({
+  icon,
+  activeIcon,
+  count,
+  isActive,
+  activeColor,
+  color,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  activeIcon?: React.ComponentProps<typeof Ionicons>["name"];
+  count?: number;
+  isActive?: boolean;
+  activeColor?: string;
+  color: string;
+  onPress: (e: any) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const hoverProps = Platform.OS === "web"
+    ? { onMouseEnter: () => setHovered(true), onMouseLeave: () => setHovered(false) }
+    : {};
+
+  const displayColor = isActive ? (activeColor || color) : color;
+
+  return (
+    <TouchableOpacity
+      style={[styles.actionBtn, hovered && { backgroundColor: (activeColor || BRAND) + "18" }]}
+      onPress={onPress}
+      activeOpacity={0.75}
+      {...(hoverProps as any)}
+    >
+      <Ionicons name={isActive && activeIcon ? activeIcon : icon} size={18} color={displayColor} />
+      {count != null && count > 0 && (
+        <Text style={[styles.actionCount, { color: displayColor }]}>
+          {count >= 1000 ? `${(count / 1000).toFixed(1)}k` : count}
+        </Text>
+      )}
+    </TouchableOpacity>
+  );
+}
 
 function PostCard({
   post,
@@ -137,308 +194,328 @@ function PostCard({
   feedWidth: number;
 }) {
   const allImages = post.images?.length > 0 ? post.images : post.image_url ? [post.image_url] : [];
-  const multiImgW = (feedWidth - 36) / 2;
-
-  function handleLike() {
-    if (!isLoggedIn) { onAuthRequired(); return; }
-    onLike(post.id);
-  }
-
-  function handleComment() {
-    if (!isLoggedIn) { onAuthRequired(); return; }
-    onOpen(post.id);
-  }
+  const imgAreaW = feedWidth - 72;
+  const multiImgW = (imgAreaW - 4) / 2;
 
   return (
     <TouchableOpacity
       onPress={() => onOpen(post.id)}
       activeOpacity={0.97}
-      style={[styles.card, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}
+      style={[styles.card, { borderBottomColor: colors.border }]}
     >
-      {/* Header */}
-      <View style={styles.cardHeader}>
-        <TouchableOpacity
-          onPress={(e) => {
-            e.stopPropagation?.();
-            if (!isLoggedIn) { onAuthRequired(); return; }
-            post.author && router.push({ pathname: "/contact/[id]", params: { id: post.author.id } });
-          }}
-          activeOpacity={0.8}
-        >
-          <Avatar uri={post.author?.avatar_url || null} name={post.author?.display_name || "?"} size={40} />
-        </TouchableOpacity>
-        <View style={{ flex: 1, gap: 2 }}>
-          <View style={styles.nameRow}>
-            <Text style={[styles.cardName, { color: colors.text }]} numberOfLines={1}>
-              {post.author?.display_name || "User"}
-            </Text>
-            {post.author?.is_verified && (
-              <VerifiedBadge
-                isVerified={post.author.is_verified}
-                isOrganizationVerified={post.author.is_organization_verified}
-                size={13}
-              />
-            )}
-          </View>
-          <Text style={[styles.cardMeta, { color: colors.textMuted }]} numberOfLines={1}>
-            @{post.author?.handle} · {timeAgo(post.created_at)}
+      {/* Left: Avatar column */}
+      <TouchableOpacity
+        onPress={(e) => {
+          e.stopPropagation?.();
+          if (!isLoggedIn) { onAuthRequired(); return; }
+          post.author && router.push({ pathname: "/contact/[id]", params: { id: post.author.id } });
+        }}
+        activeOpacity={0.85}
+        style={styles.avatarCol}
+      >
+        <Avatar uri={post.author?.avatar_url || null} name={post.author?.display_name || "?"} size={40} />
+      </TouchableOpacity>
+
+      {/* Right: Content column */}
+      <View style={styles.contentCol}>
+        {/* Header row */}
+        <View style={styles.postHeader}>
+          <Text style={[styles.postName, { color: colors.text }]} numberOfLines={1}>
+            {post.author?.display_name || "User"}
           </Text>
-        </View>
-        <TouchableOpacity
-          onPress={(e) => { e.stopPropagation?.(); if (!isLoggedIn) { onAuthRequired(); return; } }}
-          hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
-        >
-          <Ionicons name="ellipsis-horizontal" size={18} color={colors.textMuted} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Content */}
-      {(post.content || "").trim().length > 0 && (
-        <RichText
-          style={[styles.cardContent, { color: colors.text }]}
-          linkColor={BRAND}
-        >
-          {post.content}
-        </RichText>
-      )}
-
-      {/* Images */}
-      {allImages.length > 0 && (
-        <View style={[styles.images, allImages.length > 1 && { flexDirection: "row", flexWrap: "wrap", gap: 2 }]}>
-          {allImages.map((uri, i) => (
-            <TouchableOpacity
-              key={i}
-              activeOpacity={0.9}
-              onPress={(e) => { e.stopPropagation?.(); onOpen(post.id); }}
-              style={allImages.length > 1 ? { flex: 1 } : undefined}
-            >
-              <Image
-                source={{ uri }}
-                style={{
-                  width: allImages.length === 1 ? feedWidth : multiImgW,
-                  height: allImages.length === 1 ? Math.round(feedWidth * 0.56) : Math.round(multiImgW * 0.75),
-                }}
-                resizeMode="cover"
-              />
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-
-      {/* Footer */}
-      <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
-        <TouchableOpacity
-          style={styles.action}
-          onPress={(e) => { e.stopPropagation?.(); handleLike(); }}
-        >
-          <Ionicons
-            name={post.liked_by_me ? "heart" : "heart-outline"}
-            size={18}
-            color={post.liked_by_me ? "#FF3B30" : colors.textMuted}
-          />
-          {post.like_count > 0 && (
-            <Text style={[styles.actionText, { color: post.liked_by_me ? "#FF3B30" : colors.textMuted }]}>
-              {post.like_count}
-            </Text>
+          {post.author?.is_verified && (
+            <VerifiedBadge
+              isVerified={post.author.is_verified}
+              isOrganizationVerified={post.author.is_organization_verified}
+              size={13}
+            />
           )}
-        </TouchableOpacity>
+          <Text style={[styles.postMeta, { color: colors.textMuted }]} numberOfLines={1}>
+            {" "}@{post.author?.handle} · {timeAgo(post.created_at)}
+          </Text>
+          <View style={{ flex: 1 }} />
+          <TouchableOpacity
+            onPress={(e) => { e.stopPropagation?.(); }}
+            hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+          >
+            <Ionicons name="ellipsis-horizontal" size={17} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
 
-        <TouchableOpacity
-          style={styles.action}
-          onPress={(e) => { e.stopPropagation?.(); handleComment(); }}
-        >
-          <Ionicons name="chatbubble-outline" size={17} color={colors.textMuted} />
-          {post.reply_count > 0 && (
-            <Text style={[styles.actionText, { color: colors.textMuted }]}>{post.reply_count}</Text>
-          )}
-        </TouchableOpacity>
+        {/* Content */}
+        {(post.content || "").trim().length > 0 && (
+          <RichText style={[styles.postContent, { color: colors.text }]} linkColor={BRAND}>
+            {post.content}
+          </RichText>
+        )}
 
-        <TouchableOpacity
-          style={styles.action}
-          onPress={(e) => {
-            e.stopPropagation?.();
-            if (!isLoggedIn) { onAuthRequired(); return; }
-            sharePost({ postId: post.id, authorName: post.author?.display_name || "User", content: post.content });
-          }}
-        >
-          <Ionicons name="arrow-redo-outline" size={17} color={colors.textMuted} />
-        </TouchableOpacity>
-
-        <View style={{ flex: 1 }} />
-
-        {post.view_count > 0 && (
-          <View style={styles.viewCount}>
-            <Ionicons name="eye-outline" size={14} color={colors.textMuted} />
-            <Text style={[styles.viewText, { color: colors.textMuted }]}>
-              {post.view_count >= 1000 ? `${(post.view_count / 1000).toFixed(1)}k` : post.view_count}
-            </Text>
+        {/* Images */}
+        {allImages.length > 0 && (
+          <View style={[styles.images, allImages.length > 1 && { flexDirection: "row", gap: 2 }]}>
+            {allImages.slice(0, 4).map((uri, i) => (
+              <TouchableOpacity
+                key={i}
+                activeOpacity={0.9}
+                onPress={(e) => { e.stopPropagation?.(); onOpen(post.id); }}
+                style={allImages.length > 1 ? { flex: 1 } : undefined}
+              >
+                <Image
+                  source={{ uri }}
+                  style={{
+                    width: allImages.length === 1 ? imgAreaW : multiImgW,
+                    height: allImages.length === 1 ? Math.round(imgAreaW * 0.56) : Math.round(multiImgW * 0.75),
+                    borderRadius: 12,
+                  }}
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
+            ))}
           </View>
         )}
+
+        {/* Action bar */}
+        <View style={styles.actionBar}>
+          <ActionButton
+            icon="chatbubble-outline"
+            color={colors.textMuted}
+            activeColor={BRAND}
+            count={post.reply_count}
+            onPress={(e) => { e.stopPropagation?.(); if (!isLoggedIn) { onAuthRequired(); return; } onOpen(post.id); }}
+          />
+          <ActionButton
+            icon="heart-outline"
+            activeIcon="heart"
+            color={colors.textMuted}
+            activeColor="#F91880"
+            isActive={post.liked_by_me}
+            count={post.like_count}
+            onPress={(e) => { e.stopPropagation?.(); if (!isLoggedIn) { onAuthRequired(); return; } onLike(post.id); }}
+          />
+          {post.view_count > 0 && (
+            <ActionButton
+              icon="bar-chart-outline"
+              color={colors.textMuted}
+              count={post.view_count}
+              onPress={(e) => { e.stopPropagation?.(); }}
+            />
+          )}
+          <ActionButton
+            icon="arrow-redo-outline"
+            color={colors.textMuted}
+            activeColor={BRAND}
+            onPress={(e) => {
+              e.stopPropagation?.();
+              if (!isLoggedIn) { onAuthRequired(); return; }
+              sharePost({ postId: post.id, authorName: post.author?.display_name || "User", content: post.content });
+            }}
+          />
+          <ActionButton
+            icon="bookmark-outline"
+            activeIcon="bookmark"
+            color={colors.textMuted}
+            activeColor={BRAND}
+            onPress={(e) => {
+              e.stopPropagation?.();
+              if (!isLoggedIn) { onAuthRequired(); return; }
+            }}
+          />
+        </View>
       </View>
     </TouchableOpacity>
   );
 }
 
+async function fetchPostsForIds(
+  postIds: string[],
+  userId?: string
+): Promise<{ likeMap: Record<string, number>; replyMap: Record<string, number>; likedSet: Set<string> }> {
+  if (postIds.length === 0) return { likeMap: {}, replyMap: {}, likedSet: new Set() };
+
+  const [{ data: likeCounts }, { data: replyCounts }, { data: myLikes }] = await Promise.all([
+    supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds),
+    supabase.from("post_replies").select("post_id").in("post_id", postIds),
+    userId
+      ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", userId)
+      : { data: [] },
+  ]);
+
+  const likeMap: Record<string, number> = {};
+  for (const l of (likeCounts || [])) likeMap[(l as any).post_id] = (likeMap[(l as any).post_id] || 0) + 1;
+  const replyMap: Record<string, number> = {};
+  for (const r of (replyCounts || [])) replyMap[(r as any).post_id] = (replyMap[(r as any).post_id] || 0) + 1;
+  const likedSet = new Set((myLikes || []).map((l: any) => l.post_id));
+
+  return { likeMap, replyMap, likedSet };
+}
+
+function mapRaw(raw: any[], likeMap: Record<string, number>, replyMap: Record<string, number>, likedSet: Set<string>): Post[] {
+  return raw.map((p: any) => ({
+    id: p.id,
+    author_id: p.author_id,
+    content: p.content || "",
+    image_url: p.image_url,
+    images: (p.post_images || []).sort((a: any, b: any) => a.display_order - b.display_order).map((i: any) => i.image_url),
+    created_at: p.created_at,
+    view_count: p.view_count || 0,
+    like_count: likeMap[p.id] || 0,
+    reply_count: replyMap[p.id] || 0,
+    author: p.profiles ? {
+      id: p.profiles.id,
+      display_name: p.profiles.display_name || "User",
+      handle: p.profiles.handle || "user",
+      avatar_url: p.profiles.avatar_url || null,
+      is_verified: p.profiles.is_verified || false,
+      is_organization_verified: p.profiles.is_organization_verified || false,
+    } : null,
+    liked_by_me: likedSet.has(p.id),
+  }));
+}
+
 export function DesktopDiscoverSection() {
   const { colors, isDark } = useTheme();
-  const { user, session } = useAuth();
+  const { user, session, profile } = useAuth();
   const { openDetail } = useDesktopDetail();
   const isLoggedIn = !!session;
-  const { width: screenW } = useWindowDimensions();
-  const feedRef = useRef<View>(null);
   const [feedWidth, setFeedWidth] = useState(600);
+  const [feedTab, setFeedTab] = useState<FeedTab>("for_you");
 
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [forYouPosts, setForYouPosts] = useState<Post[]>([]);
+  const [followingPosts, setFollowingPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
-  const loadPosts = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from("posts")
-        .select(
-          `id, author_id, content, image_url, created_at, view_count,
-           profiles!posts_author_id_fkey(id, display_name, handle, avatar_url, is_verified, is_organization_verified),
-           post_images(image_url, display_order)`
-        )
-        .eq("is_blocked", false)
-        .eq("visibility", "public")
-        .order("created_at", { ascending: false })
-        .limit(30);
+  const posts = feedTab === "for_you" ? forYouPosts : followingPosts;
 
-      if (error || !data) {
-        setLoading(false);
-        setRefreshing(false);
-        return;
-      }
+  const loadForYou = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("posts")
+      .select(`id, author_id, content, image_url, created_at, view_count,
+               profiles!posts_author_id_fkey(id, display_name, handle, avatar_url, is_verified, is_organization_verified),
+               post_images(image_url, display_order)`)
+      .eq("is_blocked", false)
+      .eq("visibility", "public")
+      .order("created_at", { ascending: false })
+      .limit(40);
 
-      const postIds = data.map((p: any) => p.id);
-
-      const [{ data: likeCounts }, { data: replyCounts }, { data: myLikes }] = await Promise.all([
-        postIds.length > 0
-          ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds)
-          : { data: [] },
-        postIds.length > 0
-          ? supabase.from("post_replies").select("post_id").in("post_id", postIds)
-          : { data: [] },
-        postIds.length > 0 && user
-          ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id)
-          : { data: [] },
-      ]);
-
-      const likeMap: Record<string, number> = {};
-      for (const l of (likeCounts || [])) {
-        likeMap[(l as any).post_id] = (likeMap[(l as any).post_id] || 0) + 1;
-      }
-      const replyMap: Record<string, number> = {};
-      for (const r of (replyCounts || [])) {
-        replyMap[(r as any).post_id] = (replyMap[(r as any).post_id] || 0) + 1;
-      }
-      const likedSet = new Set((myLikes || []).map((l: any) => l.post_id));
-
-      setPosts(
-        data.map((p: any) => ({
-          id: p.id,
-          author_id: p.author_id,
-          content: p.content || "",
-          image_url: p.image_url,
-          images: (p.post_images || [])
-            .sort((a: any, b: any) => a.display_order - b.display_order)
-            .map((i: any) => i.image_url),
-          created_at: p.created_at,
-          view_count: p.view_count || 0,
-          like_count: likeMap[p.id] || 0,
-          reply_count: replyMap[p.id] || 0,
-          author: p.profiles
-            ? {
-                id: p.profiles.id,
-                display_name: p.profiles.display_name || "User",
-                handle: p.profiles.handle || "user",
-                avatar_url: p.profiles.avatar_url || null,
-                is_verified: p.profiles.is_verified || false,
-                is_organization_verified: p.profiles.is_organization_verified || false,
-              }
-            : null,
-          liked_by_me: likedSet.has(p.id),
-        }))
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+    if (error || !data) return;
+    const ids = data.map((p: any) => p.id);
+    const counts = await fetchPostsForIds(ids, user?.id);
+    setForYouPosts(mapRaw(data, counts.likeMap, counts.replyMap, counts.likedSet));
   }, [user]);
 
-  useEffect(() => {
-    loadPosts();
-  }, [loadPosts]);
+  const loadFollowing = useCallback(async () => {
+    if (!user) { setFollowingPosts([]); return; }
+    const { data: follows } = await supabase.from("follows").select("following_id").eq("follower_id", user.id);
+    const followingIds = (follows || []).map((f: any) => f.following_id);
+    if (followingIds.length === 0) { setFollowingPosts([]); return; }
+
+    const { data, error } = await supabase
+      .from("posts")
+      .select(`id, author_id, content, image_url, created_at, view_count,
+               profiles!posts_author_id_fkey(id, display_name, handle, avatar_url, is_verified, is_organization_verified),
+               post_images(image_url, display_order)`)
+      .eq("is_blocked", false)
+      .in("author_id", followingIds)
+      .order("created_at", { ascending: false })
+      .limit(40);
+
+    if (error || !data) return;
+    const ids = data.map((p: any) => p.id);
+    const counts = await fetchPostsForIds(ids, user.id);
+    setFollowingPosts(mapRaw(data, counts.likeMap, counts.replyMap, counts.likedSet));
+  }, [user]);
+
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    await Promise.all([loadForYou(), loadFollowing()]);
+    setLoading(false);
+    setRefreshing(false);
+  }, [loadForYou, loadFollowing]);
+
+  useEffect(() => { loadAll(); }, [loadAll]);
 
   async function handleLike(postId: string) {
     if (!user) return;
-    const post = posts.find((p) => p.id === postId);
+    const setter = feedTab === "for_you" ? setForYouPosts : setFollowingPosts;
+    const currentPosts = feedTab === "for_you" ? forYouPosts : followingPosts;
+    const post = currentPosts.find((p) => p.id === postId);
     if (!post) return;
     if (post.liked_by_me) {
       await supabase.from("post_acknowledgments").delete().eq("post_id", postId).eq("user_id", user.id);
-      setPosts((prev) =>
-        prev.map((p) => p.id === postId ? { ...p, liked_by_me: false, like_count: Math.max(0, p.like_count - 1) } : p)
-      );
+      setter((prev) => prev.map((p) => p.id === postId ? { ...p, liked_by_me: false, like_count: Math.max(0, p.like_count - 1) } : p));
     } else {
       await supabase.from("post_acknowledgments").insert({ post_id: postId, user_id: user.id });
-      setPosts((prev) =>
-        prev.map((p) => p.id === postId ? { ...p, liked_by_me: true, like_count: p.like_count + 1 } : p)
-      );
+      setter((prev) => prev.map((p) => p.id === postId ? { ...p, liked_by_me: true, like_count: p.like_count + 1 } : p));
     }
   }
 
-  function handleOpenPost(postId: string) {
-    openDetail({ type: "post", id: postId });
-  }
+  const noFollowingContent = !loading && feedTab === "following" && followingPosts.length === 0;
 
   return (
     <View style={styles.root}>
-      <LoginPrompt
-        visible={showLoginPrompt}
-        onClose={() => setShowLoginPrompt(false)}
-        colors={colors}
-      />
+      <LoginPrompt visible={showLoginPrompt} onClose={() => setShowLoginPrompt(false)} colors={colors} />
 
-      {/* Main feed */}
+      {/* Feed column */}
       <View
-        ref={feedRef}
-        style={[styles.feedArea, { backgroundColor: colors.background }]}
+        style={[styles.feedArea, { borderRightColor: colors.border }]}
         onLayout={(e) => setFeedWidth(e.nativeEvent.layout.width)}
       >
-        {/* Header */}
-        <View
-          style={[
-            styles.feedHeader,
-            { borderBottomColor: colors.border, backgroundColor: colors.background },
-          ]}
-        >
-          <Text style={[styles.feedTitle, { color: colors.text }]}>Discover</Text>
-          {isLoggedIn ? (
-            <TouchableOpacity
-              onPress={() => router.push("/moments/create" as any)}
-              style={[styles.createBtn, { backgroundColor: colors.accent }]}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="add" size={18} color="#fff" />
-              <Text style={styles.createBtnText}>Post</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              onPress={() => router.push("/(auth)/login" as any)}
-              style={[styles.createBtn, { backgroundColor: colors.accent }]}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.createBtnText}>Sign in</Text>
-            </TouchableOpacity>
-          )}
+        {/* Sticky header */}
+        <View style={[styles.feedHeader, { borderBottomColor: colors.border, backgroundColor: colors.background + "ee" }]}>
+          <Text style={[styles.feedTitle, { color: colors.text }]}>Home</Text>
         </View>
 
+        {/* Tab switcher */}
+        <View style={[styles.tabRow, { borderBottomColor: colors.border }]}>
+          {(["for_you", "following"] as FeedTab[]).map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.tabItem, feedTab === tab && { borderBottomColor: BRAND, borderBottomWidth: 2 }]}
+              onPress={() => {
+                if (tab === "following" && !isLoggedIn) { setShowLoginPrompt(true); return; }
+                setFeedTab(tab);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  { color: feedTab === tab ? colors.text : colors.textMuted },
+                  feedTab === tab && { fontFamily: "Inter_700Bold" },
+                ]}
+              >
+                {tab === "for_you" ? "For you" : "Following"}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Compose box */}
+        <ComposeBox
+          profile={profile}
+          colors={colors}
+          isLoggedIn={isLoggedIn}
+          onAuthRequired={() => setShowLoginPrompt(true)}
+        />
+
+        {/* Feed */}
         {loading ? (
           <View style={styles.centered}>
-            <ActivityIndicator color={colors.accent} size="large" />
+            <ActivityIndicator color={BRAND} size="large" />
+          </View>
+        ) : noFollowingContent ? (
+          <View style={styles.emptyState}>
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>Follow people to see their posts</Text>
+            <Text style={[styles.emptySub, { color: colors.textMuted }]}>
+              When you follow someone, their posts will show up here.
+            </Text>
+            <TouchableOpacity
+              style={[styles.findPeopleBtn, { backgroundColor: BRAND }]}
+              onPress={() => setFeedTab("for_you")}
+            >
+              <Text style={styles.findPeopleBtnText}>Discover posts</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <FlatList
@@ -449,7 +526,7 @@ export function DesktopDiscoverSection() {
                 post={item}
                 colors={colors}
                 onLike={handleLike}
-                onOpen={handleOpenPost}
+                onOpen={(id) => openDetail({ type: "post", id })}
                 isLoggedIn={isLoggedIn}
                 onAuthRequired={() => setShowLoginPrompt(true)}
                 feedWidth={feedWidth}
@@ -457,15 +534,12 @@ export function DesktopDiscoverSection() {
             )}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.feedList}
-            onRefresh={() => { setRefreshing(true); loadPosts(); }}
+            onRefresh={() => { setRefreshing(true); loadAll(); }}
             refreshing={refreshing}
             ListEmptyComponent={
               <View style={styles.emptyState}>
                 <Ionicons name="newspaper-outline" size={48} color={colors.textMuted} />
-                <Text style={[styles.emptyText, { color: colors.textMuted }]}>No posts yet</Text>
-                <Text style={[styles.emptySubtext, { color: colors.textMuted }]}>
-                  Be the first to share something
-                </Text>
+                <Text style={[styles.emptyTitle, { color: colors.text }]}>No posts yet</Text>
               </View>
             }
           />
@@ -473,12 +547,7 @@ export function DesktopDiscoverSection() {
       </View>
 
       {/* Right panel */}
-      <View
-        style={[
-          styles.rightPanel,
-          { backgroundColor: isDark ? "#0c0c0f" : "#f5f6f8", borderLeftColor: colors.border },
-        ]}
-      >
+      <View style={[styles.rightPanel, { backgroundColor: colors.background, borderLeftColor: colors.border }]}>
         <DesktopRightPanel activeTab="discover" colors={colors} />
       </View>
     </View>
@@ -489,73 +558,123 @@ const styles = StyleSheet.create({
   root: { flex: 1, flexDirection: "row", overflow: "hidden" },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
 
-  feedArea: { flex: 1, overflow: "hidden", flexDirection: "column" },
+  feedArea: {
+    flex: 1,
+    flexDirection: "column",
+    overflow: "hidden",
+    borderRightWidth: StyleSheet.hairlineWidth,
+    maxWidth: 620,
+  },
   feedHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingBottom: 10,
-    paddingTop: 14,
+    paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    flexShrink: 0,
   },
   feedTitle: { fontSize: 20, fontFamily: "Inter_700Bold", letterSpacing: -0.3 },
-  createBtn: {
+
+  tabRow: {
+    flexDirection: "row",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 16,
+  },
+  tabText: {
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+  },
+
+  composeBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  composePlaceholder: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 24,
     paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 12,
+  },
+  composePlaceholderText: {
+    flex: 1,
+    fontSize: 18,
+    fontFamily: "Inter_400Regular",
+  },
+  composePostBtn: {
+    paddingHorizontal: 18,
     paddingVertical: 8,
     borderRadius: 20,
   },
-  createBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  composePostBtnText: {
+    color: "#fff",
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
+  },
+
   feedList: { flexGrow: 1 },
 
   card: {
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden",
+    gap: 12,
   },
-  cardHeader: {
+  avatarCol: { width: 40, flexShrink: 0 },
+  contentCol: { flex: 1 },
+  postHeader: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 10,
-    gap: 10,
+    flexWrap: "nowrap",
+    marginBottom: 2,
   },
-  nameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  cardName: { fontSize: 15, fontFamily: "Inter_700Bold", letterSpacing: -0.1 },
-  cardMeta: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  cardContent: {
+  postName: { fontSize: 15, fontFamily: "Inter_700Bold", letterSpacing: -0.1, flexShrink: 1 },
+  postMeta: { fontSize: 14, fontFamily: "Inter_400Regular", flexShrink: 1 },
+  postContent: {
     fontSize: 15,
     fontFamily: "Inter_400Regular",
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    lineHeight: 23,
+    lineHeight: 22,
+    marginBottom: 10,
   },
-  images: { marginBottom: 0 },
-  cardFooter: {
+  images: { marginBottom: 10 },
+
+  actionBar: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 18,
+    marginTop: 4,
+    marginLeft: -8,
+    gap: 4,
+    marginBottom: 6,
   },
-  action: { flexDirection: "row", alignItems: "center", gap: 5 },
-  actionText: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  viewCount: { flexDirection: "row", alignItems: "center", gap: 4 },
-  viewText: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  actionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  actionCount: { fontSize: 13, fontFamily: "Inter_400Regular" },
 
   rightPanel: {
-    width: 320,
+    width: 340,
     flexShrink: 0,
-    borderLeftWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
 
-  emptyState: { alignItems: "center", paddingTop: 80, gap: 10 },
-  emptyText: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  emptySubtext: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center" },
+  emptyState: { alignItems: "center", paddingTop: 60, gap: 12, paddingHorizontal: 32 },
+  emptyTitle: { fontSize: 23, fontFamily: "Inter_700Bold", textAlign: "center" },
+  emptySub: { fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22 },
+  findPeopleBtn: { paddingHorizontal: 24, paddingVertical: 13, borderRadius: 24, marginTop: 8 },
+  findPeopleBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
 });
