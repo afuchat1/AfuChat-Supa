@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,7 +12,6 @@ import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
-import Colors from "@/constants/colors";
 
 const BRAND = "#00BCD4";
 const GOLD = "#D4A853";
@@ -30,14 +28,13 @@ type Transaction = {
 };
 
 type WalletData = {
-  nexa_balance: number;
-  acoin_balance: number;
+  available_balance_ugx: number;
+  acoin: number;
 };
 
-function formatAmount(amount: number, currency: string) {
+function formatAmount(amount: number) {
   const abs = Math.abs(amount);
-  if (currency === "nexa") return `${amount >= 0 ? "+" : "-"}${abs.toLocaleString()} UGX`;
-  return `${amount >= 0 ? "+" : "-"}${abs.toLocaleString()} ${currency === "acoin" ? "ACoin" : currency}`;
+  return `${amount >= 0 ? "+" : "-"}${abs.toLocaleString()} ACoin`;
 }
 
 function formatDate(iso: string) {
@@ -76,7 +73,7 @@ function TxRow({ tx, colors }: { tx: Transaction; colors: any }) {
         <Text style={[styles.txDate, { color: colors.textMuted }]}>{formatDate(tx.created_at)}</Text>
       </View>
       <Text style={[styles.txAmount, { color: isPositive ? "#34C759" : colors.text }]}>
-        {formatAmount(tx.amount, tx.currency)}
+        {formatAmount(tx.amount)}
       </Text>
     </View>
   );
@@ -95,7 +92,7 @@ const TX_CONFIG: Record<string, { label: string; icon: string; color: string }> 
 };
 
 function mapTx(raw: any): Transaction {
-  const cfg = TX_CONFIG[raw.transaction_type] || { label: raw.transaction_type, icon: "cash-outline", color: "#8E8E93" };
+  const cfg = TX_CONFIG[raw.transaction_type] || { label: raw.transaction_type || "Transaction", icon: "cash-outline", color: "#8E8E93" };
   return {
     id: raw.id,
     type: raw.transaction_type,
@@ -104,7 +101,7 @@ function mapTx(raw: any): Transaction {
     label: cfg.label,
     icon: cfg.icon,
     color: cfg.color,
-    currency: raw.currency || "nexa",
+    currency: "acoin",
   };
 }
 
@@ -118,15 +115,25 @@ export function DesktopWalletSection() {
 
   const loadData = useCallback(async () => {
     if (!user) return;
-    const [walletRes, txRes] = await Promise.all([
-      supabase.from("wallets").select("nexa_balance, acoin_balance").eq("user_id", user.id).maybeSingle(),
-      supabase.from("wallet_transactions")
-        .select("id, transaction_type, amount, currency, created_at")
+    const [profileRes, txRes] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("acoin, available_balance_ugx")
+        .eq("id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("acoin_transactions")
+        .select("id, transaction_type, amount, created_at")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(40),
     ]);
-    if (walletRes.data) setWallet(walletRes.data);
+    if (profileRes.data) {
+      setWallet({
+        acoin: profileRes.data.acoin ?? 0,
+        available_balance_ugx: profileRes.data.available_balance_ugx ?? 0,
+      });
+    }
     setTransactions((txRes.data || []).map(mapTx));
     setLoading(false);
   }, [user]);
@@ -154,9 +161,9 @@ export function DesktopWalletSection() {
           <View style={[styles.balanceIconWrap, { backgroundColor: BRAND + "18" }]}>
             <Ionicons name="wallet" size={24} color={BRAND} />
           </View>
-          <Text style={[styles.balanceLabel, { color: colors.textMuted }]}>Nexa Balance</Text>
+          <Text style={[styles.balanceLabel, { color: colors.textMuted }]}>Wallet Balance</Text>
           <Text style={[styles.balanceAmount, { color: colors.text }]}>
-            {(wallet?.nexa_balance || 0).toLocaleString()} UGX
+            {(wallet?.available_balance_ugx || 0).toLocaleString()} UGX
           </Text>
           <Text style={[styles.balanceSub, { color: colors.textMuted }]}>Uganda Shillings</Text>
         </View>
@@ -168,7 +175,7 @@ export function DesktopWalletSection() {
           </View>
           <Text style={[styles.balanceLabel, { color: colors.textMuted }]}>ACoin Balance</Text>
           <Text style={[styles.balanceAmount, { color: GOLD }]}>
-            {(wallet?.acoin_balance || 0).toLocaleString()} 🪙
+            {(wallet?.acoin || 0).toLocaleString()} 🪙
           </Text>
           <Text style={[styles.balanceSub, { color: colors.textMuted }]}>AfuChat Coins</Text>
         </View>
