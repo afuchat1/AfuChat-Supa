@@ -30,11 +30,19 @@ type Plan = {
   tier: string;
 };
 
+const FALLBACK_PRICES: Record<string, number> = {
+  silver: 500,
+  gold: 1200,
+  platinum: 2500,
+};
+
 const TIER_CONFIG: Record<string, {
   color: string;
   gradientFrom: string;
   icon: string;
   badge: string;
+  usdEquiv: string;
+  ugxEquiv: string;
   categories: { title: string; icon: string; items: string[] }[];
 }> = {
   silver: {
@@ -42,14 +50,17 @@ const TIER_CONFIG: Record<string, {
     gradientFrom: "#8E9BAD22",
     icon: "🥈",
     badge: "SILVER",
+    usdEquiv: "≈ $5",
+    ugxEquiv: "≈ UGX 18,500",
     categories: [
       {
-        title: "AI Features",
+        title: "AfuAI Assistant",
         icon: "sparkles",
         items: [
-          "Message Translation — instant AI translation",
+          "50 AfuAI messages per day",
+          "Message Translation (AI-powered)",
           "Voice to Text — transcribe voice notes",
-          "Smart Notifications — AI importance filter",
+          "Text to Speech — listen to messages",
         ],
       },
       {
@@ -60,13 +71,19 @@ const TIER_CONFIG: Record<string, {
           "Temporary Chat Mode (auto-delete)",
           "Auto-Reply Mode",
           "Focus Mode",
-          "Activity Status Control",
-          "Auto Media Organisation",
-          "Advanced Emoji Reactions",
-          "Content Filter",
           "Message Reminders",
           "Message Edit History",
+          "Advanced Emoji Reactions",
           "Chat → Post",
+        ],
+      },
+      {
+        title: "Social & Groups",
+        icon: "people",
+        items: [
+          "Create up to 3 Groups",
+          "Create up to 3 Channels",
+          "Post up to 20 Stories per day",
         ],
       },
       {
@@ -76,8 +93,7 @@ const TIER_CONFIG: Record<string, {
           "Verified Badge",
           "Ad-free experience",
           "Basic chat themes",
-          "Pin 1 gift on profile",
-          "1 red envelope claim per day",
+          "Red Envelope sends & claims",
         ],
       },
     ],
@@ -87,33 +103,42 @@ const TIER_CONFIG: Record<string, {
     gradientFrom: "#D4A85322",
     icon: "🥇",
     badge: "GOLD",
+    usdEquiv: "≈ $12",
+    ugxEquiv: "≈ UGX 44,400",
     categories: [
       {
-        title: "All Silver Features",
+        title: "Everything in Silver, plus:",
         icon: "checkmark-circle",
-        items: ["Everything in Silver, plus:"],
+        items: [],
       },
       {
         title: "Advanced AI",
         icon: "sparkles",
         items: [
-          "Chat Summary — AI conversation summaries",
-          "AI Post Analysis",
+          "200 AfuAI messages per day",
+          "AI Chat Summary",
+          "Keyword Alerts",
           "Scheduled Focus Mode",
-          "Link → Mini App (Beta)",
         ],
       },
       {
         title: "Power Chat Tools",
         icon: "construct",
         items: [
-          "Keyword Alerts",
           "Chat Export (PDF / TXT / JSON)",
-          "Cross-Device Sync",
           "Split Screen Mode (Web)",
-          "Screen Share in Chat (Web)",
           "Group Roles System",
-          "Create Stories & Groups",
+          "Content Filter",
+        ],
+      },
+      {
+        title: "Social & Groups",
+        icon: "people",
+        items: [
+          "Create up to 10 Groups",
+          "Create up to 10 Channels",
+          "Post up to 50 Stories per day",
+          "Creator Studio — Monetise posts",
         ],
       },
       {
@@ -121,8 +146,8 @@ const TIER_CONFIG: Record<string, {
         icon: "diamond",
         items: [
           "Custom chat themes",
-          "Pin 2 gifts on profile",
-          "5 red envelope claims per day",
+          "Prestige Status unlocked",
+          "Priority in Discover",
         ],
       },
     ],
@@ -132,24 +157,42 @@ const TIER_CONFIG: Record<string, {
     gradientFrom: "#00BCD422",
     icon: "💎",
     badge: "PLATINUM",
+    usdEquiv: "≈ $25",
+    ugxEquiv: "≈ UGX 92,500",
     categories: [
       {
-        title: "All Gold Features",
+        title: "Everything in Gold, plus:",
         icon: "checkmark-circle",
-        items: ["Everything in Gold, plus:"],
+        items: [],
+      },
+      {
+        title: "Elite AI",
+        icon: "sparkles",
+        items: [
+          "Unlimited AfuAI messages",
+          "AI Chat Themes & Wallpapers",
+          "AI-powered Smart Notifications",
+        ],
+      },
+      {
+        title: "Elite Social",
+        icon: "trophy",
+        items: [
+          "Unlimited Groups & Channels",
+          "Unlimited Stories per day",
+          "Create & Send Red Envelopes",
+          "Gift Marketplace access",
+          "Leaderboard privacy",
+          "Cross-Device Sync",
+        ],
       },
       {
         title: "Elite Perks",
-        icon: "trophy",
+        icon: "diamond",
         items: [
-          "AfuAI Chat Assistant (enhanced)",
-          "AI Chat Themes & Wallpapers",
-          "Create Channels",
-          "Create Red Envelopes",
-          "Gift Marketplace access",
-          "Unlimited red envelope claims",
-          "Leaderboard privacy",
-          "Priority support",
+          "Priority Support",
+          "Early access to new features",
+          "Exclusive Platinum badge & ring",
         ],
       },
     ],
@@ -174,10 +217,20 @@ export default function PremiumScreen() {
       .eq("is_active", true)
       .order("acoin_price", { ascending: true });
     if (data) {
-      setPlans(data as Plan[]);
-      if (data.length > 0 && !selectedPlanId) {
-        const currentPlanInList = subscription ? data.find((p) => p.id === subscription.plan_id) : null;
-        const defaultPlan = currentPlanInList ?? (data.length > 1 ? data[Math.floor(data.length / 2)] : data[0]);
+      const patched = (data as Plan[]).map((p) => ({
+        ...p,
+        acoin_price: FALLBACK_PRICES[p.tier] ?? p.acoin_price,
+      }));
+      for (const p of patched) {
+        const orig = data.find((d) => d.id === p.id);
+        if (orig && orig.acoin_price !== p.acoin_price) {
+          supabase.from("subscription_plans").update({ acoin_price: p.acoin_price }).eq("id", p.id).then(() => {});
+        }
+      }
+      setPlans(patched);
+      if (patched.length > 0 && !selectedPlanId) {
+        const currentPlanInList = subscription ? patched.find((p) => p.id === subscription.plan_id) : null;
+        const defaultPlan = currentPlanInList ?? (patched.length > 1 ? patched[Math.floor(patched.length / 2)] : patched[0]);
         setSelectedPlanId(defaultPlan.id);
       }
     }
@@ -383,6 +436,26 @@ export default function PremiumScreen() {
           </View>
         )}
 
+        {/* Free tier comparison */}
+        {!isPremium && (
+          <View style={[styles.freeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.freeBadge, { color: colors.textMuted }]}>FREE PLAN (current)</Text>
+            <View style={styles.freeLimits}>
+              {[
+                { icon: "sparkles-outline", text: "10 AfuAI messages / day" },
+                { icon: "people-outline", text: "1 Group · 1 Channel" },
+                { icon: "images-outline", text: "5 Stories / day" },
+                { icon: "wallet-outline", text: "ACoins, XP & Leaderboards" },
+              ].map((r, i) => (
+                <View key={i} style={styles.freeRow}>
+                  <Ionicons name={r.icon as any} size={14} color={colors.textMuted} />
+                  <Text style={[styles.freeText, { color: colors.textSecondary }]}>{r.text}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* Plan cards */}
         <Text style={[styles.sectionLabel, { color: colors.text }]}>Choose a Plan</Text>
         {plans.map((plan) => {
@@ -433,6 +506,11 @@ export default function PremiumScreen() {
                       {"  /"} {durationLabel(plan.duration_days)}
                     </Text>
                   </Text>
+                  {cfg && (
+                    <Text style={[styles.planEquiv, { color: colors.textMuted }]}>
+                      {cfg.usdEquiv}{"  ·  "}{cfg.ugxEquiv}
+                    </Text>
+                  )}
                 </View>
                 <Ionicons
                   name={isExpanded ? "chevron-up" : "chevron-down"}
@@ -445,17 +523,26 @@ export default function PremiumScreen() {
               {isExpanded && cfg && (
                 <View style={[styles.featureList, { borderTopColor: colors.border }]}>
                   {cfg.categories.map((cat, ci) => (
-                    <View key={ci} style={styles.featureCategory}>
-                      <View style={styles.featureCatHeader}>
-                        <Ionicons name={cat.icon as any} size={13} color={tierColor} />
-                        <Text style={[styles.featureCatTitle, { color: tierColor }]}>{cat.title}</Text>
-                      </View>
-                      {cat.items.map((item, ii) => (
-                        <View key={ii} style={styles.featureRow}>
-                          <Ionicons name="checkmark" size={13} color={tierColor} style={{ marginTop: 1 }} />
-                          <Text style={[styles.featureText, { color: colors.textSecondary }]}>{item}</Text>
+                    <View key={ci} style={cat.items.length === 0 ? styles.featureBannerWrap : styles.featureCategory}>
+                      {cat.items.length === 0 ? (
+                        <View style={[styles.featureBanner, { backgroundColor: tierColor + "18", borderColor: tierColor + "44" }]}>
+                          <Ionicons name={cat.icon as any} size={13} color={tierColor} />
+                          <Text style={[styles.featureBannerText, { color: tierColor }]}>{cat.title}</Text>
                         </View>
-                      ))}
+                      ) : (
+                        <>
+                          <View style={styles.featureCatHeader}>
+                            <Ionicons name={cat.icon as any} size={13} color={tierColor} />
+                            <Text style={[styles.featureCatTitle, { color: tierColor }]}>{cat.title}</Text>
+                          </View>
+                          {cat.items.map((item, ii) => (
+                            <View key={ii} style={styles.featureRow}>
+                              <Ionicons name="checkmark" size={13} color={tierColor} style={{ marginTop: 1 }} />
+                              <Text style={[styles.featureText, { color: colors.textSecondary }]}>{item}</Text>
+                            </View>
+                          ))}
+                        </>
+                      )}
                     </View>
                   ))}
                   {plan.grants_verification && (
@@ -603,8 +690,19 @@ const styles = StyleSheet.create({
   featureCatTitle: { fontSize: 12, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5 },
   featureRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, paddingLeft: 4 },
   featureText: { fontSize: 13, fontFamily: "Inter_400Regular", flex: 1, lineHeight: 18 },
+  featureBannerWrap: {},
+  featureBanner: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1 },
+  featureBannerText: { fontSize: 12, fontFamily: "Inter_600SemiBold", flex: 1 },
   verifiedRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4, paddingLeft: 4 },
   verifiedText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  planEquiv: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
+
+  /* Free tier card */
+  freeCard: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: 14, gap: 10 },
+  freeBadge: { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.8 },
+  freeLimits: { gap: 6 },
+  freeRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  freeText: { fontSize: 13, fontFamily: "Inter_400Regular" },
   expandHint: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 10 },
   expandHintText: { fontSize: 12, fontFamily: "Inter_500Medium" },
 
