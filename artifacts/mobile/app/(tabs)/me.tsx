@@ -21,7 +21,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { useAuth } from "@/context/AuthContext";
-import { useLanguage } from "@/context/LanguageContext";
 import { showAlert } from "@/lib/alert";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
@@ -185,7 +184,6 @@ export default function MeScreen() {
   const { colors } = useTheme();
   const { profile, isPremium, subscription } = useAuth();
   const isAdmin = !!profile?.is_admin;
-  const { langLabel } = useLanguage();
   const insets = useSafeAreaInsets();
 
   const gradeIcon = profile?.current_grade === "Newcomer" ? "leaf-outline" : "star-outline";
@@ -322,67 +320,10 @@ export default function MeScreen() {
 
       <MenuGroup>
         <MenuItem
-          icon="language-outline"
-          iconBg="#007AFF"
-          label="Language"
-          value={langLabel}
-          onPress={() => router.push("/language-settings")}
-        />
-        <Separator indent={54} />
-        <MenuItem
-          icon="shield-checkmark-outline"
-          iconBg="#30D158"
-          label="Privacy"
-          onPress={() => router.push("/settings/privacy")}
-        />
-        <Separator indent={54} />
-        <MenuItem
-          icon="lock-closed-outline"
-          iconBg="#FF3B30"
-          label="Security & Data"
-          onPress={() => router.push("/settings/security")}
-        />
-        <Separator indent={54} />
-        <MenuItem
-          icon="notifications-outline"
-          iconBg="#5856D6"
-          label="Notification Settings"
-          onPress={() => router.push("/settings/notifications")}
-        />
-        <Separator indent={54} />
-        <MenuItem
-          icon="sparkles-outline"
-          iconBg="#BF5AF2"
-          label="Advanced Features"
-          onPress={() => router.push("/advanced-features")}
-          badge="38"
-        />
-        {Platform.OS !== "web" && (
-          <>
-            <Separator indent={54} />
-            <MenuItem
-              icon="shield-half-outline"
-              iconBg="#FF3B30"
-              label="Device Security"
-              onPress={() => router.push("/device-security")}
-            />
-          </>
-        )}
-      </MenuGroup>
-
-      <MenuGroup>
-        <MenuItem
-          icon="help-buoy-outline"
-          iconBg="#5856D6"
-          label="Support Center"
-          onPress={() => router.push("/support" as any)}
-        />
-        <Separator indent={54} />
-        <MenuItem
-          icon="information-circle-outline"
-          iconBg="#007AFF"
-          label="About AfuChat"
-          onPress={() => router.push("/about" as any)}
+          icon="settings-outline"
+          iconBg="#8E8E93"
+          label="Settings"
+          onPress={() => router.push("/settings")}
         />
       </MenuGroup>
 

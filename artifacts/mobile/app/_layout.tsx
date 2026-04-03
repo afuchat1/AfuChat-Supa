@@ -126,6 +126,7 @@ function RootLayoutNav() {
       <Stack.Screen name="stories/create" options={bottomSheetAnim} />
       <Stack.Screen name="stories/view" options={{ animation: "fade" }} />
       <Stack.Screen name="red-envelope/[id]" options={bottomSheetAnim} />
+      <Stack.Screen name="settings/index" options={{ headerShown: false }} />
       <Stack.Screen name="settings/privacy" />
       <Stack.Screen name="settings/notifications" />
       <Stack.Screen name="settings/chat" />
