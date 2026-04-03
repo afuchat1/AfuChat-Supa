@@ -682,6 +682,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   const hasVideo = msg.attachment_url && msg.attachment_type === "video";
   const hasAudio = msg.attachment_url && msg.attachment_type === "audio";
   const hasFile = msg.attachment_url && msg.attachment_type === "file";
+  const hasStoryReply = msg.attachment_url && msg.attachment_type === "story_reply";
   const hasTextContent = msg.encrypted_content && !["📷 Photo", "🎥 Video", "GIF"].includes(msg.encrypted_content);
 
   const replyIconOpacity = swipeX.interpolate({
@@ -781,6 +782,27 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
                 <Text style={[st.fileName, { color: textColor }]} numberOfLines={2}>{displayText}</Text>
                 <Text style={[st.fileMeta, { color: isMe ? "rgba(255,255,255,0.6)" : colors.textMuted }]}>Document</Text>
               </View>
+            </TouchableOpacity>
+          ) : hasStoryReply ? (
+            <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
+              <View style={[st.storyReplyCard, { borderColor: isMe ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.12)" }]}>
+                <Image
+                  source={{ uri: msg.attachment_url! }}
+                  style={st.storyReplyThumb}
+                  resizeMode="cover"
+                />
+                <View style={[st.storyReplyOverlay, { backgroundColor: isMe ? "rgba(0,0,0,0.35)" : "rgba(0,0,0,0.28)" }]}>
+                  <Ionicons name="camera" size={11} color="rgba(255,255,255,0.9)" />
+                  <Text style={st.storyReplyLabel}>
+                    {isMe ? "You replied to a story" : "Replied to your story"}
+                  </Text>
+                </View>
+              </View>
+              {msg.encrypted_content ? (
+                <Text style={[st.bubbleText, { color: textColor, marginTop: 6, fontSize: chatPrefsLocal.font_size, lineHeight: chatPrefsLocal.font_size + 5 }]}>
+                  {msg.encrypted_content}
+                </Text>
+              ) : null}
             </TouchableOpacity>
           ) : (
             <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
@@ -3843,6 +3865,10 @@ const st = StyleSheet.create({
   fileIconBg: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   fileName: { fontSize: 14, fontFamily: "Inter_500Medium" },
   fileMeta: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
+  storyReplyCard: { width: 200, height: 130, borderRadius: 10, overflow: "hidden", borderWidth: 1 },
+  storyReplyThumb: { width: "100%", height: "100%" },
+  storyReplyOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 5 },
+  storyReplyLabel: { fontSize: 11, fontFamily: "Inter_500Medium", color: "rgba(255,255,255,0.9)", flex: 1 },
 
   replyBanner: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, gap: 8 },
   replyBarAccent: { width: 3, height: 32, borderRadius: 2 },

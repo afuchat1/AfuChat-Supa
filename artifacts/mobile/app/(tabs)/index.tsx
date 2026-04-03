@@ -340,7 +340,7 @@ export default function ChatsScreen() {
         .order("updated_at", { ascending: false }),
       supabase
         .from("messages")
-        .select("chat_id, encrypted_content, sent_at")
+        .select("chat_id, encrypted_content, sent_at, attachment_type")
         .in("chat_id", chatIds)
         .order("sent_at", { ascending: false })
         .limit(chatIds.length * 3),
@@ -359,7 +359,11 @@ export default function ChatsScreen() {
     const lastMsgMap: Record<string, { lastMessage: string; lastMessageAt: string }> = {};
     for (const m of (lastMsgsResult.data || [])) {
       if (!lastMsgMap[m.chat_id]) {
-        lastMsgMap[m.chat_id] = { lastMessage: m.encrypted_content || "", lastMessageAt: m.sent_at };
+        let preview = m.encrypted_content || "";
+        if (m.attachment_type === "story_reply") {
+          preview = preview ? `📸 ${preview}` : "📸 Replied to a story";
+        }
+        lastMsgMap[m.chat_id] = { lastMessage: preview, lastMessageAt: m.sent_at };
       }
     }
 

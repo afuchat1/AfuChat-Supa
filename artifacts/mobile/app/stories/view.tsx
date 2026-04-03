@@ -66,11 +66,30 @@ export default function ViewStoryScreen() {
     if (!s || !user || !commentText.trim()) return;
     setSendingComment(true);
     setPaused(true);
+
+    const trimmed = commentText.trim();
+
     await supabase.from("story_replies").insert({
       story_id: s.id,
       user_id: user.id,
-      content: commentText.trim(),
+      content: trimmed,
     });
+
+    if (s.user_id !== user.id) {
+      const { data: chatId } = await supabase.rpc("get_or_create_direct_chat", {
+        other_user_id: s.user_id,
+      });
+      if (chatId) {
+        await supabase.from("messages").insert({
+          chat_id: chatId,
+          sender_id: user.id,
+          encrypted_content: trimmed,
+          attachment_url: s.media_url,
+          attachment_type: "story_reply",
+        });
+      }
+    }
+
     setCommentText("");
     setSendingComment(false);
     setPaused(false);
