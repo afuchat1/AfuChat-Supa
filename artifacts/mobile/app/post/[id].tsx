@@ -217,68 +217,82 @@ export default function PostDetailScreen() {
 
   const loadPost = useCallback(async () => {
     if (!id) return;
-    const { data } = await supabase
-      .from("posts")
-      .select(`id, content, image_url, article_title, created_at, view_count, visibility, post_type, video_url,
-        profiles!posts_author_id_fkey(id, display_name, avatar_url, handle, is_verified, is_organization_verified),
-        post_images(image_url, display_order)`)
-      .eq("id", id)
-      .single();
 
+    const [postRes, likeCountRes, replyCountRes, myLikeRes, myViewRes] = await Promise.all([
+      supabase
+        .from("posts")
+        .select(`id, content, image_url, article_title, created_at, view_count, visibility, post_type, video_url,
+          profiles!posts_author_id_fkey(id, display_name, avatar_url, handle, is_verified, is_organization_verified),
+          post_images(image_url, display_order)`)
+        .eq("id", id)
+        .single(),
+      supabase
+        .from("post_acknowledgments")
+        .select("id", { count: "exact", head: true })
+        .eq("post_id", id),
+      supabase
+        .from("post_replies")
+        .select("id", { count: "exact", head: true })
+        .eq("post_id", id),
+      user
+        ? supabase
+            .from("post_acknowledgments")
+            .select("id")
+            .eq("post_id", id)
+            .eq("user_id", user.id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      user
+        ? supabase
+            .from("post_views")
+            .select("id")
+            .eq("post_id", id)
+            .eq("viewer_id", user.id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+
+    const data = postRes.data;
     if (!data) { setLoading(false); return; }
 
-    if (data.post_type === "video" && data.video_url) {
+    if ((data as any).post_type === "video" && (data as any).video_url) {
       router.replace({ pathname: "/video/[id]", params: { id: data.id } });
       return;
     }
 
-    const { count: likeCount } = await supabase
-      .from("post_acknowledgments")
-      .select("id", { count: "exact", head: true })
-      .eq("post_id", id);
-
-    let myLike = null;
-    if (user) {
-      const { data: likeData } = await supabase
-        .from("post_acknowledgments")
-        .select("id")
-        .eq("post_id", id)
-        .eq("user_id", user.id)
-        .maybeSingle();
-      myLike = likeData;
-    }
-
-    const { count: replyCount } = await supabase
-      .from("post_replies")
-      .select("id", { count: "exact", head: true })
-      .eq("post_id", id);
-
-    let viewCount = data.view_count || 0;
-    if (user) {
-      const { data: existingView } = await supabase.from("post_views").select("id").eq("post_id", id).eq("viewer_id", user.id).maybeSingle();
-      if (!existingView) {
-        await supabase.from("post_views").insert({ post_id: id, viewer_id: user.id });
-        viewCount += 1;
-        await supabase.from("posts").update({ view_count: viewCount }).eq("id", id);
-      }
-    }
+    const viewCount = data.view_count || 0;
 
     setPost({
       id: data.id,
       content: data.content,
       image_url: data.image_url,
-      images: ((data as any).post_images || []).sort((a: any, b: any) => a.display_order - b.display_order).map((i: any) => i.image_url),
+      images: ((data as any).post_images || [])
+        .sort((a: any, b: any) => a.display_order - b.display_order)
+        .map((i: any) => i.image_url),
       post_type: (data as any).post_type || null,
       article_title: (data as any).article_title || null,
       created_at: data.created_at,
       view_count: viewCount,
       visibility: (data as any).visibility || "public",
       author: (data as any).profiles,
-      liked: !!myLike,
-      likeCount: likeCount || 0,
-      replyCount: replyCount || 0,
+      liked: !!(myLikeRes as any).data,
+      likeCount: likeCountRes.count || 0,
+      replyCount: replyCountRes.count || 0,
     });
     setLoading(false);
+
+    // Track view in background — non-blocking so it never delays the UI
+    if (user && !(myViewRes as any).data) {
+      supabase
+        .from("post_views")
+        .insert({ post_id: id, viewer_id: user.id })
+        .then(() =>
+          supabase
+            .from("posts")
+            .update({ view_count: viewCount + 1 })
+            .eq("id", id)
+        );
+    }
   }, [id, user]);
 
   const loadReplies = useCallback(async () => {

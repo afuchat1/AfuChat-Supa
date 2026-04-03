@@ -10,24 +10,26 @@ type SkeletonProps = {
 };
 
 export function Skeleton({ width, height, borderRadius = 8, style }: SkeletonProps) {
-  const { colors } = useTheme();
-  const anim = useRef(new Animated.Value(0.3)).current;
+  const { isDark } = useTheme();
+  const anim = useRef(new Animated.Value(0.5)).current;
 
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(anim, { toValue: 1, duration: 800, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0.5, duration: 900, useNativeDriver: true }),
       ])
     );
     loop.start();
     return () => loop.stop();
   }, [anim]);
 
+  const bgColor = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)";
+
   return (
     <Animated.View
       style={[
-        { width: width as any, height, borderRadius, backgroundColor: colors.border, opacity: anim },
+        { width: width as any, height, borderRadius, backgroundColor: bgColor, opacity: anim },
         style,
       ]}
     />
