@@ -237,22 +237,19 @@ function CommentsSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={cStyles.overlay} onPress={onClose}>
-        <KeyboardAvoidingView
-          behavior="padding"
-          style={cStyles.keyboard}
-        >
-          <Pressable onPress={() => {}}>
-            <View style={[cStyles.container, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-              <View style={cStyles.handle} />
-              <View style={cStyles.header}>
-                <View style={{ width: 28 }} />
-                <Text style={cStyles.title}>Comments</Text>
-                <TouchableOpacity onPress={onClose} hitSlop={12}>
-                  <Ionicons name="close" size={22} color="rgba(255,255,255,0.7)" />
-                </TouchableOpacity>
-              </View>
+      <KeyboardAvoidingView behavior="padding" style={cStyles.kavFull}>
+        <Pressable style={cStyles.overlay} onPress={onClose}>
+          <Pressable onPress={() => {}} style={[cStyles.container, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+            <View style={cStyles.handle} />
+            <View style={cStyles.header}>
+              <View style={{ width: 28 }} />
+              <Text style={cStyles.title}>Comments</Text>
+              <TouchableOpacity onPress={onClose} hitSlop={12}>
+                <Ionicons name="close" size={22} color="rgba(255,255,255,0.7)" />
+              </TouchableOpacity>
+            </View>
 
+            <View style={cStyles.middle}>
               {loading ? (
                 <View style={cStyles.center}><ActivityIndicator color={accent} /></View>
               ) : replies.length === 0 ? (
@@ -273,74 +270,76 @@ function CommentsSheet({
                   )}
                 />
               )}
+            </View>
 
-              {user ? (
-                <View>
-                  {replyingTo && (
-                    <View style={cStyles.replyingBanner}>
-                      <Text style={cStyles.replyingText}>
-                        Replying to <Text style={{ color: accent }}>@{replyingTo.profile.handle}</Text>
-                      </Text>
-                      <TouchableOpacity onPress={() => { setReplyingTo(null); setText(""); }} hitSlop={8}>
-                        <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.35)" />
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                  <View style={cStyles.inputRow}>
-                    <Avatar uri={profile?.avatar_url} name={profile?.display_name || "You"} size={30} />
-                    <View style={cStyles.inputWrap}>
-                      <TextInput
-                        ref={inputRef}
-                        style={cStyles.input}
-                        placeholder={replyingTo ? `Reply to @${replyingTo.profile.handle}...` : "Add a comment..."}
-                        placeholderTextColor="rgba(255,255,255,0.3)"
-                        value={text}
-                        onChangeText={setText}
-                        multiline
-                        maxLength={500}
-                      />
-                    </View>
-                    <TouchableOpacity
-                      onPress={sendReply}
-                      disabled={!text.trim() || sending}
-                      style={[cStyles.sendBtn, text.trim() ? [cStyles.sendBtnActive, { backgroundColor: accent }] : null]}
-                    >
-                      {sending ? (
-                        <ActivityIndicator size={16} color="#fff" />
-                      ) : (
-                        <Ionicons name="arrow-up" size={18} color={text.trim() ? "#fff" : "rgba(255,255,255,0.3)"} />
-                      )}
+            {user ? (
+              <View>
+                {replyingTo && (
+                  <View style={cStyles.replyingBanner}>
+                    <Text style={cStyles.replyingText}>
+                      Replying to <Text style={{ color: accent }}>@{replyingTo.profile.handle}</Text>
+                    </Text>
+                    <TouchableOpacity onPress={() => { setReplyingTo(null); setText(""); }} hitSlop={8}>
+                      <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.35)" />
                     </TouchableOpacity>
                   </View>
+                )}
+                <View style={cStyles.inputRow}>
+                  <Avatar uri={profile?.avatar_url} name={profile?.display_name || "You"} size={30} />
+                  <View style={cStyles.inputWrap}>
+                    <TextInput
+                      ref={inputRef}
+                      style={cStyles.input}
+                      placeholder={replyingTo ? `Reply to @${replyingTo.profile.handle}...` : "Add a comment..."}
+                      placeholderTextColor="rgba(255,255,255,0.3)"
+                      value={text}
+                      onChangeText={setText}
+                      multiline
+                      maxLength={500}
+                    />
+                  </View>
+                  <TouchableOpacity
+                    onPress={sendReply}
+                    disabled={!text.trim() || sending}
+                    style={[cStyles.sendBtn, text.trim() ? [cStyles.sendBtnActive, { backgroundColor: accent }] : null]}
+                  >
+                    {sending ? (
+                      <ActivityIndicator size={16} color="#fff" />
+                    ) : (
+                      <Ionicons name="arrow-up" size={18} color={text.trim() ? "#fff" : "rgba(255,255,255,0.3)"} />
+                    )}
+                  </TouchableOpacity>
                 </View>
-              ) : (
-                <TouchableOpacity style={cStyles.signIn} onPress={() => { onClose(); router.push("/(auth)/login"); }}>
-                  <Text style={[cStyles.signInText, { color: accent }]}>Sign in to comment</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+              </View>
+            ) : (
+              <TouchableOpacity style={cStyles.signIn} onPress={() => { onClose(); router.push("/(auth)/login"); }}>
+                <Text style={[cStyles.signInText, { color: accent }]}>Sign in to comment</Text>
+              </TouchableOpacity>
+            )}
           </Pressable>
-        </KeyboardAvoidingView>
-      </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const cStyles = StyleSheet.create({
+  kavFull: { flex: 1 },
   overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.55)" },
-  keyboard: { justifyContent: "flex-end" },
   container: {
     backgroundColor: "#1a1a1d",
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
-    maxHeight: "60%",
-    minHeight: 340,
+    maxHeight: "70%",
+    minHeight: 360,
     paddingHorizontal: 16,
+    flexDirection: "column",
   },
+  middle: { flex: 1 },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.15)", alignSelf: "center", marginTop: 10, marginBottom: 6 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(255,255,255,0.08)" },
   title: { color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold", letterSpacing: 0.2 },
-  center: { paddingVertical: 48, alignItems: "center", gap: 8 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
   emptyText: { color: "rgba(255,255,255,0.45)", fontSize: 15, fontFamily: "Inter_600SemiBold", marginTop: 8 },
   emptySubtext: { color: "rgba(255,255,255,0.25)", fontSize: 13, fontFamily: "Inter_400Regular" },
   list: { flex: 1, marginTop: 4 },

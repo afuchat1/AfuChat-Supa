@@ -181,58 +181,72 @@ export async function clearPushToken(userId: string): Promise<void> {
     .eq("id", userId);
 }
 
+function routeNotificationResponse(response: any) {
+  const id = response.notification.request.identifier;
+  if (alreadyHandled(id)) return;
+
+  const data = (response.notification.request.content.data || {}) as Record<string, string>;
+  // Priority 1: explicit deep-link URL
+  if (data?.url) {
+    router.push(data.url as any);
+    return;
+  }
+  // Priority 2: type-based routing
+  switch (data?.type) {
+    case "message":
+      if (data.chatId) router.push(`/chat/${data.chatId}` as any);
+      break;
+    case "order":
+    case "escrow":
+      if (data.orderId) router.push(`/shop/order/${data.orderId}` as any);
+      else router.push("/shop/my-orders" as any);
+      break;
+    case "payment":
+      router.push("/me" as any);
+      break;
+    case "channel":
+    case "live":
+      if (data.channelId) router.push(`/channel/${data.channelId}` as any);
+      break;
+    case "follow":
+      if (data.userId) router.push(`/contact/${data.userId}` as any);
+      else router.push("/notifications" as any);
+      break;
+    case "like":
+    case "reply":
+    case "mention":
+      if (data.postId) router.push(`/post/${data.postId}` as any);
+      else router.push("/notifications" as any);
+      break;
+    case "gift":
+      router.push("/notifications" as any);
+      break;
+    default:
+      break;
+  }
+}
+
+let _listenersActive = false;
+
 export function setupNotificationListeners() {
   if (Platform.OS === "web" || !Notifications) return () => {};
+  if (_listenersActive) return () => {};
+  _listenersActive = true;
+
+  // Drain any pending cold-start response (e.g. app launched by tapping notification).
+  // This marks the ID as handled so the addNotificationResponseReceivedListener
+  // replay on the same session doesn't re-route.
+  Notifications.getLastNotificationResponseAsync().then((response) => {
+    if (response) routeNotificationResponse(response);
+  }).catch(() => {});
 
   const responseSubscription = Notifications.addNotificationResponseReceivedListener(
-    (response) => {
-      const id = response.notification.request.identifier;
-      if (alreadyHandled(id)) return;
-
-      const data = response.notification.request.content.data as Record<string, string>;
-      // Priority 1: explicit deep-link URL
-      if (data?.url) {
-        router.push(data.url as any);
-        return;
-      }
-      // Priority 2: type-based routing
-      switch (data?.type) {
-        case "message":
-          if (data.chatId) router.push(`/chat/${data.chatId}` as any);
-          break;
-        case "order":
-        case "escrow":
-          if (data.orderId) router.push(`/shop/order/${data.orderId}` as any);
-          else router.push("/shop/my-orders" as any);
-          break;
-        case "payment":
-          router.push("/me" as any);
-          break;
-        case "channel":
-        case "live":
-          if (data.channelId) router.push(`/channel/${data.channelId}` as any);
-          break;
-        case "follow":
-          if (data.userId) router.push(`/contact/${data.userId}` as any);
-          else router.push("/notifications" as any);
-          break;
-        case "like":
-        case "reply":
-        case "mention":
-          if (data.postId) router.push(`/post/${data.postId}` as any);
-          else router.push("/notifications" as any);
-          break;
-        case "gift":
-          router.push("/notifications" as any);
-          break;
-        default:
-          router.push("/notifications" as any);
-      }
-    },
+    (response) => routeNotificationResponse(response),
   );
 
   return () => {
     responseSubscription.remove();
+    _listenersActive = false;
   };
 }
 
