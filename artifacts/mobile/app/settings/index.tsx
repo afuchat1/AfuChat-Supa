@@ -17,6 +17,13 @@ import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
 import { Separator } from "@/components/ui/Separator";
 
+const THEME_LABELS: Record<string, string> = { dark: "Dark", light: "Light", system: "System" };
+const THEME_ICONS: Record<string, React.ComponentProps<typeof Ionicons>["name"]> = {
+  dark: "moon",
+  light: "sunny",
+  system: "phone-portrait-outline",
+};
+
 type MenuItemProps = {
   icon: React.ComponentProps<typeof Ionicons>["name"];
   iconBg: string;
@@ -59,10 +66,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export default function SettingsScreen() {
-  const { colors } = useTheme();
+  const { colors, themeMode, setThemeMode } = useTheme();
   const { langLabel } = useLanguage();
   const { signOut } = useAuth();
   const insets = useSafeAreaInsets();
+
+  function cycleTheme() {
+    const next = themeMode === "dark" ? "light" : themeMode === "light" ? "system" : "dark";
+    Haptics.selectionAsync();
+    setThemeMode(next);
+  }
 
   function handleSignOut() {
     showAlert("Sign Out", "Are you sure you want to sign out?", [
@@ -92,6 +105,14 @@ export default function SettingsScreen() {
       >
         {/* Preferences */}
         <Section title="PREFERENCES">
+          <MenuItem
+            icon={THEME_ICONS[themeMode] ?? "phone-portrait-outline"}
+            iconBg="#1C1C1E"
+            label="Appearance"
+            value={THEME_LABELS[themeMode] ?? "System"}
+            onPress={cycleTheme}
+          />
+          <Separator indent={54} />
           <MenuItem
             icon="language-outline"
             iconBg="#007AFF"

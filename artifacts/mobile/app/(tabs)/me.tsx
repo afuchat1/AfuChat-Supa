@@ -289,14 +289,6 @@ export default function MeScreen() {
               onPress={() => router.push("/monetize")}
               badge="Admin"
             />
-            <Separator indent={54} />
-            <MenuItem
-              icon="bag-handle-outline"
-              iconBg="#FF6B35"
-              label="My Store"
-              onPress={() => router.push("/shop/manage" as any)}
-              badge="Admin"
-            />
           </>
         )}
       </MenuGroup>
