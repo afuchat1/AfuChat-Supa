@@ -210,12 +210,31 @@ export default function RegisterScreen() {
         router.replace("/(tabs)");
       }
     } catch (err: any) {
-      setOauthLoading(null);
-      if (isErrorWithCode(err)) {
-        if (err.code === statusCodes.SIGN_IN_CANCELLED) return;
-        if (err.code === statusCodes.IN_PROGRESS) return;
+      if (isErrorWithCode && isErrorWithCode(err)) {
+        if (err.code === statusCodes.SIGN_IN_CANCELLED) { setOauthLoading(null); return; }
+        if (err.code === statusCodes.IN_PROGRESS) { setOauthLoading(null); return; }
+        if (err.code === statusCodes.DEVELOPER_ERROR || err.code === 10) {
+          return signInWithProviderWeb("google");
+        }
       }
+      setOauthLoading(null);
       showAlert("Error", err?.message || "Google sign in failed.");
+    }
+  }
+
+  async function signInWithProviderWeb(provider: string) {
+    try {
+      const redirectUrl = makeRedirectUri({ native: "afuchat://(auth)/register" });
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: provider as any,
+        options: { redirectTo: redirectUrl, skipBrowserRedirect: true },
+      });
+      if (error) { showAlert("Error", error.message); setOauthLoading(null); return; }
+      if (!data?.url) { setOauthLoading(null); return; }
+      setOauthModalUrl(data.url);
+    } catch (_) {
+      setOauthLoading(null);
+      showAlert("Error", "Could not open Google sign in.");
     }
   }
 
