@@ -1683,8 +1683,18 @@ export default function ChatScreen() {
     setIsAfuAiTyping(true);
     const chatId = activeChatId || (isDraft ? realChatId : id) || id;
     try {
-      const userName = profile?.display_name || "there";
-      const systemPrompt = `You are AfuAI, a helpful and friendly AI assistant. Answer questions directly and naturally based on what the user asks. Be conversational, concise, and genuine — like a knowledgeable friend. Write plain text only, no markdown, no bullet points, no headings. The user's name is ${userName}.`;
+      const userContext = await getAfuAiUserContext();
+      const systemPrompt = `You are AfuAI, a capable and friendly AI assistant — like ChatGPT, but built into AfuChat. You can help with anything: writing, coding, math, advice, research, creative work, answering questions, and more.
+
+You have access to the user's AfuChat account data below. Do NOT bring it up, reference it, or mention the platform unless the user specifically asks about their account, balance, transactions, followers, or anything related to AfuChat. Just answer naturally based on what they ask.
+
+${userContext}
+
+Rules:
+- Answer any question or task the user asks, just like a general AI assistant would.
+- Only use the account data above if the user directly asks about it.
+- Write plain conversational text. No markdown, no bullet points, no headings.
+- Be concise, clear, and genuinely helpful. Speak like a knowledgeable friend.`;
 
       const conversationMessages = currentMessages
         .filter(m => !m._pending)
