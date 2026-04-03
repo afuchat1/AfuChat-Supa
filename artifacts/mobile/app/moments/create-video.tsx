@@ -52,7 +52,7 @@ export default function CreateVideoScreen() {
 
   async function pickVideo() {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      mediaTypes: ["video"] as any,
       allowsEditing: true,
       quality: 0.8,
       videoMaxDuration: MAX_DURATION_SECONDS,
@@ -86,11 +86,16 @@ export default function CreateVideoScreen() {
       setUploadProgress("Generating thumbnail…");
       let thumbnailPublicUrl: string | null = null;
       try {
-        const { getThumbnailAsync } = await import("expo-video-thumbnails");
-        const { uri: thumbUri } = await getThumbnailAsync(videoUri, { time: 1000 });
-        const thumbPath = `${user.id}/${Date.now()}_thumb.jpg`;
-        const thumbResult = await uploadToStorage("videos", thumbPath, thumbUri, "image/jpeg");
-        if (thumbResult.publicUrl) thumbnailPublicUrl = thumbResult.publicUrl;
+        const thumbMod = await import("expo-video-thumbnails");
+        const fn = thumbMod.getThumbnailAsync ?? thumbMod.default?.getThumbnailAsync;
+        if (fn && videoUri && !videoUri.startsWith("blob:")) {
+          const thumbResult2 = await fn(videoUri, { time: 1000, quality: 0.7 });
+          if (thumbResult2?.uri) {
+            const thumbPath = `${user.id}/${Date.now()}_thumb.jpg`;
+            const uploaded = await uploadToStorage("videos", thumbPath, thumbResult2.uri, "image/jpeg");
+            if (uploaded.publicUrl) thumbnailPublicUrl = uploaded.publicUrl;
+          }
+        }
       } catch (_) {}
 
       setUploadProgress("Publishing…");

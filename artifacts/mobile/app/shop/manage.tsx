@@ -124,7 +124,7 @@ export default function ShopManage() {
   }
 
   async function pickShopImage(type: "banner" | "logo") {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: type === "banner" ? [16, 6] : [1, 1], quality: 0.85 });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"] as any, allowsEditing: true, aspect: type === "banner" ? [16, 6] : [1, 1], quality: 0.85 });
     if (result.canceled || !result.assets?.[0]) return;
     const uri = result.assets[0].uri;
     if (type === "banner") setShopBanner(uri);
@@ -217,7 +217,7 @@ export default function ShopManage() {
   }
 
   async function addProductImage() {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.85 });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"] as any, allowsEditing: true, aspect: [1, 1], quality: 0.85 });
     if (result.canceled || !result.assets?.[0]) return;
     setEditingProduct((prev) => ({ ...prev, images: [...(prev?.images || []), result.assets[0].uri] }));
   }

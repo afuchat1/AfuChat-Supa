@@ -18,9 +18,12 @@ function VideoThumbnailNative({ videoUrl, fallbackImageUrl, style, resizeMode = 
 
     (async () => {
       try {
-        const { getThumbnailAsync } = await import("expo-video-thumbnails");
-        const { uri } = await getThumbnailAsync(videoUrl, { time: SEEK_TIME * 1000 });
-        if (!cancelled) setThumbUri(uri);
+        if (!videoUrl || videoUrl.startsWith("blob:")) return;
+        const thumbMod = await import("expo-video-thumbnails");
+        const fn = thumbMod.getThumbnailAsync ?? (thumbMod as any).default?.getThumbnailAsync;
+        if (!fn) return;
+        const result = await fn(videoUrl, { time: SEEK_TIME * 1000, quality: 0.7 });
+        if (!cancelled && result?.uri) setThumbUri(result.uri);
       } catch {
         if (!cancelled) setThumbUri(null);
       }
