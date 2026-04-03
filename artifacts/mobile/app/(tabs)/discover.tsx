@@ -15,9 +15,8 @@ import {
 } from "react-native";
 import { showAlert } from "@/lib/alert";
 import ViewShot from "react-native-view-shot";
-import { useSafeAreaInsets as useCardInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, useSafeAreaInsets as useCardInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { ImageViewer, useImageViewer } from "@/components/ImageViewer";

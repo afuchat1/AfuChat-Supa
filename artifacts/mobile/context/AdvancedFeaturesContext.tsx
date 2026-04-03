@@ -7,14 +7,84 @@ export type ActivityStatus = "online" | "busy" | "focus" | "offline" | "last_see
 export type AdvancedFeatureSettings = {
   activity_status: ActivityStatus;
   focus_mode: boolean;
+  focus_mode_schedule: boolean;
+  mini_profile_popup: boolean;
   offline_drafts: boolean;
+  show_typing_indicator: boolean;
+  interactive_link_preview: boolean;
+  auto_media_organization: boolean;
+  emoji_reactions_advanced: boolean;
+  message_reminders: boolean;
+  message_edit_history: boolean;
+  chat_to_post: boolean;
+  quick_action_menu: boolean;
+  drag_drop_upload: boolean;
+  user_tagging: boolean;
+  in_app_browser: boolean;
+  smart_notifications: boolean;
+  message_translation: boolean;
+  translation_language: string;
+  voice_to_text: boolean;
+  text_to_speech: boolean;
+  chat_folders: boolean;
+  temp_chat_enabled: boolean;
+  temp_chat_default_minutes: number;
+  auto_reply_enabled: boolean;
+  auto_reply_message: string;
+  chat_summary: boolean;
+  link_to_mini_app: boolean;
+  keyword_alerts: boolean;
+  keyword_alerts_list: string;
+  chat_export_format: string;
+  content_filter_topics: boolean;
+  content_filter_keywords: string;
+  split_screen_mode: boolean;
+  cross_device_sync: boolean;
+  group_roles_system: boolean;
+  screen_share: boolean;
 };
 
 const defaults: AdvancedFeatureSettings = {
   activity_status: "online",
   focus_mode: false,
+  focus_mode_schedule: false,
+  mini_profile_popup: true,
   offline_drafts: true,
+  show_typing_indicator: true,
+  interactive_link_preview: true,
+  auto_media_organization: true,
+  emoji_reactions_advanced: true,
+  message_reminders: true,
+  message_edit_history: true,
+  chat_to_post: true,
+  quick_action_menu: true,
+  drag_drop_upload: true,
+  user_tagging: true,
+  in_app_browser: true,
+  smart_notifications: true,
+  message_translation: false,
+  translation_language: "en",
+  voice_to_text: false,
+  text_to_speech: false,
+  chat_folders: false,
+  temp_chat_enabled: false,
+  temp_chat_default_minutes: 60,
+  auto_reply_enabled: false,
+  auto_reply_message: "I'm currently unavailable. I'll reply soon!",
+  chat_summary: false,
+  link_to_mini_app: false,
+  keyword_alerts: false,
+  keyword_alerts_list: "",
+  chat_export_format: "pdf",
+  content_filter_topics: false,
+  content_filter_keywords: "",
+  split_screen_mode: false,
+  cross_device_sync: true,
+  group_roles_system: false,
+  screen_share: false,
 };
+
+const COLUMNS = Object.keys(defaults).join(", ");
 
 type AdvancedFeaturesContextType = {
   features: AdvancedFeatureSettings;
@@ -37,7 +107,7 @@ export function AdvancedFeaturesProvider({ children }: { children: React.ReactNo
     if (!user) { setLoading(false); return; }
     supabase
       .from("advanced_feature_settings")
-      .select("activity_status, focus_mode, offline_drafts")
+      .select(COLUMNS)
       .eq("user_id", user.id)
       .maybeSingle()
       .then(({ data }) => {
@@ -68,9 +138,7 @@ export function AdvancedFeaturesProvider({ children }: { children: React.ReactNo
     }
 
     if (key === "focus_mode") {
-      const inFocus = value as boolean;
-      const showOnline = inFocus;
-      await supabase.from("profiles").update({ show_online_status: showOnline }).eq("id", user.id);
+      await supabase.from("profiles").update({ show_online_status: !(value as boolean) }).eq("id", user.id);
     }
   }, [user]);
 
