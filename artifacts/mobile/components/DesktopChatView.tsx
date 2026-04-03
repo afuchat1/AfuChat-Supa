@@ -164,13 +164,10 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
     ? chatInfo.is_group || chatInfo.is_channel ? chatInfo.avatar_url : chatInfo.other_avatar
     : null;
 
-  let prevDate = "";
-
-  const renderMessage = ({ item }: { item: Message }) => {
+  const renderMessage = ({ item, index }: { item: Message; index: number }) => {
     const isMe = item.sender_id === user?.id;
     const dateLabel = formatDate(item.sent_at);
-    const showDate = dateLabel !== prevDate;
-    prevDate = dateLabel;
+    const showDate = index === 0 || dateLabel !== formatDate(messages[index - 1]?.sent_at ?? "");
 
     return (
       <>

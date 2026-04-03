@@ -2923,10 +2923,10 @@ STRICT RULES:
   }
 
   function shouldShowTail(index: number): boolean {
-    if (index === 0) return true;
+    if (index === messages.length - 1) return true;
     const current = messages[index];
-    const prev = messages[index - 1];
-    return current.sender_id !== prev.sender_id;
+    const next = messages[index + 1];
+    return current.sender_id !== next.sender_id;
   }
 
   function shouldShowName(index: number): boolean {
@@ -2935,10 +2935,10 @@ STRICT RULES:
   }
 
   function shouldShowDate(index: number): boolean {
-    if (index === messages.length - 1) return true;
+    if (index === 0) return true;
     const current = new Date(messages[index].sent_at);
-    const next = new Date(messages[index + 1].sent_at);
-    return current.toDateString() !== next.toDateString();
+    const prev = new Date(messages[index - 1].sent_at);
+    return current.toDateString() !== prev.toDateString();
   }
 
   const handleScroll = useCallback((e: any) => {

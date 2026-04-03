@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Web • Desktop</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+        
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+        
+        .chat-hover:hover {
+            background-color: #f0f2f5;
+        }
+        
+        .dark .chat-hover:hover {
+            background-color: #2a2f32;
+        }
+        
+        .message-received {
+            background-color: #ffffff;
+            border-radius: 18px 18px 18px 4px;
+        }
+        
+        .dark .message-received {
+            background-color: #2a2f32;
+            border-radius: 18px 18px 18px 4px;
+        }
+        
+        .message-sent {
+            background-color: #25d366;
+            color: white;
+            border-radius: 18px 18px 4px 18px;
+        }
+        
+        .chat-list::-webkit-scrollbar {
+            width: 4px;
+        }
+        
+        .chat-list::-webkit-scrollbar-thumb {
+            background-color: #8696a0;
+            border-radius: 20px;
+        }
+    </style>
+</head>
+<body class="bg-[#111b21] text-white min-h-screen flex overflow-hidden">
+
+    <!-- LEFT SIDEBAR: Chat List -->
+    <div class="w-[380px] border-r border-[#222f35] flex flex-col">
+        
+        <!-- Top Bar -->
+        <div class="h-14 bg-[#202c33] flex items-center px-4 justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-[#25d366] rounded-full flex items-center justify-center text-xl">💬</div>
+                <span class="font-semibold text-xl">WhatsApp</span>
+            </div>
+            
+            <div class="flex items-center gap-6 text-[#8696a0]">
+                <button onclick="toggleStatus()" class="hover:text-white transition">👤</button>
+                <button onclick="newChat()" class="hover:text-white transition text-2xl leading-none">✚</button>
+                <button onclick="toggleMenu()" class="hover:text-white transition">⋯</button>
+            </div>
+        </div>
+
+        <!-- Search -->
+        <div class="px-4 py-2 bg-[#202c33]">
+            <div class="bg-[#2a3942] flex items-center gap-3 px-4 h-10 rounded-lg text-sm">
+                <span class="text-[#8696a0]">🔎</span>
+                <input id="search-input" 
+                       type="text" 
+                       placeholder="Search or start new chat"
+                       class="flex-1 bg-transparent outline-none text-white placeholder:text-[#8696a0]">
+            </div>
+        </div>
+
+        <!-- Chat List -->
+        <div id="chat-list" class="flex-1 overflow-y-auto chat-list bg-[#111b21]">
+            
+            <!-- Chat 1 -->
+            <div onclick="openChat(0)" class="chat-hover flex items-center gap-3 px-4 py-3 border-b border-[#222f35] cursor-pointer">
+                <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex-shrink-0 flex items-center justify-center text-2xl">🇺🇬</div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex justify-between">
+                        <span class="font-medium text-white">Afu (You)</span>
+                        <span class="text-xs text-[#8696a0]">now</span>
+                    </div>
+                    <div class="text-[#8696a0] text-sm truncate">Just built WhatsApp Web UI 🔥</div>
+                </div>
+                <div class="bg-[#25d366] text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">3</div>
+            </div>
+
+            <!-- Chat 2 -->
+            <div onclick="openChat(1)" class="chat-hover flex items-center gap-3 px-4 py-3 border-b border-[#222f35] cursor-pointer">
+                <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full flex-shrink-0"></div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex justify-between">
+                        <span class="font-medium text-white">Elon Musk</span>
+                        <span class="text-xs text-[#8696a0]">14:22</span>
+                    </div>
+                    <div class="text-[#8696a0] text-sm truncate">Grok 4 is insane</div>
+                </div>
+            </div>
+
+            <!-- Chat 3 -->
+            <div onclick="openChat(2)" class="chat-hover flex items-center gap-3 px-4 py-3 border-b border-[#222f35] cursor-pointer">
+                <div class="w-12 h-12 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex-shrink-0 flex items-center justify-center text-2xl">🇰🇪</div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex justify-between">
+                        <span class="font-medium text-white">Mumo • Kenya</span>
+                        <span class="text-xs text-[#8696a0]">Yesterday</span>
+                    </div>
+                    <div class="text-[#8696a0] text-sm truncate">When are you coming to Nairobi?</div>
+                </div>
+                <div class="bg-[#25d366] text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">1</div>
+            </div>
+
+            <!-- Add more chats if you want -->
+        </div>
+    </div>
+
+    <!-- MAIN CHAT AREA -->
+    <div class="flex-1 flex flex-col bg-[#0f1b22]">
+
+        <!-- Chat Header -->
+        <div id="chat-header" class="h-14 bg-[#202c33] flex items-center px-4 border-b border-[#222f35]">
+            <div onclick="closeChat()" class="xl:hidden mr-3 text-2xl">←</div>
+            
+            <div id="header-avatar" class="w-9 h-9 bg-gray-600 rounded-full flex-shrink-0"></div>
+            
+            <div class="flex-1 ml-3">
+                <div id="header-name" class="font-medium">Select a chat</div>
+                <div id="header-status" class="text-[#8696a0] text-sm">online</div>
+            </div>
+            
+            <div class="flex items-center gap-7 text-[#8696a0]">
+                <button class="hover:text-white transition">📞</button>
+                <button class="hover:text-white transition">🎥</button>
+                <button onclick="toggleInfoPanel()" class="hover:text-white transition">ℹ️</button>
+                <button onclick="toggleMenu()" class="hover:text-white transition">⋯</button>
+            </div>
+        </div>
+
+        <!-- Messages Area -->
+        <div id="messages" class="flex-1 overflow-y-auto p-6 space-y-6 bg-[url('https://i.imgur.com/7z9pL8K.png')] bg-repeat bg-[#0f1b22]">
+
+            <!-- Messages will be injected by JS -->
+            
+        </div>
+
+        <!-- Message Input -->
+        <div class="h-16 bg-[#202c33] flex items-center px-4 gap-4 border-t border-[#222f35]">
+            <button class="text-3xl text-[#8696a0] hover:text-white">😀</button>
+            <button class="text-3xl text-[#8696a0] hover:text-white">📎</button>
+            
+            <div class="flex-1 bg-[#2a3942] rounded-3xl px-6 py-2 flex items-center">
+                <input id="message-input" 
+                       type="text" 
+                       placeholder="Type a message"
+                       onkeydown="if(event.key === 'Enter') sendMessage()"
+                       class="flex-1 bg-transparent outline-none text-white placeholder:text-[#8696a0]">
+            </div>
+            
+            <button onclick="sendMessage()" class="text-4xl text-[#25d366] hover:scale-110 transition">➤</button>
+        </div>
+    </div>
+
+    <!-- RIGHT PANEL: Contact Info (toggleable) -->
+    <div id="info-panel" class="w-80 border-l border-[#222f35] bg-[#202c33] flex-col hidden xl:flex">
+        <div class="p-6 text-center">
+            <div id="info-avatar" class="w-24 h-24 mx-auto rounded-full mb-4 bg-gray-600"></div>
+            <h2 id="info-name" class="font-semibold text-xl"></h2>
+            <p id="info-phone" class="text-[#8696a0]">+256 700 123 456</p>
+        </div>
+        
+        <div class="px-6 text-[#8696a0] text-sm space-y-8">
+            <div>
+                <div class="font-medium mb-2">About</div>
+                <div id="info-about" class="text-white">"Building cool UIs in Kampala 🇺🇬"</div>
+            </div>
+            
+            <div>
+                <div class="font-medium mb-2">Media, links, and docs</div>
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="bg-[#2a3942] aspect-square rounded-xl flex items-center justify-center">📸</div>
+                    <div class="bg-[#2a3942] aspect-square rounded-xl flex items-center justify-center">📸</div>
+                    <div class="bg-[#2a3942] aspect-square rounded-xl flex items-center justify-center">📸</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-auto border-t border-[#222f35] p-6 text-red-400 text-center font-medium cursor-pointer hover:bg-[#2a3942]">
+            Block contact
+        </div>
+    </div>
+
+    <script>
+        let currentChat = -1;
+
+        const chats = [
+            {
+                name: "Afu (You)",
+                avatar: "🇺🇬",
+                status: "online",
+                messages: [
+                    { type: "received", text: "Hey, the X UI clone looked dope!", time: "14:20" },
+                    { type: "sent", text: "Thanks! Now building WhatsApp Web too 🔥", time: "14:21" },
+                    { type: "received", text: "Legend", time: "14:22" }
+                ]
+            },
+            {
+                name: "Elon Musk",
+                avatar: "🚀",
+                status: "last seen recently",
+                messages: [
+                    { type: "received", text: "Grok 4 is insane", time: "14:22" },
+                    { type: "sent", text: "Agreed! Just used it to build this UI", time: "14:23" }
+                ]
+            },
+            {
+                name: "Mumo • Kenya",
+                avatar: "🇰🇪",
+                status: "online",
+                messages: [
+                    { type: "received", text: "When are you coming to Nairobi?", time: "Yesterday" },
+                    { type: "sent", text: "Soon! Let's build something crazy together", time: "Yesterday" }
+                ]
+            }
+        ];
+
+        function openChat(index) {
+            currentChat = index;
+            const chat = chats[index];
+            
+            // Update header
+            document.getElementById('header-name').textContent = chat.name;
+            document.getElementById('header-status').textContent = chat.status;
+            document.getElementById('header-avatar').innerHTML = `<div class="w-9 h-9 flex items-center justify-center text-3xl">${chat.avatar}</div>`;
+            
+            // Update info panel
+            document.getElementById('info-name').textContent = chat.name;
+            document.getElementById('info-avatar').innerHTML = `<div class="w-24 h-24 flex items-center justify-center text-6xl">${chat.avatar}</div>`;
+            
+            // Render messages
+            const messagesContainer = document.getElementById('messages');
+            messagesContainer.innerHTML = '';
+            
+            chat.messages.forEach(msg => {
+                const div = document.createElement('div');
+                div.className = `flex ${msg.type === 'sent' ? 'justify-end' : 'justify-start'}`;
+                div.innerHTML = `
+                    <div class="${msg.type === 'sent' ? 'message-sent' : 'message-received'} px-5 py-2 max-w-[70%]">
+                        <p>${msg.text}</p>
+                        <div class="text-xs text-right mt-1 opacity-70">${msg.time}</div>
+                    </div>
+                `;
+                messagesContainer.appendChild(div);
+            });
+            
+            // Scroll to bottom
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            // Show info panel on large screens
+            if (window.innerWidth > 1280) {
+                document.getElementById('info-panel').classList.remove('hidden');
+                document.getElementById('info-panel').classList.add('flex');
+            }
+        }
+
+        function sendMessage() {
+            if (currentChat === -1) return;
+            
+            const input = document.getElementById('message-input');
+            const text = input.value.trim();
+            if (!text) return;
+            
+            const chat = chats[currentChat];
+            const now = new Date();
+            const time = `${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`;
+            
+            chat.messages.push({ type: "sent", text: text, time: time });
+            
+            // Re-render messages
+            openChat(currentChat);
+            input.value = '';
+        }
+
+        function closeChat() {
+            currentChat = -1;
+            document.getElementById('messages').innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full text-[#8696a0]">
+                    <div class="text-7xl mb-6">💬</div>
+                    <h2 class="text-2xl font-medium">WhatsApp Web</h2>
+                    <p class="text-center mt-2 max-w-xs">Send and receive messages without keeping your phone online.<br>Use WhatsApp on up to 4 linked devices.</p>
+                </div>
+            `;
+            document.getElementById('header-name').textContent = 'Select a chat';
+            document.getElementById('header-status').textContent = '';
+        }
+
+        function newChat() {
+            alert("🆕 New chat flow would open here (real WhatsApp behavior)");
+        }
+
+        function toggleInfoPanel() {
+            const panel = document.getElementById('info-panel');
+            panel.classList.toggle('hidden');
+            panel.classList.toggle('flex');
+        }
+
+        function toggleStatus() {
+            alert("👤 Your profile & status settings (real WhatsApp)");
+        }
+
+        function toggleMenu() {
+            alert("⋯ More options menu (archive, mute, etc.)");
+        }
+
+        // Auto dark mode (WhatsApp is always dark by default)
+        console.log('%c✅ WhatsApp Web Desktop UI cloned perfectly!', 'color:#25d366; font-size:16px; font-weight:bold');
+
+        // Keyboard support
+        document.addEventListener('keydown', (e) => {
+            if (e.key === '/' && document.activeElement.tagName !== "INPUT") {
+                document.getElementById('search-input').focus();
+                e.preventDefault();
+            }
+        });
+    </script>
+</body>
+</html>
