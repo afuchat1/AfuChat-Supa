@@ -70,23 +70,23 @@ function useWaColors(isDark: boolean) {
         welcomeBg: "#0b1014",
       }
     : {
-        bg: "#f0f2f5",
+        bg: "#f0f7f9",
         surface: "#ffffff",
-        input: "#f0f2f5",
-        text: "#111b21",
-        muted: "#667781",
-        border: "#d1d7db",
-        brand: "#00a884",
-        rowHover: "#f5f6f6",
-        rowSelected: "rgba(0,168,132,0.08)",
-        selectedBar: "#00a884",
-        unreadBg: "#25d366",
-        filterActive: "#25d366",
-        filterActiveTxt: "#111b21",
+        input: "#e6f2f5",
+        text: "#0d1b1e",
+        muted: "#60828a",
+        border: "#cce4ea",
+        brand: "#00BCD4",
+        rowHover: "#e6f2f5",
+        rowSelected: "rgba(0,188,212,0.1)",
+        selectedBar: "#00BCD4",
+        unreadBg: "#00BCD4",
+        filterActive: "#00BCD4",
+        filterActiveTxt: "#ffffff",
         filterInactive: "transparent",
-        filterInactiveBorder: "#d1d7db",
-        filterInactiveTxt: "#667781",
-        welcomeBg: "#f0f2f5",
+        filterInactiveBorder: "#cce4ea",
+        filterInactiveTxt: "#60828a",
+        welcomeBg: "#f0f7f9",
       };
 }
 
@@ -193,9 +193,9 @@ function WelcomePane({ wa }: { wa: ReturnType<typeof useWaColors> }) {
       <View style={[st.welcomeIconWrap, { backgroundColor: wa.brand + "15" }]}>
         <Ionicons name="chatbubble-ellipses-outline" size={64} color={wa.brand} />
       </View>
-      <Text style={[st.welcomeTitle, { color: wa.text }]}>AfuChat for Web</Text>
+      <Text style={[st.welcomeTitle, { color: wa.text }]}>AfuChat</Text>
       <Text style={[st.welcomeSub, { color: wa.muted }]}>
-        Send and receive messages without keeping your phone online.{"\n"}
+        Connect with everyone, everywhere.{"\n"}
         Select a conversation to start messaging.
       </Text>
       <View style={[st.welcomeDivider, { backgroundColor: wa.border }]} />
@@ -278,7 +278,8 @@ export function DesktopChatsSection() {
 
     const items: ChatItem[] = chatRows.map((c: any) => {
       const others = (c.chat_members || []).filter((m: any) => m.user_id !== user.id);
-      const other = others[0]?.profiles;
+      const profileRaw = others[0]?.profiles;
+      const other: any = Array.isArray(profileRaw) ? profileRaw[0] : profileRaw;
       const lm = lastMsgMap[c.id];
       return {
         id: c.id,

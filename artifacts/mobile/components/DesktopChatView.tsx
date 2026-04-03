@@ -25,7 +25,7 @@ type Message = {
   sent_at: string;
   message_type: string;
   media_url?: string;
-  sender?: { display_name: string; avatar_url: string | null; is_verified?: boolean };
+  sender?: { id: string; display_name: string; avatar_url: string | null; is_verified?: boolean } | null;
 };
 
 type ChatInfo = {
@@ -56,93 +56,110 @@ function formatDate(iso: string) {
   return d.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
 }
 
+const BRAND = "#00BCD4";
+
 export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: () => void }) {
   const { isDark } = useTheme();
   const { user } = useAuth();
   const [chatInfo, setChatInfo] = useState<ChatInfo | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const flatRef = useRef<FlatList>(null);
 
-  const wa = isDark
+  const c = isDark
     ? {
-        bg: "#0b1014",
-        surface: "#1f2c34",
-        inputBg: "#2a3942",
-        bubbleOut: "#005c4b",
+        bg: "#0d1117",
+        header: "#131d24",
+        inputBar: "#131d24",
+        inputPill: "#1c2b34",
+        bubbleOut: "#006d7c",
         bubbleOutText: "#e9edef",
-        bubbleIn: "#1f2c34",
+        bubbleIn: "#1c2b34",
         bubbleInText: "#e9edef",
         text: "#e9edef",
-        muted: "#8696a0",
-        border: "#2a3942",
-        brand: "#00BCD4",
-        datePill: "rgba(17,27,33,0.85)",
-        datePillText: "#8696a0",
-        headerBg: "#1f2c34",
-        inputBarBg: "#1f2c34",
+        muted: "#8a9ba8",
+        border: "#1e2d38",
+        datePill: "rgba(13,17,23,0.88)",
+        datePillText: "#8a9ba8",
       }
     : {
-        bg: "#efeae2",
-        surface: "#f0f2f5",
-        inputBg: "#ffffff",
-        bubbleOut: "#d9fdd3",
-        bubbleOutText: "#111b21",
+        bg: "#f2f8fa",
+        header: "#ffffff",
+        inputBar: "#ffffff",
+        inputPill: "#eaf4f7",
+        bubbleOut: "#00BCD4",
+        bubbleOutText: "#ffffff",
         bubbleIn: "#ffffff",
         bubbleInText: "#111b21",
         text: "#111b21",
         muted: "#667781",
-        border: "#d1d7db",
-        brand: "#00a884",
-        datePill: "rgba(225,221,214,0.92)",
+        border: "#dce8ec",
+        datePill: "rgba(255,255,255,0.9)",
         datePillText: "#667781",
-        headerBg: "#f0f2f5",
-        inputBarBg: "#f0f2f5",
       };
 
   const loadChat = useCallback(async () => {
     if (!user) return;
-    const [chatRes, msgRes] = await Promise.all([
-      supabase
-        .from("chats")
-        .select(`id, name, is_group, is_channel, avatar_url,
-          chat_members(user_id, profiles(id, display_name, avatar_url, is_verified))`)
-        .eq("id", chatId)
-        .single(),
-      supabase
-        .from("messages")
-        .select(`id, sender_id, encrypted_content, sent_at, message_type, media_url,
-          profiles!messages_sender_id_fkey(display_name, avatar_url, is_verified)`)
-        .eq("chat_id", chatId)
-        .order("sent_at", { ascending: true })
-        .limit(100),
-    ]);
+    setError(null);
 
-    if (chatRes.data) {
-      const c = chatRes.data;
-      const others = (c.chat_members || []).filter((m: any) => m.user_id !== user.id);
-      const profileRaw = others[0]?.profiles;
-      const other: any = Array.isArray(profileRaw) ? profileRaw[0] : profileRaw;
-      setChatInfo({
-        id: c.id,
-        name: c.name,
-        is_group: !!c.is_group,
-        is_channel: !!c.is_channel,
-        avatar_url: c.avatar_url,
-        other_display_name: other?.display_name || "User",
-        other_avatar: other?.avatar_url || null,
-        other_id: other?.id || "",
-        is_verified: !!other?.is_verified,
-      });
+    try {
+      const [chatRes, msgRes] = await Promise.all([
+        supabase
+          .from("chats")
+          .select(`id, name, is_group, is_channel, avatar_url,
+            chat_members(user_id, profiles(id, display_name, avatar_url, is_verified))`)
+          .eq("id", chatId)
+          .single(),
+        supabase
+          .from("messages")
+          .select("id, sender_id, encrypted_content, sent_at, message_type, media_url")
+          .eq("chat_id", chatId)
+          .order("sent_at", { ascending: false })
+          .limit(100),
+      ]);
+
+      if (chatRes.data) {
+        const ch = chatRes.data;
+        const others = (ch.chat_members || []).filter((m: any) => m.user_id !== user.id);
+        const profileRaw = others[0]?.profiles;
+        const other: any = Array.isArray(profileRaw) ? profileRaw[0] : profileRaw;
+        setChatInfo({
+          id: ch.id,
+          name: ch.name,
+          is_group: !!ch.is_group,
+          is_channel: !!ch.is_channel,
+          avatar_url: ch.avatar_url,
+          other_display_name: other?.display_name || "User",
+          other_avatar: other?.avatar_url || null,
+          other_id: other?.id || "",
+          is_verified: !!other?.is_verified,
+        });
+      }
+
+      const rawMessages: Message[] = (msgRes.data || []).reverse();
+
+      if (rawMessages.length > 0) {
+        const senderIds = [...new Set(rawMessages.map((m) => m.sender_id))];
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, display_name, avatar_url, is_verified")
+          .in("id", senderIds);
+
+        const profileMap: Record<string, any> = {};
+        for (const p of profiles || []) profileMap[p.id] = p;
+
+        setMessages(rawMessages.map((m) => ({ ...m, sender: profileMap[m.sender_id] || null })));
+      } else {
+        setMessages([]);
+      }
+    } catch (err) {
+      setError("Could not load messages. Tap to retry.");
+    } finally {
+      setLoading(false);
     }
-
-    if (msgRes.data) {
-      setMessages(msgRes.data.map((m: any) => ({ ...m, sender: m.profiles })));
-    }
-
-    setLoading(false);
   }, [chatId, user]);
 
   useEffect(() => { loadChat(); }, [loadChat]);
@@ -157,10 +174,10 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
         const msg = payload.new as Message;
         const { data: profile } = await supabase
           .from("profiles")
-          .select("display_name, avatar_url, is_verified")
+          .select("id, display_name, avatar_url, is_verified")
           .eq("id", msg.sender_id)
           .single();
-        setMessages((prev) => [...prev, { ...msg, sender: profile || undefined }]);
+        setMessages((prev) => [...prev, { ...msg, sender: profile || null }]);
         setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
       })
       .subscribe();
@@ -169,7 +186,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
 
   useEffect(() => {
     if (messages.length > 0) {
-      setTimeout(() => flatRef.current?.scrollToEnd({ animated: false }), 250);
+      setTimeout(() => flatRef.current?.scrollToEnd({ animated: false }), 200);
     }
   }, [messages.length]);
 
@@ -178,14 +195,16 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
     setSending(true);
     const content = text.trim();
     setText("");
-    await supabase.from("messages").insert({
+    const { error: insertErr } = await supabase.from("messages").insert({
       chat_id: chatId,
       sender_id: user.id,
       encrypted_content: content,
       message_type: "text",
       sent_at: new Date().toISOString(),
     });
-    await supabase.from("chats").update({ updated_at: new Date().toISOString() }).eq("id", chatId);
+    if (!insertErr) {
+      await supabase.from("chats").update({ updated_at: new Date().toISOString() }).eq("id", chatId);
+    }
     setSending(false);
   }
 
@@ -200,34 +219,28 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
     const isMe = item.sender_id === user?.id;
     const dateLabel = formatDate(item.sent_at);
     const showDate = index === 0 || dateLabel !== formatDate(messages[index - 1]?.sent_at ?? "");
-    const prevMsg = messages[index - 1];
     const nextMsg = messages[index + 1];
-    const isFirstInGroup = !prevMsg || prevMsg.sender_id !== item.sender_id;
     const isLastInGroup = !nextMsg || nextMsg.sender_id !== item.sender_id;
-    const marginTop = isFirstInGroup ? 8 : 1;
+    const prevMsg = messages[index - 1];
+    const isFirstInGroup = !prevMsg || prevMsg.sender_id !== item.sender_id;
+    const marginTop = isFirstInGroup ? 8 : 2;
 
     return (
       <View>
         {showDate && (
           <View style={st.dateRow}>
-            <View style={[st.datePill, { backgroundColor: wa.datePill }]}>
-              <Text style={[st.dateText, { color: wa.datePillText }]}>{dateLabel}</Text>
+            <View style={[st.datePill, { backgroundColor: c.datePill }]}>
+              <Text style={[st.dateText, { color: c.datePillText }]}>{dateLabel}</Text>
             </View>
           </View>
         )}
-        <View
-          style={[
-            st.msgRow,
-            isMe ? st.msgRowMe : st.msgRowOther,
-            { marginTop },
-          ]}
-        >
+        <View style={[st.msgRow, isMe ? st.msgRowMe : st.msgRowOther, { marginTop }]}>
           {!isMe && (
-            <View style={st.avatarSlot}>
+            <View style={st.avatarCol}>
               {isLastInGroup ? (
-                <Avatar uri={avatarUri} name={item.sender?.display_name || "?"} size={32} />
+                <Avatar uri={avatarUri} name={item.sender?.display_name || "?"} size={30} />
               ) : (
-                <View style={{ width: 32 }} />
+                <View style={{ width: 30 }} />
               )}
             </View>
           )}
@@ -235,90 +248,93 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
             style={[
               st.bubble,
               isMe
-                ? [st.bubbleMe, { backgroundColor: wa.bubbleOut }]
-                : [st.bubbleOther, { backgroundColor: wa.bubbleIn }],
-              isMe && isLastInGroup && st.bubbleMeTail,
-              !isMe && isLastInGroup && st.bubbleOtherTail,
+                ? [{ backgroundColor: c.bubbleOut }, isLastInGroup && st.bubbleMeTail]
+                : [{ backgroundColor: c.bubbleIn }, isLastInGroup && st.bubbleOtherTail],
             ]}
           >
-            {!isMe && chatInfo?.is_group && isFirstInGroup && (
-              <Text style={[st.senderName, { color: wa.brand }]} numberOfLines={1}>
-                {item.sender?.display_name}
+            {!isMe && chatInfo?.is_group && isFirstInGroup && item.sender?.display_name && (
+              <Text style={[st.senderName, { color: BRAND }]} numberOfLines={1}>
+                {item.sender.display_name}
               </Text>
             )}
             {item.message_type === "image" && item.media_url ? (
               <Image source={{ uri: item.media_url }} style={st.msgImage} resizeMode="cover" />
             ) : (
-              <View style={st.msgContent}>
-                <Text style={[st.msgText, { color: isMe ? wa.bubbleOutText : wa.bubbleInText }]}>
+              <View style={st.msgBody}>
+                <Text style={[st.msgText, { color: isMe ? c.bubbleOutText : c.bubbleInText }]}>
                   {item.encrypted_content}
                 </Text>
-                <Text style={[st.msgTime, { color: isMe ? "rgba(233,237,239,0.65)" : wa.muted }]}>
+                <Text style={[st.msgMeta, { color: isMe ? "rgba(233,237,239,0.6)" : c.muted }]}>
                   {formatTime(item.sent_at)}
-                  {isMe && (
-                    <Text style={{ color: wa.brand }}>{sending ? "" : " ✓✓"}</Text>
-                  )}
+                  {isMe ? "  ✓✓" : ""}
                 </Text>
               </View>
             )}
           </View>
-          {isMe && <View style={{ width: 4 }} />}
         </View>
       </View>
     );
   };
 
   return (
-    <View style={[st.root, { backgroundColor: wa.bg }]}>
-      <View style={[st.header, { backgroundColor: wa.headerBg, borderBottomColor: wa.border }]}>
+    <View style={[st.root, { backgroundColor: c.bg }]}>
+      <View style={[st.header, { backgroundColor: c.header, borderBottomColor: c.border }]}>
         <TouchableOpacity onPress={onClose} style={st.backBtn} hitSlop={10}>
-          <Ionicons name="chevron-back" size={22} color={wa.muted} />
+          <Ionicons name="chevron-back" size={22} color={c.muted} />
         </TouchableOpacity>
-        <Avatar uri={avatarUri} name={displayName || "Chat"} size={38} />
+        <View style={[st.avatarRing, { borderColor: BRAND + "40" }]}>
+          <Avatar uri={avatarUri} name={displayName || "Chat"} size={36} />
+        </View>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <Text style={[st.headerName, { color: wa.text }]} numberOfLines={1}>
+            <Text style={[st.headerName, { color: c.text }]} numberOfLines={1}>
               {displayName || "Chat"}
             </Text>
             {chatInfo?.is_verified && <VerifiedBadge isVerified size={14} />}
           </View>
-          <Text style={[st.headerSub, { color: wa.brand }]}>
-            {chatInfo?.is_group ? "Group chat" : chatInfo?.is_channel ? "Channel" : "tap here for contact info"}
+          <Text style={[st.headerSub, { color: BRAND }]}>
+            {chatInfo?.is_group ? "Group · tap for info" : chatInfo?.is_channel ? "Channel" : "online"}
           </Text>
         </View>
         <TouchableOpacity style={st.headerIcon} hitSlop={8}>
-          <Ionicons name="videocam-outline" size={22} color={wa.muted} />
+          <Ionicons name="videocam-outline" size={22} color={c.muted} />
         </TouchableOpacity>
         <TouchableOpacity style={st.headerIcon} hitSlop={8}>
-          <Ionicons name="call-outline" size={20} color={wa.muted} />
+          <Ionicons name="call-outline" size={20} color={c.muted} />
         </TouchableOpacity>
         <TouchableOpacity style={st.headerIcon} hitSlop={8}>
-          <Ionicons name="search-outline" size={20} color={wa.muted} />
+          <Ionicons name="ellipsis-vertical" size={20} color={c.muted} />
         </TouchableOpacity>
       </View>
 
       {loading ? (
-        <View style={st.loadingCenter}>
-          <ActivityIndicator color={wa.brand} size="large" />
+        <View style={st.center}>
+          <ActivityIndicator color={BRAND} size="large" />
+          <Text style={[st.centerText, { color: c.muted }]}>Loading messages…</Text>
         </View>
+      ) : error ? (
+        <TouchableOpacity style={st.center} onPress={loadChat}>
+          <Ionicons name="refresh-circle-outline" size={44} color={BRAND} />
+          <Text style={[st.centerText, { color: c.muted }]}>{error}</Text>
+        </TouchableOpacity>
       ) : (
         <FlatList
           ref={flatRef}
           data={messages}
           keyExtractor={(m) => m.id}
           renderItem={renderMessage}
-          contentContainerStyle={st.messageList}
+          contentContainerStyle={st.msgList}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={st.emptyState}>
-              <View style={[st.emptyIconWrap, { backgroundColor: wa.brand + "20" }]}>
-                <Ionicons name="lock-closed-outline" size={28} color={wa.brand} />
+              <View style={[st.emptyIconWrap, { backgroundColor: BRAND + "18" }]}>
+                <Ionicons name="chatbubble-ellipses-outline" size={36} color={BRAND} />
               </View>
-              <Text style={[st.emptyTitle, { color: wa.text }]}>
-                {displayName ? `Say hello to ${displayName}` : "No messages yet"}
+              <Text style={[st.emptyTitle, { color: c.text }]}>
+                {displayName ? `Start chatting with ${displayName}` : "No messages yet"}
               </Text>
-              <Text style={[st.emptySub, { color: wa.muted }]}>
-                Messages are end-to-end encrypted
+              <Text style={[st.emptySub, { color: c.muted }]}>
+                Say something to begin the conversation
               </Text>
             </View>
           }
@@ -326,18 +342,18 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
       )}
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={[st.inputBar, { backgroundColor: wa.inputBarBg, borderTopColor: wa.border }]}>
+        <View style={[st.inputBar, { backgroundColor: c.inputBar, borderTopColor: c.border }]}>
           <TouchableOpacity style={st.inputAction} hitSlop={8}>
-            <Ionicons name="happy-outline" size={24} color={wa.muted} />
+            <Ionicons name="happy-outline" size={24} color={c.muted} />
           </TouchableOpacity>
           <TouchableOpacity style={st.inputAction} hitSlop={8}>
-            <Ionicons name="attach-outline" size={24} color={wa.muted} />
+            <Ionicons name="attach-outline" size={24} color={c.muted} />
           </TouchableOpacity>
-          <View style={[st.inputPill, { backgroundColor: wa.inputBg }]}>
+          <View style={[st.inputPill, { backgroundColor: c.inputPill }]}>
             <TextInput
-              style={[st.input, { color: wa.text }]}
-              placeholder="Type a message"
-              placeholderTextColor={wa.muted}
+              style={[st.input, { color: c.text }]}
+              placeholder="Message…"
+              placeholderTextColor={c.muted}
               value={text}
               onChangeText={setText}
               multiline
@@ -347,15 +363,19 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
             />
           </View>
           <TouchableOpacity
-            style={[st.sendBtn, { backgroundColor: wa.brand }]}
+            style={[st.sendBtn, { backgroundColor: text.trim() ? BRAND : c.inputPill }]}
             onPress={sendMessage}
             disabled={!text.trim() || sending}
             activeOpacity={0.8}
           >
             {sending ? (
-              <ActivityIndicator color="#fff" size="small" />
+              <ActivityIndicator color={text.trim() ? "#fff" : c.muted} size="small" />
             ) : (
-              <Ionicons name={text.trim() ? "send" : "mic-outline"} size={18} color="#fff" />
+              <Ionicons
+                name={text.trim() ? "send" : "mic-outline"}
+                size={18}
+                color={text.trim() ? "#fff" : c.muted}
+              />
             )}
           </TouchableOpacity>
         </View>
@@ -365,7 +385,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
 }
 
 const st = StyleSheet.create({
-  root: { flex: 1, flexDirection: "column" },
+  root: { flex: 1 },
 
   header: {
     flexDirection: "row",
@@ -375,60 +395,71 @@ const st = StyleSheet.create({
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  backBtn: { paddingHorizontal: 4 },
+  backBtn: { paddingHorizontal: 2 },
+  avatarRing: {
+    borderRadius: 22,
+    borderWidth: 1.5,
+    padding: 1,
+  },
   headerName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   headerSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
   headerIcon: { padding: 6 },
 
-  loadingCenter: { flex: 1, alignItems: "center", justifyContent: "center" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  centerText: { fontSize: 14, fontFamily: "Inter_400Regular" },
 
-  messageList: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 16 },
+  msgList: { paddingHorizontal: 10, paddingTop: 8, paddingBottom: 16 },
 
   dateRow: { alignItems: "center", marginVertical: 10 },
   datePill: {
     paddingHorizontal: 14,
     paddingVertical: 5,
     borderRadius: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  dateText: { fontSize: 11, fontFamily: "Inter_500Medium" },
-
-  msgRow: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 4 },
-  msgRowMe: { justifyContent: "flex-end" },
-  msgRowOther: { justifyContent: "flex-start" },
-
-  avatarSlot: { width: 36, marginRight: 4, alignItems: "center", justifyContent: "flex-end" },
-
-  bubble: {
-    maxWidth: "72%",
-    paddingHorizontal: 10,
-    paddingTop: 7,
-    paddingBottom: 6,
-    borderRadius: 16,
     elevation: 1,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
     shadowRadius: 2,
   },
-  bubbleMe: { borderBottomRightRadius: 16 },
-  bubbleOther: { borderBottomLeftRadius: 16 },
+  dateText: { fontSize: 11, fontFamily: "Inter_500Medium" },
+
+  msgRow: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 2 },
+  msgRowMe: { justifyContent: "flex-end" },
+  msgRowOther: { justifyContent: "flex-start" },
+
+  avatarCol: { width: 34, marginRight: 6, alignItems: "center", justifyContent: "flex-end" },
+
+  bubble: {
+    maxWidth: "75%",
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 6,
+    borderRadius: 18,
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+  },
   bubbleMeTail: { borderBottomRightRadius: 4 },
   bubbleOtherTail: { borderBottomLeftRadius: 4 },
 
   senderName: { fontSize: 12, fontFamily: "Inter_600SemiBold", marginBottom: 3 },
 
-  msgContent: { flexDirection: "row", alignItems: "flex-end", flexWrap: "wrap", gap: 6 },
-  msgText: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20, flexShrink: 1 },
+  msgBody: { flexDirection: "row", alignItems: "flex-end", flexWrap: "wrap", gap: 6 },
+  msgText: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20, flex: 1 },
   msgImage: { width: 200, height: 150, borderRadius: 10, marginBottom: 2 },
-  msgTime: { fontSize: 10, fontFamily: "Inter_400Regular", marginBottom: 1, flexShrink: 0, marginLeft: "auto" as any },
+  msgMeta: {
+    fontSize: 10,
+    fontFamily: "Inter_400Regular",
+    marginBottom: 1,
+    flexShrink: 0,
+    marginLeft: "auto" as any,
+  },
 
   emptyState: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 60, gap: 12 },
-  emptyIconWrap: { width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center" },
-  emptyTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  emptyIconWrap: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
+  emptyTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold", textAlign: "center" },
   emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
 
   inputBar: {
@@ -444,7 +475,7 @@ const st = StyleSheet.create({
     flex: 1,
     borderRadius: 24,
     paddingHorizontal: 16,
-    paddingVertical: Platform.OS === "web" ? 8 : 6,
+    paddingVertical: Platform.OS === "web" ? 9 : 6,
     minHeight: 42,
     maxHeight: 120,
     justifyContent: "center",
@@ -461,6 +492,5 @@ const st = StyleSheet.create({
     borderRadius: 21,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 0,
   },
 });
