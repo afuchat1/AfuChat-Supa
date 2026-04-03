@@ -25,7 +25,12 @@ type Message = {
   sent_at: string;
   attachment_type?: string;
   attachment_url?: string;
-  sender?: { id: string; display_name: string; avatar_url: string | null; is_verified?: boolean } | null;
+  sender?: {
+    id: string;
+    display_name: string;
+    avatar_url: string | null;
+    is_verified?: boolean;
+  } | null;
 };
 
 type ChatInfo = {
@@ -38,11 +43,21 @@ type ChatInfo = {
   other_avatar: string | null;
   other_id: string;
   is_verified: boolean;
+  is_organization_verified: boolean;
+  other_last_seen: string | null;
 };
 
+function formatLastSeen(ts: string | null | undefined): { text: string; isOnline: boolean } {
+  if (!ts) return { text: "Offline", isOnline: false };
+  const diff = Date.now() - new Date(ts).getTime();
+  if (diff < 2 * 60 * 1000) return { text: "Online", isOnline: true };
+  if (diff < 60 * 60 * 1000) return { text: `Last seen ${Math.floor(diff / 60000)}m ago`, isOnline: false };
+  if (diff < 24 * 60 * 60 * 1000) return { text: `Last seen ${Math.floor(diff / 3600000)}h ago`, isOnline: false };
+  return { text: `Last seen ${new Date(ts).toLocaleDateString()}`, isOnline: false };
+}
+
 function formatTime(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatDate(iso: string) {
@@ -57,6 +72,7 @@ function formatDate(iso: string) {
 }
 
 const BRAND = "#00BCD4";
+const ONLINE_GREEN = "#34C759";
 
 export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: () => void }) {
   const { isDark } = useTheme();
@@ -68,6 +84,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const flatRef = useRef<FlatList>(null);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const c = isDark
     ? {
@@ -101,6 +118,14 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
         datePillText: "#667781",
       };
 
+  const updateMyLastSeen = useCallback(async () => {
+    if (!user) return;
+    await supabase
+      .from("profiles")
+      .update({ last_seen: new Date().toISOString() })
+      .eq("id", user.id);
+  }, [user]);
+
   const loadChat = useCallback(async () => {
     if (!user) return;
     setError(null);
@@ -110,7 +135,11 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
         supabase
           .from("chats")
           .select(`id, name, is_group, is_channel, avatar_url,
-            chat_members(user_id, profiles(id, display_name, avatar_url, is_verified))`)
+            chat_members(user_id, profiles(
+              id, display_name, avatar_url,
+              is_verified, is_organization_verified,
+              last_seen, show_online_status
+            ))`)
           .eq("id", chatId)
           .single(),
         supabase
@@ -126,6 +155,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
         const others = (ch.chat_members || []).filter((m: any) => m.user_id !== user.id);
         const profileRaw = others[0]?.profiles;
         const other: any = Array.isArray(profileRaw) ? profileRaw[0] : profileRaw;
+        const showPresence = other?.show_online_status !== false;
         setChatInfo({
           id: ch.id,
           name: ch.name,
@@ -136,6 +166,8 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
           other_avatar: other?.avatar_url || null,
           other_id: other?.id || "",
           is_verified: !!other?.is_verified,
+          is_organization_verified: !!other?.is_organization_verified,
+          other_last_seen: showPresence ? (other?.last_seen || null) : null,
         });
       }
 
@@ -150,7 +182,6 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
 
         const profileMap: Record<string, any> = {};
         for (const p of profiles || []) profileMap[p.id] = p;
-
         setMessages(rawMessages.map((m) => ({ ...m, sender: profileMap[m.sender_id] || null })));
       } else {
         setMessages([]);
@@ -162,27 +193,59 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
     }
   }, [chatId, user]);
 
-  useEffect(() => { loadChat(); }, [loadChat]);
+  useEffect(() => {
+    loadChat();
+    updateMyLastSeen();
+
+    heartbeatRef.current = setInterval(updateMyLastSeen, 30_000);
+    return () => {
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+    };
+  }, [loadChat, updateMyLastSeen]);
 
   useEffect(() => {
     if (!user) return;
-    const channel = supabase
-      .channel(`desktop-chat:${chatId}`)
-      .on("postgres_changes", {
-        event: "INSERT", schema: "public", table: "messages", filter: `chat_id=eq.${chatId}`,
-      }, async (payload) => {
-        const msg = payload.new as Message;
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("id, display_name, avatar_url, is_verified")
-          .eq("id", msg.sender_id)
-          .single();
-        setMessages((prev) => [...prev, { ...msg, sender: profile || null }]);
-        setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
-      })
+    const chan = supabase
+      .channel(`desktop-chat-msgs:${chatId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages", filter: `chat_id=eq.${chatId}` },
+        async (payload) => {
+          const msg = payload.new as Message;
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("id, display_name, avatar_url, is_verified")
+            .eq("id", msg.sender_id)
+            .single();
+          setMessages((prev) => [...prev, { ...msg, sender: profile || null }]);
+          setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
+        }
+      )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { supabase.removeChannel(chan); };
   }, [chatId, user]);
+
+  useEffect(() => {
+    if (!chatInfo?.other_id || chatInfo.is_group || chatInfo.is_channel) return;
+    const otherId = chatInfo.other_id;
+    const chan = supabase
+      .channel(`desktop-presence:${otherId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${otherId}` },
+        (payload) => {
+          const updated: any = payload.new;
+          const showPresence = updated?.show_online_status !== false;
+          setChatInfo((prev) =>
+            prev
+              ? { ...prev, other_last_seen: showPresence ? (updated?.last_seen || null) : null }
+              : prev
+          );
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(chan); };
+  }, [chatInfo?.other_id, chatInfo?.is_group, chatInfo?.is_channel]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -195,14 +258,18 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
     setSending(true);
     const content = text.trim();
     setText("");
+    const now = new Date().toISOString();
     const { error: insertErr } = await supabase.from("messages").insert({
       chat_id: chatId,
       sender_id: user.id,
       encrypted_content: content,
-      sent_at: new Date().toISOString(),
+      sent_at: now,
     });
     if (!insertErr) {
-      await supabase.from("chats").update({ updated_at: new Date().toISOString() }).eq("id", chatId);
+      await Promise.all([
+        supabase.from("chats").update({ updated_at: now }).eq("id", chatId),
+        supabase.from("profiles").update({ last_seen: now }).eq("id", user.id),
+      ]);
     }
     setSending(false);
   }
@@ -214,6 +281,10 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
     ? chatInfo.is_group || chatInfo.is_channel ? chatInfo.avatar_url : chatInfo.other_avatar
     : null;
 
+  const presenceInfo = !chatInfo?.is_group && !chatInfo?.is_channel
+    ? formatLastSeen(chatInfo?.other_last_seen)
+    : null;
+
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
     const isMe = item.sender_id === user?.id;
     const dateLabel = formatDate(item.sent_at);
@@ -222,7 +293,6 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
     const isLastInGroup = !nextMsg || nextMsg.sender_id !== item.sender_id;
     const prevMsg = messages[index - 1];
     const isFirstInGroup = !prevMsg || prevMsg.sender_id !== item.sender_id;
-    const marginTop = isFirstInGroup ? 8 : 2;
 
     return (
       <View>
@@ -233,7 +303,13 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
             </View>
           </View>
         )}
-        <View style={[st.msgRow, isMe ? st.msgRowMe : st.msgRowOther, { marginTop }]}>
+        <View
+          style={[
+            st.msgRow,
+            isMe ? st.msgRowMe : st.msgRowOther,
+            { marginTop: isFirstInGroup ? 8 : 2 },
+          ]}
+        >
           {!isMe && (
             <View style={st.avatarCol}>
               {isLastInGroup ? (
@@ -257,13 +333,24 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
               </Text>
             )}
             {item.attachment_type === "image" && item.attachment_url ? (
-              <Image source={{ uri: item.attachment_url }} style={st.msgImage} resizeMode="cover" />
+              <Image
+                source={{ uri: item.attachment_url }}
+                style={st.msgImage}
+                resizeMode="cover"
+              />
             ) : (
               <View style={st.msgBody}>
-                <Text style={[st.msgText, { color: isMe ? c.bubbleOutText : c.bubbleInText }]}>
+                <Text
+                  style={[st.msgText, { color: isMe ? c.bubbleOutText : c.bubbleInText }]}
+                >
                   {item.encrypted_content}
                 </Text>
-                <Text style={[st.msgMeta, { color: isMe ? "rgba(233,237,239,0.6)" : c.muted }]}>
+                <Text
+                  style={[
+                    st.msgMeta,
+                    { color: isMe ? "rgba(233,237,239,0.65)" : c.muted },
+                  ]}
+                >
                   {formatTime(item.sent_at)}
                   {isMe ? "  ✓✓" : ""}
                 </Text>
@@ -281,20 +368,45 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
         <TouchableOpacity onPress={onClose} style={st.backBtn} hitSlop={10}>
           <Ionicons name="chevron-back" size={22} color={c.muted} />
         </TouchableOpacity>
-        <View style={[st.avatarRing, { borderColor: BRAND + "40" }]}>
-          <Avatar uri={avatarUri} name={displayName || "Chat"} size={36} />
+
+        <View style={{ position: "relative" }}>
+          <View style={[st.avatarRing, { borderColor: presenceInfo?.isOnline ? ONLINE_GREEN : "transparent" }]}>
+            <Avatar uri={avatarUri} name={displayName || "Chat"} size={36} />
+          </View>
+          {presenceInfo?.isOnline && (
+            <View style={st.onlineDot} />
+          )}
         </View>
-        <View style={{ flex: 1 }}>
+
+        <View style={{ flex: 1, minWidth: 0 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
             <Text style={[st.headerName, { color: c.text }]} numberOfLines={1}>
               {displayName || "Chat"}
             </Text>
-            {chatInfo?.is_verified && <VerifiedBadge isVerified size={14} />}
+            {(chatInfo?.is_verified || chatInfo?.is_organization_verified) && (
+              <VerifiedBadge
+                isVerified={chatInfo.is_verified}
+                isOrganizationVerified={chatInfo.is_organization_verified}
+                size={14}
+              />
+            )}
           </View>
-          <Text style={[st.headerSub, { color: BRAND }]}>
-            {chatInfo?.is_group ? "Group · tap for info" : chatInfo?.is_channel ? "Channel" : "online"}
-          </Text>
+          {chatInfo?.is_group ? (
+            <Text style={[st.headerSub, { color: c.muted }]}>Group · tap for info</Text>
+          ) : chatInfo?.is_channel ? (
+            <Text style={[st.headerSub, { color: c.muted }]}>Channel</Text>
+          ) : presenceInfo ? (
+            <Text
+              style={[
+                st.headerSub,
+                { color: presenceInfo.isOnline ? ONLINE_GREEN : BRAND },
+              ]}
+            >
+              {presenceInfo.text}
+            </Text>
+          ) : null}
         </View>
+
         <TouchableOpacity style={st.headerIcon} hitSlop={8}>
           <Ionicons name="videocam-outline" size={22} color={c.muted} />
         </TouchableOpacity>
@@ -397,8 +509,19 @@ const st = StyleSheet.create({
   backBtn: { paddingHorizontal: 2 },
   avatarRing: {
     borderRadius: 22,
-    borderWidth: 1.5,
+    borderWidth: 2,
     padding: 1,
+  },
+  onlineDot: {
+    position: "absolute",
+    bottom: 1,
+    right: 1,
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    backgroundColor: ONLINE_GREEN,
+    borderWidth: 2,
+    borderColor: "#131d24",
   },
   headerName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   headerSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
@@ -456,8 +579,20 @@ const st = StyleSheet.create({
     marginLeft: "auto" as any,
   },
 
-  emptyState: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 60, gap: 12 },
-  emptyIconWrap: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
+  emptyState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 60,
+    gap: 12,
+  },
+  emptyIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   emptyTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold", textAlign: "center" },
   emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
 
