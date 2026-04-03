@@ -22,6 +22,8 @@ import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { uploadToStorage } from "@/lib/mediaUpload";
 import { showAlert } from "@/lib/alert";
+import { PremiumGate } from "@/components/ui/PremiumGate";
+import { isOnline } from "@/lib/offlineStore";
 
 export default function CreateChannelScreen() {
   const { colors } = useTheme();
@@ -53,6 +55,10 @@ export default function CreateChannelScreen() {
   }
 
   async function createChannel() {
+    if (!isOnline()) {
+      showAlert("No internet", "Creating a channel requires an internet connection.");
+      return;
+    }
     if (!channelName.trim()) {
       showAlert("Channel name required", "Please enter a name for your channel.");
       return;
@@ -128,6 +134,11 @@ export default function CreateChannelScreen() {
   }
 
   return (
+    <PremiumGate
+      tier="platinum"
+      title="Create a Channel"
+      description="Broadcast channels are a Platinum-only feature. Upgrade to reach your audience at scale."
+    >
     <KeyboardAvoidingView
       style={[styles.root, { backgroundColor: colors.background }]}
       behavior="padding"
@@ -207,6 +218,7 @@ export default function CreateChannelScreen() {
         </Text>
       </View>
     </KeyboardAvoidingView>
+    </PremiumGate>
   );
 }
 

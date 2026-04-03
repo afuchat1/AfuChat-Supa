@@ -111,3 +111,22 @@ The project is structured as a pnpm monorepo using TypeScript, with distinct pac
 - **React Native Share API**: Content sharing.
 - **`react-native-view-shot`**: Capturing post content.
 - **AI Providers (via Supabase Edge Functions)**: Gemini 2.5 Flash, Lovable AI, DeepSeek, GPT-4o Mini, AIML API, DALL-E 3, Runware, AIML Flux, Freepik AI.
+
+## Tier System
+
+Tiers: `free → silver → gold → platinum`. Managed by `hooks/useTier.ts` (`hasTier(tier)` utility reads `useAuth().subscription.plan_tier`).
+
+Gate component: `components/ui/PremiumGate.tsx` — wraps screen content, shows full-screen lock with upgrade CTA when tier is insufficient.
+
+Applied gates:
+- **Group create** (`app/group/create.tsx`) — Gold required
+- **Channel create** (`app/channel/create.tsx`) — Platinum required
+- **Story create** (`app/stories/create.tsx`) — Gold required
+- **Monetize** (`app/monetize.tsx`) — Silver required
+- **AfuAI chat tap** (`app/(tabs)/index.tsx`) — Platinum intercept, routes to `/premium`
+
+## Offline Improvements
+
+- `lib/offlineStore.ts` — added `cacheWallet` / `getCachedWallet` (key `offline_wallet`)
+- `app/wallet/index.tsx` — loads cached transactions when offline; caches on successful load; shows `OfflineBanner`
+- `app/group/create.tsx`, `app/channel/create.tsx`, `app/stories/create.tsx`, `app/monetize.tsx` — `isOnline()` guard before any mutation

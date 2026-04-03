@@ -22,6 +22,8 @@ import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { ContactRowSkeleton } from "@/components/ui/Skeleton";
+import { PremiumGate } from "@/components/ui/PremiumGate";
+import { isOnline } from "@/lib/offlineStore";
 
 type FollowedUser = {
   id: string;
@@ -71,6 +73,10 @@ export default function CreateGroupScreen() {
   }
 
   async function createGroup() {
+    if (!isOnline()) {
+      showAlert("No internet", "Creating a group requires an internet connection.");
+      return;
+    }
     if (!groupName.trim()) {
       showAlert("Group name required", "Please enter a group name.");
       return;
@@ -108,6 +114,11 @@ export default function CreateGroupScreen() {
   }
 
   return (
+    <PremiumGate
+      tier="gold"
+      title="Create a Group"
+      description="Group chats are available for Gold members and above. Upgrade to bring people together in shared spaces."
+    >
     <KeyboardAvoidingView style={[styles.root, { backgroundColor: colors.background }]} behavior="padding" keyboardVerticalOffset={0}>
       <View
         style={[
@@ -195,6 +206,7 @@ export default function CreateGroupScreen() {
         />
       )}
     </KeyboardAvoidingView>
+    </PremiumGate>
   );
 }
 

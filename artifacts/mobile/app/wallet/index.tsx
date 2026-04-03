@@ -25,6 +25,8 @@ import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { WalletSkeleton } from "@/components/ui/Skeleton";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
+import OfflineBanner from "@/components/ui/OfflineBanner";
+import { cacheWallet, getCachedWallet, isOnline } from "@/lib/offlineStore";
 
 type Transaction = {
   id: string;
@@ -176,6 +178,15 @@ export default function WalletScreen() {
 
   const loadData = useCallback(async () => {
     if (!user) return;
+    if (!isOnline()) {
+      const cached = await getCachedWallet();
+      if (cached) {
+        setTransactions(cached.transactions);
+        setLoading(false);
+        setRefreshing(false);
+      }
+      return;
+    }
     const [{ data: xpSent }, { data: xpReceived }, { data: acoinTx }, { data: settings }, { data: giftsSent }, { data: giftsReceived }] = await Promise.all([
       supabase.from("xp_transfers").select("id, amount, created_at, status, message, receiver_id, profiles!xp_transfers_receiver_id_fkey(handle, display_name)").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(30),
       supabase.from("xp_transfers").select("id, amount, created_at, status, message, sender_id, profiles!xp_transfers_sender_id_fkey(handle, display_name)").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(30),
@@ -252,9 +263,10 @@ export default function WalletScreen() {
 
     all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     setTransactions(all);
+    cacheWallet({ acoin: profile?.acoin ?? 0, nexa: profile?.xp ?? 0, transactions: all });
     setLoading(false);
     setRefreshing(false);
-  }, [user]);
+  }, [user, profile]);
 
   const loadPendingCount = useCallback(async () => {
     if (!user) return;
@@ -489,6 +501,7 @@ export default function WalletScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
+      <OfflineBanner />
       {/* Header */}
       <View style={[
         styles.header,

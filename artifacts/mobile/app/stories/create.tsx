@@ -28,6 +28,8 @@ import Colors from "@/constants/colors";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { showAlert } from "@/lib/alert";
 import { uploadToStorage } from "@/lib/mediaUpload";
+import { PremiumGate } from "@/components/ui/PremiumGate";
+import { isOnline } from "@/lib/offlineStore";
 
 const CAPTION_MAX = 200;
 
@@ -91,6 +93,10 @@ export default function CreateStoryScreen() {
   }
 
   async function publish() {
+    if (!isOnline()) {
+      showAlert("No internet", "Publishing a story requires an internet connection.");
+      return;
+    }
     if (!mediaUri || !user) return;
     setLoading(true);
     setUploadProgress(0.1);
@@ -159,6 +165,11 @@ export default function CreateStoryScreen() {
   const charColor = charPct > 0.9 ? "#FF3B30" : charPct > 0.75 ? "#FF9500" : "rgba(255,255,255,0.5)";
 
   return (
+    <PremiumGate
+      tier="gold"
+      title="Post a Story"
+      description="Stories are available for Gold members and above. Share moments with your followers for 24 hours."
+    >
     <View style={[styles.root, { backgroundColor: "#000" }]}>
       {loading && uploadProgress > 0 && (
         <View style={[styles.progressBar, { top: insets.top }]}>
@@ -402,6 +413,7 @@ export default function CreateStoryScreen() {
         </Pressable>
       )}
     </View>
+    </PremiumGate>
   );
 }
 

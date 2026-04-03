@@ -25,6 +25,8 @@ import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { MONETIZE_FEATURES, formatAcoin, transferAcoin } from "@/lib/monetize";
+import { PremiumGate } from "@/components/ui/PremiumGate";
+import { isOnline } from "@/lib/offlineStore";
 
 const ACOIN_TO_UGX = 100;
 const GOLD = "#D4A853";
@@ -207,6 +209,10 @@ export default function MonetizeScreen() {
   }, [tab]);
 
   async function saveSetting(featureId: string, enabled: boolean, price: number) {
+    if (!isOnline()) {
+      showAlert("No internet", "Saving monetization settings requires an internet connection.");
+      return;
+    }
     if (!user) return;
     setSavingId(featureId);
     await supabase.from("creator_monetize_settings").upsert(
@@ -510,6 +516,11 @@ export default function MonetizeScreen() {
   }
 
   return (
+    <PremiumGate
+      tier="silver"
+      title="Monetize Your Content"
+      description="Monetization tools are available for Silver members and above. Upgrade to earn from your audience."
+    >
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
@@ -617,6 +628,7 @@ export default function MonetizeScreen() {
         </View>
       </Modal>
     </View>
+    </PremiumGate>
   );
 }
 

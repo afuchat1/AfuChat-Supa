@@ -31,6 +31,8 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { cacheConversations, getCachedConversations, isOnline } from "@/lib/offlineStore";
 import { addOnlineListener } from "@/lib/offlineSync";
+import { AFUAI_BOT_ID } from "@/lib/afuAiBot";
+import { useTier } from "@/hooks/useTier";
 
 
 type StoryUser = {
@@ -261,6 +263,7 @@ export default function ChatsScreen() {
   const isDesktop = useIsDesktop();
   const { openDetail } = useDesktopDetail();
   const insets = useSafeAreaInsets();
+  const { hasTier } = useTier();
   const navigation = useNavigation();
 
   const [chats, setChats] = useState<ChatItem[]>([]);
@@ -664,6 +667,10 @@ export default function ChatsScreen() {
               item={item}
               onPress={() => {
                 Haptics.selectionAsync();
+                if (!item.is_group && !item.is_channel && item.other_id === AFUAI_BOT_ID && !hasTier("platinum")) {
+                  router.push({ pathname: "/premium" });
+                  return;
+                }
                 if (isDesktop) {
                   openDetail({ type: "chat", id: item.id });
                 } else {

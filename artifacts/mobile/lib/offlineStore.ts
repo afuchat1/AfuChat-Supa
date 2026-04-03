@@ -15,6 +15,7 @@ const CACHE_KEYS = {
   FEED_FOLLOWING: "feed_tab_cache_following_v3",
   FEED_CURSOR_FOR_YOU: "feed_cursor_for_you_v3",
   FEED_CURSOR_FOLLOWING: "feed_cursor_following_v3",
+  WALLET: "offline_wallet",
 };
 
 export type PendingMessage = {
@@ -191,6 +192,21 @@ export async function removePendingMessage(id: string): Promise<void> {
     const filtered = pending.filter((m) => m.id !== id);
     await AsyncStorage.setItem(CACHE_KEYS.PENDING_MESSAGES, JSON.stringify(filtered));
   } catch {}
+}
+
+export async function cacheWallet(data: { acoin: number; nexa: number; transactions: any[] }): Promise<void> {
+  try {
+    await AsyncStorage.setItem(CACHE_KEYS.WALLET, JSON.stringify({ ...data, cachedAt: Date.now() }));
+  } catch {}
+}
+
+export async function getCachedWallet(): Promise<{ acoin: number; nexa: number; transactions: any[]; cachedAt: number } | null> {
+  try {
+    const raw = await AsyncStorage.getItem(CACHE_KEYS.WALLET);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function cacheFeedTab(tab: "for_you" | "following", posts: any[]): Promise<void> {
