@@ -181,12 +181,19 @@ export async function uploadChatMedia(
   userId: string,
   fileUri: string,
   originalName?: string,
+  contentType?: string,
 ): Promise<{ publicUrl: string | null; error: string | null }> {
-  const ext = fileUri.split(".").pop()?.split("?")[0] || "file";
+  const isBlobOrData = fileUri.startsWith("blob:") || fileUri.startsWith("data:");
+  const nameExt = originalName?.split(".").pop()?.toLowerCase();
+  const uriExt = isBlobOrData
+    ? undefined
+    : fileUri.split(".").pop()?.split("?")[0]?.toLowerCase();
+  const ext = nameExt || uriExt || "file";
   const fileName = originalName || `${Date.now()}.${ext}`;
   const filePath = bucket === "voice-messages"
     ? `${userId}/${fileName}`
     : `${userId}/${chatId}/${fileName}`;
 
-  return uploadToStorage(bucket, filePath, fileUri);
+  const resolvedContentType = contentType || getMime(ext);
+  return uploadToStorage(bucket, filePath, fileUri, resolvedContentType);
 }

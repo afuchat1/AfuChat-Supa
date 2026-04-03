@@ -2622,12 +2622,14 @@ STRICT RULES:
 
       setSending(true);
       const ext = Platform.OS === "web" ? "webm" : "m4a";
+      const voiceMime = Platform.OS === "web" ? "audio/webm" : "audio/mp4";
       const { publicUrl, error: uploadErr } = await uploadChatMedia(
         "voice-messages",
         activeChatId,
         user.id,
         uri,
         `voice_${Date.now()}.${ext}`,
+        voiceMime,
       );
 
       if (uploadErr || !publicUrl) {

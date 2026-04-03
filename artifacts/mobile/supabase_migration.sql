@@ -649,3 +649,26 @@ ALTER TABLE notifications
 CREATE INDEX IF NOT EXISTS notifications_reference_idx
   ON notifications (reference_type, reference_id)
   WHERE reference_id IS NOT NULL;
+
+-- ─── Storage: ensure voice-messages bucket allows all audio MIME types ─────────
+-- Run this if voice uploads fail with "mime type not supported"
+INSERT INTO storage.buckets (id, name, public, allowed_mime_types, file_size_limit)
+VALUES (
+  'voice-messages',
+  'voice-messages',
+  true,
+  ARRAY[
+    'audio/mp4', 'audio/webm', 'audio/mpeg', 'audio/ogg',
+    'audio/wav', 'audio/aac', 'audio/x-caf', 'audio/x-m4a',
+    'audio/3gpp', 'audio/amr'
+  ],
+  52428800
+)
+ON CONFLICT (id) DO UPDATE SET
+  public = true,
+  allowed_mime_types = ARRAY[
+    'audio/mp4', 'audio/webm', 'audio/mpeg', 'audio/ogg',
+    'audio/wav', 'audio/aac', 'audio/x-caf', 'audio/x-m4a',
+    'audio/3gpp', 'audio/amr'
+  ],
+  file_size_limit = 52428800;
