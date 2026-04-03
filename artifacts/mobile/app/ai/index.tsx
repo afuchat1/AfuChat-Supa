@@ -1,10 +1,11 @@
 import React, { useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { View } from "react-native";
 import { router } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { AFUAI_BOT_ID } from "@/lib/afuAiBot";
 import { useTheme } from "@/hooks/useTheme";
+import { AiRedirectSkeleton } from "@/components/ui/Skeleton";
 
 export default function AiRedirect() {
   const { user } = useAuth();
@@ -24,8 +25,8 @@ export default function AiRedirect() {
   }, [user]);
 
   return (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background }}>
-      <ActivityIndicator color="#00BCD4" size="large" />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <AiRedirectSkeleton />
     </View>
   );
 }

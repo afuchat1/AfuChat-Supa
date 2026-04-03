@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { MeTabSkeleton } from "@/components/ui/Skeleton";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -164,7 +165,7 @@ function XpLevelBar({ xp }: { xp: number }) {
           <View style={[styles.xpTrack, { backgroundColor: colors.backgroundTertiary }]}>
             <Animated.View style={[styles.xpFill, fillStyle]}>
               <LinearGradient
-                colors={["#00BCD4", "#AF52DE"]}
+                colors={[accent, "#AF52DE"]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={StyleSheet.absoluteFill}
@@ -181,12 +182,20 @@ function XpLevelBar({ xp }: { xp: number }) {
 }
 
 export default function MeScreen() {
-  const { colors } = useTheme();
-  const { profile, isPremium, subscription } = useAuth();
+  const { colors, accent } = useTheme();
+  const { profile, isPremium, subscription, loading } = useAuth();
   const isAdmin = !!profile?.is_admin;
   const insets = useSafeAreaInsets();
 
   const gradeIcon = profile?.current_grade === "Newcomer" ? "leaf-outline" : "star-outline";
+
+  if (loading || !profile) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }}>
+        <MeTabSkeleton />
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.backgroundSecondary }}>

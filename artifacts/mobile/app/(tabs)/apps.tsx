@@ -216,8 +216,12 @@ const CATEGORIES: Category[] = [
 const ALL_APPS = CATEGORIES.flatMap((c) => c.apps);
 const DEFAULT_FEATURED_ID = "afuai";
 
+function resolveGradient(gradient: [string, string], accent: string): [string, string] {
+  return gradient.map((c) => (c === "#00BCD4" ? accent : c)) as [string, string];
+}
+
 function AppTile({ app, onTap }: { app: AppItem; onTap: (id: string) => void }) {
-  const { colors } = useTheme();
+  const { colors, accent } = useTheme();
   const scale = useRef(new Animated.Value(1)).current;
 
   function handlePressIn() {
@@ -242,7 +246,7 @@ function AppTile({ app, onTap }: { app: AppItem; onTap: (id: string) => void }) 
       >
         <View style={styles.appIconWrapper}>
           <LinearGradient
-            colors={app.gradient}
+            colors={resolveGradient(app.gradient, accent)}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.appIcon}
@@ -262,7 +266,7 @@ function AppTile({ app, onTap }: { app: AppItem; onTap: (id: string) => void }) 
 }
 
 function FeaturedBanner({ app, onTap }: { app: AppItem; onTap: (id: string) => void }) {
-  const { colors } = useTheme();
+  const { colors, accent } = useTheme();
   function handlePress() {
     Haptics.selectionAsync();
     onTap(app.id);
@@ -275,7 +279,7 @@ function FeaturedBanner({ app, onTap }: { app: AppItem; onTap: (id: string) => v
       android_ripple={{ color: "rgba(255,255,255,0.1)", borderless: false }}
     >
       <LinearGradient
-        colors={[app.gradient[0], app.gradient[1], app.gradient[1] + "CC"]}
+        colors={[resolveGradient(app.gradient, accent)[0], resolveGradient(app.gradient, accent)[1], resolveGradient(app.gradient, accent)[1] + "CC"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.featuredGradient}
@@ -340,6 +344,7 @@ function TrendingSection({
 }
 
 function AppTileInner({ app, usageCount, onTap, colors }: { app: AppItem; usageCount: number; onTap: (id: string) => void; colors: any }) {
+  const { accent } = useTheme();
   const scale = useRef(new Animated.Value(1)).current;
   function handlePressIn() {
     Animated.spring(scale, { toValue: 0.88, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
@@ -362,7 +367,7 @@ function AppTileInner({ app, usageCount, onTap, colors }: { app: AppItem; usageC
       >
         <View style={styles.appIconWrapper}>
           <LinearGradient
-            colors={app.gradient}
+            colors={resolveGradient(app.gradient, accent)}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.appIcon}

@@ -20,6 +20,7 @@ import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { ComingSoonView } from "@/components/ui/ComingSoonView";
+import { ListRowSkeleton, PostSkeleton } from "@/components/ui/Skeleton";
 
 type Collection = {
   id: string;
@@ -273,8 +274,8 @@ export default function CollectionsScreen() {
         </View>
 
         {loadingItems ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={colors.accent} />
+          <View style={{ paddingTop: 8, gap: 8 }}>
+            {[1,2,3].map(i => <PostSkeleton key={i} />)}
           </View>
         ) : collectionItems.length === 0 ? (
           <View style={styles.center}>
@@ -344,8 +345,8 @@ export default function CollectionsScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.accent} />
+        <View style={{ paddingTop: 8 }}>
+          {[1,2,3,4,5].map(i => <ListRowSkeleton key={i} />)}
         </View>
       ) : collections.length === 0 ? (
         <View style={styles.center}>

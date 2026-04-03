@@ -2717,7 +2717,27 @@ STRICT RULES:
       const activeChatId = await getOrCreateChatId();
       if (!activeChatId) return;
 
+      // Immediately show the audio message in chat (optimistic insert)
+      const tempId = `pending-audio-${Date.now()}`;
+      const optimisticMsg: Message = {
+        id: tempId,
+        chat_id: activeChatId,
+        sender_id: user.id,
+        encrypted_content: "🎤 Voice message",
+        sent_at: new Date().toISOString(),
+        sender: {
+          display_name: profile?.display_name || "",
+          avatar_url: profile?.avatar_url || null,
+          handle: profile?.handle || "",
+        },
+        reactions: [],
+        attachment_url: uri,
+        attachment_type: "audio",
+        _pending: true,
+      };
+      setMessages((prev) => [optimisticMsg, ...prev]);
       setSending(true);
+
       const ext = Platform.OS === "web" ? "webm" : "m4a";
       const voiceMime = Platform.OS === "web" ? "audio/webm" : "audio/mp4";
       const { publicUrl, error: uploadErr } = await uploadChatMedia(
@@ -2730,6 +2750,7 @@ STRICT RULES:
       );
 
       if (uploadErr || !publicUrl) {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
         showAlert("Upload failed", uploadErr || "Could not upload voice message. Please try again.");
         setSending(false);
         return;

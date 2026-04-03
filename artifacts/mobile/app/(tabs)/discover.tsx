@@ -410,7 +410,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
 
           {/* AfuChat watermark — only rendered during image capture */}
           {capturing && (
-            <View style={styles.watermarkBar}>
+            <View style={[styles.watermarkBar, { backgroundColor: colors.accent }]}>
               <Ionicons name="chatbubble-ellipses" size={13} color="#fff" />
               <Text style={styles.watermarkText}>AfuChat · afuchat.com</Text>
             </View>

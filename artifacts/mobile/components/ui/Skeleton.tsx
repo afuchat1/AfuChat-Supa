@@ -288,6 +288,78 @@ export function ChatLoadingSkeleton() {
   );
 }
 
+export function FreelanceCardSkeleton() {
+  const { colors } = useTheme();
+  return (
+    <View style={{ backgroundColor: colors.surface, borderRadius: 14, marginHorizontal: 12, marginVertical: 5, overflow: "hidden" }}>
+      <Skeleton width="100%" height={110} borderRadius={0} />
+      <View style={{ padding: 12, gap: 7 }}>
+        <Skeleton width={180} height={14} />
+        <Skeleton width={120} height={12} />
+        <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 4 }}>
+          <Skeleton width={60} height={20} borderRadius={10} />
+          <Skeleton width={70} height={20} borderRadius={10} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+export function EventCardSkeleton() {
+  const { colors } = useTheme();
+  return (
+    <View style={{ backgroundColor: colors.surface, borderRadius: 16, marginHorizontal: 12, marginVertical: 5, overflow: "hidden" }}>
+      <Skeleton width="100%" height={120} borderRadius={0} />
+      <View style={{ padding: 12, gap: 8 }}>
+        <Skeleton width={200} height={15} />
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <Skeleton width={80} height={12} />
+          <Skeleton width={60} height={12} />
+        </View>
+        <Skeleton width={100} height={24} borderRadius={12} style={{ marginTop: 4 }} />
+      </View>
+    </View>
+  );
+}
+
+export function MeTabSkeleton() {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.backgroundSecondary, padding: 16, gap: 12 }}>
+      <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 16, flexDirection: "row", alignItems: "center", gap: 14 }}>
+        <Skeleton width={68} height={68} borderRadius={34} />
+        <View style={{ flex: 1, gap: 8 }}>
+          <Skeleton width={140} height={18} />
+          <Skeleton width={90} height={13} />
+          <Skeleton width={110} height={12} />
+        </View>
+      </View>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <Skeleton width="48%" height={72} borderRadius={14} />
+        <Skeleton width="48%" height={72} borderRadius={14} />
+      </View>
+      <Skeleton width="100%" height={56} borderRadius={14} />
+      {[1, 2, 3, 4, 5].map((i) => (
+        <View key={i} style={{ backgroundColor: colors.surface, borderRadius: 14, flexDirection: "row", alignItems: "center", gap: 12, padding: 14 }}>
+          <Skeleton width={36} height={36} borderRadius={10} />
+          <Skeleton width={150} height={14} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export function AiRedirectSkeleton() {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 18, backgroundColor: colors.background }}>
+      <Skeleton width={72} height={72} borderRadius={20} />
+      <Skeleton width={160} height={16} />
+      <Skeleton width={100} height={12} />
+    </View>
+  );
+}
+
 const sk = StyleSheet.create({
   row: {
     flexDirection: "row",

@@ -18,6 +18,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { PrestigeBadge } from "@/components/ui/PrestigeBadge";
+import { ContactRowSkeleton } from "@/components/ui/Skeleton";
 
 type FollowUser = {
   id: string;
@@ -291,8 +292,8 @@ export default function FollowersScreen() {
           </View>
         </View>
       ) : loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.accent} />
+        <View style={{ padding: 8, gap: 2 }}>
+          {[1,2,3,4,5,6,7,8].map(i => <ContactRowSkeleton key={i} />)}
         </View>
       ) : (
         <>

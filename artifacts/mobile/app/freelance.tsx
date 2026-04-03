@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
+import { FreelanceCardSkeleton } from "@/components/ui/Skeleton";
 import Colors from "@/constants/colors";
 import { transferAcoin } from "@/lib/monetize";
 import { showAlert } from "@/lib/alert";
@@ -421,9 +422,8 @@ export default function FreelanceScreen() {
 
       {/* ── Tab Content ── */}
       {loading ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={{ marginTop: 12, color: colors.textMuted, fontSize: 14 }}>Loading marketplace…</Text>
+        <View style={{ paddingTop: 8 }}>
+          {[1,2,3,4].map(i => <FreelanceCardSkeleton key={i} />)}
         </View>
       ) : tab === "explore" ? (
         <ExploreTab

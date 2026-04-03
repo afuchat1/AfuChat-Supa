@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
+import { EventCardSkeleton } from "@/components/ui/Skeleton";
 import { Platform } from "react-native";
 import Colors from "@/constants/colors";
 import { transferAcoin } from "@/lib/monetize";
@@ -241,7 +242,9 @@ export default function DigitalEventsScreen() {
           </TouchableOpacity>
         </ScrollView>
       ) : loading ? (
-        <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
+        <View style={{ paddingTop: 8 }}>
+          {[1,2,3].map(i => <EventCardSkeleton key={i} />)}
+        </View>
       ) : (
         <FlatList
           data={tab === "mine" ? myEvents : events}
