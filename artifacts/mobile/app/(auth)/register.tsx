@@ -231,11 +231,43 @@ export default function RegisterScreen() {
       const redirectUrl = makeRedirectUri({ native: "afuchat://(auth)/register" });
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: provider as any,
-        options: { redirectTo: redirectUrl, skipBrowserRedirect: true },
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
+          queryParams: { prompt: "select_account" },
+        },
       });
       if (error) { showAlert("Error", error.message); setOauthLoading(null); return; }
       if (!data?.url) { setOauthLoading(null); return; }
-      setOauthModalUrl(data.url);
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, { showInRecents: false });
+
+      if (result.type === "success" && result.url) {
+        const url = new URL(result.url);
+        const code = url.searchParams.get("code");
+        if (code) {
+          const { error: codeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (codeError) { showAlert("Error", codeError.message); }
+          else { router.replace("/(tabs)"); setOauthLoading(null); return; }
+        }
+        let accessToken: string | null = null;
+        let refreshToken: string | null = null;
+        if (url.hash) {
+          const hp = new URLSearchParams(url.hash.substring(1));
+          accessToken = hp.get("access_token");
+          refreshToken = hp.get("refresh_token");
+        }
+        if (!accessToken) {
+          accessToken = url.searchParams.get("access_token");
+          refreshToken = url.searchParams.get("refresh_token");
+        }
+        if (accessToken && refreshToken) {
+          const { error: sessionError } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+          if (sessionError) { showAlert("Error", sessionError.message); }
+          else { router.replace("/(tabs)"); }
+        }
+      }
+      setOauthLoading(null);
     } catch (_) {
       setOauthLoading(null);
       showAlert("Error", "Could not open Google sign in.");
