@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -7,6 +7,7 @@ import {
   Platform,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
@@ -98,40 +99,89 @@ const modal = StyleSheet.create({
   registerBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
 });
 
-function ComposeBox({ profile, colors, isLoggedIn, onAuthRequired }: {
+function ComposeBox({ profile, colors, isLoggedIn, onAuthRequired, onPost }: {
   profile: any; colors: any; isLoggedIn: boolean; onAuthRequired: () => void;
+  onPost: (text: string) => Promise<void>;
 }) {
-  const [hovered, setHovered] = useState(false);
-  const hoverProps = Platform.OS === "web"
-    ? { onMouseEnter: () => setHovered(true), onMouseLeave: () => setHovered(false) }
-    : {};
+  const [text, setText] = useState("");
+  const [posting, setPosting] = useState(false);
 
-  function handlePress() {
-    if (!isLoggedIn) { onAuthRequired(); return; }
-    router.push("/moments/create" as any);
+  async function handlePost() {
+    if (!text.trim() || posting) return;
+    setPosting(true);
+    await onPost(text.trim());
+    setText("");
+    setPosting(false);
+  }
+
+  if (!isLoggedIn) {
+    return (
+      <TouchableOpacity
+        onPress={onAuthRequired}
+        activeOpacity={0.92}
+        style={[styles.composeBox, { borderBottomColor: colors.border }]}
+      >
+        <Avatar uri={null} name="G" size={40} />
+        <View style={[styles.composePlaceholder, { borderColor: colors.border }]}>
+          <Text style={[styles.composePlaceholderText, { color: colors.textMuted }]}>
+            What's happening?
+          </Text>
+          <View style={[styles.composePostBtn, { backgroundColor: BRAND }]}>
+            <Text style={styles.composePostBtnText}>Post</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
   }
 
   return (
-    <TouchableOpacity
-      onPress={handlePress}
-      activeOpacity={0.92}
-      style={[styles.composeBox, { borderBottomColor: colors.border }]}
-      {...(hoverProps as any)}
-    >
-      <Avatar uri={isLoggedIn ? profile?.avatar_url : null} name={profile?.display_name || "G"} size={40} />
-      <View style={[styles.composePlaceholder, { borderColor: hovered ? colors.accent : colors.border }]}>
-        <Text style={[styles.composePlaceholderText, { color: colors.textMuted }]}>
-          What's on your mind?
-        </Text>
-        <TouchableOpacity
-          style={[styles.composePostBtn, { backgroundColor: BRAND }]}
-          onPress={handlePress}
-          activeOpacity={0.88}
-        >
-          <Text style={styles.composePostBtnText}>Post</Text>
-        </TouchableOpacity>
+    <View style={[styles.composeBox, { borderBottomColor: colors.border }]}>
+      <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: profile?.id } } as any)} activeOpacity={0.85}>
+        <Avatar uri={profile?.avatar_url || null} name={profile?.display_name || "Me"} size={40} />
+      </TouchableOpacity>
+      <View style={{ flex: 1 }}>
+        <TextInput
+          multiline
+          style={[styles.composeInput, { color: colors.text }]}
+          placeholder="What's happening?"
+          placeholderTextColor={colors.textMuted}
+          value={text}
+          onChangeText={setText}
+        />
+        <View style={[styles.composeToolbar, { borderTopColor: colors.border }]}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+            <TouchableOpacity style={styles.toolbarBtn} onPress={() => router.push("/moments/create" as any)}>
+              <Ionicons name="image-outline" size={20} color={BRAND} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.toolbarBtn} onPress={() => {}}>
+              <Ionicons name="happy-outline" size={20} color={BRAND} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.toolbarBtn} onPress={() => {}}>
+              <Ionicons name="location-outline" size={20} color={BRAND} />
+            </TouchableOpacity>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            {text.length > 0 && (
+              <Text style={[styles.charCount, { color: text.length > 260 ? "#F4212E" : colors.textMuted }]}>
+                {280 - text.length}
+              </Text>
+            )}
+            <TouchableOpacity
+              style={[styles.composePostBtn, { backgroundColor: BRAND, opacity: !text.trim() || posting ? 0.5 : 1 }]}
+              onPress={handlePost}
+              disabled={!text.trim() || posting}
+              activeOpacity={0.88}
+            >
+              {posting ? (
+                <ActivityIndicator color="#fff" size="small" style={{ width: 36 }} />
+              ) : (
+                <Text style={styles.composePostBtnText}>Post</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -450,6 +500,22 @@ export function DesktopDiscoverSection() {
     }
   }
 
+  async function handleQuickPost(text: string) {
+    if (!user) return;
+    const { data, error } = await supabase
+      .from("posts")
+      .insert({ author_id: user.id, content: text, visibility: "public" })
+      .select(`id, author_id, content, image_url, created_at, view_count,
+               profiles!posts_author_id_fkey(id, display_name, handle, avatar_url, is_verified, is_organization_verified),
+               post_images(image_url, display_order)`)
+      .single();
+    if (!error && data) {
+      const newPost = mapRaw([data], {}, {}, new Set());
+      setForYouPosts((prev) => [...newPost, ...prev]);
+      if (feedTab !== "for_you") setFeedTab("for_you");
+    }
+  }
+
   const noFollowingContent = !loading && feedTab === "following" && followingPosts.length === 0;
 
   return (
@@ -497,6 +563,7 @@ export function DesktopDiscoverSection() {
           colors={colors}
           isLoggedIn={isLoggedIn}
           onAuthRequired={() => setShowLoginPrompt(true)}
+          onPost={handleQuickPost}
         />
 
         {/* Feed */}
@@ -590,9 +657,38 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 12,
+    paddingBottom: 4,
     gap: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  composeInput: {
+    fontSize: 19,
+    fontFamily: "Inter_400Regular",
+    minHeight: 56,
+    paddingTop: 6,
+    paddingBottom: 6,
+    lineHeight: 26,
+  },
+  composeToolbar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 8,
+    paddingBottom: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: 4,
+  },
+  toolbarBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  charCount: {
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
   },
   composePlaceholder: {
     flex: 1,

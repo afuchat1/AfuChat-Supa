@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>X • Home (Desktop)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+        }
+        
+        .nav-icon {
+            font-size: 28px;
+            line-height: 1;
+        }
+        
+        .post-hover:hover {
+            background-color: rgb(249 250 251);
+        }
+        
+        .dark .post-hover:hover {
+            background-color: rgb(31 31 31);
+        }
+        
+        .feed-container {
+            max-height: calc(100vh - 57px);
+            overflow-y: auto;
+        }
+        
+        .feed-container::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-[#f4f4f4] dark:bg-[#0a0a0a] min-h-screen flex">
+
+    <!-- LEFT SIDEBAR – Fixed Desktop Nav -->
+    <div class="w-[275px] flex-col fixed h-screen border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-black px-3 py-2 hidden xl:flex">
+        
+        <!-- X Logo -->
+        <div class="px-4 py-3 mb-2">
+            <div onclick="window.location.reload()" class="nav-icon text-black dark:text-white cursor-pointer hover:scale-110 transition-transform">𝕏</div>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="flex-1 space-y-1">
+            <a href="#" onclick="fakeNavClick(this)" class="flex items-center gap-5 px-4 py-3 rounded-3xl hover:bg-gray-100 dark:hover:bg-gray-900 text-xl font-medium active">
+                <span class="nav-icon">🏠</span>
+                <span>Home</span>
+            </a>
+            <a href="#" onclick="fakeNavClick(this)" class="flex items-center gap-5 px-4 py-3 rounded-3xl hover:bg-gray-100 dark:hover:bg-gray-900 text-xl font-medium">
+                <span class="nav-icon">🔎</span>
+                <span>Explore</span>
+            </a>
+            <a href="#" onclick="fakeNavClick(this)" class="flex items-center gap-5 px-4 py-3 rounded-3xl hover:bg-gray-100 dark:hover:bg-gray-900 text-xl font-medium">
+                <span class="nav-icon">🔔</span>
+                <span>Notifications</span>
+                <span class="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">12</span>
+            </a>
+            <a href="#" onclick="fakeNavClick(this)" class="flex items-center gap-5 px-4 py-3 rounded-3xl hover:bg-gray-100 dark:hover:bg-gray-900 text-xl font-medium">
+                <span class="nav-icon">✉️</span>
+                <span>Messages</span>
+            </a>
+            <a href="#" onclick="fakeNavClick(this)" class="flex items-center gap-5 px-4 py-3 rounded-3xl hover:bg-gray-100 dark:hover:bg-gray-900 text-xl font-medium">
+                <span class="nav-icon">🧠</span>
+                <span>Grok</span>
+            </a>
+            <a href="#" onclick="fakeNavClick(this)" class="flex items-center gap-5 px-4 py-3 rounded-3xl hover:bg-gray-100 dark:hover:bg-gray-900 text-xl font-medium">
+                <span class="nav-icon">👥</span>
+                <span>Communities</span>
+            </a>
+            <a href="#" onclick="fakeNavClick(this)" class="flex items-center gap-5 px-4 py-3 rounded-3xl hover:bg-gray-100 dark:hover:bg-gray-900 text-xl font-medium">
+                <span class="nav-icon">🔖</span>
+                <span>Bookmarks</span>
+            </a>
+            <a href="#" onclick="fakeNavClick(this)" class="flex items-center gap-5 px-4 py-3 rounded-3xl hover:bg-gray-100 dark:hover:bg-gray-900 text-xl font-medium">
+                <span class="nav-icon">👤</span>
+                <span>Profile</span>
+            </a>
+            
+            <!-- Post Button -->
+            <button onclick="composePost()" 
+                    class="w-full mt-6 mx-3 bg-black dark:bg-white text-white dark:text-black font-bold text-xl py-4 rounded-3xl hover:bg-[#1d9bf0] transition-all">
+                Post
+            </button>
+        </nav>
+
+        <!-- Bottom User Info -->
+        <div onclick="fakeProfileClick()" class="mt-auto flex items-center gap-3 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-900 rounded-3xl cursor-pointer">
+            <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center text-white font-bold">A</div>
+            <div class="flex-1 min-w-0">
+                <div class="font-bold text-lg truncate">Afu</div>
+                <div class="text-gray-500 dark:text-gray-400 text-sm truncate">@afu_ug</div>
+            </div>
+            <div class="text-3xl text-gray-400">⋯</div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT AREA -->
+    <div class="flex-1 xl:ml-[275px] border-r border-gray-200 dark:border-gray-800 max-w-[600px] bg-white dark:bg-black min-h-screen">
+
+        <!-- Top Bar -->
+        <div class="sticky top-0 bg-white/80 dark:bg-black/80 backdrop-blur-lg border-b border-gray-200 dark:border-gray-800 z-50 px-6 py-4 flex items-center justify-between">
+            <h1 class="text-2xl font-bold text-black dark:text-white">Home</h1>
+            
+            <!-- For You / Following Tabs -->
+            <div class="flex bg-gray-100 dark:bg-gray-900 rounded-3xl p-1 text-sm font-semibold">
+                <button onclick="switchTab(0)" id="tab-foryou"
+                        class="px-6 py-2 rounded-3xl data-[active=true]:bg-white data-[active=true]:shadow-sm dark:data-[active=true]:bg-black">For you</button>
+                <button onclick="switchTab(1)" id="tab-following"
+                        class="px-6 py-2 rounded-3xl data-[active=true]:bg-white data-[active=true]:shadow-sm dark:data-[active=true]:bg-black">Following</button>
+            </div>
+            
+            <div class="flex items-center text-[#1d9bf0] text-3xl">✦</div>
+        </div>
+
+        <!-- Compose Box -->
+        <div class="border-b border-gray-200 dark:border-gray-800 px-6 py-4 flex gap-4">
+            <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl flex-shrink-0 flex items-center justify-center text-white font-bold">A</div>
+            <div class="flex-1">
+                <textarea id="compose-text" rows="2"
+                          class="w-full bg-transparent text-xl placeholder-gray-500 dark:placeholder-gray-400 outline-none resize-none"
+                          placeholder="What is happening?!"></textarea>
+                
+                <div class="flex items-center justify-between mt-4">
+                    <div class="flex gap-6 text-[#1d9bf0] text-2xl">
+                        <span class="cursor-pointer hover:scale-110 transition">🖼️</span>
+                        <span class="cursor-pointer hover:scale-110 transition">📊</span>
+                        <span class="cursor-pointer hover:scale-110 transition">😀</span>
+                        <span class="cursor-pointer hover:scale-110 transition">📍</span>
+                    </div>
+                    <button onclick="postTweet()" 
+                            class="bg-black dark:bg-white text-white dark:text-black px-8 py-1.5 rounded-3xl font-bold">Post</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Feed -->
+        <div id="feed" class="feed-container">
+            
+            <!-- Elon Post -->
+            <div class="post-hover px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex gap-4">
+                <div class="w-10 h-10 bg-black rounded-2xl flex-shrink-0"></div>
+                <div class="flex-1">
+                    <div class="flex items-center gap-2">
+                        <span class="font-bold">Elon Musk</span>
+                        <span class="text-gray-500">@elonmusk</span>
+                        <span class="text-gray-500">· 2h</span>
+                    </div>
+                    <p class="text-xl leading-tight mt-1">Grok 4 is now live for all Premium+ users. Ask it anything.</p>
+                    <div class="mt-4 rounded-3xl overflow-hidden border border-gray-300 dark:border-gray-700">
+                        <div class="bg-gradient-to-r from-purple-500 to-blue-500 h-56 flex items-center justify-center text-white text-6xl">🤖</div>
+                    </div>
+                    <div class="flex justify-between mt-4 text-gray-500 max-w-[425px]">
+                        <div class="flex items-center gap-3 hover:text-[#1d9bf0] cursor-pointer"><span>💭</span><span>14K</span></div>
+                        <div class="flex items-center gap-3 hover:text-[#1d9bf0] cursor-pointer"><span>🔁</span><span>8K</span></div>
+                        <div class="flex items-center gap-3 hover:text-[#1d9bf0] cursor-pointer"><span>❤️</span><span>124K</span></div>
+                        <div class="flex items-center gap-3 hover:text-[#1d9bf0] cursor-pointer"><span>📊</span><span>3.2M</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Your Post -->
+            <div class="post-hover px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex gap-4">
+                <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl flex-shrink-0 flex items-center justify-center text-white font-bold">A</div>
+                <div class="flex-1">
+                    <div class="flex items-center gap-2">
+                        <span class="font-bold">Afu</span>
+                        <span class="text-gray-500">@afu_ug</span>
+                        <span class="text-gray-500">· 14m</span>
+                    </div>
+                    <p class="text-xl leading-tight mt-1">Just built the full X home page UI in pure HTML/Tailwind in under 10 minutes 🔥</p>
+                    <div class="mt-4 text-sm text-gray-500 flex items-center gap-1">
+                        <span class="bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300 px-3 py-1 rounded-3xl">Kampala, Uganda</span>
+                    </div>
+                    <div class="flex justify-between mt-4 text-gray-500 max-w-[425px]">
+                        <div class="flex items-center gap-3 hover:text-[#1d9bf0] cursor-pointer"><span>💭</span><span>42</span></div>
+                        <div class="flex items-center gap-3 hover:text-[#1d9bf0] cursor-pointer"><span>🔁</span><span>12</span></div>
+                        <div class="flex items-center gap-3 hover:text-[#1d9bf0] cursor-pointer"><span>❤️</span><span>289</span></div>
+                        <div class="flex items-center gap-3 hover:text-[#1d9bf0] cursor-pointer"><span>📊</span><span>14K</span></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- RIGHT SIDEBAR – Desktop Only -->
+    <div class="w-[350px] flex-col fixed right-0 h-screen bg-white dark:bg-black border-l border-gray-200 dark:border-gray-800 p-6 overflow-y-auto hidden 2xl:flex">
+        
+        <!-- Search Bar -->
+        <div class="relative mb-6">
+            <input type="text" placeholder="Search X" 
+                   class="w-full h-12 bg-gray-100 dark:bg-gray-900 rounded-3xl pl-14 text-lg outline-none focus:ring-2 focus:ring-[#1d9bf0]">
+            <div class="absolute left-6 top-1/2 -translate-y-1/2 text-2xl text-gray-400">🔎</div>
+        </div>
+
+        <!-- Trending -->
+        <div class="bg-gray-100 dark:bg-gray-900 rounded-3xl p-6 mb-6">
+            <h2 class="text-2xl font-bold mb-5">What’s happening</h2>
+            <div class="space-y-6 text-sm">
+                <div>
+                    <div class="text-gray-500">Trending in Uganda · 42.1K posts</div>
+                    <div class="font-bold">#UgandaTech</div>
+                </div>
+                <div>
+                    <div class="text-gray-500">Trending · 128K posts</div>
+                    <div class="font-bold">Grok 4</div>
+                </div>
+                <div>
+                    <div class="text-gray-500">World Cup · LIVE</div>
+                    <div class="font-bold">Uganda vs Kenya</div>
+                </div>
+            </div>
+            <a href="#" class="text-[#1d9bf0] block mt-6 font-medium">Show more</a>
+        </div>
+
+        <!-- Who to follow -->
+        <div class="bg-gray-100 dark:bg-gray-900 rounded-3xl p-6">
+            <h2 class="text-2xl font-bold mb-5">Who to follow</h2>
+            <div class="space-y-5">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-black rounded-2xl"></div>
+                    <div class="flex-1">
+                        <div class="font-bold">xAI</div>
+                        <div class="text-sm text-gray-500">@xai</div>
+                    </div>
+                    <button onclick="this.textContent='Following';this.style.backgroundColor='rgb(156 163 175)'" 
+                            class="border border-gray-400 dark:border-gray-600 px-6 py-1 rounded-3xl font-bold text-sm hover:bg-gray-200 dark:hover:bg-gray-800">Follow</button>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white">G</div>
+                    <div class="flex-1">
+                        <div class="font-bold">Grok</div>
+                        <div class="text-sm text-gray-500">@grok</div>
+                    </div>
+                    <button onclick="this.textContent='Following';this.style.backgroundColor='rgb(156 163 175)'" 
+                            class="border border-gray-400 dark:border-gray-600 px-6 py-1 rounded-3xl font-bold text-sm hover:bg-gray-200 dark:hover:bg-gray-800">Follow</button>
+                </div>
+            </div>
+            <a href="#" class="text-[#1d9bf0] block mt-6 font-medium">Show more</a>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-xs text-gray-500 mt-auto pt-8 flex flex-wrap gap-x-3 gap-y-1">
+            <a href="#" class="hover:underline">Terms</a>
+            <a href="#" class="hover:underline">Privacy</a>
+            <a href="#" class="hover:underline">Cookies</a>
+            <a href="#" class="hover:underline">© 2026 X Corp.</a>
+        </div>
+    </div>
+
+    <script>
+        function fakeNavClick(el) {
+            document.querySelectorAll('nav a').forEach(a => a.classList.remove('active', 'bg-gray-100', 'dark:bg-gray-900'));
+            el.classList.add('active', 'bg-gray-100', 'dark:bg-gray-900');
+            if (el.textContent.includes('Home')) return;
+            alert('📍 This would navigate to ' + el.textContent + ' page');
+        }
+
+        function composePost() {
+            document.getElementById('compose-text').focus();
+        }
+
+        function postTweet() {
+            const text = document.getElementById('compose-text').value.trim();
+            if (!text) return alert("Write something to post!");
+            
+            const feed = document.getElementById('feed');
+            const newPost = document.createElement('div');
+            newPost.className = "post-hover px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex gap-4 animate-fade-in";
+            newPost.innerHTML = `
+                <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl flex-shrink-0 flex items-center justify-center text-white font-bold">A</div>
+                <div class="flex-1">
+                    <div class="flex items-center gap-2">
+                        <span class="font-bold">Afu</span>
+                        <span class="text-gray-500">@afu_ug</span>
+                        <span class="text-gray-500">· now</span>
+                    </div>
+                    <p class="text-xl leading-tight mt-1">${text}</p>
+                    <div class="flex justify-between mt-4 text-gray-500 max-w-[425px]">
+                        <div class="flex items-center gap-3 hover:text-[#1d9bf0] cursor-pointer"><span>💭</span><span>0</span></div>
+                        <div class="flex items-center gap-3 hover:text-[#1d9bf0] cursor-pointer"><span>🔁</span><span>0</span></div>
+                        <div class="flex items-center gap-3 hover:text-[#1d9bf0] cursor-pointer"><span>❤️</span><span>1</span></div>
+                        <div class="flex items-center gap-3 hover:text-[#1d9bf0] cursor-pointer"><span>📊</span><span>42</span></div>
+                    </div>
+                </div>
+            `;
+            feed.insertBefore(newPost, feed.firstChild);
+            document.getElementById('compose-text').value = '';
+            alert('✅ Posted live on your X home feed!');
+        }
+
+        function switchTab(n) {
+            const foryou = document.getElementById('tab-foryou');
+            const following = document.getElementById('tab-following');
+            foryou.dataset.active = n === 0 ? 'true' : 'false';
+            following.dataset.active = n === 1 ? 'true' : 'false';
+        }
+
+        function fakeProfileClick() {
+            alert('👋 You are now viewing your X profile (@afu_ug – Kampala, Uganda)');
+        }
+
+        // Auto dark mode
+        if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+        
+        console.log('%c✅ X Desktop Home Page (Pure Desktop Layout) Ready!', 'color:#1d9bf0; font-size:16px; font-weight:bold');
+    </script>
+</body>
+</html>

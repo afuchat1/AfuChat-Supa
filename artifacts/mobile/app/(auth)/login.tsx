@@ -443,10 +443,15 @@ export default function LoginScreen() {
     return (
       <View style={[styles.root, { flexDirection: isDesktop ? "row" : "column", backgroundColor: isDesktop ? (isDark ? "#0a0a0a" : "#ffffff") : colors.background }]}>
         {isDesktop && (
-          <View style={[authSplit.brandPanel, { backgroundColor: colors.accent }]}>
-            <Image source={afuSymbol} style={{ width: 80, height: 80, tintColor: "#fff", marginBottom: 28 }} resizeMode="contain" />
-            <Text style={authSplit.brandTitle}>AfuChat</Text>
-            <Text style={authSplit.brandTagline}>Connect with everyone, everywhere.</Text>
+          <View style={[authSplit.brandPanel, { backgroundColor: isDark ? "#000000" : "#f4f4f4", overflow: "hidden" }]}>
+            <View style={{ position: "absolute", bottom: -60, left: -60, opacity: 0.04 } as any}>
+              <Image source={afuSymbol} style={{ width: 520, height: 520, tintColor: colors.text }} resizeMode="contain" />
+            </View>
+            <Image source={afuSymbol} style={{ width: 52, height: 52, tintColor: colors.accent, marginBottom: 40 }} resizeMode="contain" />
+            <Text style={[authSplit.brandHeadline, { color: colors.text }]}>
+              Connect with{"\n"}everyone,{"\n"}everywhere.
+            </Text>
+            <Text style={[authSplit.brandSubline, { color: colors.text }]}>Join AfuChat today.</Text>
           </View>
         )}
         <KeyboardAvoidingView
@@ -461,7 +466,7 @@ export default function LoginScreen() {
           }
           keyboardShouldPersistTaps="handled"
         >
-          <View style={isDesktop ? { maxWidth: 400, width: "100%" as any, alignSelf: "center" } : undefined}>
+          <View style={isDesktop ? [authSplit.formCard, { backgroundColor: colors.background, borderColor: colors.border }] : undefined}>
           <View style={styles.logoWrap}>
             <Image source={afuSymbol} style={{ width: 64, height: 64, marginBottom: 12, tintColor: colors.accent }} resizeMode="contain" />
             <Text style={[styles.appName, { color: colors.text, fontSize: 24 }]}>Reset Password</Text>
@@ -601,23 +606,15 @@ export default function LoginScreen() {
         />
       </TouchableOpacity>
       {isDesktop && (
-        <View style={[authSplit.brandPanel, { backgroundColor: colors.accent }]}>
-          <Image source={afuSymbol} style={{ width: 80, height: 80, tintColor: "#fff", marginBottom: 28 }} resizeMode="contain" />
-          <Text style={authSplit.brandTitle}>AfuChat</Text>
-          <Text style={authSplit.brandTagline}>Connect with everyone, everywhere.</Text>
-          <View style={authSplit.featureList}>
-            {[
-              { icon: "chatbubbles", text: "Real-time messaging with end-to-end privacy" },
-              { icon: "compass", text: "Discover trending content and creators" },
-              { icon: "people", text: "Groups, channels, and communities" },
-              { icon: "gift", text: "Send gifts and red envelopes to friends" },
-            ].map((f) => (
-              <View key={f.text} style={authSplit.featureRow}>
-                <Ionicons name={f.icon as any} size={20} color="rgba(255,255,255,0.9)" />
-                <Text style={authSplit.featureText}>{f.text}</Text>
-              </View>
-            ))}
+        <View style={[authSplit.brandPanel, { backgroundColor: isDark ? "#000000" : "#f4f4f4", overflow: "hidden" }]}>
+          <View style={{ position: "absolute", bottom: -60, left: -60, opacity: 0.04 } as any}>
+            <Image source={afuSymbol} style={{ width: 520, height: 520, tintColor: colors.text }} resizeMode="contain" />
           </View>
+          <Image source={afuSymbol} style={{ width: 52, height: 52, tintColor: colors.accent, marginBottom: 40 }} resizeMode="contain" />
+          <Text style={[authSplit.brandHeadline, { color: colors.text }]}>
+            Connect with{"\n"}everyone,{"\n"}everywhere.
+          </Text>
+          <Text style={[authSplit.brandSubline, { color: colors.text }]}>Join AfuChat today.</Text>
         </View>
       )}
     <KeyboardAvoidingView
@@ -632,11 +629,12 @@ export default function LoginScreen() {
         }
         keyboardShouldPersistTaps="handled"
       >
-        <View style={isDesktop ? { maxWidth: 400, width: "100%" as any, alignSelf: "center" } : undefined}>
+        <View style={isDesktop ? [authSplit.formCard, { backgroundColor: colors.background, borderColor: colors.border }] : undefined}>
         {isDesktop ? (
-          <View style={{ marginBottom: 40 }}>
-            <Text style={[styles.appName, { color: colors.text, textAlign: "left", marginBottom: 8 }]}>Sign in to AfuChat</Text>
-            <Text style={[styles.tagline, { color: colors.textSecondary }]}>Welcome back. Enter your credentials below.</Text>
+          <View style={{ marginBottom: 32 }}>
+            <Image source={afuSymbol} style={{ width: 40, height: 40, tintColor: colors.accent, marginBottom: 20, alignSelf: "center" as any }} resizeMode="contain" />
+            <Text style={[styles.appName, { color: colors.text, textAlign: "center", marginBottom: 8 }]}>Sign in to AfuChat</Text>
+            <Text style={[styles.tagline, { color: colors.textSecondary, textAlign: "center" as any }]}>Welcome back</Text>
           </View>
         ) : (
           <View style={[styles.logoWrap, { marginTop: 20 }]}>
@@ -848,37 +846,34 @@ const oauthModalStyles = StyleSheet.create({
   },
 });
 
-const authSplit = StyleSheet.create({
+const authSplit = StyleSheet.create<any>({
   brandPanel: {
     flex: 1,
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "center",
-    padding: 60,
-    gap: 0,
+    paddingHorizontal: 72,
+    paddingVertical: 60,
   },
-  brandTitle: {
-    fontSize: 52,
+  brandHeadline: {
+    fontSize: 64,
     fontFamily: "Inter_700Bold",
-    color: "#fff",
-    marginBottom: 16,
-    letterSpacing: -1,
+    letterSpacing: -2,
+    lineHeight: 72,
+    marginBottom: 20,
   },
-  brandTagline: {
-    fontSize: 18,
-    fontFamily: "Inter_400Regular",
-    color: "rgba(255,255,255,0.85)",
-    textAlign: "center",
-    lineHeight: 28,
-    marginBottom: 48,
+  brandSubline: {
+    fontSize: 32,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: -0.5,
   },
-  featureList: { gap: 20, width: "100%" as any, maxWidth: 380 },
-  featureRow: { flexDirection: "row", alignItems: "center", gap: 14 },
-  featureText: {
-    fontSize: 16,
-    fontFamily: "Inter_400Regular",
-    color: "rgba(255,255,255,0.9)",
-    flex: 1,
-    lineHeight: 22,
+  formCard: {
+    maxWidth: 440,
+    width: "100%",
+    alignSelf: "center",
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 40,
+    boxShadow: "0 4px 40px rgba(0,0,0,0.08)",
   },
 });
 

@@ -409,10 +409,15 @@ export default function RegisterScreen() {
     return (
       <View style={[styles.root, { flexDirection: isDesktop ? "row" : "column", backgroundColor: isDesktop ? (isDark ? "#0a0a0a" : "#ffffff") : colors.background }]}>
         {isDesktop && (
-          <View style={[regSplit.brandPanel, { backgroundColor: colors.accent }]}>
-            <Image source={afuSymbol} style={{ width: 80, height: 80, tintColor: "#fff", marginBottom: 28 }} resizeMode="contain" />
-            <Text style={regSplit.brandTitle}>AfuChat</Text>
-            <Text style={regSplit.brandTagline}>Join the community. Connect with everyone, everywhere.</Text>
+          <View style={[regSplit.brandPanel, { backgroundColor: isDark ? "#000000" : "#f4f4f4", overflow: "hidden" }]}>
+            <View style={{ position: "absolute", bottom: -60, left: -60, opacity: 0.04 } as any}>
+              <Image source={afuSymbol} style={{ width: 520, height: 520, tintColor: colors.text }} resizeMode="contain" />
+            </View>
+            <Image source={afuSymbol} style={{ width: 52, height: 52, tintColor: colors.accent, marginBottom: 40 }} resizeMode="contain" />
+            <Text style={[regSplit.brandHeadline, { color: colors.text }]}>
+              Connect with{"\n"}everyone,{"\n"}everywhere.
+            </Text>
+            <Text style={[regSplit.brandSubline, { color: colors.text }]}>Join AfuChat today.</Text>
           </View>
         )}
         <KeyboardAvoidingView
@@ -483,23 +488,15 @@ export default function RegisterScreen() {
   return (
     <View style={[styles.root, { flexDirection: isDesktop ? "row" : "column", backgroundColor: isDesktop ? (isDark ? "#0a0a0a" : "#ffffff") : colors.background }]}>
       {isDesktop && (
-        <View style={[regSplit.brandPanel, { backgroundColor: colors.accent }]}>
-          <Image source={afuSymbol} style={{ width: 80, height: 80, tintColor: "#fff", marginBottom: 28 }} resizeMode="contain" />
-          <Text style={regSplit.brandTitle}>AfuChat</Text>
-          <Text style={regSplit.brandTagline}>Join the community. Connect with everyone, everywhere.</Text>
-          <View style={regSplit.featureList}>
-            {[
-              { icon: "chatbubbles", text: "Real-time messaging with end-to-end privacy" },
-              { icon: "compass", text: "Discover trending content and creators" },
-              { icon: "people", text: "Groups, channels, and communities" },
-              { icon: "gift", text: "Send gifts and red envelopes to friends" },
-            ].map((f) => (
-              <View key={f.text} style={regSplit.featureRow}>
-                <Ionicons name={f.icon as any} size={20} color="rgba(255,255,255,0.9)" />
-                <Text style={regSplit.featureText}>{f.text}</Text>
-              </View>
-            ))}
+        <View style={[regSplit.brandPanel, { backgroundColor: isDark ? "#000000" : "#f4f4f4", overflow: "hidden" }]}>
+          <View style={{ position: "absolute", bottom: -60, left: -60, opacity: 0.04 } as any}>
+            <Image source={afuSymbol} style={{ width: 520, height: 520, tintColor: colors.text }} resizeMode="contain" />
           </View>
+          <Image source={afuSymbol} style={{ width: 52, height: 52, tintColor: colors.accent, marginBottom: 40 }} resizeMode="contain" />
+          <Text style={[regSplit.brandHeadline, { color: colors.text }]}>
+            Connect with{"\n"}everyone,{"\n"}everywhere.
+          </Text>
+          <Text style={[regSplit.brandSubline, { color: colors.text }]}>Join AfuChat today.</Text>
         </View>
       )}
       <KeyboardAvoidingView
@@ -514,18 +511,25 @@ export default function RegisterScreen() {
         }
         keyboardShouldPersistTaps="handled"
       >
-        <View style={isDesktop ? { maxWidth: 400, width: "100%" as any, alignSelf: "center" } : undefined}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <View style={isDesktop ? [regSplit.formCard, { backgroundColor: colors.background, borderColor: colors.border }] : undefined}>
+        {!isDesktop && (
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backBtn}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
+        )}
 
-        <View style={styles.headerWrap}>
-          <Image source={afuSymbol} style={{ width: 72, height: 72, marginBottom: 20, tintColor: colors.accent }} resizeMode="contain" />
-          <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
+        <View style={[styles.headerWrap, isDesktop && { marginBottom: 28 }]}>
+          {isDesktop && (
+            <Image source={afuSymbol} style={{ width: 40, height: 40, tintColor: colors.accent, marginBottom: 20 }} resizeMode="contain" />
+          )}
+          {!isDesktop && (
+            <Image source={afuSymbol} style={{ width: 72, height: 72, marginBottom: 20, tintColor: colors.accent }} resizeMode="contain" />
+          )}
+          <Text style={[styles.title, { color: colors.text }, isDesktop && { fontSize: 24 }]}>Create Account</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             Join AfuChat and start connecting
           </Text>
@@ -746,36 +750,34 @@ const oauthModalStyles = StyleSheet.create({
   },
 });
 
-const regSplit = StyleSheet.create({
+const regSplit = StyleSheet.create<any>({
   brandPanel: {
     flex: 1,
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "center",
-    padding: 60,
+    paddingHorizontal: 72,
+    paddingVertical: 60,
   },
-  brandTitle: {
-    fontSize: 52,
+  brandHeadline: {
+    fontSize: 64,
     fontFamily: "Inter_700Bold",
-    color: "#fff",
-    marginBottom: 16,
-    letterSpacing: -1,
+    letterSpacing: -2,
+    lineHeight: 72,
+    marginBottom: 20,
   },
-  brandTagline: {
-    fontSize: 18,
-    fontFamily: "Inter_400Regular",
-    color: "rgba(255,255,255,0.85)",
-    textAlign: "center",
-    lineHeight: 28,
-    marginBottom: 48,
+  brandSubline: {
+    fontSize: 32,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: -0.5,
   },
-  featureList: { gap: 20, width: "100%" as any, maxWidth: 380 },
-  featureRow: { flexDirection: "row", alignItems: "center", gap: 14 },
-  featureText: {
-    fontSize: 16,
-    fontFamily: "Inter_400Regular",
-    color: "rgba(255,255,255,0.9)",
-    flex: 1,
-    lineHeight: 22,
+  formCard: {
+    maxWidth: 440,
+    width: "100%",
+    alignSelf: "center",
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 40,
+    boxShadow: "0 4px 40px rgba(0,0,0,0.08)",
   },
 });
 
