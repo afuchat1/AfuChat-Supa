@@ -234,7 +234,7 @@ export function DesktopChatsSection() {
     if (!user) return;
     const { data: memberRows } = await supabase
       .from("chat_members")
-      .select("chat_id, last_read_at")
+      .select("chat_id")
       .eq("user_id", user.id);
 
     if (!memberRows || memberRows.length === 0) {
@@ -244,8 +244,6 @@ export function DesktopChatsSection() {
     }
 
     const chatIds = memberRows.map((m: any) => m.chat_id);
-    const lastReadMap: Record<string, string | null> = {};
-    for (const m of memberRows as any[]) lastReadMap[m.chat_id] = m.last_read_at ?? null;
 
     const [chatResult, lastMsgsResult] = await Promise.all([
       supabase
@@ -257,17 +255,34 @@ export function DesktopChatsSection() {
         .order("updated_at", { ascending: false }),
       supabase
         .from("messages")
-        .select("chat_id, encrypted_content, sent_at, attachment_type, sender_id")
+        .select("id, chat_id, encrypted_content, sent_at, attachment_type, sender_id")
         .in("chat_id", chatIds)
         .order("sent_at", { ascending: false })
         .limit(300),
     ]);
 
     const chatRows = chatResult.data || [];
+    const msgRows = lastMsgsResult.data || [];
+
+    const fromOtherIds = msgRows
+      .filter((m: any) => m.sender_id !== user.id && m.id)
+      .map((m: any) => m.id);
+
+    let readSet = new Set<string>();
+    if (fromOtherIds.length > 0) {
+      const { data: statusRows } = await supabase
+        .from("message_status")
+        .select("message_id")
+        .eq("user_id", user.id)
+        .not("read_at", "is", null)
+        .in("message_id", fromOtherIds);
+      for (const s of statusRows || []) readSet.add(s.message_id);
+    }
+
     const lastMsgMap: Record<string, { msg: string; at: string }> = {};
     const unreadCountMap: Record<string, number> = {};
 
-    for (const m of lastMsgsResult.data || []) {
+    for (const m of msgRows) {
       if (!lastMsgMap[m.chat_id]) {
         let preview = m.encrypted_content || "";
         if (m.attachment_type === "image") preview = "📷 Photo";
@@ -276,11 +291,8 @@ export function DesktopChatsSection() {
         else if (m.attachment_type === "story_reply") preview = preview ? `📸 ${preview}` : "📸 Replied";
         lastMsgMap[m.chat_id] = { msg: preview, at: m.sent_at };
       }
-      if (m.sender_id !== user.id) {
-        const lastRead = lastReadMap[m.chat_id];
-        if (!lastRead || m.sent_at > lastRead) {
-          unreadCountMap[m.chat_id] = (unreadCountMap[m.chat_id] || 0) + 1;
-        }
+      if (m.sender_id !== user.id && m.id && !readSet.has(m.id)) {
+        unreadCountMap[m.chat_id] = (unreadCountMap[m.chat_id] || 0) + 1;
       }
     }
 
