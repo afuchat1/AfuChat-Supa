@@ -47,6 +47,8 @@ type PostData = {
   content: string;
   image_url: string | null;
   images: string[];
+  post_type: string | null;
+  article_title: string | null;
   created_at: string;
   view_count: number;
   visibility: string;
@@ -154,7 +156,7 @@ export default function PostDetailScreen() {
     if (!id) return;
     const { data } = await supabase
       .from("posts")
-      .select(`id, content, image_url, created_at, view_count, visibility, post_type, video_url,
+      .select(`id, content, image_url, article_title, created_at, view_count, visibility, post_type, video_url,
         profiles!posts_author_id_fkey(id, display_name, avatar_url, handle, is_verified, is_organization_verified),
         post_images(image_url, display_order)`)
       .eq("id", id)
@@ -203,6 +205,8 @@ export default function PostDetailScreen() {
       content: data.content,
       image_url: data.image_url,
       images: ((data as any).post_images || []).sort((a: any, b: any) => a.display_order - b.display_order).map((i: any) => i.image_url),
+      post_type: (data as any).post_type || null,
+      article_title: (data as any).article_title || null,
       created_at: data.created_at,
       view_count: viewCount,
       visibility: (data as any).visibility || "public",
@@ -477,6 +481,9 @@ export default function PostDetailScreen() {
                 </View>
               ) : (
                 <>
+                  {post.post_type === "article" && post.article_title ? (
+                    <Text style={[styles.articleTitle, { color: colors.text }]}>{post.article_title}</Text>
+                  ) : null}
                   <RichText style={[styles.postContent, { color: colors.text }]}>{postDisplayText || post.content}</RichText>
                   {postIsTranslated && (
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 0, marginBottom: 6 }}>
@@ -734,6 +741,7 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: "row", alignItems: "center" },
   authorName: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
   authorHandle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
+  articleTitle: { fontSize: 22, fontFamily: "Inter_700Bold", lineHeight: 30, marginBottom: 8 },
   postContent: { fontSize: 17, fontFamily: "Inter_400Regular", lineHeight: 26 },
   imgWrap: { gap: 6 },
   postImg: { width: "100%", height: 200, borderRadius: 12 },

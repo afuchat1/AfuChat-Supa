@@ -35,6 +35,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: "notifications", icon: "notifications-outline",        iconActive: "notifications",        label: "Notifications" },
   { key: "chats",         icon: "mail-outline",                 iconActive: "mail",                label: "Messages" },
   { key: "wallet",        icon: "wallet-outline",               iconActive: "wallet",              label: "Wallet" },
+  { key: "contacts",      icon: "people-outline",               iconActive: "people",              label: "Contacts" },
 ];
 
 function NavButton({

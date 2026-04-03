@@ -125,6 +125,20 @@ Applied gates:
 - **Monetize** (`app/monetize.tsx`) — Silver required
 - **AfuAI chat tap** (`app/(tabs)/index.tsx`) — Platinum intercept, routes to `/premium`
 
+## Desktop Contacts Section
+
+`components/desktop/DesktopContactsSection.tsx` — two-panel desktop contacts view added to the sidebar nav ("Contacts" icon). Left panel: alphabetically grouped list of people the user follows, with search, online indicators, and "Add Contact" flow. Right panel: inline profile card showing avatar, verified badge, follower/following counts, follow toggle, Message button, and a 3-column posts grid with best-thumbnail detection. Clicking a post navigates to its detail/video page.
+
+`DesktopWrapper.tsx` and `DesktopSidebar.tsx` updated to include the `"contacts"` section.
+
+## Post Thumbnail Detection
+
+All surfaces now pick the best available thumbnail using priority: `post_images[0]` → `image_url` → null.
+
+- `contact/[id].tsx`: Video posts now render `image_url` behind the play-button overlay (previously showed a blank dark background).
+- `post/[id].tsx`: Query now fetches `article_title`; article posts render a bold title above the body text in the detail view.
+- `DesktopDiscoverSection.tsx`: Already correct — video card uses `image_url`, regular posts use `post_images → image_url`.
+
 ## Offline Improvements
 
 - `lib/offlineStore.ts` — added `cacheWallet` / `getCachedWallet` (key `offline_wallet`)

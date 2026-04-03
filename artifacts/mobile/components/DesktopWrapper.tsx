@@ -19,6 +19,7 @@ import { DesktopNotificationsSection } from "./desktop/DesktopNotificationsSecti
 import { DesktopWalletSection } from "./desktop/DesktopWalletSection";
 import { DesktopSearchSection } from "./desktop/DesktopSearchSection";
 import { DesktopProfileSection } from "./desktop/DesktopProfileSection";
+import { DesktopContactsSection } from "./desktop/DesktopContactsSection";
 
 const DESKTOP_BREAKPOINT = 960;
 
@@ -28,6 +29,7 @@ export type DesktopSection =
   | "search"
   | "notifications"
   | "wallet"
+  | "contacts"
   | "profile";
 
 const BASE_FIRST_SEGMENTS = new Set([
@@ -145,6 +147,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
             {activeSection === "search" && <DesktopSearchSection />}
             {activeSection === "notifications" && <DesktopNotificationsSection />}
             {activeSection === "wallet" && <DesktopWalletSection />}
+            {activeSection === "contacts" && <DesktopContactsSection />}
             {activeSection === "profile" && <DesktopProfileSection />}
           </View>
 

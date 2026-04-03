@@ -501,9 +501,14 @@ export default function ContactProfileScreen() {
                     <>
                       {!!p.content && <Text style={[st.postContent, { color: colors.text }]} numberOfLines={3}>{p.content}</Text>}
                       {isVideo ? (
-                        <View style={[st.postThumb, { backgroundColor: "#1a1a1d", alignItems: "center", justifyContent: "center" }]}>
-                          <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" }}>
-                            <Ionicons name="play" size={24} color="#fff" />
+                        <View style={[st.postThumb, { backgroundColor: "#1a1a1d", overflow: "hidden" }]}>
+                          {p.image_url ? (
+                            <Image source={{ uri: p.image_url }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                          ) : null}
+                          <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center", backgroundColor: p.image_url ? "rgba(0,0,0,0.32)" : undefined }]}>
+                            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" }}>
+                              <Ionicons name="play" size={24} color="#fff" />
+                            </View>
                           </View>
                         </View>
                       ) : images.length === 1 ? (
