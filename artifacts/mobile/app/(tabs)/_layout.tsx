@@ -13,6 +13,7 @@ import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
+import CommunityBanner from "@/components/ui/CommunityBanner";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -150,8 +151,14 @@ export default function TabLayout() {
     }
   }, [session, profile, loading]);
 
-  if (isLiquidGlassAvailable()) {
-    return <NativeTabLayout />;
-  }
-  return <ClassicTabLayout isLoggedIn={!!session} />;
+  const layout = isLiquidGlassAvailable()
+    ? <NativeTabLayout />
+    : <ClassicTabLayout isLoggedIn={!!session} />;
+
+  return (
+    <>
+      {layout}
+      {session?.user?.id ? <CommunityBanner userId={session.user.id} /> : null}
+    </>
+  );
 }
