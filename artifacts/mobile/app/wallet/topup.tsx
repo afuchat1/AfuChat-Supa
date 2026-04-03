@@ -115,13 +115,10 @@ export default function TopUpScreen() {
       setPaymentUrl(data.redirect_url);
       setMerchantRef(data.merchant_reference);
 
-      if (Platform.OS === "web") {
-        Linking.openURL(data.redirect_url);
-        setScreen("awaiting");
-        startPolling(data.merchant_reference);
-      } else {
-        setScreen("paying");
-      }
+      // Both web and native now show the payment inside the app
+      setScreen("paying");
+      // Start polling so we catch the result even if navigation detection misses it
+      startPolling(data.merchant_reference);
     } catch (err: any) {
       showAlert("Payment Error", err?.message || "Could not start payment. Please try again.");
     } finally {
@@ -182,63 +179,90 @@ export default function TopUpScreen() {
     setCreditedAcoin(0);
   }
 
-  if (screen === "paying" && paymentUrl && Platform.OS !== "web" && WebView) {
-    return (
-      <View style={[styles.root, { backgroundColor: colors.background }]}>
-        <View
-          style={[
-            styles.header,
-            {
-              paddingTop: insets.top + 8,
-              backgroundColor: colors.surface,
-              borderBottomColor: colors.border,
-            },
-          ]}
+  if (screen === "paying" && paymentUrl) {
+    const paymentHeader = (
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: insets.top + 8,
+            backgroundColor: colors.surface,
+            borderBottomColor: colors.border,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          onPress={() =>
+            showAlert(
+              "Cancel Payment",
+              "Are you sure you want to cancel this payment?",
+              [
+                { text: "Continue Paying", style: "cancel" },
+                { text: "Cancel", style: "destructive", onPress: reset },
+              ],
+            )
+          }
         >
-          <TouchableOpacity
-            onPress={() =>
-              showAlert(
-                "Cancel Payment",
-                "Are you sure you want to cancel this payment?",
-                [
-                  { text: "Continue Paying", style: "cancel" },
-                  { text: "Cancel", style: "destructive", onPress: reset },
-                ],
-              )
-            }
-          >
-            <Ionicons name="close" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>
-            Secure Payment
+          <Ionicons name="close" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
+          Secure Payment
+        </Text>
+        <View style={styles.lockBadge}>
+          <Ionicons name="lock-closed" size={14} color={Colors.brand} />
+          <Text style={[styles.lockText, { color: Colors.brand }]}>
+            Pesapal
           </Text>
-          <View style={styles.lockBadge}>
-            <Ionicons name="lock-closed" size={14} color={Colors.brand} />
-            <Text style={[styles.lockText, { color: Colors.brand }]}>
-              Pesapal
-            </Text>
-          </View>
         </View>
-
-        <WebView
-          source={{ uri: paymentUrl }}
-          onNavigationStateChange={handleWebViewNavigation}
-          style={{ flex: 1 }}
-          startInLoadingState
-          renderLoading={() => (
-            <View style={styles.webviewLoader}>
-              <ActivityIndicator size="large" color={Colors.brand} />
-              <Text style={[styles.loadingText, { color: colors.textMuted }]}>
-                Loading secure payment…
-              </Text>
-            </View>
-          )}
-          allowsInlineMediaPlayback
-          javaScriptEnabled
-          domStorageEnabled
-        />
       </View>
     );
+
+    if (Platform.OS === "web") {
+      return (
+        <View style={[styles.root, { backgroundColor: colors.background }]}>
+          {paymentHeader}
+          {/* @ts-ignore – iframe is valid DOM on web */}
+          <iframe
+            src={paymentUrl}
+            title="Pesapal Secure Payment"
+            style={{
+              flex: 1,
+              border: "none",
+              width: "100%",
+              height: "100%",
+              minHeight: 500,
+            } as any}
+            allow="payment"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-top-navigation"
+          />
+        </View>
+      );
+    }
+
+    if (WebView) {
+      return (
+        <View style={[styles.root, { backgroundColor: colors.background }]}>
+          {paymentHeader}
+          <WebView
+            source={{ uri: paymentUrl }}
+            onNavigationStateChange={handleWebViewNavigation}
+            style={{ flex: 1 }}
+            startInLoadingState
+            renderLoading={() => (
+              <View style={styles.webviewLoader}>
+                <ActivityIndicator size="large" color={Colors.brand} />
+                <Text style={[styles.loadingText, { color: colors.textMuted }]}>
+                  Loading secure payment…
+                </Text>
+              </View>
+            )}
+            allowsInlineMediaPlayback
+            javaScriptEnabled
+            domStorageEnabled
+          />
+        </View>
+      );
+    }
   }
 
   if (screen === "awaiting") {
