@@ -1,9 +1,9 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 const PESAPAL_ENV = Deno.env.get("PESAPAL_ENV") || "live";
@@ -11,13 +11,12 @@ const PESAPAL_BASE = PESAPAL_ENV === "sandbox"
   ? "https://cybqa.pesapal.com/pesapalv3"
   : "https://pay.pesapal.com/v3";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const PESAPAL_CONSUMER_KEY = Deno.env.get("PESAPAL_CONSUMER_KEY")!;
-const PESAPAL_CONSUMER_SECRET = Deno.env.get("PESAPAL_CONSUMER_SECRET")!;
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const PESAPAL_CONSUMER_KEY = Deno.env.get("PESAPAL_CONSUMER_KEY") ?? "";
+const PESAPAL_CONSUMER_SECRET = Deno.env.get("PESAPAL_CONSUMER_SECRET") ?? "";
 
-// IPN endpoint — must be the same Supabase project URL
 const IPN_URL = `${SUPABASE_URL}/functions/v1/pesapal-ipn`;
 const CALLBACK_URL = "https://afuchat.com/wallet/payment-complete";
 
@@ -30,21 +29,15 @@ async function pesapalToken(): Promise<string> {
       consumer_secret: PESAPAL_CONSUMER_SECRET,
     }),
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Pesapal auth failed (${res.status}): ${text}`);
-  }
+  if (!res.ok) throw new Error(`Pesapal auth failed (${res.status}): ${await res.text()}`);
   const data = await res.json();
-  if (!data.token) throw new Error(`No token in Pesapal response: ${JSON.stringify(data)}`);
+  if (!data.token) throw new Error(`No token: ${JSON.stringify(data)}`);
   return data.token;
 }
 
 async function getOrRegisterIPN(token: string): Promise<string> {
-  // If admin has pre-registered the IPN ID, use it directly
   const existingIpnId = Deno.env.get("PESAPAL_IPN_ID");
   if (existingIpnId) return existingIpnId;
-
-  // Otherwise register it now (Pesapal deduplicates by URL, so this is idempotent)
   const res = await fetch(`${PESAPAL_BASE}/api/URLSetup/RegisterIPN`, {
     method: "POST",
     headers: {
@@ -52,28 +45,21 @@ async function getOrRegisterIPN(token: string): Promise<string> {
       "Accept": "application/json",
       "Authorization": `Bearer ${token}`,
     },
-    body: JSON.stringify({
-      url: IPN_URL,
-      ipn_notification_type: "POST",
-    }),
+    body: JSON.stringify({ url: IPN_URL, ipn_notification_type: "POST" }),
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`IPN registration failed (${res.status}): ${text}`);
-  }
+  if (!res.ok) throw new Error(`IPN registration failed (${res.status}): ${await res.text()}`);
   const data = await res.json();
   const ipnId = data.ipn_id || data.id;
-  if (!ipnId) throw new Error(`No IPN ID returned: ${JSON.stringify(data)}`);
+  if (!ipnId) throw new Error(`No IPN ID: ${JSON.stringify(data)}`);
   return ipnId;
 }
 
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    // Verify the calling user's JWT
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(
@@ -99,7 +85,8 @@ serve(async (req) => {
       auth: { persistSession: false },
     });
 
-    const body = await req.json();
+    const bodyText = await req.text();
+    const body = JSON.parse(bodyText);
     const { acoin_amount, currency } = body;
 
     if (!acoin_amount || typeof acoin_amount !== "number" || acoin_amount < 50) {
@@ -115,24 +102,21 @@ serve(async (req) => {
 
     const { data: profile } = await adminClient
       .from("profiles")
-      .select("display_name, handle, country")
+      .select("display_name, handle")
       .eq("id", user.id)
       .single();
 
-    const displayName = (profile?.display_name || profile?.handle || "AfuChat User").trim();
+    const displayName = ((profile as { display_name?: string; handle?: string } | null)?.display_name || (profile as { display_name?: string; handle?: string } | null)?.handle || "AfuChat User").trim();
     const nameParts = displayName.split(" ");
     const firstName = nameParts[0] || "AfuChat";
     const lastName = nameParts.slice(1).join(" ") || "User";
-    const email = user.email || "";
-    const phoneNumber = user.phone || "";
 
-    // Get Pesapal token and IPN ID
     const token = await pesapalToken();
     const ipnId = await getOrRegisterIPN(token);
 
-    console.log(`[pesapal-initiate] submitting order ${merchantRef} for user ${user.id}, ${acoin_amount} ACoin = $${amount_usd}`);
+    console.log(`[pesapal-initiate] ${merchantRef} user=${user.id} ${acoin_amount} ACoin $${amount_usd}`);
 
-    const orderPayload: Record<string, any> = {
+    const orderPayload = {
       id: merchantRef,
       currency: finalCurrency,
       amount: amount_usd,
@@ -140,14 +124,12 @@ serve(async (req) => {
       callback_url: CALLBACK_URL,
       notification_id: ipnId,
       billing_address: {
-        email_address: email,
+        email_address: user.email || "",
         first_name: firstName,
         last_name: lastName,
+        ...(user.phone ? { phone_number: user.phone } : {}),
       },
     };
-    if (phoneNumber) {
-      orderPayload.billing_address.phone_number = phoneNumber;
-    }
 
     const orderRes = await fetch(`${PESAPAL_BASE}/api/Transactions/SubmitOrderRequest`, {
       method: "POST",
@@ -160,46 +142,35 @@ serve(async (req) => {
     });
 
     const orderText = await orderRes.text();
-    if (!orderRes.ok) {
-      throw new Error(`Order submission failed (${orderRes.status}): ${orderText}`);
-    }
+    if (!orderRes.ok) throw new Error(`Order submission failed (${orderRes.status}): ${orderText}`);
 
     const orderData = JSON.parse(orderText);
-    const redirectUrl: string | undefined = orderData.redirect_url;
-    const trackingId: string | undefined = orderData.order_tracking_id;
+    if (!orderData.redirect_url) throw new Error(`No redirect_url: ${orderText}`);
 
-    if (!redirectUrl) {
-      throw new Error(`No redirect_url from Pesapal: ${orderText}`);
-    }
-
-    // Persist the order before returning so IPN can find it
     const { error: insertErr } = await adminClient.from("pesapal_orders").insert({
       user_id: user.id,
       merchant_reference: merchantRef,
-      tracking_id: trackingId || null,
+      tracking_id: orderData.order_tracking_id || null,
       acoin_amount,
       amount_usd,
       currency: finalCurrency,
       status: "pending",
     });
-
-    if (insertErr) {
-      console.error("[pesapal-initiate] DB insert error:", insertErr);
-      // Non-fatal: payment can still proceed, IPN will create it if needed
-    }
+    if (insertErr) console.error("[pesapal-initiate] DB insert error:", insertErr);
 
     return new Response(
       JSON.stringify({
-        redirect_url: redirectUrl,
+        redirect_url: orderData.redirect_url,
         merchant_reference: merchantRef,
-        tracking_id: trackingId || null,
+        tracking_id: orderData.order_tracking_id || null,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  } catch (err: any) {
-    console.error("[pesapal-initiate] error:", err?.message ?? err);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[pesapal-initiate] error:", msg);
     return new Response(
-      JSON.stringify({ error: err?.message || "Internal server error" }),
+      JSON.stringify({ error: msg || "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
