@@ -2833,14 +2833,6 @@ Rules:
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}>
-        {chatInfo?.other_id === AFUAI_BOT_ID && (
-          <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 7, backgroundColor: "#00BCD4" + "18", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#00BCD4" + "40", gap: 7 }}>
-            <Ionicons name="sparkles-outline" size={13} color="#00BCD4" />
-            <Text style={{ flex: 1, fontSize: 12, color: "#00BCD4", fontFamily: "Inter_400Regular" }}>
-              You're chatting with AfuAI — an AI assistant. Responses are AI-generated and may not always be accurate.
-            </Text>
-          </View>
-        )}
         {loading ? (
           <ChatLoadingSkeleton />
         ) : messages.length === 0 ? (

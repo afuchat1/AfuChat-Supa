@@ -38,7 +38,7 @@ async function chatWithGroq(messages: any[], maxTokens: number, apiKey: string):
         model,
         messages,
         max_tokens: maxTokens,
-        temperature: 0.7,
+        temperature: 0.3,
       }),
     });
     if (res.status === 429) { console.log(`${model} rate limited, trying next...`); continue; }
