@@ -484,40 +484,36 @@ export default function PostDetailScreen() {
 
   function renderAiSection() {
     if (replies.length < 2) return null;
-    return (
-      <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
-        {!aiSummary ? (
-          <TouchableOpacity
-            style={[styles.aiBtn, { backgroundColor: colors.accent + "10", borderColor: colors.accent + "30" }]}
-            onPress={async () => {
-              setAiSummarizing(true); setAiSummary(null);
-              try {
-                const summary = await aiSummarizeThread(post!.content, replies.map(r => ({ author: r.author.display_name, content: r.content })));
-                setAiSummary(summary);
-              } catch { showAlert("AI Error", "Could not summarize. Try again."); }
-              setAiSummarizing(false);
-            }}
-            disabled={aiSummarizing}
-          >
-            {aiSummarizing
-              ? <ActivityIndicator size="small" color={colors.accent} />
-              : <Ionicons name="sparkles" size={15} color={colors.accent} />}
-            <Text style={[styles.aiBtnText, { color: colors.accent }]}>
-              {aiSummarizing ? "Summarizing discussion…" : "AI Summarize Discussion"}
-            </Text>
+    return !aiSummary ? (
+      <TouchableOpacity
+        style={[styles.aiBtn, { backgroundColor: colors.accent + "10", borderColor: colors.accent + "30" }]}
+        onPress={async () => {
+          setAiSummarizing(true); setAiSummary(null);
+          try {
+            const summary = await aiSummarizeThread(post!.content, replies.map(r => ({ author: r.author.display_name, content: r.content })));
+            setAiSummary(summary);
+          } catch { showAlert("AI Error", "Could not summarize. Try again."); }
+          setAiSummarizing(false);
+        }}
+        disabled={aiSummarizing}
+      >
+        {aiSummarizing
+          ? <ActivityIndicator size="small" color={colors.accent} />
+          : <Ionicons name="sparkles" size={15} color={colors.accent} />}
+        <Text style={[styles.aiBtnText, { color: colors.accent }]}>
+          {aiSummarizing ? "Summarizing discussion…" : "AI Summarize Discussion"}
+        </Text>
+      </TouchableOpacity>
+    ) : (
+      <View style={[styles.aiCard, { backgroundColor: colors.accent + "0D", borderColor: colors.accent + "22" }]}>
+        <View style={styles.aiCardHeader}>
+          <Ionicons name="sparkles" size={14} color={colors.accent} />
+          <Text style={[styles.aiCardTitle, { color: colors.accent }]}>AI Summary</Text>
+          <TouchableOpacity onPress={() => setAiSummary(null)} hitSlop={8} style={{ marginLeft: "auto" }}>
+            <Ionicons name="close" size={16} color={colors.textMuted} />
           </TouchableOpacity>
-        ) : (
-          <View style={[styles.aiCard, { backgroundColor: colors.accent + "0D", borderColor: colors.accent + "22" }]}>
-            <View style={styles.aiCardHeader}>
-              <Ionicons name="sparkles" size={14} color={colors.accent} />
-              <Text style={[styles.aiCardTitle, { color: colors.accent }]}>AI Summary</Text>
-              <TouchableOpacity onPress={() => setAiSummary(null)} hitSlop={8} style={{ marginLeft: "auto" }}>
-                <Ionicons name="close" size={16} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-            <Text style={[styles.aiCardText, { color: colors.text }]}>{aiSummary}</Text>
-          </View>
-        )}
+        </View>
+        <Text style={[styles.aiCardText, { color: colors.text }]}>{aiSummary}</Text>
       </View>
     );
   }
@@ -1009,6 +1005,8 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 10,
     marginTop: 8,
+    marginHorizontal: -16,
+    paddingHorizontal: 0,
   },
   repliesHeaderLine: { flex: 1, height: StyleSheet.hairlineWidth },
   repliesHeaderBadge: {

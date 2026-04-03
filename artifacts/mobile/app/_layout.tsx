@@ -32,6 +32,7 @@ import { ChatPreferencesProvider } from "@/context/ChatPreferencesContext";
 import { AppAccentProvider } from "@/context/AppAccentContext";
 import { AdvancedFeaturesProvider } from "@/context/AdvancedFeaturesContext";
 import { DataModeProvider } from "@/context/DataModeContext";
+import GoogleOneTap from "@/components/ui/GoogleOneTap";
 
 try { setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`); } catch (_) {}
 
@@ -232,6 +233,7 @@ export default function RootLayout() {
                 <StatusBarManager />
                 <AuthProvider>
                   <ThemeSyncManager />
+                  <GoogleOneTap />
                   <DesktopWrapper>
                     <LanguageProvider>
                       <ChatPreferencesProvider>
