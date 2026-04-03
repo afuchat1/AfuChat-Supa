@@ -33,6 +33,8 @@ import { AppAccentProvider } from "@/context/AppAccentContext";
 import { AdvancedFeaturesProvider } from "@/context/AdvancedFeaturesContext";
 import { DataModeProvider } from "@/context/DataModeContext";
 import GoogleOneTap from "@/components/ui/GoogleOneTap";
+import { TourProvider } from "@/context/TourContext";
+import ProductTour from "@/components/ui/ProductTour";
 
 try { setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`); } catch (_) {}
 
@@ -239,10 +241,12 @@ export default function RootLayout() {
                       <ChatPreferencesProvider>
                       <AdvancedFeaturesProvider>
                       <DataModeProvider>
+                      <TourProvider>
                       <PushNotificationManager />
                       <AppLockGate>
                         <RootLayoutNav />
                       </AppLockGate>
+                      <ProductTour />
                       <IOSAlert
                         visible={alertState.visible}
                         title={alertState.title}
@@ -250,6 +254,7 @@ export default function RootLayout() {
                         buttons={alertState.buttons}
                         onDismiss={dismissAlert}
                       />
+                      </TourProvider>
                       </DataModeProvider>
                       </AdvancedFeaturesProvider>
                       </ChatPreferencesProvider>

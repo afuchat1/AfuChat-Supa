@@ -37,6 +37,7 @@ import { matchInterestsWeighted, recordInteraction, getLearnedInterestBoosts, co
 import { useLanguage } from "@/context/LanguageContext";
 import { translateText, LANG_LABELS } from "@/lib/translate";
 import { useDesktopDetail } from "@/context/DesktopDetailContext";
+import { useTour } from "@/context/TourContext";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { useDataMode } from "@/context/DataModeContext";
 
@@ -470,6 +471,9 @@ export default function DiscoverScreen() {
   const [bgRefreshing, setBgRefreshing] = useState(false);
   const PAGE_SIZE = isLowData ? 12 : 30;
   const imgViewer = useImageViewer();
+
+  const { step: tourStep, registerLayout: registerTourLayout, advance: advanceTour } = useTour();
+  const fabRef = useRef<TouchableOpacity>(null);
 
   const tabPostsCache = useRef<Record<"for_you" | "following", PostItem[]>>({ for_you: [], following: [] });
   const tabCacheTimestamp = useRef<Record<"for_you" | "following", number>>({ for_you: 0, following: 0 });
@@ -1150,8 +1154,18 @@ export default function DiscoverScreen() {
       )}
       {user && (
         <TouchableOpacity
+          ref={fabRef}
           style={[styles.fab, { backgroundColor: colors.accent, bottom: insets.bottom + 52 + 16 }]}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowCreatePicker(true); }}
+          onLayout={() => {
+            fabRef.current?.measureInWindow((x, y, w, h) => {
+              if (w > 0 && h > 0) registerTourLayout("fab-create", { x, y, w, h });
+            });
+          }}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setShowCreatePicker(true);
+            if (tourStep?.id === "create") advanceTour();
+          }}
           activeOpacity={0.85}
         >
           <Ionicons name="add" size={28} color="#fff" />

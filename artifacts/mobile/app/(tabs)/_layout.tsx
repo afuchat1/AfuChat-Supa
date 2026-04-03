@@ -1,11 +1,11 @@
 import { BlurView } from "expo-blur";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
-import { Tabs } from "expo-router";
+import { Tabs, usePathname } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useState } from "react";
-import { Image, Platform, StyleSheet, useColorScheme } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { Dimensions, Image, Platform, StyleSheet, useColorScheme } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -15,7 +15,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import CommunityBanner from "@/components/ui/CommunityBanner";
-import WelcomeGuide, { WELCOME_GUIDE_KEY } from "@/components/ui/WelcomeGuide";
+import { useTour, TOUR_KEY } from "@/context/TourContext";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -49,8 +49,44 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const isDesktop = useIsDesktop();
+  const { registerLayout, step, advance } = useTour();
+  const pathname = usePathname();
+  const registeredRef = useRef(false);
 
   const hideTabs = isDesktop || (!isLoggedIn && Platform.OS === "web");
+
+  useEffect(() => {
+    if (isDesktop || hideTabs) return;
+    if (registeredRef.current) return;
+    registeredRef.current = true;
+
+    const { width: SW, height: SH } = Dimensions.get("window");
+    const tabBarH = 52 + (insets.bottom > 0 ? insets.bottom : 8);
+    const tabBarTop = SH - tabBarH;
+    const tabW = SW / 4;
+
+    const tabDefs = [
+      { id: "tab-chat", index: 0 },
+      { id: "tab-discover", index: 1 },
+      { id: "tab-apps", index: 2 },
+      { id: "tab-me", index: 3 },
+    ];
+    tabDefs.forEach(({ id, index }) => {
+      registerLayout(id, {
+        x: tabW * index,
+        y: tabBarTop,
+        w: tabW,
+        h: tabBarH,
+      });
+    });
+  }, [isDesktop, hideTabs, insets.bottom, registerLayout]);
+
+  useEffect(() => {
+    if (!step) return;
+    if (step.id === "discover" && pathname === "/discover") advance();
+    if (step.id === "chat" && (pathname === "/" || pathname === "/index")) advance();
+    if (step.id === "apps" && pathname === "/apps") advance();
+  }, [pathname, step?.id]);
 
   return (
     <Tabs
@@ -145,7 +181,7 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
 export default function TabLayout() {
   const { session, profile, loading } = useAuth();
   const isDesktop = useIsDesktop();
-  const [showWelcomeGuide, setShowWelcomeGuide] = useState(false);
+  const { startTour } = useTour();
 
   useEffect(() => {
     if (loading) return;
@@ -153,12 +189,12 @@ export default function TabLayout() {
       router.replace({ pathname: "/onboarding", params: { userId: session.user.id } });
       return;
     }
-    if (session && profile?.onboarding_completed) {
-      AsyncStorage.getItem(WELCOME_GUIDE_KEY).then((seen) => {
-        if (!seen) setShowWelcomeGuide(true);
+    if (session && profile?.onboarding_completed && !isDesktop) {
+      AsyncStorage.getItem(TOUR_KEY).then((seen) => {
+        if (!seen) startTour();
       });
     }
-  }, [session, profile, loading]);
+  }, [session, profile, loading, isDesktop]);
 
   const layout = isLiquidGlassAvailable()
     ? <NativeTabLayout />
@@ -168,11 +204,6 @@ export default function TabLayout() {
     <>
       {layout}
       {session?.user?.id ? <CommunityBanner userId={session.user.id} /> : null}
-      <WelcomeGuide
-        visible={showWelcomeGuide}
-        onDismiss={() => setShowWelcomeGuide(false)}
-        displayName={profile?.display_name ?? undefined}
-      />
     </>
   );
 }
