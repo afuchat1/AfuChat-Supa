@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   ActivityIndicator,
+  Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,128 +16,58 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { supabase, supabaseUrl, supabaseAnonKey } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
+let WebView: any = null;
+let WebViewNavigation: any = null;
+if (Platform.OS !== "web") {
+  const wv = require("react-native-webview");
+  WebView = wv.WebView;
+}
+
 const ACOIN_PACKAGES = [
-  { label: "100 ACoin", amount: 100, priceUsd: 1 },
-  { label: "500 ACoin", amount: 500, priceUsd: 5 },
-  { label: "2,000 ACoin", amount: 2000, priceUsd: 20 },
-  { label: "5,000 ACoin", amount: 5000, priceUsd: 50 },
-  { label: "20,000 ACoin", amount: 20000, priceUsd: 200 },
+  { label: "100 ACoin", amount: 100, priceUsd: 1.0 },
+  { label: "500 ACoin", amount: 500, priceUsd: 5.0 },
+  { label: "2,000 ACoin", amount: 2000, priceUsd: 20.0 },
+  { label: "5,000 ACoin", amount: 5000, priceUsd: 50.0 },
+  { label: "20,000 ACoin", amount: 20000, priceUsd: 200.0 },
 ];
 
-const COUNTRY_CURRENCY: Record<string, { code: string; symbol: string }> = {
-  "Uganda": { code: "UGX", symbol: "USh" },
-  "Kenya": { code: "KES", symbol: "KSh" },
-  "Tanzania": { code: "TZS", symbol: "TSh" },
-  "Nigeria": { code: "NGN", symbol: "₦" },
-  "South Africa": { code: "ZAR", symbol: "R" },
-  "Ghana": { code: "GHS", symbol: "GH₵" },
-  "Rwanda": { code: "RWF", symbol: "FRw" },
-  "Ethiopia": { code: "ETB", symbol: "Br" },
-  "Cameroon": { code: "XAF", symbol: "FCFA" },
-  "Senegal": { code: "XOF", symbol: "CFA" },
-  "Egypt": { code: "EGP", symbol: "E£" },
-  "Morocco": { code: "MAD", symbol: "MAD" },
-  "Zambia": { code: "ZMW", symbol: "ZK" },
-  "Malawi": { code: "MWK", symbol: "MK" },
-  "United States": { code: "USD", symbol: "$" },
-  "United Kingdom": { code: "GBP", symbol: "£" },
-  "India": { code: "INR", symbol: "₹" },
-  "Pakistan": { code: "PKR", symbol: "Rs" },
-  "Germany": { code: "EUR", symbol: "€" },
-  "France": { code: "EUR", symbol: "€" },
-  "Japan": { code: "JPY", symbol: "¥" },
-  "China": { code: "CNY", symbol: "¥" },
-  "Brazil": { code: "BRL", symbol: "R$" },
-  "Mexico": { code: "MXN", symbol: "MX$" },
-  "Philippines": { code: "PHP", symbol: "₱" },
-  "Indonesia": { code: "IDR", symbol: "Rp" },
-  "Saudi Arabia": { code: "SAR", symbol: "SAR" },
-  "United Arab Emirates": { code: "AED", symbol: "AED" },
-  "Turkey": { code: "TRY", symbol: "₺" },
-  "Australia": { code: "AUD", symbol: "A$" },
-  "Canada": { code: "CAD", symbol: "C$" },
-  "Malaysia": { code: "MYR", symbol: "RM" },
-  "Thailand": { code: "THB", symbol: "฿" },
-  "South Korea": { code: "KRW", symbol: "₩" },
-  "Singapore": { code: "SGD", symbol: "S$" },
-  "Sweden": { code: "SEK", symbol: "kr" },
-  "Switzerland": { code: "CHF", symbol: "CHF" },
-  "Poland": { code: "PLN", symbol: "zł" },
-  "Colombia": { code: "COP", symbol: "COL$" },
-  "Argentina": { code: "ARS", symbol: "AR$" },
-  "Somalia": { code: "SOS", symbol: "Sh" },
-  "Sudan": { code: "SDG", symbol: "SDG" },
-  "Democratic Republic of the Congo": { code: "CDF", symbol: "FC" },
-  "Mozambique": { code: "MZN", symbol: "MT" },
-  "Zimbabwe": { code: "ZWL", symbol: "Z$" },
-  "Botswana": { code: "BWP", symbol: "P" },
-  "Namibia": { code: "NAD", symbol: "N$" },
-  "Angola": { code: "AOA", symbol: "Kz" },
-  "Burundi": { code: "BIF", symbol: "FBu" },
-  "Madagascar": { code: "MGA", symbol: "Ar" },
-  "Sierra Leone": { code: "SLL", symbol: "Le" },
-  "Ivory Coast": { code: "XOF", symbol: "CFA" },
-};
+const CALLBACK_PATTERNS = [
+  "afuchat.com/wallet/payment-complete",
+  "payment-complete",
+  "payment_status=COMPLETED",
+  "OrderNotificationType=IPNCHANGE",
+];
 
-function getUserCurrency(country: string | null | undefined): { code: string; symbol: string } {
-  if (!country) return { code: "USD", symbol: "$" };
-  return COUNTRY_CURRENCY[country] || { code: "USD", symbol: "$" };
-}
-
-function formatLocalPrice(usdPrice: number, rate: number, symbol: string, code: string): string {
-  if (code === "USD") return `$${usdPrice.toFixed(2)}`;
-  const local = Math.ceil(usdPrice * rate);
-  return `${symbol}${local.toLocaleString()}`;
-}
+type Screen = "select" | "paying" | "awaiting" | "success" | "failed";
 
 export default function TopUpScreen() {
   const { colors } = useTheme();
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const insets = useSafeAreaInsets();
+
+  const [screen, setScreen] = useState<Screen>("select");
   const [selectedPack, setSelectedPack] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState("");
-  const [exchangeRate, setExchangeRate] = useState<number>(1);
-  const [rateLoading, setRateLoading] = useState(true);
-
-  const userCurrency = getUserCurrency(profile?.country);
-  const isLocalCurrency = userCurrency.code !== "USD";
+  const [loading, setLoading] = useState(false);
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
+  const [merchantRef, setMerchantRef] = useState<string | null>(null);
+  const [creditedAcoin, setCreditedAcoin] = useState(0);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    async function fetchRate() {
-      if (userCurrency.code === "USD") {
-        setExchangeRate(1);
-        setRateLoading(false);
-        return;
-      }
-      try {
-        const res = await fetch("https://open.er-api.com/v6/latest/USD");
-        const data = await res.json();
-        if (data.result === "success" && data.rates?.[userCurrency.code]) {
-          setExchangeRate(data.rates[userCurrency.code]);
-        }
-      } catch {}
-      setRateLoading(false);
-    }
-    fetchRate();
-  }, [userCurrency.code]);
-
-  function displayPrice(usdPrice: number): string {
-    return formatLocalPrice(usdPrice, exchangeRate, userCurrency.symbol, userCurrency.code);
-  }
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
 
   function getSelectedAmount(): number {
     if (selectedPack !== null) return ACOIN_PACKAGES[selectedPack].amount;
     const custom = parseInt(customAmount || "0", 10);
     return isNaN(custom) ? 0 : custom;
-  }
-
-  function getSelectedUsdPrice(): number {
-    if (selectedPack !== null) return ACOIN_PACKAGES[selectedPack].priceUsd;
-    const custom = parseInt(customAmount || "0", 10);
-    return isNaN(custom) ? 0 : custom * 0.01;
   }
 
   async function initiatePayment() {
@@ -144,25 +76,250 @@ export default function TopUpScreen() {
       showAlert("Select a package", "Please select a package or enter at least 50 ACoin.");
       return;
     }
-    const usdPrice = getSelectedUsdPrice();
-    const localPrice = formatLocalPrice(usdPrice, exchangeRate, userCurrency.symbol, userCurrency.code);
-    const handle = profile?.handle || profile?.id?.slice(0, 8) || "unknown";
 
-    showAlert(
-      "How to Top Up",
-      `To add ${amount.toLocaleString()} ACoin (${localPrice}) to your wallet:\n\n` +
-      `1. Send ${localPrice} via MTN MoMo to:\n   0772 000 000\n\n` +
-      `2. Or Airtel Money to:\n   0756 000 000\n\n` +
-      `3. Use reference: ${handle}\n\n` +
-      `Your wallet will be credited within 2–4 hours after payment is confirmed.\n\n` +
-      `Questions? WhatsApp us at +256 772 000 000`,
-      [{ text: "Got it" }]
+    setLoading(true);
+    Haptics.selectionAsync();
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not signed in");
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/pesapal-initiate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+          "apikey": supabaseAnonKey,
+        },
+        body: JSON.stringify({ acoin_amount: amount, currency: "USD" }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.redirect_url) {
+        throw new Error(data.error || "Failed to start payment. Please try again.");
+      }
+
+      setCreditedAcoin(amount);
+      setPaymentUrl(data.redirect_url);
+      setMerchantRef(data.merchant_reference);
+
+      if (Platform.OS === "web") {
+        Linking.openURL(data.redirect_url);
+        setScreen("awaiting");
+        startPolling(data.merchant_reference);
+      } else {
+        setScreen("paying");
+      }
+    } catch (err: any) {
+      showAlert("Payment Error", err?.message || "Could not start payment. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function startPolling(ref: string) {
+    if (pollRef.current) clearInterval(pollRef.current);
+    let attempts = 0;
+    pollRef.current = setInterval(async () => {
+      attempts++;
+      if (attempts > 36) {
+        clearInterval(pollRef.current!);
+        return;
+      }
+      try {
+        const { data: order } = await supabase
+          .from("pesapal_orders")
+          .select("status")
+          .eq("merchant_reference", ref)
+          .maybeSingle();
+
+        if (order?.status === "completed") {
+          clearInterval(pollRef.current!);
+          await refreshProfile();
+          Haptics.notificationAsync("success");
+          setScreen("success");
+        } else if (order?.status === "failed" || order?.status === "invalid") {
+          clearInterval(pollRef.current!);
+          setScreen("failed");
+        }
+      } catch {}
+    }, 5000);
+  }
+
+  const handleWebViewNavigation = useCallback(
+    (navState: any) => {
+      const url = navState.url || "";
+      const isCallback = CALLBACK_PATTERNS.some((p) => url.includes(p));
+      if (isCallback) {
+        const isSuccess =
+          url.includes("payment-complete") ||
+          url.includes("payment_status=COMPLETED");
+        setScreen(isSuccess ? "success" : "failed");
+        if (isSuccess) {
+          refreshProfile?.();
+          Haptics.notificationAsync("success");
+        }
+      }
+    },
+    [refreshProfile],
+  );
+
+  function reset() {
+    if (pollRef.current) clearInterval(pollRef.current);
+    setScreen("select");
+    setPaymentUrl(null);
+    setMerchantRef(null);
+    setSelectedPack(null);
+    setCustomAmount("");
+    setCreditedAcoin(0);
+  }
+
+  if (screen === "paying" && paymentUrl && Platform.OS !== "web" && WebView) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <View
+          style={[
+            styles.header,
+            {
+              paddingTop: insets.top + 8,
+              backgroundColor: colors.surface,
+              borderBottomColor: colors.border,
+            },
+          ]}
+        >
+          <TouchableOpacity
+            onPress={() =>
+              showAlert(
+                "Cancel Payment",
+                "Are you sure you want to cancel this payment?",
+                [
+                  { text: "Continue Paying", style: "cancel" },
+                  { text: "Cancel", style: "destructive", onPress: reset },
+                ],
+              )
+            }
+          >
+            <Ionicons name="close" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            Secure Payment
+          </Text>
+          <View style={styles.lockBadge}>
+            <Ionicons name="lock-closed" size={14} color={Colors.brand} />
+            <Text style={[styles.lockText, { color: Colors.brand }]}>
+              Pesapal
+            </Text>
+          </View>
+        </View>
+
+        <WebView
+          source={{ uri: paymentUrl }}
+          onNavigationStateChange={handleWebViewNavigation}
+          style={{ flex: 1 }}
+          startInLoadingState
+          renderLoading={() => (
+            <View style={styles.webviewLoader}>
+              <ActivityIndicator size="large" color={Colors.brand} />
+              <Text style={[styles.loadingText, { color: colors.textMuted }]}>
+                Loading secure payment…
+              </Text>
+            </View>
+          )}
+          allowsInlineMediaPlayback
+          javaScriptEnabled
+          domStorageEnabled
+        />
+      </View>
+    );
+  }
+
+  if (screen === "awaiting") {
+    return (
+      <View style={[styles.root, styles.resultScreen, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={Colors.brand} style={{ marginBottom: 24 }} />
+        <Text style={[styles.resultTitle, { color: colors.text, fontSize: 22 }]}>
+          Waiting for payment…
+        </Text>
+        <Text style={[styles.resultSub, { color: colors.textMuted }]}>
+          Complete your payment in the browser window that just opened. This page will update automatically when your payment is confirmed.
+        </Text>
+        <TouchableOpacity
+          style={[styles.doneBtn, { backgroundColor: Colors.brand, marginTop: 16 }]}
+          onPress={() => paymentUrl && Linking.openURL(paymentUrl)}
+        >
+          <Text style={styles.doneBtnText}>Open Payment Page</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={reset} style={{ marginTop: 16 }}>
+          <Text style={[styles.topUpAgain, { color: colors.textMuted }]}>
+            Cancel
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (screen === "success") {
+    return (
+      <View style={[styles.root, styles.resultScreen, { backgroundColor: colors.background }]}>
+        <Ionicons name="checkmark-circle" size={80} color="#34C759" style={{ marginBottom: 20 }} />
+        <Text style={[styles.resultTitle, { color: colors.text }]}>
+          Payment Successful!
+        </Text>
+        <Text style={[styles.resultSub, { color: colors.textMuted }]}>
+          {creditedAcoin > 0
+            ? `${creditedAcoin.toLocaleString()} ACoin will be added to your wallet shortly.`
+            : "Your ACoin will be credited shortly."}
+        </Text>
+        <Text style={[styles.resultNote, { color: colors.textMuted }]}>
+          If your balance doesn't update within a few minutes, please contact support.
+        </Text>
+        <TouchableOpacity
+          style={[styles.doneBtn, { backgroundColor: Colors.brand }]}
+          onPress={() => router.back()}
+        >
+          <Text style={styles.doneBtnText}>Done</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={reset} style={{ marginTop: 12 }}>
+          <Text style={[styles.topUpAgain, { color: Colors.brand }]}>Top up again</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (screen === "failed") {
+    return (
+      <View style={[styles.root, styles.resultScreen, { backgroundColor: colors.background }]}>
+        <Ionicons name="close-circle" size={80} color="#FF3B30" style={{ marginBottom: 20 }} />
+        <Text style={[styles.resultTitle, { color: colors.text }]}>Payment Failed</Text>
+        <Text style={[styles.resultSub, { color: colors.textMuted }]}>
+          Your payment was not completed. No funds were charged.
+        </Text>
+        <TouchableOpacity
+          style={[styles.doneBtn, { backgroundColor: Colors.gold }]}
+          onPress={reset}
+        >
+          <Text style={styles.doneBtnText}>Try Again</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 12 }}>
+          <Text style={[styles.topUpAgain, { color: colors.textMuted }]}>Go back</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: insets.top + 8,
+            backgroundColor: colors.surface,
+            borderBottomColor: colors.border,
+          },
+        ]}
+      >
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
@@ -170,11 +327,15 @@ export default function TopUpScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
+      >
         <View style={[styles.balanceCard, { backgroundColor: Colors.gold }]}>
           <Ionicons name="diamond" size={28} color="rgba(255,255,255,0.9)" />
           <Text style={styles.balanceLabel}>Current Balance</Text>
-          <Text style={styles.balanceValue}>{profile?.acoin || 0} ACoin</Text>
+          <Text style={styles.balanceValue}>
+            {(profile?.acoin || 0).toLocaleString()} ACoin
+          </Text>
         </View>
 
         <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>SELECT PACKAGE</Text>
@@ -184,66 +345,82 @@ export default function TopUpScreen() {
             key={i}
             style={[
               styles.packCard,
-              { backgroundColor: colors.surface, borderColor: selectedPack === i ? Colors.gold : "transparent" },
+              {
+                backgroundColor: colors.surface,
+                borderColor: selectedPack === i ? Colors.gold : "transparent",
+              },
             ]}
-            onPress={() => { setSelectedPack(i); setCustomAmount(""); Haptics.selectionAsync(); }}
+            onPress={() => {
+              setSelectedPack(i);
+              setCustomAmount("");
+              Haptics.selectionAsync();
+            }}
           >
             <View style={styles.packLeft}>
               <Ionicons name="diamond" size={20} color={Colors.gold} />
-              <Text style={[styles.packLabel, { color: colors.text }]}>{pack.label}</Text>
+              <View>
+                <Text style={[styles.packLabel, { color: colors.text }]}>{pack.label}</Text>
+                <Text style={[styles.packSub, { color: colors.textMuted }]}>
+                  ${pack.priceUsd % 1 === 0 ? pack.priceUsd.toFixed(0) : pack.priceUsd.toFixed(2)} USD
+                </Text>
+              </View>
             </View>
-            <View style={styles.packRight}>
-              {rateLoading ? (
-                <ActivityIndicator size="small" color={Colors.gold} />
-              ) : (
-                <Text style={[styles.packPrice, { color: Colors.gold }]}>{displayPrice(pack.priceUsd)}</Text>
-              )}
-              {selectedPack === i && <Ionicons name="checkmark-circle" size={20} color={Colors.gold} />}
-            </View>
+            {selectedPack === i && (
+              <Ionicons name="checkmark-circle" size={22} color={Colors.gold} />
+            )}
           </TouchableOpacity>
         ))}
 
-        <Text style={[styles.sectionTitle, { color: colors.textMuted, marginTop: 16 }]}>OR ENTER CUSTOM AMOUNT</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textMuted, marginTop: 16 }]}>
+          OR ENTER CUSTOM AMOUNT
+        </Text>
         <View style={[styles.customRow, { backgroundColor: colors.surface }]}>
+          <Ionicons name="diamond" size={18} color={Colors.gold} style={{ marginRight: 8 }} />
           <TextInput
             style={[styles.customInput, { color: colors.text }]}
-            placeholder="Enter ACoin amount (min. 50)"
+            placeholder="ACoin amount (min. 50)"
             placeholderTextColor={colors.textMuted}
             value={customAmount}
-            onChangeText={(v) => { setCustomAmount(v.replace(/[^0-9]/g, "")); setSelectedPack(null); }}
+            onChangeText={(v) => {
+              setCustomAmount(v.replace(/[^0-9]/g, ""));
+              setSelectedPack(null);
+            }}
             keyboardType="numeric"
           />
-          {customAmount && !rateLoading ? (
+          {customAmount ? (
             <Text style={[styles.customPrice, { color: Colors.gold }]}>
-              {displayPrice((parseInt(customAmount || "0") || 0) * 0.01)}
+              ${((parseInt(customAmount || "0") || 0) * 0.01).toFixed(2)}
             </Text>
           ) : null}
         </View>
 
-        {isLocalCurrency && !rateLoading && (
-          <View style={[styles.rateNote, { backgroundColor: colors.surface }]}>
-            <Ionicons name="swap-horizontal" size={14} color={colors.textMuted} />
-            <Text style={[styles.rateNoteText, { color: colors.textMuted }]}>
-              1 USD ≈ {exchangeRate.toLocaleString(undefined, { maximumFractionDigits: 0 })} {userCurrency.code}
-            </Text>
-          </View>
-        )}
-
         <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
-          <Ionicons name="shield-checkmark" size={18} color={Colors.gold} />
+          <Ionicons name="shield-checkmark" size={18} color={Colors.brand} />
           <Text style={[styles.infoText, { color: colors.textMuted }]}>
-            Secure payments via Pesapal — supports M-Pesa, Airtel Money, Visa, Mastercard and more.
+            Payments are processed securely by Pesapal. Supports M-Pesa, Airtel Money,
+            MTN MoMo, Visa, Mastercard and more across Africa.
           </Text>
         </View>
 
         <TouchableOpacity
-          style={[styles.payBtn, { backgroundColor: Colors.gold }]}
+          style={[styles.payBtn, { backgroundColor: Colors.gold, opacity: loading ? 0.7 : 1 }]}
           onPress={initiatePayment}
+          disabled={loading}
           activeOpacity={0.85}
         >
-          <Ionicons name="phone-portrait-outline" size={20} color="#fff" />
-          <Text style={styles.payBtnText}>Top Up with Mobile Money</Text>
+          {loading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <>
+              <Ionicons name="card-outline" size={20} color="#fff" />
+              <Text style={styles.payBtnText}>Pay with Pesapal</Text>
+            </>
+          )}
         </TouchableOpacity>
+
+        <Text style={[styles.rateNote, { color: colors.textMuted }]}>
+          1 ACoin = $0.01 USD · Prices shown in USD
+        </Text>
       </ScrollView>
     </View>
   );
@@ -260,13 +437,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  lockBadge: { flexDirection: "row", alignItems: "center", gap: 4 },
+  lockText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   content: { paddingHorizontal: 16, paddingTop: 16, gap: 12 },
-  balanceCard: {
-    borderRadius: 16,
-    padding: 20,
-    alignItems: "center",
-    gap: 6,
-  },
+  balanceCard: { borderRadius: 16, padding: 20, alignItems: "center", gap: 6 },
   balanceLabel: { fontSize: 13, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.7)" },
   balanceValue: { fontSize: 32, fontFamily: "Inter_700Bold", color: "#fff" },
   sectionTitle: { fontSize: 12, fontFamily: "Inter_600SemiBold", marginLeft: 4, marginTop: 8 },
@@ -278,10 +452,9 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 2,
   },
-  packLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  packLabel: { fontSize: 16, fontFamily: "Inter_500Medium" },
-  packRight: { flexDirection: "row", alignItems: "center", gap: 8 },
-  packPrice: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  packLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  packLabel: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  packSub: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
   customRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -290,16 +463,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   customInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 48 },
-  customPrice: { fontSize: 16, fontFamily: "Inter_700Bold" },
-  rateNote: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  rateNoteText: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  customPrice: { fontSize: 15, fontFamily: "Inter_700Bold" },
   infoCard: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -317,6 +481,50 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 16,
     marginTop: 8,
+    minHeight: 54,
   },
   payBtnText: { color: "#fff", fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  rateNote: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", marginTop: 4 },
+  webviewLoader: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    backgroundColor: "transparent",
+  },
+  loadingText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  resultScreen: { alignItems: "center", justifyContent: "center", padding: 32 },
+  resultTitle: {
+    fontSize: 26,
+    fontFamily: "Inter_700Bold",
+    textAlign: "center",
+    marginBottom: 12,
+  },
+  resultSub: {
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 12,
+  },
+  resultNote: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    lineHeight: 18,
+    marginBottom: 32,
+  },
+  doneBtn: {
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+    alignItems: "center",
+    width: "100%",
+  },
+  doneBtnText: { color: "#fff", fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  topUpAgain: { fontSize: 15, fontFamily: "Inter_500Medium" },
 });
