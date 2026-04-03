@@ -27,15 +27,6 @@ import {
 } from "@/context/ChatPreferencesContext";
 import { useAppAccent } from "@/context/AppAccentContext";
 
-const THEMES: { name: ChatTheme; hex: string }[] = [
-  { name: "Teal",    hex: "#00BCD4" },
-  { name: "Blue",    hex: "#007AFF" },
-  { name: "Purple",  hex: "#AF52DE" },
-  { name: "Rose",    hex: "#FF2D55" },
-  { name: "Amber",   hex: "#FF9500" },
-  { name: "Emerald", hex: "#34C759" },
-];
-
 const BUBBLE_STYLES: { name: BubbleStyle; radius: number }[] = [
   { name: "Rounded", radius: 18 },
   { name: "Sharp",   radius: 4  },
@@ -191,34 +182,6 @@ export default function ChatSettingsScreen() {
       {/* ── APPEARANCE ─────────────────────────────── */}
       <Section title="APPEARANCE" />
 
-      {/* Theme */}
-      <View style={[styles.card, { backgroundColor: colors.surface }]}>
-        <View style={styles.cardHeader}>
-          <View style={[styles.iconBadge, { backgroundColor: themeAccent }]}>
-            <Ionicons name="color-palette" size={16} color="#fff" />
-          </View>
-          <View style={styles.rowText}>
-            <Text style={[styles.rowLabel, { color: colors.text }]}>Chat Theme</Text>
-            <Text style={[styles.rowDesc, { color: colors.textMuted }]}>Colour for your message bubbles</Text>
-          </View>
-          <Text style={[styles.chipLabel, { color: themeAccent }]}>{prefs.chat_theme}</Text>
-        </View>
-        <View style={styles.themeRow}>
-          {THEMES.map((t) => (
-            <TouchableOpacity
-              key={t.name}
-              onPress={() => { updatePref("chat_theme", t.name); setAppTheme(t.name); }}
-              style={[styles.themeCircle, { backgroundColor: t.hex }, prefs.chat_theme === t.name && styles.themeCircleActive]}
-              activeOpacity={0.8}
-            >
-              {prefs.chat_theme === t.name && (
-                <Ionicons name="checkmark" size={16} color="#fff" />
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
       {/* Bubble Style */}
       <View style={[styles.card, { backgroundColor: colors.surface, marginTop: 10 }]}>
         <View style={styles.cardHeader}>
@@ -284,8 +247,6 @@ export default function ChatSettingsScreen() {
         <ToggleRow icon="volume-high" iconColor="#007AFF" label="Sound Effects" desc="Play sounds for sent and received messages" field="sounds_enabled" />
         <Separator />
         <ToggleRow icon="checkmark-done" iconColor="#34C759" label="Read Receipts" desc="Let others see when you've read their messages" field="read_receipts" />
-        <Separator />
-        <ToggleRow icon="ellipsis-horizontal" iconColor="#5856D6" label="Typing Indicators" desc="Show when others are composing a message" field="typing_indicators" />
         <Separator />
         <ToggleRow icon="link" iconColor="#FF2D55" label="Link Previews" desc="Show rich previews for URLs in messages" field="link_previews" />
         {Platform.OS !== "web" && (

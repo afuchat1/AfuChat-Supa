@@ -55,6 +55,7 @@ import OfflineBanner from "@/components/ui/OfflineBanner";
 import { translateText, LANG_LABELS } from "@/lib/translate";
 import { useLanguage } from "@/context/LanguageContext";
 import { useChatPreferences, CHAT_THEME_COLORS, BUBBLE_RADIUS } from "@/context/ChatPreferencesContext";
+import { useAdvancedFeatures } from "@/context/AdvancedFeaturesContext";
 import { askAi, aiSuggestReply, transcribeAudio } from "@/lib/aiHelper";
 import { AFUAI_BOT_ID } from "@/lib/afuAiBot";
 import { EmojiKeyboard } from "rn-emoji-keyboard";
@@ -932,6 +933,7 @@ export default function ChatScreen() {
   const { colors } = useTheme();
   const BRAND = colors.accent;
   const { prefs: chatPrefs, themeColors: chatThemeColors, bubbleRadius: chatBubbleRadius } = useChatPreferences();
+  const { features: advancedFeatures } = useAdvancedFeatures();
   const { statsMap, getDynamicPrice } = useGiftPrices();
 
   const playNotificationSound = useCallback(async () => {
@@ -1475,7 +1477,7 @@ export default function ChatScreen() {
   }
 
   function saveDraft(text: string) {
-    if (!id) return;
+    if (!id || !advancedFeatures.offline_drafts) return;
     if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
     draftSaveTimer.current = setTimeout(() => {
       if (user && id) {
