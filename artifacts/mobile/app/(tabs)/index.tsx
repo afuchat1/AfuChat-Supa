@@ -557,8 +557,8 @@ export default function ChatsScreen() {
                       {
                         marginLeft: i === 0 ? 0 : -10,
                         zIndex: i + 1,
-                        borderColor: isActive ? colors.accent : colors.surface,
-                        borderWidth: isActive ? 2 : 1.5,
+                        borderColor: colors.surface,
+                        borderWidth: 1.5,
                         borderRadius: 18,
                       },
                     ]}
