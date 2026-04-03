@@ -699,7 +699,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
           <Ionicons name="arrow-undo" size={18} color={BRAND} />
         </Animated.View>
       )}
-      <Animated.View style={[{ flex: 1, flexDirection: "row", justifyContent: isMe ? "flex-end" : "flex-start" }, { transform: [{ translateX: swipeX }], opacity: fadeIn }]}>
+      <Animated.View style={[{ flex: 1, flexDirection: "row", justifyContent: isMe ? "flex-end" : "flex-start", minWidth: 0 }, { transform: [{ translateX: swipeX }], opacity: fadeIn }]}>
       <View style={[st.bubbleContainer, isMe ? st.bubbleContainerMe : st.bubbleContainerOther]}>
         {showTail && <BubbleTail isMe={isMe} color={bubbleColor} />}
 
@@ -3853,7 +3853,7 @@ const st = StyleSheet.create({
   msgRowMe: { justifyContent: "flex-end" },
   msgRowOther: { justifyContent: "flex-start" },
 
-  bubbleContainer: { maxWidth: "78%", position: "relative" },
+  bubbleContainer: { maxWidth: "78%", position: "relative", flexShrink: 1, minWidth: 0 },
   bubbleContainerMe: { alignItems: "flex-end" },
   bubbleContainerOther: { alignItems: "flex-start" },
 
@@ -3866,6 +3866,8 @@ const st = StyleSheet.create({
     paddingBottom: 4,
     borderRadius: 16,
     minWidth: 64,
+    overflow: "hidden",
+    flexShrink: 1,
   },
   bubbleMe: {
     borderBottomRightRadius: 16,
@@ -3882,9 +3884,9 @@ const st = StyleSheet.create({
 
   senderName: { fontSize: 12, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
 
-  replyPreview: { flexDirection: "row", alignItems: "center", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginBottom: 4, gap: 6, alignSelf: "stretch" },
+  replyPreview: { flexDirection: "row", alignItems: "center", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginBottom: 4, gap: 6, alignSelf: "stretch", overflow: "hidden", maxWidth: "100%" },
   replyBarLine: { width: 3, alignSelf: "stretch", borderRadius: 2, minHeight: 16, flexShrink: 0 },
-  replyPreviewText: { fontSize: 12, fontFamily: "Inter_400Regular", flexShrink: 1, flexGrow: 0 },
+  replyPreviewText: { fontSize: 12, fontFamily: "Inter_400Regular", flexShrink: 1, flexGrow: 0, minWidth: 0 },
 
   bubbleText: { fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 21 },
 
