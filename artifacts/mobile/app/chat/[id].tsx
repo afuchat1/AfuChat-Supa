@@ -718,11 +718,13 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
           )}
 
           {replyPreview && (
-            <View style={[st.replyPreview, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.06)" }]}>
-              <View style={[st.replyBarLine, { backgroundColor: isMe ? "#fff" : BRAND }]} />
-              <Text style={[st.replyPreviewText, { color: isMe ? "rgba(255,255,255,0.8)" : colors.textSecondary }]} numberOfLines={1}>
-                {replyPreview}
-              </Text>
+            <View style={[st.replyPreview, { backgroundColor: isMe ? "rgba(0,0,0,0.18)" : "rgba(0,0,0,0.07)" }]}>
+              <View style={[st.replyBarLine, { backgroundColor: isMe ? "rgba(255,255,255,0.9)" : BRAND }]} />
+              <View style={st.replyTextWrap}>
+                <Text style={[st.replyPreviewText, { color: isMe ? "rgba(255,255,255,0.85)" : colors.textSecondary }]} numberOfLines={1} ellipsizeMode="tail">
+                  {replyPreview}
+                </Text>
+              </View>
             </View>
           )}
 
@@ -3884,9 +3886,10 @@ const st = StyleSheet.create({
 
   senderName: { fontSize: 12, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
 
-  replyPreview: { flexDirection: "row", alignItems: "center", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginBottom: 4, gap: 6, alignSelf: "stretch", overflow: "hidden", maxWidth: "100%" },
-  replyBarLine: { width: 3, alignSelf: "stretch", borderRadius: 2, minHeight: 16, flexShrink: 0 },
-  replyPreviewText: { fontSize: 12, fontFamily: "Inter_400Regular", flexShrink: 1, flexGrow: 0, minWidth: 0 },
+  replyPreview: { flexDirection: "row", alignItems: "stretch", borderRadius: 8, marginBottom: 6, alignSelf: "stretch", overflow: "hidden" },
+  replyBarLine: { width: 3, flexShrink: 0, borderRadius: 0 },
+  replyTextWrap: { flex: 1, minWidth: 0, paddingHorizontal: 8, paddingVertical: 6, justifyContent: "center" },
+  replyPreviewText: { fontSize: 12.5, fontFamily: "Inter_500Medium", flexShrink: 1, minWidth: 0 },
 
   bubbleText: { fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 21 },
 
