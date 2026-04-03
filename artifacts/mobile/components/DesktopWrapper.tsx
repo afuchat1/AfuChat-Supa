@@ -60,9 +60,12 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
   const segments = useSegments();
 
-  const [activeSection, setActiveSection] = useState<DesktopSection>(() =>
-    sectionFromSegments(segments)
-  );
+  const [activeSection, setActiveSection] = useState<DesktopSection>(() => {
+    const fromSegs = sectionFromSegments(segments);
+    // When not logged in, always start on discover (public read access)
+    if (!session && fromSegs === "chats") return "discover";
+    return fromSegs;
+  });
 
   const handleSectionChange = useCallback(
     (section: DesktopSection) => {
