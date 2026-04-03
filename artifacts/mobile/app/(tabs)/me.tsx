@@ -278,7 +278,7 @@ export default function MeScreen() {
       )}
 
       <MenuGroup>
-        <MenuItem icon="crown" iconBg="#D4A853" label="Prestige Status" onPress={() => router.push("/prestige")} badge="NEW" />
+        <MenuItem icon="trophy" iconBg="#D4A853" label="Prestige Status" onPress={() => router.push("/prestige")} badge="NEW" />
         {isAdmin && (
           <>
             <Separator indent={54} />

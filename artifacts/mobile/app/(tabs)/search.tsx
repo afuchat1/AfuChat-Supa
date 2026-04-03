@@ -207,7 +207,7 @@ export default function SearchScreen() {
   const scrollPB = isDesktop ? 32 : insets.bottom + 52 + 16;
 
   const inputRef = useRef<TextInput>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const searchIdRef = useRef(0);
 
   const [query, setQuery] = useState("");
@@ -229,7 +229,7 @@ export default function SearchScreen() {
 
   const [isListening, setIsListening] = useState(false);
 
-  const suggestRef = useRef<ReturnType<typeof setTimeout>>();
+  const suggestRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     loadInitial();
@@ -291,7 +291,7 @@ export default function SearchScreen() {
     const all = currentTab === "all";
 
     try {
-      const fetches: Promise<any>[] = [];
+      const fetches: PromiseLike<any>[] = [];
 
       if (all || currentTab === "people") {
         let pq = supabase.from("profiles")
@@ -950,7 +950,7 @@ export default function SearchScreen() {
             <View style={[styles.idleSectionHeader, { marginBottom:12 }]}>
               <Ionicons name="time-outline" size={16} color={colors.textMuted} />
               <Text style={[styles.idleHeading, { color:colors.text, marginBottom:0 }]}>Recent Searches</Text>
-              <TouchableOpacity style={{ marginLeft:"auto" }} onPress={() => clearHistory().then(setHistory)}>
+              <TouchableOpacity style={{ marginLeft:"auto" }} onPress={() => clearHistory().then(() => setHistory([]))}>
                 <Text style={{ color:colors.textMuted, fontSize:12, fontFamily:"Inter_500Medium" }}>Clear</Text>
               </TouchableOpacity>
             </View>

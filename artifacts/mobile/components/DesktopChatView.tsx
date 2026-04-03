@@ -90,7 +90,8 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
     if (chatRes.data) {
       const c = chatRes.data;
       const others = (c.chat_members || []).filter((m: any) => m.user_id !== user.id);
-      const other = others[0]?.profiles;
+      const profileRaw = others[0]?.profiles;
+      const other: any = Array.isArray(profileRaw) ? profileRaw[0] : profileRaw;
       setChatInfo({
         id: c.id,
         name: c.name,

@@ -149,13 +149,8 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
     try {
       if (Platform.OS === "web") {
         const html2canvas = (await import("html2canvas")).default;
-        const { findDOMNode } = await import("react-dom");
         let el: HTMLElement | null = null;
-        try {
-          const domNode = findDOMNode(cardRef.current as any);
-          if (domNode && domNode instanceof HTMLElement) el = domNode;
-        } catch {}
-        if (!el && typeof document !== "undefined") {
+        if (typeof document !== "undefined") {
           el = document.querySelector("[data-post-card=\"" + item.id + "\"]") as HTMLElement | null;
         }
         if (!el) {
@@ -233,7 +228,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              onPress={() => { Haptics.impact?.(); setMenuVisible(true); }}
+              onPress={() => { Haptics.impactAsync?.(); setMenuVisible(true); }}
               hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
             >
               <Ionicons name="ellipsis-horizontal" size={18} color={colors.textMuted} />

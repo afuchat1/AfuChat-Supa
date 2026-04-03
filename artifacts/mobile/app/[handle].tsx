@@ -68,7 +68,7 @@ export default function HandleScreen() {
         if (data) setProfileId(data.id);
         setDataReady(true);
       })
-      .catch(() => setDataReady(true));
+      .then(undefined, () => setDataReady(true));
   }, [cleanHandle, isProfileLink, isValidHandle]);
 
   useEffect(() => {

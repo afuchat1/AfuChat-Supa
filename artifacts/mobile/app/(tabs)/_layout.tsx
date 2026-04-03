@@ -24,7 +24,7 @@ function NativeTabLayout() {
         <Label>AfuChat</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="discover">
-        <Icon sf={{ default: "compass", selected: "compass.fill" }} />
+        <Icon sf={{ default: "location" as any, selected: "location.fill" as any }} />
         <Label>Discover</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="apps">
@@ -96,7 +96,7 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
           title: "Discover",
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
-              <SymbolView name={focused ? "compass.fill" : "compass"} tintColor={color} size={22} />
+              <SymbolView name={(focused ? "location.fill" : "location") as any} tintColor={color} size={22} />
             ) : (
               <Ionicons name={focused ? "compass" : "compass-outline"} size={22} color={color} />
             ),

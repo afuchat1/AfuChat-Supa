@@ -369,7 +369,7 @@ export default function DigitalIdScreen() {
       } else {
         const { captureRef } = await import("react-native-view-shot");
         const uri = await captureRef(cardRef, { format: "png", quality: 1 });
-        const cacheDir = FileSystem.cacheDirectory;
+        const cacheDir = (FileSystem as any).cacheDirectory;
         if (!cacheDir) {
           await Share.share({ message: `AfuChat ID: ${formatAfuId(toAfuId(profile?.id || "00000000"))}` });
           return;

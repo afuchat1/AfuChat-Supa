@@ -112,7 +112,7 @@ export default function SecuritySettingsScreen() {
         URL.revokeObjectURL(url);
         showAlert("Downloaded", "Your data has been downloaded.");
       } else {
-        const fileUri = FileSystem.documentDirectory + `afuchat_data_${new Date().toISOString().split("T")[0]}.json`;
+        const fileUri = (FileSystem as any).documentDirectory + `afuchat_data_${new Date().toISOString().split("T")[0]}.json`;
         await FileSystem.writeAsStringAsync(fileUri, jsonString);
         try {
           const Sharing = await import("expo-sharing");

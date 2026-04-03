@@ -61,7 +61,7 @@ function ThemeSyncManager() {
         }
         initialLoadDone.current = true;
       })
-      .catch(() => { initialLoadDone.current = true; });
+      .then(undefined, () => { initialLoadDone.current = true; });
   }, [user?.id]);
 
   useEffect(() => {
@@ -69,8 +69,7 @@ function ThemeSyncManager() {
     supabase
       .from("advanced_feature_settings")
       .upsert({ user_id: user.id, theme_mode: themeMode }, { onConflict: "user_id" })
-      .then(() => {})
-      .catch(() => {});
+      .then(() => {}, () => {});
   }, [themeMode]);
 
   return null;

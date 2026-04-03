@@ -1243,7 +1243,8 @@ export default function ChatScreen() {
 
     if (chat) {
       const others = (chat.chat_members || []).filter((m: any) => m.user_id !== user.id);
-      const other = others[0]?.profiles;
+      const profileRaw = others[0]?.profiles;
+      const other: any = Array.isArray(profileRaw) ? profileRaw[0] : profileRaw;
       const memberIds = others.map((m: any) => m.profiles?.id).filter(Boolean) as string[];
       setChatInfo({
         is_group: !!chat.is_group,
@@ -1534,9 +1535,9 @@ export default function ChatScreen() {
         .maybeSingle()
         .then(({ data }) => {
           if (data?.content) { setInput(data.content); }
-          else { AsyncStorage.getItem(`chat_draft_${id}`).then((draft) => { if (draft) setInput(draft); }).catch(() => {}); }
+          else { AsyncStorage.getItem(`chat_draft_${id}`).then((draft) => { if (draft) setInput(draft); }).then(undefined, () => {}); }
         })
-        .catch(() => { AsyncStorage.getItem(`chat_draft_${id}`).then((draft) => { if (draft) setInput(draft); }).catch(() => {}); });
+        .then(undefined, () => { AsyncStorage.getItem(`chat_draft_${id}`).then((draft) => { if (draft) setInput(draft); }).then(undefined, () => {}); });
     } else {
       AsyncStorage.getItem(`chat_draft_${id}`).then((draft) => { if (draft) setInput(draft); }).catch(() => {});
     }
