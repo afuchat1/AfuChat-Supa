@@ -2,7 +2,7 @@
   "expo": {
     "name": "AfuChat",
     "slug": "afuchat",
-    "version": "2.0.33",
+    "version": "2.0.34",
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
     "scheme": "afuchat",
@@ -34,7 +34,7 @@
         "applinks:afuchat.com",
         "applinks:www.afuchat.com"
       ],
-      "buildNumber": "2.0.33"
+      "buildNumber": "2.0.34"
     },
     "android": {
       "package": "com.afuchat.app",
@@ -48,6 +48,10 @@
         "CAMERA",
         "READ_CONTACTS",
         "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
@@ -73,7 +77,7 @@
           ]
         }
       ],
-      "versionCode": 2030
+      "versionCode": 2036
     },
     "web": {
       "favicon": "./assets/images/logo.png",
@@ -95,6 +99,13 @@
       "expo-font",
       "expo-web-browser",
       "@react-native-google-signin/google-signin",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "AfuChat needs access to your photos to let you share images and videos.",
+          "cameraPermission": "AfuChat needs camera access to take photos."
+        }
+      ],
       [
         "expo-location",
         {

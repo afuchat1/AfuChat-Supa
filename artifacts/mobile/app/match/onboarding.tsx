@@ -176,7 +176,7 @@ export default function MatchOnboarding() {
   async function pickPhoto() {
     if (photos.length >= 6) { showAlert("Photo Limit", "You can add up to 6 photos."); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: "images",
       quality: 0.85,
       allowsEditing: true,
       aspect: [3, 4],

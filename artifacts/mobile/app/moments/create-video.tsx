@@ -51,10 +51,15 @@ export default function CreateVideoScreen() {
   }
 
   async function pickVideo() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      showAlert("Permission required", "Please allow access to your media library to pick a video.");
+      return;
+    }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["video"] as any,
-      allowsEditing: true,
-      quality: 0.8,
+      mediaTypes: "videos",
+      allowsEditing: false,
+      quality: 1,
       videoMaxDuration: MAX_DURATION_SECONDS,
     });
     if (!result.canceled && result.assets[0]) {
