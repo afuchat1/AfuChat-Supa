@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -8,19 +8,33 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { useDesktopDetail } from "@/context/DesktopDetailContext";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
+import { RichText } from "@/components/ui/RichText";
 import { showAlert } from "@/lib/alert";
+import { sharePost } from "@/lib/share";
 import Colors from "@/constants/colors";
 
 const BRAND = "#00BCD4";
 const GOLD = "#D4A853";
+
+function timeAgo(iso: string) {
+  const d = new Date(iso);
+  const diff = Date.now() - d.getTime();
+  if (diff < 60000) return "just now";
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
+  if (diff < 604800000) return `${Math.floor(diff / 86400000)}d`;
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
 
 type Post = {
   id: string;
@@ -28,8 +42,10 @@ type Post = {
   image_url: string | null;
   images: string[];
   created_at: string;
+  view_count: number;
   like_count: number;
   reply_count: number;
+  liked_by_me: boolean;
 };
 
 type NavLink = {
@@ -48,64 +64,140 @@ function StatBadge({ value, label, colors }: { value: number | string; label: st
   );
 }
 
-function PostGrid({ posts, colors, isDark }: { posts: Post[]; colors: any; isDark: boolean }) {
-  if (posts.length === 0) {
-    return (
-      <View style={styles.emptyPosts}>
-        <Ionicons name="images-outline" size={48} color={colors.textMuted} />
-        <Text style={[styles.emptyPostsText, { color: colors.textMuted }]}>No posts yet</Text>
-        <TouchableOpacity
-          style={[styles.createPostBtn, { backgroundColor: colors.accent }]}
-          onPress={() => router.push("/moments/create" as any)}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="add" size={16} color="#fff" />
-          <Text style={styles.createPostBtnText}>Create Post</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
+function ProfilePostCard({
+  post,
+  colors,
+  onOpen,
+  onLike,
+  panelWidth,
+  profile,
+}: {
+  post: Post;
+  colors: any;
+  onOpen: (id: string) => void;
+  onLike: (id: string) => void;
+  panelWidth: number;
+  profile: any;
+}) {
+  const allImages = post.images?.length > 0 ? post.images : post.image_url ? [post.image_url] : [];
+  const multiImgW = (panelWidth - 36) / 2;
 
   return (
-    <View style={styles.postGrid}>
-      {posts.map((p) => {
-        const img = p.images?.[0] || p.image_url;
-        return (
-          <TouchableOpacity
-            key={p.id}
-            onPress={() => router.push({ pathname: "/post/[id]", params: { id: p.id } } as any)}
-            style={[styles.postGridItem, { backgroundColor: isDark ? "#1a1a1e" : "#f0f0f5", borderColor: colors.border }]}
-            activeOpacity={0.8}
-          >
-            {img ? (
-              <Image source={{ uri: img }} style={styles.postGridImage} resizeMode="cover" />
-            ) : (
-              <View style={[styles.postGridText, { backgroundColor: isDark ? "#1a1a1e" : "#f5f5f8" }]}>
-                <Text style={[styles.postGridContent, { color: colors.text }]} numberOfLines={6}>
-                  {p.content}
-                </Text>
-              </View>
+    <TouchableOpacity
+      onPress={() => onOpen(post.id)}
+      activeOpacity={0.97}
+      style={[styles.card, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}
+    >
+      {/* Header */}
+      <View style={styles.cardHeader}>
+        <Avatar uri={profile?.avatar_url || null} name={profile?.display_name || "Me"} size={40} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <View style={styles.nameRow}>
+            <Text style={[styles.cardName, { color: colors.text }]} numberOfLines={1}>
+              {profile?.display_name || "Me"}
+            </Text>
+            {profile?.is_verified && (
+              <VerifiedBadge
+                isVerified={!!profile.is_verified}
+                isOrganizationVerified={!!profile.is_organization_verified}
+                size={13}
+              />
             )}
-            <View style={[styles.postGridOverlay, { backgroundColor: isDark ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.25)" }]}>
-              <View style={styles.postStat}>
-                <Ionicons name="heart" size={12} color="#fff" />
-                <Text style={styles.postStatText}>{p.like_count}</Text>
-              </View>
-              <View style={styles.postStat}>
-                <Ionicons name="chatbubble" size={12} color="#fff" />
-                <Text style={styles.postStatText}>{p.reply_count}</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
+          </View>
+          <Text style={[styles.cardMeta, { color: colors.textMuted }]} numberOfLines={1}>
+            @{profile?.handle || "me"} · {timeAgo(post.created_at)}
+          </Text>
+        </View>
+        <TouchableOpacity hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}>
+          <Ionicons name="ellipsis-horizontal" size={18} color={colors.textMuted} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Content */}
+      {(post.content || "").trim().length > 0 && (
+        <RichText style={[styles.cardContent, { color: colors.text }]} linkColor={BRAND}>
+          {post.content}
+        </RichText>
+      )}
+
+      {/* Images */}
+      {allImages.length > 0 && (
+        <View style={[styles.images, allImages.length > 1 && { flexDirection: "row", flexWrap: "wrap", gap: 2 }]}>
+          {allImages.map((uri, i) => (
+            <TouchableOpacity
+              key={i}
+              activeOpacity={0.9}
+              onPress={(e) => { e.stopPropagation?.(); onOpen(post.id); }}
+              style={allImages.length > 1 ? { flex: 1 } : undefined}
+            >
+              <Image
+                source={{ uri }}
+                style={{
+                  width: allImages.length === 1 ? panelWidth : multiImgW,
+                  height: allImages.length === 1 ? Math.round(panelWidth * 0.56) : Math.round(multiImgW * 0.75),
+                }}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* Footer */}
+      <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
+        <TouchableOpacity
+          style={styles.action}
+          onPress={(e) => { e.stopPropagation?.(); onLike(post.id); }}
+        >
+          <Ionicons
+            name={post.liked_by_me ? "heart" : "heart-outline"}
+            size={18}
+            color={post.liked_by_me ? "#FF3B30" : colors.textMuted}
+          />
+          {post.like_count > 0 && (
+            <Text style={[styles.actionText, { color: post.liked_by_me ? "#FF3B30" : colors.textMuted }]}>
+              {post.like_count}
+            </Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.action} onPress={(e) => { e.stopPropagation?.(); onOpen(post.id); }}>
+          <Ionicons name="chatbubble-outline" size={17} color={colors.textMuted} />
+          {post.reply_count > 0 && (
+            <Text style={[styles.actionText, { color: colors.textMuted }]}>{post.reply_count}</Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.action}
+          onPress={(e) => {
+            e.stopPropagation?.();
+            sharePost({ postId: post.id, authorName: profile?.display_name || "User", content: post.content });
+          }}
+        >
+          <Ionicons name="arrow-redo-outline" size={17} color={colors.textMuted} />
+        </TouchableOpacity>
+
+        <View style={{ flex: 1 }} />
+
+        {post.view_count > 0 && (
+          <View style={styles.viewCount}>
+            <Ionicons name="eye-outline" size={14} color={colors.textMuted} />
+            <Text style={[styles.viewText, { color: colors.textMuted }]}>
+              {post.view_count >= 1000 ? `${(post.view_count / 1000).toFixed(1)}k` : post.view_count}
+            </Text>
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
   );
 }
 
 export function DesktopProfileSection() {
   const { colors, isDark } = useTheme();
   const { user, profile, signOut } = useAuth();
+  const { openDetail } = useDesktopDetail();
+  const [panelWidth, setPanelWidth] = useState(500);
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,7 +207,7 @@ export function DesktopProfileSection() {
     if (!user) return;
     const [postsRes, followersRes, followingRes] = await Promise.all([
       supabase.from("posts")
-        .select("id, content, image_url, created_at, post_images(image_url, display_order)")
+        .select("id, content, image_url, created_at, view_count, post_images(image_url, display_order)")
         .eq("author_id", user.id)
         .eq("is_blocked", false)
         .order("created_at", { ascending: false })
@@ -127,12 +219,15 @@ export function DesktopProfileSection() {
     const rawPosts = postsRes.data || [];
     const postIds = rawPosts.map((p: any) => p.id);
 
-    const [{ data: likeCounts }, { data: replyCounts }] = await Promise.all([
+    const [{ data: likeCounts }, { data: replyCounts }, { data: myLikes }] = await Promise.all([
       postIds.length > 0
         ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds)
         : { data: [] },
       postIds.length > 0
         ? supabase.from("post_replies").select("post_id").in("post_id", postIds)
+        : { data: [] },
+      postIds.length > 0
+        ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id)
         : { data: [] },
     ]);
 
@@ -144,6 +239,7 @@ export function DesktopProfileSection() {
     for (const r of (replyCounts || [])) {
       replyMap[(r as any).post_id] = (replyMap[(r as any).post_id] || 0) + 1;
     }
+    const likedSet = new Set((myLikes || []).map((l: any) => l.post_id));
 
     setPosts(
       rawPosts.map((p: any) => ({
@@ -154,8 +250,10 @@ export function DesktopProfileSection() {
           .sort((a: any, b: any) => a.display_order - b.display_order)
           .map((i: any) => i.image_url),
         created_at: p.created_at,
+        view_count: p.view_count || 0,
         like_count: likeMap[p.id] || 0,
         reply_count: replyMap[p.id] || 0,
+        liked_by_me: likedSet.has(p.id),
       }))
     );
     setFollowStats({ followers: followersRes.count || 0, following: followingRes.count || 0 });
@@ -176,6 +274,19 @@ export function DesktopProfileSection() {
         },
       },
     ]);
+  }
+
+  async function handleLike(postId: string) {
+    if (!user) return;
+    const post = posts.find((p) => p.id === postId);
+    if (!post) return;
+    if (post.liked_by_me) {
+      await supabase.from("post_acknowledgments").delete().eq("post_id", postId).eq("user_id", user.id);
+      setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, liked_by_me: false, like_count: Math.max(0, p.like_count - 1) } : p));
+    } else {
+      await supabase.from("post_acknowledgments").insert({ post_id: postId, user_id: user.id });
+      setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, liked_by_me: true, like_count: p.like_count + 1 } : p));
+    }
   }
 
   const navLinks: NavLink[] = [
@@ -273,8 +384,11 @@ export function DesktopProfileSection() {
       </View>
 
       {/* Right panel: posts */}
-      <View style={[styles.postsPanel, { backgroundColor: isDark ? "#0f0f12" : "#f8f9fc" }]}>
-        <View style={[styles.postsHeader, { borderBottomColor: colors.border }]}>
+      <View
+        style={[styles.postsPanel, { backgroundColor: colors.background }]}
+        onLayout={(e) => setPanelWidth(e.nativeEvent.layout.width)}
+      >
+        <View style={[styles.postsHeader, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
           <Text style={[styles.postsHeaderTitle, { color: colors.text }]}>My Posts</Text>
           <TouchableOpacity
             style={[styles.createBtn, { backgroundColor: colors.accent }]}
@@ -291,9 +405,36 @@ export function DesktopProfileSection() {
             <ActivityIndicator color={colors.accent} />
           </View>
         ) : (
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.postsScroll}>
-            <PostGrid posts={posts} colors={colors} isDark={isDark} />
-          </ScrollView>
+          <FlatList
+            data={posts}
+            keyExtractor={(p) => p.id}
+            renderItem={({ item }) => (
+              <ProfilePostCard
+                post={item}
+                colors={colors}
+                onOpen={(id) => openDetail({ type: "post", id })}
+                onLike={handleLike}
+                panelWidth={panelWidth}
+                profile={profile}
+              />
+            )}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.feedList}
+            ListEmptyComponent={
+              <View style={styles.emptyPosts}>
+                <Ionicons name="images-outline" size={48} color={colors.textMuted} />
+                <Text style={[styles.emptyPostsText, { color: colors.textMuted }]}>No posts yet</Text>
+                <TouchableOpacity
+                  style={[styles.createPostBtn, { backgroundColor: colors.accent }]}
+                  onPress={() => router.push("/moments/create" as any)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="add" size={16} color="#fff" />
+                  <Text style={styles.createPostBtnText}>Create Post</Text>
+                </TouchableOpacity>
+              </View>
+            }
+          />
         )}
       </View>
     </View>
@@ -362,9 +503,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   postsHeaderTitle: { fontSize: 20, fontFamily: "Inter_700Bold", letterSpacing: -0.3 },
@@ -377,32 +518,44 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   createBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  postsScroll: { padding: 20, paddingBottom: 40 },
-  postGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  postGridItem: {
-    width: "31%" as any,
-    minWidth: 140,
-    flexGrow: 1,
-    height: 180,
-    borderRadius: 12,
+  feedList: { flexGrow: 1 },
+
+  card: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
-    borderWidth: StyleSheet.hairlineWidth,
-    position: "relative",
   },
-  postGridImage: { width: "100%" as any, height: "100%" as any },
-  postGridText: { flex: 1, padding: 12 },
-  postGridContent: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
-  postGridOverlay: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
+  cardHeader: {
     flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
     gap: 10,
-    padding: 8,
   },
-  postStat: { flexDirection: "row", alignItems: "center", gap: 3 },
-  postStatText: { color: "#fff", fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  cardName: { fontSize: 15, fontFamily: "Inter_700Bold", letterSpacing: -0.1 },
+  cardMeta: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  cardContent: {
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    lineHeight: 23,
+  },
+  images: { marginBottom: 0 },
+  cardFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 18,
+  },
+  action: { flexDirection: "row", alignItems: "center", gap: 5 },
+  actionText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  viewCount: { flexDirection: "row", alignItems: "center", gap: 4 },
+  viewText: { fontSize: 12, fontFamily: "Inter_400Regular" },
+
   emptyPosts: { alignItems: "center", paddingTop: 60, gap: 14 },
   emptyPostsText: { fontSize: 16, fontFamily: "Inter_500Medium" },
   createPostBtn: {
