@@ -770,6 +770,8 @@ export default function VideoPlayerScreen() {
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
+  const VIDEO_W = Platform.OS === "web" ? Math.min(SCREEN_W, 480) : SCREEN_W;
+  const VIDEO_H = Platform.OS === "web" ? Math.min(SCREEN_H, 860) : SCREEN_H;
 
   const [videoTab, setVideoTab] = useState<"for_you" | "following">("for_you");
   const [videos, setVideos] = useState<VideoPost[]>([]);
@@ -1002,28 +1004,6 @@ export default function VideoPlayerScreen() {
     }
   }, [user]);
 
-  if (Platform.OS === "web") {
-    return (
-      <View style={mStyles.center}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-        <View style={{ alignItems: "center", gap: 16, paddingHorizontal: 40 }}>
-          <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(255,255,255,0.06)", alignItems: "center", justifyContent: "center" }}>
-            <Ionicons name="phone-portrait-outline" size={36} color={accent} />
-          </View>
-          <Text style={{ color: "#fff", fontSize: 20, fontFamily: "Inter_700Bold", textAlign: "center" }}>
-            Videos are only available in the app
-          </Text>
-          <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 }}>
-            Download the AfuChat app to watch videos, interact with creators, and discover trending content.
-          </Text>
-          <TouchableOpacity onPress={() => router.back()} style={{ backgroundColor: accent, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 24, marginTop: 8 }}>
-            <Text style={{ color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" }}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
   if (loading) {
     return (
       <View style={mStyles.center}>
@@ -1058,52 +1038,58 @@ export default function VideoPlayerScreen() {
         </TouchableOpacity>
       </View>
 
-      {videos.length === 0 ? (
-        <View style={mStyles.emptyState}>
-          <View style={mStyles.emptyIcon}>
-            <Ionicons name="videocam-outline" size={44} color="rgba(255,255,255,0.25)" />
-          </View>
-          <Text style={mStyles.emptyTitle}>No videos yet</Text>
-          <Text style={mStyles.emptySubtitle}>
-            {videoTab === "following" ? "Follow creators to see their videos here" : "Videos will appear here soon"}
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          ref={listRef}
-          data={videos}
-          keyExtractor={(v) => v.id}
-          renderItem={({ item, index }) => (
-            <VideoItem
-              item={item}
-              isActive={index === activeIndex}
-              screenH={SCREEN_H}
-              screenW={SCREEN_W}
-              isFollowing={followingSet.has(item.author_id)}
-              isSelf={user?.id === item.author_id}
-              onLike={handleLike}
-              onBookmark={handleBookmark}
-              onOpenComments={setCommentPostId}
-              onShare={handleShare}
-              onFollow={handleFollow}
-              onRecordView={handleRecordView}
+      <View style={Platform.OS === "web" ? mStyles.webFeedOuter : { flex: 1 }}>
+        {Platform.OS === "web" && <View style={mStyles.webFeedSidebar} />}
+        <View style={Platform.OS === "web" ? [mStyles.webFeedCol, { width: VIDEO_W, height: VIDEO_H }] : { flex: 1 }}>
+          {videos.length === 0 ? (
+            <View style={mStyles.emptyState}>
+              <View style={mStyles.emptyIcon}>
+                <Ionicons name="videocam-outline" size={44} color="rgba(255,255,255,0.25)" />
+              </View>
+              <Text style={mStyles.emptyTitle}>No videos yet</Text>
+              <Text style={mStyles.emptySubtitle}>
+                {videoTab === "following" ? "Follow creators to see their videos here" : "Videos will appear here soon"}
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              ref={listRef}
+              data={videos}
+              keyExtractor={(v) => v.id}
+              renderItem={({ item, index }) => (
+                <VideoItem
+                  item={item}
+                  isActive={index === activeIndex}
+                  screenH={VIDEO_H}
+                  screenW={VIDEO_W}
+                  isFollowing={followingSet.has(item.author_id)}
+                  isSelf={user?.id === item.author_id}
+                  onLike={handleLike}
+                  onBookmark={handleBookmark}
+                  onOpenComments={setCommentPostId}
+                  onShare={handleShare}
+                  onFollow={handleFollow}
+                  onRecordView={handleRecordView}
+                />
+              )}
+              pagingEnabled
+              showsVerticalScrollIndicator={false}
+              onViewableItemsChanged={onViewableItemsChanged}
+              viewabilityConfig={viewabilityConfig}
+              getItemLayout={(_, index) => ({ length: VIDEO_H, offset: VIDEO_H * index, index })}
+              decelerationRate="fast"
+              snapToAlignment="start"
+              snapToInterval={VIDEO_H}
+              onScrollToIndexFailed={(info) => {
+                setTimeout(() => {
+                  listRef.current?.scrollToIndex({ index: info.index, animated: false });
+                }, 300);
+              }}
             />
           )}
-          pagingEnabled
-          showsVerticalScrollIndicator={false}
-          onViewableItemsChanged={onViewableItemsChanged}
-          viewabilityConfig={viewabilityConfig}
-          getItemLayout={(_, index) => ({ length: SCREEN_H, offset: SCREEN_H * index, index })}
-          decelerationRate="fast"
-          snapToAlignment="start"
-          snapToInterval={SCREEN_H}
-          onScrollToIndexFailed={(info) => {
-            setTimeout(() => {
-              listRef.current?.scrollToIndex({ index: info.index, animated: false });
-            }, 300);
-          }}
-        />
-      )}
+        </View>
+        {Platform.OS === "web" && <View style={mStyles.webFeedSidebar} />}
+      </View>
 
       <CommentsSheet
         visible={!!commentPostId}
@@ -1167,4 +1153,18 @@ const mStyles = StyleSheet.create({
   },
   emptyTitle: { color: "rgba(255,255,255,0.6)", fontSize: 18, fontFamily: "Inter_700Bold" },
   emptySubtitle: { color: "rgba(255,255,255,0.3)", fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
+
+  webFeedOuter: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#000",
+  },
+  webFeedSidebar: { flex: 1 },
+  webFeedCol: {
+    overflow: "hidden" as any,
+    borderRadius: 0,
+    backgroundColor: "#000",
+  },
 });
