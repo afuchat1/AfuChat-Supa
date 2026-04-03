@@ -134,13 +134,6 @@ export default function SettingsScreen() {
             label="Chats"
             onPress={() => router.push("/settings/chat")}
           />
-          <Separator indent={54} />
-          <MenuItem
-            icon="sparkles-outline"
-            iconBg="#BF5AF2"
-            label="Advanced Features"
-            onPress={() => router.push("/advanced-features")}
-          />
         </Section>
 
         {/* Privacy & Security */}

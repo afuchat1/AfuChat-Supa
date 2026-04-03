@@ -126,10 +126,36 @@ export default function TopUpScreen() {
     return formatLocalPrice(usdPrice, exchangeRate, userCurrency.symbol, userCurrency.code);
   }
 
+  function getSelectedAmount(): number {
+    if (selectedPack !== null) return ACOIN_PACKAGES[selectedPack].amount;
+    const custom = parseInt(customAmount || "0", 10);
+    return isNaN(custom) ? 0 : custom;
+  }
+
+  function getSelectedUsdPrice(): number {
+    if (selectedPack !== null) return ACOIN_PACKAGES[selectedPack].priceUsd;
+    const custom = parseInt(customAmount || "0", 10);
+    return isNaN(custom) ? 0 : custom * 0.01;
+  }
+
   async function initiatePayment() {
+    const amount = getSelectedAmount();
+    if (amount < 50) {
+      showAlert("Select a package", "Please select a package or enter at least 50 ACoin.");
+      return;
+    }
+    const usdPrice = getSelectedUsdPrice();
+    const localPrice = formatLocalPrice(usdPrice, exchangeRate, userCurrency.symbol, userCurrency.code);
+    const handle = profile?.handle || profile?.id?.slice(0, 8) || "unknown";
+
     showAlert(
-      "Coming Soon",
-      "ACoin top-up via card and mobile money is almost ready! We are finishing integration with Pesapal. You will be notified as soon as it launches.",
+      "How to Top Up",
+      `To add ${amount.toLocaleString()} ACoin (${localPrice}) to your wallet:\n\n` +
+      `1. Send ${localPrice} via MTN MoMo to:\n   0772 000 000\n\n` +
+      `2. Or Airtel Money to:\n   0756 000 000\n\n` +
+      `3. Use reference: ${handle}\n\n` +
+      `Your wallet will be credited within 2–4 hours after payment is confirmed.\n\n` +
+      `Questions? WhatsApp us at +256 772 000 000`,
       [{ text: "Got it" }]
     );
   }
@@ -210,19 +236,13 @@ export default function TopUpScreen() {
           </Text>
         </View>
 
-        <View style={[styles.comingSoonBanner, { backgroundColor: "#FFF3E0", borderColor: "#FFB74D" }]}>
-          <Ionicons name="time-outline" size={18} color="#F57C00" />
-          <Text style={[styles.comingSoonText, { color: "#E65100" }]}>
-            ACoin top-up is coming soon — payment gateway integration in progress.
-          </Text>
-        </View>
-
         <TouchableOpacity
-          style={[styles.payBtn, { backgroundColor: Colors.gold, opacity: 0.6 }]}
+          style={[styles.payBtn, { backgroundColor: Colors.gold }]}
           onPress={initiatePayment}
+          activeOpacity={0.85}
         >
-          <Ionicons name="card-outline" size={20} color="#fff" />
-          <Text style={styles.payBtnText}>Pay with Pesapal — Coming Soon</Text>
+          <Ionicons name="phone-portrait-outline" size={20} color="#fff" />
+          <Text style={styles.payBtnText}>Top Up with Mobile Money</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -299,14 +319,4 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   payBtnText: { color: "#fff", fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  comingSoonBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    marginTop: 4,
-  },
-  comingSoonText: { flex: 1, fontSize: 13, fontFamily: "Inter_500Medium", lineHeight: 18 },
 });

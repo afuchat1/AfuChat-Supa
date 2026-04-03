@@ -312,10 +312,31 @@ export default function MeScreen() {
 
       <MenuGroup>
         <MenuItem
+          icon="sparkles-outline"
+          iconBg="#BF5AF2"
+          label="Advanced Features"
+          onPress={() => router.push("/advanced-features")}
+        />
+        <Separator indent={54} />
+        <MenuItem
           icon="settings-outline"
           iconBg="#8E8E93"
           label="Settings"
           onPress={() => router.push("/settings")}
+        />
+        <Separator indent={54} />
+        <MenuItem
+          icon="help-buoy-outline"
+          iconBg="#5856D6"
+          label="Support Center"
+          onPress={() => router.push("/support" as any)}
+        />
+        <Separator indent={54} />
+        <MenuItem
+          icon="information-circle-outline"
+          iconBg="#007AFF"
+          label="About AfuChat"
+          onPress={() => router.push("/about" as any)}
         />
       </MenuGroup>
 

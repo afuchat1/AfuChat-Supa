@@ -22,8 +22,8 @@ import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { uploadToStorage } from "@/lib/mediaUpload";
 import { showAlert } from "@/lib/alert";
-import { PremiumGate } from "@/components/ui/PremiumGate";
 import { isOnline } from "@/lib/offlineStore";
+import { getUsage, recordUsage } from "@/lib/featureUsage";
 
 export default function CreateChannelScreen() {
   const { colors } = useTheme();
@@ -57,6 +57,18 @@ export default function CreateChannelScreen() {
   async function createChannel() {
     if (!isOnline()) {
       showAlert("No internet", "Creating a channel requires an internet connection.");
+      return;
+    }
+    const usage = await getUsage("channel_create");
+    if (!usage.allowed) {
+      showAlert(
+        "Daily limit reached",
+        `You've used your ${usage.limit} free channel creations for today. Upgrade to Platinum for unlimited broadcast channels.`,
+        [
+          { text: "Upgrade to Platinum", onPress: () => router.push("/premium") },
+          { text: "OK" },
+        ]
+      );
       return;
     }
     if (!channelName.trim()) {
@@ -117,6 +129,7 @@ export default function CreateChannelScreen() {
       });
 
       try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("channel_created"); } catch (_) {}
+      await recordUsage("channel_create");
       router.replace({ pathname: "/chat/[id]", params: { id: chat2.id } });
       setCreating(false);
       return;
@@ -129,16 +142,12 @@ export default function CreateChannelScreen() {
     });
 
     try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("channel_created"); } catch (_) {}
+    await recordUsage("channel_create");
     router.replace({ pathname: "/chat/[id]", params: { id: chat.id } });
     setCreating(false);
   }
 
   return (
-    <PremiumGate
-      tier="platinum"
-      title="Create a Channel"
-      description="Broadcast channels are a Platinum-only feature. Upgrade to reach your audience at scale."
-    >
     <KeyboardAvoidingView
       style={[styles.root, { backgroundColor: colors.background }]}
       behavior="padding"
@@ -218,7 +227,6 @@ export default function CreateChannelScreen() {
         </Text>
       </View>
     </KeyboardAvoidingView>
-    </PremiumGate>
   );
 }
 

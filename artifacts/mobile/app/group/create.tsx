@@ -21,8 +21,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import { showAlert } from "@/lib/alert";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { ContactRowSkeleton } from "@/components/ui/Skeleton";
-import { PremiumGate } from "@/components/ui/PremiumGate";
 import { isOnline } from "@/lib/offlineStore";
+import { getUsage, recordUsage } from "@/lib/featureUsage";
 
 type FollowedUser = {
   id: string;
@@ -76,6 +76,18 @@ export default function CreateGroupScreen() {
       showAlert("No internet", "Creating a group requires an internet connection.");
       return;
     }
+    const usage = await getUsage("group_create");
+    if (!usage.allowed) {
+      showAlert(
+        "Daily limit reached",
+        `You've used all ${usage.limit} free group creations for today. Come back tomorrow for more, or upgrade to Gold for unlimited groups.`,
+        [
+          { text: "Upgrade to Gold", onPress: () => router.push("/premium") },
+          { text: "OK" },
+        ]
+      );
+      return;
+    }
     if (!groupName.trim()) {
       showAlert("Group name required", "Please enter a group name.");
       return;
@@ -107,17 +119,13 @@ export default function CreateGroupScreen() {
       }));
       await supabase.from("chat_members").insert(members);
       try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("group_created"); } catch (_) {}
+      await recordUsage("group_create");
       router.replace({ pathname: "/chat/[id]", params: { id: chat.id } });
     }
     setCreating(false);
   }
 
   return (
-    <PremiumGate
-      tier="gold"
-      title="Create a Group"
-      description="Group chats are available for Gold members and above. Upgrade to bring people together in shared spaces."
-    >
     <KeyboardAvoidingView style={[styles.root, { backgroundColor: colors.background }]} behavior="padding" keyboardVerticalOffset={0}>
       <View
         style={[
@@ -205,7 +213,6 @@ export default function CreateGroupScreen() {
         />
       )}
     </KeyboardAvoidingView>
-    </PremiumGate>
   );
 }
 
