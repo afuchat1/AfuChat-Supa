@@ -922,6 +922,7 @@ export default function ChatScreen() {
   );
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [isAfuAiTyping, setIsAfuAiTyping] = useState(false);
+  const [showAfuAiMenu, setShowAfuAiMenu] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [showReactions, setShowReactions] = useState<Message | null>(null);
@@ -1677,6 +1678,32 @@ export default function ChatScreen() {
   function handleCancelAiExec(msgId: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, _aiExecAction: { ...m._aiExecAction!, status: "failed" as const, result: "Cancelled" } } : m));
+  }
+
+  async function clearAfuAiChatHistory() {
+    const chatId = isDraft ? realChatId : id;
+    if (!chatId) return;
+    Alert.alert(
+      "Clear chat history",
+      "This will permanently delete all messages in this conversation and start a fresh thread. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear",
+          style: "destructive",
+          onPress: async () => {
+            setShowAfuAiMenu(false);
+            try {
+              const { error } = await supabase.rpc("clear_afuai_chat", { p_chat_id: chatId });
+              if (error) throw error;
+              setMessages([]);
+            } catch (e) {
+              Alert.alert("Error", "Could not clear chat history. Please try again.");
+            }
+          },
+        },
+      ]
+    );
   }
 
   async function handleAfuAiResponse(userText: string, currentMessages: Message[], activeChatId?: string) {
@@ -2794,9 +2821,15 @@ Rules:
             })()}
           </View>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.push("/settings/chat")} style={st.headerAction} hitSlop={8}>
-          <Ionicons name="settings-outline" size={22} color={colors.text} />
-        </TouchableOpacity>
+        {chatInfo?.other_id === AFUAI_BOT_ID ? (
+          <TouchableOpacity onPress={() => setShowAfuAiMenu(true)} style={st.headerAction} hitSlop={8}>
+            <Ionicons name="ellipsis-vertical" size={22} color={colors.text} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity onPress={() => router.push("/settings/chat")} style={st.headerAction} hitSlop={8}>
+            <Ionicons name="settings-outline" size={22} color={colors.text} />
+          </TouchableOpacity>
+        )}
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}>
@@ -3193,6 +3226,28 @@ Rules:
           </View>
         </View>
       </Modal>
+
+      <BottomSheet visible={showAfuAiMenu} onClose={() => setShowAfuAiMenu(false)}>
+        <View style={{ paddingHorizontal: 16, paddingBottom: 8, paddingTop: 4 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+            <Ionicons name="sparkles" size={18} color="#00BCD4" />
+            <Text style={{ fontSize: 16, fontFamily: "Inter_700Bold", color: colors.text }}>AfuAI Options</Text>
+          </View>
+          <TouchableOpacity
+            style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 16 }}
+            activeOpacity={0.7}
+            onPress={clearAfuAiChatHistory}
+          >
+            <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: "#FF3B3018", alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="trash-outline" size={19} color="#FF3B30" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: "#FF3B30" }}>Clear chat history</Text>
+              <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.textMuted, marginTop: 2 }}>Delete all messages and start a new thread</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      </BottomSheet>
 
       <BottomSheet visible={showLangPicker} onClose={() => { setShowLangPicker(false); setTranslateMsg(null); setAiResult(null); setAiResultType(null); }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
