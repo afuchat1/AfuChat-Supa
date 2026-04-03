@@ -264,7 +264,7 @@ export default function WalletScreen() {
 
     all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     setTransactions(all);
-    cacheWallet({ acoin: profile?.acoin ?? 0, nexa: profile?.xp ?? 0, transactions: all });
+    cacheWallet({ acoin: profile?.acoin ?? 0, transactions: all });
     setLoading(false);
     setRefreshing(false);
   }, [user, profile]);

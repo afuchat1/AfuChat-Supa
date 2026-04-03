@@ -194,13 +194,13 @@ export async function removePendingMessage(id: string): Promise<void> {
   } catch {}
 }
 
-export async function cacheWallet(data: { acoin: number; nexa: number; transactions: any[] }): Promise<void> {
+export async function cacheWallet(data: { acoin: number; transactions: any[] }): Promise<void> {
   try {
     await AsyncStorage.setItem(CACHE_KEYS.WALLET, JSON.stringify({ ...data, cachedAt: Date.now() }));
   } catch {}
 }
 
-export async function getCachedWallet(): Promise<{ acoin: number; nexa: number; transactions: any[]; cachedAt: number } | null> {
+export async function getCachedWallet(): Promise<{ acoin: number; transactions: any[]; cachedAt: number } | null> {
   try {
     const raw = await AsyncStorage.getItem(CACHE_KEYS.WALLET);
     return raw ? JSON.parse(raw) : null;

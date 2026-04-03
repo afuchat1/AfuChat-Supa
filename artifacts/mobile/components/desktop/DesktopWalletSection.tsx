@@ -28,7 +28,6 @@ type Transaction = {
 };
 
 type WalletData = {
-  available_balance_ugx: number;
   acoin: number;
 };
 
@@ -118,7 +117,7 @@ export function DesktopWalletSection() {
     const [profileRes, txRes] = await Promise.all([
       supabase
         .from("profiles")
-        .select("acoin, available_balance_ugx")
+        .select("acoin")
         .eq("id", user.id)
         .maybeSingle(),
       supabase
@@ -129,10 +128,7 @@ export function DesktopWalletSection() {
         .limit(40),
     ]);
     if (profileRes.data) {
-      setWallet({
-        acoin: profileRes.data.acoin ?? 0,
-        available_balance_ugx: profileRes.data.available_balance_ugx ?? 0,
-      });
+      setWallet({ acoin: profileRes.data.acoin ?? 0 });
     }
     setTransactions((txRes.data || []).map(mapTx));
     setLoading(false);
@@ -154,31 +150,28 @@ export function DesktopWalletSection() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {/* Balance cards */}
-      <View style={styles.balanceRow}>
-        {/* Nexa balance */}
-        <View style={[styles.balanceCard, { backgroundColor: isDark ? "#161619" : "#ffffff", borderColor: colors.border }]}>
-          <View style={[styles.balanceIconWrap, { backgroundColor: BRAND + "18" }]}>
-            <Ionicons name="wallet" size={24} color={BRAND} />
-          </View>
-          <Text style={[styles.balanceLabel, { color: colors.textMuted }]}>Wallet Balance</Text>
-          <Text style={[styles.balanceAmount, { color: colors.text }]}>
-            {(wallet?.available_balance_ugx || 0).toLocaleString()} UGX
-          </Text>
-          <Text style={[styles.balanceSub, { color: colors.textMuted }]}>Uganda Shillings</Text>
-        </View>
-
-        {/* ACoin balance */}
-        <View style={[styles.balanceCard, { backgroundColor: isDark ? "#161619" : "#ffffff", borderColor: colors.border }]}>
+      {/* ACoin balance card */}
+      <View style={[styles.balanceCard, { backgroundColor: isDark ? "#161619" : "#ffffff", borderColor: colors.border }]}>
+        <View style={styles.balanceCardInner}>
           <View style={[styles.balanceIconWrap, { backgroundColor: GOLD + "18" }]}>
-            <Ionicons name="star" size={24} color={GOLD} />
+            <Ionicons name="star" size={28} color={GOLD} />
           </View>
-          <Text style={[styles.balanceLabel, { color: colors.textMuted }]}>ACoin Balance</Text>
-          <Text style={[styles.balanceAmount, { color: GOLD }]}>
-            {(wallet?.acoin || 0).toLocaleString()} 🪙
-          </Text>
-          <Text style={[styles.balanceSub, { color: colors.textMuted }]}>AfuChat Coins</Text>
+          <View>
+            <Text style={[styles.balanceLabel, { color: colors.textMuted }]}>ACoin Balance</Text>
+            <Text style={[styles.balanceAmount, { color: GOLD }]}>
+              {(wallet?.acoin || 0).toLocaleString()} 🪙
+            </Text>
+            <Text style={[styles.balanceSub, { color: colors.textMuted }]}>AfuChat Coins</Text>
+          </View>
         </View>
+        <TouchableOpacity
+          style={[styles.topUpBtn, { backgroundColor: GOLD }]}
+          onPress={() => router.push("/wallet/topup" as any)}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="add" size={16} color="#fff" />
+          <Text style={styles.topUpBtnText}>Buy ACoin</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Quick actions */}
@@ -220,25 +213,36 @@ export function DesktopWalletSection() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   content: { maxWidth: 860, alignSelf: "center", width: "100%" as any, padding: 28, gap: 20 },
-  balanceRow: { flexDirection: "row", gap: 16 },
   balanceCard: {
-    flex: 1,
     borderRadius: 18,
     padding: 22,
     borderWidth: StyleSheet.hairlineWidth,
-    gap: 6,
+    gap: 16,
+  },
+  balanceCardInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
   },
   balanceIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 56,
+    height: 56,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 8,
   },
   balanceLabel: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  balanceAmount: { fontSize: 28, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
-  balanceSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  balanceAmount: { fontSize: 32, fontFamily: "Inter_700Bold", letterSpacing: -0.5, marginTop: 4 },
+  balanceSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  topUpBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  topUpBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
   section: {
     borderRadius: 18,
     padding: 22,

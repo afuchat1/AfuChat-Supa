@@ -240,7 +240,6 @@ export default function MonetizeScreen() {
 
   const activeFeatures = Object.values(settings).filter((s) => s.enabled).length;
   const acoinBalance = profile?.acoin || 0;
-  const availableUGX = profile?.available_balance_ugx || 0;
   const categories = Array.from(new Set(MONETIZE_FEATURES.map((f) => f.category)));
   const hasEarnings = Object.keys(earningsByFeature).length > 0;
 
@@ -258,8 +257,7 @@ export default function MonetizeScreen() {
           <View style={styles.heroTop}>
             <View>
               <Text style={styles.heroLabel}>Total ACoin Earned</Text>
-              <Text style={styles.heroValue}>{formatAcoin(totalEarned)}</Text>
-              <Text style={styles.heroUGX}>{formatUGX(totalEarned * ACOIN_TO_UGX)}</Text>
+              <Text style={styles.heroValue}>{formatAcoin(totalEarned)} 🪙</Text>
             </View>
             <View style={styles.heroCoin}>
               <Text style={{ fontSize: 40 }}>🪙</Text>
@@ -282,20 +280,6 @@ export default function MonetizeScreen() {
           </View>
         </LinearGradient>
 
-        {availableUGX > 0 && (
-          <View style={[styles.withdrawCard, { backgroundColor: colors.surface, borderColor: colors.accent + "44" }]}>
-            <View style={[styles.withdrawIconWrap, { backgroundColor: colors.accent + "18" }]}>
-              <Ionicons name="wallet-outline" size={22} color={colors.accent} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.withdrawTitle, { color: colors.text }]}>Available to Withdraw</Text>
-              <Text style={[styles.withdrawAmount, { color: colors.accent }]}>{formatUGX(availableUGX)}</Text>
-            </View>
-            <TouchableOpacity style={[styles.withdrawBtn, { backgroundColor: colors.accent }]} onPress={() => router.push("/wallet" as any)}>
-              <Text style={styles.withdrawBtnText}>Withdraw</Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Earnings Breakdown</Text>
@@ -309,7 +293,6 @@ export default function MonetizeScreen() {
                   <Text style={[styles.earningLabel, { color: colors.text, flex: 1 }]}>{f.title}</Text>
                   <View>
                     <Text style={[styles.earningAcoin, { color: GOLD }]}>+{formatAcoin(earningsByFeature[f.id])} 🪙</Text>
-                    <Text style={[styles.earningUGX, { color: colors.textMuted }]}>{formatUGX(earningsByFeature[f.id] * ACOIN_TO_UGX)}</Text>
                   </View>
                 </View>
               ))}
@@ -321,7 +304,6 @@ export default function MonetizeScreen() {
                   <Text style={[styles.earningLabel, { color: colors.text, flex: 1 }]}>Post Engagement</Text>
                   <View>
                     <Text style={[styles.earningAcoin, { color: GOLD }]}>+{formatAcoin(earningsByFeature["post_engagement"])} 🪙</Text>
-                    <Text style={[styles.earningUGX, { color: colors.textMuted }]}>{formatUGX(earningsByFeature["post_engagement"] * ACOIN_TO_UGX)}</Text>
                   </View>
                 </View>
               )}
@@ -387,7 +369,7 @@ export default function MonetizeScreen() {
         <View style={[styles.infoBanner, { backgroundColor: colors.accent + "14" }]}>
           <Ionicons name="information-circle-outline" size={16} color={colors.accent} />
           <Text style={[styles.infoBannerText, { color: colors.accent }]}>
-            {activeFeatures} of {MONETIZE_FEATURES.length} features active · Payments are in ACoin (1 ACoin = UGX {ACOIN_TO_UGX})
+            {activeFeatures} of {MONETIZE_FEATURES.length} features active · Earnings paid out in ACoin
           </Text>
         </View>
 
@@ -593,9 +575,6 @@ export default function MonetizeScreen() {
                       <Ionicons name="add-circle-outline" size={28} color={feature.color} />
                     </TouchableOpacity>
                   </View>
-                  <Text style={[styles.priceHint, { color: colors.textMuted }]}>
-                    = {formatUGX((parseInt(editPrice) || 0) * ACOIN_TO_UGX)} per interaction
-                  </Text>
 
                   <View style={[styles.enableRow, { borderColor: colors.border }]}>
                     <View>
@@ -645,7 +624,6 @@ const styles = StyleSheet.create({
   heroTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   heroLabel: { fontSize: 12, fontFamily: "Inter_500Medium", color: "rgba(255,255,255,0.5)", marginBottom: 4 },
   heroValue: { fontSize: 36, fontFamily: "Inter_700Bold", color: GOLD },
-  heroUGX: { fontSize: 13, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.5)", marginTop: 2 },
   heroCoin: { alignItems: "center", justifyContent: "center" },
   heroStats: { flexDirection: "row", borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "rgba(255,255,255,0.1)", paddingTop: 14, gap: 0 },
   heroStat: { flex: 1, alignItems: "center" },
@@ -663,7 +641,6 @@ const styles = StyleSheet.create({
   earningIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   earningLabel: { fontSize: 14, fontFamily: "Inter_500Medium" },
   earningAcoin: { fontSize: 14, fontFamily: "Inter_700Bold", textAlign: "right" },
-  earningUGX: { fontSize: 11, fontFamily: "Inter_400Regular", textAlign: "right", marginTop: 1 },
   engagementRow: { flexDirection: "row", borderRadius: 14, padding: 16, marginBottom: 6 },
   engItem: { flex: 1, alignItems: "center", gap: 4 },
   engVal: { fontSize: 18, fontFamily: "Inter_700Bold" },
