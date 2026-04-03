@@ -14,6 +14,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { supabase, supabaseUrl as SUPA_URL, supabaseAnonKey as SUPA_KEY } from "@/lib/supabase";
 import { AFUAI_BOT_ID } from "@/lib/afuAiBot";
+import { uploadChatMedia } from "@/lib/mediaUpload";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
@@ -85,6 +86,8 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [isAfuAiTyping, setIsAfuAiTyping] = useState(false);
+  const [attachPreview, setAttachPreview] = useState<{ uri: string; type: string; name: string } | null>(null);
+  const [uploadingAttach, setUploadingAttach] = useState(false);
   const flatRef = useRef<FlatList>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -325,6 +328,85 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
     }
   }
 
+  function pickFile() {
+    if (Platform.OS !== "web") return;
+    const input = (document as any).createElement("input");
+    input.type = "file";
+    input.accept = "image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx";
+    input.onchange = (e: any) => {
+      const file = e.target?.files?.[0];
+      if (!file) return;
+      const uri = URL.createObjectURL(file);
+      const type = file.type.startsWith("image/") ? "image"
+        : file.type.startsWith("video/") ? "video"
+        : "file";
+      setAttachPreview({ uri, type, name: file.name });
+    };
+    input.click();
+  }
+
+  async function sendAttachment() {
+    if (!user || !attachPreview || uploadingAttach) return;
+    setUploadingAttach(true);
+    const now = new Date().toISOString();
+    const label = attachPreview.type === "image" ? "📷 Photo"
+      : attachPreview.type === "video" ? "🎥 Video"
+      : `📎 ${attachPreview.name}`;
+
+    const optimisticMsg: Message = {
+      id: `attach_${Date.now()}`,
+      sender_id: user.id,
+      encrypted_content: label,
+      sent_at: now,
+      attachment_type: attachPreview.type,
+      attachment_url: attachPreview.uri,
+      sender: null,
+    };
+    setMessages((prev) => [...prev, optimisticMsg]);
+    setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 60);
+
+    const { publicUrl, error: uploadErr } = await uploadChatMedia(
+      "chat-attachments",
+      chatId,
+      user.id,
+      attachPreview.uri,
+      attachPreview.name,
+    );
+
+    setAttachPreview(null);
+
+    if (uploadErr || !publicUrl) {
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+      setUploadingAttach(false);
+      return;
+    }
+
+    const { error: insertErr, data: inserted } = await supabase
+      .from("messages")
+      .insert({
+        chat_id: chatId,
+        sender_id: user.id,
+        encrypted_content: label,
+        attachment_url: publicUrl,
+        attachment_type: attachPreview.type,
+        sent_at: now,
+      })
+      .select("id")
+      .single();
+
+    if (!insertErr && inserted) {
+      setMessages((prev) =>
+        prev.map((m) => m.id === optimisticMsg.id ? { ...m, id: inserted.id, attachment_url: publicUrl } : m)
+      );
+      await Promise.all([
+        supabase.from("chats").update({ updated_at: now }).eq("id", chatId),
+        supabase.from("profiles").update({ last_seen: now }).eq("id", user.id),
+      ]);
+    }
+
+    setUploadingAttach(false);
+  }
+
   async function sendMessage() {
     if (!text.trim() || !user || sending) return;
     setSending(true);
@@ -553,11 +635,48 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
       )}
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        {attachPreview && (
+          <View style={[st.attachStrip, { backgroundColor: c.inputBar, borderTopColor: c.border }]}>
+            <View style={st.attachPreviewInner}>
+              {attachPreview.type === "image" ? (
+                <Image source={{ uri: attachPreview.uri }} style={st.attachThumb} resizeMode="cover" />
+              ) : (
+                <View style={[st.attachFileIcon, { backgroundColor: BRAND + "22" }]}>
+                  <Ionicons
+                    name={attachPreview.type === "video" ? "videocam-outline" : "document-outline"}
+                    size={20}
+                    color={BRAND}
+                  />
+                </View>
+              )}
+              <Text style={[st.attachName, { color: c.text }]} numberOfLines={1}>
+                {attachPreview.type === "image" ? "Photo" : attachPreview.name}
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <TouchableOpacity
+                style={[st.attachSendBtn, { backgroundColor: BRAND }]}
+                onPress={sendAttachment}
+                disabled={uploadingAttach}
+                activeOpacity={0.8}
+              >
+                {uploadingAttach ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Ionicons name="send" size={16} color="#fff" />
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setAttachPreview(null)} hitSlop={10} disabled={uploadingAttach}>
+                <Ionicons name="close-circle" size={22} color={c.muted} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
         <View style={[st.inputBar, { backgroundColor: c.inputBar, borderTopColor: c.border }]}>
           <TouchableOpacity style={st.inputAction} hitSlop={8}>
             <Ionicons name="happy-outline" size={24} color={c.muted} />
           </TouchableOpacity>
-          <TouchableOpacity style={st.inputAction} hitSlop={8}>
+          <TouchableOpacity style={st.inputAction} hitSlop={8} onPress={pickFile}>
             <Ionicons name="attach-outline" size={24} color={c.muted} />
           </TouchableOpacity>
           <View style={[st.inputPill, { backgroundColor: c.inputPill }]}>
@@ -709,6 +828,49 @@ const st = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  attachStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 10,
+  },
+  attachPreviewInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
+  },
+  attachThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    flexShrink: 0,
+  },
+  attachFileIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  attachName: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    flex: 1,
+  },
+  attachSendBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },

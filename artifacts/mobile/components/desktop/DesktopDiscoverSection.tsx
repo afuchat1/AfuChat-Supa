@@ -34,6 +34,9 @@ type Post = {
   content: string;
   image_url: string | null;
   images: string[];
+  post_type: string | null;
+  video_url: string | null;
+  article_title: string | null;
   created_at: string;
   view_count: number;
   like_count: number;
@@ -299,8 +302,63 @@ function PostCard({
           </RichText>
         )}
 
-        {/* Images */}
-        {allImages.length > 0 && (
+        {/* Article card */}
+        {post.post_type === "article" && post.article_title && (
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={(e) => { e.stopPropagation?.(); onOpen(post.id); }}
+            style={[styles.articleCard, { borderColor: colors.border }]}
+          >
+            <View style={styles.articleBadgeRow}>
+              <Ionicons name="document-text-outline" size={12} color={BRAND} />
+              <Text style={[styles.articleBadgeText, { color: BRAND }]}>ARTICLE</Text>
+            </View>
+            <Text style={[styles.articleTitle, { color: colors.text }]} numberOfLines={2}>
+              {post.article_title}
+            </Text>
+            {(post.content || "").trim().length > 0 && (
+              <Text style={[styles.articleExcerpt, { color: colors.textMuted }]} numberOfLines={2}>
+                {post.content}
+              </Text>
+            )}
+            {allImages.length > 0 && (
+              <Image
+                source={{ uri: allImages[0] }}
+                style={styles.articleThumb}
+                resizeMode="cover"
+              />
+            )}
+          </TouchableOpacity>
+        )}
+
+        {/* Video post */}
+        {post.post_type === "video" && (
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={(e) => { e.stopPropagation?.(); onOpen(post.id); }}
+            style={[styles.videoCard, { width: imgAreaW, height: Math.round(imgAreaW * 0.56) }]}
+          >
+            {post.image_url ? (
+              <Image source={{ uri: post.image_url }} style={styles.videoThumb} resizeMode="cover" />
+            ) : (
+              <View style={[styles.videoThumb, { backgroundColor: "#000" }]} />
+            )}
+            <View style={styles.videoOverlay}>
+              <View style={styles.playBtn}>
+                <Ionicons name="play" size={26} color="#fff" />
+              </View>
+              {Platform.OS === "web" && (
+                <View style={styles.appOnlyBadge}>
+                  <Ionicons name="phone-portrait-outline" size={11} color="#fff" />
+                  <Text style={styles.appOnlyText}>App only</Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* Images (regular posts) */}
+        {post.post_type !== "video" && post.post_type !== "article" && allImages.length > 0 && (
           <View style={[styles.images, allImages.length > 1 && { flexDirection: "row", gap: 2 }]}>
             {allImages.slice(0, 4).map((uri, i) => (
               <TouchableOpacity
@@ -405,6 +463,9 @@ function mapRaw(raw: any[], likeMap: Record<string, number>, replyMap: Record<st
     content: p.content || "",
     image_url: p.image_url,
     images: (p.post_images || []).sort((a: any, b: any) => a.display_order - b.display_order).map((i: any) => i.image_url),
+    post_type: p.post_type || null,
+    video_url: p.video_url || null,
+    article_title: p.article_title || null,
     created_at: p.created_at,
     view_count: p.view_count || 0,
     like_count: likeMap[p.id] || 0,
@@ -440,7 +501,7 @@ export function DesktopDiscoverSection() {
   const loadForYou = useCallback(async () => {
     const { data, error } = await supabase
       .from("posts")
-      .select(`id, author_id, content, image_url, created_at, view_count,
+      .select(`id, author_id, content, image_url, post_type, video_url, article_title, created_at, view_count,
                profiles!posts_author_id_fkey(id, display_name, handle, avatar_url, is_verified, is_organization_verified),
                post_images(image_url, display_order)`)
       .eq("is_blocked", false)
@@ -462,7 +523,7 @@ export function DesktopDiscoverSection() {
 
     const { data, error } = await supabase
       .from("posts")
-      .select(`id, author_id, content, image_url, created_at, view_count,
+      .select(`id, author_id, content, image_url, post_type, video_url, article_title, created_at, view_count,
                profiles!posts_author_id_fkey(id, display_name, handle, avatar_url, is_verified, is_organization_verified),
                post_images(image_url, display_order)`)
       .eq("is_blocked", false)
@@ -773,4 +834,85 @@ const styles = StyleSheet.create({
   emptySub: { fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22 },
   findPeopleBtn: { paddingHorizontal: 24, paddingVertical: 13, borderRadius: 24, marginTop: 8 },
   findPeopleBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
+
+  articleCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    gap: 6,
+    overflow: "hidden",
+  },
+  articleBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 2,
+  },
+  articleBadgeText: {
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 0.5,
+  },
+  articleTitle: {
+    fontSize: 16,
+    fontFamily: "Inter_700Bold",
+    lineHeight: 22,
+  },
+  articleExcerpt: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 18,
+  },
+  articleThumb: {
+    width: "100%" as any,
+    height: 140,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+
+  videoCard: {
+    borderRadius: 12,
+    overflow: "hidden",
+    marginBottom: 10,
+    position: "relative",
+  },
+  videoThumb: {
+    width: "100%" as any,
+    height: "100%" as any,
+    position: "absolute",
+    top: 0,
+    left: 0,
+  },
+  videoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  playBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  appOnlyBadge: {
+    position: "absolute",
+    bottom: 10,
+    right: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  appOnlyText: {
+    color: "#fff",
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+  },
 });
