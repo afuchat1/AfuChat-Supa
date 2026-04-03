@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseUrl, supabaseAnonKey } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
@@ -81,11 +81,32 @@ export default function TopUpScreen() {
     Haptics.selectionAsync();
 
     try {
-      const { data, error: fnErr } = await supabase.functions.invoke("pesapal-initiate", {
-        body: { acoin_amount: amount, currency: "USD" },
-      });
+      let data: any;
 
-      if (fnErr) throw new Error(fnErr.message || "Failed to start payment. Please try again.");
+      if (Platform.OS === "web") {
+        // Web: use SDK invoke — it handles CORS headers correctly
+        const { data: invoked, error: fnErr } = await supabase.functions.invoke("pesapal-initiate", {
+          body: { acoin_amount: amount, currency: "USD" },
+        });
+        if (fnErr) throw new Error(fnErr.message || "Failed to start payment. Please try again.");
+        data = invoked;
+      } else {
+        // Native Android/iOS: raw fetch — no CORS, simpler and more reliable
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error("Session expired. Please sign in again.");
+        const res = await fetch(`${supabaseUrl}/functions/v1/pesapal-initiate`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session.access_token}`,
+            "apikey": supabaseAnonKey,
+          },
+          body: JSON.stringify({ acoin_amount: amount, currency: "USD" }),
+        });
+        data = await res.json();
+        if (!res.ok) throw new Error(data?.error || `Payment service error (${res.status})`);
+      }
+
       if (!data?.redirect_url) {
         throw new Error(data?.error || "No payment URL returned. Please try again.");
       }
