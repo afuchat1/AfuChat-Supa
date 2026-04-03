@@ -1160,12 +1160,14 @@ export default function ChatScreen() {
     .onEnd(() => {
       recPressActiveSV.value = false;
       directionLock.value = "none";
-      slideX.value = withSpring(0, SPRING_SNAP);
-      slideY.value = withSpring(0, SPRING_SNAP);
-      micScale.value = withSpring(1, SPRING_CONFIG);
-      recBarOpacity.value = withTiming(0, { duration: 150 });
-      cancelProgress.value = withTiming(0, { duration: 150 });
-      lockProgress.value = withTiming(0, { duration: 150 });
+      if (!recLockedSV.value) {
+        slideX.value = withSpring(0, SPRING_SNAP);
+        slideY.value = withSpring(0, SPRING_SNAP);
+        micScale.value = withSpring(1, SPRING_CONFIG);
+        recBarOpacity.value = withTiming(0, { duration: 150 });
+        cancelProgress.value = withTiming(0, { duration: 150 });
+        lockProgress.value = withTiming(0, { duration: 150 });
+      }
       if (recCancelledSV.value || recLockedSV.value) return;
       if (recStartedSV.value) {
         runOnJS(onRecSend)();
@@ -2484,7 +2486,7 @@ STRICT RULES:
   }
 
   async function startVoiceRecordingHold() {
-    if (recordingRef.current || isRecording) return;
+    if (recordingRef.current) return;
     const safetyTimer = setTimeout(() => {
       if (!recStartedSV.value && recPressActiveSV.value) {
         recPressActiveSV.value = false;
@@ -2497,36 +2499,21 @@ STRICT RULES:
     try {
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== "granted") {
-        showAlert("Permission needed", "Microphone access is required to record voice messages.");
+        clearTimeout(safetyTimer);
+        recPressActiveSV.value = false;
+        showAlert("Microphone permission needed", "Go to Settings and allow AfuChat to access your microphone.");
         return;
       }
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        staysActiveInBackground: false,
       });
-      const { recording } = await Audio.Recording.createAsync(
-        Platform.OS === "ios"
-          ? {
-              isMeteringEnabled: true,
-              ios: {
-                extension: ".wav",
-                outputFormat: Audio.IOSOutputFormat.LINEARPCM,
-                audioQuality: Audio.IOSAudioQuality.MEDIUM,
-                sampleRate: 16000,
-                numberOfChannels: 1,
-                bitRate: 128000,
-                linearPCMBitDepth: 16,
-                linearPCMIsBigEndian: false,
-                linearPCMIsFloat: false,
-              },
-              android: Audio.RecordingOptionsPresets.HIGH_QUALITY.android,
-              web: Audio.RecordingOptionsPresets.HIGH_QUALITY.web,
-            }
-          : {
-              ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
-              isMeteringEnabled: true,
-            },
-      );
+      const { recording } = await Audio.Recording.createAsync({
+        ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
+        isMeteringEnabled: true,
+      });
       recordingRef.current = recording;
       recStartedSV.value = true;
       clearTimeout(safetyTimer);
@@ -2568,7 +2555,7 @@ STRICT RULES:
           const s = await recordingRef.current.getStatusAsync();
           if (s.isRecording && s.metering !== undefined) {
             const db = s.metering;
-            const normalized = Math.max(0, Math.min(1, (db + 160) / 160));
+            const normalized = Math.max(0.05, Math.min(1, (db + 60) / 55));
             setWaveformLevels((prev) => {
               const next = [...prev, normalized];
               return next.length > 40 ? next.slice(-40) : next;
@@ -2591,6 +2578,7 @@ STRICT RULES:
 
   async function stopVoiceRecording() {
     if (!recordingRef.current) return;
+    const capturedDuration = recordingDuration;
     clearInterval(recordingTimer.current);
     clearInterval(meterInterval.current);
     pulseAnim.stopAnimation();
@@ -2612,6 +2600,15 @@ STRICT RULES:
     lockProgress.value = withTiming(0, { duration: 150 });
     directionLock.value = "none";
 
+    if (capturedDuration < 1) {
+      try {
+        await recordingRef.current.stopAndUnloadAsync();
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      } catch (_) {}
+      recordingRef.current = null;
+      return;
+    }
+
     try {
       await recordingRef.current.stopAndUnloadAsync();
       const uri = recordingRef.current.getURI();
@@ -2624,7 +2621,7 @@ STRICT RULES:
       if (!activeChatId) return;
 
       setSending(true);
-      const ext = Platform.OS === "web" ? "webm" : Platform.OS === "ios" ? "wav" : "m4a";
+      const ext = Platform.OS === "web" ? "webm" : "m4a";
       const { publicUrl, error: uploadErr } = await uploadChatMedia(
         "voice-messages",
         activeChatId,
