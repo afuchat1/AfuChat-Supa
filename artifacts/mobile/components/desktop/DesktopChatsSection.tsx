@@ -151,13 +151,11 @@ function ChatRow({
             >
               {displayName || "Chat"}
             </Text>
-            {!item.is_group && !item.is_channel && (
-              <VerifiedBadge
-                isVerified={item.is_verified}
-                isOrganizationVerified={item.is_organization_verified}
-                size={12}
-              />
-            )}
+            <VerifiedBadge
+              isVerified={item.is_verified}
+              isOrganizationVerified={item.is_organization_verified}
+              size={12}
+            />
           </View>
           <Text style={[st.chatTime, { color: hasUnread ? wa.brand : wa.muted }]}>
             {item.last_message_at ? formatTime(item.last_message_at) : ""}

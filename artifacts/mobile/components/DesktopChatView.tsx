@@ -12,7 +12,8 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseUrl as SUPA_URL, supabaseAnonKey as SUPA_KEY } from "@/lib/supabase";
+import { AFUAI_BOT_ID } from "@/lib/afuAiBot";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
@@ -83,6 +84,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
   const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [isAfuAiTyping, setIsAfuAiTyping] = useState(false);
   const flatRef = useRef<FlatList>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -101,6 +103,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
         border: "#1e2d38",
         datePill: "rgba(13,17,23,0.88)",
         datePillText: "#8a9ba8",
+        typing: "#1c2b34",
       }
     : {
         bg: "#f2f8fa",
@@ -116,20 +119,17 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
         border: "#dce8ec",
         datePill: "rgba(255,255,255,0.9)",
         datePillText: "#667781",
+        typing: "#e8f5e9",
       };
 
   const updateMyLastSeen = useCallback(async () => {
     if (!user) return;
-    await supabase
-      .from("profiles")
-      .update({ last_seen: new Date().toISOString() })
-      .eq("id", user.id);
+    await supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("id", user.id);
   }, [user]);
 
   const loadChat = useCallback(async () => {
     if (!user) return;
     setError(null);
-
     try {
       const [chatRes, msgRes] = await Promise.all([
         supabase
@@ -172,21 +172,19 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
       }
 
       const rawMessages: Message[] = (msgRes.data || []).reverse();
-
       if (rawMessages.length > 0) {
         const senderIds = [...new Set(rawMessages.map((m) => m.sender_id))];
         const { data: profiles } = await supabase
           .from("profiles")
           .select("id, display_name, avatar_url, is_verified")
           .in("id", senderIds);
-
         const profileMap: Record<string, any> = {};
         for (const p of profiles || []) profileMap[p.id] = p;
         setMessages(rawMessages.map((m) => ({ ...m, sender: profileMap[m.sender_id] || null })));
       } else {
         setMessages([]);
       }
-    } catch (err) {
+    } catch {
       setError("Could not load messages. Tap to retry.");
     } finally {
       setLoading(false);
@@ -196,11 +194,8 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
   useEffect(() => {
     loadChat();
     updateMyLastSeen();
-
     heartbeatRef.current = setInterval(updateMyLastSeen, 30_000);
-    return () => {
-      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
-    };
+    return () => { if (heartbeatRef.current) clearInterval(heartbeatRef.current); };
   }, [loadChat, updateMyLastSeen]);
 
   useEffect(() => {
@@ -212,6 +207,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
         { event: "INSERT", schema: "public", table: "messages", filter: `chat_id=eq.${chatId}` },
         async (payload) => {
           const msg = payload.new as Message;
+          if (msg.sender_id === AFUAI_BOT_ID) return;
           const { data: profile } = await supabase
             .from("profiles")
             .select("id, display_name, avatar_url, is_verified")
@@ -235,10 +231,13 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
         { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${otherId}` },
         (payload) => {
           const updated: any = payload.new;
-          const showPresence = updated?.show_online_status !== false;
           setChatInfo((prev) =>
             prev
-              ? { ...prev, other_last_seen: showPresence ? (updated?.last_seen || null) : null }
+              ? {
+                  ...prev,
+                  other_last_seen:
+                    updated?.show_online_status !== false ? (updated?.last_seen || null) : null,
+                }
               : prev
           );
         }
@@ -253,37 +252,138 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
     }
   }, [messages.length]);
 
+  async function handleAfuAiReply(userText: string, currentMessages: Message[]) {
+    setIsAfuAiTyping(true);
+    setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
+    try {
+      const recent = currentMessages
+        .filter((m) => m.encrypted_content)
+        .slice(-12)
+        .map((m) => ({
+          role: m.sender_id === user?.id ? ("user" as const) : ("assistant" as const),
+          content: m.encrypted_content,
+        }));
+      recent.push({ role: "user", content: userText });
+
+      const res = await fetch(`${SUPA_URL}/functions/v1/ai-chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${SUPA_KEY}`,
+          apikey: SUPA_KEY || "",
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are AfuAI, a friendly and capable AI assistant built into AfuChat — a social super app from Uganda. Help with anything: questions, writing, analysis, coding, creative tasks, advice, translations, and more. Respond in the same language the user writes in. Keep replies conversational and appropriately concise for a chat. Never mention being built by another company — you are AfuAI.",
+            },
+            ...recent,
+          ],
+        }),
+      });
+
+      const data = await res.json();
+      const reply = (data.reply || "Sorry, I couldn't respond right now. Please try again.").trim();
+      const sentAt = new Date().toISOString();
+
+      let savedId: string | null = null;
+      try {
+        const { data: rpcId } = await supabase.rpc("insert_afuai_message", {
+          p_chat_id: chatId,
+          p_content: reply,
+        });
+        if (typeof rpcId === "string") savedId = rpcId;
+      } catch (_) {}
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: savedId || `afuai_${Date.now()}`,
+          sender_id: AFUAI_BOT_ID,
+          encrypted_content: reply,
+          sent_at: sentAt,
+          sender: { id: AFUAI_BOT_ID, display_name: "AfuAI", avatar_url: null },
+        },
+      ]);
+      setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `afuai_err_${Date.now()}`,
+          sender_id: AFUAI_BOT_ID,
+          encrypted_content: "Sorry, I couldn't respond right now. Please try again.",
+          sent_at: new Date().toISOString(),
+          sender: { id: AFUAI_BOT_ID, display_name: "AfuAI", avatar_url: null },
+        },
+      ]);
+    } finally {
+      setIsAfuAiTyping(false);
+    }
+  }
+
   async function sendMessage() {
     if (!text.trim() || !user || sending) return;
     setSending(true);
     const content = text.trim();
     setText("");
     const now = new Date().toISOString();
-    const { error: insertErr } = await supabase.from("messages").insert({
-      chat_id: chatId,
+
+    const optimisticMsg: Message = {
+      id: `msg_${Date.now()}`,
       sender_id: user.id,
       encrypted_content: content,
       sent_at: now,
-    });
-    if (!insertErr) {
+      sender: null,
+    };
+    const snapshot = [...messages, optimisticMsg];
+    setMessages(snapshot);
+    setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 60);
+
+    const isAfuAiChat = chatInfo?.other_id === AFUAI_BOT_ID;
+
+    const { error: insertErr, data: inserted } = await supabase
+      .from("messages")
+      .insert({ chat_id: chatId, sender_id: user.id, encrypted_content: content, sent_at: now })
+      .select("id")
+      .single();
+
+    if (!insertErr && inserted) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === optimisticMsg.id ? { ...m, id: inserted.id } : m))
+      );
       await Promise.all([
         supabase.from("chats").update({ updated_at: now }).eq("id", chatId),
         supabase.from("profiles").update({ last_seen: now }).eq("id", user.id),
       ]);
     }
+
     setSending(false);
+
+    if (isAfuAiChat) {
+      handleAfuAiReply(content, snapshot);
+    }
   }
 
   const displayName = chatInfo
-    ? chatInfo.is_group || chatInfo.is_channel ? chatInfo.name : chatInfo.other_display_name
+    ? chatInfo.is_group || chatInfo.is_channel
+      ? chatInfo.name
+      : chatInfo.other_display_name
     : null;
   const avatarUri = chatInfo
-    ? chatInfo.is_group || chatInfo.is_channel ? chatInfo.avatar_url : chatInfo.other_avatar
+    ? chatInfo.is_group || chatInfo.is_channel
+      ? chatInfo.avatar_url
+      : chatInfo.other_avatar
     : null;
-
-  const presenceInfo = !chatInfo?.is_group && !chatInfo?.is_channel
-    ? formatLastSeen(chatInfo?.other_last_seen)
-    : null;
+  const isAfuAiChat = chatInfo?.other_id === AFUAI_BOT_ID;
+  const presenceInfo =
+    !chatInfo?.is_group && !chatInfo?.is_channel
+      ? isAfuAiChat
+        ? { text: "AI Assistant · Always active", isOnline: true }
+        : formatLastSeen(chatInfo?.other_last_seen)
+      : null;
 
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
     const isMe = item.sender_id === user?.id;
@@ -333,24 +433,13 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
               </Text>
             )}
             {item.attachment_type === "image" && item.attachment_url ? (
-              <Image
-                source={{ uri: item.attachment_url }}
-                style={st.msgImage}
-                resizeMode="cover"
-              />
+              <Image source={{ uri: item.attachment_url }} style={st.msgImage} resizeMode="cover" />
             ) : (
               <View style={st.msgBody}>
-                <Text
-                  style={[st.msgText, { color: isMe ? c.bubbleOutText : c.bubbleInText }]}
-                >
+                <Text style={[st.msgText, { color: isMe ? c.bubbleOutText : c.bubbleInText }]}>
                   {item.encrypted_content}
                 </Text>
-                <Text
-                  style={[
-                    st.msgMeta,
-                    { color: isMe ? "rgba(233,237,239,0.65)" : c.muted },
-                  ]}
-                >
+                <Text style={[st.msgMeta, { color: isMe ? "rgba(233,237,239,0.65)" : c.muted }]}>
                   {formatTime(item.sent_at)}
                   {isMe ? "  ✓✓" : ""}
                 </Text>
@@ -370,12 +459,17 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
         </TouchableOpacity>
 
         <View style={{ position: "relative" }}>
-          <View style={[st.avatarRing, { borderColor: presenceInfo?.isOnline ? ONLINE_GREEN : "transparent" }]}>
+          <View
+            style={[
+              st.avatarRing,
+              {
+                borderColor: presenceInfo?.isOnline ? ONLINE_GREEN : "transparent",
+              },
+            ]}
+          >
             <Avatar uri={avatarUri} name={displayName || "Chat"} size={36} />
           </View>
-          {presenceInfo?.isOnline && (
-            <View style={st.onlineDot} />
-          )}
+          {presenceInfo?.isOnline && <View style={st.onlineDot} />}
         </View>
 
         <View style={{ flex: 1, minWidth: 0 }}>
@@ -396,12 +490,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
           ) : chatInfo?.is_channel ? (
             <Text style={[st.headerSub, { color: c.muted }]}>Channel</Text>
           ) : presenceInfo ? (
-            <Text
-              style={[
-                st.headerSub,
-                { color: presenceInfo.isOnline ? ONLINE_GREEN : BRAND },
-              ]}
-            >
+            <Text style={[st.headerSub, { color: presenceInfo.isOnline ? ONLINE_GREEN : BRAND }]}>
               {presenceInfo.text}
             </Text>
           ) : null}
@@ -449,6 +538,22 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
               </Text>
             </View>
           }
+          ListFooterComponent={
+            isAfuAiTyping ? (
+              <View style={[st.msgRow, st.msgRowOther, { marginTop: 6 }]}>
+                <View style={st.avatarCol}>
+                  <Avatar uri={null} name="AfuAI" size={30} />
+                </View>
+                <View style={[st.bubble, st.bubbleOtherTail, { backgroundColor: c.bubbleIn }]}>
+                  <View style={st.typingDots}>
+                    <View style={[st.dot, { backgroundColor: c.muted }]} />
+                    <View style={[st.dot, { backgroundColor: c.muted }]} />
+                    <View style={[st.dot, { backgroundColor: c.muted }]} />
+                  </View>
+                </View>
+              </View>
+            ) : null
+          }
         />
       )}
 
@@ -463,7 +568,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
           <View style={[st.inputPill, { backgroundColor: c.inputPill }]}>
             <TextInput
               style={[st.input, { color: c.text }]}
-              placeholder="Message…"
+              placeholder={isAfuAiChat ? "Ask AfuAI anything…" : "Message…"}
               placeholderTextColor={c.muted}
               value={text}
               onChangeText={setText}
@@ -476,10 +581,10 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
           <TouchableOpacity
             style={[st.sendBtn, { backgroundColor: text.trim() ? BRAND : c.inputPill }]}
             onPress={sendMessage}
-            disabled={!text.trim() || sending}
+            disabled={(!text.trim() || sending) && !isAfuAiTyping}
             activeOpacity={0.8}
           >
-            {sending ? (
+            {sending || isAfuAiTyping ? (
               <ActivityIndicator color={text.trim() ? "#fff" : c.muted} size="small" />
             ) : (
               <Ionicons
@@ -507,11 +612,7 @@ const st = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   backBtn: { paddingHorizontal: 2 },
-  avatarRing: {
-    borderRadius: 22,
-    borderWidth: 2,
-    padding: 1,
-  },
+  avatarRing: { borderRadius: 22, borderWidth: 2, padding: 1 },
   onlineDot: {
     position: "absolute",
     bottom: 1,
@@ -579,20 +680,11 @@ const st = StyleSheet.create({
     marginLeft: "auto" as any,
   },
 
-  emptyState: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: 60,
-    gap: 12,
-  },
-  emptyIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  typingDots: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4, paddingHorizontal: 2 },
+  dot: { width: 7, height: 7, borderRadius: 4, opacity: 0.7 },
+
+  emptyState: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 60, gap: 12 },
+  emptyIconWrap: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
   emptyTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold", textAlign: "center" },
   emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
 
