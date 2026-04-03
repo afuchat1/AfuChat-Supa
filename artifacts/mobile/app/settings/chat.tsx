@@ -25,6 +25,7 @@ import {
   BubbleStyle,
   MediaQuality,
 } from "@/context/ChatPreferencesContext";
+import { useAppAccent } from "@/context/AppAccentContext";
 
 const THEMES: { name: ChatTheme; hex: string }[] = [
   { name: "Teal",    hex: "#00BCD4" },
@@ -49,8 +50,13 @@ export default function ChatSettingsScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const { prefs, loading, updatePref } = useChatPreferences();
+  const { setAppTheme } = useAppAccent();
   const [clearing, setClearing] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
+
+  useEffect(() => {
+    if (!loading && prefs.chat_theme) setAppTheme(prefs.chat_theme);
+  }, [loading, prefs.chat_theme]);
 
   const themeAccent = CHAT_THEME_COLORS[prefs.chat_theme]?.accent || colors.accent;
 
@@ -201,7 +207,7 @@ export default function ChatSettingsScreen() {
           {THEMES.map((t) => (
             <TouchableOpacity
               key={t.name}
-              onPress={() => updatePref("chat_theme", t.name)}
+              onPress={() => { updatePref("chat_theme", t.name); setAppTheme(t.name); }}
               style={[styles.themeCircle, { backgroundColor: t.hex }, prefs.chat_theme === t.name && styles.themeCircleActive]}
               activeOpacity={0.8}
             >

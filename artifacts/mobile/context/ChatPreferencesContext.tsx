@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+
+const APP_ACCENT_KEY = "app_color_theme";
 
 export type ChatTheme = "Teal" | "Blue" | "Purple" | "Rose" | "Amber" | "Emerald";
 export type BubbleStyle = "Rounded" | "Sharp" | "Minimal";
@@ -87,6 +90,7 @@ export function ChatPreferencesProvider({ children }: { children: React.ReactNod
       .maybeSingle();
     if (data) {
       setPrefs({ ...defaults, ...data });
+      if (data.chat_theme) AsyncStorage.setItem(APP_ACCENT_KEY, data.chat_theme);
     }
     setLoading(false);
   }, [user]);
@@ -95,6 +99,7 @@ export function ChatPreferencesProvider({ children }: { children: React.ReactNod
 
   const updatePref = useCallback(async <K extends keyof ChatPrefs>(key: K, value: ChatPrefs[K]) => {
     setPrefs((p) => ({ ...p, [key]: value }));
+    if (key === "chat_theme") AsyncStorage.setItem(APP_ACCENT_KEY, value as string);
     if (!user) return;
     await supabase
       .from("chat_preferences")
