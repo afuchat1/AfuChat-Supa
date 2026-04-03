@@ -498,12 +498,6 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
         </View>
 
         <TouchableOpacity style={st.headerIcon} hitSlop={8}>
-          <Ionicons name="videocam-outline" size={22} color={c.muted} />
-        </TouchableOpacity>
-        <TouchableOpacity style={st.headerIcon} hitSlop={8}>
-          <Ionicons name="call-outline" size={20} color={c.muted} />
-        </TouchableOpacity>
-        <TouchableOpacity style={st.headerIcon} hitSlop={8}>
           <Ionicons name="ellipsis-vertical" size={20} color={c.muted} />
         </TouchableOpacity>
       </View>
@@ -579,22 +573,20 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
               blurOnSubmit={false}
             />
           </View>
-          <TouchableOpacity
-            style={[st.sendBtn, { backgroundColor: text.trim() ? BRAND : c.inputPill }]}
-            onPress={sendMessage}
-            disabled={(!text.trim() || sending) && !isAfuAiTyping}
-            activeOpacity={0.8}
-          >
-            {sending || isAfuAiTyping ? (
-              <ActivityIndicator color={text.trim() ? "#fff" : c.muted} size="small" />
-            ) : (
-              <Ionicons
-                name={text.trim() ? "send" : "mic-outline"}
-                size={18}
-                color={text.trim() ? "#fff" : c.muted}
-              />
-            )}
-          </TouchableOpacity>
+          {(text.trim() || sending || isAfuAiTyping) && (
+            <TouchableOpacity
+              style={[st.sendBtn, { backgroundColor: BRAND }]}
+              onPress={sendMessage}
+              disabled={sending || isAfuAiTyping}
+              activeOpacity={0.8}
+            >
+              {sending || isAfuAiTyping ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Ionicons name="send" size={18} color="#fff" />
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       </KeyboardAvoidingView>
     </View>

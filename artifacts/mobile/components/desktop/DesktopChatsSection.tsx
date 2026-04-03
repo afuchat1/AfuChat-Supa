@@ -234,7 +234,7 @@ export function DesktopChatsSection() {
     if (!user) return;
     const { data: memberRows } = await supabase
       .from("chat_members")
-      .select("chat_id")
+      .select("chat_id, last_read_at")
       .eq("user_id", user.id);
 
     if (!memberRows || memberRows.length === 0) {
@@ -244,6 +244,8 @@ export function DesktopChatsSection() {
     }
 
     const chatIds = memberRows.map((m: any) => m.chat_id);
+    const lastReadMap: Record<string, string | null> = {};
+    for (const m of memberRows as any[]) lastReadMap[m.chat_id] = m.last_read_at ?? null;
 
     const [chatResult, lastMsgsResult] = await Promise.all([
       supabase
@@ -255,22 +257,30 @@ export function DesktopChatsSection() {
         .order("updated_at", { ascending: false }),
       supabase
         .from("messages")
-        .select("chat_id, encrypted_content, sent_at, attachment_type")
+        .select("chat_id, encrypted_content, sent_at, attachment_type, sender_id")
         .in("chat_id", chatIds)
         .order("sent_at", { ascending: false })
-        .limit(chatIds.length * 2),
+        .limit(300),
     ]);
 
     const chatRows = chatResult.data || [];
     const lastMsgMap: Record<string, { msg: string; at: string }> = {};
+    const unreadCountMap: Record<string, number> = {};
+
     for (const m of lastMsgsResult.data || []) {
       if (!lastMsgMap[m.chat_id]) {
         let preview = m.encrypted_content || "";
         if (m.attachment_type === "image") preview = "📷 Photo";
         else if (m.attachment_type === "video") preview = "🎥 Video";
-        else if (m.attachment_type === "audio") preview = "🎵 Voice message";
+        else if (m.attachment_type === "audio") preview = "🎵 Audio";
         else if (m.attachment_type === "story_reply") preview = preview ? `📸 ${preview}` : "📸 Replied";
         lastMsgMap[m.chat_id] = { msg: preview, at: m.sent_at };
+      }
+      if (m.sender_id !== user.id) {
+        const lastRead = lastReadMap[m.chat_id];
+        if (!lastRead || m.sent_at > lastRead) {
+          unreadCountMap[m.chat_id] = (unreadCountMap[m.chat_id] || 0) + 1;
+        }
       }
     }
 
@@ -290,10 +300,16 @@ export function DesktopChatsSection() {
         last_message: lm?.msg || "",
         last_message_at: lm?.at || c.updated_at || "",
         avatar_url: c.avatar_url,
-        unread_count: 0,
+        unread_count: unreadCountMap[c.id] || 0,
         is_verified: !!other?.is_verified,
         is_organization_verified: !!other?.is_organization_verified,
       };
+    });
+
+    items.sort((a, b) => {
+      const ta = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+      const tb = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+      return tb - ta;
     });
 
     setChats(items);
