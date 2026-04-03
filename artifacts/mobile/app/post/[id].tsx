@@ -427,7 +427,9 @@ export default function PostDetailScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Post</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
+          {post.post_type === "article" ? "Article" : "Post"}
+        </Text>
         <TouchableOpacity onPress={() => setMenuVisible(true)} hitSlop={8}>
           <Ionicons name="ellipsis-horizontal" size={22} color={colors.text} />
         </TouchableOpacity>
@@ -438,136 +440,245 @@ export default function PostDetailScreen() {
         data={buildReplyTree(replies)}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={
-          <View style={[styles.postSection, { backgroundColor: colors.surface }]}>
-              <View style={styles.postHeader}>
-                <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: post.author.id } })}>
-                  <Avatar uri={post.author.avatar_url} name={post.author.display_name} size={44} />
-                </TouchableOpacity>
-                <View style={{ flex: 1 }}>
-                  <View style={styles.nameRow}>
-                    <Text style={[styles.authorName, { color: colors.text }]}>{post.author.display_name}</Text>
-                    {post.author.is_organization_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.gold} style={{ marginLeft: 4 }} />}
-                    {!post.author.is_organization_verified && post.author.is_verified && <Ionicons name="checkmark-circle" size={14} color={colors.accent} style={{ marginLeft: 4 }} />}
-                  </View>
-                  <Text style={[styles.authorHandle, { color: colors.textSecondary }]}>@{post.author.handle}</Text>
-                </View>
-              </View>
+          <View>
+            {/* ── Article layout ── */}
+            {post.post_type === "article" ? (
+              <View style={{ backgroundColor: colors.surface }}>
+                {/* Hero cover image */}
+                {allImages.length > 0 && (
+                  <TouchableOpacity activeOpacity={0.95} onPress={() => imgViewer.openViewer(allImages, 0)}>
+                    <Image source={{ uri: allImages[0] }} style={styles.articleHero} resizeMode="cover" />
+                  </TouchableOpacity>
+                )}
 
-              {editMode ? (
-                <View style={{ gap: 10 }}>
-                  <TextInput
-                    style={[styles.editInput, { color: colors.text, backgroundColor: colors.inputBg, borderColor: colors.border }]}
-                    value={editContent}
-                    onChangeText={setEditContent}
-                    multiline
-                    autoFocus
-                    maxLength={2000}
-                  />
-                  <View style={{ flexDirection: "row", gap: 10 }}>
-                    <TouchableOpacity
-                      style={[styles.editBtn, { backgroundColor: colors.border }]}
-                      onPress={() => setEditMode(false)}
-                    >
-                      <Text style={[styles.editBtnText, { color: colors.text }]}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.editBtn, { backgroundColor: colors.accent }]}
-                      onPress={handleEdit}
-                      disabled={editSaving}
-                    >
-                      {editSaving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={[styles.editBtnText, { color: "#fff" }]}>Save</Text>}
-                    </TouchableOpacity>
+                <View style={styles.articleContentPad}>
+                  {/* ARTICLE badge */}
+                  <View style={styles.articleBadgeRow}>
+                    <Ionicons name="document-text-outline" size={13} color={colors.accent} />
+                    <Text style={[styles.articleBadgeTxt, { color: colors.accent }]}>ARTICLE</Text>
                   </View>
-                </View>
-              ) : (
-                <>
-                  {post.post_type === "article" && post.article_title ? (
-                    <Text style={[styles.articleTitle, { color: colors.text }]}>{post.article_title}</Text>
-                  ) : null}
-                  <RichText style={[styles.postContent, { color: colors.text }]}>{postDisplayText || post.content}</RichText>
-                  {postIsTranslated && (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 0, marginBottom: 6 }}>
-                      <Ionicons name="language" size={11} color={colors.textMuted} />
-                      <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.textMuted }}>
-                        {`Translated · ${LANG_LABELS[postLang || ""] ?? postLang}`}
+
+                  {/* Title */}
+                  {post.article_title && !editMode && (
+                    <Text style={[styles.articleHeading, { color: colors.text }]}>{post.article_title}</Text>
+                  )}
+
+                  {/* Author + date */}
+                  <View style={styles.articleMetaRow}>
+                    <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: post.author.id } })}>
+                      <Avatar uri={post.author.avatar_url} name={post.author.display_name} size={36} />
+                    </TouchableOpacity>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.nameRow}>
+                        <Text style={[styles.authorName, { color: colors.text }]}>{post.author.display_name}</Text>
+                        {post.author.is_organization_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.gold} style={{ marginLeft: 4 }} />}
+                        {!post.author.is_organization_verified && post.author.is_verified && <Ionicons name="checkmark-circle" size={14} color={colors.accent} style={{ marginLeft: 4 }} />}
+                      </View>
+                      <Text style={[styles.authorHandle, { color: colors.textMuted }]}>
+                        {new Date(post.created_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })} · {post.view_count} views
                       </Text>
                     </View>
-                  )}
-                </>
-              )}
+                  </View>
 
-              {allImages.length > 0 && (
-                <View style={styles.imgWrap}>
-                  {allImages.map((uri, i) => (
-                    <TouchableOpacity key={i} activeOpacity={0.9} onPress={() => imgViewer.openViewer(allImages, i)}>
-                      <Image source={{ uri }} style={styles.postImg} resizeMode="cover" />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
+                  {/* Divider */}
+                  {!editMode && <View style={[styles.articleDivider, { backgroundColor: colors.border }]} />}
 
-              <Text style={[styles.postTime, { color: colors.textMuted }]}>
-                {new Date(post.created_at).toLocaleString()} · {post.view_count} views
-              </Text>
-
-              <View style={[styles.statsBar, { borderColor: colors.border }]}>
-                <TouchableOpacity style={styles.statBtn} onPress={toggleLike}>
-                  <Ionicons name={post.liked ? "heart" : "heart-outline"} size={20} color={post.liked ? "#FF3B30" : colors.textSecondary} />
-                  <Text style={[styles.statText, { color: colors.textSecondary }]}>{post.likeCount}</Text>
-                </TouchableOpacity>
-                <View style={styles.statBtn}>
-                  <Ionicons name="chatbubble-outline" size={20} color={colors.textSecondary} />
-                  <Text style={[styles.statText, { color: colors.textSecondary }]}>{post.replyCount}</Text>
-                </View>
-                <TouchableOpacity style={styles.statBtn} onPress={() => sharePost({ postId: post.id, authorName: post.author.display_name, content: post.content })}>
-                  <Ionicons name="share-outline" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
-
-              </View>
-
-              {replies.length >= 2 && (
-                <TouchableOpacity
-                  style={[styles.aiSummaryBtn, { backgroundColor: colors.accent + "12", borderColor: colors.accent + "30" }]}
-                  onPress={async () => {
-                    setAiSummarizing(true);
-                    setAiSummary(null);
-                    try {
-                      const summary = await aiSummarizeThread(
-                        post.content,
-                        replies.map(r => ({ author: r.author.display_name, content: r.content })),
-                      );
-                      setAiSummary(summary);
-                    } catch { showAlert("AI Error", "Could not summarize. Try again."); }
-                    setAiSummarizing(false);
-                  }}
-                  disabled={aiSummarizing}
-                >
-                  {aiSummarizing ? (
-                    <ActivityIndicator size="small" color={colors.accent} />
+                  {/* Body */}
+                  {editMode ? (
+                    <View style={{ gap: 10 }}>
+                      <TextInput
+                        style={[styles.editInput, { color: colors.text, backgroundColor: colors.inputBg, borderColor: colors.border }]}
+                        value={editContent}
+                        onChangeText={setEditContent}
+                        multiline
+                        autoFocus
+                        maxLength={2000}
+                      />
+                      <View style={{ flexDirection: "row", gap: 10 }}>
+                        <TouchableOpacity style={[styles.editBtn, { backgroundColor: colors.border }]} onPress={() => setEditMode(false)}>
+                          <Text style={[styles.editBtnText, { color: colors.text }]}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.editBtn, { backgroundColor: colors.accent }]} onPress={handleEdit} disabled={editSaving}>
+                          {editSaving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={[styles.editBtnText, { color: "#fff" }]}>Save</Text>}
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   ) : (
-                    <Ionicons name="sparkles" size={14} color={colors.accent} />
+                    <>
+                      <RichText style={[styles.articleBodyText, { color: colors.text }]}>{postDisplayText || post.content}</RichText>
+                      {postIsTranslated && (
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginBottom: 8 }}>
+                          <Ionicons name="language" size={11} color={colors.textMuted} />
+                          <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.textMuted }}>
+                            {`Translated · ${LANG_LABELS[postLang || ""] ?? postLang}`}
+                          </Text>
+                        </View>
+                      )}
+                    </>
                   )}
-                  <Text style={[styles.aiSummaryBtnText, { color: colors.accent }]}>
-                    {aiSummarizing ? "Summarizing..." : "AI Summarize Thread"}
-                  </Text>
-                </TouchableOpacity>
-              )}
-              {aiSummary && (
-                <View style={[styles.aiSummaryCard, { backgroundColor: colors.accent + "10", borderColor: colors.accent + "25" }]}>
-                  <View style={styles.aiSummaryHeader}>
-                    <Ionicons name="sparkles" size={14} color={colors.accent} />
-                    <Text style={[styles.aiSummaryTitle, { color: colors.accent }]}>AI Summary</Text>
-                    <TouchableOpacity onPress={() => setAiSummary(null)} hitSlop={8} style={{ marginLeft: "auto" }}>
-                      <Ionicons name="close" size={16} color={colors.textMuted} />
+
+                  {/* Stats */}
+                  <View style={[styles.statsBar, { borderColor: colors.border }]}>
+                    <TouchableOpacity style={styles.statBtn} onPress={toggleLike}>
+                      <Ionicons name={post.liked ? "heart" : "heart-outline"} size={20} color={post.liked ? "#FF3B30" : colors.textSecondary} />
+                      <Text style={[styles.statText, { color: colors.textSecondary }]}>{post.likeCount}</Text>
+                    </TouchableOpacity>
+                    <View style={styles.statBtn}>
+                      <Ionicons name="chatbubble-outline" size={20} color={colors.textSecondary} />
+                      <Text style={[styles.statText, { color: colors.textSecondary }]}>{post.replyCount}</Text>
+                    </View>
+                    <TouchableOpacity style={styles.statBtn} onPress={() => sharePost({ postId: post.id, authorName: post.author.display_name, content: post.content })}>
+                      <Ionicons name="share-outline" size={20} color={colors.textSecondary} />
                     </TouchableOpacity>
                   </View>
-                  <Text style={[styles.aiSummaryText, { color: colors.text }]}>{aiSummary}</Text>
+
+                  {replies.length >= 2 && (
+                    <TouchableOpacity
+                      style={[styles.aiSummaryBtn, { backgroundColor: colors.accent + "12", borderColor: colors.accent + "30" }]}
+                      onPress={async () => {
+                        setAiSummarizing(true); setAiSummary(null);
+                        try {
+                          const summary = await aiSummarizeThread(post.content, replies.map(r => ({ author: r.author.display_name, content: r.content })));
+                          setAiSummary(summary);
+                        } catch { showAlert("AI Error", "Could not summarize. Try again."); }
+                        setAiSummarizing(false);
+                      }}
+                      disabled={aiSummarizing}
+                    >
+                      {aiSummarizing ? <ActivityIndicator size="small" color={colors.accent} /> : <Ionicons name="sparkles" size={14} color={colors.accent} />}
+                      <Text style={[styles.aiSummaryBtnText, { color: colors.accent }]}>{aiSummarizing ? "Summarizing..." : "AI Summarize Thread"}</Text>
+                    </TouchableOpacity>
+                  )}
+                  {aiSummary && (
+                    <View style={[styles.aiSummaryCard, { backgroundColor: colors.accent + "10", borderColor: colors.accent + "25" }]}>
+                      <View style={styles.aiSummaryHeader}>
+                        <Ionicons name="sparkles" size={14} color={colors.accent} />
+                        <Text style={[styles.aiSummaryTitle, { color: colors.accent }]}>AI Summary</Text>
+                        <TouchableOpacity onPress={() => setAiSummary(null)} hitSlop={8} style={{ marginLeft: "auto" }}>
+                          <Ionicons name="close" size={16} color={colors.textMuted} />
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={[styles.aiSummaryText, { color: colors.text }]}>{aiSummary}</Text>
+                    </View>
+                  )}
+                  {replies.length > 0 && (
+                    <Text style={[styles.repliesLabel, { color: colors.textMuted }]}>Replies</Text>
+                  )}
                 </View>
-              )}
-              {replies.length > 0 && (
-                <Text style={[styles.repliesLabel, { color: colors.textMuted }]}>Replies</Text>
-              )}
-            </View>
+              </View>
+            ) : (
+              /* ── Regular post layout ── */
+              <View style={[styles.postSection, { backgroundColor: colors.surface }]}>
+                <View style={styles.postHeader}>
+                  <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: post.author.id } })}>
+                    <Avatar uri={post.author.avatar_url} name={post.author.display_name} size={44} />
+                  </TouchableOpacity>
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.nameRow}>
+                      <Text style={[styles.authorName, { color: colors.text }]}>{post.author.display_name}</Text>
+                      {post.author.is_organization_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.gold} style={{ marginLeft: 4 }} />}
+                      {!post.author.is_organization_verified && post.author.is_verified && <Ionicons name="checkmark-circle" size={14} color={colors.accent} style={{ marginLeft: 4 }} />}
+                    </View>
+                    <Text style={[styles.authorHandle, { color: colors.textSecondary }]}>@{post.author.handle}</Text>
+                  </View>
+                </View>
+
+                {editMode ? (
+                  <View style={{ gap: 10 }}>
+                    <TextInput
+                      style={[styles.editInput, { color: colors.text, backgroundColor: colors.inputBg, borderColor: colors.border }]}
+                      value={editContent}
+                      onChangeText={setEditContent}
+                      multiline
+                      autoFocus
+                      maxLength={2000}
+                    />
+                    <View style={{ flexDirection: "row", gap: 10 }}>
+                      <TouchableOpacity style={[styles.editBtn, { backgroundColor: colors.border }]} onPress={() => setEditMode(false)}>
+                        <Text style={[styles.editBtnText, { color: colors.text }]}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.editBtn, { backgroundColor: colors.accent }]} onPress={handleEdit} disabled={editSaving}>
+                        {editSaving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={[styles.editBtnText, { color: "#fff" }]}>Save</Text>}
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <>
+                    <RichText style={[styles.postContent, { color: colors.text }]}>{postDisplayText || post.content}</RichText>
+                    {postIsTranslated && (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 0, marginBottom: 6 }}>
+                        <Ionicons name="language" size={11} color={colors.textMuted} />
+                        <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.textMuted }}>
+                          {`Translated · ${LANG_LABELS[postLang || ""] ?? postLang}`}
+                        </Text>
+                      </View>
+                    )}
+                  </>
+                )}
+
+                {allImages.length > 0 && (
+                  <View style={styles.imgWrap}>
+                    {allImages.map((uri, i) => (
+                      <TouchableOpacity key={i} activeOpacity={0.9} onPress={() => imgViewer.openViewer(allImages, i)}>
+                        <Image source={{ uri }} style={styles.postImg} resizeMode="cover" />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                <Text style={[styles.postTime, { color: colors.textMuted }]}>
+                  {new Date(post.created_at).toLocaleString()} · {post.view_count} views
+                </Text>
+
+                <View style={[styles.statsBar, { borderColor: colors.border }]}>
+                  <TouchableOpacity style={styles.statBtn} onPress={toggleLike}>
+                    <Ionicons name={post.liked ? "heart" : "heart-outline"} size={20} color={post.liked ? "#FF3B30" : colors.textSecondary} />
+                    <Text style={[styles.statText, { color: colors.textSecondary }]}>{post.likeCount}</Text>
+                  </TouchableOpacity>
+                  <View style={styles.statBtn}>
+                    <Ionicons name="chatbubble-outline" size={20} color={colors.textSecondary} />
+                    <Text style={[styles.statText, { color: colors.textSecondary }]}>{post.replyCount}</Text>
+                  </View>
+                  <TouchableOpacity style={styles.statBtn} onPress={() => sharePost({ postId: post.id, authorName: post.author.display_name, content: post.content })}>
+                    <Ionicons name="share-outline" size={20} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+
+                {replies.length >= 2 && (
+                  <TouchableOpacity
+                    style={[styles.aiSummaryBtn, { backgroundColor: colors.accent + "12", borderColor: colors.accent + "30" }]}
+                    onPress={async () => {
+                      setAiSummarizing(true); setAiSummary(null);
+                      try {
+                        const summary = await aiSummarizeThread(post.content, replies.map(r => ({ author: r.author.display_name, content: r.content })));
+                        setAiSummary(summary);
+                      } catch { showAlert("AI Error", "Could not summarize. Try again."); }
+                      setAiSummarizing(false);
+                    }}
+                    disabled={aiSummarizing}
+                  >
+                    {aiSummarizing ? <ActivityIndicator size="small" color={colors.accent} /> : <Ionicons name="sparkles" size={14} color={colors.accent} />}
+                    <Text style={[styles.aiSummaryBtnText, { color: colors.accent }]}>{aiSummarizing ? "Summarizing..." : "AI Summarize Thread"}</Text>
+                  </TouchableOpacity>
+                )}
+                {aiSummary && (
+                  <View style={[styles.aiSummaryCard, { backgroundColor: colors.accent + "10", borderColor: colors.accent + "25" }]}>
+                    <View style={styles.aiSummaryHeader}>
+                      <Ionicons name="sparkles" size={14} color={colors.accent} />
+                      <Text style={[styles.aiSummaryTitle, { color: colors.accent }]}>AI Summary</Text>
+                      <TouchableOpacity onPress={() => setAiSummary(null)} hitSlop={8} style={{ marginLeft: "auto" }}>
+                        <Ionicons name="close" size={16} color={colors.textMuted} />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={[styles.aiSummaryText, { color: colors.text }]}>{aiSummary}</Text>
+                  </View>
+                )}
+                {replies.length > 0 && (
+                  <Text style={[styles.repliesLabel, { color: colors.textMuted }]}>Replies</Text>
+                )}
+              </View>
+            )}
+          </View>
         }
         renderItem={({ item }) => <ReplyCard item={item} colors={colors} depth={0} onReplyTo={handleReplyTo} />}
         contentContainerStyle={{ paddingBottom: 100 }}
@@ -741,6 +852,14 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: "row", alignItems: "center" },
   authorName: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
   authorHandle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
+  articleHero: { width: "100%", height: 220 },
+  articleContentPad: { padding: 18, paddingTop: 16 },
+  articleBadgeRow: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 10 },
+  articleBadgeTxt: { fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 1 },
+  articleHeading: { fontSize: 26, fontFamily: "Inter_700Bold", lineHeight: 34, marginBottom: 14 },
+  articleMetaRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16 },
+  articleDivider: { height: StyleSheet.hairlineWidth, marginBottom: 20 },
+  articleBodyText: { fontSize: 17, fontFamily: "Inter_400Regular", lineHeight: 30, marginBottom: 8 },
   articleTitle: { fontSize: 22, fontFamily: "Inter_700Bold", lineHeight: 30, marginBottom: 8 },
   postContent: { fontSize: 17, fontFamily: "Inter_400Regular", lineHeight: 26 },
   imgWrap: { gap: 6 },
