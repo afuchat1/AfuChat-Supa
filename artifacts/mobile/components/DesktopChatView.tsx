@@ -208,6 +208,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
         async (payload) => {
           const msg = payload.new as Message;
           if (msg.sender_id === AFUAI_BOT_ID) return;
+          if (msg.sender_id === user?.id) return;
           const { data: profile } = await supabase
             .from("profiles")
             .select("id, display_name, avatar_url, is_verified")
