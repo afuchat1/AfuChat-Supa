@@ -215,6 +215,39 @@ export default function AboutScreen() {
           ))}
         </View>
 
+        {/* Community & Open Source */}
+        <View style={st.sectionHeader}>
+          <Ionicons name="people" size={18} color={colors.accent} />
+          <Text style={[st.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Connect With Us</Text>
+        </View>
+        <View style={[st.legalCard, { backgroundColor: colors.surface }]}>
+          {[
+            { label: "Telegram Channel",  sub: "t.me/afuchat",          icon: "paper-plane",    iconBg: "#0088CC18", iconColor: "#0088CC", url: "https://t.me/afuchat" },
+            { label: "Founder",           sub: "t.me/amkaweesi",        icon: "person-circle",  iconBg: "#0088CC18", iconColor: "#0088CC", url: "https://t.me/amkaweesi" },
+            { label: "Support Group",     sub: "t.me/afumeet",          icon: "people",         iconBg: "#229ED918", iconColor: "#229ED9", url: "https://t.me/afumeet" },
+            { label: "WhatsApp Channel",  sub: "Follow on WhatsApp",    icon: "logo-whatsapp",  iconBg: "#25D36618", iconColor: "#25D366", url: "https://whatsapp.com/channel/0029Vb7Rbpz0Vyc9y3S8H422" },
+            { label: "GitHub Repository", sub: "github.com/afuchat1/afuchat-supa", icon: "logo-github", iconBg: "#17171718", iconColor: isDark ? "#fff" : "#171717", url: "https://github.com/afuchat1/afuchat-supa" },
+          ].map((item, i) => (
+            <React.Fragment key={item.label}>
+              {i > 0 && <View style={[st.divider, { backgroundColor: colors.border }]} />}
+              <TouchableOpacity
+                style={st.legalRow}
+                activeOpacity={0.7}
+                onPress={() => Linking.openURL(item.url).catch(() => {})}
+              >
+                <View style={[st.legalIcon, { backgroundColor: item.iconBg }]}>
+                  <Ionicons name={item.icon as any} size={18} color={item.iconColor} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[st.legalLabel, { color: colors.text }]}>{item.label}</Text>
+                  <Text style={[st.legalSub, { color: colors.textMuted }]}>{item.sub}</Text>
+                </View>
+                <Ionicons name="open-outline" size={15} color={colors.textMuted} />
+              </TouchableOpacity>
+            </React.Fragment>
+          ))}
+        </View>
+
         {/* Footer — moved from Me tab */}
         <View style={st.footer}>
           <Image source={afuSymbol} style={[st.footerSymbol, { tintColor: colors.accent }]} resizeMode="contain" />
