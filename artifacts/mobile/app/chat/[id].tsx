@@ -708,6 +708,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
           { backgroundColor: bubbleColor, borderRadius: chatRadius ?? 18 },
           isMe ? st.bubbleMe : st.bubbleOther,
           showTail ? (isMe ? st.bubbleTailMe : st.bubbleTailOther) : null,
+          replyPreview ? st.bubbleWithReply : null,
           isPending && { opacity: 0.6 },
         ]}>
           {isPremiumSender && <PremiumBubbleShimmer />}
@@ -2915,7 +2916,9 @@ STRICT RULES:
   function getReplyPreview(msgId: string | null | undefined): string | null {
     if (!msgId) return null;
     const found = messages.find((m) => m.id === msgId);
-    return found?.encrypted_content || null;
+    if (!found?.encrypted_content) return null;
+    const t = found.encrypted_content;
+    return t.length > 80 ? t.slice(0, 80) + "…" : t;
   }
 
   function shouldShowTail(index: number): boolean {
@@ -3870,6 +3873,9 @@ const st = StyleSheet.create({
     minWidth: 64,
     overflow: "hidden",
     flexShrink: 1,
+  },
+  bubbleWithReply: {
+    alignSelf: "stretch",
   },
   bubbleMe: {
     borderBottomRightRadius: 16,
