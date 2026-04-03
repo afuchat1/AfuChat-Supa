@@ -251,7 +251,7 @@ export default function PaidCommunitiesScreen() {
             <View style={styles.emptyState}>
               <Text style={{ fontSize: 48 }}>🏰</Text>
               <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                {tab === "mine" ? "No communities yet" : "No communities yet"}
+                {tab === "mine" ? "No communities yet" : "No public communities"}
               </Text>
               <Text style={[styles.emptySub, { color: colors.textMuted }]}>
                 {tab === "mine" ? "Create or join a community" : "Be the first to create one"}

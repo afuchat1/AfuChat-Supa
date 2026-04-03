@@ -89,7 +89,7 @@ export default function ProductDetailScreen() {
   const canAfford = balance >= total;
 
   async function handleAddToCart() {
-    if (!user) { router.push("/auth/login"); return; }
+    if (!user) { router.push("/(auth)/login"); return; }
     if (!product) return;
     setAddingCart(true);
     await addToCart(user.id, product.id, qty);
@@ -99,7 +99,7 @@ export default function ProductDetailScreen() {
   }
 
   async function handleBuyNow() {
-    if (!user) { router.push("/auth/login"); return; }
+    if (!user) { router.push("/(auth)/login"); return; }
     if (!product || !shop) return;
     if (!canAfford) {
       showAlert("Insufficient balance", `You need ${formatShopAcoin(total)} but have ${formatShopAcoin(balance)}.`);
@@ -345,7 +345,7 @@ export default function ProductDetailScreen() {
           <TouchableOpacity
             style={[st.buyCta, { opacity: !inStock ? 0.5 : 1 }]}
             onPress={() => {
-              if (!user) { router.push("/auth/login"); return; }
+              if (!user) { router.push("/(auth)/login"); return; }
               setShowCheckout(true);
             }}
             disabled={!inStock}

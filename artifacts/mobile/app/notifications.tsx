@@ -73,8 +73,8 @@ const TYPE_CONFIG: Record<string, TypeConfig> = {
   new_mention:        { icon: "at",              label: "mentioned you",             color: "#FF9500", category: "social",  getRoute: (n) => n.post_id ? `/post/${n.post_id}` : null },
   gift:               { icon: "gift",            label: "sent you a gift",           color: "#AF52DE", category: "social",  getRoute: () => null },
   profile_view:       { icon: "eye",             label: "viewed your profile",       color: "#8E8E93", category: "social",  getRoute: (n) => n.actor ? `/contact/${n.actor.id}` : null },
-  channel_post:       { icon: "megaphone",       label: "posted in a channel",       color: "#5856D6", category: "social",  getRoute: (n) => n.reference_id ? `/channel/${n.reference_id}` : null },
-  live_started:       { icon: "radio",           label: "started a live stream",     color: "#FF3B30", category: "social",  getRoute: (n) => n.reference_id ? `/channel/${n.reference_id}` : null },
+  channel_post:       { icon: "megaphone",       label: "posted in a channel",       color: "#5856D6", category: "social",  getRoute: (n) => n.reference_id ? `/chat/${n.reference_id}` : null },
+  live_started:       { icon: "radio",           label: "started a live stream",     color: "#FF3B30", category: "social",  getRoute: (n) => n.reference_id ? `/chat/${n.reference_id}` : null },
   // Marketplace
   order_placed:       { icon: "bag",             label: "placed a new order",        color: "#34C759", category: "marketplace", getRoute: (n) => n.reference_id ? `/shop/order/${n.reference_id}` : null },
   order_shipped:      { icon: "cube",            label: "shipped your order",        color: "#AF52DE", category: "marketplace", getRoute: (n) => n.reference_id ? `/shop/order/${n.reference_id}` : null },

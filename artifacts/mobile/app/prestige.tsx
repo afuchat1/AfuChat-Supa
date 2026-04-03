@@ -21,7 +21,7 @@ import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { PRESTIGE_TIERS, getPrestigeTier, getNextPrestigeTier, prestigeProgress } from "@/lib/prestige";
 
-type RichUser = { display_name: string; handle: string; acoin: number; avatar_url: string | null };
+type RichUser = { id: string; display_name: string; handle: string; acoin: number; avatar_url: string | null };
 
 type Purchase = { id: string; good_id: string; good_name: string; good_emoji: string; acoin_cost: number; tier_required: string; equipped: boolean; created_at: string };
 
@@ -64,7 +64,7 @@ export default function PrestigeScreen() {
     if (!user) return;
 
     const [richRes, aheadRes, purchaseRes, txRes] = await Promise.all([
-      supabase.from("profiles").select("display_name, handle, acoin, avatar_url").order("acoin", { ascending: false }).limit(20),
+      supabase.from("profiles").select("id, display_name, handle, acoin, avatar_url").order("acoin", { ascending: false }).limit(20),
       supabase.from("profiles").select("id", { count: "exact", head: true }).gt("acoin", acoin),
       supabase.from("status_goods_purchases").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
       supabase.from("acoin_transactions").select("id, amount, transaction_type, created_at, metadata").eq("user_id", user.id).in("transaction_type", ["status_good_purchase", "conversion", "topup", "subscription"]).order("created_at", { ascending: false }).limit(20),
@@ -423,7 +423,7 @@ export default function PrestigeScreen() {
                         <TouchableOpacity
                           key={u.handle}
                           style={[s.richRow, idx < richList.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
-                          onPress={() => router.push({ pathname: "/contact/[id]", params: { id: u.handle } })}
+                          onPress={() => router.push({ pathname: "/contact/[id]", params: { id: u.id } })}
                         >
                           <Text style={[s.richRank, { color: idx < 3 ? Colors.gold : colors.textMuted }]}>
                             #{idx + 1}

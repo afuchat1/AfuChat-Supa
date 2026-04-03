@@ -496,8 +496,8 @@ function MatchesTab() {
   if (matches.length === 0) return (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 40 }}>
       <View style={[styles.emptyIcon, { backgroundColor: BRAND }]}><Ionicons name="heart-outline" size={40} color="#fff" /></View>
-      <Text style={[styles.emptyTitle, { color: "#1C1C1E" }]}>No matches yet</Text>
-      <Text style={[styles.emptySub, { color: "#8E8E93" }]}>Keep swiping to find your matches!</Text>
+      <Text style={[styles.emptyTitle, { color: colors.text }]}>No matches yet</Text>
+      <Text style={[styles.emptySub, { color: colors.textMuted }]}>Keep swiping to find your matches!</Text>
     </View>
   );
 

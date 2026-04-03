@@ -121,7 +121,7 @@ export default function StoreStorefront() {
   });
 
   async function handleAddToCart(product: ShopProduct) {
-    if (!user) { router.push("/auth/login"); return; }
+    if (!user) { router.push("/(auth)/login"); return; }
     setAddingId(product.id);
     await addToCart(user.id, product.id, 1);
     setCartCount(c => c + 1);

@@ -599,7 +599,7 @@ export default function SearchScreen() {
   function ChannelCard({ ch, i }: { ch: ChannelResult; i: number }) {
     return (
       <Animated.View entering={FadeInRight.delay(i*25).duration(220)}>
-        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface }]} onPress={() => { Haptics.selectionAsync(); router.push(`/channel/${ch.id}` as any); }} activeOpacity={0.75}>
+        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface }]} onPress={() => { Haptics.selectionAsync(); router.push(`/chat/${ch.id}` as any); }} activeOpacity={0.75}>
           {ch.avatar_url
             ? <Image source={{ uri: ch.avatar_url }} style={[styles.av52, { borderRadius:14 }]} />
             : (
