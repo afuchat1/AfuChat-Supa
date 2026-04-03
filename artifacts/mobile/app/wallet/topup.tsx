@@ -42,7 +42,7 @@ const CALLBACK_PATTERNS = [
   "OrderNotificationType=IPNCHANGE",
 ];
 
-type Screen = "select" | "paying" | "awaiting" | "success" | "failed";
+type Screen = "select" | "paying" | "awaiting" | "verifying" | "success" | "failed";
 
 export default function TopUpScreen() {
   const { colors } = useTheme();
@@ -118,7 +118,7 @@ export default function TopUpScreen() {
     }
   }
 
-  function startPolling(ref: string) {
+  const startPolling = useCallback((ref: string) => {
     if (pollRef.current) clearInterval(pollRef.current);
     let attempts = 0;
     pollRef.current = setInterval(async () => {
@@ -145,24 +145,20 @@ export default function TopUpScreen() {
         }
       } catch {}
     }, 5000);
-  }
+  }, [refreshProfile]);
 
   const handleWebViewNavigation = useCallback(
     (navState: any) => {
       const url = navState.url || "";
       const isCallback = CALLBACK_PATTERNS.some((p) => url.includes(p));
-      if (isCallback) {
-        const isSuccess =
-          url.includes("payment-complete") ||
-          url.includes("payment_status=COMPLETED");
-        setScreen(isSuccess ? "success" : "failed");
-        if (isSuccess) {
-          refreshProfile?.();
-          Haptics.notificationAsync("success");
-        }
+      if (isCallback && merchantRef) {
+        // Pesapal redirects to callback URL for ALL outcomes (success/fail/cancelled).
+        // The URL alone doesn't tell us the outcome — show a checking screen and poll the DB.
+        setScreen("verifying");
+        startPolling(merchantRef);
       }
     },
-    [refreshProfile],
+    [merchantRef, startPolling],
   );
 
   function reset() {
@@ -255,6 +251,20 @@ export default function TopUpScreen() {
             Cancel
           </Text>
         </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (screen === "verifying") {
+    return (
+      <View style={[styles.root, styles.resultScreen, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={Colors.brand} style={{ marginBottom: 24 }} />
+        <Text style={[styles.resultTitle, { color: colors.text, fontSize: 22 }]}>
+          Checking your payment…
+        </Text>
+        <Text style={[styles.resultSub, { color: colors.textMuted }]}>
+          Please wait while we confirm your payment. This usually takes a few seconds.
+        </Text>
       </View>
     );
   }
