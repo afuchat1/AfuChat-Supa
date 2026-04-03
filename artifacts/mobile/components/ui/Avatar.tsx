@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
-import { Image, StyleSheet, Text, View, ViewStyle } from "react-native";
+import React from "react";
+import { StyleSheet, Text, View, ViewStyle } from "react-native";
+import { Image } from "expo-image";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { PremiumRing } from "./PremiumRing";
 
@@ -34,24 +35,16 @@ export function Avatar({ uri, name, size = 44, style, online, premium }: Props) 
   const { accent } = useAppAccent();
   const initials = getInitials(name);
   const bgColor = hashColor(name);
-  const [imgError, setImgError] = useState(false);
-
-  useEffect(() => { setImgError(false); }, [uri]);
-
-  const showImage = !!uri && !imgError;
-
-  const ring = 2.5;
-  const gap = 2;
-  const outerSize = size + (ring + gap) * 2;
 
   const innerNode = (
     <View style={{ width: size, height: size }}>
-      {showImage ? (
+      {uri ? (
         <Image
           source={{ uri }}
           style={{ width: size, height: size, borderRadius: size / 2 }}
-          resizeMode="cover"
-          onError={() => setImgError(true)}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          transition={120}
         />
       ) : (
         <View
@@ -80,6 +73,10 @@ export function Avatar({ uri, name, size = 44, style, online, premium }: Props) 
       )}
     </View>
   );
+
+  const ring = 2.5;
+  const gap = 2;
+  const outerSize = size + (ring + gap) * 2;
 
   if (premium) {
     return (

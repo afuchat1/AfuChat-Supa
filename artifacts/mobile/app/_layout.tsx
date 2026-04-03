@@ -31,6 +31,7 @@ import { SplashOverlay } from "@/components/SplashOverlay";
 import { ChatPreferencesProvider } from "@/context/ChatPreferencesContext";
 import { AppAccentProvider } from "@/context/AppAccentContext";
 import { AdvancedFeaturesProvider } from "@/context/AdvancedFeaturesContext";
+import { DataModeProvider } from "@/context/DataModeContext";
 
 try { setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`); } catch (_) {}
 
@@ -235,6 +236,7 @@ export default function RootLayout() {
                     <LanguageProvider>
                       <ChatPreferencesProvider>
                       <AdvancedFeaturesProvider>
+                      <DataModeProvider>
                       <PushNotificationManager />
                       <AppLockGate>
                         <RootLayoutNav />
@@ -246,6 +248,7 @@ export default function RootLayout() {
                         buttons={alertState.buttons}
                         onDismiss={dismissAlert}
                       />
+                      </DataModeProvider>
                       </AdvancedFeaturesProvider>
                       </ChatPreferencesProvider>
                     </LanguageProvider>

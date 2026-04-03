@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Animated,
   FlatList,
-  Image,
   Modal,
   Platform,
   RefreshControl,
@@ -13,6 +12,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { Image as ExpoImage } from "expo-image";
 import { showAlert } from "@/lib/alert";
 import ViewShot from "react-native-view-shot";
 import { useSafeAreaInsets, useSafeAreaInsets as useCardInsets } from "react-native-safe-area-context";
@@ -38,6 +38,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { translateText, LANG_LABELS } from "@/lib/translate";
 import { useDesktopDetail } from "@/context/DesktopDetailContext";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
+import { useDataMode } from "@/context/DataModeContext";
 
 type PostItem = {
   id: string;
@@ -95,6 +96,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
   const { width: screenW } = useWindowDimensions();
   const cardInsets = useCardInsets();
   const isDesktop = useIsDesktop();
+  const { isLowData } = useDataMode();
   const { openDetail } = useDesktopDetail();
   const { user: currentUser } = useAuth();
   const [displayContent, setDisplayContent] = useState(item.content);
@@ -244,6 +246,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
                     videoUrl={item.video_url!}
                     fallbackImageUrl={item.image_url}
                     style={StyleSheet.absoluteFill}
+                    lowData={isLowData}
                   />
                   <View style={StyleSheet.absoluteFill}>
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
@@ -272,6 +275,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
                     videoUrl={item.video_url!}
                     fallbackImageUrl={item.image_url}
                     style={StyleSheet.absoluteFill}
+                    lowData={isLowData}
                   />
                   <View style={styles.playCircle}>
                     <Ionicons name="play" size={22} color="#fff" />
@@ -289,7 +293,13 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
           {item.post_type === "article" ? (
             <View style={[styles.articleCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
               {allImages.length > 0 && (
-                <Image source={{ uri: allImages[0] }} style={styles.articleCover} resizeMode="cover" />
+                <ExpoImage
+                  source={{ uri: allImages[0] }}
+                  style={styles.articleCover}
+                  contentFit="cover"
+                  cachePolicy={isLowData ? "disk" : "memory-disk"}
+                  priority={isLowData ? "low" : "normal"}
+                />
               )}
               <View style={styles.articleCardBody}>
                 <View style={[styles.articleBadgeRow, { backgroundColor: colors.accent + "15" }]}>
@@ -348,13 +358,16 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
                   onPress={(e) => { e.stopPropagation(); onImagePress?.(allImages, i); }}
                   style={allImages.length > 1 ? { flex: 1 } : undefined}
                 >
-                  <Image
+                  <ExpoImage
                     source={{ uri }}
                     style={{
                       width: allImages.length === 1 ? effectiveW : multiImgW,
                       height: allImages.length === 1 ? Math.round(effectiveW * 0.56) : Math.round(multiImgW * 0.75),
                     }}
-                    resizeMode="cover"
+                    contentFit="cover"
+                    cachePolicy={isLowData ? "disk" : "memory-disk"}
+                    priority={i === 0 ? (isLowData ? "low" : "high") : "low"}
+                    transition={150}
                   />
                 </TouchableOpacity>
               ))}
@@ -441,6 +454,7 @@ export default function DiscoverScreen() {
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const isDesktop = useIsDesktop();
+  const { isLowData } = useDataMode();
   const SIDEBAR_W = 280;
   const RIGHT_PANEL_W = screenWidth >= 1280 ? 380 : 0;
   const centerW = isDesktop ? screenWidth - SIDEBAR_W - RIGHT_PANEL_W : screenWidth;
@@ -454,7 +468,7 @@ export default function DiscoverScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [followingEmpty, setFollowingEmpty] = useState(false);
   const [bgRefreshing, setBgRefreshing] = useState(false);
-  const PAGE_SIZE = 30;
+  const PAGE_SIZE = isLowData ? 12 : 30;
   const imgViewer = useImageViewer();
 
   const tabPostsCache = useRef<Record<"for_you" | "following", PostItem[]>>({ for_you: [], following: [] });

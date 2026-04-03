@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Modal,
   Platform,
   StyleSheet,
@@ -12,6 +11,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { Image as ExpoImage } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
@@ -23,6 +23,7 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { RichText } from "@/components/ui/RichText";
 import { DesktopRightPanel } from "@/components/DesktopRightPanel";
 import { sharePost } from "@/lib/share";
+import { useDataMode } from "@/context/DataModeContext";
 
 const BRAND = "#00BCD4";
 
@@ -246,6 +247,7 @@ function PostCard({
   onAuthRequired: () => void;
   feedWidth: number;
 }) {
+  const { isLowData } = useDataMode();
   const allImages = post.images?.length > 0 ? post.images : post.image_url ? [post.image_url] : [];
   const imgAreaW = feedWidth - 72;
   const multiImgW = (imgAreaW - 4) / 2;
@@ -322,10 +324,12 @@ function PostCard({
               </Text>
             )}
             {allImages.length > 0 && (
-              <Image
+              <ExpoImage
                 source={{ uri: allImages[0] }}
                 style={styles.articleThumb}
-                resizeMode="cover"
+                contentFit="cover"
+                cachePolicy={isLowData ? "disk" : "memory-disk"}
+                priority={isLowData ? "low" : "normal"}
               />
             )}
           </TouchableOpacity>
@@ -339,7 +343,7 @@ function PostCard({
             style={[styles.videoCard, { width: imgAreaW, height: Math.round(imgAreaW * 0.56) }]}
           >
             {post.image_url ? (
-              <Image source={{ uri: post.image_url }} style={styles.videoThumb} resizeMode="cover" />
+              <ExpoImage source={{ uri: post.image_url }} style={styles.videoThumb} contentFit="cover" cachePolicy={isLowData ? "disk" : "memory-disk"} />
             ) : (
               <View style={[styles.videoThumb, { backgroundColor: "#000" }]} />
             )}
@@ -367,14 +371,17 @@ function PostCard({
                 onPress={(e) => { e.stopPropagation?.(); onOpen(post.id); }}
                 style={allImages.length > 1 ? { flex: 1 } : undefined}
               >
-                <Image
+                <ExpoImage
                   source={{ uri }}
                   style={{
                     width: allImages.length === 1 ? imgAreaW : multiImgW,
                     height: allImages.length === 1 ? Math.round(imgAreaW * 0.56) : Math.round(multiImgW * 0.75),
                     borderRadius: 12,
                   }}
-                  resizeMode="cover"
+                  contentFit="cover"
+                  cachePolicy={isLowData ? "disk" : "memory-disk"}
+                  priority={i === 0 ? (isLowData ? "low" : "high") : "low"}
+                  transition={150}
                 />
               </TouchableOpacity>
             ))}

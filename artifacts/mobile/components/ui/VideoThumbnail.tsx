@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { Image, Platform, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
 
 const SEEK_TIME = 1.0;
 
@@ -8,17 +9,19 @@ type Props = {
   fallbackImageUrl?: string | null;
   style?: any;
   resizeMode?: "cover" | "contain" | "stretch";
+  lowData?: boolean;
 };
 
-function VideoThumbnailNative({ videoUrl, fallbackImageUrl, style, resizeMode = "cover" }: Props) {
+function VideoThumbnailNative({ videoUrl, fallbackImageUrl, style, lowData }: Props) {
   const [thumbUri, setThumbUri] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    if (lowData) return;
+    if (!videoUrl || videoUrl.startsWith("blob:")) return;
 
+    let cancelled = false;
     (async () => {
       try {
-        if (!videoUrl || videoUrl.startsWith("blob:")) return;
         const thumbMod = await import("expo-video-thumbnails");
         const fn = thumbMod.getThumbnailAsync ?? (thumbMod as any).default?.getThumbnailAsync;
         if (!fn) return;
@@ -30,7 +33,7 @@ function VideoThumbnailNative({ videoUrl, fallbackImageUrl, style, resizeMode = 
     })();
 
     return () => { cancelled = true; };
-  }, [videoUrl]);
+  }, [videoUrl, lowData]);
 
   const source = thumbUri || fallbackImageUrl;
   if (!source) return <View style={[style, { backgroundColor: "#0a0a0a" }]} />;
@@ -39,12 +42,14 @@ function VideoThumbnailNative({ videoUrl, fallbackImageUrl, style, resizeMode = 
     <Image
       source={{ uri: source }}
       style={style}
-      resizeMode={resizeMode}
+      contentFit="cover"
+      cachePolicy={lowData ? "disk" : "memory-disk"}
+      transition={100}
     />
   );
 }
 
-function VideoThumbnailWeb({ videoUrl, style }: Props) {
+function VideoThumbnailWeb({ videoUrl, fallbackImageUrl, style, lowData }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const handleLoadedData = useCallback(() => {
@@ -53,12 +58,24 @@ function VideoThumbnailWeb({ videoUrl, style }: Props) {
     }
   }, []);
 
+  if (lowData) {
+    if (!fallbackImageUrl) return <View style={[style, { backgroundColor: "#0a0a0a" }]} />;
+    return (
+      <Image
+        source={{ uri: fallbackImageUrl }}
+        style={style}
+        contentFit="cover"
+        cachePolicy="disk"
+      />
+    );
+  }
+
   return (
     // @ts-ignore
     <video
       ref={videoRef}
       src={videoUrl}
-      preload="auto"
+      preload="metadata"
       muted
       playsInline
       onLoadedData={handleLoadedData}
