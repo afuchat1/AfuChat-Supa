@@ -1,27 +1,40 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-export type FeatureKey =
-  | "stories_create"
-  | "afuai_messages"
-  | "group_create"
-  | "channel_create";
+export type DailyFeatureKey = "stories_create" | "afuai_messages";
+export type Tier = "free" | "silver" | "gold" | "platinum";
 
-const DAILY_LIMITS: Record<FeatureKey, number> = {
-  stories_create: 5,
-  afuai_messages: 10,
-  group_create: 3,
-  channel_create: 2,
+export const TIER_DAILY_LIMITS: Record<DailyFeatureKey, Record<Tier, number>> = {
+  stories_create: { free: 5, silver: 20, gold: 50, platinum: Infinity },
+  afuai_messages: { free: 10, silver: 50, gold: 200, platinum: Infinity },
 };
 
-function todayKey(feature: FeatureKey): string {
+export const TIER_GROUP_LIMITS: Record<Tier, number> = {
+  free: 1,
+  silver: 3,
+  gold: 10,
+  platinum: Infinity,
+};
+
+export const TIER_CHANNEL_LIMITS: Record<Tier, number> = {
+  free: 1,
+  silver: 3,
+  gold: 10,
+  platinum: Infinity,
+};
+
+function todayKey(feature: DailyFeatureKey): string {
   const d = new Date().toISOString().slice(0, 10);
   return `fu_${feature}_${d}`;
 }
 
-export async function getUsage(
-  feature: FeatureKey
+export async function getDailyUsage(
+  feature: DailyFeatureKey,
+  tier: Tier = "free"
 ): Promise<{ count: number; limit: number; remaining: number; allowed: boolean }> {
-  const limit = DAILY_LIMITS[feature];
+  const limit = TIER_DAILY_LIMITS[feature][tier] ?? TIER_DAILY_LIMITS[feature]["free"];
+  if (!isFinite(limit)) {
+    return { count: 0, limit: Infinity, remaining: Infinity, allowed: true };
+  }
   try {
     const raw = await AsyncStorage.getItem(todayKey(feature));
     const count = raw ? parseInt(raw, 10) : 0;
@@ -36,7 +49,7 @@ export async function getUsage(
   }
 }
 
-export async function recordUsage(feature: FeatureKey): Promise<void> {
+export async function recordDailyUsage(feature: DailyFeatureKey): Promise<void> {
   try {
     const key = todayKey(feature);
     const raw = await AsyncStorage.getItem(key);

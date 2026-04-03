@@ -23,11 +23,11 @@ import { supabase } from "@/lib/supabase";
 import { uploadToStorage } from "@/lib/mediaUpload";
 import { showAlert } from "@/lib/alert";
 import { isOnline } from "@/lib/offlineStore";
-import { getUsage, recordUsage } from "@/lib/featureUsage";
+import { TIER_CHANNEL_LIMITS } from "@/lib/featureUsage";
 
 export default function CreateChannelScreen() {
   const { colors } = useTheme();
-  const { user } = useAuth();
+  const { user, subscription } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [channelName, setChannelName] = useState("");
@@ -59,17 +59,28 @@ export default function CreateChannelScreen() {
       showAlert("No internet", "Creating a channel requires an internet connection.");
       return;
     }
-    const usage = await getUsage("channel_create");
-    if (!usage.allowed) {
-      showAlert(
-        "Daily limit reached",
-        `You've used your ${usage.limit} free channel creations for today. Upgrade to Platinum for unlimited broadcast channels.`,
-        [
-          { text: "Upgrade to Platinum", onPress: () => router.push("/premium") },
-          { text: "OK" },
-        ]
-      );
-      return;
+    const tier = (subscription?.plan_tier as keyof typeof TIER_CHANNEL_LIMITS) || "free";
+    const limit = TIER_CHANNEL_LIMITS[tier] ?? 1;
+    if (isFinite(limit)) {
+      const { count } = await supabase
+        .from("chats")
+        .select("id", { count: "exact", head: true })
+        .eq("created_by", user!.id)
+        .eq("is_channel", true);
+      const current = count ?? 0;
+      if (current >= limit) {
+        const nextTier = tier === "free" ? "Silver" : tier === "silver" ? "Gold" : "Platinum";
+        showAlert(
+          "Channel limit reached",
+          `You can create up to ${limit} channel${limit === 1 ? "" : "s"} on your current plan. Upgrade to ${nextTier} to broadcast to more audiences.`,
+          [
+            { text: `Upgrade to ${nextTier}`, onPress: () => router.push("/premium") },
+            { text: "OK" },
+          ]
+        );
+        setCreating(false);
+        return;
+      }
     }
     if (!channelName.trim()) {
       showAlert("Channel name required", "Please enter a name for your channel.");
@@ -129,7 +140,6 @@ export default function CreateChannelScreen() {
       });
 
       try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("channel_created"); } catch (_) {}
-      await recordUsage("channel_create");
       router.replace({ pathname: "/chat/[id]", params: { id: chat2.id } });
       setCreating(false);
       return;
@@ -142,7 +152,6 @@ export default function CreateChannelScreen() {
     });
 
     try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("channel_created"); } catch (_) {}
-    await recordUsage("channel_create");
     router.replace({ pathname: "/chat/[id]", params: { id: chat.id } });
     setCreating(false);
   }

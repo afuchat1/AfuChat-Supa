@@ -29,7 +29,7 @@ import { useAppAccent } from "@/context/AppAccentContext";
 import { showAlert } from "@/lib/alert";
 import { uploadToStorage } from "@/lib/mediaUpload";
 import { isOnline } from "@/lib/offlineStore";
-import { getUsage, recordUsage } from "@/lib/featureUsage";
+import { getDailyUsage, recordDailyUsage } from "@/lib/featureUsage";
 
 const CAPTION_MAX = 200;
 
@@ -42,7 +42,7 @@ const PRIVACY_OPTIONS: { id: Privacy; label: string; icon: React.ComponentProps<
 
 export default function CreateStoryScreen() {
   const { accent } = useAppAccent();
-  const { user, profile } = useAuth();
+  const { user, profile, subscription } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const params = useLocalSearchParams<{ mediaUri?: string; mediaType?: string }>();
@@ -97,13 +97,15 @@ export default function CreateStoryScreen() {
       showAlert("No internet", "Publishing a story requires an internet connection.");
       return;
     }
-    const usage = await getUsage("stories_create");
+    const tier = (subscription?.plan_tier as "free" | "silver" | "gold" | "platinum") || "free";
+    const usage = await getDailyUsage("stories_create", tier);
     if (!usage.allowed) {
+      const nextTier = tier === "free" ? "Silver" : tier === "silver" ? "Gold" : "Platinum";
       showAlert(
-        "Daily limit reached",
-        `You've shared ${usage.limit} free stories today. Come back tomorrow for ${usage.limit} more, or upgrade to Gold for unlimited stories.`,
+        "Daily story limit reached",
+        `You've shared all ${usage.limit} free stories for today. Come back tomorrow, or upgrade to ${nextTier} for more.`,
         [
-          { text: "Upgrade to Gold", onPress: () => router.push("/premium") },
+          { text: `Upgrade to ${nextTier}`, onPress: () => router.push("/premium") },
           { text: "OK" },
         ]
       );
@@ -151,7 +153,7 @@ export default function CreateStoryScreen() {
       } else {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("story_created"); } catch (_) {}
-        await recordUsage("stories_create");
+        await recordDailyUsage("stories_create");
         if (router.canDismiss()) {
           router.dismissAll();
         } else {

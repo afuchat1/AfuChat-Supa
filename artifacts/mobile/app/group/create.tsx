@@ -22,7 +22,7 @@ import { showAlert } from "@/lib/alert";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { ContactRowSkeleton } from "@/components/ui/Skeleton";
 import { isOnline } from "@/lib/offlineStore";
-import { getUsage, recordUsage } from "@/lib/featureUsage";
+import { TIER_GROUP_LIMITS } from "@/lib/featureUsage";
 
 type FollowedUser = {
   id: string;
@@ -35,7 +35,7 @@ type FollowedUser = {
 
 export default function CreateGroupScreen() {
   const { colors } = useTheme();
-  const { user } = useAuth();
+  const { user, subscription } = useAuth();
   const insets = useSafeAreaInsets();
   const [groupName, setGroupName] = useState("");
   const [followedUsers, setFollowedUsers] = useState<FollowedUser[]>([]);
@@ -76,17 +76,29 @@ export default function CreateGroupScreen() {
       showAlert("No internet", "Creating a group requires an internet connection.");
       return;
     }
-    const usage = await getUsage("group_create");
-    if (!usage.allowed) {
-      showAlert(
-        "Daily limit reached",
-        `You've used all ${usage.limit} free group creations for today. Come back tomorrow for more, or upgrade to Gold for unlimited groups.`,
-        [
-          { text: "Upgrade to Gold", onPress: () => router.push("/premium") },
-          { text: "OK" },
-        ]
-      );
-      return;
+    const tier = (subscription?.plan_tier as keyof typeof TIER_GROUP_LIMITS) || "free";
+    const limit = TIER_GROUP_LIMITS[tier] ?? 1;
+    if (isFinite(limit)) {
+      const { count } = await supabase
+        .from("chats")
+        .select("id", { count: "exact", head: true })
+        .eq("created_by", user!.id)
+        .eq("is_group", true)
+        .eq("is_channel", false);
+      const current = count ?? 0;
+      if (current >= limit) {
+        const nextTier = tier === "free" ? "Silver" : tier === "silver" ? "Gold" : "Platinum";
+        showAlert(
+          "Group limit reached",
+          `You can create up to ${limit} group${limit === 1 ? "" : "s"} on your current plan. Upgrade to ${nextTier} to create more.`,
+          [
+            { text: `Upgrade to ${nextTier}`, onPress: () => router.push("/premium") },
+            { text: "OK" },
+          ]
+        );
+        setCreating(false);
+        return;
+      }
     }
     if (!groupName.trim()) {
       showAlert("Group name required", "Please enter a group name.");
@@ -119,7 +131,6 @@ export default function CreateGroupScreen() {
       }));
       await supabase.from("chat_members").insert(members);
       try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("group_created"); } catch (_) {}
-      await recordUsage("group_create");
       router.replace({ pathname: "/chat/[id]", params: { id: chat.id } });
     }
     setCreating(false);

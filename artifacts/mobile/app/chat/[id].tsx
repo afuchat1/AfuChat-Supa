@@ -58,6 +58,7 @@ import { useChatPreferences, CHAT_THEME_COLORS, BUBBLE_RADIUS } from "@/context/
 import { useAdvancedFeatures } from "@/context/AdvancedFeaturesContext";
 import { askAi, aiSuggestReply, transcribeAudio } from "@/lib/aiHelper";
 import { AFUAI_BOT_ID } from "@/lib/afuAiBot";
+import { getDailyUsage, recordDailyUsage } from "@/lib/featureUsage";
 import { EmojiKeyboard } from "rn-emoji-keyboard";
 import GiftPickerSheet, { DbGift } from "@/components/gifts/GiftPickerSheet";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -929,7 +930,7 @@ export default function ChatScreen() {
     contactAvatar?: string;
   }>();
   const isDraft = id === "new";
-  const { user, profile, isPremium, refreshProfile } = useAuth();
+  const { user, profile, isPremium, subscription, refreshProfile } = useAuth();
   const { colors } = useTheme();
   const BRAND = colors.accent;
   const { prefs: chatPrefs, themeColors: chatThemeColors, bubbleRadius: chatBubbleRadius } = useChatPreferences();
@@ -1625,6 +1626,13 @@ export default function ChatScreen() {
       try { execAction = { actionType, params: JSON.parse(j.trim()) }; } catch {}
       return "";
     });
+    text = text.replace(/\b(go to|visit|navigate to|open|tap|click)\s+(\/[\w\-/]+)/gi, (_, verb, route) => {
+      const label = route.replace(/^\//, "").replace(/\//g, " › ").replace(/-/g, " ");
+      actions.push({ label: label.charAt(0).toUpperCase() + label.slice(1), icon: "arrow-forward-circle", action: "navigate", params: { route: route.trim() } });
+      return "";
+    });
+    text = text.replace(/\s\/[\w][\w\-/]*/g, " ");
+    text = text.replace(/\s+/g, " ");
     return { text: text.trim(), actions, suggestions, invoices, execAction };
   }
 
@@ -1768,7 +1776,7 @@ export default function ChatScreen() {
     const chatId = activeChatId || (isDraft ? realChatId : id) || id;
     try {
       const userContext = await getAfuAiUserContext();
-      const systemPrompt = `You are AfuAI, a capable and friendly AI assistant built into AfuChat. You can help with anything: writing, coding, math, advice, research, creative work, general questions, and more.
+      const systemPrompt = `You are AfuAI, a capable and professional AI assistant built into AfuChat. You can help with anything: writing, coding, math, advice, research, creative work, general questions, and more.
 
 You have access to the user's AfuChat account data below. Only reference it when the user asks about their account, balance, transactions, followers, or anything platform-related.
 
@@ -1782,9 +1790,9 @@ FORMATTING — you can use rich text in your responses:
 - 1. numbered list items
 
 SPECIAL TAGS — append these at the end of your response when relevant:
-- [SUGGEST:Follow-up question] — add up to 3 natural follow-up suggestions for the user (e.g. [SUGGEST:What is my Nexa balance?])
-- [ACTION:Button label:/route] — add a tappable button that navigates in the app. Routes: /wallet, /premium, /profile/handle, /settings
-- [EXEC:action_type:{"param":"value"}] — request to perform an in-app action. ONLY use when the user explicitly asks to do something. Always explain what you're about to do in text first, then add the tag.
+- [SUGGEST:Follow-up question] — add up to 3 natural follow-up suggestions (e.g. [SUGGEST:What is my Nexa balance?])
+- [ACTION:Button label:/route] — add a tappable in-app button. Routes: /wallet, /premium, /profile/handle, /settings
+- [EXEC:action_type:{"param":"value"}] — in-app action. ONLY use when the user explicitly asks. Explain what you will do in text first, then add the tag.
   Supported actions:
   · send_nexa: {"handle":"username","amount":100,"message":"optional note"}
   · send_acoin: {"handle":"username","amount":50}
@@ -1794,11 +1802,13 @@ SPECIAL TAGS — append these at the end of your response when relevant:
   · cancel_subscription: {}
   · convert_nexa: {"amount":100}
 
-Rules:
-- Answer like a knowledgeable friend — direct, helpful, genuine.
-- Use formatting for structured answers (lists, code, headings). Keep conversational replies as plain text.
-- Only emit [EXEC:...] when explicitly asked. Never execute actions without user intent.
-- [SUGGEST:...] tags should offer natural next steps, not repeat the same question.`;
+STRICT RULES:
+- NEVER write route paths like /premium, /wallet, /settings, /profile etc. in your text body. If navigation is needed, use [ACTION:...] tags only.
+- Answer like a knowledgeable professional — direct, clear, and genuinely helpful.
+- Use formatting for structured answers. Keep conversational replies as plain prose.
+- Only emit [EXEC:...] tags when the user explicitly requests an action. Never act without clear intent.
+- [SUGGEST:...] tags should offer meaningful next steps, not repeat the same question.
+- Keep your tone professional and warm. Never be dismissive or overly promotional.`;
 
       const conversationMessages = currentMessages
         .filter(m => !m._pending)
@@ -2118,6 +2128,25 @@ Rules:
     setSending(false);
 
     if (isAfuAiDirectChat) {
+      const aiTier = (subscription?.plan_tier as "free" | "silver" | "gold" | "platinum") || "free";
+      const aiUsage = await getDailyUsage("afuai_messages", aiTier);
+      if (!aiUsage.allowed) {
+        const nextTier = aiTier === "free" ? "Silver" : aiTier === "silver" ? "Gold" : "Platinum";
+        setMessages((prev) => [{
+          id: `afuai_limit_${Date.now()}`,
+          chat_id: activeChatId,
+          sender_id: AFUAI_BOT_ID,
+          encrypted_content: `You've reached your ${aiUsage.limit} daily message limit on the ${aiTier === "free" ? "Free" : aiTier.charAt(0).toUpperCase() + aiTier.slice(1)} plan. Upgrade to ${nextTier} for ${aiTier === "free" ? "50" : aiTier === "silver" ? "200" : "unlimited"} messages per day.`,
+          sent_at: new Date().toISOString(),
+          sender: { display_name: "AfuAI", avatar_url: null, handle: "afuai" },
+          reactions: [],
+          _isAi: true,
+          _aiActions: [{ label: `Upgrade to ${nextTier}`, icon: "diamond", action: "navigate", params: { route: "/premium" } }],
+        }, ...prev]);
+        setSending(false);
+        return;
+      }
+
       const insertPayload: any = {
         chat_id: activeChatId,
         sender_id: user.id,
@@ -2132,6 +2161,7 @@ Rules:
         );
       }
 
+      await recordDailyUsage("afuai_messages");
       const snapshot = messages;
       handleAfuAiResponse(text, snapshot, activeChatId);
       try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("message_sent"); } catch (_) {}
