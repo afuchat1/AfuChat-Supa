@@ -318,13 +318,6 @@ export default function MeScreen() {
           onPress={() => router.push("/premium")}
           value={isPremium ? `Active (${subscription?.plan_tier})` : ""}
         />
-        <Separator indent={54} />
-        <MenuItem
-          icon="swap-horizontal-outline"
-          iconBg="#AF52DE"
-          label="Switch Accounts"
-          onPress={() => router.push("/linked-accounts")}
-        />
       </MenuGroup>
 
       <MenuGroup>

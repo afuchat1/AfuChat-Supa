@@ -257,7 +257,7 @@ const storyBarStyles = StyleSheet.create({
 
 export default function ChatsScreen() {
   const { colors } = useTheme();
-  const { user } = useAuth();
+  const { user, profile, linkedAccounts, switchAccount } = useAuth();
   const isDesktop = useIsDesktop();
   const { openDetail } = useDesktopDetail();
   const insets = useSafeAreaInsets();
@@ -269,6 +269,7 @@ export default function ChatsScreen() {
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const [switchingId, setSwitchingId] = useState<string | null>(null);
 
   const fetchUnreadCount = useCallback(() => {
     if (!user) return;
@@ -530,6 +531,70 @@ export default function ChatsScreen() {
           { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border },
         ]}
       >
+        {/* Account avatar stack — left side */}
+        {(() => {
+          const others = linkedAccounts.filter(a => a.userId !== user?.id);
+          const currentFallback = { userId: user?.id || "", displayName: profile?.display_name || "", avatarUrl: profile?.avatar_url || null };
+          const currentStored = linkedAccounts.find(a => a.userId === user?.id);
+          const current = currentStored || currentFallback;
+          // Others first (behind), current last (on top). Max 3 total.
+          const displayList = [...others, current].slice(-3);
+          const extra = linkedAccounts.length > 3 ? linkedAccounts.length - 3 : 0;
+          return (
+            <TouchableOpacity
+              style={styles.accountStack}
+              onPress={() => router.push("/linked-accounts")}
+              activeOpacity={0.75}
+            >
+              {displayList.map((acc, i) => {
+                const isActive = acc.userId === user?.id;
+                const isSwitching = switchingId === acc.userId;
+                return (
+                  <TouchableOpacity
+                    key={acc.userId}
+                    style={[
+                      styles.stackAvatarWrap,
+                      {
+                        marginLeft: i === 0 ? 0 : -10,
+                        zIndex: i + 1,
+                        borderColor: isActive ? colors.accent : colors.surface,
+                        borderWidth: isActive ? 2 : 1.5,
+                        borderRadius: 18,
+                      },
+                    ]}
+                    onPress={async (e) => {
+                      e.stopPropagation();
+                      if (isActive) {
+                        router.push("/linked-accounts");
+                        return;
+                      }
+                      setSwitchingId(acc.userId);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      await switchAccount(acc.userId);
+                      setSwitchingId(null);
+                    }}
+                    activeOpacity={0.75}
+                    disabled={isSwitching}
+                  >
+                    {isSwitching ? (
+                      <View style={[styles.stackAvatar, { backgroundColor: colors.inputBg, alignItems: "center", justifyContent: "center" }]}>
+                        <ActivityIndicator size="small" color={colors.accent} />
+                      </View>
+                    ) : (
+                      <Avatar uri={acc.avatarUrl} name={acc.displayName} size={30} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+              {extra > 0 && (
+                <View style={[styles.stackAvatarWrap, styles.stackExtra, { marginLeft: -10, backgroundColor: colors.inputBg, borderColor: colors.surface, zIndex: 10 }]}>
+                  <Text style={[styles.stackExtraText, { color: colors.textMuted }]}>+{extra}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })()}
+
         <Text style={[styles.headerTitle, { color: colors.text, textAlign: "center", flex: 1 }]}>AfuChat</Text>
         <TouchableOpacity onPress={() => router.push("/notifications")} style={styles.headerIcon}>
           <Ionicons name="notifications-outline" size={22} color={colors.text} />
@@ -754,4 +819,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  accountStack: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 2,
+  },
+  stackAvatarWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stackAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    overflow: "hidden",
+  },
+  stackExtra: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+  },
+  stackExtraText: { fontSize: 10, fontFamily: "Inter_700Bold" },
 });
