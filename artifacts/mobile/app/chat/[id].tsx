@@ -2576,6 +2576,62 @@ STRICT RULES:
     }
   }
 
+  async function startVoiceRecordingWeb() {
+    if (recordingRef.current) return;
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== "granted") {
+        showAlert("Microphone permission needed", "Please allow access to your microphone.");
+        return;
+      }
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        staysActiveInBackground: false,
+      });
+      const { recording } = await Audio.Recording.createAsync({
+        ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
+        isMeteringEnabled: true,
+      });
+      recordingRef.current = recording;
+      recStartedSV.value = true;
+      recLockedSV.value = true;
+      setIsRecording(true);
+      setRecLocked(true);
+      setRecordingDuration(0);
+      setRecordingTenths(0);
+      setWaveformLevels([]);
+      recordingTimer.current = setInterval(() => {
+        setRecordingTenths((t) => {
+          if (t >= 9) { setRecordingDuration((d) => d + 1); return 0; }
+          return t + 1;
+        });
+      }, 100);
+      meterInterval.current = setInterval(async () => {
+        if (!recordingRef.current) return;
+        try {
+          const s = await recordingRef.current.getStatusAsync();
+          if (s.isRecording && s.metering !== undefined) {
+            const db = s.metering;
+            const normalized = Math.max(0.05, Math.min(1, (db + 60) / 55));
+            setWaveformLevels((prev) => {
+              const next = [...prev, normalized];
+              return next.length > 40 ? next.slice(-40) : next;
+            });
+          }
+        } catch (_) {}
+      }, 100);
+    } catch {
+      recStartedSV.value = false;
+      recLockedSV.value = false;
+      setIsRecording(false);
+      setRecLocked(false);
+      try { await Audio.setAudioModeAsync({ allowsRecordingIOS: false }); } catch (_) {}
+      showAlert("Error", "Could not start recording.");
+    }
+  }
+
   async function stopVoiceRecording() {
     if (!recordingRef.current) return;
     const capturedDuration = recordingDuration;
@@ -3207,6 +3263,14 @@ STRICT RULES:
                   ) : (
                     <Ionicons name={editingMessage ? "checkmark" : "send"} size={18} color="#fff" />
                   )}
+                </TouchableOpacity>
+              ) : Platform.OS === "web" ? (
+                <TouchableOpacity
+                  onPress={startVoiceRecordingWeb}
+                  style={[st.sendBtn, { backgroundColor: BRAND }]}
+                  hitSlop={6}
+                >
+                  <Ionicons name="mic" size={20} color="#fff" />
                 </TouchableOpacity>
               ) : (
                 <View style={isRecording && !recLocked ? st.recMicWrap : undefined}>
