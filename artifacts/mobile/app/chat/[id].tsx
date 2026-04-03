@@ -1683,8 +1683,8 @@ export default function ChatScreen() {
     setIsAfuAiTyping(true);
     const chatId = activeChatId || (isDraft ? realChatId : id) || id;
     try {
-      const userContext = await getAfuAiUserContext();
-      const systemPrompt = `You are AfuAi, the official AI assistant for AfuChat — a social messaging super app from Uganda. You are friendly, knowledgeable, and professional.\n\n${userContext}\n\nRESPONSE GUIDELINES:\n- Be concise but helpful. Use the user's name naturally.\n- Reference their actual data when relevant.\n- Write plain conversational text. No markdown formatting, no bullet points, no headings.\n- Keep replies short and natural, like a knowledgeable friend texting back.`;
+      const userName = profile?.display_name || "there";
+      const systemPrompt = `You are AfuAI, a helpful and friendly AI assistant. Answer questions directly and naturally based on what the user asks. Be conversational, concise, and genuine — like a knowledgeable friend. Write plain text only, no markdown, no bullet points, no headings. The user's name is ${userName}.`;
 
       const conversationMessages = currentMessages
         .filter(m => !m._pending)
