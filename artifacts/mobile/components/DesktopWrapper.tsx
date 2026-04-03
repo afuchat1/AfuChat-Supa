@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Platform,
   StyleSheet,
@@ -30,12 +30,15 @@ export type DesktopSection =
   | "wallet"
   | "profile";
 
+/**
+ * Segments that are treated as "base" (section panels visible, overlay hidden).
+ * Auth, onboarding and any real sub-routes are intentionally NOT in this set
+ * so they appear inside the detail overlay.
+ */
 const BASE_FIRST_SEGMENTS = new Set([
-  "",
+  "",         // initial empty segment before routing settles
   "index",
   "(tabs)",
-  "(auth)",
-  "onboarding",
   "+html",
   "+not-found",
 ]);
@@ -62,14 +65,28 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
 
   const [activeSection, setActiveSection] = useState<DesktopSection>(() => {
     const fromSegs = sectionFromSegments(segments);
-    // When not logged in, always start on discover (public read access)
-    if (!session && fromSegs === "chats") return "discover";
+    // Unauthenticated visitors always start on the public Discover feed
+    if (!session && (fromSegs === "chats" || fromSegs === "notifications" || fromSegs === "wallet" || fromSegs === "profile")) {
+      return "discover";
+    }
     return fromSegs;
   });
+
+  // When session is lost (sign-out), fall back to Discover
+  const prevSessionRef = useRef(session);
+  useEffect(() => {
+    const wasLoggedIn = !!prevSessionRef.current;
+    const isLoggedIn = !!session;
+    if (wasLoggedIn && !isLoggedIn) {
+      setActiveSection("discover");
+    }
+    prevSessionRef.current = session;
+  }, [session]);
 
   const handleSectionChange = useCallback(
     (section: DesktopSection) => {
       setActiveSection(section);
+      // If we're inside a detail overlay, collapse back to the base tab
       if (isDetailRoute(segments)) {
         try {
           router.replace("/(tabs)" as any);
@@ -99,15 +116,30 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
           Platform.OS === "web" && ({ boxShadow: shellShadow } as any),
         ]}
       >
-        {session && (
+        {/* Icon rail — authenticated users only */}
+        {session ? (
           <DesktopIconRail
             activeSection={activeSection}
             onSectionChange={handleSectionChange}
           />
+        ) : (
+          /* Minimal guest rail: logo + sign-in button */
+          <View style={[styles.guestRail, { backgroundColor: shellBg, borderRightColor: colors.border }]}>
+            <View style={[styles.guestLogoWrap, { backgroundColor: colors.accent + "18" }]}>
+              <Ionicons name="chatbubble-ellipses" size={22} color={colors.accent} />
+            </View>
+            <TouchableOpacity
+              onPress={() => router.push("/(auth)/login" as any)}
+              style={[styles.guestSignInBtn, { backgroundColor: colors.accent }]}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="log-in-outline" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
         )}
 
         <View style={[styles.mainArea, { borderLeftColor: colors.border }]}>
-          {/* Section panels */}
+          {/* Section panels — always behind the overlay */}
           <View style={styles.sectionLayer}>
             {activeSection === "chats" && <DesktopChatsSection />}
             {activeSection === "discover" && <DesktopDiscoverSection />}
@@ -118,9 +150,9 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
           </View>
 
           {/*
-           * Detail overlay — always mounted so expo-router stays alive.
-           * Uses display:none when on base routes (sections show),
-           * display:flex when on a detail route (overlay covers sections).
+           * Detail overlay — always mounted so expo-router tree stays alive.
+           * display:flex  → overlay is on top (detail / auth / settings screens)
+           * display:none  → sections visible (base tab routes)
            */}
           {Platform.OS === "web" && (
             <View
@@ -129,29 +161,23 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
                 { backgroundColor: overlayBg, display: showOverlay ? "flex" : "none" },
               ]}
             >
-              {/* Back header */}
               <View
                 style={[
                   styles.overlayHeader,
-                  {
-                    borderBottomColor: colors.border,
-                    backgroundColor: overlayBg,
-                  },
+                  { borderBottomColor: colors.border, backgroundColor: overlayBg },
                 ]}
               >
                 <TouchableOpacity
-                  onPress={() => router.back()}
+                  onPress={() => {
+                    try { router.back(); } catch {
+                      router.replace("/(tabs)" as any);
+                    }
+                  }}
                   style={styles.backBtn}
                   activeOpacity={0.7}
                 >
-                  <Ionicons
-                    name="chevron-back"
-                    size={20}
-                    color={colors.accent}
-                  />
-                  <Text style={[styles.backText, { color: colors.accent }]}>
-                    Back
-                  </Text>
+                  <Ionicons name="chevron-back" size={20} color={colors.accent} />
+                  <Text style={[styles.backText, { color: colors.accent }]}>Back</Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.overlayContent}>{children}</View>
@@ -190,6 +216,28 @@ const styles = StyleSheet.create({
     maxWidth: 1600,
     flexDirection: "row",
     overflow: "hidden",
+  },
+  guestRail: {
+    width: 64,
+    flexShrink: 0,
+    alignItems: "center",
+    paddingVertical: 12,
+    gap: 16,
+    borderRightWidth: StyleSheet.hairlineWidth,
+  },
+  guestLogoWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  guestSignInBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
   },
   mainArea: {
     flex: 1,

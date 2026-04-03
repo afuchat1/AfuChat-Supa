@@ -29,7 +29,7 @@ type Post = {
   images: string[];
   created_at: string;
   like_count: number;
-  comment_count: number;
+  reply_count: number;
 };
 
 type NavLink = {
@@ -93,7 +93,7 @@ function PostGrid({ posts, colors, isDark }: { posts: Post[]; colors: any; isDar
               </View>
               <View style={styles.postStat}>
                 <Ionicons name="chatbubble" size={12} color="#fff" />
-                <Text style={styles.postStatText}>{p.comment_count}</Text>
+                <Text style={styles.postStatText}>{p.reply_count}</Text>
               </View>
             </View>
           </TouchableOpacity>
@@ -115,7 +115,7 @@ export function DesktopProfileSection() {
     if (!user) return;
     const [postsRes, followersRes, followingRes] = await Promise.all([
       supabase.from("posts")
-        .select("id, content, image_url, images, created_at, like_count, comment_count")
+        .select("id, content, image_url, created_at, post_images(image_url, display_order)")
         .eq("author_id", user.id)
         .eq("is_blocked", false)
         .order("created_at", { ascending: false })
@@ -123,7 +123,41 @@ export function DesktopProfileSection() {
       supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", user.id),
       supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", user.id),
     ]);
-    setPosts((postsRes.data || []).map((p: any) => ({ ...p, images: p.images || [] })));
+
+    const rawPosts = postsRes.data || [];
+    const postIds = rawPosts.map((p: any) => p.id);
+
+    const [{ data: likeCounts }, { data: replyCounts }] = await Promise.all([
+      postIds.length > 0
+        ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds)
+        : { data: [] },
+      postIds.length > 0
+        ? supabase.from("post_replies").select("post_id").in("post_id", postIds)
+        : { data: [] },
+    ]);
+
+    const likeMap: Record<string, number> = {};
+    for (const l of (likeCounts || [])) {
+      likeMap[(l as any).post_id] = (likeMap[(l as any).post_id] || 0) + 1;
+    }
+    const replyMap: Record<string, number> = {};
+    for (const r of (replyCounts || [])) {
+      replyMap[(r as any).post_id] = (replyMap[(r as any).post_id] || 0) + 1;
+    }
+
+    setPosts(
+      rawPosts.map((p: any) => ({
+        id: p.id,
+        content: p.content || "",
+        image_url: p.image_url,
+        images: (p.post_images || [])
+          .sort((a: any, b: any) => a.display_order - b.display_order)
+          .map((i: any) => i.image_url),
+        created_at: p.created_at,
+        like_count: likeMap[p.id] || 0,
+        reply_count: replyMap[p.id] || 0,
+      }))
+    );
     setFollowStats({ followers: followersRes.count || 0, following: followingRes.count || 0 });
     setLoading(false);
   }, [user]);
