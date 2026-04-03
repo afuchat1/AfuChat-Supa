@@ -210,12 +210,16 @@ export default function RegisterScreen() {
         router.replace("/(tabs)");
       }
     } catch (err: any) {
+      if (
+        err?.code === 10 ||
+        (statusCodes && err?.code === statusCodes.DEVELOPER_ERROR) ||
+        String(err?.message ?? "").includes("DEVELOPER_ERROR")
+      ) {
+        return signInWithProviderWeb("google");
+      }
       if (isErrorWithCode && isErrorWithCode(err)) {
         if (err.code === statusCodes.SIGN_IN_CANCELLED) { setOauthLoading(null); return; }
         if (err.code === statusCodes.IN_PROGRESS) { setOauthLoading(null); return; }
-        if (err.code === statusCodes.DEVELOPER_ERROR || err.code === 10) {
-          return signInWithProviderWeb("google");
-        }
       }
       setOauthLoading(null);
       showAlert("Error", err?.message || "Google sign in failed.");
