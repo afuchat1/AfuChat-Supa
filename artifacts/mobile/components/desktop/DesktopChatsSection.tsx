@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -17,7 +17,6 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { DesktopChatView } from "@/components/DesktopChatView";
-import Colors from "@/constants/colors";
 
 type ChatItem = {
   id: string;
@@ -41,73 +40,111 @@ function formatTime(iso: string): string {
   const now = new Date();
   const diff = now.getTime() - d.getTime();
   if (diff < 60000) return "now";
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
   if (diff < 86400000) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   if (diff < 604800000) return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()];
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-type Filter = "all" | "groups" | "channels";
+type Filter = "all" | "unread" | "groups";
 
-const FILTER_LABELS: { key: Filter; label: string }[] = [
+function useWaColors(isDark: boolean) {
+  return isDark
+    ? {
+        bg: "#111b21",
+        surface: "#202c33",
+        input: "#2a3942",
+        text: "#e9edef",
+        muted: "#8696a0",
+        border: "#222f35",
+        brand: "#00BCD4",
+        rowHover: "#2a3942",
+        rowSelected: "rgba(0,188,212,0.12)",
+        selectedBar: "#00BCD4",
+        unreadBg: "#00BCD4",
+        filterActive: "#00BCD4",
+        filterActiveTxt: "#fff",
+        filterInactive: "transparent",
+        filterInactiveBorder: "#2a3942",
+        filterInactiveTxt: "#8696a0",
+        welcomeBg: "#0b1014",
+      }
+    : {
+        bg: "#f0f2f5",
+        surface: "#ffffff",
+        input: "#f0f2f5",
+        text: "#111b21",
+        muted: "#667781",
+        border: "#d1d7db",
+        brand: "#00a884",
+        rowHover: "#f5f6f6",
+        rowSelected: "rgba(0,168,132,0.08)",
+        selectedBar: "#00a884",
+        unreadBg: "#25d366",
+        filterActive: "#25d366",
+        filterActiveTxt: "#111b21",
+        filterInactive: "transparent",
+        filterInactiveBorder: "#d1d7db",
+        filterInactiveTxt: "#667781",
+        welcomeBg: "#f0f2f5",
+      };
+}
+
+const FILTERS: { key: Filter; label: string }[] = [
   { key: "all", label: "All" },
+  { key: "unread", label: "Unread" },
   { key: "groups", label: "Groups" },
-  { key: "channels", label: "Channels" },
 ];
 
 function ChatRow({
   item,
   isSelected,
   onPress,
-  colors,
-  isDark,
+  wa,
 }: {
   item: ChatItem;
   isSelected: boolean;
   onPress: () => void;
-  colors: any;
-  isDark: boolean;
+  wa: ReturnType<typeof useWaColors>;
 }) {
   const displayName = item.is_group || item.is_channel ? item.name : item.other_display_name;
-  const avatar = item.is_group || item.is_channel ? item.avatar_url : item.other_avatar;
+  const avatarUri = item.is_group || item.is_channel ? item.avatar_url : item.other_avatar;
   const hasUnread = item.unread_count > 0;
   const [hovered, setHovered] = useState(false);
 
   const hoverProps =
     Platform.OS === "web"
-      ? {
-          onMouseEnter: () => setHovered(true),
-          onMouseLeave: () => setHovered(false),
-        }
+      ? { onMouseEnter: () => setHovered(true), onMouseLeave: () => setHovered(false) }
       : {};
 
   return (
     <TouchableOpacity
       onPress={onPress}
-      activeOpacity={0.85}
+      activeOpacity={0.9}
       style={[
-        styles.chatRow,
-        isSelected && { backgroundColor: colors.accent + "18" },
-        !isSelected && hovered && { backgroundColor: colors.backgroundSecondary + "70" },
+        st.chatRow,
+        isSelected && { backgroundColor: wa.rowSelected },
+        !isSelected && hovered && { backgroundColor: wa.rowHover },
+        { borderBottomColor: wa.border },
       ]}
       {...(hoverProps as any)}
     >
-      {isSelected && <View style={[styles.selectedBar, { backgroundColor: colors.accent }]} />}
+      {isSelected && <View style={[st.selectedBar, { backgroundColor: wa.selectedBar }]} />}
       <View style={{ position: "relative" }}>
-        <Avatar uri={avatar} name={displayName || "Chat"} size={44} />
+        <Avatar uri={avatarUri} name={displayName || "Chat"} size={48} />
         {item.is_channel && (
-          <View style={[styles.channelBadge, { backgroundColor: colors.accent }]}>
+          <View style={[st.channelBadge, { backgroundColor: wa.brand }]}>
             <Ionicons name="megaphone" size={9} color="#fff" />
           </View>
         )}
       </View>
-      <View style={styles.chatInfo}>
-        <View style={styles.chatTop}>
-          <View style={styles.chatNameRow}>
+      <View style={st.chatInfo}>
+        <View style={st.chatTop}>
+          <View style={st.chatNameRow}>
             <Text
               style={[
-                styles.chatName,
-                { color: isSelected ? colors.accent : colors.text },
+                st.chatName,
+                { color: isSelected ? wa.brand : wa.text },
                 hasUnread && { fontFamily: "Inter_700Bold" },
               ]}
               numberOfLines={1}
@@ -122,24 +159,24 @@ function ChatRow({
               />
             )}
           </View>
-          <Text style={[styles.chatTime, { color: hasUnread ? colors.accent : colors.textMuted }]}>
+          <Text style={[st.chatTime, { color: hasUnread ? wa.brand : wa.muted }]}>
             {item.last_message_at ? formatTime(item.last_message_at) : ""}
           </Text>
         </View>
-        <View style={styles.chatBottom}>
+        <View style={st.chatBottom}>
           <Text
             style={[
-              styles.chatPreview,
-              { color: hasUnread ? colors.text : colors.textMuted },
+              st.chatPreview,
+              { color: hasUnread ? wa.text : wa.muted },
               hasUnread && { fontFamily: "Inter_500Medium" },
             ]}
             numberOfLines={1}
           >
-            {item.last_message || "No messages yet"}
+            {item.last_message || "Tap to open chat"}
           </Text>
           {hasUnread && (
-            <View style={[styles.unreadDot, { backgroundColor: colors.accent }]}>
-              <Text style={styles.unreadText}>
+            <View style={[st.unreadBadge, { backgroundColor: wa.unreadBg }]}>
+              <Text style={st.unreadText}>
                 {item.unread_count > 99 ? "99+" : item.unread_count}
               </Text>
             </View>
@@ -150,52 +187,34 @@ function ChatRow({
   );
 }
 
-function ChatListEmpty({ colors }: { colors: any }) {
+function WelcomePane({ wa }: { wa: ReturnType<typeof useWaColors> }) {
   return (
-    <View style={styles.emptyList}>
-      <Ionicons name="chatbubbles-outline" size={44} color={colors.textMuted} />
-      <Text style={[styles.emptyTitle, { color: colors.text }]}>No conversations</Text>
-      <Text style={[styles.emptySub, { color: colors.textMuted }]}>
-        Start a chat to get going
-      </Text>
-      <TouchableOpacity
-        style={[styles.newChatBtn, { backgroundColor: colors.accent }]}
-        onPress={() => router.push("/group/create" as any)}
-        activeOpacity={0.85}
-      >
-        <Ionicons name="create-outline" size={16} color="#fff" />
-        <Text style={styles.newChatBtnText}>New Chat</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-function WelcomePane({ colors, isDark }: { colors: any; isDark: boolean }) {
-  return (
-    <View style={[styles.welcomePane, { backgroundColor: isDark ? "#0d0d10" : "#f8f9fc" }]}>
-      <View style={[styles.welcomeIconWrap, { backgroundColor: colors.accent + "15" }]}>
-        <Ionicons name="chatbubble-ellipses-outline" size={56} color={colors.accent} />
+    <View style={[st.welcomePane, { backgroundColor: wa.welcomeBg, borderLeftColor: wa.border }]}>
+      <View style={[st.welcomeIconWrap, { backgroundColor: wa.brand + "15" }]}>
+        <Ionicons name="chatbubble-ellipses-outline" size={64} color={wa.brand} />
       </View>
-      <Text style={[styles.welcomeTitle, { color: colors.text }]}>Welcome to AfuChat</Text>
-      <Text style={[styles.welcomeSub, { color: colors.textMuted }]}>
-        Select a conversation to start messaging, or create a new chat.
+      <Text style={[st.welcomeTitle, { color: wa.text }]}>AfuChat for Web</Text>
+      <Text style={[st.welcomeSub, { color: wa.muted }]}>
+        Send and receive messages without keeping your phone online.{"\n"}
+        Select a conversation to start messaging.
       </Text>
-      <View style={{ flexDirection: "row", gap: 12, marginTop: 8 }}>
+      <View style={[st.welcomeDivider, { backgroundColor: wa.border }]} />
+      <View style={{ flexDirection: "row", gap: 10 }}>
         <TouchableOpacity
-          style={[styles.welcomeBtn, { backgroundColor: colors.accent }]}
+          style={[st.welcomeBtn, { backgroundColor: wa.brand }]}
           onPress={() => router.push("/group/create" as any)}
           activeOpacity={0.85}
         >
-          <Ionicons name="create-outline" size={15} color="#fff" />
-          <Text style={styles.welcomeBtnText}>New Chat</Text>
+          <Ionicons name="create-outline" size={16} color="#fff" />
+          <Text style={st.welcomeBtnText}>New Chat</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.welcomeBtn, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}
+          style={[st.welcomeBtn, { backgroundColor: "transparent", borderWidth: 1, borderColor: wa.brand }]}
           onPress={() => router.push("/channel/create" as any)}
           activeOpacity={0.85}
         >
-          <Ionicons name="megaphone-outline" size={15} color={colors.accent} />
-          <Text style={[styles.welcomeBtnText, { color: colors.accent }]}>New Channel</Text>
+          <Ionicons name="megaphone-outline" size={16} color={wa.brand} />
+          <Text style={[st.welcomeBtnText, { color: wa.brand }]}>New Channel</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -203,8 +222,9 @@ function WelcomePane({ colors, isDark }: { colors: any; isDark: boolean }) {
 }
 
 export function DesktopChatsSection() {
-  const { colors, isDark } = useTheme();
+  const { isDark } = useTheme();
   const { user } = useAuth();
+  const wa = useWaColors(isDark);
 
   const [chats, setChats] = useState<ChatItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -248,7 +268,10 @@ export function DesktopChatsSection() {
     for (const m of lastMsgsResult.data || []) {
       if (!lastMsgMap[m.chat_id]) {
         let preview = m.encrypted_content || "";
-        if (m.attachment_type === "story_reply") preview = preview ? `📸 ${preview}` : "📸 Replied";
+        if (m.attachment_type === "image") preview = "📷 Photo";
+        else if (m.attachment_type === "video") preview = "🎥 Video";
+        else if (m.attachment_type === "audio") preview = "🎵 Voice message";
+        else if (m.attachment_type === "story_reply") preview = preview ? `📸 ${preview}` : "📸 Replied";
         lastMsgMap[m.chat_id] = { msg: preview, at: m.sent_at };
       }
     }
@@ -292,8 +315,8 @@ export function DesktopChatsSection() {
   }, [user, loadChats]);
 
   const filtered = chats.filter((c) => {
+    if (filter === "unread" && c.unread_count === 0) return false;
     if (filter === "groups" && !c.is_group) return false;
-    if (filter === "channels" && !c.is_channel) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
       const name = (c.is_group || c.is_channel ? c.name : c.other_display_name) || "";
@@ -303,61 +326,62 @@ export function DesktopChatsSection() {
   });
 
   return (
-    <View style={styles.root}>
-      {/* Left panel: chat list */}
-      <View
-        style={[
-          styles.listPanel,
-          { backgroundColor: isDark ? "#0c0c0f" : "#f5f6f8", borderRightColor: colors.border },
-        ]}
-      >
-        {/* Header */}
-        <View style={[styles.panelHeader, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.panelTitle, { color: colors.text }]}>Messages</Text>
-          <TouchableOpacity
-            style={[styles.composeBtn, { backgroundColor: colors.accent + "18" }]}
-            onPress={() => router.push("/group/create" as any)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="create-outline" size={17} color={colors.accent} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Search */}
-        <View style={[styles.searchWrap, { backgroundColor: colors.inputBg }]}>
-          <Ionicons name="search-outline" size={15} color={colors.textMuted} />
-          <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Search conversations…"
-            placeholderTextColor={colors.textMuted}
-            value={search}
-            onChangeText={setSearch}
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch("")} hitSlop={8}>
-              <Ionicons name="close-circle" size={15} color={colors.textMuted} />
+    <View style={[st.root, { backgroundColor: wa.bg }]}>
+      <View style={[st.listPanel, { backgroundColor: wa.bg, borderRightColor: wa.border }]}>
+        <View style={[st.panelHeader, { backgroundColor: wa.surface }]}>
+          <Text style={[st.panelTitle, { color: wa.text }]}>Messages</Text>
+          <View style={{ flexDirection: "row", gap: 4 }}>
+            <TouchableOpacity
+              style={[st.headerBtn, { backgroundColor: wa.input }]}
+              onPress={() => router.push("/group/create" as any)}
+              hitSlop={8}
+            >
+              <Ionicons name="create-outline" size={18} color={wa.brand} />
             </TouchableOpacity>
-          )}
+            <TouchableOpacity
+              style={[st.headerBtn, { backgroundColor: wa.input }]}
+              hitSlop={8}
+            >
+              <Ionicons name="ellipsis-vertical" size={18} color={wa.muted} />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Filter chips */}
-        <View style={styles.filterRow}>
-          {FILTER_LABELS.map((f) => (
+        <View style={[st.searchRow, { backgroundColor: wa.surface, paddingBottom: 8 }]}>
+          <View style={[st.searchWrap, { backgroundColor: wa.input }]}>
+            <Ionicons name="search-outline" size={15} color={wa.muted} />
+            <TextInput
+              style={[st.searchInput, { color: wa.text }]}
+              placeholder="Search or start new chat"
+              placeholderTextColor={wa.muted}
+              value={search}
+              onChangeText={setSearch}
+            />
+            {search.length > 0 && (
+              <TouchableOpacity onPress={() => setSearch("")} hitSlop={8}>
+                <Ionicons name="close-circle" size={15} color={wa.muted} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        <View style={[st.filterRow, { backgroundColor: wa.surface, borderBottomColor: wa.border }]}>
+          {FILTERS.map((f) => (
             <TouchableOpacity
               key={f.key}
               onPress={() => setFilter(f.key)}
               style={[
-                styles.filterChip,
+                st.filterChip,
                 filter === f.key
-                  ? { backgroundColor: colors.accent, borderColor: colors.accent }
-                  : { backgroundColor: "transparent", borderColor: colors.border },
+                  ? { backgroundColor: wa.filterActive, borderColor: wa.filterActive }
+                  : { backgroundColor: wa.filterInactive, borderColor: wa.filterInactiveBorder },
               ]}
               activeOpacity={0.8}
             >
               <Text
                 style={[
-                  styles.filterChipText,
-                  { color: filter === f.key ? "#fff" : colors.textMuted },
+                  st.filterChipText,
+                  { color: filter === f.key ? wa.filterActiveTxt : wa.filterInactiveTxt },
                 ]}
               >
                 {f.label}
@@ -366,10 +390,9 @@ export function DesktopChatsSection() {
           ))}
         </View>
 
-        {/* Chat list */}
         {loading ? (
-          <View style={styles.loadingCenter}>
-            <ActivityIndicator color={colors.accent} />
+          <View style={st.loadingCenter}>
+            <ActivityIndicator color={wa.brand} />
           </View>
         ) : (
           <FlatList
@@ -380,74 +403,76 @@ export function DesktopChatsSection() {
                 item={item}
                 isSelected={selectedChatId === item.id}
                 onPress={() => setSelectedChatId(item.id)}
-                colors={colors}
-                isDark={isDark}
+                wa={wa}
               />
             )}
             showsVerticalScrollIndicator={false}
-            ListEmptyComponent={<ChatListEmpty colors={colors} />}
-            contentContainerStyle={filtered.length === 0 ? { flex: 1 } : undefined}
+            ListEmptyComponent={
+              <View style={st.emptyList}>
+                <Ionicons name="chatbubbles-outline" size={44} color={wa.muted} />
+                <Text style={[st.emptyTitle, { color: wa.text }]}>
+                  {search ? "No results found" : "No conversations"}
+                </Text>
+                <Text style={[st.emptySub, { color: wa.muted }]}>
+                  {search ? "Try a different name" : "Start a chat to get going"}
+                </Text>
+              </View>
+            }
           />
         )}
       </View>
 
-      {/* Right panel: selected chat */}
-      <View style={[styles.chatPane, { backgroundColor: isDark ? "#0f0f12" : "#ffffff" }]}>
+      <View style={[st.chatPane, { backgroundColor: wa.welcomeBg }]}>
         {selectedChatId ? (
           <DesktopChatView
             chatId={selectedChatId}
             onClose={() => setSelectedChatId(null)}
           />
         ) : (
-          <WelcomePane colors={colors} isDark={isDark} />
+          <WelcomePane wa={wa} />
         )}
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    flexDirection: "row",
-    overflow: "hidden",
-  },
+const st = StyleSheet.create({
+  root: { flex: 1, flexDirection: "row", overflow: "hidden" },
+
   listPanel: {
-    width: 300,
+    width: 380,
     flexShrink: 0,
     borderRightWidth: StyleSheet.hairlineWidth,
     flexDirection: "column",
+    overflow: "hidden",
   },
   panelHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingTop: 18,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingTop: 16,
+    paddingBottom: 10,
   },
   panelTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontFamily: "Inter_700Bold",
     letterSpacing: -0.3,
   },
-  composeBtn: {
+  headerBtn: {
     width: 34,
     height: 34,
-    borderRadius: 10,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
   },
+  searchRow: { paddingHorizontal: 12, paddingTop: 4 },
   searchWrap: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginHorizontal: 12,
-    marginTop: 10,
-    marginBottom: 8,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    height: 38,
     borderRadius: 10,
   },
   searchInput: {
@@ -455,37 +480,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     padding: 0,
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
   },
   filterRow: {
     flexDirection: "row",
     gap: 6,
     paddingHorizontal: 12,
+    paddingTop: 8,
     paddingBottom: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   filterChip: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 5,
     borderRadius: 20,
     borderWidth: 1,
   },
-  filterChipText: {
-    fontSize: 12,
-    fontFamily: "Inter_500Medium",
-  },
+  filterChipText: { fontSize: 12, fontFamily: "Inter_500Medium" },
+
   chatRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 14,
+    gap: 12,
+    paddingHorizontal: 16,
     paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     position: "relative",
-    overflow: "hidden",
   },
   selectedBar: {
     position: "absolute",
     left: 0,
-    top: 8,
-    bottom: 8,
+    top: 10,
+    bottom: 10,
     width: 3,
     borderRadius: 2,
   },
@@ -499,125 +525,56 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  chatInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  chatTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 4,
-  },
-  chatNameRow: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    minWidth: 0,
-  },
-  chatName: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-    flex: 1,
-  },
-  chatTime: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-    flexShrink: 0,
-  },
-  chatBottom: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 2,
-  },
-  chatPreview: {
-    flex: 1,
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-  },
-  unreadDot: {
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
+  chatInfo: { flex: 1, minWidth: 0 },
+  chatTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 4 },
+  chatNameRow: { flex: 1, flexDirection: "row", alignItems: "center", gap: 4, minWidth: 0 },
+  chatName: { fontSize: 15, fontFamily: "Inter_600SemiBold", flex: 1 },
+  chatTime: { fontSize: 11, fontFamily: "Inter_400Regular", flexShrink: 0 },
+  chatBottom: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 },
+  chatPreview: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular" },
+  unreadBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 4,
+    paddingHorizontal: 5,
   },
-  unreadText: {
-    color: "#fff",
-    fontSize: 10,
-    fontFamily: "Inter_700Bold",
-  },
-  loadingCenter: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyList: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 32,
-    gap: 10,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
-    marginTop: 4,
-  },
-  emptySub: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    textAlign: "center",
-  },
-  newChatBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 22,
-    marginTop: 8,
-  },
-  newChatBtnText: {
-    color: "#fff",
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-  },
-  chatPane: {
-    flex: 1,
-    overflow: "hidden",
-  },
+  unreadText: { color: "#fff", fontSize: 11, fontFamily: "Inter_700Bold" },
+
+  loadingCenter: { flex: 1, alignItems: "center", justifyContent: "center" },
+
+  emptyList: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 10, paddingTop: 60 },
+  emptyTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold", marginTop: 4 },
+  emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
+
+  chatPane: { flex: 1, overflow: "hidden" },
+
   welcomePane: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     padding: 48,
     gap: 14,
+    borderLeftWidth: StyleSheet.hairlineWidth,
   },
   welcomeIconWrap: {
-    width: 96,
-    height: 96,
-    borderRadius: 28,
+    width: 112,
+    height: 112,
+    borderRadius: 56,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 8,
+    marginBottom: 4,
   },
-  welcomeTitle: {
-    fontSize: 24,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: -0.4,
-    textAlign: "center",
-  },
+  welcomeTitle: { fontSize: 28, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
   welcomeSub: {
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: "Inter_400Regular",
     textAlign: "center",
     lineHeight: 22,
-    maxWidth: 320,
+    maxWidth: 340,
   },
+  welcomeDivider: { height: 1, width: 200, marginVertical: 4 },
   welcomeBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -626,9 +583,5 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     borderRadius: 24,
   },
-  welcomeBtnText: {
-    color: "#fff",
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-  },
+  welcomeBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
 });

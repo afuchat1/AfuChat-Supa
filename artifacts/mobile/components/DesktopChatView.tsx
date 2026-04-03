@@ -12,12 +12,10 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
-import Colors from "@/constants/colors";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 
 type Message = {
@@ -48,6 +46,7 @@ function formatTime(iso: string) {
 }
 
 function formatDate(iso: string) {
+  if (!iso) return "";
   const d = new Date(iso);
   const now = new Date();
   if (d.toDateString() === now.toDateString()) return "Today";
@@ -58,16 +57,50 @@ function formatDate(iso: string) {
 }
 
 export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: () => void }) {
-  const { colors, isDark } = useTheme();
+  const { isDark } = useTheme();
   const { user } = useAuth();
   const [chatInfo, setChatInfo] = useState<ChatInfo | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
-  const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const flatRef = useRef<FlatList>(null);
-  const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const wa = isDark
+    ? {
+        bg: "#0b1014",
+        surface: "#1f2c34",
+        inputBg: "#2a3942",
+        bubbleOut: "#005c4b",
+        bubbleOutText: "#e9edef",
+        bubbleIn: "#1f2c34",
+        bubbleInText: "#e9edef",
+        text: "#e9edef",
+        muted: "#8696a0",
+        border: "#2a3942",
+        brand: "#00BCD4",
+        datePill: "rgba(17,27,33,0.85)",
+        datePillText: "#8696a0",
+        headerBg: "#1f2c34",
+        inputBarBg: "#1f2c34",
+      }
+    : {
+        bg: "#efeae2",
+        surface: "#f0f2f5",
+        inputBg: "#ffffff",
+        bubbleOut: "#d9fdd3",
+        bubbleOutText: "#111b21",
+        bubbleIn: "#ffffff",
+        bubbleInText: "#111b21",
+        text: "#111b21",
+        muted: "#667781",
+        border: "#d1d7db",
+        brand: "#00a884",
+        datePill: "rgba(225,221,214,0.92)",
+        datePillText: "#667781",
+        headerBg: "#f0f2f5",
+        inputBarBg: "#f0f2f5",
+      };
 
   const loadChat = useCallback(async () => {
     if (!user) return;
@@ -106,10 +139,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
     }
 
     if (msgRes.data) {
-      setMessages(msgRes.data.map((m: any) => ({
-        ...m,
-        sender: m.profiles,
-      })));
+      setMessages(msgRes.data.map((m: any) => ({ ...m, sender: m.profiles })));
     }
 
     setLoading(false);
@@ -131,14 +161,16 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
           .eq("id", msg.sender_id)
           .single();
         setMessages((prev) => [...prev, { ...msg, sender: profile || undefined }]);
-        setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 100);
+        setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 80);
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [chatId, user]);
 
   useEffect(() => {
-    setTimeout(() => flatRef.current?.scrollToEnd({ animated: false }), 300);
+    if (messages.length > 0) {
+      setTimeout(() => flatRef.current?.scrollToEnd({ animated: false }), 250);
+    }
   }, [messages.length]);
 
   async function sendMessage() {
@@ -160,7 +192,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
   const displayName = chatInfo
     ? chatInfo.is_group || chatInfo.is_channel ? chatInfo.name : chatInfo.other_display_name
     : null;
-  const avatar = chatInfo
+  const avatarUri = chatInfo
     ? chatInfo.is_group || chatInfo.is_channel ? chatInfo.avatar_url : chatInfo.other_avatar
     : null;
 
@@ -168,82 +200,106 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
     const isMe = item.sender_id === user?.id;
     const dateLabel = formatDate(item.sent_at);
     const showDate = index === 0 || dateLabel !== formatDate(messages[index - 1]?.sent_at ?? "");
+    const prevMsg = messages[index - 1];
+    const nextMsg = messages[index + 1];
+    const isFirstInGroup = !prevMsg || prevMsg.sender_id !== item.sender_id;
+    const isLastInGroup = !nextMsg || nextMsg.sender_id !== item.sender_id;
+    const marginTop = isFirstInGroup ? 8 : 1;
 
     return (
-      <>
+      <View>
         {showDate && (
-          <View style={styles.dateRow}>
-            <View style={[styles.datePill, { backgroundColor: colors.backgroundSecondary }]}>
-              <Text style={[styles.dateText, { color: colors.textMuted }]}>{dateLabel}</Text>
+          <View style={st.dateRow}>
+            <View style={[st.datePill, { backgroundColor: wa.datePill }]}>
+              <Text style={[st.dateText, { color: wa.datePillText }]}>{dateLabel}</Text>
             </View>
           </View>
         )}
-        <View style={[styles.msgRow, isMe && styles.msgRowMe]}>
+        <View
+          style={[
+            st.msgRow,
+            isMe ? st.msgRowMe : st.msgRowOther,
+            { marginTop },
+          ]}
+        >
           {!isMe && (
-            <Avatar
-              uri={item.sender?.avatar_url || null}
-              name={item.sender?.display_name || "?"}
-              size={28}
-            />
+            <View style={st.avatarSlot}>
+              {isLastInGroup ? (
+                <Avatar uri={avatarUri} name={item.sender?.display_name || "?"} size={32} />
+              ) : (
+                <View style={{ width: 32 }} />
+              )}
+            </View>
           )}
-          <View style={[
-            styles.bubble,
-            isMe
-              ? { backgroundColor: colors.accent, borderBottomRightRadius: 4 }
-              : { backgroundColor: isDark ? "#2a2a2e" : "#f0f0f5", borderBottomLeftRadius: 4 },
-          ]}>
-            {!isMe && chatInfo?.is_group && (
-              <Text style={[styles.senderName, { color: colors.accent }]}>{item.sender?.display_name}</Text>
-            )}
-            {item.message_type === "image" && item.media_url ? (
-              <Image source={{ uri: item.media_url }} style={styles.msgImage} resizeMode="cover" />
-            ) : (
-              <Text style={[styles.msgText, { color: isMe ? "#fff" : colors.text }]}>
-                {item.encrypted_content}
+          <View
+            style={[
+              st.bubble,
+              isMe
+                ? [st.bubbleMe, { backgroundColor: wa.bubbleOut }]
+                : [st.bubbleOther, { backgroundColor: wa.bubbleIn }],
+              isMe && isLastInGroup && st.bubbleMeTail,
+              !isMe && isLastInGroup && st.bubbleOtherTail,
+            ]}
+          >
+            {!isMe && chatInfo?.is_group && isFirstInGroup && (
+              <Text style={[st.senderName, { color: wa.brand }]} numberOfLines={1}>
+                {item.sender?.display_name}
               </Text>
             )}
-            <Text style={[styles.msgTime, { color: isMe ? "rgba(255,255,255,0.6)" : colors.textMuted }]}>
-              {formatTime(item.sent_at)}
-            </Text>
+            {item.message_type === "image" && item.media_url ? (
+              <Image source={{ uri: item.media_url }} style={st.msgImage} resizeMode="cover" />
+            ) : (
+              <View style={st.msgContent}>
+                <Text style={[st.msgText, { color: isMe ? wa.bubbleOutText : wa.bubbleInText }]}>
+                  {item.encrypted_content}
+                </Text>
+                <Text style={[st.msgTime, { color: isMe ? "rgba(233,237,239,0.65)" : wa.muted }]}>
+                  {formatTime(item.sent_at)}
+                  {isMe && (
+                    <Text style={{ color: wa.brand }}>{sending ? "" : " ✓✓"}</Text>
+                  )}
+                </Text>
+              </View>
+            )}
           </View>
-          {isMe && <View style={{ width: 28 }} />}
+          {isMe && <View style={{ width: 4 }} />}
         </View>
-      </>
+      </View>
     );
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={onClose} style={styles.backBtn} hitSlop={8}>
-          <Ionicons name="chevron-back" size={20} color={colors.textMuted} />
+    <View style={[st.root, { backgroundColor: wa.bg }]}>
+      <View style={[st.header, { backgroundColor: wa.headerBg, borderBottomColor: wa.border }]}>
+        <TouchableOpacity onPress={onClose} style={st.backBtn} hitSlop={10}>
+          <Ionicons name="chevron-back" size={22} color={wa.muted} />
         </TouchableOpacity>
-        <Avatar uri={avatar} name={displayName || "Chat"} size={36} />
+        <Avatar uri={avatarUri} name={displayName || "Chat"} size={38} />
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <Text style={[styles.headerName, { color: colors.text }]} numberOfLines={1}>
+            <Text style={[st.headerName, { color: wa.text }]} numberOfLines={1}>
               {displayName || "Chat"}
             </Text>
             {chatInfo?.is_verified && <VerifiedBadge isVerified size={14} />}
           </View>
-          {chatInfo?.is_group ? (
-            <Text style={[styles.headerSub, { color: colors.textMuted }]}>Group</Text>
-          ) : chatInfo?.is_channel ? (
-            <Text style={[styles.headerSub, { color: colors.textMuted }]}>Channel</Text>
-          ) : null}
+          <Text style={[st.headerSub, { color: wa.brand }]}>
+            {chatInfo?.is_group ? "Group chat" : chatInfo?.is_channel ? "Channel" : "tap here for contact info"}
+          </Text>
         </View>
-        <TouchableOpacity
-          style={styles.headerAction}
-          onPress={() => router.push({ pathname: "/chat/[id]", params: { id: chatId } })}
-          hitSlop={8}
-        >
-          <Ionicons name="expand-outline" size={18} color={colors.textMuted} />
+        <TouchableOpacity style={st.headerIcon} hitSlop={8}>
+          <Ionicons name="videocam-outline" size={22} color={wa.muted} />
+        </TouchableOpacity>
+        <TouchableOpacity style={st.headerIcon} hitSlop={8}>
+          <Ionicons name="call-outline" size={20} color={wa.muted} />
+        </TouchableOpacity>
+        <TouchableOpacity style={st.headerIcon} hitSlop={8}>
+          <Ionicons name="search-outline" size={20} color={wa.muted} />
         </TouchableOpacity>
       </View>
 
       {loading ? (
-        <View style={styles.loadingCenter}>
-          <ActivityIndicator color={colors.accent} />
+        <View style={st.loadingCenter}>
+          <ActivityIndicator color={wa.brand} size="large" />
         </View>
       ) : (
         <FlatList
@@ -251,26 +307,37 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
           data={messages}
           keyExtractor={(m) => m.id}
           renderItem={renderMessage}
-          contentContainerStyle={styles.messageList}
+          contentContainerStyle={st.messageList}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <View style={styles.emptyMessages}>
-              <Text style={{ fontSize: 40 }}>👋</Text>
-              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                Say hello to {displayName}
+            <View style={st.emptyState}>
+              <View style={[st.emptyIconWrap, { backgroundColor: wa.brand + "20" }]}>
+                <Ionicons name="lock-closed-outline" size={28} color={wa.brand} />
+              </View>
+              <Text style={[st.emptyTitle, { color: wa.text }]}>
+                {displayName ? `Say hello to ${displayName}` : "No messages yet"}
+              </Text>
+              <Text style={[st.emptySub, { color: wa.muted }]}>
+                Messages are end-to-end encrypted
               </Text>
             </View>
           }
         />
       )}
 
-      <KeyboardAvoidingView behavior="padding">
-        <View style={[styles.inputRow, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-          <View style={[styles.inputWrap, { backgroundColor: colors.inputBg }]}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <View style={[st.inputBar, { backgroundColor: wa.inputBarBg, borderTopColor: wa.border }]}>
+          <TouchableOpacity style={st.inputAction} hitSlop={8}>
+            <Ionicons name="happy-outline" size={24} color={wa.muted} />
+          </TouchableOpacity>
+          <TouchableOpacity style={st.inputAction} hitSlop={8}>
+            <Ionicons name="attach-outline" size={24} color={wa.muted} />
+          </TouchableOpacity>
+          <View style={[st.inputPill, { backgroundColor: wa.inputBg }]}>
             <TextInput
-              style={[styles.input, { color: colors.text }]}
-              placeholder="Message…"
-              placeholderTextColor={colors.textMuted}
+              style={[st.input, { color: wa.text }]}
+              placeholder="Type a message"
+              placeholderTextColor={wa.muted}
               value={text}
               onChangeText={setText}
               multiline
@@ -280,11 +347,16 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
             />
           </View>
           <TouchableOpacity
-            style={[styles.sendBtn, { backgroundColor: text.trim() ? colors.accent : colors.backgroundSecondary }]}
+            style={[st.sendBtn, { backgroundColor: wa.brand }]}
             onPress={sendMessage}
             disabled={!text.trim() || sending}
+            activeOpacity={0.8}
           >
-            <Ionicons name="send" size={16} color={text.trim() ? "#fff" : colors.textMuted} />
+            {sending ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Ionicons name={text.trim() ? "send" : "mic-outline"} size={18} color="#fff" />
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -292,64 +364,103 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
   );
 }
 
-const styles = StyleSheet.create({
+const st = StyleSheet.create({
   root: { flex: 1, flexDirection: "column" },
+
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  backBtn: { padding: 4 },
+  backBtn: { paddingHorizontal: 4 },
   headerName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  headerSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
-  headerAction: { padding: 4 },
+  headerSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
+  headerIcon: { padding: 6 },
+
   loadingCenter: { flex: 1, alignItems: "center", justifyContent: "center" },
-  messageList: { paddingHorizontal: 16, paddingVertical: 12, gap: 4 },
-  dateRow: { alignItems: "center", marginVertical: 8 },
-  datePill: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
+
+  messageList: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 16 },
+
+  dateRow: { alignItems: "center", marginVertical: 10 },
+  datePill: {
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
   dateText: { fontSize: 11, fontFamily: "Inter_500Medium" },
-  msgRow: { flexDirection: "row", alignItems: "flex-end", gap: 8, marginVertical: 2 },
+
+  msgRow: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 4 },
   msgRowMe: { justifyContent: "flex-end" },
+  msgRowOther: { justifyContent: "flex-start" },
+
+  avatarSlot: { width: 36, marginRight: 4, alignItems: "center", justifyContent: "flex-end" },
+
   bubble: {
     maxWidth: "72%",
-    paddingHorizontal: 12,
-    paddingTop: 8,
+    paddingHorizontal: 10,
+    paddingTop: 7,
     paddingBottom: 6,
-    borderRadius: 18,
-    gap: 2,
+    borderRadius: 16,
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
   },
-  senderName: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: Colors.brand, marginBottom: 2 },
-  msgText: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
+  bubbleMe: { borderBottomRightRadius: 16 },
+  bubbleOther: { borderBottomLeftRadius: 16 },
+  bubbleMeTail: { borderBottomRightRadius: 4 },
+  bubbleOtherTail: { borderBottomLeftRadius: 4 },
+
+  senderName: { fontSize: 12, fontFamily: "Inter_600SemiBold", marginBottom: 3 },
+
+  msgContent: { flexDirection: "row", alignItems: "flex-end", flexWrap: "wrap", gap: 6 },
+  msgText: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20, flexShrink: 1 },
   msgImage: { width: 200, height: 150, borderRadius: 10, marginBottom: 2 },
-  msgTime: { fontSize: 10, fontFamily: "Inter_400Regular", alignSelf: "flex-end" },
-  emptyMessages: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 60, gap: 10 },
-  emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
-  inputRow: {
+  msgTime: { fontSize: 10, fontFamily: "Inter_400Regular", marginBottom: 1, flexShrink: 0, marginLeft: "auto" as any },
+
+  emptyState: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 60, gap: 12 },
+  emptyIconWrap: { width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center" },
+  emptyTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
+
+  inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  inputWrap: {
+  inputAction: { paddingBottom: 8, paddingHorizontal: 2 },
+  inputPill: {
     flex: 1,
-    borderRadius: 22,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    minHeight: 40,
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: Platform.OS === "web" ? 8 : 6,
+    minHeight: 42,
     maxHeight: 120,
     justifyContent: "center",
   },
-  input: { fontSize: 14, fontFamily: "Inter_400Regular", maxHeight: 100 },
+  input: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    maxHeight: 100,
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
+  },
   sendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 0,
   },
 });
