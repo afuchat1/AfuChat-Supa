@@ -144,3 +144,27 @@ All surfaces now pick the best available thumbnail using priority: `post_images[
 - `lib/offlineStore.ts` — added `cacheWallet` / `getCachedWallet` (key `offline_wallet`)
 - `app/wallet/index.tsx` — loads cached transactions when offline; caches on successful load; shows `OfflineBanner`
 - `app/group/create.tsx`, `app/channel/create.tsx`, `app/stories/create.tsx`, `app/monetize.tsx` — `isOnline()` guard before any mutation
+## Post Detail Page Redesign
+
+`app/post/[id].tsx` — Full visual overhaul (all logic preserved):
+- **Article hero**: 280px full-bleed image with `LinearGradient` overlay; article title + badge displayed on top of the gradient for a magazine-style look
+- **Reading time**: Calculated from word count (`Math.ceil(words/200)`) shown in the badge row
+- **Author byline**: Full-width bordered row (avatar + name + date + view count) separating hero from body
+- **Image grid**: Smart `ImageGrid` component — 1 image full-width, 2 images side-by-side, 3-4 in a 2×2 tile grid with "+N" overflow badge
+- **Engagement bar**: 4-column bar (Like · Replies · Views · Share) with `hairlineWidth` dividers; like count turns red when liked
+- **Reply section header**: Centered divider with a badge showing reply count
+- **Reply composer**: Shows user's own avatar; character counter appears at 200+ chars; turns red below 20 remaining
+- **Reply card**: Nested replies get a colored left-border depth indicator; replies render in a rounded bubble
+- **Context menu**: Menu items use icon badge circles (color-coded per action)
+
+## First-Login Welcome Guide
+
+`components/ui/WelcomeGuide.tsx` — New full-screen overlay shown once per account after first login:
+- 6 swipeable slides: Welcome · Chat · Discover · AfuAI · Wallet · Community
+- Each slide: `LinearGradient` background, large icon circle, title, subtitle, 3 feature bullet points
+- Smooth spring entrance animation (scale + translateY)
+- Top-right **Skip** button dismisses immediately
+- Dot page indicators (active dot wider)
+- **Next** → **Get Started** CTA button at bottom
+- Stored in `AsyncStorage` key `afu_welcome_guide_v1_seen` — shown exactly once
+- Wired in `(tabs)/_layout.tsx` after `onboarding_completed === true`, shows user's first name on slide 1

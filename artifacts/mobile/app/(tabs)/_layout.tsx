@@ -4,16 +4,18 @@ import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Image, Platform, StyleSheet, useColorScheme } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import CommunityBanner from "@/components/ui/CommunityBanner";
+import WelcomeGuide, { WELCOME_GUIDE_KEY } from "@/components/ui/WelcomeGuide";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -143,11 +145,18 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
 export default function TabLayout() {
   const { session, profile, loading } = useAuth();
   const isDesktop = useIsDesktop();
+  const [showWelcomeGuide, setShowWelcomeGuide] = useState(false);
 
   useEffect(() => {
     if (loading) return;
     if (session && profile && !profile.onboarding_completed) {
       router.replace({ pathname: "/onboarding", params: { userId: session.user.id } });
+      return;
+    }
+    if (session && profile?.onboarding_completed) {
+      AsyncStorage.getItem(WELCOME_GUIDE_KEY).then((seen) => {
+        if (!seen) setShowWelcomeGuide(true);
+      });
     }
   }, [session, profile, loading]);
 
@@ -159,6 +168,11 @@ export default function TabLayout() {
     <>
       {layout}
       {session?.user?.id ? <CommunityBanner userId={session.user.id} /> : null}
+      <WelcomeGuide
+        visible={showWelcomeGuide}
+        onDismiss={() => setShowWelcomeGuide(false)}
+        displayName={profile?.display_name ?? undefined}
+      />
     </>
   );
 }
