@@ -1732,7 +1732,7 @@ export default function ChatScreen() {
   async function clearAfuAiChatHistory() {
     const chatId = isDraft ? realChatId : id;
     if (!chatId) return;
-    Alert.alert(
+    showAlert(
       "Clear chat history",
       "This will permanently delete all messages in this conversation and start a fresh thread. This cannot be undone.",
       [
@@ -1747,7 +1747,7 @@ export default function ChatScreen() {
               if (error) throw error;
               setMessages([]);
             } catch (e) {
-              Alert.alert("Error", "Could not clear chat history. Please try again.");
+              showAlert("Error", "Could not clear chat history. Please try again.");
             }
           },
         },
