@@ -5,6 +5,17 @@ import { supabase } from "@/lib/supabase";
 
 const EAS_PROJECT_ID = "b55c5d92-7a83-472f-b660-d1838efba5fe";
 
+const _handledIds = new Set<string>();
+function alreadyHandled(id: string): boolean {
+  if (_handledIds.has(id)) return true;
+  _handledIds.add(id);
+  if (_handledIds.size > 50) {
+    const first = _handledIds.values().next().value as string;
+    _handledIds.delete(first);
+  }
+  return false;
+}
+
 let Notifications: typeof import("expo-notifications") | null = null;
 let Device: typeof import("expo-device") | null = null;
 
@@ -175,6 +186,9 @@ export function setupNotificationListeners() {
 
   const responseSubscription = Notifications.addNotificationResponseReceivedListener(
     (response) => {
+      const id = response.notification.request.identifier;
+      if (alreadyHandled(id)) return;
+
       const data = response.notification.request.content.data as Record<string, string>;
       // Priority 1: explicit deep-link URL
       if (data?.url) {

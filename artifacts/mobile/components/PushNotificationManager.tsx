@@ -26,9 +26,9 @@ export function PushNotificationManager() {
 
     return () => {
       cleanup();
-      registered.current = false;
+      if (!user) registered.current = false;
     };
-  }, [user]);
+  }, [user?.id]);
 
   useEffect(() => {
     if (Platform.OS === "web" || !user) return;
