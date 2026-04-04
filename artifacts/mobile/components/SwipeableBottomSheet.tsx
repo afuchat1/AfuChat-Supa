@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { BlurView } from "expo-blur";
 
 const SCREEN_H = Dimensions.get("window").height;
 const CLOSE_THRESHOLD = 100;
@@ -23,18 +24,23 @@ interface Props {
   backgroundColor?: string;
   maxHeight?: string | number;
   overlayColor?: string;
+  useGlass?: boolean;
 }
 
 export default function SwipeableBottomSheet({
   visible,
   onClose,
   children,
-  backgroundColor = "#fff",
+  backgroundColor,
   maxHeight = "85%",
   overlayColor = "rgba(0,0,0,0.5)",
+  useGlass = true,
 }: Props) {
   const { width } = useWindowDimensions();
   const isDesktop = Platform.OS === "web" && width >= DESKTOP_BP;
+  const isIOS = Platform.OS === "ios";
+
+  const resolvedBg = backgroundColor ?? (isIOS ? "transparent" : "rgba(18,22,28,0.96)");
 
   const translateY = useRef(new Animated.Value(SCREEN_H)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -105,10 +111,15 @@ export default function SwipeableBottomSheet({
           <Animated.View
             style={[
               styles.desktopCard,
-              { backgroundColor, transform: [{ scale }] },
+              { transform: [{ scale }] },
             ]}
           >
-            {children}
+            {isIOS && useGlass ? (
+              <BlurView intensity={80} tint="dark" style={[StyleSheet.absoluteFill, { borderRadius: 16 }]} />
+            ) : (
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: resolvedBg, borderRadius: 16 }]} />
+            )}
+            <View style={styles.desktopCardInner}>{children}</View>
           </Animated.View>
         </Animated.View>
       </Modal>
@@ -122,13 +133,19 @@ export default function SwipeableBottomSheet({
         <Animated.View
           style={[
             styles.sheet,
-            { backgroundColor, maxHeight, transform: [{ translateY }] },
+            { maxHeight: maxHeight as any, transform: [{ translateY }] },
           ]}
         >
+          {isIOS && useGlass ? (
+            <BlurView intensity={85} tint="dark" style={[StyleSheet.absoluteFill, styles.blurSheet]} />
+          ) : (
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: resolvedBg, borderTopLeftRadius: 24, borderTopRightRadius: 24 }]} />
+          )}
+          <View style={styles.sheetBorder} pointerEvents="none" />
           <View {...panResponder.panHandlers} style={styles.handleArea}>
             <View style={styles.handle} />
           </View>
-          {children}
+          <View style={styles.sheetContent}>{children}</View>
         </Animated.View>
       </View>
     </Modal>
@@ -145,16 +162,37 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     overflow: "hidden",
   },
+  blurSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  sheetBorder: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.10)",
+  },
   handleArea: {
     alignItems: "center",
     paddingTop: 12,
     paddingBottom: 4,
+    zIndex: 1,
   },
   handle: {
-    width: 40,
+    width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "#C7C7CC",
+    backgroundColor: "rgba(255,255,255,0.20)",
+  },
+  sheetContent: {
+    zIndex: 1,
   },
   desktopOverlay: {
     flex: 1,
@@ -167,8 +205,13 @@ const styles = StyleSheet.create({
     maxHeight: "82%",
     borderRadius: 16,
     overflow: "hidden",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.10)",
     ...Platform.select({
-      web: { boxShadow: "0 8px 40px rgba(0,0,0,0.24)" } as any,
+      web: { boxShadow: "0 12px 50px rgba(0,0,0,0.36)" } as any,
     }),
+  },
+  desktopCardInner: {
+    zIndex: 1,
   },
 });

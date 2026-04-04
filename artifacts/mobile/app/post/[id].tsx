@@ -110,6 +110,8 @@ function ImageGrid({ images, onPress }: { images: string[]; onPress: (i: number)
   );
 }
 
+const THREAD_COLORS = ["#00BCD4", "#5C6BC0", "#26A69A", "#EF6C00", "#8E24AA"];
+
 function ReplyCard({
   item,
   colors,
@@ -122,44 +124,135 @@ function ReplyCard({
   onReplyTo: (reply: Reply) => void;
 }) {
   const { displayText, isTranslated, lang } = useAutoTranslate(item.content);
-  const indent = Math.min(depth, 3) * 24;
+  const [collapsed, setCollapsed] = useState(false);
+  const [liked, setLiked] = useState(false);
+  const [localLikes, setLocalLikes] = useState(0);
+  const indent = Math.min(depth, 4) * 18;
+  const hasChildren = (item.children?.length ?? 0) > 0;
+  const threadColor = THREAD_COLORS[depth % THREAD_COLORS.length];
+  const isTopLevel = depth === 0;
+  const avatarSize = isTopLevel ? 36 : 28;
+
+  function handleLike() {
+    const next = !liked;
+    setLiked(next);
+    setLocalLikes((c) => (next ? c + 1 : Math.max(0, c - 1)));
+  }
 
   return (
     <>
-      <View style={[styles.replyRow, { paddingLeft: 16 + indent }]}>
+      <View style={{ flexDirection: "row", paddingLeft: 16 + indent, paddingRight: 16, paddingTop: isTopLevel ? 14 : 8, paddingBottom: 2 }}>
+        {/* Thread connector line for nested replies */}
         {depth > 0 && (
-          <View style={[styles.replyDepthLine, { backgroundColor: colors.border }]} />
+          <View
+            style={{
+              width: 2,
+              borderRadius: 1,
+              backgroundColor: threadColor + "50",
+              position: "absolute",
+              left: 16 + indent - 10,
+              top: 0,
+              bottom: 0,
+            }}
+          />
         )}
-        <Avatar uri={item.author.avatar_url} name={item.author.display_name} size={depth > 0 ? 28 : 36} />
-        <View style={[styles.replyBubble, { backgroundColor: colors.surface }]}>
-          <View style={styles.replyHeader}>
-            <Text style={[styles.replyName, { color: colors.text }]}>{item.author.display_name}</Text>
+
+        {/* Avatar */}
+        <TouchableOpacity onPress={() => router.push(`/contact/${item.author.id}` as any)} activeOpacity={0.8} style={{ marginRight: 10, marginTop: 2 }}>
+          <Avatar uri={item.author.avatar_url} name={item.author.display_name} size={avatarSize} />
+          {isTopLevel && (
+            <View style={{
+              position: "absolute", bottom: -2, right: -2,
+              width: 12, height: 12, borderRadius: 6,
+              backgroundColor: colors.background,
+              alignItems: "center", justifyContent: "center",
+            }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#34C759" }} />
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* Body */}
+        <View style={{ flex: 1 }}>
+          {/* Header row */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flexWrap: "wrap", marginBottom: 3 }}>
+            <TouchableOpacity onPress={() => router.push(`/contact/${item.author.id}` as any)} activeOpacity={0.8}>
+              <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_700Bold" }} numberOfLines={1}>
+                {item.author.display_name}
+              </Text>
+            </TouchableOpacity>
             {item.author.is_organization_verified && (
-              <Ionicons name="checkmark-circle" size={12} color={Colors.gold} style={{ marginLeft: 2 }} />
+              <Ionicons name="checkmark-circle" size={13} color={Colors.gold} />
             )}
             {!item.author.is_organization_verified && item.author.is_verified && (
-              <Ionicons name="checkmark-circle" size={12} color={colors.accent} style={{ marginLeft: 2 }} />
+              <Ionicons name="checkmark-circle" size={13} color={colors.accent} />
             )}
-            <Text style={[styles.replyTime, { color: colors.textMuted }]}> · {timeAgo(item.created_at)}</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 11 }}>@{item.author.handle}</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 11 }}>· {timeAgo(item.created_at)}</Text>
           </View>
-          <RichText style={[styles.replyContent, { color: colors.text }]}>{displayText}</RichText>
+
+          {/* Content */}
+          <RichText style={{ color: colors.text, fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 21 }}>
+            {displayText}
+          </RichText>
+
           {isTranslated && (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 3 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 4 }}>
               <Ionicons name="language" size={10} color={colors.textMuted} />
               <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: colors.textMuted }}>
                 {`Translated · ${LANG_LABELS[lang || ""] ?? lang}`}
               </Text>
             </View>
           )}
-          <TouchableOpacity onPress={() => onReplyTo(item)} style={styles.replyBtn} hitSlop={8}>
-            <Ionicons name="arrow-undo-outline" size={13} color={colors.textMuted} />
-            <Text style={[styles.replyBtnText, { color: colors.textMuted }]}>Reply</Text>
-          </TouchableOpacity>
+
+          {/* Action row */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 16, marginTop: 8, marginBottom: 4 }}>
+            <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 4 }} onPress={handleLike} activeOpacity={0.7}>
+              <Ionicons name={liked ? "heart" : "heart-outline"} size={14} color={liked ? "#FF2D55" : colors.textMuted} />
+              {localLikes > 0 && (
+                <Text style={{ color: liked ? "#FF2D55" : colors.textMuted, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>{localLikes}</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 4 }} onPress={() => onReplyTo(item)} activeOpacity={0.7}>
+              <Ionicons name="arrow-undo-outline" size={14} color={colors.textMuted} />
+              <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Reply</Text>
+            </TouchableOpacity>
+
+            {hasChildren && (
+              <TouchableOpacity
+                style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                onPress={() => setCollapsed((c) => !c)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={collapsed ? "chevron-down-circle-outline" : "chevron-up-circle-outline"}
+                  size={14}
+                  color={threadColor}
+                />
+                <Text style={{ color: threadColor, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>
+                  {collapsed ? `${item.children!.length} ${item.children!.length === 1 ? "reply" : "replies"}` : "Hide"}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
-      {item.children?.map((child) => (
+
+      {/* Separator line */}
+      {isTopLevel && !hasChildren && (
+        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 16 + indent + avatarSize + 10, marginRight: 16, marginTop: 4 }} />
+      )}
+
+      {/* Children */}
+      {!collapsed && item.children?.map((child) => (
         <ReplyCard key={child.id} item={child} colors={colors} depth={depth + 1} onReplyTo={onReplyTo} />
       ))}
+
+      {/* Bottom separator after thread group */}
+      {isTopLevel && hasChildren && !collapsed && (
+        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 16, marginRight: 16, marginTop: 6, marginBottom: 2 }} />
+      )}
     </>
   );
 }
@@ -948,12 +1041,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     paddingVertical: 14,
-    marginBottom: 4,
+    marginBottom: 18,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
     marginHorizontal: -16,
     paddingHorizontal: 16,
-    marginBottom: 18,
   },
   authorName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   authorMeta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },

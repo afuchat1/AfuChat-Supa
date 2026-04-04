@@ -37,6 +37,7 @@ import { RichText } from "@/components/ui/RichText";
 import * as FileSystem from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
+import { BlurView } from "expo-blur";
 
 const USE_NATIVE = Platform.OS !== "web";
 
@@ -95,27 +96,88 @@ function formatRelative(iso: string): string {
   return `${Math.floor(diff / 2592000000)}mo`;
 }
 
+const VID_THREAD_COLORS = ["#00BCD4", "#5C6BC0", "#26A69A", "#EF6C00", "#8E24AA"];
+
 function VideoReplyItem({ reply: r, depth, onReplyTo }: { reply: Reply; depth: number; onReplyTo: (r: Reply) => void }) {
-  const indent = Math.min(depth, 3) * 24;
+  const indent = Math.min(depth, 4) * 18;
+  const [liked, setLiked] = useState(false);
+  const [localLikes, setLocalLikes] = useState(0);
+  const [collapsed, setCollapsed] = useState(false);
+  const threadColor = VID_THREAD_COLORS[depth % VID_THREAD_COLORS.length];
+  const hasChildren = (r.children?.length ?? 0) > 0;
+  const isTop = depth === 0;
+
+  function handleLike() {
+    const next = !liked;
+    setLiked(next);
+    setLocalLikes((c) => (next ? c + 1 : Math.max(0, c - 1)));
+  }
+
   return (
     <>
-      <View style={[cStyles.replyRow, { paddingLeft: indent }]}>
-        <Avatar uri={r.profile.avatar_url} name={r.profile.display_name} size={depth > 0 ? 26 : 34} />
-        <View style={cStyles.replyBody}>
-          <View style={cStyles.replyMeta}>
-            <Text style={cStyles.replyName}>{r.profile.display_name}</Text>
-            <Text style={cStyles.replyTime}>{formatRelative(r.created_at)}</Text>
+      <View style={{ flexDirection: "row", paddingLeft: indent, paddingTop: isTop ? 14 : 8, paddingBottom: 2, paddingRight: 0, position: "relative" }}>
+        {depth > 0 && (
+          <View style={{
+            position: "absolute",
+            left: indent - 10,
+            top: 0,
+            bottom: 0,
+            width: 2,
+            borderRadius: 1,
+            backgroundColor: threadColor + "40",
+          }} />
+        )}
+        <View style={{ marginRight: 10, marginTop: 1 }}>
+          <Avatar uri={r.profile.avatar_url} name={r.profile.display_name} size={isTop ? 34 : 26} />
+        </View>
+        <View style={{ flex: 1, paddingRight: 8 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 3, flexWrap: "wrap" }}>
+            <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "Inter_700Bold" }}>
+              {r.profile.display_name}
+            </Text>
+            <Text style={{ color: "rgba(255,255,255,0.3)", fontSize: 11 }}>@{r.profile.handle}</Text>
+            <Text style={{ color: "rgba(255,255,255,0.25)", fontSize: 11 }}>· {formatRelative(r.created_at)}</Text>
           </View>
-          <Text style={cStyles.replyContent}>{r.content}</Text>
-          <TouchableOpacity onPress={() => onReplyTo(r)} style={cStyles.replyToBtn} hitSlop={8}>
-            <Ionicons name="arrow-undo-outline" size={11} color="rgba(255,255,255,0.35)" />
-            <Text style={cStyles.replyToBtnText}>Reply</Text>
-          </TouchableOpacity>
+          <Text style={{ color: "rgba(255,255,255,0.88)", fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 }}>
+            {r.content}
+          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginTop: 7, marginBottom: 2 }}>
+            <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 4 }} onPress={handleLike} activeOpacity={0.7}>
+              <Ionicons name={liked ? "heart" : "heart-outline"} size={13} color={liked ? "#FF2D55" : "rgba(255,255,255,0.35)"} />
+              {localLikes > 0 && (
+                <Text style={{ color: liked ? "#FF2D55" : "rgba(255,255,255,0.35)", fontSize: 11, fontFamily: "Inter_600SemiBold" }}>
+                  {localLikes}
+                </Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 4 }} onPress={() => onReplyTo(r)} activeOpacity={0.7}>
+              <Ionicons name="arrow-undo-outline" size={13} color="rgba(255,255,255,0.35)" />
+              <Text style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, fontFamily: "Inter_600SemiBold" }}>Reply</Text>
+            </TouchableOpacity>
+            {hasChildren && (
+              <TouchableOpacity
+                style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
+                onPress={() => setCollapsed((c) => !c)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name={collapsed ? "chevron-down" : "chevron-up"} size={12} color={threadColor} />
+                <Text style={{ color: threadColor, fontSize: 11, fontFamily: "Inter_600SemiBold" }}>
+                  {collapsed ? `${r.children!.length} ${r.children!.length === 1 ? "reply" : "replies"}` : "Hide"}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
-      {r.children?.map((child) => (
+      {isTop && !hasChildren && (
+        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: "rgba(255,255,255,0.06)", marginLeft: indent + 44, marginRight: 0, marginTop: 4 }} />
+      )}
+      {!collapsed && r.children?.map((child) => (
         <VideoReplyItem key={child.id} reply={child} depth={depth + 1} onReplyTo={onReplyTo} />
       ))}
+      {isTop && hasChildren && !collapsed && (
+        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: "rgba(255,255,255,0.06)", marginTop: 6, marginBottom: 2 }} />
+      )}
     </>
   );
 }
@@ -248,7 +310,13 @@ function CommentsSheet({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior="padding" style={cStyles.kavFull}>
         <Pressable style={cStyles.overlay} onPress={onClose}>
-          <Pressable onPress={() => {}} style={[cStyles.container, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <Pressable onPress={() => {}} style={[cStyles.container, { paddingBottom: Math.max(insets.bottom, 16), backgroundColor: "transparent" }]}>
+            {Platform.OS === "ios" ? (
+              <BlurView intensity={90} tint="dark" style={[StyleSheet.absoluteFill, { borderTopLeftRadius: 18, borderTopRightRadius: 18 }]} />
+            ) : (
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: "#141418", borderTopLeftRadius: 18, borderTopRightRadius: 18 }]} />
+            )}
+            <View style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, borderTopLeftRadius: 18, borderTopRightRadius: 18, borderTopWidth: StyleSheet.hairlineWidth, borderLeftWidth: StyleSheet.hairlineWidth, borderRightWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.1)" }} pointerEvents="none" />
             <View style={cStyles.handle} />
             <View style={cStyles.header}>
               <View style={{ width: 28 }} />

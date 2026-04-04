@@ -51,8 +51,128 @@ type Reply = {
   id: string;
   content: string;
   created_at: string;
+  parent_reply_id: string | null;
   author: { id: string; display_name: string; avatar_url: string | null; handle: string; is_verified: boolean; is_organization_verified: boolean };
+  children?: Reply[];
 };
+
+const ART_THREAD_COLORS = ["#00BCD4", "#5C6BC0", "#26A69A", "#EF6C00", "#8E24AA"];
+
+function buildArticleReplyTree(flat: Reply[]): Reply[] {
+  const map = new Map<string, Reply>();
+  const roots: Reply[] = [];
+  for (const r of flat) map.set(r.id, { ...r, children: [] });
+  for (const r of flat) {
+    const node = map.get(r.id)!;
+    if (r.parent_reply_id && map.has(r.parent_reply_id)) {
+      map.get(r.parent_reply_id)!.children!.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+  return roots;
+}
+
+function ArticleReplyCard({
+  item,
+  colors,
+  depth,
+  onReplyTo,
+}: {
+  item: Reply;
+  colors: any;
+  depth: number;
+  onReplyTo: (r: Reply) => void;
+}) {
+  const [liked, setLiked] = useState(false);
+  const [localLikes, setLocalLikes] = useState(0);
+  const [collapsed, setCollapsed] = useState(false);
+  const indent = Math.min(depth, 4) * 18;
+  const hasChildren = (item.children?.length ?? 0) > 0;
+  const threadColor = ART_THREAD_COLORS[depth % ART_THREAD_COLORS.length];
+  const isTop = depth === 0;
+  const avatarSize = isTop ? 36 : 28;
+
+  function handleLike() {
+    const next = !liked;
+    setLiked(next);
+    setLocalLikes((c) => (next ? c + 1 : Math.max(0, c - 1)));
+  }
+
+  return (
+    <>
+      <View style={{ flexDirection: "row", paddingLeft: 20 + indent, paddingRight: 20, paddingTop: isTop ? 14 : 8, paddingBottom: 2 }}>
+        {depth > 0 && (
+          <View style={{
+            position: "absolute",
+            left: 20 + indent - 10,
+            top: 0,
+            bottom: 0,
+            width: 2,
+            borderRadius: 1,
+            backgroundColor: threadColor + "50",
+          }} />
+        )}
+        <TouchableOpacity onPress={() => router.push(`/contact/${item.author.id}` as any)} activeOpacity={0.8} style={{ marginRight: 10, marginTop: 2 }}>
+          <Avatar uri={item.author.avatar_url} name={item.author.display_name} size={avatarSize} />
+        </TouchableOpacity>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flexWrap: "wrap", marginBottom: 3 }}>
+            <TouchableOpacity onPress={() => router.push(`/contact/${item.author.id}` as any)} activeOpacity={0.8}>
+              <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_700Bold" }}>
+                {item.author.display_name}
+              </Text>
+            </TouchableOpacity>
+            {item.author.is_organization_verified && (
+              <Ionicons name="checkmark-circle" size={13} color={Colors.gold} />
+            )}
+            {!item.author.is_organization_verified && item.author.is_verified && (
+              <Ionicons name="checkmark-circle" size={13} color={colors.accent} />
+            )}
+            <Text style={{ color: colors.textMuted, fontSize: 11 }}>@{item.author.handle}</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 11 }}>· {timeAgo(item.created_at)}</Text>
+          </View>
+          <RichText style={{ color: colors.text, fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 21 }}>
+            {item.content}
+          </RichText>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 16, marginTop: 8, marginBottom: 4 }}>
+            <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 4 }} onPress={handleLike} activeOpacity={0.7}>
+              <Ionicons name={liked ? "heart" : "heart-outline"} size={14} color={liked ? "#FF2D55" : colors.textMuted} />
+              {localLikes > 0 && (
+                <Text style={{ color: liked ? "#FF2D55" : colors.textMuted, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>{localLikes}</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 4 }} onPress={() => onReplyTo(item)} activeOpacity={0.7}>
+              <Ionicons name="arrow-undo-outline" size={14} color={colors.textMuted} />
+              <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Reply</Text>
+            </TouchableOpacity>
+            {hasChildren && (
+              <TouchableOpacity
+                style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
+                onPress={() => setCollapsed((c) => !c)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name={collapsed ? "chevron-down-circle-outline" : "chevron-up-circle-outline"} size={13} color={threadColor} />
+                <Text style={{ color: threadColor, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>
+                  {collapsed ? `${item.children!.length} ${item.children!.length === 1 ? "reply" : "replies"}` : "Hide"}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </View>
+      {isTop && !hasChildren && (
+        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 20 + indent + avatarSize + 10, marginRight: 20, marginTop: 4 }} />
+      )}
+      {!collapsed && item.children?.map((child) => (
+        <ArticleReplyCard key={child.id} item={child} colors={colors} depth={depth + 1} onReplyTo={onReplyTo} />
+      ))}
+      {isTop && hasChildren && !collapsed && (
+        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 20, marginRight: 20, marginTop: 6, marginBottom: 2 }} />
+      )}
+    </>
+  );
+}
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -85,6 +205,8 @@ export default function ArticleDetailScreen() {
   const [replyText, setReplyText] = useState("");
   const [replying, setReplying] = useState(false);
   const [liking, setLiking] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<Reply | null>(null);
+  const replyInputRef = React.useRef<TextInput>(null);
 
   const { displayText: displayBody, isTranslated: bodyTranslated, lang: bodyLang } = useAutoTranslate(
     article?.article_body || article?.content
@@ -108,7 +230,7 @@ export default function ArticleDetailScreen() {
 
       const [{ data: likesData }, { data: repliesData }, { data: myLike }] = await Promise.all([
         supabase.from("post_acknowledgments").select("post_id").eq("post_id", id),
-        supabase.from("post_replies").select("id, content, created_at, profiles!post_replies_author_id_fkey(id, display_name, avatar_url, handle, is_verified, is_organization_verified)").eq("post_id", id).order("created_at", { ascending: true }),
+        supabase.from("post_replies").select("id, content, created_at, parent_reply_id, profiles!post_replies_author_id_fkey(id, display_name, avatar_url, handle, is_verified, is_organization_verified)").eq("post_id", id).order("created_at", { ascending: true }),
         user ? supabase.from("post_acknowledgments").select("post_id").eq("post_id", id).eq("user_id", user.id).maybeSingle() : { data: null },
       ]);
 
@@ -138,6 +260,7 @@ export default function ArticleDetailScreen() {
         id: r.id,
         content: r.content,
         created_at: r.created_at,
+        parent_reply_id: r.parent_reply_id || null,
         author: {
           id: r.profiles?.id,
           display_name: r.profiles?.display_name || "User",
@@ -189,25 +312,36 @@ export default function ArticleDetailScreen() {
     setLiking(false);
   }
 
+  function handleReplyTo(r: Reply) {
+    setReplyingTo(r);
+    setReplyText("");
+    setTimeout(() => replyInputRef.current?.focus(), 100);
+  }
+
   async function submitReply() {
     if (!user || !replyText.trim() || !article) return;
     setReplying(true);
+    const insertData: any = { post_id: article.id, author_id: user.id, content: replyText.trim() };
+    if (replyingTo) insertData.parent_reply_id = replyingTo.id;
     const { data: inserted, error } = await supabase
       .from("post_replies")
-      .insert({ post_id: article.id, author_id: user.id, content: replyText.trim() })
-      .select("id, content, created_at, profiles!post_replies_author_id_fkey(id, display_name, avatar_url, handle, is_verified, is_organization_verified)")
+      .insert(insertData)
+      .select("id, content, created_at, parent_reply_id, profiles!post_replies_author_id_fkey(id, display_name, avatar_url, handle, is_verified, is_organization_verified)")
       .single();
     if (!error && inserted) {
       const r = inserted as any;
       const newReply: Reply = {
         id: r.id, content: r.content, created_at: r.created_at,
+        parent_reply_id: r.parent_reply_id || null,
         author: { id: r.profiles?.id, display_name: r.profiles?.display_name || "User", avatar_url: r.profiles?.avatar_url || null, handle: r.profiles?.handle || "user", is_verified: r.profiles?.is_verified || false, is_organization_verified: r.profiles?.is_organization_verified || false },
       };
       setReplies((prev) => [...prev, newReply]);
       setArticle((a) => a ? { ...a, replyCount: a.replyCount + 1 } : a);
       setReplyText("");
-      if (article.author.id !== user.id) {
-        notifyPostReply({ postAuthorId: article.author.id, replierName: myProfile?.display_name || "Someone", replierUserId: user.id, postId: article.id, replyPreview: replyText.trim() });
+      setReplyingTo(null);
+      const notifyTarget = replyingTo ? replyingTo.author.id : article.author.id;
+      if (notifyTarget !== user.id) {
+        notifyPostReply({ postAuthorId: notifyTarget, replierName: myProfile?.display_name || "Someone", replierUserId: user.id, postId: article.id, replyPreview: replyText.trim() });
       }
     }
     setReplying(false);
@@ -374,24 +508,13 @@ export default function ArticleDetailScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 52 : 0}>
         <FlatList
-          data={replies}
+          data={buildArticleReplyTree(replies)}
           keyExtractor={(r) => r.id}
           ListHeaderComponent={ListHeader}
           contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => (
-            <View style={[styles.replyRow, { backgroundColor: colors.surface, marginHorizontal: 20, marginBottom: 8 }]}>
-              <Avatar uri={item.author.avatar_url} name={item.author.display_name} size={34} />
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 3 }}>
-                  <Text style={[styles.replyName, { color: colors.text }]}>{item.author.display_name}</Text>
-                  {item.author.is_organization_verified && <Ionicons name="checkmark-circle" size={11} color={Colors.gold} />}
-                  {!item.author.is_organization_verified && item.author.is_verified && <Ionicons name="checkmark-circle" size={11} color={colors.accent} />}
-                  <Text style={[styles.replyTime, { color: colors.textMuted }]}>{timeAgo(item.created_at)}</Text>
-                </View>
-                <RichText style={[styles.replyContent, { color: colors.text }]}>{item.content}</RichText>
-              </View>
-            </View>
+            <ArticleReplyCard item={item} colors={colors} depth={0} onReplyTo={handleReplyTo} />
           )}
           ListEmptyComponent={
             <View style={{ alignItems: "center", paddingVertical: 32, paddingHorizontal: 20 }}>
@@ -402,27 +525,40 @@ export default function ArticleDetailScreen() {
         />
 
         {user ? (
-          <View style={[styles.replyBar, { borderTopColor: colors.border, backgroundColor: colors.surface, paddingBottom: insets.bottom + 8 }]}>
-            <Avatar uri={myProfile?.avatar_url} name={myProfile?.display_name} size={30} />
-            <TextInput
-              style={[styles.replyInput, { backgroundColor: colors.backgroundTertiary, color: colors.text }]}
-              placeholder="Add a comment..."
-              placeholderTextColor={colors.textMuted}
-              value={replyText}
-              onChangeText={setReplyText}
-              multiline
-              maxLength={500}
-            />
-            <TouchableOpacity
-              onPress={submitReply}
-              disabled={replying || !replyText.trim()}
-              style={[styles.sendBtn, { backgroundColor: replyText.trim() ? colors.accent : colors.backgroundTertiary }]}
-            >
-              {replying
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <Ionicons name="send" size={16} color={replyText.trim() ? "#fff" : colors.textMuted} />
-              }
-            </TouchableOpacity>
+          <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, backgroundColor: colors.surface }}>
+            {replyingTo && (
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+                <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.textMuted }}>
+                  Replying to <Text style={{ color: colors.accent, fontFamily: "Inter_600SemiBold" }}>@{replyingTo.author.handle}</Text>
+                </Text>
+                <TouchableOpacity onPress={() => { setReplyingTo(null); setReplyText(""); }} hitSlop={8}>
+                  <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+            )}
+            <View style={[styles.replyBar, { paddingBottom: insets.bottom + 8, backgroundColor: "transparent" }]}>
+              <Avatar uri={myProfile?.avatar_url} name={myProfile?.display_name} size={30} />
+              <TextInput
+                ref={replyInputRef}
+                style={[styles.replyInput, { backgroundColor: colors.backgroundTertiary, color: colors.text }]}
+                placeholder={replyingTo ? `Reply to @${replyingTo.author.handle}...` : "Add a comment..."}
+                placeholderTextColor={colors.textMuted}
+                value={replyText}
+                onChangeText={setReplyText}
+                multiline
+                maxLength={500}
+              />
+              <TouchableOpacity
+                onPress={submitReply}
+                disabled={replying || !replyText.trim()}
+                style={[styles.sendBtn, { backgroundColor: replyText.trim() ? colors.accent : colors.backgroundTertiary }]}
+              >
+                {replying
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Ionicons name="send" size={16} color={replyText.trim() ? "#fff" : colors.textMuted} />
+                }
+              </TouchableOpacity>
+            </View>
           </View>
         ) : (
           <TouchableOpacity
