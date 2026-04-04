@@ -3,6 +3,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -14,6 +15,7 @@ import * as Haptics from "@/lib/haptics";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useTheme } from "@/hooks/useTheme";
+import { useDataMode } from "@/context/DataModeContext";
 import { showAlert } from "@/lib/alert";
 import { Separator } from "@/components/ui/Separator";
 
@@ -44,12 +46,45 @@ function MenuItem({ icon, iconBg, label, value, onPress, danger }: MenuItemProps
       <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
         <Ionicons name={icon} size={18} color="#fff" />
       </View>
-      <Text style={[styles.label, { color: danger ? "#FF3B30" : colors.text }]}>{label}</Text>
+      <Text style={[styles.label, { flex: 1, color: danger ? "#FF3B30" : colors.text }]}>{label}</Text>
       <View style={styles.right}>
         {value ? <Text style={[styles.value, { color: colors.textMuted }]}>{value}</Text> : null}
         {!danger && <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />}
       </View>
     </TouchableOpacity>
+  );
+}
+
+type ToggleItemProps = {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  iconBg: string;
+  label: string;
+  subtitle?: string;
+  value: boolean;
+  onValueChange: (v: boolean) => void;
+};
+
+function ToggleItem({ icon, iconBg, label, subtitle, value, onValueChange }: ToggleItemProps) {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.item, { backgroundColor: colors.surface }]}>
+      <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
+        <Ionicons name={icon} size={18} color="#fff" />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
+        {subtitle ? (
+          <Text style={[styles.subtitle, { color: colors.textMuted }]}>{subtitle}</Text>
+        ) : null}
+      </View>
+      <Switch
+        value={value}
+        onValueChange={(v) => { Haptics.selectionAsync(); onValueChange(v); }}
+        trackColor={{ false: colors.border, true: colors.accent }}
+        thumbColor="#fff"
+        ios_backgroundColor={colors.border}
+      />
+    </View>
   );
 }
 
@@ -69,6 +104,7 @@ export default function SettingsScreen() {
   const { colors, themeMode, setThemeMode } = useTheme();
   const { langLabel } = useLanguage();
   const { signOut } = useAuth();
+  const { dataSaverEnabled, toggleDataSaver } = useDataMode();
   const insets = useSafeAreaInsets();
 
   function cycleTheme() {
@@ -133,6 +169,15 @@ export default function SettingsScreen() {
             iconBg="#32D74B"
             label="Chats"
             onPress={() => router.push("/settings/chat")}
+          />
+          <Separator indent={54} />
+          <ToggleItem
+            icon="speedometer-outline"
+            iconBg="#FF9500"
+            label="Data Saver"
+            subtitle="Reduces image & video quality"
+            value={dataSaverEnabled}
+            onValueChange={toggleDataSaver}
           />
         </Section>
 
@@ -239,7 +284,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  label: { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular" },
+  label: { fontSize: 16, fontFamily: "Inter_400Regular" },
+  subtitle: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
   right: { flexDirection: "row", alignItems: "center", gap: 6 },
   value: { fontSize: 14, fontFamily: "Inter_400Regular" },
 });
