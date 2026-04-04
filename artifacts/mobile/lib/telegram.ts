@@ -25,10 +25,30 @@ function getWebApp(): any {
   return (window as any).Telegram?.WebApp ?? null;
 }
 
+/**
+ * Returns true when the page is running inside Telegram's Mini App WebView
+ * AND the Telegram Web App SDK has fully initialised.
+ *
+ * - `TelegramWebviewProxy` is injected by Telegram's native WebView before any
+ *   page scripts run — it is NEVER present in a regular browser.
+ * - `initData` is a non-empty string only when opened as an actual Mini App.
+ * - We require the SDK object (`window.Telegram.WebApp`) to exist so callers
+ *   can safely use getTelegramUser() etc. immediately after this returns true.
+ */
 export function isTelegramMiniApp(): boolean {
+  if (Platform.OS !== "web" || typeof window === "undefined") return false;
   const tg = getWebApp();
-  if (!tg) return false;
-  return typeof tg.version !== "undefined";
+  if (!tg || typeof tg.version === "undefined") return false;
+  // Confirm we are inside Telegram's WebView (not a regular browser that also
+  // loaded the SDK script).
+  return !!(tg.initData || tg.initDataUnsafe?.user) ||
+    !!(window as any).TelegramWebviewProxy;
+}
+
+/** True if Telegram's WebView has already injected its bridge (before the SDK loads). */
+export function isInTelegramWebView(): boolean {
+  if (Platform.OS !== "web" || typeof window === "undefined") return false;
+  return !!(window as any).TelegramWebviewProxy;
 }
 
 export function getTelegramInitData(): string {

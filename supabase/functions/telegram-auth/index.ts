@@ -88,7 +88,11 @@ Deno.serve(async (req: Request) => {
     const tgUser = JSON.parse(userRaw);
     const telegramId = String(tgUser.id);
     const email = `tg_${telegramId}@afuchat.tg`;
-    const displayName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(" ") || tgUser.username || "Telegram User";
+    const displayName =
+      [tgUser.first_name, tgUser.last_name].filter(Boolean).join(" ") ||
+      tgUser.username ||
+      "Telegram User";
+    // Deterministic password derived from stable identifiers
     const password = `tg_${telegramId}_${botToken.slice(0, 8)}`;
 
     const supabase = createClient(
@@ -97,91 +101,90 @@ Deno.serve(async (req: Request) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    const { data: existingUser, error: listError } = await supabase.auth.admin.listUsers();
-    const found = existingUser?.users?.find(
-      (u: any) => u.user_metadata?.telegram_id === telegramId
-    );
+    // ── Try to sign in first (existing user — O(1), no list scan) ──
+    const { data: existingSession, error: signInError } =
+      await supabase.auth.signInWithPassword({ email, password });
 
-    let userId: string;
-
-    if (found) {
-      userId = found.id;
-    } else {
-      const { data: created, error: createError } = await supabase.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: {
-          telegram_id: telegramId,
-          telegram_username: tgUser.username ?? null,
-          full_name: displayName,
-          avatar_url: tgUser.photo_url ?? null,
-          provider: "telegram",
-        },
-      });
-
-      if (createError || !created?.user) {
-        return new Response(JSON.stringify({ error: createError?.message ?? "Failed to create user" }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      userId = created.user.id;
-
-      await supabase.from("profiles").upsert({
-        id: userId,
+    if (!signInError && existingSession?.session) {
+      // Update profile metadata in case name/photo changed
+      await supabase.from("profiles").update({
         display_name: displayName,
-        handle: tgUser.username ? tgUser.username.toLowerCase().replace(/[^a-z0-9_]/g, "") : `tg${telegramId}`,
+        avatar_url: tgUser.photo_url ?? null,
+      }).eq("id", existingSession.session.user.id);
+
+      return new Response(
+        JSON.stringify({
+          access_token: existingSession.session.access_token,
+          refresh_token: existingSession.session.refresh_token,
+          user: existingSession.session.user,
+          telegram_user: tgUser,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ── New user — create account ──
+    const { data: created, error: createError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        telegram_id: telegramId,
+        telegram_username: tgUser.username ?? null,
+        full_name: displayName,
+        avatar_url: tgUser.photo_url ?? null,
+        provider: "telegram",
+      },
+    });
+
+    if (createError || !created?.user) {
+      return new Response(
+        JSON.stringify({ error: createError?.message ?? "Failed to create user" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Create profile row
+    const handle = tgUser.username
+      ? tgUser.username.toLowerCase().replace(/[^a-z0-9_]/g, "")
+      : `tg${telegramId}`;
+
+    await supabase.from("profiles").upsert(
+      {
+        id: created.user.id,
+        display_name: displayName,
+        handle,
         avatar_url: tgUser.photo_url ?? null,
         language: tgUser.language_code ?? "en",
         onboarding_completed: false,
-      }, { onConflict: "id" });
-    }
+      },
+      { onConflict: "id" }
+    );
 
-    const { data: signInData, error: signInError } = await supabase.auth.admin.generateLink({
-      type: "magiclink",
-      email,
-      options: { redirectTo: undefined },
-    });
+    // Sign in to get a real session token
+    const { data: newSession, error: newSignInError } =
+      await supabase.auth.signInWithPassword({ email, password });
 
-    if (signInError || !signInData) {
-      const { data: signIn2, error: signIn2Err } = await supabase.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-      });
-      return new Response(JSON.stringify({ error: "Could not generate session" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const { data: sessionData, error: sessionError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (sessionError || !sessionData?.session) {
-      return new Response(JSON.stringify({ error: sessionError?.message ?? "Failed to create session" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (newSignInError || !newSession?.session) {
+      return new Response(
+        JSON.stringify({ error: newSignInError?.message ?? "Failed to create session" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     return new Response(
       JSON.stringify({
-        access_token: sessionData.session.access_token,
-        refresh_token: sessionData.session.refresh_token,
-        user: sessionData.session.user,
+        access_token: newSession.session.access_token,
+        refresh_token: newSession.session.refresh_token,
+        user: newSession.session.user,
         telegram_user: tgUser,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message ?? "Internal server error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: err.message ?? "Internal server error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 });
