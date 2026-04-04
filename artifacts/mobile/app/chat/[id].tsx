@@ -1093,6 +1093,9 @@ export default function ChatScreen() {
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const showScrollBtnRef = useRef(false);
   const [newMsgCount, setNewMsgCount] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const oldestCursorRef = useRef<string | null>(null);
   const scrollBtnOpacity = useRef(new Animated.Value(0)).current;
   const [isRecording, setIsRecording] = useState(false);
   const [recLocked, setRecLocked] = useState(false);
@@ -1397,6 +1400,8 @@ export default function ChatScreen() {
         return extras.length > 0 ? [...extras, ...mapped] : mapped;
       });
       cacheMessages(chatId, mapped);
+      oldestCursorRef.current = data.length > 0 ? data[data.length - 1].sent_at : null;
+      setHasMore(data.length >= 50);
 
       const unreadFromOthers = data.filter((m: any) => m.sender_id !== user.id);
       if (unreadFromOthers.length > 0) {
@@ -1423,6 +1428,63 @@ export default function ChatScreen() {
     }
     setLoading(false);
   }, [id, user, isDraft, realChatId]);
+
+  const loadMoreMessages = useCallback(async () => {
+    const chatId = isDraft ? realChatId : id;
+    if (!chatId || !user || loadingMore || !hasMore || !oldestCursorRef.current) return;
+    setLoadingMore(true);
+    const cursor = oldestCursorRef.current;
+    const { data } = await supabase
+      .from("messages")
+      .select(`id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`)
+      .eq("chat_id", chatId)
+      .lt("sent_at", cursor)
+      .order("sent_at", { ascending: false })
+      .limit(50);
+    if (data && data.length > 0) {
+      const msgIds = data.map((m: any) => m.id);
+      const [{ data: reactions }, { data: statuses }] = await Promise.all([
+        supabase.from("message_reactions").select("message_id, reaction, user_id").in("message_id", msgIds),
+        supabase.from("message_status").select("message_id, read_at, delivered_at").in("message_id", msgIds),
+      ]);
+      const reactionMap: Record<string, { emoji: string; count: number; myReaction: boolean }[]> = {};
+      for (const r of (reactions || []) as any[]) {
+        if (!reactionMap[r.message_id]) reactionMap[r.message_id] = [];
+        const existing = reactionMap[r.message_id].find((x: any) => x.emoji === r.reaction);
+        if (existing) { existing.count++; if (r.user_id === user.id) existing.myReaction = true; }
+        else reactionMap[r.message_id].push({ emoji: r.reaction, count: 1, myReaction: r.user_id === user.id });
+      }
+      const readSet = new Set<string>();
+      const deliveredSet = new Set<string>();
+      for (const s of (statuses || []) as any[]) {
+        if (s.read_at) readSet.add(s.message_id);
+        else if (s.delivered_at) deliveredSet.add(s.message_id);
+      }
+      const mapped = data.map((m: any) => {
+        const isBot = m.sender_id === AFUAI_BOT_ID;
+        const aiParsed = isBot ? parseAfuAiTags(m.encrypted_content || "") : null;
+        return {
+          id: m.id, chat_id: m.chat_id, sender_id: m.sender_id,
+          encrypted_content: aiParsed ? (aiParsed.text || m.encrypted_content) : m.encrypted_content,
+          sent_at: m.sent_at, reply_to_message_id: m.reply_to_message_id,
+          attachment_url: m.attachment_url, attachment_type: m.attachment_type, edited_at: m.edited_at,
+          sender: m.profiles, reactions: reactionMap[m.id] || [],
+          status: m.sender_id === user.id
+            ? (readSet.has(m.id) ? "read" : deliveredSet.has(m.id) ? "delivered" : "sent")
+            : undefined,
+          _isAi: isBot || undefined,
+          _aiActions: aiParsed && aiParsed.actions.length > 0 ? aiParsed.actions : undefined,
+          _aiInvoices: aiParsed && aiParsed.invoices.length > 0 ? aiParsed.invoices : undefined,
+        };
+      });
+      oldestCursorRef.current = data[data.length - 1].sent_at;
+      setHasMore(data.length >= 50);
+      setMessages((prev) => [...prev, ...mapped]);
+    } else {
+      setHasMore(false);
+    }
+    setLoadingMore(false);
+  }, [id, user, isDraft, realChatId, loadingMore, hasMore]);
 
   useEffect(() => {
     const unsub = onConnectivityChange(async (online) => {
@@ -1522,8 +1584,9 @@ export default function ChatScreen() {
             setNewMsgCount((c) => c + 1);
           }
 
-          if (user && chatPrefs.read_receipts) {
-            await supabase.from("message_status").upsert({ message_id: newMsg.id, user_id: user.id, delivered_at: new Date().toISOString(), read_at: new Date().toISOString() }, { onConflict: "message_id,user_id" });
+          if (user) {
+            supabase.from("message_status").upsert({ message_id: newMsg.id, user_id: user.id, delivered_at: new Date().toISOString(), read_at: new Date().toISOString() }, { onConflict: "message_id,user_id" }).then(() => {});
+            markChatVisited(id);
           }
         }
       )
@@ -3163,6 +3226,13 @@ STRICT RULES:
               showsVerticalScrollIndicator={false}
               onScroll={handleScroll}
               scrollEventThrottle={16}
+              onEndReached={loadMoreMessages}
+              onEndReachedThreshold={0.3}
+              ListHeaderComponent={
+                loadingMore
+                  ? <View style={{ paddingVertical: 12, alignItems: "center" }}><ActivityIndicator size="small" color={colors.accent} /></View>
+                  : null
+              }
               ListFooterComponent={
                 (typingUsers.length > 0 || isAfuAiTyping)
                   ? <TypingBubble names={isAfuAiTyping ? ["AfuAI", ...typingUsers] : typingUsers} colors={{ ...colors, bubbleIncoming: isAfuAiTyping && typingUsers.length === 0 ? "#004D5C" : colors.bubbleIncoming, bubbleIncomingText: isAfuAiTyping && typingUsers.length === 0 ? "#E0F7FA" : colors.bubbleIncomingText }} />
