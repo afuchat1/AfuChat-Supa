@@ -1068,6 +1068,7 @@ export default function ChatScreen() {
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const typingMapRef = useRef<Map<string, string>>(new Map());
   const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const [isAfuAiTyping, setIsAfuAiTyping] = useState(false);
   const [showAfuAiMenu, setShowAfuAiMenu] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -1610,41 +1611,38 @@ export default function ChatScreen() {
       )
       .subscribe();
 
-    const typingSub = supabase
-      .channel(`typing:${id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "typing_indicators", filter: `chat_id=eq.${id}` },
-        async (payload) => {
-          const data = payload.new as any;
-          const uid = data.user_id;
-          if (uid === user?.id) return;
+    const typingChannel = supabase.channel(`typing:${id}`, { config: { broadcast: { self: false } } });
+    typingChannelRef.current = typingChannel;
 
-          const clearTyper = () => {
-            if (typingTimersRef.current.has(uid)) {
-              clearTimeout(typingTimersRef.current.get(uid)!);
-              typingTimersRef.current.delete(uid);
-            }
-            typingMapRef.current.delete(uid);
-            setTypingUsers(Array.from(typingMapRef.current.values()));
-          };
+    typingChannel
+      .on("broadcast", { event: "typing" }, (payload) => {
+        const { user_id: uid, display_name: name, is_typing } = (payload.payload || {}) as any;
+        if (!uid || uid === user?.id) return;
 
-          if (data.is_typing) {
-            if (!typingMapRef.current.has(uid)) {
-              const { data: typer } = await supabase.from("profiles").select("display_name").eq("id", uid).single();
-              typingMapRef.current.set(uid, typer?.display_name || "Someone");
-            }
-            if (typingTimersRef.current.has(uid)) clearTimeout(typingTimersRef.current.get(uid)!);
-            typingTimersRef.current.set(uid, setTimeout(clearTyper, 6000));
-            setTypingUsers(Array.from(typingMapRef.current.values()));
-          } else {
-            clearTyper();
+        const clearTyper = () => {
+          if (typingTimersRef.current.has(uid)) {
+            clearTimeout(typingTimersRef.current.get(uid)!);
+            typingTimersRef.current.delete(uid);
           }
+          typingMapRef.current.delete(uid);
+          setTypingUsers(Array.from(typingMapRef.current.values()));
+        };
+
+        if (is_typing) {
+          typingMapRef.current.set(uid, name || "Someone");
+          if (typingTimersRef.current.has(uid)) clearTimeout(typingTimersRef.current.get(uid)!);
+          typingTimersRef.current.set(uid, setTimeout(clearTyper, 6000));
+          setTypingUsers(Array.from(typingMapRef.current.values()));
+        } else {
+          clearTyper();
         }
-      )
+      })
       .subscribe();
 
     return () => {
       supabase.removeChannel(msgSub);
-      supabase.removeChannel(typingSub);
+      supabase.removeChannel(typingChannel);
+      typingChannelRef.current = null;
       typingTimersRef.current.forEach((t) => clearTimeout(t));
       typingTimersRef.current.clear();
       typingMapRef.current.clear();
@@ -1655,9 +1653,17 @@ export default function ChatScreen() {
     if (!user || !id || isDraft) return;
     if (!chatPrefs.typing_indicators) return;
     if (typingTimeout.current) clearTimeout(typingTimeout.current);
-    supabase.from("typing_indicators").upsert({ chat_id: id, user_id: user.id, is_typing: true }, { onConflict: "chat_id,user_id" });
+    typingChannelRef.current?.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { user_id: user.id, display_name: profile?.display_name || "Someone", is_typing: true },
+    });
     typingTimeout.current = setTimeout(() => {
-      supabase.from("typing_indicators").upsert({ chat_id: id, user_id: user.id, is_typing: false }, { onConflict: "chat_id,user_id" });
+      typingChannelRef.current?.send({
+        type: "broadcast",
+        event: "typing",
+        payload: { user_id: user.id, display_name: profile?.display_name || "Someone", is_typing: false },
+      });
     }, 3000);
   }
 
