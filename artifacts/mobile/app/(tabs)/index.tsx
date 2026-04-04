@@ -31,6 +31,7 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { cacheConversations, getCachedConversations, isOnline } from "@/lib/offlineStore";
 import { addOnlineListener } from "@/lib/offlineSync";
+import { wasChatRecentlyVisited, clearChatVisited } from "@/lib/chatVisited";
 
 type StoryUser = {
   userId: string;
@@ -76,7 +77,7 @@ function ChatRow({ item, onPress }: { item: ChatItem; onPress: () => void }) {
   const { colors } = useTheme();
   const displayName = item.is_group || item.is_channel ? item.name : item.other_display_name;
   const avatar = item.is_group || item.is_channel ? item.avatar_url : item.other_avatar;
-  const hasUnread = item.unread_count > 0;
+  const hasUnread = item.unread_count > 0 && !wasChatRecentlyVisited(item.id);
   const pulse = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (hasUnread) {
@@ -419,6 +420,10 @@ export default function ChatsScreen() {
         is_verified: !!other?.is_verified,
         is_organization_verified: !!other?.is_organization_verified,
       };
+    });
+
+    items.forEach((item) => {
+      if (item.unread_count === 0) clearChatVisited(item.id);
     });
 
     items.sort((a, b) => {

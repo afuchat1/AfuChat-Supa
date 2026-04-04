@@ -57,6 +57,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useChatPreferences, CHAT_THEME_COLORS, BUBBLE_RADIUS } from "@/context/ChatPreferencesContext";
 import { useAdvancedFeatures } from "@/context/AdvancedFeaturesContext";
 import { useDataMode } from "@/context/DataModeContext";
+import { markChatVisited } from "@/lib/chatVisited";
 import { askAi, aiSuggestReply, transcribeAudio } from "@/lib/aiHelper";
 import { AFUAI_BOT_ID } from "@/lib/afuAiBot";
 import { getDailyUsage, recordDailyUsage } from "@/lib/featureUsage";
@@ -1398,7 +1399,7 @@ export default function ChatScreen() {
       cacheMessages(chatId, mapped);
 
       const unreadFromOthers = data.filter((m: any) => m.sender_id !== user.id);
-      if (unreadFromOthers.length > 0 && chatPrefs.read_receipts) {
+      if (unreadFromOthers.length > 0) {
         const now = new Date().toISOString();
         const unreadIds = unreadFromOthers.map((m: any) => m.id);
         const { data: myReadRows } = unreadIds.length > 0
@@ -1407,7 +1408,7 @@ export default function ChatScreen() {
         const alreadyRead = new Set((myReadRows || []).map((r: any) => r.message_id));
         const toMark = unreadFromOthers.filter((m: any) => !alreadyRead.has(m.id));
         if (toMark.length > 0) {
-          await supabase.from("message_status").upsert(
+          supabase.from("message_status").upsert(
             toMark.map((m: any) => ({
               message_id: m.id,
               user_id: user.id,
@@ -1415,9 +1416,10 @@ export default function ChatScreen() {
               read_at: now,
             })),
             { onConflict: "message_id,user_id" }
-          );
+          ).then(() => {});
         }
       }
+      if (chatId) markChatVisited(chatId);
     }
     setLoading(false);
   }, [id, user, isDraft, realChatId]);
@@ -2177,6 +2179,7 @@ STRICT RULES:
       return;
     }
     setSending(true);
+    if (draftSaveTimer.current) { clearTimeout(draftSaveTimer.current); draftSaveTimer.current = null; }
     if (!directText) setInput("");
     if (id) {
       AsyncStorage.removeItem(`chat_draft_${id}`).catch(() => {});
