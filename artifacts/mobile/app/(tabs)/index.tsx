@@ -59,6 +59,8 @@ type ChatItem = {
   unread_count: number;
   is_verified: boolean;
   is_organization_verified: boolean;
+  other_last_seen: string | null;
+  other_show_online: boolean;
 };
 
 function formatTime(iso: string): string {
@@ -73,11 +75,17 @@ function formatTime(iso: string): string {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
+function isUserOnline(lastSeen: string | null, showOnline: boolean): boolean {
+  if (!showOnline || !lastSeen) return false;
+  return Date.now() - new Date(lastSeen).getTime() < 2 * 60 * 1000;
+}
+
 function ChatRow({ item, onPress }: { item: ChatItem; onPress: () => void }) {
   const { colors } = useTheme();
   const displayName = item.is_group || item.is_channel ? item.name : item.other_display_name;
   const avatar = item.is_group || item.is_channel ? item.avatar_url : item.other_avatar;
   const hasUnread = item.unread_count > 0 && !wasChatRecentlyVisited(item.id);
+  const isOnlineDot = !item.is_group && !item.is_channel && isUserOnline(item.other_last_seen, item.other_show_online);
   const pulse = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (hasUnread) {
@@ -100,7 +108,12 @@ function ChatRow({ item, onPress }: { item: ChatItem; onPress: () => void }) {
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <Avatar uri={avatar} name={displayName || "Chat"} size={50} />
+      <View style={{ position: "relative" }}>
+        <Avatar uri={avatar} name={displayName || "Chat"} size={50} />
+        {isOnlineDot && (
+          <View style={[styles.onlineDot, { borderColor: colors.surface }]} />
+        )}
+      </View>
       <View style={styles.rowContent}>
         <View style={styles.rowTop}>
           <View style={styles.nameRow}>
@@ -334,7 +347,7 @@ export default function ChatsScreen() {
         .from("chats")
         .select(`
           id, name, is_group, is_channel, is_pinned, is_archived, avatar_url, updated_at,
-          chat_members(user_id, profiles(id, display_name, avatar_url, is_verified, is_organization_verified))
+          chat_members(user_id, profiles(id, display_name, avatar_url, is_verified, is_organization_verified, last_seen, show_online_status))
         `)
         .in("id", chatIds)
         .eq("is_archived", false)
@@ -419,6 +432,8 @@ export default function ChatsScreen() {
         unread_count: unreadMap[c.id] || 0,
         is_verified: !!other?.is_verified,
         is_organization_verified: !!other?.is_organization_verified,
+        other_last_seen: other?.last_seen || null,
+        other_show_online: other?.show_online_status !== false,
       };
     });
 
@@ -801,6 +816,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
   },
   unreadBadgeText: { color: "#fff", fontSize: 11, fontFamily: "Inter_700Bold", lineHeight: 14 },
+  onlineDot: { position: "absolute", bottom: 1, right: 1, width: 13, height: 13, borderRadius: 7, backgroundColor: "#34C759", borderWidth: 2 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   emptySubtitle: { fontSize: 14, fontFamily: "Inter_400Regular" },

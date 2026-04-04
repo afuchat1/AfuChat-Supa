@@ -1057,6 +1057,8 @@ export default function ChatScreen() {
       : null
   );
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const typingMapRef = useRef<Map<string, string>>(new Map());
+  const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const [isAfuAiTyping, setIsAfuAiTyping] = useState(false);
   const [showAfuAiMenu, setShowAfuAiMenu] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -1603,14 +1605,28 @@ export default function ChatScreen() {
       .on("postgres_changes", { event: "*", schema: "public", table: "typing_indicators", filter: `chat_id=eq.${id}` },
         async (payload) => {
           const data = payload.new as any;
-          if (data.user_id === user?.id) return;
-          const { data: typer } = await supabase.from("profiles").select("display_name").eq("id", data.user_id).single();
-          const name = typer?.display_name || "Someone";
+          const uid = data.user_id;
+          if (uid === user?.id) return;
+
+          const clearTyper = () => {
+            if (typingTimersRef.current.has(uid)) {
+              clearTimeout(typingTimersRef.current.get(uid)!);
+              typingTimersRef.current.delete(uid);
+            }
+            typingMapRef.current.delete(uid);
+            setTypingUsers(Array.from(typingMapRef.current.values()));
+          };
+
           if (data.is_typing) {
-            setTypingUsers((prev) => prev.includes(name) ? prev : [...prev, name]);
-            setTimeout(() => { setTypingUsers((prev) => prev.filter((n) => n !== name)); }, 5000);
+            if (!typingMapRef.current.has(uid)) {
+              const { data: typer } = await supabase.from("profiles").select("display_name").eq("id", uid).single();
+              typingMapRef.current.set(uid, typer?.display_name || "Someone");
+            }
+            if (typingTimersRef.current.has(uid)) clearTimeout(typingTimersRef.current.get(uid)!);
+            typingTimersRef.current.set(uid, setTimeout(clearTyper, 6000));
+            setTypingUsers(Array.from(typingMapRef.current.values()));
           } else {
-            setTypingUsers((prev) => prev.filter((n) => n !== name));
+            clearTyper();
           }
         }
       )
@@ -1619,6 +1635,9 @@ export default function ChatScreen() {
     return () => {
       supabase.removeChannel(msgSub);
       supabase.removeChannel(typingSub);
+      typingTimersRef.current.forEach((t) => clearTimeout(t));
+      typingTimersRef.current.clear();
+      typingMapRef.current.clear();
     };
   }, [id, loadChatInfo, loadMessages]);
 
