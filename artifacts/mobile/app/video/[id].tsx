@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Clipboard,
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -17,6 +19,7 @@ import {
   ViewToken,
   useWindowDimensions,
 } from "react-native";
+import { Image as ExpoImage } from "expo-image";
 import { useDataMode } from "@/context/DataModeContext";
 import { getCachedVideoUri, cacheVideo } from "@/lib/videoCache";
 import { router, useLocalSearchParams } from "expo-router";
@@ -30,6 +33,9 @@ import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { notifyPostLike, notifyPostReply } from "@/lib/notifyUser";
+import * as FileSystem from "expo-file-system";
+import * as MediaLibrary from "expo-media-library";
+import * as Sharing from "expo-sharing";
 
 const USE_NATIVE = Platform.OS !== "web";
 
@@ -438,20 +444,32 @@ function VideoItem({
   onShare: (item: VideoPost) => void;
   onFollow: (authorId: string, isFollowing: boolean) => void;
   onRecordView: (postId: string) => void;
+  onOpenMenu: (item: VideoPost) => void;
 }) {
   const { accent } = useAppAccent();
   const [paused, setPaused] = useState(false);
   const [buffering, setBuffering] = useState(true);
   const [progress, setProgress] = useState(0);
+  const [durationMs, setDurationMs] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [cachedUri, setCachedUri] = useState<string | null>(null);
   const [manualPlay, setManualPlay] = useState(false);
+  const [progressBarWidth, setProgressBarWidth] = useState(0);
   const heartScale = useRef(new Animated.Value(1)).current;
   const doubleTapHeart = useRef(new Animated.Value(0)).current;
+  const watermarkSpin = useRef(new Animated.Value(0)).current;
   const lastTap = useRef(0);
   const insets = useSafeAreaInsets();
   const videoRef = useRef<Video>(null);
   const cacheAttempted = useRef(false);
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(watermarkSpin, { toValue: 1, duration: 4000, useNativeDriver: USE_NATIVE })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
 
   const viewRecorded = useRef(false);
 
@@ -487,8 +505,21 @@ function VideoItem({
     if (!status.isLoaded) return;
     setBuffering(status.isBuffering);
     if (status.durationMillis && status.durationMillis > 0) {
+      setDurationMs(status.durationMillis);
       setProgress(status.positionMillis / status.durationMillis);
     }
+  }
+
+  async function seekToPercent(percent: number) {
+    if (!durationMs || !videoRef.current) return;
+    const targetMs = Math.max(0, Math.min(durationMs, durationMs * percent));
+    await videoRef.current.setPositionAsync(targetMs).catch(() => {});
+  }
+
+  function handleProgressBarPress(locationX: number) {
+    if (!progressBarWidth || progressBarWidth <= 0) return;
+    const pct = Math.max(0, Math.min(1, locationX / progressBarWidth));
+    seekToPercent(pct);
   }
 
   function handleTap() {
@@ -523,9 +554,11 @@ function VideoItem({
 
   const showExpand = item.content && (item.content.split("\n").length > 2 || item.content.length > 100);
 
+  const watermarkRotate = watermarkSpin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
+
   return (
     <View style={[vStyles.item, { width: screenW, height: screenH }]}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={handleTap}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={handleTap} onLongPress={() => onOpenMenu(item)} delayLongPress={380}>
         {isNearActive ? (
           <Video
             ref={videoRef}
@@ -677,7 +710,15 @@ function VideoItem({
       </View>
 
       <View style={[vStyles.musicRow, { bottom: (insets.bottom > 0 ? insets.bottom : 0) + 6 }]}>
-        <Ionicons name="musical-notes" size={13} color="rgba(255,255,255,0.7)" />
+        <Animated.View style={[vStyles.watermarkDisc, { transform: [{ rotate: watermarkRotate }] }]}>
+          <View style={vStyles.watermarkInner}>
+            <ExpoImage
+              source={require("../../assets/images/afu-symbol.png")}
+              style={vStyles.watermarkLogo}
+              contentFit="contain"
+            />
+          </View>
+        </Animated.View>
         <View style={vStyles.musicMarquee}>
           <Text style={vStyles.musicText} numberOfLines={1}>
             {item.audio_name || `Original audio · ${item.profile.display_name}`}
@@ -685,9 +726,16 @@ function VideoItem({
         </View>
       </View>
 
-      <View style={[vStyles.progressBar, { bottom: insets.bottom > 0 ? insets.bottom : 0 }]}>
+      <TouchableOpacity
+        activeOpacity={1}
+        style={[vStyles.progressBar, { bottom: insets.bottom > 0 ? insets.bottom : 0 }]}
+        onLayout={(e) => setProgressBarWidth(e.nativeEvent.layout.width)}
+        onPress={(e) => handleProgressBarPress(e.nativeEvent.locationX)}
+        hitSlop={{ top: 10, bottom: 10 }}
+      >
         <View style={[vStyles.progressFill, { width: `${progress * 100}%` }]} />
-      </View>
+        <View style={[vStyles.progressThumb, { left: `${progress * 100}%` as any }]} />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -805,7 +853,7 @@ const vStyles = StyleSheet.create({
     right: 76,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
   },
   musicMarquee: { flex: 1, overflow: "hidden" },
   musicText: {
@@ -814,18 +862,246 @@ const vStyles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
   },
 
+  watermarkDisc: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: "rgba(0,188,212,0.5)",
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  watermarkInner: {
+    width: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  watermarkLogo: {
+    width: 16,
+    height: 16,
+    tintColor: "#00BCD4",
+  },
+
   progressBar: {
     position: "absolute",
     left: 0,
     right: 0,
-    height: 2.5,
+    height: 4,
     backgroundColor: "rgba(255,255,255,0.15)",
+    justifyContent: "center",
   },
   progressFill: {
-    height: "100%",
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
     backgroundColor: "rgba(255,255,255,0.85)",
-    borderRadius: 1,
+    borderRadius: 2,
   },
+  progressThumb: {
+    position: "absolute",
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#fff",
+    top: -4,
+    marginLeft: -6,
+    shadowColor: "#000",
+    shadowOpacity: 0.4,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+});
+
+const SOCIAL_PLATFORMS = [
+  { id: "whatsapp",  label: "WhatsApp",  icon: "logo-whatsapp",   color: "#25D366", scheme: (url: string) => `https://wa.me/?text=${encodeURIComponent(url)}` },
+  { id: "telegram",  label: "Telegram",  icon: "paper-plane",     color: "#0088CC", scheme: (url: string) => `https://t.me/share/url?url=${encodeURIComponent(url)}` },
+  { id: "twitter",   label: "X",         icon: "logo-twitter",    color: "#000",    scheme: (url: string) => `https://x.com/intent/tweet?text=${encodeURIComponent(url)}` },
+  { id: "facebook",  label: "Facebook",  icon: "logo-facebook",   color: "#1877F2", scheme: (url: string) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}` },
+  { id: "instagram", label: "Instagram", icon: "logo-instagram",  color: "#E1306C", scheme: (_: string) => `instagram://app` },
+  { id: "tiktok",    label: "TikTok",    icon: "musical-notes",   color: "#010101", scheme: (_: string) => `tiktok://` },
+  { id: "copy",      label: "Copy link", icon: "link-outline",    color: "#555",    scheme: null },
+  { id: "more",      label: "More",      icon: "share-social",    color: "#00BCD4", scheme: null },
+];
+
+function SocialShareSheet({ visible, onClose, url, title }: { visible: boolean; onClose: () => void; url: string; title: string }) {
+  if (!visible) return null;
+
+  async function handlePlatform(p: typeof SOCIAL_PLATFORMS[number]) {
+    if (p.id === "copy") {
+      Clipboard.setString(url);
+      onClose();
+      return;
+    }
+    if (p.id === "more") {
+      onClose();
+      setTimeout(async () => {
+        await Share.share({ message: `${title} ${url}`, url, title });
+      }, 300);
+      return;
+    }
+    onClose();
+    const deepUrl = p.scheme!(url);
+    const canOpen = await Linking.canOpenURL(deepUrl).catch(() => false);
+    if (canOpen) {
+      await Linking.openURL(deepUrl).catch(() => {});
+    } else {
+      await Share.share({ message: `${title} ${url}`, url, title });
+    }
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableOpacity style={ssStyles.backdrop} activeOpacity={1} onPress={onClose} />
+      <View style={ssStyles.sheet}>
+        <View style={ssStyles.handle} />
+        <Text style={ssStyles.title}>Share video</Text>
+        <View style={ssStyles.grid}>
+          {SOCIAL_PLATFORMS.map((p) => (
+            <TouchableOpacity key={p.id} style={ssStyles.cell} onPress={() => handlePlatform(p)}>
+              <View style={[ssStyles.iconCircle, { backgroundColor: p.color }]}>
+                <Ionicons name={p.icon as any} size={22} color="#fff" />
+              </View>
+              <Text style={ssStyles.cellLabel}>{p.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <TouchableOpacity style={ssStyles.cancelBtn} onPress={onClose}>
+          <Text style={ssStyles.cancelText}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+    </Modal>
+  );
+}
+
+const ssStyles = StyleSheet.create({
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
+  sheet: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#1a1a1a",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 36,
+    paddingTop: 12,
+  },
+  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.2)", alignSelf: "center", marginBottom: 14 },
+  title: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold", textAlign: "center", marginBottom: 20 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "center" },
+  cell: { width: 72, alignItems: "center", gap: 6 },
+  iconCircle: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center" },
+  cellLabel: { color: "rgba(255,255,255,0.7)", fontSize: 11, fontFamily: "Inter_400Regular", textAlign: "center" },
+  cancelBtn: {
+    marginTop: 16,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  cancelText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+});
+
+function VideoContextMenu({
+  visible,
+  item,
+  onClose,
+  onShare,
+  onRepost,
+  onDownload,
+}: {
+  visible: boolean;
+  item: VideoPost | null;
+  onClose: () => void;
+  onShare: () => void;
+  onRepost: () => void;
+  onDownload: () => void;
+}) {
+  if (!visible || !item) return null;
+
+  const OPTIONS = [
+    { id: "share",    label: "Share to...",     icon: "share-social-outline",   action: onShare },
+    { id: "repost",   label: "Repost",          icon: "repeat-outline",         action: onRepost },
+    { id: "download", label: "Save to device",  icon: "download-outline",       action: onDownload },
+  ];
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={cmStyles.backdrop} activeOpacity={1} onPress={onClose} />
+      <View style={cmStyles.sheet}>
+        <View style={cmStyles.handle} />
+        <View style={cmStyles.authorPreview}>
+          <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={36} />
+          <View>
+            <Text style={cmStyles.previewHandle}>@{item.profile.handle}</Text>
+            <Text style={cmStyles.previewCaption} numberOfLines={1}>{item.content || "Video"}</Text>
+          </View>
+        </View>
+        <View style={cmStyles.divider} />
+        {OPTIONS.map((opt) => (
+          <TouchableOpacity key={opt.id} style={cmStyles.row} onPress={() => { onClose(); setTimeout(opt.action, 200); }}>
+            <View style={cmStyles.rowIcon}>
+              <Ionicons name={opt.icon as any} size={22} color="#fff" />
+            </View>
+            <Text style={cmStyles.rowLabel}>{opt.label}</Text>
+            <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.3)" />
+          </TouchableOpacity>
+        ))}
+        <TouchableOpacity style={cmStyles.cancelBtn} onPress={onClose}>
+          <Text style={cmStyles.cancelText}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+    </Modal>
+  );
+}
+
+const cmStyles = StyleSheet.create({
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.55)" },
+  sheet: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#1a1a1a",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 36,
+    paddingTop: 12,
+  },
+  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.2)", alignSelf: "center", marginBottom: 14 },
+  authorPreview: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 },
+  previewHandle: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  previewCaption: { color: "rgba(255,255,255,0.45)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  divider: { height: 1, backgroundColor: "rgba(255,255,255,0.08)", marginVertical: 8 },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    gap: 14,
+  },
+  rowIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rowLabel: { flex: 1, color: "#fff", fontSize: 15, fontFamily: "Inter_500Medium" },
+  cancelBtn: {
+    marginTop: 6,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  cancelText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
 });
 
 export default function VideoPlayerScreen() {
@@ -842,6 +1118,9 @@ export default function VideoPlayerScreen() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [followingSet, setFollowingSet] = useState<Set<string>>(new Set());
+  const [menuItem, setMenuItem] = useState<VideoPost | null>(null);
+  const [shareSheetItem, setShareSheetItem] = useState<VideoPost | null>(null);
+  const [downloading, setDownloading] = useState(false);
   const listRef = useRef<FlatList>(null);
   const initialScrollDone = useRef(false);
   const tabAnim = useRef(new Animated.Value(0)).current;
@@ -1075,21 +1354,47 @@ export default function VideoPlayerScreen() {
     }
   }
 
-  async function handleShare(item: VideoPost) {
-    const postUrl = Platform.OS === "web" && typeof window !== "undefined"
+  function getVideoUrl(item: VideoPost): string {
+    return Platform.OS === "web" && typeof window !== "undefined"
       ? `${window.location.origin}/video/${item.id}`
       : `https://afuchat.com/video/${item.id}`;
+  }
+
+  async function handleShare(item: VideoPost) {
+    setShareSheetItem(item);
+  }
+
+  async function handleRepost(item: VideoPost) {
+    const postUrl = getVideoUrl(item);
     try {
-      if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title: `${item.profile.display_name} on AfuChat`, url: postUrl });
-      } else {
-        await Share.share({
-          message: `Check out this video by ${item.profile.display_name} on AfuChat ${postUrl}`,
-          url: postUrl,
-          title: `${item.profile.display_name} on AfuChat`,
-        });
-      }
+      await Share.share({
+        message: `🔁 Reposting: ${item.profile.display_name} on AfuChat\n${postUrl}`,
+        url: postUrl,
+        title: `Repost from AfuChat`,
+      });
     } catch {}
+  }
+
+  async function handleDownload(item: VideoPost) {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== "granted") {
+        setDownloading(false);
+        return;
+      }
+      const ext = item.video_url.split("?")[0].split(".").pop()?.toLowerCase() || "mp4";
+      const dest = (FileSystem.cacheDirectory ?? "") + `afuchat_dl_${item.id}.${ext}`;
+      const { uri } = await FileSystem.downloadAsync(item.video_url, dest);
+      await MediaLibrary.createAssetAsync(uri);
+      await FileSystem.deleteAsync(uri, { idempotent: true });
+    } catch {}
+    setDownloading(false);
+  }
+
+  function handleOpenMenu(item: VideoPost) {
+    setMenuItem(item);
   }
 
   async function handleFollow(authorId: string, isFollowing: boolean) {
@@ -1220,6 +1525,7 @@ export default function VideoPlayerScreen() {
                 onShare={handleShare}
                 onFollow={handleFollow}
                 onRecordView={handleRecordView}
+                onOpenMenu={handleOpenMenu}
               />
             );
           }}
@@ -1248,6 +1554,28 @@ export default function VideoPlayerScreen() {
         postId={commentPostId || ""}
         onReplyCountChange={handleReplyCountChange}
       />
+
+      <VideoContextMenu
+        visible={!!menuItem}
+        item={menuItem}
+        onClose={() => setMenuItem(null)}
+        onShare={() => menuItem && setShareSheetItem(menuItem)}
+        onRepost={() => menuItem && handleRepost(menuItem)}
+        onDownload={() => menuItem && handleDownload(menuItem)}
+      />
+
+      <SocialShareSheet
+        visible={!!shareSheetItem}
+        onClose={() => setShareSheetItem(null)}
+        url={shareSheetItem ? getVideoUrl(shareSheetItem) : ""}
+        title={shareSheetItem ? `${shareSheetItem.profile.display_name} on AfuChat` : ""}
+      />
+
+      {downloading && (
+        <View style={mStyles.downloadToast} pointerEvents="none" accessibilityElementsHidden>
+          <Text style={mStyles.downloadToastText}>⬇ Saving to device…</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -1304,4 +1632,22 @@ const mStyles = StyleSheet.create({
   },
   emptyTitle: { color: "rgba(255,255,255,0.6)", fontSize: 18, fontFamily: "Inter_700Bold" },
   emptySubtitle: { color: "rgba(255,255,255,0.3)", fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
+  downloadToast: {
+    position: "absolute",
+    bottom: 80,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  downloadToastText: {
+    color: "#fff",
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    backgroundColor: "rgba(0,0,0,0.65)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    overflow: "hidden",
+  },
 });
