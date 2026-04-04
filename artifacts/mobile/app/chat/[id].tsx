@@ -694,10 +694,10 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
     });
   }
 
-  const displayText = showTranslated && translated ? translated : msg.encrypted_content;
+  const displayText = (showTranslated && translated ? translated : msg.encrypted_content) ?? "";
 
-  const isRedEnvelope = msg.encrypted_content.startsWith("🧧");
-  const isGiftMsg = msg.encrypted_content.startsWith("🎁");
+  const isRedEnvelope = msg.encrypted_content?.startsWith("🧧") ?? false;
+  const isGiftMsg = msg.encrypted_content?.startsWith("🎁") ?? false;
   const meBubbleColor = chatTheme?.bubble || BRAND;
   const otherBubbleColor = colors.bubbleIncoming;
   const bubbleColor = isMe ? meBubbleColor : otherBubbleColor;
@@ -810,7 +810,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
                 </TouchableOpacity>
               )}
               {hasTextContent && (
-                <RichText style={[st.bubbleText, { color: textColor, marginTop: 6, fontSize: chatPrefsLocal.font_size, lineHeight: chatPrefsLocal.font_size + 5 }]} linkColor={isMe ? "#FFFFFF" : "#00BCD4"}>{displayText}</RichText>
+                <RichText style={[st.bubbleText, { color: textColor, marginTop: 6, fontSize: chatPrefsLocal?.font_size ?? 15, lineHeight: (chatPrefsLocal?.font_size ?? 15) + 5 }]} linkColor={isMe ? "#FFFFFF" : "#00BCD4"}>{displayText}</RichText>
               )}
             </>
           ) : hasVideo ? (
@@ -845,7 +845,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
                 </TouchableOpacity>
               )}
               {showTranscript && transcript && (
-                <Text style={[st.bubbleText, { color: textColor, marginTop: 6, fontStyle: "italic", fontSize: chatPrefsLocal.font_size, lineHeight: chatPrefsLocal.font_size + 5 }]}>{transcript}</Text>
+                <Text style={[st.bubbleText, { color: textColor, marginTop: 6, fontStyle: "italic", fontSize: chatPrefsLocal?.font_size ?? 15, lineHeight: (chatPrefsLocal?.font_size ?? 15) + 5 }]}>{transcript}</Text>
               )}
             </View>
           ) : hasFile ? (
@@ -874,7 +874,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
                 </View>
               </View>
               {msg.encrypted_content ? (
-                <Text style={[st.bubbleText, { color: textColor, marginTop: 6, fontSize: chatPrefsLocal.font_size, lineHeight: chatPrefsLocal.font_size + 5 }]}>
+                <Text style={[st.bubbleText, { color: textColor, marginTop: 6, fontSize: chatPrefsLocal?.font_size ?? 15, lineHeight: (chatPrefsLocal?.font_size ?? 15) + 5 }]}>
                   {msg.encrypted_content}
                 </Text>
               ) : null}
@@ -883,7 +883,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
             <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
               {msg._isAi
                 ? <AiRichContent content={displayText} colors={colors} isUser={isMe} />
-                : <RichText style={[st.bubbleText, { color: textColor, fontSize: chatPrefsLocal.font_size, lineHeight: chatPrefsLocal.font_size + 5 }]} linkColor={isMe ? "#FFFFFF" : "#00BCD4"}>{displayText}</RichText>
+                : <RichText style={[st.bubbleText, { color: textColor, fontSize: chatPrefsLocal?.font_size ?? 15, lineHeight: (chatPrefsLocal?.font_size ?? 15) + 5 }]} linkColor={isMe ? "#FFFFFF" : "#00BCD4"}>{displayText}</RichText>
               }
             </TouchableOpacity>
           )}

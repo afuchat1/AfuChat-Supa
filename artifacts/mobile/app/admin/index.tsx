@@ -85,6 +85,7 @@ type CurrencySettings = {
 const TABS = [
   { id: "overview", label: "Overview", icon: "stats-chart" as const },
   { id: "lookup", label: "ID Lookup", icon: "finger-print" as const },
+  { id: "scanner", label: "ID Scanner", icon: "scan" as const },
   { id: "users", label: "Users", icon: "people" as const },
   { id: "sellers", label: "Seller Apps", icon: "storefront" as const },
   { id: "content", label: "Content", icon: "document-text" as const },
@@ -1443,9 +1444,34 @@ export default function AdminDashboard() {
     );
   }
 
+  function renderScanner() {
+    return (
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Digital ID Scanner</Text>
+        <View style={[styles.userRow, { backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", padding: 28, gap: 14 }]}>
+          <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: BRAND + "18", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: BRAND + "40" }}>
+            <Ionicons name="scan" size={32} color={BRAND} />
+          </View>
+          <Text style={[styles.sectionTitle, { color: colors.text, fontSize: 17, marginBottom: 0 }]}>ID Card Scanner</Text>
+          <Text style={{ fontSize: 13, color: colors.textMuted, textAlign: "center", lineHeight: 20 }}>
+            Scan any AfuChat Digital ID QR code to reveal the full user record, activity history, account status and economy data.
+          </Text>
+          <TouchableOpacity
+            style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: BRAND, paddingHorizontal: 28, paddingVertical: 13, borderRadius: 10, marginTop: 4 }}
+            onPress={() => router.push("/admin/id-scanner" as any)}
+          >
+            <Ionicons name="scan-circle" size={20} color="#fff" />
+            <Text style={{ fontSize: 15, fontWeight: "700", color: "#fff", letterSpacing: 0.3 }}>Launch Scanner</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   const tabContent: Record<string, () => React.ReactNode> = {
     overview: renderOverview,
     lookup: renderLookup,
+    scanner: renderScanner,
     users: renderUsers,
     sellers: renderSellerApps,
     content: renderContent,
