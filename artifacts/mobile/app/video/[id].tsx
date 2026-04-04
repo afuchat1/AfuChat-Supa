@@ -573,7 +573,7 @@ function VideoItem({
     onLike(item.id, item.liked);
   }
 
-  const showExpand = item.content && (item.content.split("\n").length > 2 || item.content.length > 100);
+  const showExpand = !!item.content && (item.content.split("\n").length > 2 || item.content.length > 120);
 
   const watermarkRotate = watermarkSpin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
 
@@ -655,15 +655,22 @@ function VideoItem({
 
         {!!item.content && (
           <TouchableOpacity
-            activeOpacity={0.8}
+            activeOpacity={showExpand ? 0.75 : 1}
             onPress={() => showExpand && setExpanded((e) => !e)}
             disabled={!showExpand}
+            style={vStyles.captionWrap}
           >
             <Text style={vStyles.caption} numberOfLines={expanded ? undefined : 2}>
               {item.content}
             </Text>
             {showExpand && !expanded && (
-              <Text style={vStyles.seeMore}>more</Text>
+              <Text style={vStyles.captionMore}>
+                <Text style={vStyles.captionEllipsis}>... </Text>
+                <Text style={vStyles.captionMoreLink}>more</Text>
+              </Text>
+            )}
+            {showExpand && expanded && (
+              <Text style={vStyles.captionLessLink}>less</Text>
             )}
           </TouchableOpacity>
         )}
@@ -838,17 +845,33 @@ const vStyles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     marginTop: 1,
   },
+  captionWrap: {
+    marginTop: 2,
+  },
   caption: {
     color: "rgba(255,255,255,0.92)",
     fontSize: 13,
     fontFamily: "Inter_400Regular",
     lineHeight: 19,
   },
-  seeMore: {
-    color: "rgba(255,255,255,0.5)",
+  captionMore: {
+    marginTop: 1,
     fontSize: 13,
+    lineHeight: 19,
+  },
+  captionEllipsis: {
+    color: "rgba(255,255,255,0.5)",
+    fontFamily: "Inter_400Regular",
+  },
+  captionMoreLink: {
+    color: "#00BCD4",
     fontFamily: "Inter_600SemiBold",
-    marginTop: 2,
+  },
+  captionLessLink: {
+    color: "#00BCD4",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+    marginTop: 4,
   },
   viewRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
   viewText: { color: "rgba(255,255,255,0.4)", fontSize: 11, fontFamily: "Inter_400Regular" },
