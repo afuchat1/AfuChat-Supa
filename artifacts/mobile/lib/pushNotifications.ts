@@ -3,7 +3,7 @@ import { Platform } from "react-native";
 import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
 
-const EAS_PROJECT_ID = "b55c5d92-7a83-472f-b660-d1838efba5fe";
+const EAS_PROJECT_ID = "b4af70bc-1c1b-4337-8892-ffcedbaa3742";
 
 const _handledIds = new Set<string>();
 function alreadyHandled(id: string): boolean {
