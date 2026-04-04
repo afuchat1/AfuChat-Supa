@@ -18,6 +18,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { useDataMode } from "@/context/DataModeContext";
+import { getCachedVideoUri, cacheVideo } from "@/lib/videoCache";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -411,6 +412,7 @@ function VideoItem({
   item,
   isActive,
   isNearActive,
+  isLowData,
   screenH,
   screenW,
   isFollowing,
@@ -425,6 +427,7 @@ function VideoItem({
   item: VideoPost;
   isActive: boolean;
   isNearActive: boolean;
+  isLowData: boolean;
   screenH: number;
   screenW: number;
   isFollowing: boolean;
@@ -441,11 +444,14 @@ function VideoItem({
   const [buffering, setBuffering] = useState(true);
   const [progress, setProgress] = useState(0);
   const [expanded, setExpanded] = useState(false);
+  const [cachedUri, setCachedUri] = useState<string | null>(null);
+  const [manualPlay, setManualPlay] = useState(false);
   const heartScale = useRef(new Animated.Value(1)).current;
   const doubleTapHeart = useRef(new Animated.Value(0)).current;
   const lastTap = useRef(0);
   const insets = useSafeAreaInsets();
   const videoRef = useRef<Video>(null);
+  const cacheAttempted = useRef(false);
 
   const viewRecorded = useRef(false);
 
@@ -454,12 +460,25 @@ function VideoItem({
       setPaused(false);
       setProgress(0);
       setExpanded(false);
-      // Release buffer and stop network I/O when scrolled away
-      videoRef.current?.unloadAsync().catch(() => {});
+      if (!cachedUri) {
+        videoRef.current?.unloadAsync().catch(() => {});
+      }
     } else {
       if (!viewRecorded.current) {
         viewRecorded.current = true;
         onRecordView(item.id);
+      }
+      if (!cacheAttempted.current && item.video_url) {
+        cacheAttempted.current = true;
+        getCachedVideoUri(item.video_url).then((existing) => {
+          if (existing) {
+            setCachedUri(existing);
+          } else if (!isLowData) {
+            cacheVideo(item.video_url).then((local) => {
+              if (local) setCachedUri(local);
+            });
+          }
+        });
       }
     }
   }, [isActive]);
@@ -510,10 +529,10 @@ function VideoItem({
         {isNearActive ? (
           <Video
             ref={videoRef}
-            source={{ uri: item.video_url }}
+            source={{ uri: cachedUri || item.video_url }}
             style={StyleSheet.absoluteFill}
             resizeMode={ResizeMode.CONTAIN}
-            shouldPlay={isActive && !paused}
+            shouldPlay={isActive && !paused && (!isLowData || !!cachedUri || manualPlay)}
             isLooping
             isMuted={false}
             onPlaybackStatusUpdate={onPlaybackStatus}
@@ -523,13 +542,27 @@ function VideoItem({
         )}
       </Pressable>
 
-      {buffering && isActive && (
+      {isActive && isLowData && !cachedUri && !manualPlay && (
+        <TouchableOpacity
+          style={vStyles.dataSaverGate}
+          onPress={() => setManualPlay(true)}
+          activeOpacity={0.85}
+        >
+          <View style={vStyles.dataSaverCircle}>
+            <Ionicons name="play" size={36} color="#fff" style={{ marginLeft: 4 }} />
+          </View>
+          <Text style={vStyles.dataSaverLabel}>Tap to play</Text>
+          <Text style={vStyles.dataSaverSub}>Data saver is on</Text>
+        </TouchableOpacity>
+      )}
+
+      {buffering && isActive && (!isLowData || !!cachedUri || manualPlay) && (
         <View style={[vStyles.bufferOverlay, { pointerEvents: "none" as any }]}>
           <ActivityIndicator color="rgba(255,255,255,0.7)" size="small" />
         </View>
       )}
 
-      {paused && !buffering && (
+      {paused && !buffering && (!isLowData || !!cachedUri || manualPlay) && (
         <View style={[vStyles.pauseOverlay, { pointerEvents: "none" as any }]}>
           <View style={vStyles.pauseCircle}>
             <Ionicons name="play" size={32} color="#fff" style={{ marginLeft: 3 }} />
@@ -662,6 +695,26 @@ function VideoItem({
 const vStyles = StyleSheet.create({
   item: { backgroundColor: "#000" },
 
+  dataSaverGate: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    gap: 8,
+  },
+  dataSaverCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  dataSaverLabel: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  dataSaverSub: { color: "rgba(255,255,255,0.55)", fontSize: 12, fontFamily: "Inter_400Regular" },
   bufferOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
   pauseOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
   pauseCircle: {
@@ -819,7 +872,7 @@ export default function VideoPlayerScreen() {
       .eq("is_blocked", false)
       .not("video_url", "is", null)
       .order("created_at", { ascending: false })
-      .limit(50);
+      .limit(100);
 
     if (tab === "following" && user) {
       const { data: followData } = await supabase
@@ -841,8 +894,17 @@ export default function VideoPlayerScreen() {
 
     if (data && data.length > 0) {
       const postIds = data.map((p: any) => p.id);
-      const authorIds = [...new Set(data.map((p: any) => p.author_id))];
-      const [{ data: likesData }, { data: repliesData }, { data: viewsData }, { data: myLikes }, { data: myBookmarks }, { data: myFollows }] = await Promise.all([
+      const authorIds = [...new Set(data.map((p: any) => p.author_id))] as string[];
+
+      const [
+        { data: likesData },
+        { data: repliesData },
+        { data: viewsData },
+        { data: myLikes },
+        { data: myBookmarks },
+        { data: myFollows },
+        { data: myRecentLikes },
+      ] = await Promise.all([
         supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds),
         supabase.from("post_replies").select("post_id").in("post_id", postIds),
         supabase.from("post_views").select("post_id").in("post_id", postIds),
@@ -855,7 +917,15 @@ export default function VideoPlayerScreen() {
         user
           ? supabase.from("follows").select("following_id").eq("follower_id", user.id).in("following_id", authorIds)
           : { data: [] },
+        user
+          ? supabase.from("post_acknowledgments")
+              .select("post_id")
+              .eq("user_id", user.id)
+              .gte("created_at", new Date(Date.now() - 30 * 24 * 3600000).toISOString())
+              .limit(300)
+          : { data: [] },
       ]);
+
       setFollowingSet(new Set((myFollows || []).map((f: any) => f.following_id)));
 
       const likeMap: Record<string, number> = {};
@@ -866,6 +936,15 @@ export default function VideoPlayerScreen() {
       for (const v of (viewsData || [])) viewMap[v.post_id] = (viewMap[v.post_id] || 0) + 1;
       const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
       const myBookmarkSet = new Set((myBookmarks || []).map((b: any) => b.post_id));
+      const myRecentLikeSet = new Set((myRecentLikes || []).map((l: any) => l.post_id));
+
+      // Build preferred author affinity: authors whose content in the feed the user previously liked
+      const likedAuthorIds = new Set(
+        data
+          .filter((p: any) => myRecentLikeSet.has(p.id))
+          .map((p: any) => p.author_id as string)
+      );
+      const followedSet = new Set((myFollows || []).map((f: any) => f.following_id as string));
 
       const mapped: VideoPost[] = data.map((p: any) => ({
         id: p.id,
@@ -885,7 +964,40 @@ export default function VideoPlayerScreen() {
         likeCount: likeMap[p.id] || 0,
         replyCount: replyMap[p.id] || 0,
       }));
-      setVideos(mapped);
+
+      // ── Personalised ranking algorithm ──────────────────────────────────
+      const now = Date.now();
+      const scored = mapped.map((v) => {
+        const ageHours = (now - new Date(v.created_at).getTime()) / 3600000;
+        const engagement = v.likeCount * 3 + v.replyCount * 2 + v.view_count * 0.3;
+
+        // Engagement quality (log scale to avoid viral monopoly)
+        let score = Math.log1p(engagement) * 25;
+
+        // Recency: content under 24h gets a big boost, decays over 7 days
+        const recency = Math.max(0, 1 - ageHours / 168);
+        score += recency * 45;
+
+        // Personalisation: author the user has liked before
+        if (likedAuthorIds.has(v.author_id)) score += 55;
+
+        // Following boost (strong signal)
+        if (followedSet.has(v.author_id)) score += 40;
+
+        // Already liked by user: slight de-rank (seen, engaged, move on)
+        if (v.liked) score -= 10;
+
+        // Bookmarked: user saved it, don't re-show as much
+        if (v.bookmarked) score -= 5;
+
+        // Add a tiny random factor so feed feels fresh on every load
+        score += Math.random() * 8;
+
+        return { video: v, score };
+      });
+
+      scored.sort((a, b) => b.score - a.score);
+      setVideos(scored.map((s) => s.video));
     }
     setLoading(false);
   }, [user]);
@@ -1097,6 +1209,7 @@ export default function VideoPlayerScreen() {
                 item={item}
                 isActive={isActive}
                 isNearActive={isNearActive}
+                isLowData={isLowData}
                 screenH={SCREEN_H}
                 screenW={SCREEN_W}
                 isFollowing={followingSet.has(item.author_id)}

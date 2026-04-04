@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +14,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system";
 import { Video, ResizeMode } from "expo-av";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
@@ -24,6 +24,12 @@ import { showAlert } from "@/lib/alert";
 import { uploadToStorage } from "@/lib/mediaUpload";
 
 const MAX_DURATION_SECONDS = 90;
+const WARN_SIZE_MB = 80;
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 export default function CreateVideoScreen() {
   const { colors } = useTheme();
@@ -33,6 +39,7 @@ export default function CreateVideoScreen() {
   const [videoUri, setVideoUri] = useState<string | null>(null);
   const [videoMime, setVideoMime] = useState<string | undefined>(undefined);
   const [duration, setDuration] = useState<number>(0);
+  const [fileSize, setFileSize] = useState<number>(0);
   const [caption, setCaption] = useState("");
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
@@ -59,7 +66,7 @@ export default function CreateVideoScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: "videos",
       allowsEditing: false,
-      quality: 1,
+      quality: 0.7,
       videoMaxDuration: MAX_DURATION_SECONDS,
     });
     if (!result.canceled && result.assets[0]) {
@@ -72,20 +79,43 @@ export default function CreateVideoScreen() {
       setVideoUri(asset.uri);
       setVideoMime(asset.mimeType || undefined);
       setDuration(dur);
+      setFileSize(0);
+      try {
+        const info = await FileSystem.getInfoAsync(asset.uri);
+        if (info.exists) setFileSize((info as any).size ?? 0);
+      } catch (_) {}
     }
   }
 
   async function post() {
     if (!user) { router.push("/(auth)/login"); return; }
     if (!videoUri) { showAlert("No video", "Please pick a video first."); return; }
+
+    if (fileSize > WARN_SIZE_MB * 1024 * 1024) {
+      showAlert(
+        "Large file",
+        `This video is ${formatBytes(fileSize)}. Large videos take longer to upload and use more data. Continue?`,
+        [
+          { text: "Cancel", style: "cancel", onPress: () => {} },
+          { text: "Upload anyway", style: "default", onPress: () => doPost() },
+        ]
+      );
+      return;
+    }
+    doPost();
+  }
+
+  async function doPost() {
     setLoading(true);
-    setUploadProgress("Uploading video…");
+    setUploadProgress("Preparing video…");
     try {
-      const rawExt = videoUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "";
+      const rawExt = videoUri!.split(".").pop()?.split("?")[0]?.toLowerCase() || "";
       const ext = ["mp4", "mov", "avi", "webm", "mkv", "m4v"].includes(rawExt) ? rawExt : "mp4";
-      const filePath = `${user.id}/${Date.now()}.${ext}`;
+      const filePath = `${user!.id}/${Date.now()}.${ext}`;
       const resolvedMime = videoMime || (ext === "mov" ? "video/quicktime" : `video/${ext}`);
-      const { publicUrl, error: uploadError } = await uploadToStorage("videos", filePath, videoUri, resolvedMime);
+
+      setUploadProgress("Uploading video…");
+      const { publicUrl, error: uploadError } = await uploadToStorage("videos", filePath, videoUri!, resolvedMime);
       if (uploadError || !publicUrl) throw new Error(uploadError || "Upload failed");
 
       setUploadProgress("Generating thumbnail…");
@@ -96,7 +126,7 @@ export default function CreateVideoScreen() {
         if (fn && videoUri && !videoUri.startsWith("blob:")) {
           const thumbResult2 = await fn(videoUri, { time: 1000, quality: 0.7 });
           if (thumbResult2?.uri) {
-            const thumbPath = `${user.id}/${Date.now()}_thumb.jpg`;
+            const thumbPath = `${user!.id}/${Date.now()}_thumb.jpg`;
             const uploaded = await uploadToStorage("videos", thumbPath, thumbResult2.uri, "image/jpeg");
             if (uploaded.publicUrl) thumbnailPublicUrl = uploaded.publicUrl;
           }
@@ -105,7 +135,7 @@ export default function CreateVideoScreen() {
 
       setUploadProgress("Publishing…");
       const { error } = await supabase.from("posts").insert({
-        author_id: user.id,
+        author_id: user!.id,
         content: caption.trim(),
         video_url: publicUrl,
         image_url: thumbnailPublicUrl,
@@ -126,6 +156,8 @@ export default function CreateVideoScreen() {
 
   const canPost = !!videoUri && !loading;
   const durationLabel = duration > 0 ? `${Math.round(duration)}s / ${MAX_DURATION_SECONDS}s` : "";
+  const sizeLabel = fileSize > 0 ? formatBytes(fileSize) : "";
+  const isLargeFile = fileSize > WARN_SIZE_MB * 1024 * 1024;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -178,6 +210,12 @@ export default function CreateVideoScreen() {
                   <View style={styles.durationBadge}>
                     <Ionicons name="time-outline" size={12} color="#fff" />
                     <Text style={styles.durationText}>{durationLabel}</Text>
+                  </View>
+                ) : null}
+                {sizeLabel ? (
+                  <View style={[styles.durationBadge, isLargeFile && { backgroundColor: "rgba(255,80,0,0.75)" }]}>
+                    <Ionicons name={isLargeFile ? "warning-outline" : "cloud-upload-outline"} size={12} color="#fff" />
+                    <Text style={styles.durationText}>{sizeLabel}</Text>
                   </View>
                 ) : null}
               </View>
