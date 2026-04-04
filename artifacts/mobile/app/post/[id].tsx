@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -78,34 +79,28 @@ function ImageGrid({ images, onPress }: { images: string[]; onPress: (i: number)
       </TouchableOpacity>
     );
   }
-  if (images.length === 2) {
-    return (
-      <View style={styles.imgGrid2}>
-        {images.map((uri, i) => (
-          <TouchableOpacity key={i} style={{ flex: 1 }} activeOpacity={0.9} onPress={() => onPress(i)}>
-            <Image source={{ uri }} style={styles.imgGridCell} resizeMode="cover" />
+  return (
+    <View style={{ gap: 4 }}>
+      {/* First image — full width, tall */}
+      <TouchableOpacity activeOpacity={0.9} onPress={() => onPress(0)}>
+        <Image source={{ uri: images[0] }} style={styles.imgSingle} resizeMode="cover" />
+      </TouchableOpacity>
+      {/* Remaining images — horizontal scroll */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ gap: 4 }}
+      >
+        {images.slice(1).map((uri, i) => (
+          <TouchableOpacity
+            key={i + 1}
+            activeOpacity={0.9}
+            onPress={() => onPress(i + 1)}
+          >
+            <Image source={{ uri }} style={styles.imgThumb} resizeMode="cover" />
           </TouchableOpacity>
         ))}
-      </View>
-    );
-  }
-  return (
-    <View style={styles.imgGrid}>
-      {images.slice(0, 4).map((uri, i) => (
-        <TouchableOpacity
-          key={i}
-          style={styles.imgGridItem}
-          activeOpacity={0.9}
-          onPress={() => onPress(i)}
-        >
-          <Image source={{ uri }} style={styles.imgGridCell} resizeMode="cover" />
-          {i === 3 && images.length > 4 && (
-            <View style={styles.imgMoreOverlay}>
-              <Text style={styles.imgMoreText}>+{images.length - 4}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      ))}
+      </ScrollView>
     </View>
   );
 }
@@ -1059,7 +1054,8 @@ const styles = StyleSheet.create({
   postTimestamp: { fontSize: 13, fontFamily: "Inter_400Regular" },
 
   /* Image grid */
-  imgSingle: { width: "100%", height: 240, borderRadius: 14 },
+  imgSingle: { width: "100%", height: 260, borderRadius: 14 },
+  imgThumb: { width: 110, height: 110, borderRadius: 10 },
   imgGrid2: { flexDirection: "row", gap: 4, height: 220, borderRadius: 14, overflow: "hidden" },
   imgGrid: { flexDirection: "row", flexWrap: "wrap", gap: 4, borderRadius: 14, overflow: "hidden" },
   imgGridItem: { width: "49.5%", height: 160, position: "relative" },

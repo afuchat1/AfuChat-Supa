@@ -6,6 +6,7 @@ import {
   Modal,
   Platform,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -352,27 +353,47 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
 
           {/* ── Images ── */}
           {allImages.length > 0 && item.post_type !== "video" && item.post_type !== "article" && (
-            <View style={[styles.images, allImages.length > 1 && { flexDirection: "row", flexWrap: "wrap", gap: 2 }]}>
-              {allImages.map((uri, i) => (
-                <TouchableOpacity
-                  key={i}
-                  activeOpacity={0.9}
-                  onPress={(e) => { e.stopPropagation(); onImagePress?.(allImages, i); }}
-                  style={allImages.length > 1 ? { flex: 1 } : undefined}
+            <View style={styles.images}>
+              {/* First image — full width */}
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={(e) => { e.stopPropagation(); onImagePress?.(allImages, 0); }}
+              >
+                <ExpoImage
+                  source={{ uri: allImages[0] }}
+                  style={{ width: effectiveW, height: Math.round(effectiveW * 0.56) }}
+                  contentFit="cover"
+                  cachePolicy={isLowData ? "disk" : "memory-disk"}
+                  priority={isLowData ? "low" : "high"}
+                  transition={150}
+                />
+              </TouchableOpacity>
+              {/* Remaining images — horizontal scroll */}
+              {allImages.length > 1 && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={{ marginTop: 3 }}
+                  contentContainerStyle={{ gap: 3 }}
                 >
-                  <ExpoImage
-                    source={{ uri }}
-                    style={{
-                      width: allImages.length === 1 ? effectiveW : multiImgW,
-                      height: allImages.length === 1 ? Math.round(effectiveW * 0.56) : Math.round(multiImgW * 0.75),
-                    }}
-                    contentFit="cover"
-                    cachePolicy={isLowData ? "disk" : "memory-disk"}
-                    priority={i === 0 ? (isLowData ? "low" : "high") : "low"}
-                    transition={150}
-                  />
-                </TouchableOpacity>
-              ))}
+                  {allImages.slice(1).map((uri, i) => (
+                    <TouchableOpacity
+                      key={i + 1}
+                      activeOpacity={0.9}
+                      onPress={(e) => { e.stopPropagation(); onImagePress?.(allImages, i + 1); }}
+                    >
+                      <ExpoImage
+                        source={{ uri }}
+                        style={{ width: 110, height: 90, borderRadius: 8 }}
+                        contentFit="cover"
+                        cachePolicy={isLowData ? "disk" : "memory-disk"}
+                        priority="low"
+                        transition={150}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
             </View>
           )}
 
