@@ -21,6 +21,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { notifyPostLike, notifyNewFollow } from "@/lib/notifyUser";
+import { useDataMode } from "@/context/DataModeContext";
 
 const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get("window");
 
@@ -50,17 +51,20 @@ function VideoItem({
   onLike,
   onFollow,
   currentUserId,
+  isLowData,
 }: {
   item: VideoPost;
   isActive: boolean;
   onLike: (postId: string, liked: boolean) => void;
   onFollow: (authorId: string) => void;
   currentUserId?: string;
+  isLowData?: boolean;
 }) {
   const { accent } = useAppAccent();
   const videoRef = useRef<Video>(null);
   const [muted, setMuted] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [manualPlay, setManualPlay] = useState(false);
   const heartScale = useRef(new Animated.Value(1)).current;
   const followScale = useRef(new Animated.Value(1)).current;
 
@@ -80,14 +84,24 @@ function VideoItem({
     onFollow(item.author_id);
   }
 
-  const shouldPlay = isActive && !paused;
+  const shouldPlay = isLowData ? (manualPlay && isActive && !paused) : (isActive && !paused);
   const isOwnVideo = currentUserId === item.author_id;
   const showFollowButton = !isOwnVideo && !item.following;
 
   return (
     <View style={styles.videoItem}>
       {/* Video */}
-      <TouchableOpacity activeOpacity={1} style={StyleSheet.absoluteFill} onPress={() => setPaused((p) => !p)}>
+      <TouchableOpacity
+        activeOpacity={1}
+        style={StyleSheet.absoluteFill}
+        onPress={() => {
+          if (isLowData && !manualPlay) {
+            setManualPlay(true);
+          } else {
+            setPaused((p) => !p);
+          }
+        }}
+      >
         <Video
           ref={videoRef}
           source={{ uri: item.video_url }}
@@ -97,7 +111,15 @@ function VideoItem({
           isLooping
           isMuted={muted}
         />
-        {paused && (
+        {isLowData && !manualPlay && (
+          <View style={styles.pauseOverlay}>
+            <Ionicons name="play-circle-outline" size={64} color="rgba(255,255,255,0.9)" />
+            <Text style={{ color: "rgba(255,255,255,0.75)", fontSize: 13, marginTop: 8, fontFamily: "Inter_400Regular" }}>
+              Data Saver — Tap to play
+            </Text>
+          </View>
+        )}
+        {(!isLowData || manualPlay) && paused && (
           <View style={styles.pauseOverlay}>
             <Ionicons name="play" size={52} color="rgba(255,255,255,0.85)" />
           </View>
@@ -171,6 +193,7 @@ type Props = {
 export default function VideoFeed({ tabBarHeight = 52 }: Props) {
   const { accent } = useAppAccent();
   const { user, profile } = useAuth();
+  const { isLowData } = useDataMode();
   const insets = useSafeAreaInsets();
 
   const [posts, setPosts] = useState<VideoPost[]>([]);
@@ -304,6 +327,7 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
           onLike={handleLike}
           onFollow={handleFollow}
           currentUserId={user?.id}
+          isLowData={isLowData}
         />
       )}
       pagingEnabled

@@ -17,6 +17,7 @@ import { AFUAI_BOT_ID } from "@/lib/afuAiBot";
 import { uploadChatMedia } from "@/lib/mediaUpload";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { useDataMode } from "@/context/DataModeContext";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 
@@ -79,6 +80,8 @@ const ONLINE_GREEN = "#34C759";
 export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: () => void }) {
   const { isDark } = useTheme();
   const { user } = useAuth();
+  const { isLowData } = useDataMode();
+  const [revealedImages, setRevealedImages] = useState<Set<string>>(new Set());
   const [chatInfo, setChatInfo] = useState<ChatInfo | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -516,7 +519,18 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
               </Text>
             )}
             {item.attachment_type === "image" && item.attachment_url ? (
-              <Image source={{ uri: item.attachment_url }} style={st.msgImage} resizeMode="cover" />
+              isLowData && !revealedImages.has(item.id) ? (
+                <TouchableOpacity
+                  onPress={() => setRevealedImages((prev) => new Set([...prev, item.id]))}
+                  style={[st.msgImage, { backgroundColor: "rgba(0,0,0,0.1)", alignItems: "center", justifyContent: "center" }]}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="image-outline" size={24} color="rgba(0,0,0,0.35)" />
+                  <Text style={{ fontSize: 11, color: "rgba(0,0,0,0.4)", marginTop: 4 }}>Tap to load image</Text>
+                </TouchableOpacity>
+              ) : (
+                <Image source={{ uri: item.attachment_url }} style={st.msgImage} resizeMode="cover" />
+              )
             ) : (
               <View style={st.msgBody}>
                 <Text style={[st.msgText, { color: isMe ? c.bubbleOutText : c.bubbleInText }]}>

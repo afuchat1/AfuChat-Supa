@@ -56,6 +56,7 @@ import { translateText, LANG_LABELS } from "@/lib/translate";
 import { useLanguage } from "@/context/LanguageContext";
 import { useChatPreferences, CHAT_THEME_COLORS, BUBBLE_RADIUS } from "@/context/ChatPreferencesContext";
 import { useAdvancedFeatures } from "@/context/AdvancedFeaturesContext";
+import { useDataMode } from "@/context/DataModeContext";
 import { askAi, aiSuggestReply, transcribeAudio } from "@/lib/aiHelper";
 import { AFUAI_BOT_ID } from "@/lib/afuAiBot";
 import { getDailyUsage, recordDailyUsage } from "@/lib/featureUsage";
@@ -571,6 +572,8 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   const BRAND = colors.accent;
   const { preferredLang, voiceToText, textToSpeech } = useLanguage();
   const { themeColors: chatTheme, bubbleRadius: chatRadius, prefs: chatPrefsLocal } = useChatPreferences();
+  const { isLowData } = useDataMode();
+  const [imageRevealed, setImageRevealed] = useState(!isLowData);
   const [translated, setTranslated] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
   const [showTranslated, setShowTranslated] = useState(false);
@@ -767,17 +770,32 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
           )}
 
           {hasImage ? (
-            <TouchableOpacity
-              onPress={() => onImageTap?.([msg.attachment_url!], 0)}
-              onLongPress={() => onLongPress(msg)}
-              delayLongPress={300}
-              activeOpacity={0.9}
-            >
-              <Image source={{ uri: msg.attachment_url! }} style={st.attachImage} resizeMode="cover" />
-              {hasTextContent && (
-                <RichText style={[st.bubbleText, { color: textColor, marginTop: 6, fontSize: chatPrefsLocal.font_size, lineHeight: chatPrefsLocal.font_size + 5 }]} linkColor={isMe ? "#FFFFFF" : "#00BCD4"}>{displayText}</RichText>
-              )}
-            </TouchableOpacity>
+            isLowData && !imageRevealed ? (
+              <TouchableOpacity
+                onPress={() => setImageRevealed(true)}
+                onLongPress={() => onLongPress(msg)}
+                delayLongPress={300}
+                activeOpacity={0.8}
+                style={[st.attachImage, { backgroundColor: "rgba(0,0,0,0.12)", alignItems: "center", justifyContent: "center" }]}
+              >
+                <Ionicons name="image-outline" size={28} color={isMe ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.35)"} />
+                <Text style={{ fontSize: 11, color: isMe ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.4)", marginTop: 4, fontFamily: "Inter_400Regular" }}>
+                  Tap to load image
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={() => onImageTap?.([msg.attachment_url!], 0)}
+                onLongPress={() => onLongPress(msg)}
+                delayLongPress={300}
+                activeOpacity={0.9}
+              >
+                <Image source={{ uri: msg.attachment_url! }} style={st.attachImage} resizeMode="cover" />
+                {hasTextContent && (
+                  <RichText style={[st.bubbleText, { color: textColor, marginTop: 6, fontSize: chatPrefsLocal.font_size, lineHeight: chatPrefsLocal.font_size + 5 }]} linkColor={isMe ? "#FFFFFF" : "#00BCD4"}>{displayText}</RichText>
+                )}
+              </TouchableOpacity>
+            )
           ) : hasVideo ? (
             <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
               <View style={st.attachVideo}>
@@ -997,6 +1015,7 @@ export default function ChatScreen() {
   const BRAND = colors.accent;
   const { prefs: chatPrefs, themeColors: chatThemeColors, bubbleRadius: chatBubbleRadius } = useChatPreferences();
   const { features: advancedFeatures } = useAdvancedFeatures();
+  const { isLowData: chatIsLowData } = useDataMode();
   const { statsMap, getDynamicPrice } = useGiftPrices();
 
   const playNotificationSound = useCallback(async () => {
@@ -2423,7 +2442,8 @@ STRICT RULES:
     setShowAttachMenu(false);
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") { showAlert("Permission needed", "Camera access is required to take photos."); return; }
-    const pickerQuality = chatPrefs.media_quality === "High" ? 1.0 : chatPrefs.media_quality === "Low" ? 0.4 : 0.8;
+    const baseQuality = chatPrefs.media_quality === "High" ? 1.0 : chatPrefs.media_quality === "Low" ? 0.4 : 0.8;
+    const pickerQuality = chatIsLowData ? Math.min(baseQuality, 0.4) : baseQuality;
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: pickerQuality });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
@@ -2435,7 +2455,8 @@ STRICT RULES:
     setShowAttachMenu(false);
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") { showAlert("Permission needed", "Gallery access is required."); return; }
-    const pickerQuality = chatPrefs.media_quality === "High" ? 1.0 : chatPrefs.media_quality === "Low" ? 0.4 : 0.8;
+    const baseQuality = chatPrefs.media_quality === "High" ? 1.0 : chatPrefs.media_quality === "Low" ? 0.4 : 0.8;
+    const pickerQuality = chatIsLowData ? Math.min(baseQuality, 0.4) : baseQuality;
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: pickerQuality, allowsMultipleSelection: false });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
