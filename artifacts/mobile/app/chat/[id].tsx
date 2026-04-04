@@ -136,20 +136,16 @@ const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 const BRAND_FALLBACK = Colors.brand;
 
 function formatLastSeen(ts: string | null | undefined, showOnlineStatus?: boolean): { text: string; isOnline: boolean } {
-  if (showOnlineStatus === false) return { text: "recently", isOnline: false };
-  if (!ts) return { text: "recently", isOnline: false };
+  if (showOnlineStatus === false) return { text: "last seen recently", isOnline: false };
+  if (!ts) return { text: "last seen recently", isOnline: false };
   const diff = Date.now() - new Date(ts).getTime();
   if (diff < 2 * 60 * 1000) return { text: "Online", isOnline: true };
-  if (diff < 60 * 60 * 1000) return { text: "recently", isOnline: false };
+  if (diff < 60 * 60 * 1000) return { text: "last seen recently", isOnline: false };
   if (diff < 24 * 60 * 60 * 1000) {
     const h = Math.floor(diff / 3600000);
-    return { text: `Last seen ${h === 1 ? "1 hour" : `${h} hours`} ago`, isOnline: false };
+    return { text: `last seen ${h}h ago`, isOnline: false };
   }
-  if (diff < 7 * 24 * 60 * 60 * 1000) {
-    const days = Math.floor(diff / 86400000);
-    return { text: `Last seen ${days === 1 ? "yesterday" : `${days} days ago`}`, isOnline: false };
-  }
-  return { text: `Last seen ${new Date(ts).toLocaleDateString()}`, isOnline: false };
+  return { text: "last seen long time ago", isOnline: false };
 }
 
 function formatMsgTime(iso: string): string {
