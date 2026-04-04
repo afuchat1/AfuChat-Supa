@@ -708,7 +708,7 @@ function VideoItem({
       <GradientOverlay position="bottom" height={360} />
       <GradientOverlay position="top" height={120} />
 
-      <View style={[vStyles.bottomArea, { bottom: insets.bottom + 20 }]}>
+      <View style={[vStyles.bottomArea, { bottom: insets.bottom + 52 }]}>
         <TouchableOpacity
           onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}
           style={vStyles.authorRow}
