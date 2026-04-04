@@ -23,6 +23,7 @@ import { shareProfile } from "@/lib/share";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { ProfileSkeleton, PostSkeleton } from "@/components/ui/Skeleton";
 import { PrestigeBadge } from "@/components/ui/PrestigeBadge";
+import { RichText } from "@/components/ui/RichText";
 
 type Profile = {
   id: string;
@@ -494,12 +495,12 @@ export default function ContactProfileScreen() {
                           <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: colors.accent }}>Article</Text>
                         </View>
                         {p.article_title ? <Text style={[st.articleTitle, { color: colors.text }]} numberOfLines={2}>{p.article_title}</Text> : null}
-                        {!!p.content && <Text style={{ color: colors.textSecondary, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 }} numberOfLines={2}>{p.content}</Text>}
+                        {!!p.content && <RichText style={{ color: colors.textSecondary, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 }} numberOfLines={2}>{p.content}</RichText>}
                       </View>
                     </View>
                   ) : (
                     <>
-                      {!!p.content && <Text style={[st.postContent, { color: colors.text }]} numberOfLines={3}>{p.content}</Text>}
+                      {!!p.content && <RichText style={[st.postContent, { color: colors.text }]} numberOfLines={3}>{p.content}</RichText>}
                       {isVideo ? (
                         <View style={[st.postThumb, { backgroundColor: "#1a1a1d", overflow: "hidden" }]}>
                           {p.image_url ? (

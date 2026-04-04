@@ -107,6 +107,8 @@ function handlePress(segment: Segment) {
       break;
     }
     case "hashtag": {
+      const tag = segment.text.replace("#", "");
+      router.push({ pathname: "/(tabs)/search", params: { tag } });
       break;
     }
   }

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -17,7 +17,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -34,6 +34,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { supabase } from "@/lib/supabase";
+import { RichText } from "@/components/ui/RichText";
 import {
   getSearchHistory,
   addToHistory,
@@ -197,6 +198,8 @@ export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const isDesktop = useIsDesktop();
   const { width: SW } = useWindowDimensions();
+  const { tag: incomingTag } = useLocalSearchParams<{ tag?: string }>();
+  const handledTagRef = useRef<string | null>(null);
 
   const QUICK_GAP = 10;
   const QUICK_COLS = 4;
@@ -226,6 +229,7 @@ export default function SearchScreen() {
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [sortMode, setSortMode] = useState<"relevance"|"recent"|"popular">("relevance");
   const [showFilters, setShowFilters] = useState(false);
+  const [trendingHashtags, setTrendingHashtags] = useState<{ tag: string; count: number }[]>([]);
 
   const [isListening, setIsListening] = useState(false);
 
@@ -239,11 +243,52 @@ export default function SearchScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!incomingTag || incomingTag === handledTagRef.current) return;
+    handledTagRef.current = incomingTag;
+    const q = `#${incomingTag}`;
+    setQuery(q);
+    setTab("posts");
+    setHasSearched(false);
+    addToHistory(q).then(setHistory);
+    performSearch(q, "posts", false, "popular");
+  }, [incomingTag, performSearch]);
+
   async function loadInitial() {
     const [h, s] = await Promise.all([getSearchHistory(), getSavedSearches()]);
     setHistory(h);
     setSaved(s);
     loadTrendingPeople();
+    loadTrendingHashtags();
+  }
+
+  async function loadTrendingHashtags() {
+    try {
+      const { data } = await supabase
+        .from("posts")
+        .select("content, view_count")
+        .ilike("content", "%#%")
+        .eq("visibility", "public")
+        .order("created_at", { ascending: false })
+        .limit(400);
+      if (!data) return;
+      const HASHTAG_RE = /#(\w{2,30})/g;
+      const scores: Record<string, number> = {};
+      for (const post of data) {
+        if (!post.content) continue;
+        HASHTAG_RE.lastIndex = 0;
+        let m: RegExpExecArray | null;
+        while ((m = HASHTAG_RE.exec(post.content)) !== null) {
+          const t = m[1].toLowerCase();
+          scores[t] = (scores[t] || 0) + 1 + Math.log1p(post.view_count || 0) * 0.15;
+        }
+      }
+      const sorted = Object.entries(scores)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 20)
+        .map(([tag, score]) => ({ tag, count: Math.max(1, Math.round(score)) }));
+      setTrendingHashtags(sorted);
+    } catch {}
   }
 
   async function loadTrendingPeople() {
@@ -433,9 +478,10 @@ export default function SearchScreen() {
   function onTagPress(tag: string) {
     const q = `#${tag}`;
     setQuery(q);
+    setTab("posts");
     setShowSuggest(false);
     addToHistory(q).then(setHistory);
-    performSearch(q, tab, verifiedOnly, sortMode);
+    performSearch(q, "posts", verifiedOnly, "popular");
   }
 
   function onHistoryPress(term: string) {
@@ -568,7 +614,7 @@ export default function SearchScreen() {
                 {p.article_title ? (
                   <Text style={{ fontSize: 16, fontFamily: "Inter_700Bold", color: colors.text, lineHeight: 22 }} numberOfLines={2}>{p.article_title}</Text>
                 ) : null}
-                <Text style={{ color: colors.textSecondary, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 }} numberOfLines={2}>{p.content}</Text>
+                <RichText style={{ color: colors.textSecondary, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 }} numberOfLines={2}>{p.content}</RichText>
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderRadius: 8, backgroundColor: BRAND, marginTop: 4 }}>
                   <Ionicons name="book-outline" size={12} color="#fff" />
                   <Text style={{ color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Read article</Text>
@@ -577,9 +623,9 @@ export default function SearchScreen() {
             </View>
           ) : (
             <>
-              <Text style={{ color:colors.text, fontSize:14, fontFamily:"Inter_400Regular", lineHeight:22 }} numberOfLines={hasImage ? 2 : 4}>
+              <RichText style={{ color:colors.text, fontSize:14, fontFamily:"Inter_400Regular", lineHeight:22 }} numberOfLines={hasImage ? 2 : 4}>
                 {p.content}
-              </Text>
+              </RichText>
               {hasImage && (
                 <Image source={{ uri: p.image_url! }} style={{ width:"100%", height:150, borderRadius:12 }} resizeMode="cover" />
               )}
@@ -773,7 +819,7 @@ export default function SearchScreen() {
             <View style={[{ width:"100%", borderRadius:16, padding:16, gap:12, backgroundColor:colors.surface }]}>
               <Text style={{ color:colors.textMuted, fontSize:12, fontFamily:"Inter_600SemiBold", letterSpacing:0.5, textTransform:"uppercase" }}>Explore trending</Text>
               <View style={styles.tagsWrap}>
-                {TRENDING_TAGS.slice(0,8).map(tag => (
+                {(trendingHashtags.length > 0 ? trendingHashtags.slice(0, 8) : TRENDING_TAGS.slice(0, 8).map(t => ({ tag: t, count: 0 }))).map(({ tag }) => (
                   <TouchableOpacity key={tag} style={[styles.tagChip, { backgroundColor:BRAND+"12", borderColor:BRAND+"25" }]} onPress={() => onTagPress(tag)} activeOpacity={0.7}>
                     <Text style={{ color:BRAND, fontSize:13, fontFamily:"Inter_700Bold" }}>#</Text>
                     <Text style={{ color:BRAND, fontSize:13, fontFamily:"Inter_500Medium" }}>{tag}</Text>
@@ -929,8 +975,11 @@ export default function SearchScreen() {
             <Text style={[styles.idleHeading, { color:colors.text }]}>Trending Topics</Text>
           </View>
           <View style={styles.tagsWrap}>
-            {TRENDING_TAGS.map((tag, i) => (
-              <Animated.View key={tag} entering={FadeIn.delay(i*20).duration(180)}>
+            {(trendingHashtags.length > 0
+              ? trendingHashtags
+              : TRENDING_TAGS.map(t => ({ tag: t, count: 0 }))
+            ).map(({ tag, count }, i) => (
+              <Animated.View key={tag} entering={FadeIn.delay(i * 20).duration(180)}>
                 <TouchableOpacity
                   style={[styles.tagChip, { backgroundColor:"#AF52DE"+"12", borderColor:"#AF52DE"+"28" }]}
                   onPress={() => onTagPress(tag)}
@@ -938,6 +987,11 @@ export default function SearchScreen() {
                 >
                   <Text style={{ color:"#AF52DE", fontSize:13, fontFamily:"Inter_700Bold" }}>#</Text>
                   <Text style={{ color:"#AF52DE", fontSize:13, fontFamily:"Inter_500Medium" }}>{tag}</Text>
+                  {count > 1 && (
+                    <View style={{ backgroundColor:"#AF52DE"+"20", borderRadius:8, paddingHorizontal:5, paddingVertical:1, marginLeft:2 }}>
+                      <Text style={{ color:"#AF52DE", fontSize:10, fontFamily:"Inter_600SemiBold" }}>{count > 99 ? "99+" : count}</Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
               </Animated.View>
             ))}

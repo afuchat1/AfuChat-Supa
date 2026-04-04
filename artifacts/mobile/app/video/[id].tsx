@@ -33,6 +33,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { notifyPostLike, notifyPostReply } from "@/lib/notifyUser";
+import { RichText } from "@/components/ui/RichText";
 import * as FileSystem from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
@@ -660,9 +661,13 @@ function VideoItem({
             disabled={!showExpand}
             style={vStyles.captionWrap}
           >
-            <Text style={vStyles.caption} numberOfLines={expanded ? undefined : 2}>
+            <RichText
+              style={vStyles.caption}
+              numberOfLines={expanded ? undefined : 2}
+              linkColor="#00BCD4"
+            >
               {item.content}
-            </Text>
+            </RichText>
             {showExpand && !expanded && (
               <Text style={vStyles.captionMore}>
                 <Text style={vStyles.captionEllipsis}>... </Text>
