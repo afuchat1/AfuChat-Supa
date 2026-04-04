@@ -61,6 +61,7 @@ type AuthContextType = {
   linkedAccounts: StoredAccount[];
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  signInWithTelegram: (initData: string) => Promise<{ success: boolean; error?: string }>;
   addAccount: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   switchAccount: (userId: string) => Promise<{ success: boolean; error?: string }>;
   removeAccount: (userId: string) => Promise<void>;
@@ -77,6 +78,7 @@ const AuthContext = createContext<AuthContextType>({
   linkedAccounts: [],
   signOut: async () => {},
   refreshProfile: async () => {},
+  signInWithTelegram: async () => ({ success: false }),
   addAccount: async () => ({ success: false }),
   switchAccount: async () => ({ success: false }),
   removeAccount: async () => {},
@@ -322,6 +324,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return unsub;
   }, [user]);
 
+  const signInWithTelegram = useCallback(async (initData: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+      const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+      const res = await fetch(`${supabaseUrl}/functions/v1/telegram-auth`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": supabaseAnonKey ?? "",
+        },
+        body: JSON.stringify({ initData }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.access_token) {
+        return { success: false, error: data.error ?? "Telegram sign-in failed" };
+      }
+      const { error } = await supabase.auth.setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      });
+      if (error) return { success: false, error: error.message };
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message ?? "Telegram sign-in failed" };
+    }
+  }, []);
+
   const signOut = useCallback(async () => {
     if (user) {
       await clearPushToken(user.id);
@@ -333,8 +362,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const contextValue = useMemo(() => ({
     session, user, profile, subscription, isPremium, loading, linkedAccounts,
-    signOut, refreshProfile, addAccount, switchAccount, removeAccount: handleRemoveAccount, refreshLinkedAccounts,
-  }), [session, user, profile, subscription, isPremium, loading, linkedAccounts, signOut]);
+    signOut, refreshProfile, signInWithTelegram, addAccount, switchAccount, removeAccount: handleRemoveAccount, refreshLinkedAccounts,
+  }), [session, user, profile, subscription, isPremium, loading, linkedAccounts, signOut, signInWithTelegram]);
 
   return (
     <AuthContext.Provider value={contextValue}>

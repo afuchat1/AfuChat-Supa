@@ -37,6 +37,8 @@ import { useIsDesktop } from "@/hooks/useIsDesktop";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { GoogleLogo, GitHubLogo } from "@/components/ui/OAuthLogos";
+import { isTelegramMiniApp, getTelegramInitData } from "@/lib/telegram";
+import { useTelegram } from "@/context/TelegramContext";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -44,7 +46,8 @@ WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const { colors, isDark, themeMode, setThemeMode } = useTheme();
-  const { user } = useAuth();
+  const { user, signInWithTelegram } = useAuth();
+  const { isTelegram, telegramUser } = useTelegram();
   const insets = useSafeAreaInsets();
   const isDesktop = useIsDesktop();
 
@@ -57,6 +60,36 @@ export default function LoginScreen() {
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
+  const [telegramLoading, setTelegramLoading] = useState(false);
+  const telegramAutoTriedRef = useRef(false);
+
+  React.useEffect(() => {
+    if (!isTelegram || telegramAutoTriedRef.current || user) return;
+    const initData = getTelegramInitData();
+    if (!initData) return;
+    telegramAutoTriedRef.current = true;
+    setTelegramLoading(true);
+    signInWithTelegram(initData).then(({ success, error }) => {
+      if (!success) {
+        setTelegramLoading(false);
+        showAlert("Telegram sign-in failed", error ?? "Could not sign in. Please try again.");
+      }
+    });
+  }, [isTelegram, user]);
+
+  async function handleTelegramSignIn() {
+    const initData = getTelegramInitData();
+    if (!initData) {
+      showAlert("Not in Telegram", "Open this app inside Telegram to use Telegram sign-in.");
+      return;
+    }
+    setTelegramLoading(true);
+    const { success, error } = await signInWithTelegram(initData);
+    if (!success) {
+      setTelegramLoading(false);
+      showAlert("Telegram sign-in failed", error ?? "Could not sign in. Please try again.");
+    }
+  }
 
   const [oauthModalUrl, setOauthModalUrl] = useState<string | null>(null);
   const oauthHandledRef = useRef(false);
@@ -742,6 +775,24 @@ export default function LoginScreen() {
                 <GitHubLogo size={22} color={isDark ? "#24292f" : "#ffffff"} />
                 <Text style={[styles.oauthBtnText, { color: isDark ? "#24292f" : "#ffffff" }]}>
                   Continue with GitHub
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.oauthBtn, { backgroundColor: "#2AABEE", borderColor: "#2AABEE" }]}
+            onPress={handleTelegramSignIn}
+            disabled={telegramLoading || !!oauthLoading}
+            activeOpacity={0.8}
+          >
+            {telegramLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Text style={{ fontSize: 20, lineHeight: 24 }}>✈️</Text>
+                <Text style={[styles.oauthBtnText, { color: "#ffffff" }]}>
+                  {isTelegram ? "Continue with Telegram" : "Open in Telegram"}
                 </Text>
               </>
             )}

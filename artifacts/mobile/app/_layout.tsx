@@ -23,6 +23,8 @@ import { PushNotificationManager } from "@/components/PushNotificationManager";
 import { IOSAlert, type IOSAlertButton } from "@/components/ui/IOSAlert";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ThemeProvider, useThemeContext } from "@/context/ThemeContext";
+import { TelegramProvider } from "@/context/TelegramContext";
+import { TelegramBackButton } from "@/components/TelegramBackButton";
 import { supabase } from "@/lib/supabase";
 import { registerAlertListener, unregisterAlertListener } from "@/lib/alert";
 import { setBaseUrl } from "@/lib/api-client-react/src";
@@ -230,6 +232,7 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
+              <TelegramProvider>
               <ThemeProvider>
                 <AppAccentProvider>
                 <StatusBarManager />
@@ -242,6 +245,7 @@ export default function RootLayout() {
                       <AdvancedFeaturesProvider>
                       <DataModeProvider>
                       <TourProvider>
+                      <TelegramBackButton />
                       <PushNotificationManager />
                       <AppLockGate>
                         <RootLayoutNav />
@@ -263,6 +267,7 @@ export default function RootLayout() {
                 </AuthProvider>
               </AppAccentProvider>
               </ThemeProvider>
+              </TelegramProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>
