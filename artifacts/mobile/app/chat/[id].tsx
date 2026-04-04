@@ -3268,21 +3268,23 @@ STRICT RULES:
               onEndReached={loadMoreMessages}
               onEndReachedThreshold={0.3}
               ListHeaderComponent={
+                (typingUsers.length > 0 || isAfuAiTyping)
+                  ? <TypingBubble
+                      names={isAfuAiTyping ? ["AfuAI", ...typingUsers] : typingUsers}
+                      colors={{
+                        ...colors,
+                        bubbleIncoming: isAfuAiTyping && typingUsers.length === 0 ? "#004D5C" : colors.bubbleIncoming,
+                        bubbleIncomingText: isAfuAiTyping && typingUsers.length === 0 ? "#E0F7FA" : colors.bubbleIncomingText,
+                      }}
+                    />
+                  : null
+              }
+              ListFooterComponent={
                 loadingMore
                   ? <View style={{ paddingVertical: 12, alignItems: "center" }}><ActivityIndicator size="small" color={colors.accent} /></View>
                   : null
               }
             />
-            {(typingUsers.length > 0 || isAfuAiTyping) && (
-              <TypingBubble
-                names={isAfuAiTyping ? ["AfuAI", ...typingUsers] : typingUsers}
-                colors={{
-                  ...colors,
-                  bubbleIncoming: isAfuAiTyping && typingUsers.length === 0 ? "#004D5C" : colors.bubbleIncoming,
-                  bubbleIncomingText: isAfuAiTyping && typingUsers.length === 0 ? "#E0F7FA" : colors.bubbleIncomingText,
-                }}
-              />
-            )}
             <Animated.View
               style={[st.scrollFab, { opacity: scrollBtnOpacity, backgroundColor: colors.surface }]}
               pointerEvents={showScrollBtn ? "auto" : "none"}
