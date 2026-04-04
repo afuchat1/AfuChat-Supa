@@ -175,6 +175,26 @@ export async function uploadAvatar(
   return publicUrl;
 }
 
+const MIME_TO_EXT: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/png": "png",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "video/mp4": "mp4",
+  "video/quicktime": "mov",
+  "video/webm": "webm",
+  "audio/mp4": "m4a",
+  "audio/aac": "aac",
+  "audio/mpeg": "mp3",
+  "audio/wav": "wav",
+  "audio/ogg": "ogg",
+  "audio/x-caf": "caf",
+  "application/pdf": "pdf",
+  "application/msword": "doc",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+};
+
 export async function uploadChatMedia(
   bucket: string,
   chatId: string,
@@ -188,7 +208,8 @@ export async function uploadChatMedia(
   const uriExt = isBlobOrData
     ? undefined
     : fileUri.split(".").pop()?.split("?")[0]?.toLowerCase();
-  const ext = nameExt || uriExt || "file";
+  const mimeExt = contentType ? MIME_TO_EXT[contentType.toLowerCase()] : undefined;
+  const ext = nameExt || uriExt || mimeExt || "file";
   const fileName = originalName || `${Date.now()}.${ext}`;
   const filePath = bucket === "voice-messages"
     ? `${userId}/${fileName}`

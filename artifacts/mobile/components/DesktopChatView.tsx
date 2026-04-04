@@ -89,7 +89,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [isAfuAiTyping, setIsAfuAiTyping] = useState(false);
-  const [attachPreview, setAttachPreview] = useState<{ uri: string; type: string; name: string } | null>(null);
+  const [attachPreview, setAttachPreview] = useState<{ uri: string; type: string; name: string; mimeType?: string } | null>(null);
   const [uploadingAttach, setUploadingAttach] = useState(false);
   const flatRef = useRef<FlatList>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -343,7 +343,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
       const type = file.type.startsWith("image/") ? "image"
         : file.type.startsWith("video/") ? "video"
         : "file";
-      setAttachPreview({ uri, type, name: file.name });
+      setAttachPreview({ uri, type, name: file.name, mimeType: file.type || undefined });
     };
     input.click();
   }
@@ -374,6 +374,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
       user.id,
       attachPreview.uri,
       attachPreview.name,
+      attachPreview.mimeType,
     );
 
     setAttachPreview(null);

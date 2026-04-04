@@ -1272,7 +1272,7 @@ export default function ChatScreen() {
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [gifSearch, setGifSearch] = useState("");
-  const [attachmentPreview, setAttachmentPreview] = useState<{ uri: string; type: string; name?: string } | null>(null);
+  const [attachmentPreview, setAttachmentPreview] = useState<{ uri: string; type: string; name?: string; mimeType?: string } | null>(null);
   const [networkOnline, setNetworkOnline] = useState(isOnline());
   const [messageLimited, setMessageLimited] = useState(false);
   const [forwardMsg, setForwardMsg] = useState<Message | null>(null);
@@ -2517,7 +2517,7 @@ STRICT RULES:
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: pickerQuality });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
-      setAttachmentPreview({ uri: asset.uri, type: "image" });
+      setAttachmentPreview({ uri: asset.uri, type: "image", mimeType: asset.mimeType || "image/jpeg" });
     }
   }
 
@@ -2530,7 +2530,7 @@ STRICT RULES:
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: pickerQuality, allowsMultipleSelection: false });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
-      setAttachmentPreview({ uri: asset.uri, type: "image" });
+      setAttachmentPreview({ uri: asset.uri, type: "image", mimeType: asset.mimeType || "image/jpeg" });
     }
   }
 
@@ -2569,6 +2569,7 @@ STRICT RULES:
         user.id,
         attachmentPreview.uri,
         attachmentPreview.name || undefined,
+        attachmentPreview.mimeType,
       );
 
       if (uploadErr || !publicUrl) {
