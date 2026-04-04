@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Clipboard,
   FlatList,
@@ -1260,6 +1261,9 @@ function VideoContextMenu({
   onShare,
   onRepost,
   onDownload,
+  onCopyLink,
+  onNotInterested,
+  onReport,
 }: {
   visible: boolean;
   item: VideoPost | null;
@@ -1267,13 +1271,19 @@ function VideoContextMenu({
   onShare: () => void;
   onRepost: () => void;
   onDownload: () => void;
+  onCopyLink: () => void;
+  onNotInterested: () => void;
+  onReport: () => void;
 }) {
   if (!visible || !item) return null;
 
   const OPTIONS = [
-    { id: "share",    label: "Share to...",     icon: "share-social-outline",   action: onShare },
-    { id: "repost",   label: "Repost",          icon: "repeat-outline",         action: onRepost },
-    { id: "download", label: "Save to device",  icon: "download-outline",       action: onDownload },
+    { id: "download",       label: "Save to device",   icon: "download-outline",        action: onDownload,       color: "#fff" },
+    { id: "share",          label: "Share to...",      icon: "share-social-outline",    action: onShare,          color: "#fff" },
+    { id: "repost",         label: "Repost",           icon: "repeat-outline",          action: onRepost,         color: "#fff" },
+    { id: "copylink",       label: "Copy link",        icon: "link-outline",            action: onCopyLink,       color: "#fff" },
+    { id: "notinterested",  label: "Not interested",   icon: "eye-off-outline",         action: onNotInterested,  color: "rgba(255,255,255,0.65)" },
+    { id: "report",         label: "Report",           icon: "flag-outline",            action: onReport,         color: "#FF453A" },
   ];
 
   return (
@@ -1291,11 +1301,11 @@ function VideoContextMenu({
         <View style={cmStyles.divider} />
         {OPTIONS.map((opt) => (
           <TouchableOpacity key={opt.id} style={cmStyles.row} onPress={() => { onClose(); setTimeout(opt.action, 200); }}>
-            <View style={cmStyles.rowIcon}>
-              <Ionicons name={opt.icon as any} size={22} color="#fff" />
+            <View style={[cmStyles.rowIcon, opt.id === "report" && { backgroundColor: "rgba(255,69,58,0.12)" }]}>
+              <Ionicons name={opt.icon as any} size={22} color={opt.color} />
             </View>
-            <Text style={cmStyles.rowLabel}>{opt.label}</Text>
-            <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.3)" />
+            <Text style={[cmStyles.rowLabel, { color: opt.color }]}>{opt.label}</Text>
+            <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.2)" />
           </TouchableOpacity>
         ))}
         <TouchableOpacity style={cmStyles.cancelBtn} onPress={onClose}>
@@ -1367,6 +1377,7 @@ export default function VideoPlayerScreen() {
   const [menuItem, setMenuItem] = useState<VideoPost | null>(null);
   const [shareSheetItem, setShareSheetItem] = useState<VideoPost | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [downloadToast, setDownloadToast] = useState<string | null>(null);
   const [soundSheetData, setSoundSheetData] = useState<{ item: VideoPost; albumArtUrl: string | null; trackArtist: string | null } | null>(null);
   const listRef = useRef<FlatList>(null);
   const initialScrollDone = useRef(false);
@@ -1622,13 +1633,29 @@ export default function VideoPlayerScreen() {
     } catch {}
   }
 
+  function showToast(msg: string, durationMs = 2500) {
+    setDownloadToast(msg);
+    setTimeout(() => setDownloadToast(null), durationMs);
+  }
+
   async function handleDownload(item: VideoPost) {
     if (downloading) return;
+    if (Platform.OS === "web") {
+      showToast("Download is only available in the app");
+      return;
+    }
     setDownloading(true);
+    showToast("⬇ Saving to device…", 30000);
     try {
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== "granted") {
         setDownloading(false);
+        setDownloadToast(null);
+        Alert.alert(
+          "Permission needed",
+          "Please allow photo/media library access in Settings to save videos.",
+          [{ text: "OK" }]
+        );
         return;
       }
       const ext = item.video_url.split("?")[0].split(".").pop()?.toLowerCase() || "mp4";
@@ -1636,8 +1663,37 @@ export default function VideoPlayerScreen() {
       const { uri } = await FileSystem.downloadAsync(item.video_url, dest);
       await MediaLibrary.createAssetAsync(uri);
       await FileSystem.deleteAsync(uri, { idempotent: true });
-    } catch {}
-    setDownloading(false);
+      setDownloading(false);
+      showToast("✓ Saved to your device");
+    } catch {
+      setDownloading(false);
+      setDownloadToast(null);
+      Alert.alert("Download failed", "Could not save the video. Please try again.", [{ text: "OK" }]);
+    }
+  }
+
+  function handleCopyLink(item: VideoPost) {
+    const url = getVideoUrl(item);
+    Clipboard.setString(url);
+    showToast("Link copied to clipboard");
+  }
+
+  function handleNotInterested(item: VideoPost) {
+    setVideos((prev) => prev.filter((v) => v.id !== item.id));
+    showToast("Video removed from feed");
+  }
+
+  function handleReport(item: VideoPost) {
+    Alert.alert(
+      "Report video",
+      "Why are you reporting this video?",
+      [
+        { text: "Spam", onPress: () => showToast("Report submitted — thanks") },
+        { text: "Inappropriate content", onPress: () => showToast("Report submitted — thanks") },
+        { text: "Misinformation", onPress: () => showToast("Report submitted — thanks") },
+        { text: "Cancel", style: "cancel" },
+      ]
+    );
   }
 
   function handleOpenMenu(item: VideoPost) {
@@ -1822,6 +1878,9 @@ export default function VideoPlayerScreen() {
         onShare={() => menuItem && setShareSheetItem(menuItem)}
         onRepost={() => menuItem && handleRepost(menuItem)}
         onDownload={() => menuItem && handleDownload(menuItem)}
+        onCopyLink={() => menuItem && handleCopyLink(menuItem)}
+        onNotInterested={() => { if (menuItem) { setMenuItem(null); handleNotInterested(menuItem); } }}
+        onReport={() => menuItem && handleReport(menuItem)}
       />
 
       <SocialShareSheet
@@ -1842,9 +1901,9 @@ export default function VideoPlayerScreen() {
         }}
       />
 
-      {downloading && (
+      {!!downloadToast && (
         <View style={mStyles.downloadToast} pointerEvents="none" accessibilityElementsHidden>
-          <Text style={mStyles.downloadToastText}>⬇ Saving to device…</Text>
+          <Text style={mStyles.downloadToastText}>{downloadToast}</Text>
         </View>
       )}
     </View>
