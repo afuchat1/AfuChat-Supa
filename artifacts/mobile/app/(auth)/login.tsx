@@ -21,6 +21,7 @@ import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
 import { WebView } from "react-native-webview";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 
 let GoogleSignin: any = null;
 let isErrorWithCode: any = null;
@@ -43,8 +44,14 @@ WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const { colors, isDark, themeMode, setThemeMode } = useTheme();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const isDesktop = useIsDesktop();
+
+  React.useEffect(() => {
+    if (user) router.replace("/(tabs)");
+  }, [user]);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
@@ -131,8 +138,11 @@ export default function LoginScreen() {
       return;
     }
     setResetLoading(true);
+    const resetRedirect = Platform.OS === "web" && typeof window !== "undefined"
+      ? window.location.origin + "/"
+      : "https://afuchat.com/";
     const { error } = await supabase.auth.resetPasswordForEmail(resetEmail.trim(), {
-      redirectTo: "https://www.afuchat.com/",
+      redirectTo: resetRedirect,
     });
     setResetLoading(false);
     if (error) {
@@ -331,7 +341,7 @@ export default function LoginScreen() {
       setOauthLoading(provider);
 
       const redirectUrl = Platform.OS === "web"
-        ? "https://www.afuchat.com/"
+        ? (typeof window !== "undefined" ? window.location.origin + "/" : "https://afuchat.com/")
         : makeRedirectUri({ native: "afuchat://(auth)/login" });
 
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -366,8 +376,7 @@ export default function LoginScreen() {
           `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`
         );
         if (!popup) {
-          showAlert("Error", "Popup blocked. Please allow popups for this site.");
-          setOauthLoading(null);
+          window.location.href = data.url;
           return;
         }
         const pollTimer = setInterval(async () => {
