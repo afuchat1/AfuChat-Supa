@@ -48,14 +48,23 @@ type ChatInfo = {
   is_verified: boolean;
   is_organization_verified: boolean;
   other_last_seen: string | null;
+  other_show_online_status: boolean;
 };
 
-function formatLastSeen(ts: string | null | undefined): { text: string; isOnline: boolean } {
-  if (!ts) return { text: "Offline", isOnline: false };
+function formatLastSeen(ts: string | null | undefined, showOnlineStatus?: boolean): { text: string; isOnline: boolean } {
+  if (showOnlineStatus === false) return { text: "recently", isOnline: false };
+  if (!ts) return { text: "recently", isOnline: false };
   const diff = Date.now() - new Date(ts).getTime();
   if (diff < 2 * 60 * 1000) return { text: "Online", isOnline: true };
-  if (diff < 60 * 60 * 1000) return { text: `Last seen ${Math.floor(diff / 60000)}m ago`, isOnline: false };
-  if (diff < 24 * 60 * 60 * 1000) return { text: `Last seen ${Math.floor(diff / 3600000)}h ago`, isOnline: false };
+  if (diff < 60 * 60 * 1000) return { text: "recently", isOnline: false };
+  if (diff < 24 * 60 * 60 * 1000) {
+    const h = Math.floor(diff / 3600000);
+    return { text: `Last seen ${h === 1 ? "1 hour" : `${h} hours`} ago`, isOnline: false };
+  }
+  if (diff < 7 * 24 * 60 * 60 * 1000) {
+    const days = Math.floor(diff / 86400000);
+    return { text: `Last seen ${days === 1 ? "yesterday" : `${days} days ago`}`, isOnline: false };
+  }
   return { text: `Last seen ${new Date(ts).toLocaleDateString()}`, isOnline: false };
 }
 
@@ -161,7 +170,6 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
         const others = (ch.chat_members || []).filter((m: any) => m.user_id !== user.id);
         const profileRaw = others[0]?.profiles;
         const other: any = Array.isArray(profileRaw) ? profileRaw[0] : profileRaw;
-        const showPresence = other?.show_online_status !== false;
         setChatInfo({
           id: ch.id,
           name: ch.name,
@@ -173,7 +181,8 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
           other_id: other?.id || "",
           is_verified: !!other?.is_verified,
           is_organization_verified: !!other?.is_organization_verified,
-          other_last_seen: showPresence ? (other?.last_seen || null) : null,
+          other_last_seen: other?.last_seen || null,
+          other_show_online_status: other?.show_online_status !== false,
         });
       }
 
@@ -242,8 +251,8 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
             prev
               ? {
                   ...prev,
-                  other_last_seen:
-                    updated?.show_online_status !== false ? (updated?.last_seen || null) : null,
+                  other_last_seen: updated?.last_seen || null,
+                  other_show_online_status: updated?.show_online_status !== false,
                 }
               : prev
           );
@@ -469,7 +478,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
     !chatInfo?.is_group && !chatInfo?.is_channel
       ? isAfuAiChat
         ? { text: "AI Assistant · Always active", isOnline: true }
-        : formatLastSeen(chatInfo?.other_last_seen)
+        : formatLastSeen(chatInfo?.other_last_seen, chatInfo?.other_show_online_status)
       : null;
 
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {

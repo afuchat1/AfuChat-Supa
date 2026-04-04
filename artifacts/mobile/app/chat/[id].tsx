@@ -129,17 +129,26 @@ type ChatInfo = {
   is_verified?: boolean;
   is_organization_verified?: boolean;
   other_last_seen?: string | null;
+  other_show_online_status?: boolean;
 };
 
 const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 const BRAND_FALLBACK = Colors.brand;
 
-function formatLastSeen(ts: string | null | undefined): { text: string; isOnline: boolean } {
-  if (!ts) return { text: "Offline", isOnline: false };
+function formatLastSeen(ts: string | null | undefined, showOnlineStatus?: boolean): { text: string; isOnline: boolean } {
+  if (showOnlineStatus === false) return { text: "recently", isOnline: false };
+  if (!ts) return { text: "recently", isOnline: false };
   const diff = Date.now() - new Date(ts).getTime();
   if (diff < 2 * 60 * 1000) return { text: "Online", isOnline: true };
-  if (diff < 60 * 60 * 1000) return { text: `Last seen ${Math.floor(diff / 60000)}m ago`, isOnline: false };
-  if (diff < 24 * 60 * 60 * 1000) return { text: `Last seen ${Math.floor(diff / 3600000)}h ago`, isOnline: false };
+  if (diff < 60 * 60 * 1000) return { text: "recently", isOnline: false };
+  if (diff < 24 * 60 * 60 * 1000) {
+    const h = Math.floor(diff / 3600000);
+    return { text: `Last seen ${h === 1 ? "1 hour" : `${h} hours`} ago`, isOnline: false };
+  }
+  if (diff < 7 * 24 * 60 * 60 * 1000) {
+    const days = Math.floor(diff / 86400000);
+    return { text: `Last seen ${days === 1 ? "yesterday" : `${days} days ago`}`, isOnline: false };
+  }
   return { text: `Last seen ${new Date(ts).toLocaleDateString()}`, isOnline: false };
 }
 
@@ -1321,7 +1330,8 @@ export default function ChatScreen() {
         avatar_url: chat.avatar_url,
         is_verified: !!other?.is_verified,
         is_organization_verified: !!other?.is_organization_verified,
-        other_last_seen: other?.show_online_status !== false ? (other?.last_seen || null) : null,
+        other_last_seen: other?.last_seen || null,
+        other_show_online_status: other?.show_online_status !== false,
       });
     }
   }, [id, user, isDraft]);
@@ -3214,7 +3224,7 @@ STRICT RULES:
             ) : chatInfo?.is_group ? (
               <Text style={[st.headerSub, { color: colors.textMuted }]}>Group chat</Text>
             ) : (() => {
-              const ls = formatLastSeen(chatInfo?.other_last_seen);
+              const ls = formatLastSeen(chatInfo?.other_last_seen, chatInfo?.other_show_online_status);
               return <Text style={[st.headerSub, { color: ls.isOnline ? "#34C759" : colors.textMuted }]}>{ls.text}</Text>;
             })()}
           </View>
@@ -3262,12 +3272,17 @@ STRICT RULES:
                   ? <View style={{ paddingVertical: 12, alignItems: "center" }}><ActivityIndicator size="small" color={colors.accent} /></View>
                   : null
               }
-              ListFooterComponent={
-                (typingUsers.length > 0 || isAfuAiTyping)
-                  ? <TypingBubble names={isAfuAiTyping ? ["AfuAI", ...typingUsers] : typingUsers} colors={{ ...colors, bubbleIncoming: isAfuAiTyping && typingUsers.length === 0 ? "#004D5C" : colors.bubbleIncoming, bubbleIncomingText: isAfuAiTyping && typingUsers.length === 0 ? "#E0F7FA" : colors.bubbleIncomingText }} />
-                  : null
-              }
             />
+            {(typingUsers.length > 0 || isAfuAiTyping) && (
+              <TypingBubble
+                names={isAfuAiTyping ? ["AfuAI", ...typingUsers] : typingUsers}
+                colors={{
+                  ...colors,
+                  bubbleIncoming: isAfuAiTyping && typingUsers.length === 0 ? "#004D5C" : colors.bubbleIncoming,
+                  bubbleIncomingText: isAfuAiTyping && typingUsers.length === 0 ? "#E0F7FA" : colors.bubbleIncomingText,
+                }}
+              />
+            )}
             <Animated.View
               style={[st.scrollFab, { opacity: scrollBtnOpacity, backgroundColor: colors.surface }]}
               pointerEvents={showScrollBtn ? "auto" : "none"}
