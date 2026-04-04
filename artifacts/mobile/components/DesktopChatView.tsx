@@ -520,18 +520,28 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
               </Text>
             )}
             {item.attachment_type === "image" && item.attachment_url ? (
-              isLowData && !revealedImages.has(item.id) ? (
-                <TouchableOpacity
-                  onPress={() => setRevealedImages((prev) => new Set([...prev, item.id]))}
-                  style={[st.msgImage, { backgroundColor: "rgba(0,0,0,0.1)", alignItems: "center", justifyContent: "center" }]}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="image-outline" size={24} color="rgba(0,0,0,0.35)" />
-                  <Text style={{ fontSize: 11, color: "rgba(0,0,0,0.4)", marginTop: 4 }}>Tap to load image</Text>
-                </TouchableOpacity>
-              ) : (
-                <Image source={{ uri: item.attachment_url }} style={st.msgImage} resizeMode="cover" />
-              )
+              <>
+                {isLowData && !revealedImages.has(item.id) ? (
+                  <TouchableOpacity
+                    onPress={() => setRevealedImages((prev) => new Set([...prev, item.id]))}
+                    style={[st.msgImage, { backgroundColor: "rgba(0,0,0,0.1)", alignItems: "center", justifyContent: "center" }]}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="image-outline" size={24} color="rgba(0,0,0,0.35)" />
+                    <Text style={{ fontSize: 11, color: "rgba(0,0,0,0.4)", marginTop: 4 }}>Tap to load image</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Image source={{ uri: item.attachment_url }} style={st.msgImage} resizeMode="cover" />
+                )}
+                {item.encrypted_content && !["📷 Photo", "🎥 Video", "GIF"].includes(item.encrypted_content) && (
+                  <Text style={[st.msgText, { color: isMe ? c.bubbleOutText : c.bubbleInText, marginTop: 6 }]}>
+                    {item.encrypted_content}
+                  </Text>
+                )}
+                <Text style={[st.msgMeta, { color: isMe ? "rgba(233,237,239,0.65)" : c.muted }]}>
+                  {formatTime(item.sent_at)}{isMe ? "  ✓✓" : ""}
+                </Text>
+              </>
             ) : (
               <View style={st.msgBody}>
                 <Text style={[st.msgText, { color: isMe ? c.bubbleOutText : c.bubbleInText }]}>
