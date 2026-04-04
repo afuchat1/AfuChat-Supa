@@ -61,6 +61,15 @@ function formatLastSeen(ts: string | null | undefined, showOnlineStatus?: boolea
     const h = Math.floor(diff / 3600000);
     return { text: `last seen ${h}h ago`, isOnline: false };
   }
+  const date = new Date(ts);
+  if (diff < 7 * 24 * 60 * 60 * 1000) {
+    const day = date.toLocaleDateString([], { weekday: "long" });
+    return { text: `last seen on ${day}`, isOnline: false };
+  }
+  if (diff < 30 * 24 * 60 * 60 * 1000) {
+    const label = date.toLocaleDateString([], { day: "numeric", month: "short" });
+    return { text: `last seen on ${label}`, isOnline: false };
+  }
   return { text: "last seen long time ago", isOnline: false };
 }
 
