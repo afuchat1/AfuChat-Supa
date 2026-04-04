@@ -28,7 +28,7 @@ function getWebApp(): any {
 export function isTelegramMiniApp(): boolean {
   const tg = getWebApp();
   if (!tg) return false;
-  return typeof tg.initData === "string" && tg.initData.length > 0;
+  return typeof tg.version !== "undefined";
 }
 
 export function getTelegramInitData(): string {
