@@ -88,7 +88,7 @@ const ONLINE_GREEN = "#34C759";
 
 export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: () => void }) {
   const { isDark } = useTheme();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { isLowData } = useDataMode();
   const [revealedImages, setRevealedImages] = useState<Set<string>>(new Set());
   const [chatInfo, setChatInfo] = useState<ChatInfo | null>(null);
@@ -98,10 +98,15 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [isAfuAiTyping, setIsAfuAiTyping] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [attachPreview, setAttachPreview] = useState<{ uri: string; type: string; name: string; mimeType?: string } | null>(null);
   const [uploadingAttach, setUploadingAttach] = useState(false);
   const flatRef = useRef<FlatList>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingMapRef = useRef<Map<string, string>>(new Map());
+  const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const c = isDark
     ? {
@@ -261,6 +266,58 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
       .subscribe();
     return () => { supabase.removeChannel(chan); };
   }, [chatInfo?.other_id, chatInfo?.is_group, chatInfo?.is_channel]);
+
+  useEffect(() => {
+    if (!user) return;
+    const typingChannel = supabase.channel(`typing:${chatId}`, { config: { broadcast: { self: false } } });
+    typingChannelRef.current = typingChannel;
+    typingChannel
+      .on("broadcast", { event: "typing" }, (payload) => {
+        const { user_id: uid, display_name: name, is_typing } = (payload.payload || {}) as any;
+        if (!uid || uid === user?.id) return;
+        const clearTyper = () => {
+          if (typingTimersRef.current.has(uid)) {
+            clearTimeout(typingTimersRef.current.get(uid)!);
+            typingTimersRef.current.delete(uid);
+          }
+          typingMapRef.current.delete(uid);
+          setTypingUsers(Array.from(typingMapRef.current.values()));
+        };
+        if (is_typing) {
+          typingMapRef.current.set(uid, name || "Someone");
+          if (typingTimersRef.current.has(uid)) clearTimeout(typingTimersRef.current.get(uid)!);
+          typingTimersRef.current.set(uid, setTimeout(clearTyper, 6000));
+          setTypingUsers(Array.from(typingMapRef.current.values()));
+        } else {
+          clearTyper();
+        }
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(typingChannel);
+      typingChannelRef.current = null;
+      typingTimersRef.current.forEach((t) => clearTimeout(t));
+      typingTimersRef.current.clear();
+      typingMapRef.current.clear();
+    };
+  }, [chatId, user]);
+
+  function handleTyping() {
+    if (!user) return;
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingChannelRef.current?.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { user_id: user.id, display_name: profile?.display_name || "Someone", is_typing: true },
+    });
+    typingTimeoutRef.current = setTimeout(() => {
+      typingChannelRef.current?.send({
+        type: "broadcast",
+        event: "typing",
+        payload: { user_id: user.id, display_name: profile?.display_name || "Someone", is_typing: false },
+      });
+    }, 3000);
+  }
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -650,18 +707,38 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
             </View>
           }
           ListFooterComponent={
-            isAfuAiTyping ? (
-              <View style={[st.msgRow, st.msgRowOther, { marginTop: 6 }]}>
-                <View style={st.avatarCol}>
-                  <Avatar uri={null} name="AfuAI" size={30} />
-                </View>
-                <View style={[st.bubble, st.bubbleOtherTail, { backgroundColor: c.bubbleIn }]}>
-                  <View style={st.typingDots}>
-                    <View style={[st.dot, { backgroundColor: c.muted }]} />
-                    <View style={[st.dot, { backgroundColor: c.muted }]} />
-                    <View style={[st.dot, { backgroundColor: c.muted }]} />
+            (isAfuAiTyping || typingUsers.length > 0) ? (
+              <View>
+                {isAfuAiTyping && (
+                  <View style={[st.msgRow, st.msgRowOther, { marginTop: 6 }]}>
+                    <View style={st.avatarCol}>
+                      <Avatar uri={null} name="AfuAI" size={30} />
+                    </View>
+                    <View style={[st.bubble, st.bubbleOtherTail, { backgroundColor: c.bubbleIn }]}>
+                      <View style={st.typingDots}>
+                        <View style={[st.dot, { backgroundColor: c.muted }]} />
+                        <View style={[st.dot, { backgroundColor: c.muted }]} />
+                        <View style={[st.dot, { backgroundColor: c.muted }]} />
+                      </View>
+                    </View>
                   </View>
-                </View>
+                )}
+                {typingUsers.length > 0 && (
+                  <View style={[st.msgRow, st.msgRowOther, { marginTop: 4, marginBottom: 4 }]}>
+                    <View style={[st.bubble, st.bubbleOtherTail, { backgroundColor: c.bubbleIn }]}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <View style={st.typingDots}>
+                          <View style={[st.dot, { backgroundColor: c.muted }]} />
+                          <View style={[st.dot, { backgroundColor: c.muted }]} />
+                          <View style={[st.dot, { backgroundColor: c.muted }]} />
+                        </View>
+                        <Text style={{ color: c.muted, fontSize: 12 }}>
+                          {typingUsers.join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing…
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
               </View>
             ) : null
           }
@@ -719,7 +796,7 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
               placeholder={isAfuAiChat ? "Ask AfuAI anything…" : "Message…"}
               placeholderTextColor={c.muted}
               value={text}
-              onChangeText={setText}
+              onChangeText={(t) => { setText(t); handleTyping(); }}
               multiline
               maxLength={4000}
               onSubmitEditing={sendMessage}
