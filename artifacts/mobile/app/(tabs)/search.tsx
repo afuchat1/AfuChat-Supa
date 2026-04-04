@@ -51,12 +51,13 @@ const MATCH = "#FF2D55";
 const GOLD = "#D4A853";
 const SUCCESS = "#34C759";
 
-type SearchTab = "all" | "people" | "posts" | "channels" | "events" | "gifts" | "apps" | "shops";
+type SearchTab = "all" | "people" | "posts" | "videos" | "channels" | "events" | "gifts" | "apps" | "shops";
 
 const TABS: { id: SearchTab; label: string; icon: string }[] = [
   { id: "all",      label: "All",      icon: "apps-outline" },
   { id: "people",   label: "People",   icon: "people-outline" },
   { id: "posts",    label: "Posts",    icon: "document-text-outline" },
+  { id: "videos",   label: "Videos",   icon: "play-circle-outline" },
   { id: "channels", label: "Channels", icon: "megaphone-outline" },
   { id: "events",   label: "Events",   icon: "calendar-outline" },
   { id: "gifts",    label: "Gifts",    icon: "gift-outline" },
@@ -103,6 +104,7 @@ const PLATFORM_APPS = [
 const QUICK_CATEGORIES = [
   { id: "people",   label: "People",   icon: "people",        gradient: [BRAND, "#0097A7"],       route: null },
   { id: "posts",    label: "Posts",    icon: "document-text", gradient: ["#007AFF", "#0A84FF"],   route: null },
+  { id: "videos",   label: "Videos",   icon: "play-circle",   gradient: ["#FF3B30", "#FF453A"],   route: null },
   { id: "channels", label: "Channels", icon: "megaphone",     gradient: ["#AF52DE", "#BF5AF2"],   route: null },
   { id: "events",   label: "Events",   icon: "calendar",      gradient: ["#FF9500", "#FFCC00"],   route: "/digital-events" },
   { id: "gifts",    label: "Gifts",    icon: "gift",          gradient: ["#FF3B30", "#FF453A"],   route: "/gifts" },
@@ -115,6 +117,7 @@ const TRENDING_TAGS = ["gaming","photography","music","travel","coding","fitness
 
 type PersonResult   = { id:string; handle:string; display_name:string; avatar_url:string|null; bio:string|null; is_verified:boolean; is_organization_verified:boolean; current_grade:string; country:string|null; xp?:number };
 type PostResult     = { id:string; content:string; image_url:string|null; author_id:string; author_handle:string; author_name:string; author_avatar:string|null; view_count:number; created_at:string; post_type:string; article_title:string|null };
+type VideoResult    = { id:string; content:string; video_url:string; image_url:string|null; author_id:string; author_handle:string; author_name:string; author_avatar:string|null; view_count:number; created_at:string; audio_name:string|null };
 type ChannelResult  = { id:string; name:string; description:string|null; avatar_url:string|null; subscriber_count:number };
 type EventResult    = { id:string; title:string; description:string|null; emoji:string; price:number; event_date:string; capacity:number; tickets_sold:number; category:string|null; creator_name:string; creator_handle:string };
 type GiftResult     = { id:string; name:string; emoji:string; base_xp_cost:number; rarity:string; description:string|null };
@@ -124,6 +127,7 @@ type AppResult      = typeof PLATFORM_APPS[number];
 type AllResults = {
   people:   PersonResult[];
   posts:    PostResult[];
+  videos:   VideoResult[];
   channels: ChannelResult[];
   events:   EventResult[];
   gifts:    GiftResult[];
@@ -131,7 +135,7 @@ type AllResults = {
   apps:     AppResult[];
 };
 
-const EMPTY: AllResults = { people:[], posts:[], channels:[], events:[], gifts:[], shops:[], apps:[] };
+const EMPTY: AllResults = { people:[], posts:[], videos:[], channels:[], events:[], gifts:[], shops:[], apps:[] };
 
 function timeAgo(iso:string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -243,17 +247,6 @@ export default function SearchScreen() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!incomingTag || incomingTag === handledTagRef.current) return;
-    handledTagRef.current = incomingTag;
-    const q = `#${incomingTag}`;
-    setQuery(q);
-    setTab("posts");
-    setHasSearched(false);
-    addToHistory(q).then(setHistory);
-    performSearch(q, "posts", false, "popular");
-  }, [incomingTag, performSearch]);
-
   async function loadInitial() {
     const [h, s] = await Promise.all([getSearchHistory(), getSavedSearches()]);
     setHistory(h);
@@ -325,7 +318,7 @@ export default function SearchScreen() {
 
   const performSearch = useCallback(async (q: string, currentTab: SearchTab, vOnly: boolean, sort: "relevance"|"recent"|"popular") => {
     const trimmed = q.trim();
-    if (trimmed.length < 1) {
+    if (trimmed.length < 1 && currentTab !== "videos") {
       setResults(EMPTY); setHasSearched(false); setTotalCount(0); return;
     }
 
@@ -351,11 +344,25 @@ export default function SearchScreen() {
         let pq = supabase.from("posts")
           .select("id, content, image_url, author_id, view_count, visibility, created_at, post_type, article_title")
           .ilike("content", pat)
-          .eq("visibility", "public");
+          .eq("visibility", "public")
+          .neq("post_type", "video");
         if (sort === "recent") pq = pq.order("created_at", { ascending: false });
         else if (sort === "popular") pq = pq.order("view_count", { ascending: false });
         else pq = pq.order("created_at", { ascending: false });
         fetches.push(pq.limit(all ? 5 : 25));
+      } else fetches.push(Promise.resolve({ data: [] }));
+
+      if (all || currentTab === "videos") {
+        let vq = supabase.from("posts")
+          .select("id, content, video_url, image_url, author_id, view_count, visibility, created_at, audio_name")
+          .eq("post_type", "video")
+          .eq("visibility", "public")
+          .not("video_url", "is", null);
+        if (trimmed.length > 0) vq = vq.ilike("content", pat);
+        if (sort === "recent") vq = vq.order("created_at", { ascending: false });
+        else if (sort === "popular") vq = vq.order("view_count", { ascending: false });
+        else vq = vq.order("view_count", { ascending: false });
+        fetches.push(vq.limit(all ? 4 : 30));
       } else fetches.push(Promise.resolve({ data: [] }));
 
       if (all || currentTab === "channels") {
@@ -405,21 +412,32 @@ export default function SearchScreen() {
 
       fetches.push(Promise.resolve({ data: searchApps(trimmed) }));
 
-      const [peopleRes, postsRes, channelsRes, eventsRes, giftsRes, shopsRes, appsRes] = await Promise.all(fetches);
+      const [peopleRes, postsRes, videosRes, channelsRes, eventsRes, giftsRes, shopsRes, appsRes] = await Promise.all(fetches);
       if (id !== searchIdRef.current) return;
 
       const people: PersonResult[] = peopleRes.data || [];
 
-      let posts: PostResult[] = [];
-      if (postsRes.data?.length > 0) {
-        const aids = [...new Set(postsRes.data.map((p: any) => p.author_id))];
-        const { data: authors } = await supabase.from("profiles").select("id, handle, display_name, avatar_url").in("id", aids as string[]);
-        const amap = new Map((authors || []).map((a: any) => [a.id, a]));
-        posts = postsRes.data.map((p: any) => {
-          const a = amap.get(p.author_id) || {} as any;
-          return { id: p.id, content: p.content, image_url: p.image_url || null, author_id: p.author_id, author_handle: a.handle || "", author_name: a.display_name || "", author_avatar: a.avatar_url || null, view_count: p.view_count || 0, created_at: p.created_at, post_type: p.post_type || "text", article_title: p.article_title || null };
-        });
+      // Build author map from both posts + videos in one request
+      const allAuthorIds = [
+        ...(postsRes.data || []).map((p: any) => p.author_id),
+        ...(videosRes.data || []).map((v: any) => v.author_id),
+      ];
+      const uniqueAuthorIds = [...new Set(allAuthorIds)];
+      let amap = new Map<string, any>();
+      if (uniqueAuthorIds.length > 0) {
+        const { data: authors } = await supabase.from("profiles").select("id, handle, display_name, avatar_url").in("id", uniqueAuthorIds as string[]);
+        amap = new Map((authors || []).map((a: any) => [a.id, a]));
       }
+
+      const posts: PostResult[] = (postsRes.data || []).map((p: any) => {
+        const a = amap.get(p.author_id) || {} as any;
+        return { id: p.id, content: p.content, image_url: p.image_url || null, author_id: p.author_id, author_handle: a.handle || "", author_name: a.display_name || "", author_avatar: a.avatar_url || null, view_count: p.view_count || 0, created_at: p.created_at, post_type: p.post_type || "text", article_title: p.article_title || null };
+      });
+
+      const videos: VideoResult[] = (videosRes.data || []).map((v: any) => {
+        const a = amap.get(v.author_id) || {} as any;
+        return { id: v.id, content: v.content || "", video_url: v.video_url, image_url: v.image_url || null, author_id: v.author_id, author_handle: a.handle || "", author_name: a.display_name || "", author_avatar: a.avatar_url || null, view_count: v.view_count || 0, created_at: v.created_at, audio_name: v.audio_name || null };
+      });
 
       const channels: ChannelResult[] = channelsRes.data || [];
 
@@ -431,8 +449,8 @@ export default function SearchScreen() {
       const shops: ShopResult[] = (shopsRes.data && !shopsRes.merged) ? [] : (shopsRes.data || []);
       const apps: AppResult[] = appsRes.data || [];
 
-      const total = people.length + posts.length + channels.length + events.length + gifts.length + shops.length + apps.length;
-      setResults({ people, posts, channels, events, gifts, shops, apps });
+      const total = people.length + posts.length + videos.length + channels.length + events.length + gifts.length + shops.length + apps.length;
+      setResults({ people, posts, videos, channels, events, gifts, shops, apps });
       setTotalCount(total);
     } catch (e) {
       console.warn("Search error:", e);
@@ -440,6 +458,17 @@ export default function SearchScreen() {
       if (id === searchIdRef.current) setLoading(false);
     }
   }, [searchApps]);
+
+  useEffect(() => {
+    if (!incomingTag || incomingTag === handledTagRef.current) return;
+    handledTagRef.current = incomingTag;
+    const q = `#${incomingTag}`;
+    setQuery(q);
+    setTab("posts");
+    setHasSearched(false);
+    addToHistory(q).then(setHistory);
+    performSearch(q, "posts", false, "popular");
+  }, [incomingTag, performSearch]);
 
   function onChangeText(text: string) {
     setQuery(text);
@@ -462,7 +491,7 @@ export default function SearchScreen() {
   function onTabPress(t: SearchTab) {
     setTab(t);
     Haptics.selectionAsync();
-    if (query.trim().length >= 1) performSearch(query, t, verifiedOnly, sortMode);
+    if (query.trim().length >= 1 || t === "videos") performSearch(query, t, verifiedOnly, sortMode);
   }
 
   function clearSearch() {
@@ -522,6 +551,7 @@ export default function SearchScreen() {
     all:      totalCount,
     people:   results.people.length,
     posts:    results.posts.length,
+    videos:   results.videos.length,
     channels: results.channels.length,
     events:   results.events.length,
     gifts:    results.gifts.length,
@@ -797,12 +827,13 @@ export default function SearchScreen() {
   function renderResults() {
     const showPeople   = (tab === "all" || tab === "people")   && results.people.length > 0;
     const showPosts    = (tab === "all" || tab === "posts")    && results.posts.length > 0;
+    const showVideos   = (tab === "all" || tab === "videos")   && results.videos.length > 0;
     const showChannels = (tab === "all" || tab === "channels") && results.channels.length > 0;
     const showEvents   = (tab === "all" || tab === "events")   && results.events.length > 0;
     const showGifts    = (tab === "all" || tab === "gifts")    && results.gifts.length > 0;
     const showShops    = (tab === "all" || tab === "shops")    && results.shops.length > 0;
     const showApps     = (tab === "all" || tab === "apps")     && results.apps.length > 0;
-    const anyResults = showPeople || showPosts || showChannels || showEvents || showGifts || showShops || showApps;
+    const anyResults = showPeople || showPosts || showVideos || showChannels || showEvents || showGifts || showShops || showApps;
 
     if (!anyResults) {
       return (
@@ -856,6 +887,13 @@ export default function SearchScreen() {
           </View>
         )}
 
+        {showVideos && (
+          <View style={{ paddingTop:16 }}>
+            <SectionLabel icon="play-circle" label="Videos" count={results.videos.length} onSeeAll={tab === "all" && results.videos.length >= 4 ? () => onTabPress("videos") : undefined} />
+            <VideoGrid videos={tab === "all" ? results.videos.slice(0, 4) : results.videos} compact={tab === "all"} />
+          </View>
+        )}
+
         {showChannels && (
           <View style={{ paddingTop:16 }}>
             <SectionLabel icon="megaphone" label="Channels" count={results.channels.length} onSeeAll={tab === "all" && results.channels.length >= 4 ? () => onTabPress("channels") : undefined} />
@@ -894,6 +932,69 @@ export default function SearchScreen() {
     );
   }
 
+  function VideoGrid({ videos, compact }: { videos: VideoResult[]; compact?: boolean }) {
+    const COLS = compact ? 2 : (isDesktop ? 3 : 2);
+    const GAP = 8;
+    const HPAD = 16;
+    const cardW = Math.floor((SW - HPAD * 2 - GAP * (COLS - 1)) / COLS);
+    const cardH = Math.round(cardW * 9 / 16);
+    return (
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: GAP, paddingHorizontal: HPAD, paddingBottom: 8 }}>
+        {videos.map((v, i) => (
+          <Animated.View key={v.id} entering={FadeIn.delay(i * 30).duration(220)}>
+            <TouchableOpacity
+              style={{ width: cardW, borderRadius: 14, overflow: "hidden", backgroundColor: "#1a1a1d" }}
+              onPress={() => { Haptics.selectionAsync(); router.push({ pathname: "/video/[id]", params: { id: v.id } } as any); }}
+              activeOpacity={0.82}
+            >
+              {/* Thumbnail */}
+              <View style={{ width: cardW, height: cardH }}>
+                {v.image_url ? (
+                  <Image source={{ uri: v.image_url }} style={{ width: cardW, height: cardH }} resizeMode="cover" />
+                ) : (
+                  <LinearGradient colors={["#1a2a35", "#0d1117"]} style={{ width: cardW, height: cardH, alignItems: "center", justifyContent: "center" }}>
+                    <Ionicons name="videocam" size={28} color="#ffffff40" />
+                  </LinearGradient>
+                )}
+                {/* Play button overlay */}
+                <View style={{ ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.35)" }}>
+                    <Ionicons name="play" size={18} color="#fff" style={{ marginLeft: 2 }} />
+                  </View>
+                </View>
+                {/* View count badge */}
+                <View style={{ position: "absolute", top: 6, right: 6, flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "rgba(0,0,0,0.62)", borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
+                  <Ionicons name="eye-outline" size={10} color="#fff" />
+                  <Text style={{ color: "#fff", fontSize: 10, fontFamily: "Inter_500Medium" }}>{v.view_count > 999 ? `${(v.view_count / 1000).toFixed(1)}k` : v.view_count}</Text>
+                </View>
+                {/* Audio name badge */}
+                {v.audio_name && (
+                  <View style={{ position: "absolute", bottom: 6, left: 6, right: 6, flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(0,0,0,0.62)", borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3 }}>
+                    <Ionicons name="musical-notes" size={10} color={BRAND} />
+                    <Text style={{ color: "#fff", fontSize: 9, fontFamily: "Inter_500Medium", flex: 1 }} numberOfLines={1}>{v.audio_name}</Text>
+                  </View>
+                )}
+              </View>
+              {/* Meta row */}
+              <View style={{ padding: 8, gap: 4, backgroundColor: colors.surface }}>
+                {v.content ? (
+                  <Text style={{ color: colors.text, fontSize: 12, fontFamily: "Inter_500Medium", lineHeight: 16 }} numberOfLines={2}>{v.content}</Text>
+                ) : null}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                  {v.author_avatar
+                    ? <Image source={{ uri: v.author_avatar }} style={{ width: 16, height: 16, borderRadius: 8 }} />
+                    : <AvatarPlaceholder name={v.author_name} size={16} color={BRAND} />}
+                  <Text style={{ color: colors.textMuted, fontSize: 10, fontFamily: "Inter_500Medium", flex: 1 }} numberOfLines={1}>{v.author_name}</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 10 }}>{timeAgo(v.created_at)}</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+        ))}
+      </View>
+    );
+  }
+
   function renderLoading() {
     return (
       <ScrollView contentContainerStyle={{ paddingTop:16, paddingBottom:scrollPB }} showsVerticalScrollIndicator={false}>
@@ -918,7 +1019,13 @@ export default function SearchScreen() {
               <Animated.View key={qc.id} entering={FadeInDown.delay(i*30).duration(200)}>
                 <TouchableOpacity
                   style={[styles.quickCard, { width:quickCardW, backgroundColor:colors.surface }]}
-                  onPress={() => qc.route ? router.push(qc.route as any) : (setTab(qc.id as SearchTab), inputRef.current?.focus())}
+                  onPress={() => {
+                    if (qc.route) { router.push(qc.route as any); return; }
+                    const t = qc.id as SearchTab;
+                    setTab(t);
+                    inputRef.current?.focus();
+                    if (t === "videos") performSearch("", "videos", false, "popular");
+                  }}
                   activeOpacity={0.78}
                 >
                   <LinearGradient
