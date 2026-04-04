@@ -9,6 +9,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ViewToken,
   useWindowDimensions,
 } from "react-native";
 import { Image as ExpoImage } from "expo-image";
@@ -504,6 +505,25 @@ export function DesktopDiscoverSection() {
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   const posts = feedTab === "for_you" ? forYouPosts : followingPosts;
+  const setCurrentPosts = feedTab === "for_you" ? setForYouPosts : setFollowingPosts;
+
+  const recordedViewsRef = useRef<Set<string>>(new Set());
+  const viewabilityConfig = useRef({ minimumViewTime: 800, itemVisiblePercentThreshold: 50 }).current;
+  const onViewableItemsChangedRef = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {});
+  onViewableItemsChangedRef.current = ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    if (!isLoggedIn || !user) return;
+    for (const vi of viewableItems) {
+      const postId = vi.item?.id as string | undefined;
+      if (!postId || recordedViewsRef.current.has(postId)) continue;
+      recordedViewsRef.current.add(postId);
+      supabase.from("post_views").insert({ post_id: postId, viewer_id: user.id }).then(() => {
+        setCurrentPosts((prev) => prev.map((p) => p.id === postId ? { ...p, view_count: (p.view_count || 0) + 1 } : p));
+      });
+    }
+  };
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    onViewableItemsChangedRef.current({ viewableItems });
+  }).current;
 
   const loadForYou = useCallback(async () => {
     const { data, error } = await supabase
@@ -667,6 +687,8 @@ export function DesktopDiscoverSection() {
                 feedWidth={feedWidth}
               />
             )}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={viewabilityConfig}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.feedList}
             onRefresh={() => { setRefreshing(true); loadAll(); }}

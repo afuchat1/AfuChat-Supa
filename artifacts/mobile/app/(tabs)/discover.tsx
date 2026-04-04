@@ -10,6 +10,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  ViewToken,
   useWindowDimensions,
 } from "react-native";
 import { Image as ExpoImage } from "expo-image";
@@ -481,6 +482,23 @@ export default function DiscoverScreen() {
   const postsRef = useRef<PostItem[]>([]);
   const feedTabRef = useRef<"for_you" | "following">("for_you");
   const flatListRef = useRef<FlatList>(null);
+  const recordedViewsRef = useRef<Set<string>>(new Set());
+  const viewabilityConfig = useRef({ minimumViewTime: 800, itemVisiblePercentThreshold: 50 }).current;
+  const onViewableItemsChangedRef = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {});
+  onViewableItemsChangedRef.current = ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    if (!user) return;
+    for (const vi of viewableItems) {
+      const postId = vi.item?.id as string | undefined;
+      if (!postId || recordedViewsRef.current.has(postId)) continue;
+      recordedViewsRef.current.add(postId);
+      supabase.from("post_views").insert({ post_id: postId, viewer_id: user.id }).then(() => {
+        setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, view_count: (p.view_count || 0) + 1 } : p));
+      });
+    }
+  };
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    onViewableItemsChangedRef.current({ viewableItems });
+  }).current;
   const [newPostAuthors, setNewPostAuthors] = useState<{ id: string; avatar_url: string | null; display_name: string }[]>([]);
   const newPostAuthorIdsRef = useRef<Set<string>>(new Set());
 
@@ -1131,6 +1149,8 @@ export default function DiscoverScreen() {
           showsVerticalScrollIndicator={false}
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
           initialNumToRender={8}
           maxToRenderPerBatch={6}
           windowSize={8}
