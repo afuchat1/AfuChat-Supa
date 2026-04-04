@@ -429,6 +429,8 @@ function VideoItem({
   onShare,
   onFollow,
   onRecordView,
+  onOpenMenu,
+  onOpenSound,
 }: {
   item: VideoPost;
   isActive: boolean;
@@ -445,6 +447,7 @@ function VideoItem({
   onFollow: (authorId: string, isFollowing: boolean) => void;
   onRecordView: (postId: string) => void;
   onOpenMenu: (item: VideoPost) => void;
+  onOpenSound: (item: VideoPost, albumArtUrl: string | null, trackArtist: string | null) => void;
 }) {
   const { accent } = useAppAccent();
   const [paused, setPaused] = useState(false);
@@ -455,6 +458,8 @@ function VideoItem({
   const [cachedUri, setCachedUri] = useState<string | null>(null);
   const [manualPlay, setManualPlay] = useState(false);
   const [progressBarWidth, setProgressBarWidth] = useState(0);
+  const [albumArtUrl, setAlbumArtUrl] = useState<string | null>(null);
+  const [trackArtist, setTrackArtist] = useState<string | null>(null);
   const heartScale = useRef(new Animated.Value(1)).current;
   const doubleTapHeart = useRef(new Animated.Value(0)).current;
   const watermarkSpin = useRef(new Animated.Value(0)).current;
@@ -463,6 +468,8 @@ function VideoItem({
   const videoRef = useRef<Video>(null);
   const cacheAttempted = useRef(false);
 
+  const isOriginalAudio = !item.audio_name || item.audio_name.toLowerCase().startsWith("original audio");
+
   useEffect(() => {
     const loop = Animated.loop(
       Animated.timing(watermarkSpin, { toValue: 1, duration: 4000, useNativeDriver: USE_NATIVE })
@@ -470,6 +477,20 @@ function VideoItem({
     loop.start();
     return () => loop.stop();
   }, []);
+
+  useEffect(() => {
+    if (isOriginalAudio || !item.audio_name || albumArtUrl) return;
+    fetch(`https://api.deezer.com/search?q=${encodeURIComponent(item.audio_name)}&limit=1`)
+      .then((r) => r.json())
+      .then((data) => {
+        const track = data?.data?.[0];
+        if (track) {
+          setAlbumArtUrl(track.album?.cover_small || track.album?.cover || null);
+          setTrackArtist(track.artist?.name || null);
+        }
+      })
+      .catch(() => {});
+  }, [item.audio_name, isOriginalAudio]);
 
   const viewRecorded = useRef(false);
 
@@ -709,22 +730,34 @@ function VideoItem({
 
       </View>
 
-      <View style={[vStyles.musicRow, { bottom: (insets.bottom > 0 ? insets.bottom : 0) + 6 }]}>
+      <TouchableOpacity
+        activeOpacity={0.75}
+        style={[vStyles.musicRow, { bottom: (insets.bottom > 0 ? insets.bottom : 0) + 6 }]}
+        onPress={() => onOpenSound(item, albumArtUrl, trackArtist)}
+      >
         <Animated.View style={[vStyles.watermarkDisc, { transform: [{ rotate: watermarkRotate }] }]}>
-          <View style={vStyles.watermarkInner}>
-            <ExpoImage
-              source={require("../../assets/images/afu-symbol.png")}
-              style={vStyles.watermarkLogo}
-              contentFit="contain"
-            />
-          </View>
+          {albumArtUrl ? (
+            <ExpoImage source={{ uri: albumArtUrl }} style={vStyles.watermarkAlbumArt} contentFit="cover" />
+          ) : (
+            <View style={vStyles.watermarkInner}>
+              <ExpoImage
+                source={require("../../assets/images/afu-symbol.png")}
+                style={vStyles.watermarkLogo}
+                contentFit="contain"
+              />
+            </View>
+          )}
         </Animated.View>
         <View style={vStyles.musicMarquee}>
           <Text style={vStyles.musicText} numberOfLines={1}>
-            {item.audio_name || `Original audio · ${item.profile.display_name}`}
+            <Ionicons name="musical-note" size={11} color="rgba(255,255,255,0.75)" />
+            {" "}{item.audio_name || `Original audio · ${item.profile.display_name}`}
           </Text>
+          {trackArtist && (
+            <Text style={vStyles.musicArtist} numberOfLines={1}>{trackArtist}</Text>
+          )}
         </View>
-      </View>
+      </TouchableOpacity>
 
       <TouchableOpacity
         activeOpacity={1}
@@ -884,6 +917,17 @@ const vStyles = StyleSheet.create({
     height: 16,
     tintColor: "#00BCD4",
   },
+  watermarkAlbumArt: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
+  musicArtist: {
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 10,
+    fontFamily: "Inter_400Regular",
+    marginTop: 1,
+  },
 
   progressBar: {
     position: "absolute",
@@ -914,6 +958,112 @@ const vStyles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 3,
   },
+});
+
+function SoundSheet({
+  visible,
+  item,
+  albumArtUrl,
+  trackArtist,
+  onClose,
+  onUseSound,
+}: {
+  visible: boolean;
+  item: VideoPost | null;
+  albumArtUrl: string | null;
+  trackArtist: string | null;
+  onClose: () => void;
+  onUseSound: () => void;
+}) {
+  if (!visible || !item) return null;
+  const isOriginal = !item.audio_name || item.audio_name.toLowerCase().startsWith("original audio");
+  const displayName = item.audio_name || `Original audio · ${item.profile.display_name}`;
+  const artistLine = trackArtist || (isOriginal ? item.profile.display_name : null);
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableOpacity style={soundStyles.backdrop} activeOpacity={1} onPress={onClose} />
+      <View style={soundStyles.sheet}>
+        <View style={soundStyles.handle} />
+        <View style={soundStyles.artRow}>
+          <View style={soundStyles.artWrap}>
+            {albumArtUrl ? (
+              <ExpoImage source={{ uri: albumArtUrl }} style={soundStyles.art} contentFit="cover" />
+            ) : (
+              <View style={[soundStyles.art, soundStyles.artFallback]}>
+                <Ionicons name="musical-notes" size={36} color="#00BCD4" />
+              </View>
+            )}
+          </View>
+          <View style={soundStyles.trackInfo}>
+            <Text style={soundStyles.trackName} numberOfLines={2}>{displayName}</Text>
+            {artistLine && <Text style={soundStyles.trackArtist}>{artistLine}</Text>}
+            {!isOriginal && <View style={soundStyles.knownBadge}><Text style={soundStyles.knownBadgeText}>🎵 Identified track</Text></View>}
+          </View>
+        </View>
+
+        <View style={soundStyles.statsRow}>
+          <Ionicons name="videocam-outline" size={14} color="rgba(255,255,255,0.45)" />
+          <Text style={soundStyles.statsText}>Used in this video by @{item.profile.handle}</Text>
+        </View>
+
+        <TouchableOpacity style={soundStyles.useBtn} onPress={() => { onClose(); setTimeout(onUseSound, 200); }}>
+          <Ionicons name="add-circle-outline" size={20} color="#fff" />
+          <Text style={soundStyles.useBtnText}>Use this sound</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={soundStyles.cancelBtn} onPress={onClose}>
+          <Text style={soundStyles.cancelText}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+    </Modal>
+  );
+}
+
+const soundStyles = StyleSheet.create({
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.55)" },
+  sheet: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#1a1a1a",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+    paddingTop: 12,
+  },
+  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.2)", alignSelf: "center", marginBottom: 20 },
+  artRow: { flexDirection: "row", gap: 16, alignItems: "flex-start", marginBottom: 16 },
+  artWrap: { shadowColor: "#000", shadowOpacity: 0.5, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+  art: { width: 84, height: 84, borderRadius: 10 },
+  artFallback: { backgroundColor: "rgba(0,188,212,0.12)", borderWidth: 1, borderColor: "rgba(0,188,212,0.25)", alignItems: "center", justifyContent: "center" },
+  trackInfo: { flex: 1, justifyContent: "center", gap: 4 },
+  trackName: { color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold", lineHeight: 20 },
+  trackArtist: { color: "rgba(255,255,255,0.55)", fontSize: 13, fontFamily: "Inter_400Regular" },
+  knownBadge: { alignSelf: "flex-start", backgroundColor: "rgba(0,188,212,0.15)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, marginTop: 2, borderWidth: 1, borderColor: "rgba(0,188,212,0.25)" },
+  knownBadgeText: { color: "#00BCD4", fontSize: 11, fontFamily: "Inter_500Medium" },
+  statsRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 20 },
+  statsText: { color: "rgba(255,255,255,0.4)", fontSize: 12, fontFamily: "Inter_400Regular" },
+  useBtn: {
+    backgroundColor: "#00BCD4",
+    borderRadius: 14,
+    paddingVertical: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  useBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold" },
+  cancelBtn: {
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  cancelText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
 });
 
 const SOCIAL_PLATFORMS = [
@@ -1121,6 +1271,7 @@ export default function VideoPlayerScreen() {
   const [menuItem, setMenuItem] = useState<VideoPost | null>(null);
   const [shareSheetItem, setShareSheetItem] = useState<VideoPost | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [soundSheetData, setSoundSheetData] = useState<{ item: VideoPost; albumArtUrl: string | null; trackArtist: string | null } | null>(null);
   const listRef = useRef<FlatList>(null);
   const initialScrollDone = useRef(false);
   const tabAnim = useRef(new Animated.Value(0)).current;
@@ -1397,6 +1548,18 @@ export default function VideoPlayerScreen() {
     setMenuItem(item);
   }
 
+  function handleOpenSound(item: VideoPost, albumArtUrl: string | null, trackArtist: string | null) {
+    setSoundSheetData({ item, albumArtUrl, trackArtist });
+  }
+
+  function handleUseSound(item: VideoPost, albumArtUrl: string | null) {
+    const soundName = item.audio_name || `Original audio · ${item.profile.display_name}`;
+    const params: Record<string, string> = { soundName };
+    if (albumArtUrl) params.soundAlbumArt = albumArtUrl;
+    params.remixPostId = item.id;
+    router.push({ pathname: "/moments/create-video", params });
+  }
+
   async function handleFollow(authorId: string, isFollowing: boolean) {
     if (!user) { router.push("/(auth)/login"); return; }
     if (isFollowing) {
@@ -1526,6 +1689,7 @@ export default function VideoPlayerScreen() {
                 onFollow={handleFollow}
                 onRecordView={handleRecordView}
                 onOpenMenu={handleOpenMenu}
+                onOpenSound={handleOpenSound}
               />
             );
           }}
@@ -1569,6 +1733,17 @@ export default function VideoPlayerScreen() {
         onClose={() => setShareSheetItem(null)}
         url={shareSheetItem ? getVideoUrl(shareSheetItem) : ""}
         title={shareSheetItem ? `${shareSheetItem.profile.display_name} on AfuChat` : ""}
+      />
+
+      <SoundSheet
+        visible={!!soundSheetData}
+        item={soundSheetData?.item ?? null}
+        albumArtUrl={soundSheetData?.albumArtUrl ?? null}
+        trackArtist={soundSheetData?.trackArtist ?? null}
+        onClose={() => setSoundSheetData(null)}
+        onUseSound={() => {
+          if (soundSheetData) handleUseSound(soundSheetData.item, soundSheetData.albumArtUrl);
+        }}
       />
 
       {downloading && (

@@ -10,7 +10,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
+import { Image as ExpoImage } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -35,6 +36,7 @@ export default function CreateVideoScreen() {
   const { colors } = useTheme();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
+  const { soundName, soundAlbumArt } = useLocalSearchParams<{ soundName?: string; soundAlbumArt?: string }>();
 
   const [videoUri, setVideoUri] = useState<string | null>(null);
   const [videoMime, setVideoMime] = useState<string | undefined>(undefined);
@@ -43,6 +45,7 @@ export default function CreateVideoScreen() {
   const [caption, setCaption] = useState("");
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
+  const [soundDismissed, setSoundDismissed] = useState(false);
   const videoRef = useRef<Video>(null);
 
   if (Platform.OS === "web") {
@@ -142,6 +145,7 @@ export default function CreateVideoScreen() {
         post_type: "video",
         visibility: "public",
         view_count: 0,
+        ...(soundName && !soundDismissed ? { audio_name: soundName } : {}),
       });
       if (error) throw error;
       try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("post_created"); } catch (_) {}
@@ -226,6 +230,26 @@ export default function CreateVideoScreen() {
             </View>
           )}
 
+          {/* Sound banner */}
+          {soundName && !soundDismissed ? (
+            <View style={[styles.soundBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              {soundAlbumArt ? (
+                <ExpoImage source={{ uri: soundAlbumArt }} style={styles.soundArt} contentFit="cover" />
+              ) : (
+                <View style={[styles.soundArt, styles.soundArtFallback]}>
+                  <Ionicons name="musical-notes" size={16} color={colors.accent} />
+                </View>
+              )}
+              <View style={styles.soundInfo}>
+                <Text style={[styles.soundLabel, { color: colors.textMuted }]}>Using sound</Text>
+                <Text style={[styles.soundName, { color: colors.text }]} numberOfLines={1}>{soundName}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setSoundDismissed(true)} hitSlop={8}>
+                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
           {/* Caption */}
           <View style={[styles.captionBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Ionicons name="pencil-outline" size={18} color={colors.textMuted} style={{ marginTop: 2 }} />
@@ -296,4 +320,10 @@ const styles = StyleSheet.create({
   tipText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 20 },
   progressRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   progressText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  soundBanner: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth },
+  soundArt: { width: 44, height: 44, borderRadius: 8 },
+  soundArtFallback: { backgroundColor: "rgba(0,188,212,0.1)", alignItems: "center", justifyContent: "center" },
+  soundInfo: { flex: 1, gap: 2 },
+  soundLabel: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  soundName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
 });
