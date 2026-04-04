@@ -1326,10 +1326,14 @@ export default function ChatScreen() {
     const chatId = isDraft ? realChatId : id;
     if (!chatId || !user) return;
 
-    if (!isOnline()) {
-      const cached = await getCachedMessages(chatId);
-      if (cached.length > 0) setMessages(cached);
+    const cached = await getCachedMessages(chatId);
+    if (cached.length > 0) {
+      setMessages(cached);
       setLoading(false);
+    }
+
+    if (!isOnline()) {
+      if (cached.length === 0) setLoading(false);
       return;
     }
 
@@ -2556,7 +2560,8 @@ STRICT RULES:
     if (!activeChatId) { setSending(false); return; }
 
     try {
-      const label = attachmentPreview.type === "image" ? "📷 Photo" : `📎 ${attachmentPreview.name || "File"}`;
+      const caption = input.trim();
+      const label = caption || (attachmentPreview.type === "image" ? "📷 Photo" : `📎 ${attachmentPreview.name || "File"}`);
 
       const { publicUrl, error: uploadErr } = await uploadChatMedia(
         "chat-attachments",
@@ -2580,6 +2585,8 @@ STRICT RULES:
         attachment_type: attachmentPreview.type,
       });
 
+      setInput("");
+      saveDraft("");
       loadMessages();
     } catch (e: any) {
       showAlert("Upload failed", e?.message || "Could not upload file");
@@ -3291,6 +3298,12 @@ STRICT RULES:
                 <Text style={[st.attachPreviewName, { color: colors.text }]} numberOfLines={1}>{attachmentPreview.name || "File"}</Text>
               </View>
             )}
+            <View style={{ flex: 1, paddingHorizontal: 10 }}>
+              <Text style={{ color: colors.text, fontSize: 13, fontWeight: "600" }} numberOfLines={1}>
+                {attachmentPreview.type === "image" ? "Photo ready to send" : attachmentPreview.name || "File ready to send"}
+              </Text>
+              <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>Type a caption below (optional)</Text>
+            </View>
             <TouchableOpacity onPress={() => setAttachmentPreview(null)} style={st.attachPreviewClose} hitSlop={8}>
               <Ionicons name="close-circle" size={22} color={colors.textMuted} />
             </TouchableOpacity>
@@ -3379,7 +3392,7 @@ STRICT RULES:
                     <TextInput
                       ref={chatInputRef}
                       style={[st.input, { color: colors.text }]}
-                      placeholder="Message"
+                      placeholder={attachmentPreview ? "Add a caption..." : "Message"}
                       placeholderTextColor={colors.textMuted}
                       value={input}
                       onChangeText={(t) => { setInput(t); handleTyping(); saveDraft(t); }}
@@ -4103,7 +4116,7 @@ const st = StyleSheet.create({
   replyBannerText: { fontSize: 13, fontFamily: "Inter_400Regular" },
 
   attachPreviewBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, gap: 10 },
-  attachPreviewImg: { width: 56, height: 56, borderRadius: 10 },
+  attachPreviewImg: { width: 68, height: 68, borderRadius: 10 },
   attachPreviewFile: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
   attachPreviewName: { fontSize: 13, fontFamily: "Inter_500Medium", maxWidth: 160 },
   attachPreviewClose: { marginLeft: "auto" },
