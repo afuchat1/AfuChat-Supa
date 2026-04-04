@@ -1,5 +1,8 @@
 import { supabase } from "@/lib/supabase";
 
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
+
 type NotifyParams = {
   userId: string;
   title: string;
@@ -18,49 +21,29 @@ async function callNotify(params: NotifyParams) {
     postId, referenceId, referenceType,
   } = params;
 
+  // Send push notification via the server-side edge function.
+  // This runs with the service role key so it can always read the recipient's
+  // push token regardless of RLS, and delivers server-side for reliability.
   try {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("expo_push_token")
-      .eq("id", userId)
-      .single();
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
 
-    if (profile?.expo_push_token) {
-      const channelId =
-        data.type === "message" ? "messages" :
-        data.type === "follow" || data.type === "like" || data.type === "reply" ? "social" :
-        data.type === "order" || data.type === "payment" || data.type === "escrow" ? "marketplace" :
-        "default";
-
-      const res = await fetch("https://exp.host/--/api/v2/push/send", {
+    if (accessToken) {
+      fetch(`${SUPABASE_URL}/functions/v1/send-push-notification`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json",
-          "Accept-Encoding": "gzip, deflate",
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({
-          to: profile.expo_push_token,
-          title,
-          body,
-          data,
-          sound: "default",
-          badge: 1,
-          priority: "high",
-          channelId,
-          ttl: 604800,
-          expiration: Math.floor(Date.now() / 1000) + 604800,
-        }),
-      });
-      const json = await res.json();
-      if (json?.data?.status === "error") {
-        console.warn("[Notify] Push error:", json.data.message, json.data.details);
-      }
+        body: JSON.stringify({ userId, title, body, data }),
+      }).catch(() => {});
     }
-  } catch (e) {
-    console.warn("[Notify] Push failed:", e);
+  } catch {
+    // Silently skip if push fails — in-app notification still gets inserted below
   }
 
+  // Insert in-app notification record (client-side, works independently of push)
   if (notificationType) {
     try {
       const record: any = {
