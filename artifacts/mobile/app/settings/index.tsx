@@ -175,7 +175,7 @@ export default function SettingsScreen() {
             icon="speedometer-outline"
             iconBg="#FF9500"
             label="Data Saver"
-            subtitle="Reduces image & video quality"
+            subtitle="Reduces quality on mobile data · Auto-off on WiFi"
             value={dataSaverEnabled}
             onValueChange={toggleDataSaver}
           />

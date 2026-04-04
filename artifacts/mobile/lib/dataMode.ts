@@ -7,20 +7,26 @@ type Listener = (mode: DataMode) => void;
 
 const STORAGE_KEY = "afu_data_mode_override";
 
-let _mode: DataMode = "high";
+let _mode: DataMode = "low";
+let _isWifi: boolean = false;
 let _manualOverride: DataMode | null = null;
 let _listeners: Listener[] = [];
 let _initialized = false;
 
-function notify(mode: DataMode) {
-  if (mode === _mode) return;
-  _mode = mode;
-  _listeners.forEach((fn) => fn(mode));
+function getEffectiveMode(): DataMode {
+  if (_isWifi) return "high";
+  return _manualOverride ?? "low";
 }
 
-function applyAutoMode(detected: DataMode) {
-  if (_manualOverride !== null) return;
-  notify(detected);
+function notify(newMode: DataMode) {
+  if (newMode === _mode) return;
+  _mode = newMode;
+  _listeners.forEach((fn) => fn(newMode));
+}
+
+function applyNetworkState(detected: DataMode) {
+  _isWifi = detected === "high";
+  notify(getEffectiveMode());
 }
 
 function detectFromNetState(state: any): DataMode {
@@ -38,8 +44,8 @@ export async function initDataMode() {
     const stored = await AsyncStorage.getItem(STORAGE_KEY);
     if (stored === "low" || stored === "high") {
       _manualOverride = stored;
-      _mode = stored;
-      _listeners.forEach((fn) => fn(_mode));
+    } else if (stored === null) {
+      _manualOverride = null;
     }
   } catch (_) {}
 
@@ -54,29 +60,23 @@ export async function initDataMode() {
             conn.effectiveType === "slow-2g" ||
             conn.effectiveType === "2g" ||
             conn.effectiveType === "3g";
-          applyAutoMode(isLow ? "low" : "high");
+          applyNetworkState(isLow ? "low" : "high");
         };
         check();
-        conn.addEventListener("change", () => {
-          const isLow =
-            conn.saveData ||
-            conn.effectiveType === "slow-2g" ||
-            conn.effectiveType === "2g" ||
-            conn.effectiveType === "3g";
-          applyAutoMode(isLow ? "low" : "high");
-        });
+        conn.addEventListener("change", check);
       }
     } catch (_) {}
+    notify(getEffectiveMode());
     return;
   }
 
   try {
     const NetInfo = require("@react-native-community/netinfo").default;
     NetInfo.fetch().then((state: any) => {
-      applyAutoMode(detectFromNetState(state));
+      applyNetworkState(detectFromNetState(state));
     });
     NetInfo.addEventListener((state: any) => {
-      applyAutoMode(detectFromNetState(state));
+      applyNetworkState(detectFromNetState(state));
     });
   } catch (_) {}
 }
@@ -89,14 +89,18 @@ export function getManualOverride(): DataMode | null {
   return _manualOverride;
 }
 
+export function getIsWifi(): boolean {
+  return _isWifi;
+}
+
 export async function setManualDataMode(mode: DataMode | null) {
   _manualOverride = mode;
   if (mode === null) {
     await AsyncStorage.removeItem(STORAGE_KEY);
   } else {
     await AsyncStorage.setItem(STORAGE_KEY, mode);
-    notify(mode);
   }
+  notify(getEffectiveMode());
 }
 
 export function subscribeDataMode(fn: Listener): () => void {
