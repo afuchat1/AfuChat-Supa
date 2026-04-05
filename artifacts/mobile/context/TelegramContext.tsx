@@ -9,7 +9,7 @@ import React, {
 import { Platform } from "react-native";
 import {
   isTelegramMiniApp,
-  isInTelegramWebView,
+  looksLikeTelegramWebApp,
   getTelegramUser,
   getTelegramColorScheme,
   getTelegramSafeAreaInset,
@@ -59,10 +59,13 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
   const [viewportHeight, setViewportHeight] = useState(0);
   const appliedRef = useRef(false);
 
-  /** Called once the SDK is confirmed loaded. Sets all reactive state. */
+  /**
+   * Called once the SDK is confirmed loaded and we have verified we are
+   * inside an actual Telegram Mini App.  Populates all reactive state.
+   */
   const applyTelegramState = useCallback(() => {
     if (appliedRef.current) return;
-    if (!isTelegramMiniApp()) return; // not a real Mini App context
+    if (!isTelegramMiniApp()) return;
     appliedRef.current = true;
 
     setIsTg(true);
@@ -72,50 +75,52 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
     setContentSafeAreaInset(getTelegramContentSafeAreaInset());
     setViewportHeight(getTelegramViewportHeight());
 
-    telegramReady();
-    telegramExpand();
+    try { telegramReady(); } catch (_) {}
+    try { telegramExpand(); } catch (_) {}
   }, []);
 
   useEffect(() => {
     if (!isWeb || typeof window === "undefined" || typeof document === "undefined") return;
 
-    // ── Fast path: SDK already fully initialised (e.g. static build has it in <head>) ──
+    // ── Fast path: SDK already loaded and we are inside Telegram ──
     if (isTelegramMiniApp()) {
       applyTelegramState();
       return;
     }
 
-    // ── Only proceed with script injection / waiting if we are actually
-    //    inside Telegram's WebView.  In a regular browser TelegramWebviewProxy
-    //    does not exist, so we skip entirely to avoid false-positive detection. ──
-    if (!isInTelegramWebView()) return;
+    // ── Determine whether we should bother loading the SDK at all.
+    //    We load it eagerly if there are any signals we might be in Telegram,
+    //    but always load it if the URL contains Telegram hash params. ──
+    const shouldLoad = looksLikeTelegramWebApp();
 
-    // Helper: attach to an existing script tag's load event
-    const waitForExistingScript = (el: HTMLScriptElement) => {
-      if ((el as any).__tgLoaded) {
-        applyTelegramState();
-      } else {
-        el.addEventListener("load", applyTelegramState, { once: true });
-      }
+    const onSdkLoad = () => {
+      applyTelegramState();
     };
 
-    // Check whether a <script> tag for the SDK is already in the document
+    // Check for existing script tag (e.g. injected by +html.tsx in a static build)
     const existing = document.querySelector(
       'script[src*="telegram-web-app"]'
     ) as HTMLScriptElement | null;
 
     if (existing) {
-      waitForExistingScript(existing);
+      if ((existing as any).__tgLoaded) {
+        onSdkLoad();
+      } else {
+        existing.addEventListener("load", onSdkLoad, { once: true });
+      }
       return;
     }
 
-    // Inject the SDK — we know we're in Telegram's WebView, so we definitely need it.
+    // Only inject the script when there's a good reason to think we're in Telegram.
+    // This avoids a ~50 KB network request for regular browser visitors.
+    if (!shouldLoad) return;
+
     const script = document.createElement("script");
     script.src = "https://telegram.org/js/telegram-web-app.js";
-    script.async = false; // keep execution order relative to React bootstrap
+    script.async = false; // preserve load order relative to existing scripts
     script.onload = () => {
       (script as any).__tgLoaded = true;
-      applyTelegramState();
+      onSdkLoad();
     };
     script.onerror = () => {
       (script as any).__tgLoaded = true;
@@ -123,7 +128,7 @@ export function TelegramProvider({ children }: { children: React.ReactNode }) {
     document.head.insertBefore(script, document.head.firstChild);
   }, [isWeb, applyTelegramState]);
 
-  // Subscribe to live theme / viewport events once confirmed inside Telegram
+  // Subscribe to live theme / viewport events once confirmed in Telegram
   useEffect(() => {
     if (!isTg) return;
 

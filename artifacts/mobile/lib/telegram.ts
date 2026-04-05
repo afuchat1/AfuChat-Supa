@@ -26,29 +26,47 @@ function getWebApp(): any {
 }
 
 /**
- * Returns true when the page is running inside Telegram's Mini App WebView
- * AND the Telegram Web App SDK has fully initialised.
+ * Returns true when the page is running inside an actual Telegram Mini App.
  *
- * - `TelegramWebviewProxy` is injected by Telegram's native WebView before any
- *   page scripts run — it is NEVER present in a regular browser.
- * - `initData` is a non-empty string only when opened as an actual Mini App.
- * - We require the SDK object (`window.Telegram.WebApp`) to exist so callers
- *   can safely use getTelegramUser() etc. immediately after this returns true.
+ * Detection strategy (most → least reliable):
+ *  1. tg.platform — the SDK sets this to the Telegram client name (e.g. "android",
+ *     "ios", "tdesktop"). In a regular browser it is "unknown".
+ *  2. tg.initData — non-empty string only when opened via a bot button/link.
+ *  3. URL hash — Telegram passes #tgWebAppData=... before the SDK loads.
+ *
+ * The SDK object (window.Telegram.WebApp) must exist for this to return true,
+ * so callers can immediately use getTelegramUser() etc.
  */
 export function isTelegramMiniApp(): boolean {
   if (Platform.OS !== "web" || typeof window === "undefined") return false;
+
   const tg = getWebApp();
   if (!tg || typeof tg.version === "undefined") return false;
-  // Confirm we are inside Telegram's WebView (not a regular browser that also
-  // loaded the SDK script).
-  return !!(tg.initData || tg.initDataUnsafe?.user) ||
-    !!(window as any).TelegramWebviewProxy;
+
+  // Primary: platform is set to a real client name inside Telegram
+  if (tg.platform && tg.platform !== "unknown") return true;
+
+  // Fallback: initData is non-empty only in real Mini App contexts
+  if (tg.initData) return true;
+
+  return false;
 }
 
-/** True if Telegram's WebView has already injected its bridge (before the SDK loads). */
-export function isInTelegramWebView(): boolean {
+/**
+ * Returns true if the page appears to have been opened as a Telegram Mini App,
+ * even before the SDK has loaded.  Uses the URL hash that Telegram injects.
+ */
+export function looksLikeTelegramWebApp(): boolean {
   if (Platform.OS !== "web" || typeof window === "undefined") return false;
-  return !!(window as any).TelegramWebviewProxy;
+  // TelegramWebviewProxy: older Telegram WebView bridge (Android / desktop)
+  if ((window as any).TelegramWebviewProxy) return true;
+  // iOS bridge
+  if ((window as any).webkit?.messageHandlers?.TelegramWebviewProxy) return true;
+  // Modern Telegram passes data via URL hash
+  try {
+    if (window.location.hash.includes("tgWebAppData")) return true;
+  } catch (_) {}
+  return false;
 }
 
 export function getTelegramInitData(): string {
