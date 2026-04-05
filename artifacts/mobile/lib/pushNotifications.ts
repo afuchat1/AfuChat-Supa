@@ -5,6 +5,9 @@ import { supabase } from "@/lib/supabase";
 
 const EAS_PROJECT_ID = "b55c5d92-7a83-472f-b660-d1838efba5fe";
 
+let _lastRegistrationError: string | null = null;
+export function getLastPushRegistrationError(): string | null { return _lastRegistrationError; }
+
 const _handledIds = new Set<string>();
 function alreadyHandled(id: string): boolean {
   if (_handledIds.has(id)) return true;
@@ -204,10 +207,13 @@ export async function registerForPushNotifications(userId: string): Promise<stri
 
     return token;
   } catch (error: any) {
-    if (error?.message?.includes?.("removed from Expo Go")) {
+    const msg = error?.message || String(error);
+    if (msg?.includes?.("removed from Expo Go")) {
       console.log("[PushNotif] Push notifications not available in Expo Go");
+      _lastRegistrationError = "Not available in Expo Go";
     } else {
-      console.warn("[PushNotif] Registration failed:", error?.message || error);
+      console.warn("[PushNotif] Registration failed:", msg);
+      _lastRegistrationError = msg;
     }
     return null;
   }
