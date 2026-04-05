@@ -121,6 +121,12 @@ serve(async (req) => {
     const channelId = notifType === 'message' ? 'messages' : 
                       ['like', 'follow', 'reply'].includes(notifType) ? 'social' : 'default';
 
+    // Build token → userId map so we can clean up invalid tokens later
+    const tokenToUserId = new Map<string, string>();
+    for (const p of profiles) {
+      if (p.expo_push_token) tokenToUserId.set(p.expo_push_token, p.id);
+    }
+
     const messages = tokens.map(token => ({
       to: token,
       title: title.substring(0, 100),
@@ -138,6 +144,8 @@ serve(async (req) => {
     }
 
     let sent = 0;
+    const invalidTokens: string[] = [];
+
     for (const chunk of chunks) {
       const response = await fetch('https://exp.host/--/api/v2/push/send', {
         method: 'POST',
@@ -151,10 +159,37 @@ serve(async (req) => {
 
       if (response.ok) {
         const result = await response.json();
-        const tickets = result.data || [];
-        sent += tickets.filter((t: any) => t.status === 'ok').length;
+        const tickets: any[] = result.data || [];
+
+        tickets.forEach((ticket, idx) => {
+          if (ticket.status === 'ok') {
+            sent++;
+          } else if (
+            ticket.status === 'error' &&
+            ticket.details?.error === 'DeviceNotRegistered'
+          ) {
+            // Token is stale (app uninstalled or token rotated) — collect for cleanup
+            const staleToken = chunk[idx]?.to;
+            if (staleToken) invalidTokens.push(staleToken);
+          }
+        });
       } else {
         console.error('Expo push error:', response.status, await response.text());
+      }
+    }
+
+    // Clear stale tokens so the app registers a fresh one on next open
+    if (invalidTokens.length > 0) {
+      const staleUserIds = invalidTokens
+        .map(t => tokenToUserId.get(t))
+        .filter(Boolean) as string[];
+
+      if (staleUserIds.length > 0) {
+        await adminClient
+          .from('profiles')
+          .update({ expo_push_token: null })
+          .in('id', staleUserIds);
+        console.log(`Cleared ${staleUserIds.length} stale push token(s)`);
       }
     }
 

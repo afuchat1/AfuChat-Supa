@@ -158,10 +158,16 @@ export async function registerForPushNotifications(userId: string): Promise<stri
 
     console.log("[PushNotif] Token registered:", token?.slice(0, 30));
 
-    await supabase
+    const { error: dbError } = await supabase
       .from("profiles")
       .update({ expo_push_token: token })
       .eq("id", userId);
+
+    if (dbError) {
+      console.warn("[PushNotif] Failed to save token to DB:", dbError.message);
+    } else {
+      console.log("[PushNotif] Token saved to DB successfully");
+    }
 
     return token;
   } catch (error: any) {
