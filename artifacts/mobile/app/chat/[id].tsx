@@ -1654,6 +1654,52 @@ export default function ChatScreen() {
     };
   }, [id, loadChatInfo, loadMessages]);
 
+  // ── Realtime: online status + read receipts (1-on-1 chats only) ───────────
+  useEffect(() => {
+    const otherId = chatInfo?.other_id;
+    if (!otherId || chatInfo?.is_group || chatInfo?.is_channel || isDraft) return;
+
+    // Watch the other user's profile so their online status stays live
+    const presenceSub = supabase
+      .channel(`presence-watch:${id}:${otherId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${otherId}` },
+        (payload) => {
+          const updated = payload.new as any;
+          if (updated?.last_seen) {
+            setChatInfo((prev) => prev ? { ...prev, other_last_seen: updated.last_seen } : prev);
+          }
+        }
+      )
+      .subscribe();
+
+    // Watch for the other user reading messages so read receipts update live
+    const readSub = supabase
+      .channel(`read-watch:${id}:${otherId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "message_status", filter: `user_id=eq.${otherId}` },
+        (payload) => {
+          const row = payload.new as any;
+          if (!row?.message_id || !row?.read_at) return;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === row.message_id && m.sender_id === user?.id
+                ? { ...m, status: "read" as const }
+                : m
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(presenceSub);
+      supabase.removeChannel(readSub);
+    };
+  }, [chatInfo?.other_id, chatInfo?.is_group, chatInfo?.is_channel, id, isDraft, user?.id]);
+
   function handleTyping() {
     if (!user || !id || isDraft) return;
     if (!chatPrefs.typing_indicators) return;
