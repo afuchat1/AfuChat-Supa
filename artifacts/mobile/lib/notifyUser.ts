@@ -421,3 +421,18 @@ export async function notifyVerificationStatus(params: {
     notificationType: params.approved ? "verification_approved" : "verification_update",
   });
 }
+
+export async function notifyCallInitiated(params: {
+  calleeId: string;
+  callId: string;
+  callType: "voice" | "video";
+  callerName: string;
+}) {
+  callNotify({
+    userId: params.calleeId,
+    title: `Incoming ${params.callType === "video" ? "Video" : "Voice"} Call`,
+    body: `${params.callerName} is calling you`,
+    data: { type: "call", callId: params.callId, callType: params.callType, url: `/call/${params.callId}` },
+    notificationType: "call",
+  });
+}

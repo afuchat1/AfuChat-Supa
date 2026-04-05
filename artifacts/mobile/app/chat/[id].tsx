@@ -3244,6 +3244,51 @@ STRICT RULES:
           <TouchableOpacity onPress={() => setShowAfuAiMenu(true)} style={st.headerAction} hitSlop={8}>
             <Ionicons name="ellipsis-vertical" size={22} color={colors.text} />
           </TouchableOpacity>
+        ) : chatInfo && !chatInfo.is_group && !chatInfo.is_channel && chatInfo.other_id ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <TouchableOpacity
+              style={st.headerAction}
+              hitSlop={8}
+              onPress={async () => {
+                if (!user) return;
+                try {
+                  const { initiateCall } = await import("@/lib/callSignaling");
+                  const callId = await initiateCall({
+                    calleeId: chatInfo.other_id!,
+                    chatId: id as string,
+                    callType: "voice",
+                    callerId: user.id,
+                  });
+                  router.push({ pathname: "/call/[id]", params: { id: callId } });
+                } catch (e: any) {
+                  showAlert("Call failed", e.message || "Could not start call.");
+                }
+              }}
+            >
+              <Ionicons name="call-outline" size={22} color={colors.text} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={st.headerAction}
+              hitSlop={8}
+              onPress={async () => {
+                if (!user) return;
+                try {
+                  const { initiateCall } = await import("@/lib/callSignaling");
+                  const callId = await initiateCall({
+                    calleeId: chatInfo.other_id!,
+                    chatId: id as string,
+                    callType: "video",
+                    callerId: user.id,
+                  });
+                  router.push({ pathname: "/call/[id]", params: { id: callId } });
+                } catch (e: any) {
+                  showAlert("Call failed", e.message || "Could not start call.");
+                }
+              }}
+            >
+              <Ionicons name="videocam-outline" size={23} color={colors.text} />
+            </TouchableOpacity>
+          </View>
         ) : (
           <TouchableOpacity onPress={() => router.push("/settings/chat")} style={st.headerAction} hitSlop={8}>
             <Ionicons name="settings-outline" size={22} color={colors.text} />

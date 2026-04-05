@@ -85,6 +85,7 @@
     "react-native-qrcode-svg": "^6.3.21",
     "react-native-url-polyfill": "^3.0.0",
     "react-native-view-shot": "^4.0.3",
+    "react-native-webrtc": "^124.0.7",
     "react-native-webview": "~13.15.0",
     "rn-emoji-keyboard": "^1.7.0"
   }

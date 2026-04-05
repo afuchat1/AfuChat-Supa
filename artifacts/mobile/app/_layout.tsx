@@ -18,6 +18,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { DesktopWrapper } from "@/components/DesktopWrapper";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { CallManager } from "@/components/CallManager";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { PushNotificationManager } from "@/components/PushNotificationManager";
 import { IOSAlert, type IOSAlertButton } from "@/components/ui/IOSAlert";
@@ -147,6 +148,7 @@ function RootLayoutNav() {
       <Stack.Screen name="privacy" options={bottomSheetAnim} />
       <Stack.Screen name="video/[id]" options={{ headerShown: false, animation: "fade", contentStyle: { backgroundColor: "#000" } }} />
       <Stack.Screen name="[handle]" options={{ animation: "fade" }} />
+      <Stack.Screen name="call/[id]" options={{ headerShown: false, animation: "fade", gestureEnabled: false, contentStyle: { backgroundColor: "#1a1a2e" } }} />
     </Stack>
   );
 }
@@ -243,6 +245,7 @@ export default function RootLayout() {
                       <DataModeProvider>
                       <TourProvider>
                       <PushNotificationManager />
+                      <CallManager />
                       <AppLockGate>
                         <RootLayoutNav />
                       </AppLockGate>
