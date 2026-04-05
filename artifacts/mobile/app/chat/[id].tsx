@@ -567,7 +567,7 @@ function AiConfirmationCard({ exec: ea, colors: c, onConfirm, onCancel }: { exec
 
 const SWIPE_THRESHOLD = 60;
 
-function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, replyPreview, onTapEnvelope, onTapGift, onImageTap, isPremiumSender, onConfirmExec, onCancelExec, onSuggestionTap }: {
+function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, replyPreview, onTapReply, isHighlighted, onTapEnvelope, onTapGift, onImageTap, isPremiumSender, onConfirmExec, onCancelExec, onSuggestionTap }: {
   msg: Message;
   isMe: boolean;
   showTail: boolean;
@@ -575,6 +575,8 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   onLongPress: (msg: Message) => void;
   onReply: (msg: Message) => void;
   replyPreview?: string | null;
+  onTapReply?: () => void;
+  isHighlighted?: boolean;
   onTapEnvelope?: (msg: Message) => void;
   onTapGift?: (msg: Message) => void;
   onImageTap?: (images: string[], index: number) => void;
@@ -774,14 +776,22 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
           )}
 
           {replyPreview && (
-            <View style={[st.replyPreview, { backgroundColor: isMe ? "rgba(0,0,0,0.18)" : "rgba(0,0,0,0.07)" }]}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={onTapReply}
+              disabled={!onTapReply}
+              style={[st.replyPreview, { backgroundColor: isMe ? "rgba(0,0,0,0.18)" : "rgba(0,0,0,0.07)" }]}
+            >
               <View style={[st.replyBarLine, { backgroundColor: isMe ? "rgba(255,255,255,0.9)" : BRAND }]} />
               <View style={st.replyTextWrap}>
                 <Text style={[st.replyPreviewText, { color: isMe ? "rgba(255,255,255,0.85)" : colors.textSecondary }]} numberOfLines={1} ellipsizeMode="tail">
                   {replyPreview}
                 </Text>
               </View>
-            </View>
+            </TouchableOpacity>
+          )}
+          {isHighlighted && (
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,188,212,0.22)", borderRadius: chatRadius ?? 18, pointerEvents: "none" }]} />
           )}
 
           {hasImage ? (
@@ -1077,6 +1087,8 @@ export default function ChatScreen() {
   const [isAfuAiTyping, setIsAfuAiTyping] = useState(false);
   const [showAfuAiMenu, setShowAfuAiMenu] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [showReactions, setShowReactions] = useState<Message | null>(null);
   const [showRedEnvelope, setShowRedEnvelope] = useState(false);
@@ -3202,6 +3214,15 @@ STRICT RULES:
     setNewMsgCount(0);
   }, []);
 
+  const scrollToMessage = useCallback((msgId: string) => {
+    const index = messages.findIndex((m) => m.id === msgId);
+    if (index === -1) return;
+    flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    setHighlightedMsgId(msgId);
+    highlightTimerRef.current = setTimeout(() => setHighlightedMsgId(null), 1500);
+  }, [messages]);
+
   const headerTitle = chatInfo?.is_group || chatInfo?.is_channel ? chatInfo.name || "Group" : chatInfo?.other_name || "Chat";
   const headerAvatar = chatInfo?.is_group || chatInfo?.is_channel ? chatInfo?.avatar_url : chatInfo?.other_avatar;
 
@@ -3232,8 +3253,10 @@ STRICT RULES:
           showTail={shouldShowTail(index)}
           showName={shouldShowName(index)}
           onLongPress={(m) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowReactions(m); }}
-          onReply={(m) => setReplyTo(m)}
+          onReply={(m) => { setReplyTo(m); setTimeout(() => chatInputRef.current?.focus(), 50); }}
           replyPreview={getReplyPreview(item.reply_to_message_id)}
+          onTapReply={item.reply_to_message_id ? () => scrollToMessage(item.reply_to_message_id!) : undefined}
+          isHighlighted={item.id === highlightedMsgId}
           onTapEnvelope={handleTapEnvelope}
           onTapGift={handleTapGift}
           onImageTap={imgViewer.openViewer}
@@ -3369,6 +3392,11 @@ STRICT RULES:
               scrollEventThrottle={16}
               onEndReached={loadMoreMessages}
               onEndReachedThreshold={0.3}
+              onScrollToIndexFailed={(info) => {
+                setTimeout(() => {
+                  flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
+                }, 300);
+              }}
               ListHeaderComponent={
                 (typingUsers.length > 0 || isAfuAiTyping)
                   ? <TypingBubble
