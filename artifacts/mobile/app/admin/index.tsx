@@ -95,6 +95,7 @@ const TABS = [
   { id: "subs", label: "Plans", icon: "diamond" as const },
   { id: "currency", label: "Currency", icon: "cash" as const },
   { id: "reports", label: "Reports", icon: "shield" as const },
+  { id: "broadcast", label: "Broadcast", icon: "megaphone" as const },
   { id: "system", label: "System", icon: "settings" as const },
 ];
 
@@ -161,6 +162,12 @@ export default function AdminDashboard() {
   const [systemToday, setSystemToday] = useState({ users: 0, posts: 0, stories: 0, gifts: 0 });
   const [systemWeek, setSystemWeek] = useState({ users: 0, posts: 0, messages: 0 });
   const [recentGifts, setRecentGifts] = useState<any[]>([]);
+
+  const [broadcastTitle, setBroadcastTitle] = useState("");
+  const [broadcastBody, setBroadcastBody] = useState("");
+  const [broadcastTarget, setBroadcastTarget] = useState<"all" | "premium">("all");
+  const [broadcastSending, setBroadcastSending] = useState(false);
+  const [broadcastResult, setBroadcastResult] = useState<{ sent: number; total: number; message: string } | null>(null);
   const isAdmin = !!profile?.is_admin;
 
   const loadStats = useCallback(async () => {
@@ -1223,6 +1230,159 @@ export default function AdminDashboard() {
     );
   }
 
+  async function handleBroadcast() {
+    if (!broadcastTitle.trim() || !broadcastBody.trim()) {
+      showAlert("Missing fields", "Please fill in both the title and message.");
+      return;
+    }
+    setBroadcastSending(true);
+    setBroadcastResult(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const jwt = sessionData?.session?.access_token;
+      if (!jwt) throw new Error("Not authenticated");
+
+      const apiBase = process.env.EXPO_PUBLIC_DOMAIN
+        ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+        : "";
+      const res = await fetch(`${apiBase}/api/admin/broadcast-push`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${jwt}`,
+        },
+        body: JSON.stringify({ title: broadcastTitle.trim(), body: broadcastBody.trim(), target: broadcastTarget }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed");
+      setBroadcastResult(json);
+    } catch (err: any) {
+      showAlert("Broadcast failed", err.message || "An error occurred");
+    } finally {
+      setBroadcastSending(false);
+    }
+  }
+
+  function renderBroadcast() {
+    return (
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Push Broadcast</Text>
+
+        <View style={[styles.planCard, { backgroundColor: colors.surface, gap: 14 }]}>
+          <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Compose Notification</Text>
+
+          <View style={{ gap: 6 }}>
+            <Text style={[styles.lookupLabel, { color: colors.textMuted }]}>Title</Text>
+            <TextInput
+              style={[styles.filterInput, { backgroundColor: colors.backgroundSecondary, color: colors.text, fontFamily: "Inter_500Medium", fontSize: 14 }]}
+              placeholder="e.g. New Feature Available!"
+              placeholderTextColor={colors.textMuted}
+              value={broadcastTitle}
+              onChangeText={setBroadcastTitle}
+              maxLength={100}
+            />
+            <Text style={{ color: colors.textMuted, fontSize: 11, alignSelf: "flex-end" }}>{broadcastTitle.length}/100</Text>
+          </View>
+
+          <View style={{ gap: 6 }}>
+            <Text style={[styles.lookupLabel, { color: colors.textMuted }]}>Message</Text>
+            <TextInput
+              style={[styles.filterInput, { backgroundColor: colors.backgroundSecondary, color: colors.text, fontFamily: "Inter_400Regular", fontSize: 14, minHeight: 90, textAlignVertical: "top", paddingTop: 10 }]}
+              placeholder="Write your announcement here..."
+              placeholderTextColor={colors.textMuted}
+              value={broadcastBody}
+              onChangeText={setBroadcastBody}
+              multiline
+              maxLength={200}
+            />
+            <Text style={{ color: colors.textMuted, fontSize: 11, alignSelf: "flex-end" }}>{broadcastBody.length}/200</Text>
+          </View>
+
+          <View style={{ gap: 8 }}>
+            <Text style={[styles.lookupLabel, { color: colors.textMuted }]}>Audience</Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              {(["all", "premium"] as const).map((t) => (
+                <TouchableOpacity
+                  key={t}
+                  onPress={() => setBroadcastTarget(t)}
+                  style={[styles.tab, broadcastTarget === t && styles.activeTab, { flex: 1, justifyContent: "center", paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: broadcastTarget === t ? BRAND : colors.border }]}
+                >
+                  <Ionicons name={t === "all" ? "globe-outline" : "diamond-outline"} size={16} color={broadcastTarget === t ? BRAND : colors.textMuted} />
+                  <Text style={[styles.tabText, { color: broadcastTarget === t ? BRAND : colors.textMuted }]}>
+                    {t === "all" ? "All Users" : "Premium Only"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+
+        {(broadcastTitle.trim() || broadcastBody.trim()) && (
+          <View style={[styles.planCard, { backgroundColor: colors.surface, gap: 8 }]}>
+            <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Preview</Text>
+            <View style={{ backgroundColor: colors.backgroundSecondary, borderRadius: 12, padding: 14, gap: 4 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: BRAND + "30", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="chatbubble" size={18} color={BRAND} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.text, fontFamily: "Inter_700Bold", fontSize: 13 }} numberOfLines={1}>
+                    {broadcastTitle.trim() || "Title"}
+                  </Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 11 }}>AfuChat · now</Text>
+                </View>
+              </View>
+              <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_400Regular", paddingLeft: 40 }} numberOfLines={3}>
+                {broadcastBody.trim() || "Message body..."}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {broadcastResult && (
+          <View style={[styles.planCard, { backgroundColor: "#10B98120", borderWidth: 1, borderColor: "#10B981", gap: 6 }]}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Ionicons name="checkmark-circle" size={22} color="#10B981" />
+              <Text style={{ color: "#10B981", fontFamily: "Inter_700Bold", fontSize: 15 }}>Broadcast Sent!</Text>
+            </View>
+            <Text style={{ color: colors.text, fontSize: 13 }}>{broadcastResult.message}</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+              {broadcastResult.sent} delivered · {broadcastResult.total} eligible devices
+            </Text>
+          </View>
+        )}
+
+        <TouchableOpacity
+          onPress={() => {
+            showAlert(
+              "Send Broadcast?",
+              `This will push "${broadcastTitle.trim()}" to ${broadcastTarget === "all" ? "ALL users" : "premium members"} right now. Are you sure?`,
+              [
+                { text: "Cancel", style: "cancel" },
+                { text: "Send Now", style: "destructive", onPress: handleBroadcast },
+              ]
+            );
+          }}
+          disabled={broadcastSending || !broadcastTitle.trim() || !broadcastBody.trim()}
+          style={[styles.actionBtn, { backgroundColor: BRAND, opacity: (broadcastSending || !broadcastTitle.trim() || !broadcastBody.trim()) ? 0.5 : 1, marginTop: 4 }]}
+        >
+          {broadcastSending ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <>
+              <Ionicons name="megaphone" size={18} color="#fff" />
+              <Text style={[styles.actionBtnText, { color: "#fff" }]}>Send to {broadcastTarget === "all" ? "Everyone" : "Premium Members"}</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        <Text style={{ color: colors.textMuted, fontSize: 12, textAlign: "center", marginTop: 8 }}>
+          Broadcast respects each user's push notification preferences.
+        </Text>
+      </View>
+    );
+  }
+
   function renderSystem() {
     return (
       <View style={styles.section}>
@@ -1481,6 +1641,7 @@ export default function AdminDashboard() {
     subs: renderSubscriptions,
     currency: renderCurrency,
     reports: renderReports,
+    broadcast: renderBroadcast,
     system: renderSystem,
   };
 

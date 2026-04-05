@@ -4,6 +4,7 @@ import aiChatRouter from "./ai-chat";
 import accountPurgeRouter from "./account-purge";
 import chatsRouter from "./chats";
 import supportRouter from "./support";
+import adminRouter from "./admin";
 
 const router: IRouter = Router();
 
@@ -12,5 +13,6 @@ router.use(aiChatRouter);
 router.use(accountPurgeRouter);
 router.use(chatsRouter);
 router.use(supportRouter);
+router.use(adminRouter);
 
 export default router;
