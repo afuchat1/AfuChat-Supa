@@ -1238,24 +1238,91 @@ export default function AdminDashboard() {
     setBroadcastSending(true);
     setBroadcastResult(null);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const jwt = sessionData?.session?.access_token;
-      if (!jwt) throw new Error("Not authenticated");
+      // 1. Fetch profiles with push tokens
+      let eligibleIds: string[] | null = null;
+      if (broadcastTarget === "premium") {
+        const { data: subs } = await supabase
+          .from("user_subscriptions")
+          .select("user_id")
+          .eq("is_active", true);
+        eligibleIds = (subs || []).map((s: any) => s.user_id);
+        if (eligibleIds.length === 0) {
+          setBroadcastResult({ sent: 0, total: 0, message: "No active premium subscribers found" });
+          return;
+        }
+      }
 
-      const apiBase = process.env.EXPO_PUBLIC_DOMAIN
-        ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-        : "";
-      const res = await fetch(`${apiBase}/api/admin/broadcast-push`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${jwt}`,
-        },
-        body: JSON.stringify({ title: broadcastTitle.trim(), body: broadcastBody.trim(), target: broadcastTarget }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed");
-      setBroadcastResult(json);
+      let profileQuery = supabase
+        .from("profiles")
+        .select("id, expo_push_token")
+        .not("expo_push_token", "is", null)
+        .eq("account_deleted", false);
+
+      if (eligibleIds) {
+        profileQuery = profileQuery.in("id", eligibleIds);
+      }
+
+      const { data: profiles, error: profileErr } = await profileQuery;
+      if (profileErr) throw new Error(profileErr.message);
+
+      const allIds = (profiles || []).map((p: any) => p.id);
+      if (allIds.length === 0) {
+        setBroadcastResult({ sent: 0, total: 0, message: "No eligible users with push tokens" });
+        return;
+      }
+
+      // 2. Filter out users who have disabled push
+      const { data: prefs } = await supabase
+        .from("notification_preferences")
+        .select("user_id, push_enabled")
+        .in("user_id", allIds);
+
+      const disabledSet = new Set(
+        (prefs || []).filter((p: any) => p.push_enabled === false).map((p: any) => p.user_id)
+      );
+
+      const tokens: string[] = (profiles || [])
+        .filter((p: any) => !disabledSet.has(p.id) && p.expo_push_token)
+        .map((p: any) => p.expo_push_token as string);
+
+      const total = tokens.length;
+      if (total === 0) {
+        setBroadcastResult({ sent: 0, total: 0, message: "All eligible users have push disabled" });
+        return;
+      }
+
+      // 3. Send in batches of 100 (Expo limit)
+      const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
+      let sent = 0;
+
+      for (let i = 0; i < tokens.length; i += 100) {
+        const chunk = tokens.slice(i, i + 100);
+        const messages = chunk.map((token) => ({
+          to: token,
+          title: broadcastTitle.trim().substring(0, 100),
+          body: broadcastBody.trim().substring(0, 200),
+          data: { type: "broadcast" },
+          sound: "default",
+          badge: 1,
+          priority: "high",
+          channelId: "default",
+        }));
+
+        const res = await fetch(EXPO_PUSH_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify(messages),
+        });
+
+        if (res.ok) {
+          const result = await res.json();
+          (result.data || []).forEach((ticket: any) => {
+            if (ticket.status === "ok") sent++;
+          });
+        }
+      }
+
+      setBroadcastResult({ sent, total, message: `Broadcast delivered to ${sent} of ${total} devices` });
     } catch (err: any) {
       showAlert("Broadcast failed", err.message || "An error occurred");
     } finally {
