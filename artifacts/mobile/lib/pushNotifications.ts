@@ -158,15 +158,48 @@ export async function registerForPushNotifications(userId: string): Promise<stri
 
     console.log("[PushNotif] Token registered:", token?.slice(0, 30));
 
-    const { error: dbError } = await supabase
-      .from("profiles")
-      .update({ expo_push_token: token })
-      .eq("id", userId);
+    // Primary: save via server-side edge function (uses service role key, always works)
+    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
+    const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
+    let savedViaEdge = false;
 
-    if (dbError) {
-      console.warn("[PushNotif] Failed to save token to DB:", dbError.message);
-    } else {
-      console.log("[PushNotif] Token saved to DB successfully");
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (accessToken && supabaseUrl) {
+        const res = await fetch(`${supabaseUrl}/functions/v1/register-push-token`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": supabaseAnonKey,
+            "Authorization": `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ token }),
+        });
+        if (res.ok) {
+          savedViaEdge = true;
+          console.log("[PushNotif] Token saved via edge function");
+        } else {
+          const errText = await res.text();
+          console.warn("[PushNotif] Edge function token save failed:", errText);
+        }
+      }
+    } catch (edgeErr: any) {
+      console.warn("[PushNotif] Edge function unreachable:", edgeErr?.message);
+    }
+
+    // Fallback: direct Supabase client update
+    if (!savedViaEdge) {
+      const { error: dbError } = await supabase
+        .from("profiles")
+        .update({ expo_push_token: token })
+        .eq("id", userId);
+
+      if (dbError) {
+        console.warn("[PushNotif] Fallback DB save failed:", dbError.message);
+      } else {
+        console.log("[PushNotif] Token saved via Supabase client (fallback)");
+      }
     }
 
     return token;
