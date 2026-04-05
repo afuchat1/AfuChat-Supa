@@ -1356,87 +1356,68 @@ export default function AdminDashboard() {
     setBroadcastSending(true);
     setBroadcastResult(null);
     try {
-      // 1. Fetch profiles with push tokens
-      let eligibleIds: string[] | null = null;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const jwt = sessionData?.session?.access_token;
+      if (!jwt) throw new Error("Not authenticated");
+
+      // 1. Gather eligible user IDs
+      let userIds: string[] = [];
+
       if (broadcastTarget === "premium") {
-        const { data: subs } = await supabase
+        const { data: subs, error: subsErr } = await supabase
           .from("user_subscriptions")
           .select("user_id")
           .eq("is_active", true);
-        eligibleIds = (subs || []).map((s: any) => s.user_id);
-        if (eligibleIds.length === 0) {
+        if (subsErr) throw new Error(subsErr.message);
+        userIds = (subs || []).map((s: any) => s.user_id);
+        if (userIds.length === 0) {
           setBroadcastResult({ sent: 0, total: 0, message: "No active premium subscribers found" });
           return;
         }
+      } else {
+        const { data: profiles, error: profileErr } = await supabase
+          .from("profiles")
+          .select("id")
+          .not("expo_push_token", "is", null)
+          .eq("account_deleted", false);
+        if (profileErr) throw new Error(profileErr.message);
+        userIds = (profiles || []).map((p: any) => p.id);
       }
 
-      let profileQuery = supabase
-        .from("profiles")
-        .select("id, expo_push_token")
-        .not("expo_push_token", "is", null)
-        .eq("account_deleted", false);
-
-      if (eligibleIds) {
-        profileQuery = profileQuery.in("id", eligibleIds);
-      }
-
-      const { data: profiles, error: profileErr } = await profileQuery;
-      if (profileErr) throw new Error(profileErr.message);
-
-      const allIds = (profiles || []).map((p: any) => p.id);
-      if (allIds.length === 0) {
+      if (userIds.length === 0) {
         setBroadcastResult({ sent: 0, total: 0, message: "No eligible users with push tokens" });
         return;
       }
 
-      // 2. Filter out users who have disabled push
-      const { data: prefs } = await supabase
-        .from("notification_preferences")
-        .select("user_id, push_enabled")
-        .in("user_id", allIds);
-
-      const disabledSet = new Set(
-        (prefs || []).filter((p: any) => p.push_enabled === false).map((p: any) => p.user_id)
-      );
-
-      const tokens: string[] = (profiles || [])
-        .filter((p: any) => !disabledSet.has(p.id) && p.expo_push_token)
-        .map((p: any) => p.expo_push_token as string);
-
-      const total = tokens.length;
-      if (total === 0) {
-        setBroadcastResult({ sent: 0, total: 0, message: "All eligible users have push disabled" });
-        return;
-      }
-
-      // 3. Send in batches of 100 (Expo limit)
-      const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
+      // 2. Send via edge function in batches of 100
+      const EDGE_URL = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-push-notification`;
+      const ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
       let sent = 0;
+      let total = 0;
 
-      for (let i = 0; i < tokens.length; i += 100) {
-        const chunk = tokens.slice(i, i + 100);
-        const messages = chunk.map((token) => ({
-          to: token,
-          title: broadcastTitle.trim().substring(0, 100),
-          body: broadcastBody.trim().substring(0, 200),
-          data: { type: "broadcast" },
-          sound: "default",
-          badge: 1,
-          priority: "high",
-          channelId: "default",
-        }));
-
-        const res = await fetch(EXPO_PUSH_URL, {
+      for (let i = 0; i < userIds.length; i += 100) {
+        const chunk = userIds.slice(i, i + 100);
+        const res = await fetch(EDGE_URL, {
           method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify(messages),
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${jwt}`,
+            "apikey": ANON_KEY,
+          },
+          body: JSON.stringify({
+            userIds: chunk,
+            title: broadcastTitle.trim().substring(0, 100),
+            body: broadcastBody.trim().substring(0, 200),
+            data: { type: "broadcast" },
+          }),
         });
-
         if (res.ok) {
-          const result = await res.json();
-          (result.data || []).forEach((ticket: any) => {
-            if (ticket.status === "ok") sent++;
-          });
+          const json = await res.json();
+          sent += json.sent ?? 0;
+          total += json.total ?? chunk.length;
+        } else {
+          const errText = await res.text();
+          console.error("Broadcast chunk error", res.status, errText);
         }
       }
 
