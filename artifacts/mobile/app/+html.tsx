@@ -12,9 +12,6 @@ export default function Root({ children }: PropsWithChildren) {
           content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, shrink-to-fit=no, viewport-fit=cover"
         />
 
-        {/* Telegram Mini App SDK — must load before React bundle */}
-        <script src="https://telegram.org/js/telegram-web-app.js" />
-
         <title>AfuChat — Uganda's Super App | Chat, Discover, Connect</title>
 
         <meta name="application-name" content="AfuChat" />
