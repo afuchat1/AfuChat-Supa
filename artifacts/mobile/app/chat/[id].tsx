@@ -3259,7 +3259,7 @@ STRICT RULES:
         />
       </View>
     );
-  }, [messages, user, colors]);
+  }, [messages, user, colors, highlightedMsgId, scrollToMessage]);
 
   return (
     <View style={[st.root, { backgroundColor: colors.background }]}>
@@ -3376,6 +3376,7 @@ STRICT RULES:
               ref={flatListRef}
               data={messages}
               keyExtractor={(m) => m.id}
+              extraData={highlightedMsgId}
               renderItem={renderMessage}
               inverted
               contentContainerStyle={st.listContent}
