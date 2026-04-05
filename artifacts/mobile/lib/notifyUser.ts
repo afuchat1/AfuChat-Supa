@@ -1,4 +1,4 @@
-import { supabase, supabaseUrl as SUPABASE_URL, supabaseAnonKey as SUPABASE_ANON_KEY } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 
 type NotifyParams = {
   userId: string;
@@ -14,31 +14,13 @@ type NotifyParams = {
 
 async function callNotify(params: NotifyParams) {
   const {
-    userId, title, body, data = {}, notificationType, actorId,
+    userId, notificationType, actorId,
     postId, referenceId, referenceType,
   } = params;
 
-  // Send push notification via the server-side edge function.
-  // This runs with the service role key so it can always read the recipient's
-  // push token regardless of RLS, and delivers server-side for reliability.
-  try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData?.session?.access_token;
-
-    if (accessToken) {
-      fetch(`${SUPABASE_URL}/functions/v1/send-push-notification`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": SUPABASE_ANON_KEY,
-          "Authorization": `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ userId, title, body, data }),
-      }).catch(() => {});
-    }
-  } catch {
-    // Silently skip if push fails — in-app notification still gets inserted below
-  }
+  // Push notifications are now handled server-side by the API watcher which
+  // listens to `messages` and `notifications` table inserts via Supabase
+  // Realtime. No client-side push call needed here.
 
   // Insert in-app notification record (client-side, works independently of push)
   if (notificationType) {
