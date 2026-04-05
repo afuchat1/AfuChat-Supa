@@ -8,6 +8,7 @@ type RichTextProps = {
   style?: any;
   linkColor?: string;
   numberOfLines?: number;
+  selectable?: boolean;
 };
 
 type Segment = {
@@ -114,15 +115,15 @@ function handlePress(segment: Segment) {
   }
 }
 
-export function RichText({ children, style, linkColor = "#00BCD4", numberOfLines }: RichTextProps) {
-  if (!children) return <Text style={style}>{""}</Text>;
+export function RichText({ children, style, linkColor = "#00BCD4", numberOfLines, selectable }: RichTextProps) {
+  if (!children) return <Text style={style} selectable={selectable}>{""}</Text>;
   const segments = parseText(children);
 
   return (
-    <Text style={style} numberOfLines={numberOfLines}>
+    <Text style={style} numberOfLines={numberOfLines} selectable={selectable}>
       {segments.map((seg, i) => {
         if (seg.type === "text") {
-          return <Text key={i}>{seg.text}</Text>;
+          return <Text key={i} selectable={selectable}>{seg.text}</Text>;
         }
         return (
           <Text

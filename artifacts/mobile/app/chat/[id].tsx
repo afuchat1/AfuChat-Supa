@@ -27,6 +27,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import { Video, ResizeMode, Audio } from "expo-av";
 import * as Speech from "expo-speech";
+import * as Clipboard from "expo-clipboard";
 import AudioPlayer from "@/components/AudioPlayer";
 import Svg, { Path } from "react-native-svg";
 import { ChatLoadingSkeleton } from "@/components/ui/Skeleton";
@@ -893,7 +894,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
             <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
               {msg._isAi
                 ? <AiRichContent content={displayText} colors={colors} isUser={isMe} />
-                : <RichText style={[st.bubbleText, { color: textColor, fontSize: chatPrefsLocal?.font_size ?? 15, lineHeight: (chatPrefsLocal?.font_size ?? 15) + 5 }]} linkColor={isMe ? "#FFFFFF" : "#00BCD4"}>{displayText}</RichText>
+                : <RichText style={[st.bubbleText, { color: textColor, fontSize: chatPrefsLocal?.font_size ?? 15, lineHeight: (chatPrefsLocal?.font_size ?? 15) + 5 }]} linkColor={isMe ? "#FFFFFF" : "#00BCD4"} selectable={Platform.OS === "web"}>{displayText}</RichText>
               }
             </TouchableOpacity>
           )}
@@ -3668,10 +3669,28 @@ STRICT RULES:
               ))}
             </View>
             <View style={[st.reactModalDivider, { backgroundColor: colors.border }]} />
-            <TouchableOpacity style={st.reactModalAction} onPress={() => { if (showReactions) { setReplyTo(showReactions); setShowReactions(null); } }}>
+            <TouchableOpacity style={st.reactModalAction} onPress={() => { if (showReactions) { setReplyTo(showReactions); setTimeout(() => chatInputRef.current?.focus(), 50); setShowReactions(null); } }}>
               <Ionicons name="arrow-undo" size={20} color={colors.text} />
               <Text style={[st.reactModalActionText, { color: colors.text }]}>Reply</Text>
             </TouchableOpacity>
+            {showReactions && (() => {
+              const txt = showReactions.encrypted_content?.trim();
+              const isGift = !txt || txt.startsWith("🎁 ") || txt.startsWith("🧧") || txt.includes("|giftId:");
+              if (isGift) return null;
+              return (
+                <TouchableOpacity
+                  style={st.reactModalAction}
+                  onPress={async () => {
+                    await Clipboard.setStringAsync(txt);
+                    setShowReactions(null);
+                    showAlert("Copied", "Message text copied to clipboard.");
+                  }}
+                >
+                  <Ionicons name="copy-outline" size={20} color={colors.text} />
+                  <Text style={[st.reactModalActionText, { color: colors.text }]}>Copy Text</Text>
+                </TouchableOpacity>
+              );
+            })()}
             <TouchableOpacity
               style={st.reactModalAction}
               onPress={() => { if (showReactions) { openForward(showReactions); setShowReactions(null); } }}
