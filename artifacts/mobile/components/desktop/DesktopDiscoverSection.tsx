@@ -95,12 +95,12 @@ function LoginPrompt({ visible, onClose, colors }: { visible: boolean; onClose: 
 
 const modal = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" },
-  card: { width: 340, borderRadius: 20, padding: 28, alignItems: "center", gap: 10 },
+  card: { width: 340, borderRadius: 4, padding: 28, alignItems: "center", gap: 10 },
   title: { fontSize: 20, fontFamily: "Inter_700Bold", textAlign: "center" },
   sub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
-  loginBtn: { width: "100%" as any, paddingVertical: 13, borderRadius: 24, alignItems: "center", marginTop: 6 },
+  loginBtn: { width: "100%" as any, paddingVertical: 13, borderRadius: 4, alignItems: "center", marginTop: 6 },
   loginBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  registerBtn: { width: "100%" as any, paddingVertical: 12, borderRadius: 24, alignItems: "center", borderWidth: 1.5 },
+  registerBtn: { width: "100%" as any, paddingVertical: 12, borderRadius: 4, alignItems: "center", borderWidth: 1 },
   registerBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
 });
 
@@ -109,6 +109,7 @@ function ComposeBox({ profile, colors, isLoggedIn, onAuthRequired, onPost }: {
   onPost: (text: string) => Promise<void>;
 }) {
   const [text, setText] = useState("");
+  const [focused, setFocused] = useState(false);
   const [posting, setPosting] = useState(false);
 
   async function handlePost() {
@@ -116,6 +117,7 @@ function ComposeBox({ profile, colors, isLoggedIn, onAuthRequired, onPost }: {
     setPosting(true);
     await onPost(text.trim());
     setText("");
+    setFocused(false);
     setPosting(false);
   }
 
@@ -123,62 +125,64 @@ function ComposeBox({ profile, colors, isLoggedIn, onAuthRequired, onPost }: {
     return (
       <TouchableOpacity
         onPress={onAuthRequired}
-        activeOpacity={0.92}
+        activeOpacity={0.95}
         style={[styles.composeBox, { borderBottomColor: colors.border }]}
       >
-        <Avatar uri={null} name="G" size={40} />
-        <View style={[styles.composePlaceholder, { borderColor: colors.border }]}>
+        <Avatar uri={null} name="G" size={34} />
+        <View style={[styles.composeFieldWrap, { borderColor: colors.border, backgroundColor: colors.surface || colors.background }]}>
           <Text style={[styles.composePlaceholderText, { color: colors.textMuted }]}>
-            What's happening?
+            What's on your mind?
           </Text>
-          <View style={[styles.composePostBtn, { backgroundColor: BRAND }]}>
-            <Text style={styles.composePostBtnText}>Post</Text>
-          </View>
+        </View>
+        <View style={[styles.composePostBtn, { backgroundColor: BRAND }]}>
+          <Text style={styles.composePostBtnText}>Post</Text>
         </View>
       </TouchableOpacity>
     );
   }
 
   return (
-    <View style={[styles.composeBox, { borderBottomColor: colors.border }]}>
+    <View style={[styles.composeBox, { borderBottomColor: colors.border }, focused && styles.composeBoxFocused]}>
       <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: profile?.id } } as any)} activeOpacity={0.85}>
-        <Avatar uri={profile?.avatar_url || null} name={profile?.display_name || "Me"} size={40} />
+        <Avatar uri={profile?.avatar_url || null} name={profile?.display_name || "Me"} size={34} />
       </TouchableOpacity>
       <View style={{ flex: 1 }}>
         <TextInput
           multiline
           style={[styles.composeInput, { color: colors.text }]}
-          placeholder="What's happening?"
+          placeholder="What's on your mind?"
           placeholderTextColor={colors.textMuted}
           value={text}
           onChangeText={setText}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
         />
         <View style={[styles.composeToolbar, { borderTopColor: colors.border }]}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
             <TouchableOpacity style={styles.toolbarBtn} onPress={() => router.push("/moments/create" as any)}>
-              <Ionicons name="image-outline" size={20} color={BRAND} />
+              <Ionicons name="image-outline" size={18} color={BRAND} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.toolbarBtn} onPress={() => {}}>
-              <Ionicons name="happy-outline" size={20} color={BRAND} />
+              <Ionicons name="happy-outline" size={18} color={BRAND} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.toolbarBtn} onPress={() => {}}>
-              <Ionicons name="location-outline" size={20} color={BRAND} />
+              <Ionicons name="link-outline" size={18} color={BRAND} />
             </TouchableOpacity>
           </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             {text.length > 0 && (
               <Text style={[styles.charCount, { color: text.length > 260 ? "#F4212E" : colors.textMuted }]}>
                 {280 - text.length}
               </Text>
             )}
             <TouchableOpacity
-              style={[styles.composePostBtn, { backgroundColor: BRAND, opacity: !text.trim() || posting ? 0.5 : 1 }]}
+              style={[styles.composePostBtn, { backgroundColor: BRAND, opacity: !text.trim() || posting ? 0.45 : 1 }]}
               onPress={handlePost}
               disabled={!text.trim() || posting}
               activeOpacity={0.88}
             >
               {posting ? (
-                <ActivityIndicator color="#fff" size="small" style={{ width: 36 }} />
+                <ActivityIndicator color="#fff" size="small" style={{ width: 44 }} />
               ) : (
                 <Text style={styles.composePostBtnText}>Post</Text>
               )}
@@ -352,12 +356,6 @@ function PostCard({
               <View style={styles.playBtn}>
                 <Ionicons name="play" size={26} color="#fff" />
               </View>
-              {Platform.OS === "web" && (
-                <View style={styles.appOnlyBadge}>
-                  <Ionicons name="phone-portrait-outline" size={11} color="#fff" />
-                  <Text style={styles.appOnlyText}>App only</Text>
-                </View>
-              )}
             </View>
           </TouchableOpacity>
         )}
@@ -377,7 +375,7 @@ function PostCard({
                   style={{
                     width: allImages.length === 1 ? imgAreaW : multiImgW,
                     height: allImages.length === 1 ? Math.round(imgAreaW * 0.56) : Math.round(multiImgW * 0.75),
-                    borderRadius: 12,
+                    borderRadius: 3,
                   }}
                   contentFit="cover"
                   cachePolicy={isLowData ? "disk" : "memory-disk"}
@@ -752,13 +750,24 @@ const styles = StyleSheet.create({
     gap: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  composeBoxFocused: {
+    backgroundColor: "rgba(0,188,212,0.03)",
+  },
+  composeFieldWrap: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 4,
+  },
   composeInput: {
-    fontSize: 19,
+    fontSize: 15,
     fontFamily: "Inter_400Regular",
-    minHeight: 56,
-    paddingTop: 6,
-    paddingBottom: 6,
-    lineHeight: 26,
+    minHeight: 48,
+    paddingTop: 4,
+    paddingBottom: 4,
+    lineHeight: 22,
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
   },
   composeToolbar: {
     flexDirection: "row",
@@ -770,40 +779,30 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   toolbarBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 4,
     alignItems: "center",
     justifyContent: "center",
   },
   charCount: {
-    fontSize: 15,
+    fontSize: 13,
     fontFamily: "Inter_400Regular",
-  },
-  composePlaceholder: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 12,
   },
   composePlaceholderText: {
     flex: 1,
-    fontSize: 18,
+    fontSize: 14,
     fontFamily: "Inter_400Regular",
   },
   composePostBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 4,
   },
   composePostBtnText: {
     color: "#fff",
-    fontSize: 15,
-    fontFamily: "Inter_700Bold",
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
   },
 
   feedList: { flexGrow: 1 },
@@ -839,7 +838,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 4,
     marginLeft: -8,
-    gap: 4,
+    gap: 0,
     marginBottom: 6,
   },
   actionBtn: {
@@ -848,7 +847,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: 4,
   },
   actionCount: { fontSize: 13, fontFamily: "Inter_400Regular" },
 
@@ -859,17 +858,17 @@ const styles = StyleSheet.create({
   },
 
   emptyState: { alignItems: "center", paddingTop: 60, gap: 12, paddingHorizontal: 32 },
-  emptyTitle: { fontSize: 23, fontFamily: "Inter_700Bold", textAlign: "center" },
-  emptySub: { fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22 },
-  findPeopleBtn: { paddingHorizontal: 24, paddingVertical: 13, borderRadius: 24, marginTop: 8 },
-  findPeopleBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
+  emptyTitle: { fontSize: 20, fontFamily: "Inter_700Bold", textAlign: "center" },
+  emptySub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22 },
+  findPeopleBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 4, marginTop: 8 },
+  findPeopleBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
 
   articleCard: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 4,
+    padding: 12,
     marginBottom: 10,
-    gap: 6,
+    gap: 4,
     overflow: "hidden",
   },
   articleBadgeRow: {
@@ -879,14 +878,15 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   articleBadgeText: {
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: "Inter_700Bold",
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
+    textTransform: "uppercase" as const,
   },
   articleTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: "Inter_700Bold",
-    lineHeight: 22,
+    lineHeight: 21,
   },
   articleExcerpt: {
     fontSize: 13,
@@ -895,13 +895,13 @@ const styles = StyleSheet.create({
   },
   articleThumb: {
     width: "100%" as any,
-    height: 140,
-    borderRadius: 8,
+    height: 130,
+    borderRadius: 2,
     marginTop: 8,
   },
 
   videoCard: {
-    borderRadius: 12,
+    borderRadius: 4,
     overflow: "hidden",
     marginBottom: 10,
     position: "relative",
@@ -915,33 +915,16 @@ const styles = StyleSheet.create({
   },
   videoOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.35)",
+    backgroundColor: "rgba(0,0,0,0.3)",
     alignItems: "center",
     justifyContent: "center",
   },
   playBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    width: 52,
+    height: 52,
+    borderRadius: 4,
+    backgroundColor: "rgba(0,0,0,0.5)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  appOnlyBadge: {
-    position: "absolute",
-    bottom: 10,
-    right: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  appOnlyText: {
-    color: "#fff",
-    fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
   },
 });

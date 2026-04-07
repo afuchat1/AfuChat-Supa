@@ -81,7 +81,7 @@ function ThemeSyncManager() {
 }
 
 const bottomSheetAnim = Platform.OS === "web"
-  ? { animation: "fade" as const }
+  ? { animation: "none" as const }
   : { animation: "slide_from_bottom" as const, gestureDirection: "vertical" as const };
 
 function RootLayoutNav() {
@@ -89,15 +89,15 @@ function RootLayoutNav() {
     <Stack
       screenOptions={{
         headerShown: false,
-        animation: Platform.OS === "web" ? "fade" : "slide_from_right",
-        animationDuration: Platform.OS === "web" ? 150 : 250,
+        animation: Platform.OS === "web" ? "none" : "slide_from_right",
+        animationDuration: Platform.OS === "web" ? 0 : 250,
         gestureEnabled: Platform.OS !== "web",
         gestureDirection: "horizontal",
       }}
     >
-      <Stack.Screen name="index" options={{ animation: "fade" }} />
-      <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
-      <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
+      <Stack.Screen name="index" options={{ animation: Platform.OS === "web" ? "none" : "fade" }} />
+      <Stack.Screen name="(auth)" options={{ animation: Platform.OS === "web" ? "none" : "fade" }} />
+      <Stack.Screen name="(tabs)" options={{ animation: Platform.OS === "web" ? "none" : "fade" }} />
       <Stack.Screen name="chat/[id]" />
       <Stack.Screen name="contact/[id]" />
       <Stack.Screen name="moments/create" options={bottomSheetAnim} />
@@ -161,7 +161,7 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplash, setShowSplash] = useState(Platform.OS !== "web");
   const splashDismissed = useRef(false);
   const dismissSplash = useCallback(() => {
     if (!splashDismissed.current) {
@@ -171,6 +171,7 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
+    if (Platform.OS === "web") return;
     const t = setTimeout(dismissSplash, 5000);
     return () => clearTimeout(t);
   }, []);

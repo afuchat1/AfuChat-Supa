@@ -489,7 +489,7 @@ const st = StyleSheet.create({
   headerBtn: {
     width: 34,
     height: 34,
-    borderRadius: 17,
+    borderRadius: 4,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -499,8 +499,8 @@ const st = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     paddingHorizontal: 12,
-    height: 38,
-    borderRadius: 10,
+    height: 36,
+    borderRadius: 4,
   },
   searchInput: {
     flex: 1,
@@ -518,10 +518,10 @@ const st = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   filterChip: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
+    borderRadius: 4,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   filterChipText: { fontSize: 12, fontFamily: "Inter_500Medium" },
 
@@ -606,9 +606,9 @@ const st = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 20,
-    paddingVertical: 11,
-    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: 4,
   },
   welcomeBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
 });

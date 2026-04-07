@@ -97,7 +97,7 @@ export function DesktopTopNav({ activeSection, onSectionChange, hasSession }: Pr
       ? ("moon" as const)
       : themeMode === "light"
       ? ("sunny" as const)
-      : ("phone-portrait-outline" as const);
+      : ("contrast-outline" as const);
 
   function cycleTheme() {
     const next =
