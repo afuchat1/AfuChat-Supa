@@ -6,7 +6,6 @@ import {
   Text,
   TouchableOpacity,
   View,
-  useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -18,10 +17,6 @@ import type { DesktopSection } from "./DesktopWrapper";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
-const WIDE = 240;
-const NARROW = 68;
-const BREAKPOINT = 1100;
-
 type NavItem = {
   key: DesktopSection;
   icon: React.ComponentProps<typeof Ionicons>["name"];
@@ -30,26 +25,30 @@ type NavItem = {
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { key: "discover",      icon: "home-outline",                 iconActive: "home",                label: "Home" },
-  { key: "search",        icon: "search-outline",               iconActive: "search",              label: "Explore" },
-  { key: "notifications", icon: "notifications-outline",        iconActive: "notifications",        label: "Notifications" },
-  { key: "chats",         icon: "mail-outline",                 iconActive: "mail",                label: "Messages" },
-  { key: "wallet",        icon: "wallet-outline",               iconActive: "wallet",              label: "Wallet" },
-  { key: "contacts",      icon: "people-outline",               iconActive: "people",              label: "Contacts" },
+  { key: "discover",      icon: "home-outline",          iconActive: "home",          label: "Home" },
+  { key: "search",        icon: "search-outline",        iconActive: "search",        label: "Explore" },
+  { key: "notifications", icon: "notifications-outline", iconActive: "notifications", label: "Notifications" },
+  { key: "chats",         icon: "mail-outline",          iconActive: "mail",          label: "Messages" },
+  { key: "wallet",        icon: "wallet-outline",        iconActive: "wallet",        label: "Wallet" },
+  { key: "contacts",      icon: "people-outline",        iconActive: "people",        label: "Contacts" },
 ];
 
-function NavButton({
+type Props = {
+  activeSection: DesktopSection;
+  onSectionChange: (s: DesktopSection) => void;
+  hasSession: boolean;
+};
+
+function NavTab({
   item,
   isActive,
   onPress,
   colors,
-  showLabel,
 }: {
   item: NavItem;
   isActive: boolean;
   onPress: () => void;
   colors: any;
-  showLabel: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const hoverProps =
@@ -60,45 +59,45 @@ function NavButton({
   return (
     <TouchableOpacity
       onPress={onPress}
-      activeOpacity={0.85}
+      activeOpacity={0.8}
       style={[
-        styles.navItem,
-        showLabel ? styles.navItemWide : styles.navItemNarrow,
-        hovered && { backgroundColor: colors.textMuted + "18" },
+        styles.navTab,
+        isActive && [styles.navTabActive, { borderBottomColor: colors.accent }],
+        hovered && !isActive && { backgroundColor: colors.textMuted + "12" },
       ]}
       {...(hoverProps as any)}
     >
       <Ionicons
         name={isActive ? item.iconActive : item.icon}
-        size={24}
-        color={isActive ? colors.text : colors.text}
+        size={18}
+        color={isActive ? colors.accent : colors.textMuted}
       />
-      {showLabel && (
-        <Text
-          style={[
-            styles.navLabel,
-            { color: colors.text, fontFamily: isActive ? "Inter_700Bold" : "Inter_400Regular" },
-          ]}
-        >
-          {item.label}
-        </Text>
-      )}
+      <Text
+        style={[
+          styles.navTabLabel,
+          {
+            color: isActive ? colors.accent : colors.textMuted,
+            fontFamily: isActive ? "Inter_600SemiBold" : "Inter_400Regular",
+          },
+        ]}
+      >
+        {item.label}
+      </Text>
     </TouchableOpacity>
   );
 }
 
-type Props = {
-  activeSection: DesktopSection;
-  onSectionChange: (s: DesktopSection) => void;
-};
-
-export function DesktopIconRail({ activeSection, onSectionChange }: Props) {
+export function DesktopTopNav({ activeSection, onSectionChange, hasSession }: Props) {
   const { profile, signOut } = useAuth();
-  const { colors, isDark, themeMode, setThemeMode } = useTheme();
-  const { width: screenW } = useWindowDimensions();
-  const showLabel = screenW >= BREAKPOINT;
+  const { colors, themeMode, setThemeMode } = useTheme();
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const themeIcon =
+    themeMode === "dark"
+      ? ("moon" as const)
+      : themeMode === "light"
+      ? ("sunny" as const)
+      : ("phone-portrait-outline" as const);
 
   function cycleTheme() {
     const next =
@@ -106,10 +105,8 @@ export function DesktopIconRail({ activeSection, onSectionChange }: Props) {
     setThemeMode(next);
   }
 
-  const themeIcon =
-    themeMode === "dark" ? ("moon" as const) : themeMode === "light" ? ("sunny" as const) : ("phone-portrait-outline" as const);
-
   async function handleSignOut() {
+    setUserMenuOpen(false);
     showAlert("Sign out?", "You'll need to log back in.", [
       { text: "Cancel", style: "cancel" },
       {
@@ -123,189 +120,221 @@ export function DesktopIconRail({ activeSection, onSectionChange }: Props) {
     ]);
   }
 
-  const sidebarW = showLabel ? WIDE : NARROW;
-
   return (
-    <View
-      style={[
-        styles.sidebar,
-        { width: sidebarW, backgroundColor: colors.background, borderRightColor: colors.border },
-      ]}
-    >
+    <View style={[styles.topbar, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
       {/* Logo */}
       <TouchableOpacity
-        style={[styles.logoRow, showLabel ? styles.logoRowWide : styles.logoRowNarrow]}
+        style={styles.logoArea}
         onPress={() => onSectionChange("discover")}
         activeOpacity={0.85}
       >
         <View style={[styles.logoCircle, { backgroundColor: colors.accent }]}>
           <Image source={afuSymbol} style={styles.logoImg} resizeMode="contain" />
         </View>
-        {showLabel && (
-          <Text style={[styles.logoText, { color: colors.text }]}>AfuChat</Text>
-        )}
+        <Text style={[styles.logoText, { color: colors.text }]}>AfuChat</Text>
       </TouchableOpacity>
 
-      {/* Nav items */}
-      <View style={styles.navGroup}>
-        {NAV_ITEMS.map((item) => (
-          <NavButton
-            key={item.key}
-            item={item}
-            isActive={activeSection === item.key}
-            onPress={() => onSectionChange(item.key)}
-            colors={colors}
-            showLabel={showLabel}
-          />
-        ))}
+      {/* Nav tabs — center */}
+      {hasSession && (
+        <View style={styles.navTabs}>
+          {NAV_ITEMS.map((item) => (
+            <NavTab
+              key={item.key}
+              item={item}
+              isActive={activeSection === item.key}
+              onPress={() => onSectionChange(item.key)}
+              colors={colors}
+            />
+          ))}
+        </View>
+      )}
 
-        {/* Profile nav item */}
-        <NavButton
-          item={{ key: "profile", icon: "person-outline", iconActive: "person", label: "Profile" }}
-          isActive={activeSection === "profile"}
-          onPress={() => onSectionChange("profile")}
-          colors={colors}
-          showLabel={showLabel}
-        />
-      </View>
-
-      {/* Post button */}
-      <TouchableOpacity
-        style={[
-          styles.postBtn,
-          showLabel ? styles.postBtnWide : styles.postBtnNarrow,
-          { backgroundColor: colors.accent },
-        ]}
-        onPress={() => router.push("/moments/create" as any)}
-        activeOpacity={0.88}
-      >
-        {showLabel ? (
-          <Text style={styles.postBtnText}>Post</Text>
-        ) : (
-          <Ionicons name="add" size={22} color="#fff" />
-        )}
-      </TouchableOpacity>
-
-      <View style={{ flex: 1 }} />
-
-      {/* Bottom utilities */}
-      <View style={[styles.bottomRow, showLabel ? styles.bottomRowWide : styles.bottomRowNarrow]}>
-        <TouchableOpacity
-          style={[styles.utilBtn, showLabel ? styles.utilBtnWide : styles.utilBtnNarrow, { borderRadius: showLabel ? 8 : 24 }]}
-          onPress={cycleTheme}
-          activeOpacity={0.75}
-        >
-          <Ionicons name={themeIcon} size={18} color={colors.textMuted} />
-          {showLabel && <Text style={[styles.utilLabel, { color: colors.textMuted }]}>
-            {themeMode === "dark" ? "Dark" : themeMode === "light" ? "Light" : "System"}
-          </Text>}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.utilBtn, showLabel ? styles.utilBtnWide : styles.utilBtnNarrow, { borderRadius: showLabel ? 8 : 24 }]}
-          onPress={() => router.push("/settings" as any)}
-          activeOpacity={0.75}
-        >
-          <Ionicons name="settings-outline" size={18} color={colors.textMuted} />
-          {showLabel && <Text style={[styles.utilLabel, { color: colors.textMuted }]}>Settings</Text>}
-        </TouchableOpacity>
-      </View>
-
-      {/* User profile card at bottom */}
-      <TouchableOpacity
-        style={[
-          styles.profileCard,
-          showLabel ? styles.profileCardWide : styles.profileCardNarrow,
-          { borderTopColor: colors.border },
-        ]}
-        onPress={handleSignOut}
-        activeOpacity={0.85}
-      >
-        <Avatar uri={profile?.avatar_url || null} name={profile?.display_name || "Me"} size={38} />
-        {showLabel && (
+      {/* Right side actions */}
+      <View style={styles.rightArea}>
+        {hasSession ? (
           <>
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={[styles.profileName, { color: colors.text }]} numberOfLines={1}>
-                {profile?.display_name || "Me"}
-              </Text>
-              <Text style={[styles.profileHandle, { color: colors.textMuted }]} numberOfLines={1}>
-                @{profile?.handle || "me"}
-              </Text>
+            {/* Post button */}
+            <TouchableOpacity
+              style={[styles.postBtn, { backgroundColor: colors.accent }]}
+              onPress={() => router.push("/moments/create" as any)}
+              activeOpacity={0.88}
+            >
+              <Ionicons name="add" size={16} color="#fff" />
+              <Text style={styles.postBtnText}>Post</Text>
+            </TouchableOpacity>
+
+            {/* Theme toggle */}
+            <TouchableOpacity onPress={cycleTheme} style={styles.iconBtn} activeOpacity={0.75}>
+              <Ionicons name={themeIcon} size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+
+            {/* Settings */}
+            <TouchableOpacity
+              onPress={() => router.push("/settings" as any)}
+              style={styles.iconBtn}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="settings-outline" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+
+            {/* User avatar / profile */}
+            <View style={{ position: "relative" as any }}>
+              <TouchableOpacity
+                style={styles.avatarBtn}
+                onPress={() => setUserMenuOpen((v) => !v)}
+                activeOpacity={0.85}
+              >
+                <Avatar
+                  uri={profile?.avatar_url || null}
+                  name={profile?.display_name || "Me"}
+                  size={32}
+                />
+              </TouchableOpacity>
+
+              {userMenuOpen && (
+                <View
+                  style={[
+                    styles.userMenu,
+                    { backgroundColor: colors.background, borderColor: colors.border },
+                  ]}
+                >
+                  <TouchableOpacity
+                    style={styles.menuItem}
+                    onPress={() => {
+                      setUserMenuOpen(false);
+                      onSectionChange("profile");
+                    }}
+                  >
+                    <Ionicons name="person-outline" size={16} color={colors.text} />
+                    <Text style={[styles.menuItemText, { color: colors.text }]}>Profile</Text>
+                  </TouchableOpacity>
+                  <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+                  <TouchableOpacity style={styles.menuItem} onPress={handleSignOut}>
+                    <Ionicons name="log-out-outline" size={16} color={colors.textMuted} />
+                    <Text style={[styles.menuItemText, { color: colors.textMuted }]}>Sign Out</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
-            <Ionicons name="ellipsis-horizontal" size={16} color={colors.textMuted} />
           </>
+        ) : (
+          <TouchableOpacity
+            onPress={() => router.push("/(auth)/login" as any)}
+            style={[styles.postBtn, { backgroundColor: colors.accent }]}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="log-in-outline" size={16} color="#fff" />
+            <Text style={styles.postBtnText}>Sign In</Text>
+          </TouchableOpacity>
         )}
-      </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
+/** Legacy export kept so any old import of DesktopIconRail still compiles */
+export const DesktopIconRail = DesktopTopNav;
+
 const styles = StyleSheet.create<any>({
-  sidebar: {
+  topbar: {
+    height: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     flexShrink: 0,
-    flexDirection: "column",
-    paddingVertical: 8,
-    borderRightWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden",
+    gap: 0,
   },
 
-  logoRow: { alignItems: "center", paddingVertical: 6, marginBottom: 4 },
-  logoRowWide: { flexDirection: "row", paddingHorizontal: 14, gap: 10 },
-  logoRowNarrow: { justifyContent: "center" },
+  logoArea: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginRight: 24,
+  },
   logoCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
   },
-  logoImg: { width: 20, height: 20, tintColor: "#fff" },
-  logoText: { fontSize: 20, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
+  logoImg: { width: 17, height: 17, tintColor: "#fff" },
+  logoText: { fontSize: 17, fontFamily: "Inter_700Bold", letterSpacing: -0.4 },
 
-  navGroup: { paddingTop: 4, gap: 2 },
-  navItem: {
+  navTabs: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "stretch",
+    height: 52,
+    gap: 2,
+  },
+  navTab: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 28,
-    marginHorizontal: 6,
+    gap: 6,
+    paddingHorizontal: 14,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
   },
-  navItemWide: { paddingHorizontal: 14, paddingVertical: 12, gap: 16 },
-  navItemNarrow: { paddingHorizontal: 0, paddingVertical: 12, justifyContent: "center" },
-  navLabel: { fontSize: 19, letterSpacing: -0.2 },
+  navTabActive: {
+    borderBottomWidth: 2,
+  },
+  navTabLabel: {
+    fontSize: 14,
+    letterSpacing: -0.1,
+  },
+
+  rightArea: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginLeft: 16,
+  },
 
   postBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 4,
+  },
+  postBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+
+  iconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 4,
     alignItems: "center",
     justifyContent: "center",
-    marginHorizontal: 10,
-    marginTop: 16,
   },
-  postBtnWide: { paddingVertical: 14, borderRadius: 28 },
-  postBtnNarrow: { width: 46, height: 46, borderRadius: 23, alignSelf: "center" },
-  postBtnText: { color: "#fff", fontSize: 17, fontFamily: "Inter_700Bold" },
 
-  bottomRow: { gap: 2, paddingHorizontal: 6 },
-  bottomRowWide: {},
-  bottomRowNarrow: { alignItems: "center" },
-  utilBtn: {
+  avatarBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 4,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  userMenu: {
+    position: "absolute",
+    top: 40,
+    right: 0,
+    width: 180,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 4,
+    paddingVertical: 4,
+    zIndex: 200,
+  },
+  menuItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 8,
     gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
-  utilBtnWide: { paddingHorizontal: 12 },
-  utilBtnNarrow: { width: 44, height: 44, justifyContent: "center", alignSelf: "center" },
-  utilLabel: { fontSize: 14, fontFamily: "Inter_400Regular" },
-
-  profileCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingTop: 10,
-    paddingBottom: 6,
-    marginTop: 4,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  profileCardWide: { paddingHorizontal: 14 },
-  profileCardNarrow: { justifyContent: "center", paddingHorizontal: 6 },
-  profileName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  profileHandle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 1 },
+  menuItemText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  menuDivider: { height: StyleSheet.hairlineWidth, marginVertical: 2 },
 });

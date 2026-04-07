@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Modal,
   Platform,
+  Pressable,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
   useWindowDimensions,
@@ -12,7 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { DesktopDetailProvider } from "@/context/DesktopDetailContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
-import { DesktopIconRail } from "./DesktopSidebar";
+import { DesktopTopNav } from "./DesktopSidebar";
 import { DesktopChatsSection } from "./desktop/DesktopChatsSection";
 import { DesktopDiscoverSection } from "./desktop/DesktopDiscoverSection";
 import { DesktopNotificationsSection } from "./desktop/DesktopNotificationsSection";
@@ -55,51 +56,8 @@ function isDetailRoute(segs: readonly string[]): boolean {
   return !BASE_FIRST_SEGMENTS.has(segs[0]);
 }
 
-function GuestSidebar() {
-  const { colors } = useTheme();
-  return (
-    <View style={[gs.sidebar, { backgroundColor: colors.background, borderRightColor: colors.border }]}>
-      <View style={[gs.logoCircle, { backgroundColor: colors.accent }]}>
-        <Ionicons name="chatbubble-ellipses" size={20} color="#fff" />
-      </View>
-      <TouchableOpacity
-        onPress={() => router.push("/(auth)/login" as any)}
-        style={[gs.signInBtn, { backgroundColor: colors.accent }]}
-        activeOpacity={0.85}
-      >
-        <Ionicons name="log-in-outline" size={20} color="#fff" />
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-const gs = StyleSheet.create({
-  sidebar: {
-    width: 68,
-    flexShrink: 0,
-    alignItems: "center",
-    paddingVertical: 12,
-    gap: 16,
-    borderRightWidth: StyleSheet.hairlineWidth,
-  },
-  logoCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  signInBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
-
 function DesktopShell({ children }: { children: React.ReactNode }) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { session } = useAuth();
   const segments = useSegments();
 
@@ -129,51 +87,52 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
     [segments]
   );
 
-  const showOverlay = isDetailRoute(segments);
+  const showModal = isDetailRoute(segments);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <View style={[styles.shell, { backgroundColor: colors.background }]}>
-        {session ? (
-          <DesktopIconRail activeSection={activeSection} onSectionChange={handleSectionChange} />
-        ) : (
-          <GuestSidebar />
-        )}
+      <DesktopTopNav
+        activeSection={activeSection}
+        onSectionChange={handleSectionChange}
+        hasSession={!!session}
+      />
 
-        <View style={[styles.mainArea, { borderLeftColor: colors.border }]}>
-          <View style={styles.sectionLayer}>
-            {activeSection === "chats" && <DesktopChatsSection />}
-            {activeSection === "discover" && <DesktopDiscoverSection />}
-            {activeSection === "search" && <DesktopSearchSection />}
-            {activeSection === "notifications" && <DesktopNotificationsSection />}
-            {activeSection === "wallet" && <DesktopWalletSection />}
-            {activeSection === "contacts" && <DesktopContactsSection />}
-            {activeSection === "profile" && <DesktopProfileSection />}
-          </View>
-
-          {Platform.OS === "web" && (
-            <View
-              style={[
-                styles.detailOverlay,
-                { backgroundColor: colors.background, display: showOverlay ? "flex" : "none" },
-              ]}
-            >
-              <View style={[styles.overlayHeader, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
-                <TouchableOpacity
-                  onPress={() => {
-                    try { router.back(); } catch { router.replace("/(tabs)" as any); }
-                  }}
-                  style={styles.backBtn}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="arrow-back" size={20} color={colors.text} />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.overlayContent}>{children}</View>
-            </View>
-          )}
+      <View style={[styles.mainArea, { borderTopColor: colors.border }]}>
+        <View style={styles.sectionLayer}>
+          {activeSection === "chats" && <DesktopChatsSection />}
+          {activeSection === "discover" && <DesktopDiscoverSection />}
+          {activeSection === "search" && <DesktopSearchSection />}
+          {activeSection === "notifications" && <DesktopNotificationsSection />}
+          {activeSection === "wallet" && <DesktopWalletSection />}
+          {activeSection === "contacts" && <DesktopContactsSection />}
+          {activeSection === "profile" && <DesktopProfileSection />}
         </View>
       </View>
+
+      {Platform.OS === "web" && showModal && (
+        <View style={styles.modalBackdrop}>
+          <Pressable
+            style={styles.backdropPress}
+            onPress={() => {
+              try { router.back(); } catch { router.replace("/(tabs)" as any); }
+            }}
+          />
+          <View style={[styles.modalSheet, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+              <TouchableOpacity
+                onPress={() => {
+                  try { router.back(); } catch { router.replace("/(tabs)" as any); }
+                }}
+                style={styles.closeBtn}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={20} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalContent}>{children}</View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -192,43 +151,51 @@ export function DesktopWrapper({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  shell: {
-    flex: 1,
-    maxWidth: 1280,
-    alignSelf: "center" as any,
-    width: "100%" as any,
-    flexDirection: "row",
-    overflow: "hidden",
-  },
+  root: { flex: 1, flexDirection: "column" as any },
   mainArea: {
     flex: 1,
-    flexDirection: "row",
-    overflow: "hidden",
-    borderLeftWidth: StyleSheet.hairlineWidth,
-    position: "relative" as any,
+    flexDirection: "row" as any,
+    overflow: "hidden" as any,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  sectionLayer: { flex: 1, flexDirection: "row" },
-  detailOverlay: {
+  sectionLayer: { flex: 1, flexDirection: "row" as any },
+  modalBackdrop: {
     position: "absolute" as any,
     top: 0, left: 0, right: 0, bottom: 0,
-    zIndex: 10,
-    flexDirection: "column",
+    zIndex: 100,
+    alignItems: "center" as any,
+    justifyContent: "center" as any,
+    backgroundColor: "rgba(0,0,0,0.4)",
   },
-  overlayHeader: {
-    height: 52,
-    flexDirection: "row",
-    alignItems: "center",
+  backdropPress: {
+    position: "absolute" as any,
+    top: 0, left: 0, right: 0, bottom: 0,
+  },
+  modalSheet: {
+    width: "54%" as any,
+    maxWidth: 720,
+    minWidth: 480,
+    height: "82%" as any,
+    borderRadius: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden" as any,
+    flexDirection: "column" as any,
+    zIndex: 1,
+  },
+  modalHeader: {
+    height: 48,
+    flexDirection: "row" as any,
+    alignItems: "center" as any,
     paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexShrink: 0,
   },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 4,
+    alignItems: "center" as any,
+    justifyContent: "center" as any,
   },
-  overlayContent: { flex: 1, overflow: "hidden" as any },
+  modalContent: { flex: 1, overflow: "hidden" as any },
 });
