@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -21,6 +20,10 @@ import { DesktopWalletSection } from "./desktop/DesktopWalletSection";
 import { DesktopSearchSection } from "./desktop/DesktopSearchSection";
 import { DesktopProfileSection } from "./desktop/DesktopProfileSection";
 import { DesktopContactsSection } from "./desktop/DesktopContactsSection";
+import { DesktopAppsSection } from "./desktop/DesktopAppsSection";
+import { DesktopAISection } from "./desktop/DesktopAISection";
+import { DesktopMatchSection } from "./desktop/DesktopMatchSection";
+import { DesktopSettingsSection } from "./desktop/DesktopSettingsSection";
 
 const DESKTOP_BREAKPOINT = 960;
 
@@ -31,7 +34,15 @@ export type DesktopSection =
   | "notifications"
   | "wallet"
   | "contacts"
-  | "profile";
+  | "profile"
+  | "apps"
+  | "ai"
+  | "match"
+  | "settings";
+
+const AUTHED_SECTIONS: DesktopSection[] = [
+  "chats", "notifications", "wallet", "profile", "ai", "match", "settings",
+];
 
 const BASE_FIRST_SEGMENTS = new Set([
   "",
@@ -48,7 +59,11 @@ function sectionFromSegments(segs: readonly string[]): DesktopSection {
   if (flat.includes("discover")) return "discover";
   if (flat.includes("search")) return "search";
   if (flat.includes("me")) return "profile";
-  return "chats";
+  if (flat.includes("ai")) return "ai";
+  if (flat.includes("match")) return "match";
+  if (flat.includes("apps")) return "apps";
+  if (flat.includes("settings")) return "settings";
+  return "discover";
 }
 
 function isDetailRoute(segs: readonly string[]): boolean {
@@ -63,9 +78,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
 
   const [activeSection, setActiveSection] = useState<DesktopSection>(() => {
     const fromSegs = sectionFromSegments(segments);
-    if (!session && (fromSegs === "chats" || fromSegs === "notifications" || fromSegs === "wallet" || fromSegs === "profile")) {
-      return "discover";
-    }
+    if (!session && AUTHED_SECTIONS.includes(fromSegs)) return "discover";
     return fromSegs;
   });
 
@@ -79,12 +92,17 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
 
   const handleSectionChange = useCallback(
     (section: DesktopSection) => {
+      // Guard authed sections
+      if (!session && AUTHED_SECTIONS.includes(section)) {
+        router.push("/(auth)/login" as any);
+        return;
+      }
       setActiveSection(section);
       if (isDetailRoute(segments)) {
         try { router.replace("/(tabs)" as any); } catch { try { router.back(); } catch {} }
       }
     },
-    [segments]
+    [segments, session]
   );
 
   const showModal = isDetailRoute(segments);
@@ -97,15 +115,19 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
         hasSession={!!session}
       />
 
-      <View style={[styles.mainArea, { borderTopColor: colors.border }]}>
+      <View style={styles.mainArea}>
         <View style={styles.sectionLayer}>
-          {activeSection === "chats" && <DesktopChatsSection />}
-          {activeSection === "discover" && <DesktopDiscoverSection />}
-          {activeSection === "search" && <DesktopSearchSection />}
+          {activeSection === "chats"         && <DesktopChatsSection />}
+          {activeSection === "discover"      && <DesktopDiscoverSection />}
+          {activeSection === "search"        && <DesktopSearchSection />}
           {activeSection === "notifications" && <DesktopNotificationsSection />}
-          {activeSection === "wallet" && <DesktopWalletSection />}
-          {activeSection === "contacts" && <DesktopContactsSection />}
-          {activeSection === "profile" && <DesktopProfileSection />}
+          {activeSection === "wallet"        && <DesktopWalletSection />}
+          {activeSection === "contacts"      && <DesktopContactsSection />}
+          {activeSection === "profile"       && <DesktopProfileSection />}
+          {activeSection === "apps"          && <DesktopAppsSection onNavigate={handleSectionChange} />}
+          {activeSection === "ai"            && <DesktopAISection />}
+          {activeSection === "match"         && <DesktopMatchSection />}
+          {activeSection === "settings"      && <DesktopSettingsSection />}
         </View>
       </View>
 
@@ -123,10 +145,10 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
                 onPress={() => {
                   try { router.back(); } catch { router.replace("/(tabs)" as any); }
                 }}
-                style={styles.closeBtn}
+                style={[styles.closeBtn, { backgroundColor: colors.textMuted + "14" }]}
                 activeOpacity={0.7}
               >
-                <Ionicons name="close" size={20} color={colors.text} />
+                <Ionicons name="close" size={18} color={colors.text} />
               </TouchableOpacity>
             </View>
             <View style={styles.modalContent}>{children}</View>
@@ -150,42 +172,48 @@ export function DesktopWrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, flexDirection: "column" as any },
+const styles = StyleSheet.create<any>({
+  root: { flex: 1, flexDirection: "column" },
   mainArea: {
     flex: 1,
-    flexDirection: "row" as any,
-    overflow: "hidden" as any,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    overflow: "hidden",
   },
-  sectionLayer: { flex: 1, flexDirection: "row" as any },
+  sectionLayer: { flex: 1, flexDirection: "row" },
+
+  // Modal overlay for detail routes
   modalBackdrop: {
-    position: "absolute" as any,
+    position: "absolute",
     top: 0, left: 0, right: 0, bottom: 0,
-    zIndex: 100,
-    alignItems: "center" as any,
-    justifyContent: "center" as any,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    zIndex: 500,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.45)",
   },
   backdropPress: {
-    position: "absolute" as any,
+    position: "absolute",
     top: 0, left: 0, right: 0, bottom: 0,
   },
   modalSheet: {
-    width: "54%" as any,
-    maxWidth: 720,
-    minWidth: 480,
-    height: "82%" as any,
-    borderRadius: 4,
+    width: "56%",
+    maxWidth: 740,
+    minWidth: 500,
+    height: "84%",
+    borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden" as any,
-    flexDirection: "column" as any,
-    zIndex: 1,
+    overflow: "hidden",
+    flexDirection: "column",
+    zIndex: 501,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.25,
+    shadowRadius: 40,
+    elevation: 20,
   },
   modalHeader: {
-    height: 48,
-    flexDirection: "row" as any,
-    alignItems: "center" as any,
+    height: 50,
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexShrink: 0,
@@ -193,9 +221,9 @@ const styles = StyleSheet.create({
   closeBtn: {
     width: 32,
     height: 32,
-    borderRadius: 4,
-    alignItems: "center" as any,
-    justifyContent: "center" as any,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  modalContent: { flex: 1, overflow: "hidden" as any },
+  modalContent: { flex: 1, overflow: "hidden" },
 });
