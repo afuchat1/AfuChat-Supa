@@ -50,7 +50,6 @@ AfuChat is a full-featured super app built with React Native and Expo. It combin
 - **Premium Subscriptions** — Silver / Gold / Platinum tiers paid with ACoin, unlocking verified badge and exclusive features
 - **Push Notifications** — Expo Push Notifications with channel-specific sounds and preference management
 - **Offline-First** — Full AsyncStorage caching, pending message queue, and auto-sync on reconnect
-- **Admin Dashboard** — Platform stats, user management, content moderation, and currency settings
 - **Digital ID & Prestige** — User profile cards, achievement system, and prestige levels
 
 ---
