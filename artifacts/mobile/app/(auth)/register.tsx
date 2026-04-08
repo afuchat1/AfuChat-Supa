@@ -451,7 +451,7 @@ export default function RegisterScreen() {
               {"\n"}Enter it below to continue.
             </Text>
 
-            <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
+            <View style={[styles.field, { backgroundColor: colors.inputBg }, isDesktop && { borderRadius: 4 }]}>
               <Ionicons name="keypad-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
               <TextInput
                 style={[styles.input, { color: colors.text, letterSpacing: 4, fontSize: 20, textAlign: "center" }]}
@@ -542,7 +542,7 @@ export default function RegisterScreen() {
         </View>
 
         <View style={styles.form}>
-          <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
+          <View style={[styles.field, { backgroundColor: colors.inputBg }, isDesktop && { borderRadius: 4 }]}>
             <Ionicons name="mail-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
             <TextInput
               style={[styles.input, { color: colors.text }]}
@@ -556,7 +556,7 @@ export default function RegisterScreen() {
             />
           </View>
 
-          <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
+          <View style={[styles.field, { backgroundColor: colors.inputBg }, isDesktop && { borderRadius: 4 }]}>
             <Ionicons name="lock-closed-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
             <TextInput
               style={[styles.input, { color: colors.text, flex: 1 }]}
@@ -604,7 +604,7 @@ export default function RegisterScreen() {
           </TouchableOpacity>
 
           <Pressable
-            style={[styles.primaryBtn, { backgroundColor: colors.accent, opacity: (loading || !agreedToTerms) ? 0.5 : 1 }]}
+            style={[styles.primaryBtn, { backgroundColor: colors.accent, opacity: (loading || !agreedToTerms) ? 0.5 : 1 }, isDesktop && { borderRadius: 4 }]}
             onPress={handleRegister}
             disabled={loading || !agreedToTerms}
             accessibilityRole="button"
@@ -625,7 +625,7 @@ export default function RegisterScreen() {
 
           <View style={styles.oauthRow}>
             <TouchableOpacity
-              style={[styles.oauthBtn, { borderColor: colors.border, backgroundColor: isDark ? "#1f1f1f" : "#ffffff" }]}
+              style={[styles.oauthBtn, { borderColor: colors.border, backgroundColor: isDark ? "#1f1f1f" : "#ffffff" }, isDesktop && { borderRadius: 4 }]}
               onPress={() => signInWithProvider("google")}
               disabled={!!oauthLoading}
               activeOpacity={0.8}
@@ -641,7 +641,7 @@ export default function RegisterScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.oauthBtn, { backgroundColor: isDark ? "#f5f5f5" : "#24292f", borderColor: isDark ? "#f5f5f5" : "#24292f" }]}
+              style={[styles.oauthBtn, { backgroundColor: isDark ? "#f5f5f5" : "#24292f", borderColor: isDark ? "#f5f5f5" : "#24292f" }, isDesktop && { borderRadius: 4 }]}
               onPress={() => signInWithProvider("github")}
               disabled={!!oauthLoading}
               activeOpacity={0.8}
@@ -780,7 +780,7 @@ const regSplit = StyleSheet.create<any>({
     maxWidth: 440,
     width: "100%",
     alignSelf: "center",
-    borderRadius: 24,
+    borderRadius: 4,
     borderWidth: 1,
     padding: 40,
     boxShadow: "0 4px 40px rgba(0,0,0,0.08)",

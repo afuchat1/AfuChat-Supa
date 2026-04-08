@@ -60,7 +60,7 @@ const sb = StyleSheet.create({
   wrap: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 24,
+    borderRadius: 4,
     paddingHorizontal: 14,
     paddingVertical: 10,
     gap: 10,
@@ -251,7 +251,7 @@ const rp = StyleSheet.create({
   scrollContent: { padding: 16, gap: 14, paddingBottom: 40 },
 
   card: {
-    borderRadius: 16,
+    borderRadius: 4,
     overflow: "hidden",
   },
   sectionTitle: {
@@ -272,7 +272,7 @@ const rp = StyleSheet.create({
   followBtn: {
     paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: 4,
     borderWidth: 1.5,
   },
   followBtnText: { fontSize: 13, fontFamily: "Inter_700Bold" },

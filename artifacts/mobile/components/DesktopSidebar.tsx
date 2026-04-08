@@ -335,7 +335,10 @@ function NavTab({
 
       {hasDropdown && open && (
         <>
-          <Pressable style={StyleSheet.absoluteFillObject as any} onPress={() => setOpen(false)} />
+          <Pressable
+            style={{ position: "fixed" as any, top: 0, left: 0, right: 0, bottom: 0, zIndex: 997 }}
+            onPress={() => setOpen(false)}
+          />
           <DropdownPanel
             col1={def.key === "apps" ? APPS_ITEMS_COL1 : def.dropdown!}
             col2={def.key === "apps" ? APPS_ITEMS_COL2 : undefined}
@@ -668,7 +671,7 @@ const styles = StyleSheet.create<any>({
     gap: 5,
     paddingHorizontal: 10,
     height: 36,
-    borderRadius: 8,
+    borderRadius: 4,
     position: "relative",
   },
   navTabLabel: { fontSize: 13.5 },
@@ -688,7 +691,7 @@ const styles = StyleSheet.create<any>({
     left: 0,
     flexDirection: "row",
     minWidth: 200,
-    borderRadius: 12,
+    borderRadius: 6,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: 6,
     zIndex: 999,
@@ -742,7 +745,7 @@ const styles = StyleSheet.create<any>({
     top: 44,
     right: 0,
     width: 248,
-    borderRadius: 12,
+    borderRadius: 6,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: 6,
     zIndex: 999,
@@ -767,7 +770,7 @@ const styles = StyleSheet.create<any>({
   iconBtn: {
     width: 36,
     height: 36,
-    borderRadius: 8,
+    borderRadius: 4,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
@@ -779,7 +782,7 @@ const styles = StyleSheet.create<any>({
     gap: 5,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 4,
   },
   postBtnLabel: { color: "#fff", fontSize: 13.5, fontFamily: "Inter_600SemiBold" },
   avatarBtn: {
@@ -788,13 +791,13 @@ const styles = StyleSheet.create<any>({
     gap: 3,
     paddingHorizontal: 6,
     paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: 4,
   },
 
   // Auth
   authBtns: { flexDirection: "row", alignItems: "center", gap: 8 },
-  loginBtn: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 8, borderWidth: 1 },
+  loginBtn: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 4, borderWidth: 1 },
   loginBtnLabel: { fontSize: 13.5, fontFamily: "Inter_600SemiBold" },
-  signupBtn: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 8 },
+  signupBtn: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 4 },
   signupBtnLabel: { color: "#fff", fontSize: 13.5, fontFamily: "Inter_600SemiBold" },
 });
