@@ -126,6 +126,28 @@ Applied gates:
 - **Monetize** (`app/monetize.tsx`) — Silver required
 - **AfuAI chat tap** (`app/(tabs)/index.tsx`) — Platinum intercept, routes to `/premium`
 
+## Desktop UI Overhaul (Full Desktop Experience)
+
+`DesktopSidebar.tsx` — Fully rewritten top nav (`DesktopTopNav`):
+- **Logo**: AfuChat logo + wordmark, links to Home/Discover section
+- **Nav items** (left): Home, Explore, Connect▼ (Messages, Contacts, Create Group/Channel), Create▼ (Post, Article, Video, Story), Wallet▼ (My Wallet, Top Up, Transfer, Requests, Gift Vault), Apps — all with dropdown panels; auth-gated items hidden for logged-out users
+- **Icon rail** (right, logged-in only): Notifications bell with live unread badge, Messages icon with live unread count badge, Match heart shortcut, Post quick-action button, Avatar dropdown menu
+- **Avatar menu**: Profile, Edit, Digital ID, Achievements, Prestige, Go Premium, Username Market, Settings, Admin (if admin), theme toggle, Sign Out
+- **Auth buttons** (right, logged-out): Log in + Sign up free
+- **Live unread counts**: `useUnreadCounts` hook subscribes to Supabase Realtime for `notifications` and `chat_members` tables and updates badge counts in real-time
+- **Apps dropdown**: 2-column grid with AfuAI, Games, Gifts, Match, Events, Marketplace, Freelance, Files, Saved, Referral
+
+`DesktopWrapper.tsx` — Updated section routing:
+- New section types: `ai | apps | match | settings`
+- Auth-guard redirects to login for protected sections
+- All new sections rendered
+
+New desktop section files:
+- `components/desktop/DesktopAppsSection.tsx` — Full apps launcher with category left-sidebar (Intelligence, Social, Entertainment, Finance, Marketplace, Tools, Account) and list-style app tiles with gradient icons. Shows `adminOnly` apps only to admin users.
+- `components/desktop/DesktopAISection.tsx` — Full-featured AI chat interface with message history, suggestion chips, real-time streaming via Supabase channel. Uses `get_or_create_direct_chat` RPC with AfuAI bot ID.
+- `components/desktop/DesktopMatchSection.tsx` — Dating/match section with profile cards (photo, bio, tags), like/pass action buttons, sidebar quick links for filters and settings. Reads from `match_profiles` and writes to `match_likes`.
+- `components/desktop/DesktopSettingsSection.tsx` — Settings panel with sidebar tabs (Account, Privacy, Security, Notifications, Chats, Appearance, Language, Advanced, Danger Zone), routing to existing app routes via `router.push`.
+
 ## Desktop Contacts Section
 
 `components/desktop/DesktopContactsSection.tsx` — two-panel desktop contacts view added to the sidebar nav ("Contacts" icon). Left panel: alphabetically grouped list of people the user follows, with search, online indicators, and "Add Contact" flow. Right panel: inline profile card showing avatar, verified badge, follower/following counts, follow toggle, Message button, and a 3-column posts grid with best-thumbnail detection. Clicking a post navigates to its detail/video page.

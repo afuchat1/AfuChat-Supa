@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
@@ -18,6 +19,98 @@ import type { DesktopSection } from "./DesktopWrapper";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 const BRAND = "#00BCD4";
+
+// ─── Live unread counts hook ─────────────────────────────────────────────────
+
+function useUnreadCounts(userId: string | null) {
+  const [notifCount, setNotifCount] = useState(0);
+  const [chatCount, setChatCount] = useState(0);
+
+  useEffect(() => {
+    if (!userId) { setNotifCount(0); setChatCount(0); return; }
+
+    // Fetch notification unread count
+    supabase
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("is_read", false)
+      .then(({ count }) => setNotifCount(count ?? 0));
+
+    // Fetch chat unread count (chats with unread_count > 0)
+    supabase
+      .from("chat_members")
+      .select("unread_count")
+      .eq("user_id", userId)
+      .gt("unread_count", 0)
+      .then(({ data }) => {
+        const total = (data || []).reduce((sum: number, r: any) => sum + (r.unread_count || 0), 0);
+        setChatCount(total);
+      });
+
+    // Subscribe to new notifications
+    const notifSub = supabase
+      .channel(`nav-notifs-${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, () => {
+        supabase
+          .from("notifications")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("is_read", false)
+          .then(({ count }) => setNotifCount(count ?? 0));
+      })
+      .subscribe();
+
+    // Subscribe to chat member changes
+    const chatSub = supabase
+      .channel(`nav-chats-${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_members", filter: `user_id=eq.${userId}` }, () => {
+        supabase
+          .from("chat_members")
+          .select("unread_count")
+          .eq("user_id", userId)
+          .gt("unread_count", 0)
+          .then(({ data }) => {
+            const total = (data || []).reduce((sum: number, r: any) => sum + (r.unread_count || 0), 0);
+            setChatCount(total);
+          });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(notifSub);
+      supabase.removeChannel(chatSub);
+    };
+  }, [userId]);
+
+  return { notifCount, chatCount };
+}
+
+// ─── Badge pill ───────────────────────────────────────────────────────────────
+
+function CountBadge({ count, color = "#FF3B30" }: { count: number; color?: string }) {
+  if (count <= 0) return null;
+  return (
+    <View style={[badgeStyles.wrap, { backgroundColor: color }]}>
+      <Text style={badgeStyles.text}>{count > 99 ? "99+" : count}</Text>
+    </View>
+  );
+}
+
+const badgeStyles = StyleSheet.create({
+  wrap: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  text: { color: "#fff", fontSize: 9, fontFamily: "Inter_700Bold" },
+});
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -359,9 +452,10 @@ type Props = {
 };
 
 export function DesktopTopNav({ activeSection, onSectionChange, hasSession }: Props) {
-  const { profile, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const { colors, isDark, themeMode, setThemeMode } = useTheme();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const { notifCount, chatCount } = useUnreadCounts(hasSession ? (user?.id ?? null) : null);
 
   function cycleTheme() {
     const next = themeMode === "system" ? "dark" : themeMode === "dark" ? "light" : "system";
@@ -435,6 +529,21 @@ export function DesktopTopNav({ activeSection, onSectionChange, hasSession }: Pr
                 size={19}
                 color={activeSection === "notifications" ? BRAND : colors.textMuted}
               />
+              <CountBadge count={notifCount} />
+            </TouchableOpacity>
+
+            {/* Messages shortcut */}
+            <TouchableOpacity
+              onPress={() => onSectionChange("chats")}
+              activeOpacity={0.8}
+              style={[styles.iconBtn, activeSection === "chats" && { backgroundColor: BRAND + "18" }]}
+            >
+              <Ionicons
+                name={activeSection === "chats" ? "chatbubble-ellipses" : "chatbubble-ellipses-outline"}
+                size={19}
+                color={activeSection === "chats" ? BRAND : colors.textMuted}
+              />
+              <CountBadge count={chatCount} />
             </TouchableOpacity>
 
             {/* Match shortcut */}
@@ -661,6 +770,8 @@ const styles = StyleSheet.create<any>({
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
+    position: "relative",
+    overflow: "visible",
   },
   postBtn: {
     flexDirection: "row",
