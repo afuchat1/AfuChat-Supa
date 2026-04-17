@@ -1,6 +1,7 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Image,
   KeyboardAvoidingView,
   Linking,
@@ -23,6 +24,10 @@ import { makeRedirectUri } from "expo-auth-session";
 import { WebView } from "react-native-webview";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+import { useTheme } from "@/hooks/useTheme";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
+import { showAlert } from "@/lib/alert";
+import { GoogleLogo, GitHubLogo } from "@/components/ui/OAuthLogos";
 
 let GoogleSignin: any = null;
 let isErrorWithCode: any = null;
@@ -33,864 +38,439 @@ try {
   isErrorWithCode = mod.isErrorWithCode;
   statusCodes = mod.statusCodes;
 } catch (_) {}
-import { useTheme } from "@/hooks/useTheme";
-import { useIsDesktop } from "@/hooks/useIsDesktop";
-import Colors from "@/constants/colors";
-import { showAlert } from "@/lib/alert";
-import { GoogleLogo, GitHubLogo } from "@/components/ui/OAuthLogos";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
 WebBrowser.maybeCompleteAuthSession();
 
-const desktopCardStyle = (isDark: boolean, colors: any) => ({
-  width: 460,
-  backgroundColor: colors.background,
-  borderRadius: 20,
-  paddingHorizontal: 40,
-  paddingVertical: 40,
-  // @ts-ignore
-  boxShadow: isDark
-    ? "0 0 0 1px rgba(255,255,255,0.07), 0 16px 48px rgba(0,0,0,0.5)"
-    : "0 0 0 1px rgba(0,0,0,0.06), 0 16px 48px rgba(0,0,0,0.1)",
+// ─── Focused input ────────────────────────────────────────────────────────────
+function AuthInput({ icon, placeholder, value, onChangeText, secureTextEntry, keyboardType, autoCapitalize, autoComplete, colors, isDark, rightElement, onSubmitEditing, returnKeyType, inputRef }: any) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <View style={[inputSt.wrap, { backgroundColor: isDark ? "#111113" : "#F5F5F7", borderColor: focused ? "#00BCD4" : isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)" }]}>
+      <Ionicons name={icon} size={17} color={focused ? "#00BCD4" : colors.textMuted} style={inputSt.icon} />
+      <TextInput ref={inputRef} style={[inputSt.text, { color: colors.text }]} placeholder={placeholder} placeholderTextColor={colors.textMuted} value={value} onChangeText={onChangeText} secureTextEntry={secureTextEntry} keyboardType={keyboardType} autoCapitalize={autoCapitalize ?? "none"} autoComplete={autoComplete} autoCorrect={false} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} onSubmitEditing={onSubmitEditing} returnKeyType={returnKeyType ?? "next"} />
+      {rightElement}
+    </View>
+  );
+}
+const inputSt = StyleSheet.create({
+  wrap: { flexDirection: "row", alignItems: "center", borderRadius: 10, borderWidth: 1.5, paddingHorizontal: 14, height: 50 },
+  icon: { marginRight: 10 },
+  text: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 50 },
 });
 
+// ─── Or divider ───────────────────────────────────────────────────────────────
+function OrDivider({ colors }: { colors: any }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+      <View style={{ flex: 1, height: 1, backgroundColor: colors.textMuted + "33" }} />
+      <Text style={{ fontSize: 12, fontFamily: "Inter_500Medium", color: colors.textMuted, letterSpacing: 0.5 }}>OR</Text>
+      <View style={{ flex: 1, height: 1, backgroundColor: colors.textMuted + "33" }} />
+    </View>
+  );
+}
+
+// ─── OAuth button ─────────────────────────────────────────────────────────────
+function OAuthBtn({ label, logo, onPress, loading, colors, isDark }: any) {
+  return (
+    <TouchableOpacity style={[oauthSt.btn, { backgroundColor: isDark ? "#111113" : "#F5F5F7", borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)" }]} onPress={onPress} disabled={loading} activeOpacity={0.75}>
+      {loading ? <ActivityIndicator size="small" color={colors.text} /> : logo}
+      <Text style={[oauthSt.label, { color: colors.text }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+const oauthSt = StyleSheet.create({
+  btn: { flex: 1, flexDirection: "row", height: 46, borderRadius: 10, borderWidth: 1.5, alignItems: "center", justifyContent: "center", gap: 8 },
+  label: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+});
+
+// ─── Desktop brand panel ──────────────────────────────────────────────────────
+function BrandPanel() {
+  return (
+    <View style={brandSt.panel}>
+      <View style={brandSt.circleA} />
+      <View style={brandSt.circleB} />
+      <View style={brandSt.inner}>
+        <View style={brandSt.logoRow}>
+          <Image source={afuSymbol} style={brandSt.logo} resizeMode="contain" />
+          <Text style={brandSt.logoText}>AfuChat</Text>
+        </View>
+        <View style={{ flex: 1, justifyContent: "center" }}>
+          <Text style={brandSt.headline}>{"Join the\ncommunity\ntoday."}</Text>
+          <Text style={brandSt.sub}>Millions of people connect, share, and grow on AfuChat every day.</Text>
+        </View>
+        <View style={brandSt.features}>
+          {[
+            { icon: "shield-checkmark-outline", label: "Secure & private by default" },
+            { icon: "flash-outline",            label: "Fast, real-time conversations" },
+            { icon: "globe-outline",            label: "Connect across 100+ countries" },
+            { icon: "star-outline",             label: "Free forever with premium options" },
+          ].map((f) => (
+            <View key={f.icon} style={brandSt.featureRow}>
+              <Ionicons name={f.icon as any} size={15} color="rgba(255,255,255,0.8)" />
+              <Text style={brandSt.featureLabel}>{f.label}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+}
+const brandSt = StyleSheet.create<any>({
+  panel: { flex: 1, overflow: "hidden", position: "relative", backgroundColor: "#0097A7" },
+  circleA: { position: "absolute", top: -130, right: -130, width: 400, height: 400, borderRadius: 200, backgroundColor: "rgba(255,255,255,0.07)" },
+  circleB: { position: "absolute", bottom: -90, left: -90, width: 300, height: 300, borderRadius: 150, backgroundColor: "rgba(255,255,255,0.05)" },
+  inner: { flex: 1, padding: 56, justifyContent: "space-between" },
+  logoRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  logo: { width: 36, height: 36, tintColor: "#fff" },
+  logoText: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#fff", letterSpacing: -0.3 },
+  headline: { fontSize: 42, fontFamily: "Inter_700Bold", color: "#fff", letterSpacing: -1.5, lineHeight: 50, marginBottom: 16 },
+  sub: { fontSize: 15, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.75)", lineHeight: 23 },
+  features: { gap: 10 },
+  featureRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  featureLabel: { fontSize: 14, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.8)" },
+});
+
+// ─── Email verification modal ─────────────────────────────────────────────────
+function VerifyEmailModal({
+  visible, onClose, email, onVerified, colors, isDark,
+}: { visible: boolean; onClose: () => void; email: string; onVerified: (uid: string) => void; colors: any; isDark: boolean }) {
+  const [code, setCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(opacity, { toValue: visible ? 1 : 0, duration: 200, useNativeDriver: true }).start();
+    if (!visible) { const t = setTimeout(() => setCode(""), 220); return () => clearTimeout(t); }
+  }, [visible]);
+
+  async function verify() {
+    if (code.trim().length !== 6) return showAlert("Invalid code", "Please enter the 6-digit code from your email.");
+    setLoading(true);
+    const { data, error } = await supabase.auth.verifyOtp({ email, token: code.trim(), type: "signup" });
+    setLoading(false);
+    if (error) showAlert("Verification failed", "The code is invalid or expired. Please try again.");
+    else onVerified(data.user?.id ?? "");
+  }
+
+  async function resend() {
+    const redirect = Platform.OS === "web" && typeof window !== "undefined" ? window.location.origin + "/" : "https://afuchat.com/";
+    const { error } = await supabase.auth.resend({ type: "signup", email, options: { emailRedirectTo: redirect } });
+    if (error) showAlert("Error", error.message);
+    else showAlert("Code resent", "A new code has been sent to your email.");
+  }
+
+  const bg = isDark ? "#18181B" : "#FFFFFF";
+
+  return (
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      <Animated.View style={[vmSt.overlay, { opacity, backgroundColor: isDark ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.45)" }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[vmSt.card, { backgroundColor: bg }]}>
+          <View style={vmSt.header}>
+            <View style={{ flex: 1 }}>
+              <Text style={[vmSt.title, { color: colors.text }]}>Verify your email</Text>
+              <Text style={[vmSt.subtitle, { color: colors.textSecondary }]}>
+                We sent a 6-digit code to{"\n"}<Text style={{ fontFamily: "Inter_600SemiBold", color: colors.text }}>{email}</Text>
+              </Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={vmSt.closeBtn}>
+              <Ionicons name="close" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+          <View style={vmSt.body}>
+            <AuthInput icon="keypad-outline" placeholder="6-digit verification code" value={code} onChangeText={setCode} keyboardType="number-pad" colors={colors} isDark={isDark} returnKeyType="go" onSubmitEditing={verify} />
+            <TouchableOpacity style={[vmSt.btn, loading && { opacity: 0.6 }]} onPress={verify} disabled={loading} activeOpacity={0.85}>
+              {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={vmSt.btnText}>Verify email</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity onPress={resend} style={{ alignSelf: "center", paddingVertical: 4 }}>
+              <Text style={{ fontSize: 13, fontFamily: "Inter_500Medium", color: "#00BCD4" }}>Didn't receive it? Resend code</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Animated.View>
+    </Modal>
+  );
+}
+const vmSt = StyleSheet.create({
+  overlay: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20 },
+  card: { width: "100%", maxWidth: 420, borderRadius: 16, overflow: "hidden",
+    // @ts-ignore
+    boxShadow: "0 20px 60px rgba(0,0,0,0.25)" },
+  header: { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: 28, paddingTop: 28, paddingBottom: 20, gap: 12 },
+  title: { fontSize: 20, fontFamily: "Inter_700Bold", letterSpacing: -0.3, marginBottom: 6 },
+  subtitle: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 22 },
+  closeBtn: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", marginTop: 2 },
+  body: { paddingHorizontal: 28, paddingBottom: 28, gap: 12 },
+  btn: { height: 48, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: "#00BCD4", marginTop: 4 },
+  btnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+});
+
+// ─── OAuth WebView modal ──────────────────────────────────────────────────────
+function OAuthWebModal({ url, onClose, onNav, onShouldLoad, colors }: any) {
+  return (
+    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+          <TouchableOpacity onPress={onClose} style={{ padding: 6 }}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
+          <Text style={{ fontSize: 16, fontFamily: "Inter_600SemiBold", color: colors.text }}>Sign Up</Text>
+          <View style={{ width: 36 }} />
+        </View>
+        <WebView source={{ uri: url }} style={{ flex: 1 }} javaScriptEnabled domStorageEnabled startInLoadingState onNavigationStateChange={onNav} onShouldStartLoadWithRequest={onShouldLoad} />
+      </View>
+    </Modal>
+  );
+}
+
+// ─── Terms checkbox ───────────────────────────────────────────────────────────
+function TermsRow({ agreed, onToggle, colors, isDark }: any) {
+  return (
+    <TouchableOpacity style={termsSt.row} onPress={onToggle} activeOpacity={0.7}>
+      <View style={[termsSt.box, { borderColor: agreed ? "#00BCD4" : isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)", backgroundColor: agreed ? "#00BCD4" : "transparent" }]}>
+        {agreed && <Ionicons name="checkmark" size={13} color="#fff" />}
+      </View>
+      <Text style={[termsSt.text, { color: colors.textSecondary }]}>
+        I agree to the{" "}
+        <Text style={{ color: "#00BCD4" }} onPress={() => Linking.openURL("https://afuchat.com/terms")}>Terms of Service</Text>
+        {" "}and{" "}
+        <Text style={{ color: "#00BCD4" }} onPress={() => Linking.openURL("https://afuchat.com/privacy")}>Privacy Policy</Text>
+      </Text>
+    </TouchableOpacity>
+  );
+}
+const termsSt = StyleSheet.create({
+  row: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  box: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, alignItems: "center", justifyContent: "center", marginTop: 1, flexShrink: 0 },
+  text: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 20 },
+});
+
+// ─── Main screen ──────────────────────────────────────────────────────────────
 export default function RegisterScreen() {
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, setThemeMode } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const isDesktop = useIsDesktop();
 
-  React.useEffect(() => {
-    if (user) router.replace("/(tabs)");
-  }, [user]);
+  useEffect(() => { if (user) router.replace("/(tabs)"); }, [user]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [agreedToTerms, setAgreedToTerms] = useState(false);
-
+  const [agreed, setAgreed] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
   const [oauthModalUrl, setOauthModalUrl] = useState<string | null>(null);
   const oauthHandledRef = useRef(false);
-
-  const [verifyStep, setVerifyStep] = useState(false);
-  const [otpCode, setOtpCode] = useState("");
-  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [verifyVisible, setVerifyVisible] = useState(false);
+  const [signupEmail, setSignupEmail] = useState("");
   const [signupUserId, setSignupUserId] = useState<string | null>(null);
+  const pwdRef = useRef<TextInput>(null);
 
   async function handleRegister() {
-    if (!email || !password) {
-      showAlert("Missing fields", "Please enter your email and password.");
-      return;
-    }
-    if (!agreedToTerms) {
-      showAlert("Terms Required", "You must agree to the Terms of Service and Privacy Policy to create an account.");
-      return;
-    }
-    if (password.length < 6) {
-      showAlert("Weak password", "Password must be at least 6 characters.");
-      return;
-    }
+    if (!email || !password) return showAlert("Missing fields", "Please enter your email and password.");
+    if (!agreed) return showAlert("Terms required", "You must agree to the Terms of Service and Privacy Policy.");
+    if (password.length < 6) return showAlert("Password too short", "Password must be at least 6 characters.");
     setLoading(true);
-
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-    });
-
-    if (error) {
-      setLoading(false);
-      showAlert("Registration failed", error.message);
-      return;
-    }
-
+    const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
     setLoading(false);
-
+    if (error) { showAlert("Registration failed", error.message); return; }
     if (data.user) {
       setSignupUserId(data.user.id);
-
       if (data.user.identities && data.user.identities.length === 0) {
-        showAlert("Account exists", "An account with this email already exists. Please log in instead.");
-        return;
+        showAlert("Account exists", "An account with this email already exists. Please sign in instead."); return;
       }
-
       if (!data.session) {
-        setVerifyStep(true);
-        showAlert("Verification code sent", "We've sent a 6-digit code to your email. Please check your inbox (and spam folder).");
+        setSignupEmail(email.trim());
+        setVerifyVisible(true);
       } else {
         router.replace({ pathname: "/onboarding", params: { userId: data.user.id } });
       }
     }
   }
 
-  async function handleVerifyOtp() {
-    if (otpCode.trim().length !== 6) {
-      showAlert("Invalid code", "Please enter the 6-digit code from your email.");
-      return;
-    }
-
-    setVerifyLoading(true);
-
-    const { data, error } = await supabase.auth.verifyOtp({
-      email: email.trim(),
-      token: otpCode.trim(),
-      type: "signup",
-    });
-
-    if (error) {
-      setVerifyLoading(false);
-      showAlert("Verification failed", "The code you entered is invalid or expired. Please try again.");
-      return;
-    }
-
-    setVerifyLoading(false);
-    const uid = signupUserId || data.user?.id;
-    router.replace({ pathname: "/onboarding", params: { userId: uid || "" } });
+  function onVerified(uid: string) {
+    setVerifyVisible(false);
+    router.replace({ pathname: "/onboarding", params: { userId: signupUserId || uid || "" } });
   }
 
-  function isOAuthRedirect(url: string): boolean {
+  function isOAuthRedirect(url: string) {
     try {
-      const parsed = new URL(url);
-      const host = parsed.hostname.toLowerCase();
-      return (
-        (host === "www.afuchat.com" || host === "afuchat.com") &&
-        (parsed.pathname === "/" || parsed.pathname === "") &&
-        (parsed.searchParams.has("code") || parsed.hash.includes("access_token"))
-      );
-    } catch {
-      return false;
-    }
+      const p = new URL(url); const h = p.hostname.toLowerCase();
+      return (h === "afuchat.com" || h === "www.afuchat.com") && (p.pathname === "/" || p.pathname === "") && (p.searchParams.has("code") || p.hash.includes("access_token"));
+    } catch { return false; }
   }
 
   async function handleOAuthRedirect(url: string) {
-    if (oauthHandledRef.current) return;
-    oauthHandledRef.current = true;
+    if (oauthHandledRef.current) return; oauthHandledRef.current = true;
     try {
-      const parsed = new URL(url);
-      const code = parsed.searchParams.get("code");
-      if (!code) {
-        showAlert("Error", "No authorization code received. Please try again.");
-        setOauthModalUrl(null);
-        setOauthLoading(null);
-        return;
-      }
-      const { error: codeError } = await supabase.auth.exchangeCodeForSession(code);
-      if (codeError) {
-        showAlert("Error", codeError.message);
-      } else {
-        setOauthModalUrl(null);
-        setOauthLoading(null);
-        router.replace("/(tabs)");
-        return;
-      }
-    } catch (_) {
-      showAlert("Error", "Could not complete sign up. Please try again.");
-    }
-    setOauthModalUrl(null);
-    setOauthLoading(null);
+      const code = new URL(url).searchParams.get("code");
+      if (!code) { showAlert("Error", "No code received."); setOauthModalUrl(null); setOauthLoading(null); return; }
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) showAlert("Error", error.message);
+      else { setOauthModalUrl(null); setOauthLoading(null); router.replace("/(tabs)"); return; }
+    } catch { showAlert("Error", "Could not complete sign up."); }
+    setOauthModalUrl(null); setOauthLoading(null);
   }
 
   async function nativeGoogleSignIn() {
     try {
       setOauthLoading("google");
-      GoogleSignin.configure({
-        webClientId: "830762767270-lmefgjjk25i17lithkq6iisjv8gfh08d.apps.googleusercontent.com",
-      });
+      GoogleSignin.configure({ webClientId: "830762767270-lmefgjjk25i17lithkq6iisjv8gfh08d.apps.googleusercontent.com" });
       await GoogleSignin.hasPlayServices();
-      const response = await GoogleSignin.signIn();
-      const idToken = response?.data?.idToken;
-      if (!idToken) {
-        showAlert("Error", "Could not get Google ID token.");
-        setOauthLoading(null);
-        return;
-      }
-      const { error } = await supabase.auth.signInWithIdToken({
-        provider: "google",
-        token: idToken,
-      });
-      if (error) {
-        showAlert("Error", error.message);
-        setOauthLoading(null);
-      } else {
-        router.replace("/(tabs)");
-      }
+      const resp = await GoogleSignin.signIn();
+      const idToken = resp?.data?.idToken;
+      if (!idToken) { showAlert("Error", "Could not get Google ID token."); setOauthLoading(null); return; }
+      const { error } = await supabase.auth.signInWithIdToken({ provider: "google", token: idToken });
+      if (error) { showAlert("Error", error.message); setOauthLoading(null); } else router.replace("/(tabs)");
     } catch (err: any) {
-      if (
-        err?.code === 10 ||
-        (statusCodes && err?.code === statusCodes.DEVELOPER_ERROR) ||
-        String(err?.message ?? "").includes("DEVELOPER_ERROR")
-      ) {
-        return signInWithProviderWeb("google");
-      }
-      if (isErrorWithCode && isErrorWithCode(err)) {
-        if (err.code === statusCodes.SIGN_IN_CANCELLED) { setOauthLoading(null); return; }
-        if (err.code === statusCodes.IN_PROGRESS) { setOauthLoading(null); return; }
-      }
-      setOauthLoading(null);
-      showAlert("Error", err?.message || "Google sign in failed.");
-    }
-  }
-
-  async function signInWithProviderWeb(provider: string) {
-    try {
-      const redirectUrl = makeRedirectUri({ native: "afuchat://(auth)/register" });
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: provider as any,
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: true,
-          queryParams: { prompt: "select_account" },
-        },
-      });
-      if (error) { showAlert("Error", error.message); setOauthLoading(null); return; }
-      if (!data?.url) { setOauthLoading(null); return; }
-
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, { showInRecents: false });
-
-      if (result.type === "success" && result.url) {
-        const url = new URL(result.url);
-        const code = url.searchParams.get("code");
-        if (code) {
-          const { error: codeError } = await supabase.auth.exchangeCodeForSession(code);
-          if (codeError) { showAlert("Error", codeError.message); }
-          else { router.replace("/(tabs)"); setOauthLoading(null); return; }
-        }
-        let accessToken: string | null = null;
-        let refreshToken: string | null = null;
-        if (url.hash) {
-          const hp = new URLSearchParams(url.hash.substring(1));
-          accessToken = hp.get("access_token");
-          refreshToken = hp.get("refresh_token");
-        }
-        if (!accessToken) {
-          accessToken = url.searchParams.get("access_token");
-          refreshToken = url.searchParams.get("refresh_token");
-        }
-        if (accessToken && refreshToken) {
-          const { error: sessionError } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-          if (sessionError) { showAlert("Error", sessionError.message); }
-          else { router.replace("/(tabs)"); }
-        }
-      }
-      setOauthLoading(null);
-    } catch (_) {
-      setOauthLoading(null);
-      showAlert("Error", "Could not open Google sign in.");
+      if (err?.code === 10 || String(err?.message ?? "").includes("DEVELOPER_ERROR")) return signInWithProvider("google");
+      if (isErrorWithCode?.(err) && (err.code === statusCodes?.SIGN_IN_CANCELLED || err.code === statusCodes?.IN_PROGRESS)) { setOauthLoading(null); return; }
+      setOauthLoading(null); showAlert("Error", err?.message || "Google sign up failed.");
     }
   }
 
   async function signInWithProvider(provider: string) {
     try {
-      if (provider === "google" && Platform.OS !== "web" && GoogleSignin) {
-        return nativeGoogleSignIn();
-      }
-
+      if (provider === "google" && Platform.OS !== "web" && GoogleSignin) return nativeGoogleSignIn();
       setOauthLoading(provider);
-
       const redirectUrl = Platform.OS === "web"
         ? (typeof window !== "undefined" ? window.location.origin + "/" : "https://afuchat.com/")
         : makeRedirectUri({ native: "afuchat://(auth)/register" });
-
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: provider as any,
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: true,
-        },
-      });
-      if (error) {
-        showAlert("Error", error.message);
-        setOauthLoading(null);
-        return;
-      }
-
-      if (!data?.url) {
-        setOauthLoading(null);
-        return;
-      }
-
+      const { data, error } = await supabase.auth.signInWithOAuth({ provider: provider as any, options: { redirectTo: redirectUrl, skipBrowserRedirect: true, queryParams: { prompt: "select_account" } } });
+      if (error) { showAlert("Error", error.message); setOauthLoading(null); return; }
+      if (!data?.url) { setOauthLoading(null); return; }
       oauthHandledRef.current = false;
-
       if (Platform.OS === "web") {
-        const width = 500;
-        const height = 650;
-        const left = window.screenX + (window.innerWidth - width) / 2;
-        const top = window.screenY + (window.innerHeight - height) / 2;
-        const popup = window.open(
-          data.url,
-          "oauth_popup",
-          `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`
-        );
-        if (!popup) {
-          window.location.href = data.url;
-          return;
-        }
-        const pollTimer = setInterval(async () => {
+        const w = 500, h = 650;
+        const left = window.screenX + (window.innerWidth - w) / 2;
+        const top = window.screenY + (window.innerHeight - h) / 2;
+        const popup = window.open(data.url, "oauth_popup", `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no`);
+        if (!popup) { window.location.href = data.url; return; }
+        const timer = setInterval(async () => {
           try {
-            if (popup.closed) {
-              clearInterval(pollTimer);
-              setOauthLoading(null);
-              return;
-            }
-            const popupUrl = popup.location.href;
-            if (popupUrl && isOAuthRedirect(popupUrl)) {
-              clearInterval(pollTimer);
-              popup.close();
-              await handleOAuthRedirect(popupUrl);
-            }
+            if (popup.closed) { clearInterval(timer); setOauthLoading(null); return; }
+            const u = popup.location.href;
+            if (u && isOAuthRedirect(u)) { clearInterval(timer); popup.close(); await handleOAuthRedirect(u); }
           } catch (_) {}
         }, 300);
         return;
       }
-
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {
-        showInRecents: false,
-      });
-
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, { showInRecents: false });
       if (result.type === "success" && result.url) {
         const url = new URL(result.url);
         const code = url.searchParams.get("code");
-        if (code) {
-          const { error: codeError } = await supabase.auth.exchangeCodeForSession(code);
-          if (codeError) {
-            showAlert("Error", codeError.message);
-          } else {
-            router.replace("/(tabs)");
-            setOauthLoading(null);
-            return;
-          }
-        }
-
-        let accessToken: string | null = null;
-        let refreshToken: string | null = null;
-
-        if (url.hash) {
-          const hashParams = new URLSearchParams(url.hash.substring(1));
-          accessToken = hashParams.get("access_token");
-          refreshToken = hashParams.get("refresh_token");
-        }
-
-        if (!accessToken) {
-          accessToken = url.searchParams.get("access_token");
-          refreshToken = url.searchParams.get("refresh_token");
-        }
-
-        if (accessToken && refreshToken) {
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-          if (sessionError) {
-            showAlert("Error", sessionError.message);
-          } else {
-            router.replace("/(tabs)");
-          }
-        }
+        if (code) { const { error: e } = await supabase.auth.exchangeCodeForSession(code); if (e) showAlert("Error", e.message); else router.replace("/(tabs)"); setOauthLoading(null); return; }
+        let at = url.hash ? new URLSearchParams(url.hash.substring(1)).get("access_token") : null;
+        let rt = url.hash ? new URLSearchParams(url.hash.substring(1)).get("refresh_token") : null;
+        if (!at) { at = url.searchParams.get("access_token"); rt = url.searchParams.get("refresh_token"); }
+        if (at && rt) { const { error: e } = await supabase.auth.setSession({ access_token: at, refresh_token: rt }); if (e) showAlert("Error", e.message); else router.replace("/(tabs)"); }
       }
       setOauthLoading(null);
-    } catch (_) {
-      setOauthLoading(null);
-      showAlert("Error", "Could not complete sign up. Please try again.");
-    }
+    } catch { setOauthLoading(null); showAlert("Error", "Could not complete sign up."); }
   }
 
-  async function handleResendCode() {
-    setVerifyLoading(true);
-    const { error } = await supabase.auth.resend({
-      type: "signup",
-      email: email.trim(),
-    });
-    setVerifyLoading(false);
-
-    if (error) {
-      showAlert("Error", error.message);
-    } else {
-      showAlert("Code resent", "A new verification code has been sent to your email.");
-    }
-  }
-
-  if (verifyStep) {
-    return (
-      <View style={[styles.root, { flexDirection: isDesktop ? "row" : "column", backgroundColor: isDesktop ? (isDark ? "#0a0a0a" : "#ffffff") : colors.background }]}>
-        {isDesktop && (
-          <View style={[regSplit.brandPanel, { backgroundColor: isDark ? "#000000" : "#f4f4f4", overflow: "hidden" }]}>
-            <View style={{ position: "absolute", bottom: -60, left: -60, opacity: 0.04 } as any}>
-              <Image source={afuSymbol} style={{ width: 520, height: 520, tintColor: colors.text }} resizeMode="contain" />
-            </View>
-            <Image source={afuSymbol} style={{ width: 52, height: 52, tintColor: colors.accent, marginBottom: 40 }} resizeMode="contain" />
-            <Text style={[regSplit.brandHeadline, { color: colors.text }]}>
-              Connect with{"\n"}everyone,{"\n"}everywhere.
-            </Text>
-            <Text style={[regSplit.brandSubline, { color: colors.text }]}>Join AfuChat today.</Text>
-          </View>
-        )}
-        <KeyboardAvoidingView
-          behavior="padding"
-          style={{ flex: 1, backgroundColor: isDesktop ? (isDark ? "#111113" : "#ffffff") : colors.background }}
-        >
-        <ScrollView
-          contentContainerStyle={
-            isDesktop
-              ? { flexGrow: 1, justifyContent: "center", paddingHorizontal: 60, paddingVertical: 48 }
-              : { ...styles.scroll, paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 }
+  // ── Shared form content ───────────────────────────────────────────────────
+  const FormContent = (
+    <>
+      <View style={{ flexDirection: "row", gap: 10 }}>
+        <OAuthBtn label="Google" logo={<GoogleLogo size={18} />} onPress={() => signInWithProvider("google")} loading={oauthLoading === "google"} colors={colors} isDark={isDark} />
+        <OAuthBtn label="GitHub" logo={<GitHubLogo size={18} color={isDark ? "#fff" : "#24292E"} />} onPress={() => signInWithProvider("github")} loading={oauthLoading === "github"} colors={colors} isDark={isDark} />
+      </View>
+      <OrDivider colors={colors} />
+      <View style={{ gap: 10 }}>
+        <AuthInput icon="mail-outline" placeholder="Email address" value={email} onChangeText={setEmail} keyboardType="email-address" autoComplete="email" colors={colors} isDark={isDark} returnKeyType="next" onSubmitEditing={() => pwdRef.current?.focus()} />
+        <AuthInput inputRef={pwdRef} icon="lock-closed-outline" placeholder="Password (min. 6 characters)" value={password} onChangeText={setPassword} secureTextEntry={!showPwd} autoComplete="new-password" colors={colors} isDark={isDark} returnKeyType="go" onSubmitEditing={handleRegister}
+          rightElement={
+            <TouchableOpacity onPress={() => setShowPwd(p => !p)} style={{ padding: 4 }}>
+              <Ionicons name={showPwd ? "eye-off-outline" : "eye-outline"} size={17} color={colors.textMuted} />
+            </TouchableOpacity>
           }
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={isDesktop ? { maxWidth: 400, width: "100%" as any, alignSelf: "center" } : undefined}>
-          <View style={styles.headerWrap}>
-            <Image source={afuSymbol} style={{ width: 64, height: 64, marginBottom: 12, tintColor: colors.accent }} resizeMode="contain" />
-            <Text style={[styles.title, { color: colors.text, fontSize: 24 }]}>Verify Your Email</Text>
-          </View>
+        />
+      </View>
+      <TermsRow agreed={agreed} onToggle={() => setAgreed(p => !p)} colors={colors} isDark={isDark} />
+      <TouchableOpacity style={[formSt.primaryBtn, loading && { opacity: 0.6 }]} onPress={handleRegister} disabled={loading} activeOpacity={0.85}>
+        {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={formSt.primaryBtnText}>Create account</Text>}
+      </TouchableOpacity>
+      <View style={formSt.switchRow}>
+        <Text style={[{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.textSecondary }]}>Already have an account?</Text>
+        <TouchableOpacity onPress={() => router.push("/(auth)/login")}>
+          <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#00BCD4" }}>{" "}Sign in</Text>
+        </TouchableOpacity>
+      </View>
+    </>
+  );
 
-          <View style={styles.form}>
-            <Text style={[styles.verifyDesc, { color: colors.textSecondary }]}>
-              We've sent a 6-digit verification code to{"\n"}
-              <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold" }}>{email}</Text>
-              {"\n"}Enter it below to continue.
-            </Text>
+  // ── Desktop ───────────────────────────────────────────────────────────────
+  if (isDesktop) {
+    return (
+      <View style={[deskSt.root, { backgroundColor: isDark ? "#09090B" : "#F4F4F5" }]}>
+        <TouchableOpacity style={[deskSt.themeBtn, { backgroundColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.07)" }]} onPress={() => setThemeMode(isDark ? "light" : "dark")}>
+          <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={16} color={isDark ? "#fff" : "#000"} />
+        </TouchableOpacity>
 
-            <View style={[styles.field, { backgroundColor: colors.inputBg }, isDesktop && { borderRadius: 4 }]}>
-              <Ionicons name="keypad-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
-              <TextInput
-                style={[styles.input, { color: colors.text, letterSpacing: 4, fontSize: 20, textAlign: "center" }]}
-                placeholder="000000"
-                placeholderTextColor={colors.textMuted}
-                value={otpCode}
-                onChangeText={setOtpCode}
-                keyboardType="number-pad"
-                maxLength={6}
-                autoFocus
-              />
+        <BrandPanel />
+
+        <View style={[deskSt.formSide, { backgroundColor: isDark ? "#09090B" : "#FFFFFF" }]}>
+          <ScrollView contentContainerStyle={deskSt.formScroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <View style={deskSt.formCard}>
+              <View style={{ marginBottom: 8 }}>
+                <Image source={afuSymbol} style={[deskSt.headerLogo, { tintColor: "#00BCD4" }]} resizeMode="contain" />
+                <Text style={[deskSt.headerTitle, { color: colors.text }]}>Create your account</Text>
+                <Text style={[deskSt.headerSub, { color: colors.textSecondary }]}>Join AfuChat — it's free and takes less than a minute.</Text>
+              </View>
+              {FormContent}
             </View>
+          </ScrollView>
+        </View>
 
-            <TouchableOpacity
-              style={[styles.primaryBtn, { backgroundColor: colors.accent }, verifyLoading && { opacity: 0.6 }]}
-              onPress={handleVerifyOtp}
-              disabled={verifyLoading}
-            >
-              {verifyLoading ? <ActivityIndicator color="#fff" /> : (
-                <Text style={styles.primaryBtnText}>Verify & Continue</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={handleResendCode} style={styles.resendBtn} disabled={verifyLoading}>
-              <Text style={[styles.resendText, { color: colors.accent }]}>Didn't get the code? Resend</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => { setVerifyStep(false); setOtpCode(""); }} style={styles.backToFormBtn}>
-              <Ionicons name="arrow-back" size={18} color={colors.accent} />
-              <Text style={[styles.backToFormText, { color: colors.accent }]}>Back</Text>
-            </TouchableOpacity>
-          </View>
-          </View>
-        </ScrollView>
-        </KeyboardAvoidingView>
+        <VerifyEmailModal visible={verifyVisible} onClose={() => setVerifyVisible(false)} email={signupEmail} onVerified={onVerified} colors={colors} isDark={isDark} />
+        {oauthModalUrl && <OAuthWebModal url={oauthModalUrl} onClose={() => { setOauthModalUrl(null); setOauthLoading(null); }} onNav={(s: any) => { if (s.url && isOAuthRedirect(s.url)) handleOAuthRedirect(s.url); }} onShouldLoad={(r: any) => { if (r.url && isOAuthRedirect(r.url)) { handleOAuthRedirect(r.url); return false; } return true; }} colors={colors} />}
       </View>
     );
   }
 
+  // ── Mobile ────────────────────────────────────────────────────────────────
   return (
-    <View style={[styles.root, { flexDirection: isDesktop ? "row" : "column", backgroundColor: isDesktop ? (isDark ? "#0a0a0a" : "#ffffff") : colors.background }]}>
-      {isDesktop && (
-        <View style={[regSplit.brandPanel, { backgroundColor: isDark ? "#000000" : "#f4f4f4", overflow: "hidden" }]}>
-          <View style={{ position: "absolute", bottom: -60, left: -60, opacity: 0.04 } as any}>
-            <Image source={afuSymbol} style={{ width: 520, height: 520, tintColor: colors.text }} resizeMode="contain" />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={[mobSt.scroll, { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <View style={mobSt.logoArea}>
+            <Image source={afuSymbol} style={[mobSt.logo, { tintColor: "#00BCD4" }]} resizeMode="contain" />
+            <Text style={[mobSt.appName, { color: colors.text }]}>AfuChat</Text>
+            <Text style={[mobSt.tagline, { color: colors.textSecondary }]}>Create your free account</Text>
           </View>
-          <Image source={afuSymbol} style={{ width: 52, height: 52, tintColor: colors.accent, marginBottom: 40 }} resizeMode="contain" />
-          <Text style={[regSplit.brandHeadline, { color: colors.text }]}>
-            Connect with{"\n"}everyone,{"\n"}everywhere.
-          </Text>
-          <Text style={[regSplit.brandSubline, { color: colors.text }]}>Join AfuChat today.</Text>
-        </View>
-      )}
-      <KeyboardAvoidingView
-        behavior="padding"
-        style={{ flex: 1, backgroundColor: isDesktop ? (isDark ? "#111113" : "#ffffff") : colors.background }}
-      >
-      <ScrollView
-        contentContainerStyle={
-          isDesktop
-            ? { flexGrow: 1, justifyContent: "center", paddingHorizontal: 60, paddingVertical: 48 }
-            : { ...styles.scroll, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }
-        }
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={isDesktop ? [regSplit.formCard, { backgroundColor: colors.background, borderColor: colors.border }] : undefined}>
-        {!isDesktop && (
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backBtn}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-        )}
-
-        <View style={[styles.headerWrap, isDesktop && { marginBottom: 28 }]}>
-          {isDesktop && (
-            <Image source={afuSymbol} style={{ width: 40, height: 40, tintColor: colors.accent, marginBottom: 20 }} resizeMode="contain" />
-          )}
-          {!isDesktop && (
-            <Image source={afuSymbol} style={{ width: 72, height: 72, marginBottom: 20, tintColor: colors.accent }} resizeMode="contain" />
-          )}
-          <Text style={[styles.title, { color: colors.text }, isDesktop && { fontSize: 24 }]}>Create Account</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Join AfuChat and start connecting
-          </Text>
-        </View>
-
-        <View style={styles.form}>
-          <View style={[styles.field, { backgroundColor: colors.inputBg }, isDesktop && { borderRadius: 4 }]}>
-            <Ionicons name="mail-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
-            <TextInput
-              style={[styles.input, { color: colors.text }]}
-              placeholder="Email address"
-              placeholderTextColor={colors.textMuted}
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              autoFocus
-            />
-          </View>
-
-          <View style={[styles.field, { backgroundColor: colors.inputBg }, isDesktop && { borderRadius: 4 }]}>
-            <Ionicons name="lock-closed-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
-            <TextInput
-              style={[styles.input, { color: colors.text, flex: 1 }]}
-              placeholder="Password (min. 6 characters)"
-              placeholderTextColor={colors.textMuted}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPwd}
-            />
-            <Pressable onPress={() => setShowPwd((v) => !v)} style={styles.eyeBtn}>
-              <Ionicons
-                name={showPwd ? "eye-off-outline" : "eye-outline"}
-                size={18}
-                color={colors.textMuted}
-              />
-            </Pressable>
-          </View>
-
-          <TouchableOpacity
-            style={styles.termsRow}
-            onPress={() => setAgreedToTerms((v) => !v)}
-            activeOpacity={0.7}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: agreedToTerms }}
-          >
-            <View style={[styles.checkbox, agreedToTerms && [styles.checkboxChecked, { backgroundColor: colors.accent, borderColor: colors.accent }]]}>
-              {agreedToTerms && <Ionicons name="checkmark" size={14} color="#fff" />}
-            </View>
-            <Text style={[styles.termsText, { color: colors.textSecondary }]}>
-              I have read and agree to the{" "}
-              <Text
-                style={[styles.termsLink, { color: colors.accent }]}
-                onPress={() => router.push("/terms")}
-              >
-                Terms of Service
-              </Text>
-              {" "}and{" "}
-              <Text
-                style={[styles.termsLink, { color: colors.accent }]}
-                onPress={() => router.push("/privacy")}
-              >
-                Privacy Policy
-              </Text>
-            </Text>
-          </TouchableOpacity>
-
-          <Pressable
-            style={[styles.primaryBtn, { backgroundColor: colors.accent, opacity: (loading || !agreedToTerms) ? 0.5 : 1 }, isDesktop && { borderRadius: 4 }]}
-            onPress={handleRegister}
-            disabled={loading || !agreedToTerms}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: loading || !agreedToTerms }}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.primaryBtnText}>Create Account</Text>
-            )}
-          </Pressable>
-
-          <View style={styles.divider}>
-            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-            <Text style={[styles.dividerText, { color: colors.textMuted }]}>or sign up with</Text>
-            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-          </View>
-
-          <View style={styles.oauthRow}>
-            <TouchableOpacity
-              style={[styles.oauthBtn, { borderColor: colors.border, backgroundColor: isDark ? "#1f1f1f" : "#ffffff" }, isDesktop && { borderRadius: 4 }]}
-              onPress={() => signInWithProvider("google")}
-              disabled={!!oauthLoading}
-              activeOpacity={0.8}
-            >
-              {oauthLoading === "google" ? (
-                <ActivityIndicator color={colors.accent} />
-              ) : (
-                <>
-                  <GoogleLogo size={22} />
-                  <Text style={[styles.oauthBtnText, { color: colors.text }]}>Google</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.oauthBtn, { backgroundColor: isDark ? "#f5f5f5" : "#24292f", borderColor: isDark ? "#f5f5f5" : "#24292f" }, isDesktop && { borderRadius: 4 }]}
-              onPress={() => signInWithProvider("github")}
-              disabled={!!oauthLoading}
-              activeOpacity={0.8}
-            >
-              {oauthLoading === "github" ? (
-                <ActivityIndicator color={isDark ? "#24292f" : "#fff"} />
-              ) : (
-                <>
-                  <GitHubLogo size={22} color={isDark ? "#24292f" : "#ffffff"} />
-                  <Text style={[styles.oauthBtnText, { color: isDark ? "#24292f" : "#ffffff" }]}>GitHub</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.loginLink}
-          >
-            <Text style={[styles.loginLinkText, { color: colors.textSecondary }]}>
-              Already have an account?{" "}
-              <Text style={{ color: colors.accent, fontFamily: "Inter_600SemiBold" }}>
-                Log in
-              </Text>
-            </Text>
-          </TouchableOpacity>
-        </View>
-        </View>
-      </ScrollView>
+          <View style={{ gap: 16 }}>{FormContent}</View>
+        </ScrollView>
       </KeyboardAvoidingView>
-
-      {Platform.OS !== "web" && (
-        <Modal
-          visible={!!oauthModalUrl}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={() => {
-            setOauthModalUrl(null);
-            setOauthLoading(null);
-          }}
-        >
-          <View style={[oauthModalStyles.container, { backgroundColor: colors.background }]}>
-            <View style={[oauthModalStyles.header, { borderBottomColor: colors.border }]}>
-              <TouchableOpacity
-                onPress={() => {
-                  setOauthModalUrl(null);
-                  setOauthLoading(null);
-                }}
-                style={oauthModalStyles.closeBtn}
-              >
-                <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
-              <Text style={[oauthModalStyles.headerTitle, { color: colors.text }]}>Sign Up</Text>
-              <View style={{ width: 40 }} />
-            </View>
-            {oauthModalUrl && (
-              <WebView
-                source={{ uri: oauthModalUrl }}
-                style={{ flex: 1 }}
-                javaScriptEnabled
-                domStorageEnabled
-                startInLoadingState
-                userAgent="Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
-                renderLoading={() => (
-                  <View style={oauthModalStyles.loadingOverlay}>
-                    <ActivityIndicator size="large" color={colors.accent} />
-                  </View>
-                )}
-                onNavigationStateChange={(navState) => {
-                  if (navState.url && isOAuthRedirect(navState.url)) {
-                    handleOAuthRedirect(navState.url);
-                  }
-                }}
-                onShouldStartLoadWithRequest={(request) => {
-                  if (request.url && isOAuthRedirect(request.url)) {
-                    handleOAuthRedirect(request.url);
-                    return false;
-                  }
-                  return true;
-                }}
-              />
-            )}
-          </View>
-        </Modal>
-      )}
+      <VerifyEmailModal visible={verifyVisible} onClose={() => setVerifyVisible(false)} email={signupEmail} onVerified={onVerified} colors={colors} isDark={isDark} />
+      {oauthModalUrl && <OAuthWebModal url={oauthModalUrl} onClose={() => { setOauthModalUrl(null); setOauthLoading(null); }} onNav={(s: any) => { if (s.url && isOAuthRedirect(s.url)) handleOAuthRedirect(s.url); }} onShouldLoad={(r: any) => { if (r.url && isOAuthRedirect(r.url)) { handleOAuthRedirect(r.url); return false; } return true; }} colors={colors} />}
     </View>
   );
 }
 
-const oauthModalStyles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  closeBtn: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: { fontSize: 17, fontWeight: "600" },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.9)",
-  },
+const formSt = StyleSheet.create({
+  primaryBtn: { height: 50, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: "#00BCD4" },
+  primaryBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold", letterSpacing: 0.1 },
+  switchRow: { flexDirection: "row", justifyContent: "center", flexWrap: "wrap" },
+  switchText: { fontSize: 14, fontFamily: "Inter_400Regular" },
 });
 
-const regSplit = StyleSheet.create<any>({
-  brandPanel: {
-    flex: 1,
-    alignItems: "flex-start",
-    justifyContent: "center",
-    paddingHorizontal: 72,
-    paddingVertical: 60,
-  },
-  brandHeadline: {
-    fontSize: 64,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: -2,
-    lineHeight: 72,
-    marginBottom: 20,
-  },
-  brandSubline: {
-    fontSize: 32,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: -0.5,
-  },
-  formCard: {
-    maxWidth: 440,
-    width: "100%",
-    alignSelf: "center",
-    borderRadius: 4,
-    borderWidth: 1,
-    padding: 40,
-    boxShadow: "0 4px 40px rgba(0,0,0,0.08)",
-  },
+const deskSt = StyleSheet.create<any>({
+  root: { flex: 1, flexDirection: "row", position: "relative" },
+  themeBtn: { position: "absolute", top: 20, right: 20, zIndex: 10, width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  formSide: { flex: 1, maxWidth: 520 },
+  formScroll: { flexGrow: 1, justifyContent: "center", padding: 48 },
+  formCard: { width: "100%", maxWidth: 400, alignSelf: "center", gap: 20 },
+  headerLogo: { width: 40, height: 40, marginBottom: 10 },
+  headerTitle: { fontSize: 26, fontFamily: "Inter_700Bold", letterSpacing: -0.5, marginBottom: 4 },
+  headerSub: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22 },
 });
 
-const styles = StyleSheet.create({
-  root: { flex: 1 },
+const mobSt = StyleSheet.create({
   scroll: { flexGrow: 1, paddingHorizontal: 28 },
-  backBtn: { marginBottom: 24 },
-  headerWrap: { marginBottom: 32, alignItems: "center" },
-  title: { fontSize: 28, fontFamily: "Inter_700Bold", marginBottom: 8 },
-  subtitle: { fontSize: 15, fontFamily: "Inter_400Regular" },
-  form: { gap: 14 },
-  field: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    height: 52,
-  },
-  fieldIcon: { marginRight: 10 },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    fontFamily: "Inter_400Regular",
-    height: 52,
-  },
-  eyeBtn: { padding: 4 },
-  verifyDesc: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 22,
-    textAlign: "center",
-    marginBottom: 8,
-  },
-  resendBtn: { alignSelf: "center", marginTop: 4 },
-  resendText: { fontSize: 14, fontFamily: "Inter_500Medium" },
-  backToFormBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 8 },
-  backToFormText: { fontSize: 15, fontFamily: "Inter_500Medium" },
-  termsRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    paddingVertical: 4,
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: "#CCC",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 1,
-  },
-  checkboxChecked: {
-    backgroundColor: Colors.brand,
-    borderColor: Colors.brand,
-  },
-  termsText: {
-    flex: 1,
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 20,
-  },
-  termsLink: {
-    color: Colors.brand,
-    fontFamily: "Inter_600SemiBold",
-  },
-  primaryBtn: {
-    backgroundColor: Colors.brand,
-    height: 52,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 4,
-  },
-  primaryBtnText: {
-    color: "#fff",
-    fontSize: 17,
-    fontFamily: "Inter_600SemiBold",
-  },
-  divider: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginVertical: 4,
-  },
-  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth },
-  dividerText: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  oauthRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  oauthBtn: {
-    flex: 1,
-    flexDirection: "row",
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-  },
-  oauthBtnText: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: 0.1,
-  },
-  loginLink: { alignItems: "center", marginTop: 4 },
-  loginLinkText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  logoArea: { alignItems: "center", marginBottom: 36 },
+  logo: { width: 56, height: 56, marginBottom: 12 },
+  appName: { fontSize: 26, fontFamily: "Inter_700Bold", letterSpacing: -0.5, marginBottom: 4 },
+  tagline: { fontSize: 15, fontFamily: "Inter_400Regular" },
 });
