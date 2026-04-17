@@ -174,4 +174,4 @@ We welcome contributions! Please read our [Contributing Guidelines](./CONTRIBUTI
 
 ## License
 
-[MIT](./LICENSE) © 2024 AfuChat Technologies Ltd
+[MIT](./LICENSE) © 2026 AfuChat Technologies Ltd
