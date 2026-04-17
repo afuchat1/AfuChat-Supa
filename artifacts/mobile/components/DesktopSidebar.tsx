@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
+  Animated,
   Image,
   Platform,
   Pressable,
@@ -269,7 +270,7 @@ function DropdownPanel({
   );
 }
 
-// ─── Single nav tab ───────────────────────────────────────────────────────────
+// ─── Single nav tab (hover-to-open, Vercel-style) ────────────────────────────
 
 function NavTab({
   def,
@@ -285,14 +286,63 @@ function NavTab({
   colors: any;
 }) {
   const [open, setOpen] = useState(false);
+  const [visible, setVisible] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const hasDropdown = !!def.dropdown;
+  const animVal = useRef(new Animated.Value(0)).current;
+  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const trigHovered = useRef(false);
+  const ddHovered = useRef(false);
+  const hasDropdown = !!def.dropdown || def.key === "apps";
   const isApps = def.key === "apps";
 
-  const hoverProps =
-    Platform.OS === "web"
-      ? { onMouseEnter: () => setHovered(true), onMouseLeave: () => setHovered(false) }
-      : {};
+  // Animate in/out
+  useEffect(() => {
+    if (open) {
+      setVisible(true);
+      Animated.spring(animVal, { toValue: 1, useNativeDriver: true, speed: 28, bounciness: 1 }).start();
+    } else {
+      Animated.timing(animVal, { toValue: 0, duration: 110, useNativeDriver: true }).start(() => setVisible(false));
+    }
+  }, [open]);
+
+  function scheduleOpen() {
+    if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
+    if (!open) {
+      openTimer.current = setTimeout(() => setOpen(true), 80);
+    }
+  }
+
+  function scheduleClose() {
+    if (openTimer.current) { clearTimeout(openTimer.current); openTimer.current = null; }
+    closeTimer.current = setTimeout(() => {
+      if (!trigHovered.current && !ddHovered.current) setOpen(false);
+    }, 140);
+  }
+
+  const triggerProps = Platform.OS === "web" ? {
+    onMouseEnter: () => {
+      trigHovered.current = true;
+      setHovered(true);
+      if (hasDropdown) scheduleOpen();
+    },
+    onMouseLeave: () => {
+      trigHovered.current = false;
+      setHovered(false);
+      if (hasDropdown) scheduleClose();
+    },
+  } : {};
+
+  const panelProps = Platform.OS === "web" ? {
+    onMouseEnter: () => {
+      ddHovered.current = true;
+      if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
+    },
+    onMouseLeave: () => {
+      ddHovered.current = false;
+      scheduleClose();
+    },
+  } : {};
 
   function handlePress() {
     if (hasDropdown) setOpen((v) => !v);
@@ -301,8 +351,12 @@ function NavTab({
   }
 
   const activeColor = BRAND;
-  const idleColor = colors.textMuted;
-  const textColor = isActive ? activeColor : idleColor;
+  const textColor = isActive ? activeColor : colors.textMuted;
+
+  const dropAnim = {
+    opacity: animVal,
+    transform: [{ translateY: animVal.interpolate({ inputRange: [0, 1], outputRange: [-5, 0] }) }],
+  };
 
   return (
     <View style={{ position: "relative" }}>
@@ -313,18 +367,10 @@ function NavTab({
           styles.navTab,
           hovered && !isActive && { backgroundColor: colors.textMuted + "0d" },
         ]}
-        {...(hoverProps as any)}
+        {...(triggerProps as any)}
       >
         {def.icon && <Ionicons name={def.icon as any} size={16} color={textColor} />}
-        <Text
-          style={[
-            styles.navTabLabel,
-            {
-              color: textColor,
-              fontFamily: isActive ? "Inter_600SemiBold" : "Inter_500Medium",
-            },
-          ]}
-        >
+        <Text style={[styles.navTabLabel, { color: textColor, fontFamily: isActive ? "Inter_600SemiBold" : "Inter_500Medium" }]}>
           {def.label}
         </Text>
         {hasDropdown && (
@@ -333,19 +379,21 @@ function NavTab({
         {isActive && <View style={[styles.activeIndicator, { backgroundColor: activeColor }]} />}
       </TouchableOpacity>
 
-      {hasDropdown && open && (
+      {visible && hasDropdown && (
         <>
           <Pressable
             style={{ position: "fixed" as any, top: 0, left: 0, right: 0, bottom: 0, zIndex: 997 }}
             onPress={() => setOpen(false)}
           />
-          <DropdownPanel
-            col1={def.key === "apps" ? APPS_ITEMS_COL1 : def.dropdown!}
-            col2={def.key === "apps" ? APPS_ITEMS_COL2 : undefined}
-            onClose={() => setOpen(false)}
-            onSection={(s) => { setOpen(false); onSection(s); }}
-            colors={colors}
-          />
+          <Animated.View style={[dropAnim, { position: "absolute" as any, top: 44, left: 0, zIndex: 999 }]} {...(panelProps as any)}>
+            <DropdownPanel
+              col1={isApps ? APPS_ITEMS_COL1 : def.dropdown!}
+              col2={isApps ? APPS_ITEMS_COL2 : undefined}
+              onClose={() => setOpen(false)}
+              onSection={(s) => { setOpen(false); onSection(s); }}
+              colors={colors}
+            />
+          </Animated.View>
         </>
       )}
     </View>
@@ -686,20 +734,18 @@ const styles = StyleSheet.create<any>({
 
   // Dropdown
   dropdown: {
-    position: "absolute",
-    top: 44,
-    left: 0,
     flexDirection: "row",
     minWidth: 200,
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: 6,
-    zIndex: 999,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.12,
     shadowRadius: 24,
     elevation: 16,
+    // @ts-ignore
+    backdropFilter: "blur(12px)",
   },
   menuRow: {
     flexDirection: "row",

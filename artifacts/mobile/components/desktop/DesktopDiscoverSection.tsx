@@ -122,23 +122,7 @@ function ComposeBox({ profile, colors, isLoggedIn, onAuthRequired, onPost }: {
   }
 
   if (!isLoggedIn) {
-    return (
-      <TouchableOpacity
-        onPress={onAuthRequired}
-        activeOpacity={0.95}
-        style={[styles.composeBox, { borderBottomColor: colors.border }]}
-      >
-        <Avatar uri={null} name="G" size={34} />
-        <View style={[styles.composeFieldWrap, { borderColor: colors.border, backgroundColor: colors.surface || colors.background }]}>
-          <Text style={[styles.composePlaceholderText, { color: colors.textMuted }]}>
-            What's on your mind?
-          </Text>
-        </View>
-        <View style={[styles.composePostBtn, { backgroundColor: BRAND }]}>
-          <Text style={styles.composePostBtnText}>Post</Text>
-        </View>
-      </TouchableOpacity>
-    );
+    return null;
   }
 
   return (
