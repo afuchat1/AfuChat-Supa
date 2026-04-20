@@ -50,14 +50,40 @@ router.get("/.well-known/apple-app-site-association", (_req, res) => {
 });
 
 router.get("/robots.txt", (_req, res) => {
+  res.set("Cache-Control", "public, max-age=86400");
   res.type("text/plain").send(`User-agent: *
-Allow: /
+# Allow public content pages (served as server-rendered HTML with full metadata)
+Allow: /$
 Allow: /@*
 Allow: /p/*
 Allow: /post/*
+Allow: /og/*
+
+# Block authenticated-only and dynamic routes that provide no indexable value
 Disallow: /api/
 Disallow: /admin/
 Disallow: /__mockup/
+Disallow: /search
+Disallow: /login
+Disallow: /register
+Disallow: /sign-in
+Disallow: /sign-up
+Disallow: /messages
+Disallow: /chat/
+Disallow: /notifications
+Disallow: /settings
+Disallow: /wallet
+Disallow: /games
+Disallow: /ai-chat
+Disallow: /shop/cart
+Disallow: /edit-profile
+
+# Block all query string pages (search results, filters, etc.)
+Disallow: /*?*
+
+# Re-allow canonical query-free public pages after the wildcard block above
+Allow: /p/*
+Allow: /@*
 
 Sitemap: ${SITE_URL}/sitemap.xml
 `);
@@ -68,34 +94,62 @@ router.get("/sitemap.xml", async (_req, res) => {
   const posts: any[] = [];
   if (supabase) {
     const [profileResult, postResult] = await Promise.all([
-      supabase.from("profiles").select("handle, updated_at").eq("is_private", false).not("handle", "like", "deleted_%").order("updated_at", { ascending: false }).limit(1000),
-      supabase.from("posts").select("id, created_at, author:profiles!author_id(is_private)").eq("is_blocked", false).order("created_at", { ascending: false }).limit(2000),
+      supabase
+        .from("profiles")
+        .select("handle, updated_at")
+        .eq("is_private", false)
+        .not("handle", "like", "deleted_%")
+        .not("handle", "is", null)
+        .order("updated_at", { ascending: false })
+        .limit(5000),
+      supabase
+        .from("posts")
+        .select("id, created_at, author_id")
+        .eq("is_blocked", false)
+        .order("created_at", { ascending: false })
+        .limit(5000),
     ]);
     profiles.push(...(profileResult.data || []));
-    posts.push(...(postResult.data || []));
+
+    // Only include posts from public (non-private) accounts
+    if (postResult.data && postResult.data.length > 0) {
+      const authorIds = [...new Set(postResult.data.map((p: any) => p.author_id))];
+      const { data: privateAuthors } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("is_private", true)
+        .in("id", authorIds);
+      const privateSet = new Set((privateAuthors || []).map((a: any) => a.id));
+      posts.push(...postResult.data.filter((p: any) => !privateSet.has(p.author_id)));
+    }
   }
+
+  const today = new Date().toISOString().split("T")[0];
 
   const profileUrls = profiles.map((p) => `
   <url>
-    <loc>${SITE_URL}/@${p.handle}</loc>
+    <loc>${SITE_URL}/@${encodeURIComponent(p.handle)}</loc>
     <lastmod>${new Date(p.updated_at || Date.now()).toISOString().split("T")[0]}</lastmod>
     <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
+    <priority>0.8</priority>
   </url>`).join("");
 
-  const publicPosts = posts.filter((p) => !p.author?.is_private);
-  const postUrls = publicPosts.map((p) => `
+  const postUrls = posts.map((p) => `
   <url>
     <loc>${SITE_URL}/p/${encodeUuidToShort(p.id)}</loc>
     <lastmod>${new Date(p.created_at || Date.now()).toISOString().split("T")[0]}</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
+    <priority>0.6</priority>
   </url>`).join("");
 
+  res.set("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400");
   res.type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:news="http://www.google.com/schemas/sitemap-news/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
-    <loc>${SITE_URL}</loc>
+    <loc>${SITE_URL}/</loc>
+    <lastmod>${today}</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>

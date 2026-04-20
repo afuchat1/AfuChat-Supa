@@ -9,8 +9,8 @@ const seoTags = `
     <meta name="theme-color" content="#00897B" />
     <meta name="keywords" content="AfuChat, social media, chat app, messaging, discover, connect, community, social platform, real-time chat, moments, stories" />
     <meta name="author" content="AfuChat" />
-    <meta name="robots" content="index, follow" />
-    <meta name="googlebot" content="index, follow, max-video-preview:-1, max-image-preview:large, max-snippet:-1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="googlebot" content="noindex, nofollow" />
     <meta property="og:site_name" content="AfuChat" />
     <meta property="og:title" content="AfuChat — Connect, Chat, Discover" />
     <meta property="og:description" content="Your all-in-one social platform. Chat in real time, discover trending content, share moments, and build your community." />
@@ -26,6 +26,7 @@ const seoTags = `
     <meta name="twitter:title" content="AfuChat — Connect, Chat, Discover" />
     <meta name="twitter:description" content="Your all-in-one social platform. Chat in real time, discover trending content, share moments, and build your community." />
     <meta name="twitter:image" content="https://afuchat.com/logo.png" />
+    <link rel="canonical" href="https://afuchat.com" />
     <link rel="icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="/logo.png" />
     <link rel="apple-touch-icon" href="/logo.png" />
@@ -51,4 +52,4 @@ if (html.includes('<title>AfuChat</title>')) {
 }
 
 fs.writeFileSync(indexPath, html, 'utf8');
-console.log('SEO meta tags injected into index.html');
+console.log('SEO meta tags injected into index.html (noindex for SPA shell — public pages served by API)');
