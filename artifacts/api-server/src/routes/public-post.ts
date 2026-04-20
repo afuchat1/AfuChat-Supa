@@ -84,6 +84,8 @@ function renderPostPage(post: any, author: any, images: string[], stats: { likes
     `<img src="${escapeHtml(img)}" alt="Post image ${i + 1}" style="width:100%;border-radius:12px;margin-top:12px;max-height:500px;object-fit:cover;" loading="${i === 0 ? "eager" : "lazy"}" />`
   ).join("");
 
+  const viewCount = post.view_count || 0;
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "SocialMediaPosting",
@@ -102,6 +104,7 @@ function renderPostPage(post: any, author: any, images: string[], stats: { likes
     interactionStatistic: [
       { "@type": "InteractionCounter", interactionType: "https://schema.org/LikeAction", userInteractionCount: stats.likes },
       { "@type": "InteractionCounter", interactionType: "https://schema.org/CommentAction", userInteractionCount: stats.replies },
+      { "@type": "InteractionCounter", interactionType: "https://schema.org/WatchAction", userInteractionCount: viewCount },
     ],
     publisher: {
       "@type": "Organization",
@@ -195,6 +198,7 @@ function renderPostPage(post: any, author: any, images: string[], stats: { likes
       <div class="post-stats">
         <span>&#10084;&#65039; ${stats.likes.toLocaleString()} likes</span>
         <span>&#128172; ${stats.replies.toLocaleString()} replies</span>
+        <span>&#128065;&#65039; ${viewCount.toLocaleString()} views</span>
       </div>
       <div class="post-time">
         <time datetime="${post.created_at}" itemprop="datePublished">${dateStr}</time>

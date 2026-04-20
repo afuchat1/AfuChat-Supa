@@ -67,15 +67,34 @@ function renderProfilePage(profile: any, posts: any[], isPrivate = false): strin
     `;
   }).join("");
 
+  const followerCount = profile.followers || 0;
+
   const jsonLd = {
     "@context": "https://schema.org",
-    "@type": "Person",
-    name: profile.display_name || "User",
-    alternateName: `@${profile.handle}`,
+    "@type": "ProfilePage",
+    name: `${profile.display_name || "User"} on AfuChat`,
     url: `${SITE_URL}/@${profile.handle}`,
-    image: avatarUrl || undefined,
-    description: bio || `${displayName} on AfuChat`,
-    sameAs: profile.website ? [profile.website] : [],
+    mainEntity: {
+      "@type": "Person",
+      name: profile.display_name || "User",
+      alternateName: `@${profile.handle}`,
+      url: `${SITE_URL}/@${profile.handle}`,
+      image: avatarUrl || undefined,
+      description: profile.bio || `${profile.display_name || "User"} on AfuChat`,
+      sameAs: profile.website ? [profile.website] : [],
+      interactionStatistic: [
+        {
+          "@type": "InteractionCounter",
+          interactionType: "https://schema.org/FollowAction",
+          userInteractionCount: followerCount,
+        },
+        {
+          "@type": "InteractionCounter",
+          interactionType: "https://schema.org/WriteAction",
+          userInteractionCount: posts.length,
+        },
+      ],
+    },
   };
 
   return `<!DOCTYPE html>
