@@ -102,8 +102,8 @@ function renderProfilePage(profile: any, posts: any[], isPrivate = false): strin
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${displayName} (@${handle}) - ${SITE_NAME}</title>
-  <meta name="description" content="${bio || `${displayName} on ${SITE_NAME}. Join AfuChat to connect.`}" />
+  <title>${displayName} (@${handle}) — ${SITE_NAME}</title>
+  <meta name="description" content="${followerCount > 0 ? `${followerCount.toLocaleString()} followers. ` : ""}${bio ? escapeHtml(bio) : `${displayName} on ${SITE_NAME}. Join AfuChat to connect.`}" />
   <meta name="robots" content="${isPrivate ? "noindex, nofollow" : "index, follow"}" />
   <link rel="canonical" href="${SITE_URL}/@${handle}" />
 
@@ -310,6 +310,7 @@ router.get("/@:handle", async (req, res) => {
   }
 
   if (profile.is_private) {
+    res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
     return res.send(renderProfilePage({
       ...profile,
       bio: "This account is private.",
@@ -341,6 +342,7 @@ router.get("/@:handle", async (req, res) => {
   const followers = (followersData as any)?.count || 0;
   const following = (followingData as any)?.count || 0;
 
+  res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
   return res.send(renderProfilePage({ ...profile, followers, following }, enrichedPosts));
 });
 

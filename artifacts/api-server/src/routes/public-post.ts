@@ -118,13 +118,13 @@ function renderPostPage(post: any, author: any, images: string[], stats: { likes
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${displayName}: "${truncate(content, 60) || "Post"}" - ${SITE_NAME}</title>
+  <title>@${handle} on ${SITE_NAME}: "${truncate(content, 60) || "Post"}"</title>
   <meta name="description" content="${escapeHtml(ogDescription)}" />
   <meta name="robots" content="index, follow, max-image-preview:large" />
   <link rel="canonical" href="${postUrl}" />
 
   <meta property="og:type" content="article" />
-  <meta property="og:title" content="${escapeHtml(`${displayName} on ${SITE_NAME}`)}" />
+  <meta property="og:title" content="@${handle}: &quot;${escapeHtml(truncate(content, 80) || "Post")}&quot;" />
   <meta property="og:description" content="${escapeHtml(ogDescription)}" />
   <meta property="og:url" content="${postUrl}" />
   <meta property="og:site_name" content="${SITE_NAME}" />
@@ -133,12 +133,14 @@ function renderPostPage(post: any, author: any, images: string[], stats: { likes
   <meta property="og:image:height" content="630" />
   <meta property="article:published_time" content="${post.created_at}" />
   <meta property="article:author" content="${profileUrl}" />
+  <meta property="article:author_name" content="${displayName} (@${handle})" />
 
   <meta name="twitter:card" content="${images.length > 0 ? "summary_large_image" : "summary"}" />
-  <meta name="twitter:title" content="${escapeHtml(`${displayName} on ${SITE_NAME}`)}" />
+  <meta name="twitter:title" content="@${handle}: &quot;${escapeHtml(truncate(content, 60) || "Post")}&quot;" />
   <meta name="twitter:description" content="${escapeHtml(ogDescription)}" />
   <meta name="twitter:image" content="${escapeHtml(ogImage)}" />
   <meta name="twitter:site" content="@afuchat" />
+  <meta name="twitter:creator" content="@${handle}" />
 
   <meta name="theme-color" content="${BRAND_COLOR}" />
   <link rel="icon" type="image/png" href="${SITE_URL}/favicon.png" />
@@ -286,6 +288,7 @@ async function handlePostPage(param: string, res: any) {
   const replyCount = (replies as any)?.count || 0;
 
   const shortId = encodeUuidToShort(post.id);
+  res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
   res.send(renderPostPage(post, author, images, { likes: likeCount, replies: replyCount }, shortId));
 }
 

@@ -1,12 +1,14 @@
 /**
  * Standalone production server for Expo static builds.
  *
- * Serves the output of build.js (static-build/) with two special routes:
- * - GET / or /manifest with expo-platform header → platform manifest JSON
- * - GET / without expo-platform → serves index.html (web app)
- * Everything else falls through to static file serving from ./static-build/.
+ * Smart proxy server that routes two types of traffic:
+ * - SEO/public routes (/@handle, /p/*, /og/*, /robots.txt, /sitemap.xml, /) → API server (port 3000)
+ * - All other routes → Expo static build (index.html SPA)
  *
- * Zero external dependencies — uses only Node.js built-ins (http, fs, path).
+ * This ensures Google can crawl server-rendered pages with full metadata instead
+ * of the client-side JS app that requires JavaScript execution.
+ *
+ * Zero external dependencies — uses only Node.js built-ins.
  */
 
 const http = require("http");
@@ -15,6 +17,7 @@ const path = require("path");
 
 const STATIC_ROOT = path.resolve(__dirname, "..", "static-build");
 const basePath = (process.env.BASE_PATH || "/").replace(/\/+$/, "");
+const API_PORT = parseInt(process.env.API_PORT || "3000", 10);
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -33,6 +36,40 @@ const MIME_TYPES = {
   ".otf": "font/otf",
   ".map": "application/json",
 };
+
+/**
+ * Routes that must be handled by the Express API server for proper
+ * server-rendered HTML with SEO metadata, JSON-LD, and Open Graph tags.
+ * These are the pages that Google will crawl and index.
+ */
+const SEO_ROUTE = /^(\/@[^/]|\/p\/|\/post\/|\/og\/|\/sitemap\.xml$|\/robots\.txt$|\/.well-known\/)/;
+
+function proxyToApi(req, res) {
+  const options = {
+    hostname: "127.0.0.1",
+    port: API_PORT,
+    path: req.url,
+    method: req.method,
+    headers: { ...req.headers, host: `localhost:${API_PORT}` },
+  };
+
+  const proxyReq = http.request(options, (proxyRes) => {
+    res.writeHead(proxyRes.statusCode, proxyRes.headers);
+    proxyRes.pipe(res, { end: true });
+  });
+
+  proxyReq.on("error", (err) => {
+    console.error(`[proxy] API error for ${req.url}:`, err.message);
+    res.writeHead(502, { "content-type": "text/plain" });
+    res.end("Service temporarily unavailable");
+  });
+
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    req.pipe(proxyReq, { end: true });
+  } else {
+    proxyReq.end();
+  }
+}
 
 function serveManifest(platform, res) {
   const manifestPath = path.join(STATIC_ROOT, platform, "manifest.json");
@@ -85,21 +122,36 @@ const server = http.createServer((req, res) => {
     pathname = pathname.slice(basePath.length) || "/";
   }
 
-  if (pathname === "/" || pathname === "/manifest") {
+  // Root path and API-driven SEO routes → proxy to Express API server
+  // This gives Google properly server-rendered HTML with full metadata
+  if (pathname === "/" || SEO_ROUTE.test(pathname)) {
+    return proxyToApi(req, res);
+  }
+
+  // Expo platform manifest requests
+  if (pathname === "/manifest") {
     const platform = req.headers["expo-platform"];
     if (platform === "ios" || platform === "android") {
       return serveManifest(platform, res);
     }
-
-    if (pathname === "/") {
-      return serveStaticFile("/index.html", res);
-    }
   }
 
-  serveStaticFile(pathname, res);
+  // Try to serve a static file from the Expo build
+  const staticFilePath = path.join(STATIC_ROOT, pathname);
+  if (
+    fs.existsSync(staticFilePath) &&
+    !fs.statSync(staticFilePath).isDirectory()
+  ) {
+    return serveStaticFile(pathname, res);
+  }
+
+  // All other routes → Expo SPA (index.html handles client-side routing)
+  serveStaticFile("/index.html", res);
 });
 
 const port = parseInt(process.env.PORT || "3000", 10);
 server.listen(port, "0.0.0.0", () => {
-  console.log(`Serving static Expo build on port ${port}`);
+  console.log(
+    `[serve] Web server on port ${port} — SEO routes proxied to API on port ${API_PORT}`,
+  );
 });
