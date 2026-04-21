@@ -121,38 +121,41 @@ function OrDivider({ colors }: { colors: any }) {
   );
 }
 
-// ─── OAuth button ─────────────────────────────────────────────────────────────
+// ─── OAuth icon button (circular, icon-only) ─────────────────────────────────
 function OAuthBtn({ label, logo, onPress, loading, colors, isDark }: any) {
   return (
     <TouchableOpacity
+      accessibilityLabel={`Continue with ${label}`}
+      accessibilityRole="button"
       style={[
         oauthSt.btn,
         {
-          backgroundColor: isDark ? "#111113" : "#F5F5F7",
-          borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)",
+          backgroundColor: isDark ? "#15151A" : "#FFFFFF",
+          borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
+          shadowColor: isDark ? "#000" : "#000",
         },
       ]}
       onPress={onPress}
       disabled={loading}
-      activeOpacity={0.75}
+      activeOpacity={0.7}
     >
       {loading ? <ActivityIndicator size="small" color={colors.text} /> : logo}
-      <Text style={[oauthSt.label, { color: colors.text }]}>{label}</Text>
     </TouchableOpacity>
   );
 }
 const oauthSt = StyleSheet.create({
   btn: {
-    flex: 1,
-    flexDirection: "row",
-    height: 46,
-    borderRadius: 10,
-    borderWidth: 1.5,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  label: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
 });
 
 // ─── Desktop brand panel ──────────────────────────────────────────────────────
@@ -480,14 +483,6 @@ export default function LoginScreen() {
   // ── Form card (shared between desktop & mobile) ───────────────────────────
   const FormContent = (
     <>
-      {/* OAuth row */}
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        <OAuthBtn label="Google" logo={<GoogleLogo size={18} />} onPress={() => signInWithProvider("google")} loading={oauthLoading === "google"} colors={colors} isDark={isDark} />
-        <OAuthBtn label="GitHub" logo={<GitHubLogo size={18} color={isDark ? "#fff" : "#24292E"} />} onPress={() => signInWithProvider("github")} loading={oauthLoading === "github"} colors={colors} isDark={isDark} />
-        <OAuthBtn label="X" logo={<XLogo size={18} color={isDark ? "#fff" : "#000"} />} onPress={() => signInWithProvider("twitter")} loading={oauthLoading === "twitter"} colors={colors} isDark={isDark} />
-        <OAuthBtn label="GitLab" logo={<GitLabLogo size={18} />} onPress={() => signInWithProvider("gitlab")} loading={oauthLoading === "gitlab"} colors={colors} isDark={isDark} />
-      </View>
-      <OrDivider colors={colors} />
       {/* Fields */}
       <View style={{ gap: 10 }}>
         <AuthInput icon="mail-outline" placeholder="Email address" value={email} onChangeText={setEmail} keyboardType="email-address" autoComplete="email" colors={colors} isDark={isDark} returnKeyType="next" onSubmitEditing={() => pwdRef.current?.focus()} />
@@ -505,6 +500,14 @@ export default function LoginScreen() {
       <TouchableOpacity style={[formSt.primaryBtn, loading && { opacity: 0.6 }]} onPress={handleLogin} disabled={loading} activeOpacity={0.85}>
         {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={formSt.primaryBtnText}>Sign in</Text>}
       </TouchableOpacity>
+      <OrDivider colors={colors} />
+      {/* OAuth icon row — bottom */}
+      <View style={{ flexDirection: "row", gap: 14, justifyContent: "center", marginTop: 4 }}>
+        <OAuthBtn label="Google" logo={<GoogleLogo size={22} />} onPress={() => signInWithProvider("google")} loading={oauthLoading === "google"} colors={colors} isDark={isDark} />
+        <OAuthBtn label="GitHub" logo={<GitHubLogo size={22} color={isDark ? "#fff" : "#24292E"} />} onPress={() => signInWithProvider("github")} loading={oauthLoading === "github"} colors={colors} isDark={isDark} />
+        <OAuthBtn label="X" logo={<XLogo size={20} color={isDark ? "#fff" : "#000"} />} onPress={() => signInWithProvider("twitter")} loading={oauthLoading === "twitter"} colors={colors} isDark={isDark} />
+        <OAuthBtn label="GitLab" logo={<GitLabLogo size={22} />} onPress={() => signInWithProvider("gitlab")} loading={oauthLoading === "gitlab"} colors={colors} isDark={isDark} />
+      </View>
       <View style={formSt.switchRow}>
         <Text style={[formSt.switchText, { color: colors.textSecondary }]}>Don't have an account?</Text>
         <TouchableOpacity onPress={() => router.push("/(auth)/register")}>
