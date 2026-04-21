@@ -26,7 +26,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { showAlert } from "@/lib/alert";
-import { GoogleLogo, GitHubLogo, XLogo, GitLabLogo } from "@/components/ui/OAuthLogos";
+import { GoogleLogo, GitHubLogo, XLogo, GitLabLogo, PhoneLogo } from "@/components/ui/OAuthLogos";
 
 let GoogleSignin: any = null;
 let isErrorWithCode: any = null;
@@ -502,11 +502,12 @@ export default function LoginScreen() {
       </TouchableOpacity>
       <OrDivider colors={colors} />
       {/* OAuth icon row — bottom */}
-      <View style={{ flexDirection: "row", gap: 14, justifyContent: "center", marginTop: 4 }}>
+      <View style={{ flexDirection: "row", gap: 12, justifyContent: "center", marginTop: 4, flexWrap: "wrap" }}>
         <OAuthBtn label="Google" logo={<GoogleLogo size={22} />} onPress={() => signInWithProvider("google")} loading={oauthLoading === "google"} colors={colors} isDark={isDark} />
         <OAuthBtn label="GitHub" logo={<GitHubLogo size={22} color={isDark ? "#fff" : "#24292E"} />} onPress={() => signInWithProvider("github")} loading={oauthLoading === "github"} colors={colors} isDark={isDark} />
         <OAuthBtn label="X" logo={<XLogo size={20} color={isDark ? "#fff" : "#000"} />} onPress={() => signInWithProvider("twitter")} loading={oauthLoading === "twitter"} colors={colors} isDark={isDark} />
         <OAuthBtn label="GitLab" logo={<GitLabLogo size={22} />} onPress={() => signInWithProvider("gitlab")} loading={oauthLoading === "gitlab"} colors={colors} isDark={isDark} />
+        <OAuthBtn label="Phone" logo={<PhoneLogo size={22} color="#00BCD4" />} onPress={() => router.push("/(auth)/phone" as any)} loading={false} colors={colors} isDark={isDark} />
       </View>
       <View style={formSt.switchRow}>
         <Text style={[formSt.switchText, { color: colors.textSecondary }]}>Don't have an account?</Text>

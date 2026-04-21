@@ -43,6 +43,21 @@ export function FacebookLogo({ size = 20 }: { size?: number }) {
   );
 }
 
+export function PhoneLogo({ size = 20, color = "#00BCD4" }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M3 5.5C3 14.06 9.94 21 18.5 21a1.5 1.5 0 0 0 1.5-1.5v-2.32a1 1 0 0 0-.8-.98l-3.85-.77a1 1 0 0 0-1.05.5l-1.06 1.96a14.05 14.05 0 0 1-6.13-6.13l1.96-1.06a1 1 0 0 0 .5-1.05L8.8 5.8a1 1 0 0 0-.98-.8H5.5A1.5 1.5 0 0 0 4 6.5L3 5.5z"
+        fill={color}
+      />
+      <Path
+        d="M14.5 6a.75.75 0 0 1 .75-.75 4.75 4.75 0 0 1 4.75 4.75.75.75 0 0 1-1.5 0A3.25 3.25 0 0 0 15.25 6.75.75.75 0 0 1 14.5 6zm.75 2.5a.75.75 0 0 0 0 1.5c.69 0 1.25.56 1.25 1.25a.75.75 0 0 0 1.5 0A2.75 2.75 0 0 0 15.25 8.5z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
 export function XLogo({ size = 20, color = "#fff" }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
