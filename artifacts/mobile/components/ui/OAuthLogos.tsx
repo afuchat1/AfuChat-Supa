@@ -43,6 +43,29 @@ export function FacebookLogo({ size = 20 }: { size?: number }) {
   );
 }
 
+export function XLogo({ size = 20, color = "#fff" }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <Path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </Svg>
+  );
+}
+
+export function GitLabLogo({ size = 20 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path fill="#E24329" d="M23.955 13.587l-1.342-4.135-2.664-8.189a.455.455 0 0 0-.867 0L16.418 9.45H7.582L4.919 1.263a.455.455 0 0 0-.867 0L1.388 9.452.045 13.587a.924.924 0 0 0 .331 1.023L12 23.054l11.624-8.443a.92.92 0 0 0 .331-1.024" />
+      <Path fill="#FC6D26" d="M12 23.054l4.418-13.605H7.582z" />
+      <Path fill="#E24329" d="M12 23.054L7.582 9.449H1.388z" />
+      <Path fill="#FCA326" d="M1.388 9.449L.045 13.587a.92.92 0 0 0 .331 1.023L12 23.054z" />
+      <Path fill="#E24329" d="M1.388 9.45h6.194L4.919 1.263a.455.455 0 0 0-.867 0z" />
+      <Path fill="#FC6D26" d="M12 23.054l4.418-13.605h6.194L12 23.054z" />
+      <Path fill="#FCA326" d="M22.612 9.449l1.343 4.138a.92.92 0 0 1-.331 1.023L12 23.054l10.612-13.605z" />
+      <Path fill="#E24329" d="M22.612 9.45h-6.194l2.664-8.187a.455.455 0 0 1 .867 0z" />
+    </Svg>
+  );
+}
+
 export function AppleLogo({ size = 20, color = "#000" }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>

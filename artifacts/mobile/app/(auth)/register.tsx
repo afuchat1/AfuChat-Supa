@@ -27,7 +27,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { showAlert } from "@/lib/alert";
-import { GoogleLogo, GitHubLogo } from "@/components/ui/OAuthLogos";
+import { GoogleLogo, GitHubLogo, XLogo, GitLabLogo } from "@/components/ui/OAuthLogos";
 
 let GoogleSignin: any = null;
 let isErrorWithCode: any = null;
@@ -376,6 +376,8 @@ export default function RegisterScreen() {
       <View style={{ flexDirection: "row", gap: 10 }}>
         <OAuthBtn label="Google" logo={<GoogleLogo size={18} />} onPress={() => signInWithProvider("google")} loading={oauthLoading === "google"} colors={colors} isDark={isDark} />
         <OAuthBtn label="GitHub" logo={<GitHubLogo size={18} color={isDark ? "#fff" : "#24292E"} />} onPress={() => signInWithProvider("github")} loading={oauthLoading === "github"} colors={colors} isDark={isDark} />
+        <OAuthBtn label="X" logo={<XLogo size={18} color={isDark ? "#fff" : "#000"} />} onPress={() => signInWithProvider("twitter")} loading={oauthLoading === "twitter"} colors={colors} isDark={isDark} />
+        <OAuthBtn label="GitLab" logo={<GitLabLogo size={18} />} onPress={() => signInWithProvider("gitlab")} loading={oauthLoading === "gitlab"} colors={colors} isDark={isDark} />
       </View>
       <OrDivider colors={colors} />
       <View style={{ gap: 10 }}>
