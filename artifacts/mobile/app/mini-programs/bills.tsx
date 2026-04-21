@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
   billCard: { width: "31%", alignItems: "center", padding: 14, borderRadius: 14, borderWidth: 1.5, gap: 6 },
   billIcon: { fontSize: 28 },
   billName: { fontSize: 11, fontFamily: "Inter_600SemiBold", textAlign: "center" },
-  inputWrap: { flexDirection: "row", alignItems: "center", borderRadius: 12, paddingHorizontal: 14, gap: 8, borderWidth: 1 },
+  inputWrap: { flexDirection: "row", alignItems: "center", borderRadius: 12, paddingHorizontal: 14, gap: 8,},
   input: { flex: 1, fontSize: 16, fontFamily: "Inter_500Medium", paddingVertical: 14 },
   inputPrefix: { fontSize: 18 },
   feeCard: { borderRadius: 14, padding: 16, gap: 10 },

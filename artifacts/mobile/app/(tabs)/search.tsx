@@ -1269,7 +1269,7 @@ const styles = StyleSheet.create({
   root:            { flex:1 },
   header:          { borderBottomWidth:StyleSheet.hairlineWidth, paddingBottom:0 },
   headerTitle:     { fontSize:22, fontFamily:"Inter_700Bold", paddingHorizontal:16, marginBottom:10 },
-  searchBar:       { flexDirection:"row", alignItems:"center", marginHorizontal:16, paddingHorizontal:12, paddingVertical:10, borderRadius:14, borderWidth:1.5, gap:8 },
+  searchBar:       { flexDirection:"row", alignItems:"center", marginHorizontal:16, paddingHorizontal:12, paddingVertical:10, borderRadius:14, gap:8 },
   searchInput:     { flex:1, fontSize:15, fontFamily:"Inter_400Regular", padding:0 },
   actionRow:       { paddingHorizontal:16, paddingVertical:8 },
   filterPill:      { flexDirection:"row", alignItems:"center", gap:5, paddingHorizontal:11, paddingVertical:6, borderRadius:20, borderWidth:1, borderColor:"rgba(128,128,128,0.2)" },

@@ -281,7 +281,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
   },
   searchInput: {
     flex: 1,

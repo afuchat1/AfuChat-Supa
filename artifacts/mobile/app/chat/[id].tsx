@@ -4337,7 +4337,7 @@ const st = StyleSheet.create({
     minHeight: 48,
   },
   pillIcon: { paddingHorizontal: 6 },
-  input: { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 22, borderWidth: 0, outlineStyle: "none" as any, paddingTop: 10, paddingBottom: 10, minHeight: 28, maxHeight: 120 },
+  input: { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 22, outlineStyle: "none" as any, paddingTop: 10, paddingBottom: 10, minHeight: 28, maxHeight: 120 },
   sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   recHoldBar: { alignItems: "center" },
   recCancelZone: { width: 44, alignItems: "center", justifyContent: "center" },

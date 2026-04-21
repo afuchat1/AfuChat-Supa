@@ -1831,7 +1831,7 @@ const styles = StyleSheet.create({
   statIconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   statValue: { fontSize: 16, fontFamily: "Inter_700Bold" },
   statLabel: { fontSize: 10, fontFamily: "Inter_400Regular" },
-  searchInput: { height: 44, borderRadius: 12, paddingHorizontal: 16, fontSize: 15, fontFamily: "Inter_400Regular", borderWidth: 1 },
+  searchInput: { height: 44, borderRadius: 12, paddingHorizontal: 16, fontSize: 15, fontFamily: "Inter_400Regular",},
   userRow: { flexDirection: "row", alignItems: "center", padding: 12, borderRadius: 14, gap: 10 },
   userAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   userAvatarText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },

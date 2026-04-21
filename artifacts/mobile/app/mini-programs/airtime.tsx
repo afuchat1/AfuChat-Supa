@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
   providerCard: { flex: 1, alignItems: "center", padding: 12, borderRadius: 12, borderWidth: 1.5, gap: 4 },
   providerIcon: { fontSize: 20 },
   providerName: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  inputWrap: { flexDirection: "row", alignItems: "center", borderRadius: 12, paddingHorizontal: 14, gap: 8, borderWidth: 1 },
+  inputWrap: { flexDirection: "row", alignItems: "center", borderRadius: 12, paddingHorizontal: 14, gap: 8,},
   input: { flex: 1, fontSize: 16, fontFamily: "Inter_500Medium", paddingVertical: 14 },
   inputPrefix: { fontSize: 18 },
   quickRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

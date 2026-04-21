@@ -594,7 +594,7 @@ const styles = StyleSheet.create({
   giftConfirmPrice: { fontSize: 12, fontFamily: "Inter_700Bold" },
   giftSendBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: BRAND, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10 },
   giftSendBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_700Bold" },
-  inputBar: { flexDirection: "row", alignItems: "flex-end", gap: 8, paddingHorizontal: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  inputBar: { flexDirection: "row", alignItems: "flex-end", gap: 8, paddingHorizontal: 12, paddingTop: 10,},
   inputAction: { width: 34, height: 34, alignItems: "center", justifyContent: "center" },
   inputField: { flex: 1, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, fontFamily: "Inter_400Regular", maxHeight: 120 },
   sendBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },

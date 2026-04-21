@@ -853,7 +853,7 @@ const styles = StyleSheet.create({
   logoPreview: { width: 70, height: 70, borderRadius: 18 },
   logoEditBadge: { position: "absolute", bottom: -4, right: -4, backgroundColor: Colors.brand, width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
   formLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", marginBottom: 6, letterSpacing: 0.2 },
-  formInput: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, fontSize: 15, fontFamily: "Inter_400Regular" },
+  formInput: { borderRadius: 12, paddingHorizontal: 14, fontSize: 15, fontFamily: "Inter_400Regular" },
   catChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
   catChipText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   priceRow: { flexDirection: "row", alignItems: "center", borderRadius: 14, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8, gap: 8 },

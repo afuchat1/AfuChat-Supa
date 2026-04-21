@@ -1459,9 +1459,9 @@ const st = StyleSheet.create({
   deliverSheet: { padding: 16, gap: 12, borderTopWidth: StyleSheet.hairlineWidth },
 
   // Forms
-  input: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, borderWidth: 1 },
+  input: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15,},
   emojiInput: { width: 70, height: 54, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1 },
-  textarea: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, borderWidth: 1, lineHeight: 21 },
+  textarea: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, lineHeight: 21 },
   primaryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 15, borderRadius: 16, marginTop: 8 },
   primaryBtnText: { color: "#fff", fontSize: 15, fontWeight: "800" },
 

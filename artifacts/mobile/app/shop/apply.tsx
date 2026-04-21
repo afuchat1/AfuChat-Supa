@@ -460,7 +460,6 @@ const st = StyleSheet.create({
   sectionLabel: { fontSize: 15, fontFamily: "Inter_700Bold", marginBottom: 10 },
   label: { fontSize: 12, fontFamily: "Inter_600SemiBold", marginTop: 8, marginBottom: 4 },
   input: {
-    borderWidth: 1,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: Platform.OS === "ios" ? 12 : 9,

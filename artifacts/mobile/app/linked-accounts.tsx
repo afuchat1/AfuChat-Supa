@@ -346,7 +346,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     height: 50,
-    borderWidth: 1,
   },
   input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
 

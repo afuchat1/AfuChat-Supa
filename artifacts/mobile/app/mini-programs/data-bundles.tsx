@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
   providerRow: { flexDirection: "row", gap: 8 },
   providerCard: { flex: 1, alignItems: "center", padding: 12, borderRadius: 12, borderWidth: 1.5 },
   providerName: { fontSize: 12, fontFamily: "Inter_700Bold" },
-  inputWrap: { flexDirection: "row", alignItems: "center", borderRadius: 12, paddingHorizontal: 14, gap: 8, borderWidth: 1 },
+  inputWrap: { flexDirection: "row", alignItems: "center", borderRadius: 12, paddingHorizontal: 14, gap: 8,},
   input: { flex: 1, fontSize: 16, fontFamily: "Inter_500Medium", paddingVertical: 14 },
   bundleGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   bundleCard: { width: "48%", borderRadius: 14, padding: 14, borderWidth: 1.5, alignItems: "center", gap: 4 },

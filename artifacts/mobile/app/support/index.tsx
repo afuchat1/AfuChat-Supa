@@ -442,12 +442,12 @@ const st = StyleSheet.create({
 
   formLabel: { fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.8, marginBottom: 8, textTransform: "uppercase" },
   input: {
-    borderRadius: 12, borderWidth: 1.5,
+    borderRadius: 12,
     paddingHorizontal: 14, paddingVertical: 13,
     fontSize: 15, fontFamily: "Inter_400Regular", marginBottom: 20,
   },
   textarea: {
-    borderRadius: 12, borderWidth: 1.5,
+    borderRadius: 12,
     paddingHorizontal: 14, paddingVertical: 13,
     fontSize: 15, fontFamily: "Inter_400Regular",
     minHeight: 130, marginBottom: 20,

@@ -683,7 +683,7 @@ const st = StyleSheet.create({
   timelineDot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
   chatInput: {
     flexDirection: "row", alignItems: "flex-end", gap: 10,
-    paddingHorizontal: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 16, paddingTop: 12,
   },
   chatTextInput: {
     flex: 1, borderWidth: 1, borderRadius: 20, paddingHorizontal: 14,

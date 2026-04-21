@@ -374,10 +374,10 @@ const st = StyleSheet.create({
 
   inputBar: {
     flexDirection: "row", alignItems: "flex-end", gap: 8,
-    padding: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth,
+    padding: 12, paddingTop: 10,
   },
   replyInput: {
-    flex: 1, borderRadius: 22, borderWidth: 1.5,
+    flex: 1, borderRadius: 22,
     paddingHorizontal: 16, paddingVertical: 11,
     fontSize: 15, fontFamily: "Inter_400Regular", maxHeight: 110,
   },

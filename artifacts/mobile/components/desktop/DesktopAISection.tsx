@@ -369,7 +369,6 @@ const styles = StyleSheet.create<any>({
   bubbleTime: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 6, textAlign: "right" },
 
   inputBar: {
-    borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: 14,
@@ -387,7 +386,6 @@ const styles = StyleSheet.create<any>({
   input: {
     flex: 1,
     borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 16,
     paddingVertical: 10,
     fontSize: 14.5,

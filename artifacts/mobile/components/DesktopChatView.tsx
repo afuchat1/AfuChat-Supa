@@ -922,7 +922,6 @@ const st = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
   },
   inputAction: { paddingBottom: 8, paddingHorizontal: 2 },
   inputPill: {

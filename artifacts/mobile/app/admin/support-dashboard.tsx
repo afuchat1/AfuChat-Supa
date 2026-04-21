@@ -702,7 +702,7 @@ const st = StyleSheet.create({
   replyTypeBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   replyInputRow: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   replyInput: {
-    flex: 1, borderRadius: 16, borderWidth: 1.5,
+    flex: 1, borderRadius: 16,
     paddingHorizontal: 14, paddingVertical: 10,
     fontSize: 14, fontFamily: "Inter_400Regular",
     maxHeight: 120, minHeight: 44,

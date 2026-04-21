@@ -636,7 +636,7 @@ const styles = StyleSheet.create({
   recipientRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   recipientAvatar: { width: 40, height: 40, borderRadius: 20 },
   balanceRow: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
-  modalInput: { borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, fontFamily: "Inter_400Regular" },
+  modalInput: { borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, fontFamily: "Inter_400Regular" },
   sendBtn: { borderRadius: 28, paddingVertical: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   sendBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
 });

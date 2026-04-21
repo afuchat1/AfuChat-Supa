@@ -444,7 +444,6 @@ const st = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 10,
     borderRadius: 12,
-    borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: Platform.OS === "ios" ? 10 : 8,
     gap: 8,

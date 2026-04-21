@@ -509,7 +509,7 @@ const styles = StyleSheet.create({
   headerTitle: { flex: 1, fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center" },
   sortBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, borderWidth: 1 },
   sortBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  searchBar: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  searchBar: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 10,},
   searchInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", padding: 0 },
   tabScroll: { flexGrow: 0, borderBottomWidth: StyleSheet.hairlineWidth },
   tab: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 13, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },

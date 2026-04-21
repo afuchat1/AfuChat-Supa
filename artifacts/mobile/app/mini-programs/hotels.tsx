@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
   roomText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   roomMult: { fontSize: 11, fontFamily: "Inter_400Regular" },
   detailsRow: { flexDirection: "row", gap: 12 },
-  inputWrap: { borderRadius: 12, borderWidth: 1, overflow: "hidden" },
+  inputWrap: { borderRadius: 12, overflow: "hidden" },
   input: { fontSize: 18, fontFamily: "Inter_600SemiBold", paddingVertical: 12, paddingHorizontal: 14 },
   feeCard: { borderRadius: 14, padding: 16, gap: 10 },
   feeRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },

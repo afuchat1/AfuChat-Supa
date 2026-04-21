@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
   iconCircle: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
   iconEmoji: { fontSize: 36 },
   label: { fontSize: 14, fontFamily: "Inter_600SemiBold", marginTop: 4 },
-  inputWrap: { flexDirection: "row", alignItems: "center", borderRadius: 12, paddingHorizontal: 14, gap: 8, borderWidth: 1 },
+  inputWrap: { flexDirection: "row", alignItems: "center", borderRadius: 12, paddingHorizontal: 14, gap: 8,},
   input: { flex: 1, fontSize: 16, fontFamily: "Inter_500Medium", paddingVertical: 14 },
   amountWrap: { flexDirection: "row", alignItems: "center", borderRadius: 16, paddingHorizontal: 20, borderWidth: 1, justifyContent: "center" },
   amountPrefix: { fontSize: 28 },

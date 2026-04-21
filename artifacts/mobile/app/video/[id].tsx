@@ -436,8 +436,6 @@ const cStyles = StyleSheet.create({
     alignItems: "flex-end",
     gap: 10,
     paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(255,255,255,0.08)",
   },
   inputWrap: { flex: 1 },
   input: {
@@ -448,8 +446,6 @@ const cStyles = StyleSheet.create({
     paddingHorizontal: 14,
     backgroundColor: "rgba(255,255,255,0.06)",
     borderRadius: 22,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
     maxHeight: 88,
   },
   sendBtn: {

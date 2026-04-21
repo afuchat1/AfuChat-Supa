@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
   cartItemTotal: { fontSize: 15, fontFamily: "Inter_700Bold" },
   noteCard: { borderRadius: 14, padding: 14, gap: 8 },
   noteLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  noteInput: { borderRadius: 10, borderWidth: 1, padding: 10, fontSize: 14, fontFamily: "Inter_400Regular", minHeight: 56 },
+  noteInput: { borderRadius: 10, padding: 10, fontSize: 14, fontFamily: "Inter_400Regular", minHeight: 56 },
   checkoutPanel: { position: "absolute", bottom: 0, left: 0, right: 0, borderTopWidth: StyleSheet.hairlineWidth, padding: 16, gap: 10 },
   summaryRows: { gap: 6 },
   summaryRow: { flexDirection: "row", justifyContent: "space-between" },
