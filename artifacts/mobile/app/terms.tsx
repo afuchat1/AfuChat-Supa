@@ -11,7 +11,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
 
-const LAST_UPDATED = "April 2, 2026";
+const LAST_UPDATED = "April 21, 2026";
 
 type Clause = { heading: string; body: string };
 type Section = { title: string; clauses: Clause[] };
@@ -31,6 +31,10 @@ const SECTIONS: Section[] = [
       {
         heading: "1.3 Account Registration",
         body: "You agree to provide accurate, current, and complete information during registration. You are responsible for maintaining the confidentiality of your credentials and for all activity under your account. Notify us immediately of any unauthorized access.",
+      },
+      {
+        heading: "1.3.1 Third-Party Sign-In",
+        body: "You may create an AfuChat account or sign in using third-party identity providers including Google, GitHub, X (formerly Twitter), GitLab, and Apple. By choosing to sign in with one of these providers, you authorize AfuChat to receive certain information from your third-party account (such as your name, email address, profile photo and provider user ID) in accordance with the provider's authorization screen and our Privacy Policy. You remain bound by the terms of the third-party provider in addition to these Terms. We do not receive or store your third-party password.",
       },
       {
         heading: "1.4 User Content",
@@ -141,7 +145,7 @@ const SECTIONS: Section[] = [
     clauses: [
       {
         heading: "4.1 Information We Collect",
-        body: "We collect:\n\n• Account information: name, email, phone number, date of birth\n• Profile data: display name, handle, bio, profile photo\n• Usage data: features used, content viewed, interactions made\n• Device information: device type, OS, IP address, push token\n• Location data: approximate location for geo-based features (with your permission)\n• Payment data: AfuPay transaction history (not payment card details)",
+        body: "We collect:\n\n• Account information: name, email, phone number, date of birth\n• Profile data: display name, handle, bio, profile photo\n• Third-party sign-in data: when you sign in with Google, GitHub, X, GitLab or Apple, we receive basic profile information (name, email, avatar, provider user ID) from that provider; we never receive your third-party password\n• Usage data: features used, content viewed, interactions made\n• Device information: device type, OS, IP address, push token\n• Location data: approximate location for geo-based features (with your permission)\n• Payment data: AfuPay transaction history (not payment card details)",
       },
       {
         heading: "4.2 How We Use Your Information",
@@ -170,6 +174,10 @@ const SECTIONS: Section[] = [
       {
         heading: "4.8 Cookies & Web Tracking",
         body: "On web, we use local storage and session cookies to maintain your session. We do not use third-party advertising cookies or tracking pixels. You may disable cookies in your browser settings, but some features may not function correctly.",
+      },
+      {
+        heading: "4.8.1 Public Profiles & Search Engine Indexing",
+        body: "Public profile pages (afuchat.com/@yourhandle) and public posts (afuchat.com/p/<id>) are accessible to anyone on the internet and are indexed by search engines such as Google. Information visible on these pages — your display name, handle, bio, avatar, banner, follower count and the content of your public posts — may appear in search results and link previews on other services.\n\nIf you do not want your profile or posts indexed, you can:\n\n• Switch your account to private (Settings → Privacy → Account)\n• Delete individual posts or your entire account\n• Use the in-app report tool to request expedited de-indexing of removed content\n\nDirect messages, AfuPay transactions, drafts, and private-account content are never indexed and never appear in our public sitemap.",
       },
       {
         heading: "4.9 Children's Privacy",

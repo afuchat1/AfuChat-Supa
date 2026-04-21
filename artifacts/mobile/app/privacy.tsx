@@ -12,12 +12,16 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 
-const LAST_UPDATED = "April 2, 2026";
+const LAST_UPDATED = "April 21, 2026";
 
 const sections = [
   {
     title: "1. Information We Collect",
-    body: `We collect information you provide directly to us, including:\n\n• Account information: email address, display name, username (handle), password, date of birth, gender, and country\n• Profile information: avatar, banner image, bio, phone number, website URL, and interests\n• Content you create: posts, stories, comments, and media uploads\n• Communications: messages you send through the Platform (note: private 1-on-1 messages are end-to-end encrypted and their content is not accessible to AfuChat)\n• Usage data: interactions with content, features used, and preferences\n• Device information: device type, operating system, and push notification tokens`,
+    body: `We collect information you provide directly to us, including:\n\n• Account information: email address, display name, username (handle), password, date of birth, gender, and country\n• Profile information: avatar, banner image, bio, phone number, website URL, and interests\n• Third-party sign-in data: when you choose to sign in with Google, GitHub, X (formerly Twitter), GitLab or Apple, we receive basic profile information from that provider — typically your name, email address, profile photo and provider user ID. We never receive or store your third-party account password.\n• Content you create: posts, stories, comments, and media uploads\n• Communications: messages you send through the Platform (note: private 1-on-1 messages are end-to-end encrypted and their content is not accessible to AfuChat)\n• Usage data: interactions with content, features used, and preferences\n• Device information: device type, operating system, and push notification tokens`,
+  },
+  {
+    title: "1a. Third-Party Sign-In Providers",
+    body: `AfuChat supports signing in or registering with the following identity providers:\n\n• Google\n• GitHub\n• X (formerly Twitter)\n• GitLab\n• Apple (on iOS)\n\nWhen you choose one of these options, you are redirected to the provider's secure login page. The provider then returns a limited set of profile information to AfuChat — usually your name, email, avatar URL and a stable user identifier — which we use to create or link your AfuChat account. We do not see, receive, or store your password for that provider.\n\nYou can revoke AfuChat's access at any time from your provider's account settings (e.g., Google Account → Security → Third-party access). Doing so will prevent future sign-ins via that provider but will not delete your AfuChat account; to delete your account, use Settings → Account → Delete Account.`,
   },
   {
     title: "2. How We Use Your Information",
@@ -46,6 +50,10 @@ const sections = [
   {
     title: "8. Cookies and Tracking",
     body: `On the web version of AfuChat, we use local storage and session cookies to maintain your login state and preferences. We do not use third-party advertising cookies or cross-site tracking technologies. Analytics data is collected in aggregate form to improve the Platform.`,
+  },
+  {
+    title: "8a. Public Profiles & Search Engine Indexing",
+    body: `Public profile pages (e.g. afuchat.com/@yourhandle) and public posts (e.g. afuchat.com/p/<post-id>) are accessible to anyone on the internet, including search engines such as Google, Bing and DuckDuckGo. We provide a public sitemap and structured data (Open Graph, Twitter Cards, JSON-LD) so that these pages can be discovered, previewed and indexed by third parties.\n\nInformation visible on these public pages — your display name, handle, bio, avatar, banner, follower count and the content of your public posts — may appear in search results and link previews on other services. Direct messages, drafts, AfuPay transactions, and any content from accounts marked private are excluded from public indexing and are not included in our sitemap.\n\nTo prevent indexing of your account:\n\n• Switch your account to private in Settings → Privacy → Account\n• Delete specific posts or your entire account\n• Use Google's "Remove outdated content" tool for cached pages after deletion\n\nWe also expose a robots.txt that disallows indexing of authenticated areas (login, register, settings, messages, wallet, search, AI chat, games).`,
   },
   {
     title: "9. Children's Privacy",
