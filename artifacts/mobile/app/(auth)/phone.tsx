@@ -143,7 +143,7 @@ export default function PhoneAuthScreen() {
                 We'll text you a one-time verification code. Standard SMS rates may apply.
               </Text>
 
-              <View style={[st.inputRow, { backgroundColor: isDark ? "#15151A" : "#F5F5F7", borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)" }]}>
+              <View style={[st.inputRow, { backgroundColor: isDark ? "#15151A" : "#F5F5F7" }]}>
                 <Ionicons name="call-outline" size={18} color={colors.textMuted} />
                 <TextInput
                   value={phone}
@@ -184,7 +184,7 @@ export default function PhoneAuthScreen() {
                 <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold" }}>{phone}</Text>
               </Text>
 
-              <View style={[st.inputRow, { backgroundColor: isDark ? "#15151A" : "#F5F5F7", borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)" }]}>
+              <View style={[st.inputRow, { backgroundColor: isDark ? "#15151A" : "#F5F5F7" }]}>
                 <Ionicons name="key-outline" size={18} color={colors.textMuted} />
                 <TextInput
                   ref={codeRef}
@@ -264,7 +264,7 @@ const st = StyleSheet.create({
 
   inputRow: {
     width: "100%", flexDirection: "row", alignItems: "center", gap: 10,
-    height: 52, borderRadius: 12, borderWidth: 1, paddingHorizontal: 14,
+    height: 52, borderRadius: 12, paddingHorizontal: 14,
   },
   input: { flex: 1, fontSize: 15, fontFamily: "Inter_500Medium" },
 

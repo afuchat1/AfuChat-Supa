@@ -47,7 +47,7 @@ WebBrowser.maybeCompleteAuthSession();
 function AuthInput({ icon, placeholder, value, onChangeText, secureTextEntry, keyboardType, autoCapitalize, autoComplete, colors, isDark, rightElement, onSubmitEditing, returnKeyType, inputRef }: any) {
   const [focused, setFocused] = useState(false);
   return (
-    <View style={[inputSt.wrap, { backgroundColor: isDark ? "#111113" : "#F5F5F7", borderColor: focused ? "#00BCD4" : isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)" }]}>
+    <View style={[inputSt.wrap, { backgroundColor: isDark ? "#111113" : "#F5F5F7" }]}>
       <Ionicons name={icon} size={17} color={focused ? "#00BCD4" : colors.textMuted} style={inputSt.icon} />
       <TextInput ref={inputRef} style={[inputSt.text, { color: colors.text }]} placeholder={placeholder} placeholderTextColor={colors.textMuted} value={value} onChangeText={onChangeText} secureTextEntry={secureTextEntry} keyboardType={keyboardType} autoCapitalize={autoCapitalize ?? "none"} autoComplete={autoComplete} autoCorrect={false} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} onSubmitEditing={onSubmitEditing} returnKeyType={returnKeyType ?? "next"} />
       {rightElement}
@@ -55,7 +55,7 @@ function AuthInput({ icon, placeholder, value, onChangeText, secureTextEntry, ke
   );
 }
 const inputSt = StyleSheet.create({
-  wrap: { flexDirection: "row", alignItems: "center", borderRadius: 10, borderWidth: 1.5, paddingHorizontal: 14, height: 50 },
+  wrap: { flexDirection: "row", alignItems: "center", borderRadius: 10, paddingHorizontal: 14, height: 50 },
   icon: { marginRight: 10 },
   text: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 50 },
 });
@@ -414,6 +414,13 @@ export default function RegisterScreen() {
   if (isDesktop) {
     return (
       <View style={[deskSt.root, { backgroundColor: isDark ? "#09090B" : "#F4F4F5" }]}>
+        <TouchableOpacity
+          style={[deskSt.backBtn, { backgroundColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.07)" }]}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace("/" as any))}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="arrow-back" size={16} color={isDark ? "#fff" : "#000"} />
+        </TouchableOpacity>
         <TouchableOpacity style={[deskSt.themeBtn, { backgroundColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.07)" }]} onPress={() => setThemeMode(isDark ? "light" : "dark")}>
           <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={16} color={isDark ? "#fff" : "#000"} />
         </TouchableOpacity>
@@ -442,6 +449,13 @@ export default function RegisterScreen() {
   // ── Mobile ────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <TouchableOpacity
+        style={[mobBackSt.btn, { top: insets.top + 8, backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }]}
+        onPress={() => (router.canGoBack() ? router.back() : router.replace("/" as any))}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        <Ionicons name="arrow-back" size={20} color={colors.text} />
+      </TouchableOpacity>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={[mobSt.scroll, { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={mobSt.logoArea}>
@@ -468,6 +482,7 @@ const formSt = StyleSheet.create({
 const deskSt = StyleSheet.create<any>({
   root: { flex: 1, flexDirection: "row", position: "relative" },
   themeBtn: { position: "absolute", top: 20, right: 20, zIndex: 10, width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  backBtn: { position: "absolute", top: 20, left: 20, zIndex: 10, width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   formSide: { flex: 1, maxWidth: 520 },
   formScroll: { flexGrow: 1, justifyContent: "center", padding: 48 },
   formCard: { width: "100%", maxWidth: 400, alignSelf: "center", gap: 20 },
@@ -476,6 +491,9 @@ const deskSt = StyleSheet.create<any>({
   headerSub: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22 },
 });
 
+const mobBackSt = StyleSheet.create({
+  btn: { position: "absolute", left: 16, zIndex: 10, width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+});
 const mobSt = StyleSheet.create({
   scroll: { flexGrow: 1, paddingHorizontal: 28 },
   logoArea: { alignItems: "center", marginBottom: 36 },
