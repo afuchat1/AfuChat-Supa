@@ -105,6 +105,8 @@ function RootLayoutNav() {
       <Stack.Screen name="group/create" options={bottomSheetAnim} />
       <Stack.Screen name="group/[id]" />
       <Stack.Screen name="ai/index" />
+      <Stack.Screen name="apps/index" />
+      <Stack.Screen name="apps/submit" options={bottomSheetAnim} />
       <Stack.Screen name="apps/[id]" options={{ animation: Platform.OS === "web" ? "none" : "slide_from_right" }} />
       <Stack.Screen name="post/[id]" />
       <Stack.Screen name="my-posts/index" />
