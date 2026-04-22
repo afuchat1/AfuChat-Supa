@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -27,9 +28,15 @@ type AppDef = {
   route?: string;
   section?: DesktopSection;
   adminOnly?: boolean;
+  featured?: boolean;
 };
 
-type Category = { id: string; title: string; icon: React.ComponentProps<typeof Ionicons>["name"]; apps: AppDef[] };
+type Category = {
+  id: string;
+  title: string;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  apps: AppDef[];
+};
 
 const CATEGORIES: Category[] = [
   {
@@ -37,8 +44,8 @@ const CATEGORIES: Category[] = [
     title: "Intelligence",
     icon: "sparkles",
     apps: [
-      { id: "afuai",  label: "AfuAI",      sub: "Your intelligent assistant. Ask anything, do everything.",   icon: "sparkles",        gradient: [BRAND, "#0097A7"],   badge: "AI",  section: "ai" },
-      { id: "search", label: "Search",      sub: "Find people, posts, channels, events and more.",              icon: "search",          gradient: ["#5856D6","#6E6CD3"],              route: "/search" },
+      { id: "afuai",  label: "AfuAI",  sub: "Your intelligent assistant. Ask anything, get answers and actions.", icon: "sparkles", gradient: [BRAND, "#0097A7"], badge: "AI", section: "ai", featured: true },
+      { id: "search", label: "Search", sub: "Find people, posts, channels, events and more.",                     icon: "search",   gradient: ["#5856D6", "#6E6CD3"],            route: "/search" },
     ],
   },
   {
@@ -46,10 +53,10 @@ const CATEGORIES: Category[] = [
     title: "Social",
     icon: "people",
     apps: [
-      { id: "match",    label: "AfuMatch",   sub: "Meet new people and find meaningful connections.",            icon: "heart",           gradient: ["#FF2D55","#FF375F"],badge: "NEW", section: "match" },
-      { id: "referral", label: "Referral",   sub: "Invite friends and earn Nexa rewards.",                      icon: "people",          gradient: ["#34C759","#00C781"],              route: "/referral" },
-      { id: "events",   label: "Events",     sub: "Discover local and online events near you.",                  icon: "calendar",        gradient: ["#FF9500","#FFCC00"],              route: "/digital-events", adminOnly: true },
-      { id: "paid-com", label: "Communities",sub: "Join paid communities and exclusive groups.",                  icon: "people-circle",   gradient: ["#AF52DE","#BF5AF2"],              route: "/paid-communities", adminOnly: true },
+      { id: "match",    label: "AfuMatch",   sub: "Meet new people and find meaningful connections.",  icon: "heart",          gradient: ["#FF2D55", "#FF375F"], badge: "NEW", section: "match", featured: true },
+      { id: "referral", label: "Referral",   sub: "Invite friends and earn Nexa rewards.",             icon: "people",         gradient: ["#34C759", "#00C781"],               route: "/referral" },
+      { id: "events",   label: "Events",     sub: "Discover local and online events near you.",        icon: "calendar",       gradient: ["#FF9500", "#FFCC00"],               route: "/digital-events", adminOnly: true },
+      { id: "paid-com", label: "Communities",sub: "Join paid communities and exclusive groups.",        icon: "people-circle",  gradient: ["#AF52DE", "#BF5AF2"],               route: "/paid-communities", adminOnly: true },
     ],
   },
   {
@@ -57,9 +64,9 @@ const CATEGORIES: Category[] = [
     title: "Entertainment",
     icon: "game-controller",
     apps: [
-      { id: "games",   label: "Games",       sub: "Play mini games and win ACoins.",                            icon: "game-controller", gradient: ["#007AFF","#0A84FF"],              route: "/games" },
-      { id: "gifts",   label: "Gifts",       sub: "Send animated gifts to people you love.",                    icon: "gift",            gradient: ["#FF3B30","#FF453A"],              route: "/gifts" },
-      { id: "stories", label: "Stories",     sub: "Share moments that disappear in 24 hours.",                  icon: "aperture",        gradient: ["#FF9500","#FF6B35"],              route: "/stories/camera" },
+      { id: "games",   label: "Games",   sub: "Play mini games and win ACoins.",                  icon: "game-controller", gradient: ["#007AFF", "#0A84FF"], route: "/games", featured: true },
+      { id: "gifts",   label: "Gifts",   sub: "Send animated gifts to people you love.",          icon: "gift",            gradient: ["#FF3B30", "#FF453A"], route: "/gifts" },
+      { id: "stories", label: "Stories", sub: "Share moments that disappear in 24 hours.",        icon: "aperture",        gradient: ["#FF9500", "#FF6B35"], route: "/stories/camera" },
     ],
   },
   {
@@ -67,9 +74,9 @@ const CATEGORIES: Category[] = [
     title: "Finance",
     icon: "wallet",
     apps: [
-      { id: "wallet",    label: "Wallet",    sub: "Send, receive and manage your ACoins & Nexa.",               icon: "wallet",          gradient: [BRAND,"#26C6DA"],                  section: "wallet" as DesktopSection },
-      { id: "services",  label: "Services",  sub: "Pay bills, top up, and access local services.",               icon: "card",            gradient: ["#AF52DE","#BF5AF2"],              route: "/mini-programs", adminOnly: true },
-      { id: "freelance", label: "Freelance", sub: "Hire talent or find work on AfuFreelance.",                  icon: "briefcase",       gradient: ["#34C759","#30D158"],badge: "NEW", route: "/freelance", adminOnly: true },
+      { id: "wallet",    label: "Wallet",    sub: "Send, receive and manage your ACoins & Nexa.",  icon: "wallet",    gradient: [BRAND, "#26C6DA"], section: "wallet" as DesktopSection },
+      { id: "services",  label: "Services",  sub: "Pay bills, top up, and access local services.",  icon: "card",      gradient: ["#AF52DE", "#BF5AF2"], route: "/mini-programs", adminOnly: true },
+      { id: "freelance", label: "Freelance", sub: "Hire talent or find work on AfuFreelance.",      icon: "briefcase", gradient: ["#34C759", "#30D158"], badge: "NEW", route: "/freelance", adminOnly: true },
     ],
   },
   {
@@ -77,8 +84,9 @@ const CATEGORIES: Category[] = [
     title: "Marketplace",
     icon: "storefront",
     apps: [
-      { id: "shop",      label: "Marketplace",    sub: "Shop from verified organization stores.",                icon: "storefront",      gradient: ["#FF2D55","#FF6B35"],badge: "NEW", route: "/store", adminOnly: true },
-      { id: "usernames", label: "Usernames",      sub: "Buy and sell premium @handles.",                        icon: "at",              gradient: ["#007AFF","#5AC8FA"],              route: "/username-market", adminOnly: true },
+      { id: "shop",       label: "Marketplace", sub: "Shop from verified organization stores.", icon: "storefront", gradient: ["#FF2D55", "#FF6B35"], badge: "NEW", route: "/store", adminOnly: true },
+      { id: "usernames",  label: "Usernames",   sub: "Buy and sell premium @handles.",          icon: "at",         gradient: ["#007AFF", "#5AC8FA"],               route: "/username-market", adminOnly: true },
+      { id: "miniapps",   label: "Mini Apps",   sub: "Browse and publish lightweight mini apps.", icon: "grid",      gradient: [BRAND, "#0097A7"], badge: "NEW",   route: "/apps" },
     ],
   },
   {
@@ -86,10 +94,10 @@ const CATEGORIES: Category[] = [
     title: "Tools",
     icon: "construct",
     apps: [
-      { id: "digitalid",   label: "Digital ID",  sub: "Your verifiable digital identity card.",                 icon: "id-card",         gradient: ["#1E3A5F","#2C5282"],badge: "3D",  route: "/digital-id" },
-      { id: "saved",       label: "Saved Posts", sub: "All your bookmarked posts in one place.",                 icon: "bookmark",        gradient: ["#FF6B35","#FF8C00"],              route: "/saved-posts" },
-      { id: "collections", label: "Collections", sub: "Curate and share themed collections.",                   icon: "albums",          gradient: ["#BF5AF2","#AF52DE"],              route: "/collections", adminOnly: true },
-      { id: "files",       label: "File Manager",sub: "Store and share your files securely.",                   icon: "folder",          gradient: ["#5856D6","#6E6CD3"],              route: "/file-manager", adminOnly: true },
+      { id: "digitalid",   label: "Digital ID",   sub: "Your verifiable digital identity card.", icon: "id-card",  gradient: ["#1E3A5F", "#2C5282"], badge: "3D", route: "/digital-id" },
+      { id: "saved",       label: "Saved Posts",  sub: "All your bookmarked posts in one place.", icon: "bookmark", gradient: ["#FF6B35", "#FF8C00"],          route: "/saved-posts" },
+      { id: "collections", label: "Collections",  sub: "Curate and share themed collections.",   icon: "albums",   gradient: ["#BF5AF2", "#AF52DE"],          route: "/collections", adminOnly: true },
+      { id: "files",       label: "File Manager", sub: "Store and share your files securely.",   icon: "folder",   gradient: ["#5856D6", "#6E6CD3"],          route: "/file-manager", adminOnly: true },
     ],
   },
   {
@@ -97,14 +105,83 @@ const CATEGORIES: Category[] = [
     title: "Account",
     icon: "person",
     apps: [
-      { id: "premium",      label: "Premium",      sub: "Unlock exclusive features with AfuChat Premium.",      icon: "star",            gradient: [GOLD,"#C89A3E"],    badge: "⭐",   route: "/premium" },
-      { id: "prestige",     label: "Prestige",     sub: "Earn and showcase your community standing.",           icon: "ribbon",          gradient: ["#AF52DE","#9B59B6"],              route: "/prestige" },
-      { id: "achievements", label: "Achievements", sub: "Track your milestones and earn badges.",               icon: "trophy",          gradient: ["#FF9500","#FFB300"],              route: "/achievements" },
+      { id: "premium",      label: "Premium",      sub: "Unlock exclusive features with AfuChat Premium.", icon: "star",   gradient: [GOLD, "#C89A3E"], badge: "PRO", route: "/premium", featured: true },
+      { id: "prestige",     label: "Prestige",     sub: "Earn and showcase your community standing.",      icon: "ribbon", gradient: ["#AF52DE", "#9B59B6"],            route: "/prestige" },
+      { id: "achievements", label: "Achievements", sub: "Track your milestones and earn badges.",         icon: "trophy", gradient: ["#FF9500", "#FFB300"],            route: "/achievements" },
     ],
   },
 ];
 
-// ─── App Tile ─────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function gradFor(app: AppDef, accent: string): [string, string] {
+  return app.gradient.map((c) => (c === BRAND ? accent : c)) as [string, string];
+}
+
+// ─── Featured hero banner ────────────────────────────────────────────────────
+
+function FeaturedBanner({
+  app,
+  colors,
+  accent,
+  onPress,
+}: {
+  app: AppDef;
+  colors: any;
+  accent: string;
+  onPress: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const hoverProps =
+    Platform.OS === "web"
+      ? { onMouseEnter: () => setHovered(true), onMouseLeave: () => setHovered(false) }
+      : {};
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.92}
+      style={[
+        styles.banner,
+        { borderColor: colors.border },
+        hovered && { transform: [{ translateY: -2 }] },
+      ]}
+      {...(hoverProps as any)}
+    >
+      <LinearGradient
+        colors={gradFor(app, accent)}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFillObject as any}
+      />
+      <View style={styles.bannerOverlay} />
+      <View style={styles.bannerContent}>
+        <View style={styles.bannerIconWrap}>
+          <Ionicons name={app.icon} size={28} color="#fff" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Text style={styles.bannerTitle}>{app.label}</Text>
+            {!!app.badge && (
+              <View style={styles.bannerBadge}>
+                <Text style={styles.bannerBadgeText}>{app.badge}</Text>
+              </View>
+            )}
+          </View>
+          <Text style={styles.bannerSub} numberOfLines={2}>
+            {app.sub}
+          </Text>
+        </View>
+        <View style={styles.bannerCta}>
+          <Text style={styles.bannerCtaText}>Open</Text>
+          <Ionicons name="arrow-forward" size={14} color="#fff" />
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+// ─── App tile ────────────────────────────────────────────────────────────────
 
 function AppTile({
   app,
@@ -123,32 +200,37 @@ function AppTile({
       ? { onMouseEnter: () => setHovered(true), onMouseLeave: () => setHovered(false) }
       : {};
 
-  const grad: [string, string] = app.gradient.map((c) =>
-    c === BRAND ? accent : c
-  ) as [string, string];
-
   return (
     <TouchableOpacity
       onPress={onPress}
-      activeOpacity={0.85}
+      activeOpacity={0.88}
       style={[
         styles.tile,
-        { backgroundColor: colors.surface, borderColor: hovered ? accent + "50" : colors.border },
-        hovered && { shadowOpacity: 0.12 },
+        {
+          backgroundColor: colors.surface,
+          borderColor: hovered ? accent + "55" : colors.border,
+        },
+        hovered && Platform.OS === "web" && ({ transform: [{ translateY: -2 }] } as any),
       ]}
       {...(hoverProps as any)}
     >
-      <LinearGradient colors={grad} style={styles.tileIcon} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-        <Ionicons name={app.icon} size={24} color="#fff" />
+      <LinearGradient
+        colors={gradFor(app, accent)}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.tileIcon}
+      >
+        <Ionicons name={app.icon} size={20} color="#fff" />
       </LinearGradient>
+
       <View style={styles.tileMeta}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <Text style={[styles.tileLabel, { color: colors.text }]} numberOfLines={1}>
             {app.label}
           </Text>
           {!!app.badge && (
-            <View style={[styles.badge, { backgroundColor: accent + "20" }]}>
-              <Text style={[styles.badgeText, { color: accent }]}>{app.badge}</Text>
+            <View style={[styles.tileBadge, { backgroundColor: accent + "1F" }]}>
+              <Text style={[styles.tileBadgeText, { color: accent }]}>{app.badge}</Text>
             </View>
           )}
         </View>
@@ -156,12 +238,24 @@ function AppTile({
           {app.sub}
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+
+      <View
+        style={[
+          styles.tileArrow,
+          { backgroundColor: hovered ? accent : colors.text + "08" },
+        ]}
+      >
+        <Ionicons
+          name="arrow-forward"
+          size={13}
+          color={hovered ? "#fff" : colors.textMuted}
+        />
+      </View>
     </TouchableOpacity>
   );
 }
 
-// ─── Category Section ─────────────────────────────────────────────────────────
+// ─── Category block ──────────────────────────────────────────────────────────
 
 function CategoryBlock({
   cat,
@@ -182,117 +276,126 @@ function CategoryBlock({
   return (
     <View style={styles.catBlock}>
       <View style={styles.catHeader}>
-        <View style={[styles.catIconWrap, { backgroundColor: accent + "18" }]}>
-          <Ionicons name={cat.icon} size={15} color={accent} />
+        <View style={[styles.catIconWrap, { backgroundColor: accent + "16" }]}>
+          <Ionicons name={cat.icon} size={14} color={accent} />
         </View>
         <Text style={[styles.catTitle, { color: colors.text }]}>{cat.title}</Text>
+        <View style={[styles.catCount, { backgroundColor: colors.text + "08" }]}>
+          <Text style={[styles.catCountText, { color: colors.textMuted }]}>
+            {visibleApps.length}
+          </Text>
+        </View>
       </View>
       <View style={styles.tileGrid}>
         {visibleApps.map((app) => (
-          <AppTile
-            key={app.id}
-            app={app}
-            colors={colors}
-            accent={accent}
-            onPress={() => {
-              if (app.section) onNavigate(app.section);
-              else if (app.route) router.push(app.route as any);
-            }}
-          />
+          <View key={app.id} style={styles.tileCol}>
+            <AppTile
+              app={app}
+              colors={colors}
+              accent={accent}
+              onPress={() => {
+                if (app.section) onNavigate(app.section);
+                else if (app.route) router.push(app.route as any);
+              }}
+            />
+          </View>
         ))}
       </View>
     </View>
   );
 }
 
-// ─── Left sidebar nav ─────────────────────────────────────────────────────────
-
-function SideNav({
-  active,
-  onSelect,
-  colors,
-  accent,
-  isAdmin,
-}: {
-  active: string;
-  onSelect: (id: string) => void;
-  colors: any;
-  accent: string;
-  isAdmin: boolean;
-}) {
-  const visible = CATEGORIES.filter(
-    (c) => !c.apps.every((a) => a.adminOnly && !isAdmin)
-  );
-
-  return (
-    <View style={[styles.sideNav, { borderRightColor: colors.border, backgroundColor: colors.surface }]}>
-      <Text style={[styles.sideTitle, { color: colors.textMuted }]}>Categories</Text>
-      {visible.map((cat) => {
-        const isActive = cat.id === active;
-        return (
-          <TouchableOpacity
-            key={cat.id}
-            onPress={() => onSelect(cat.id)}
-            activeOpacity={0.8}
-            style={[
-              styles.sideItem,
-              isActive && { backgroundColor: accent + "14" },
-            ]}
-          >
-            <View style={[styles.sideIconWrap, isActive && { backgroundColor: accent + "20" }]}>
-              <Ionicons name={cat.icon} size={15} color={isActive ? accent : colors.textMuted} />
-            </View>
-            <Text style={[styles.sideLabel, { color: isActive ? accent : colors.text, fontFamily: isActive ? "Inter_600SemiBold" : "Inter_500Medium" }]}>
-              {cat.title}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
-}
-
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export function DesktopAppsSection({ onNavigate }: { onNavigate: (section: DesktopSection) => void }) {
+export function DesktopAppsSection({
+  onNavigate,
+}: {
+  onNavigate: (section: DesktopSection) => void;
+}) {
   const { colors, accent } = useTheme();
   const { profile } = useAuth();
   const isAdmin = (profile as any)?.is_admin ?? false;
+  const [filter, setFilter] = useState("");
 
-  const [activeCat, setActiveCat] = useState("intelligence");
-  const scrollRef = React.useRef<ScrollView>(null);
+  const featured = useMemo(
+    () =>
+      CATEGORIES.flatMap((c) => c.apps)
+        .filter((a) => a.featured && (!a.adminOnly || isAdmin))
+        .slice(0, 3),
+    [isAdmin],
+  );
 
-  const selectedCat = CATEGORIES.find((c) => c.id === activeCat);
-
-  function handleScroll(id: string) {
-    setActiveCat(id);
-  }
+  const filteredCats = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return CATEGORIES;
+    return CATEGORIES.map((c) => ({
+      ...c,
+      apps: c.apps.filter(
+        (a) =>
+          a.label.toLowerCase().includes(q) ||
+          a.sub.toLowerCase().includes(q),
+      ),
+    })).filter((c) => c.apps.length > 0);
+  }, [filter]);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <SideNav active={activeCat} onSelect={handleScroll} colors={colors} accent={accent} isAdmin={isAdmin} />
+      {/* Top section header */}
+      <View style={[styles.pageHeader, { borderBottomColor: colors.border }]}>
+        <View style={styles.pageHeaderLeft}>
+          <Text style={[styles.pageTitle, { color: colors.text }]}>Apps</Text>
+          <Text style={[styles.pageSub, { color: colors.textMuted }]}>
+            All your tools, services, and entertainment in one place
+          </Text>
+        </View>
+        <View
+          style={[
+            styles.filterWrap,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
+          <Ionicons name="search" size={14} color={colors.textMuted} />
+          <TextInput
+            value={filter}
+            onChangeText={setFilter}
+            placeholder="Filter apps"
+            placeholderTextColor={colors.textMuted}
+            style={[styles.filterInput, { color: colors.text }]}
+          />
+          {filter.length > 0 && (
+            <TouchableOpacity onPress={() => setFilter("")} hitSlop={8}>
+              <Ionicons name="close-circle" size={14} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
 
       <ScrollView
-        ref={scrollRef}
-        style={styles.main}
-        contentContainerStyle={styles.mainContent}
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero */}
-        <View style={[styles.hero, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <View style={[styles.heroIcon, { backgroundColor: accent + "18" }]}>
-            <Ionicons name="grid" size={28} color={accent} />
+        {/* Featured row */}
+        {featured.length > 0 && filter.trim() === "" && (
+          <View style={styles.featuredRow}>
+            {featured.map((app) => (
+              <View key={app.id} style={styles.featuredCol}>
+                <FeaturedBanner
+                  app={app}
+                  colors={colors}
+                  accent={accent}
+                  onPress={() => {
+                    if (app.section) onNavigate(app.section);
+                    else if (app.route) router.push(app.route as any);
+                  }}
+                />
+              </View>
+            ))}
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.heroTitle, { color: colors.text }]}>AfuChat Apps</Text>
-            <Text style={[styles.heroSub, { color: colors.textMuted }]}>
-              All your tools, entertainment, and services in one place
-            </Text>
-          </View>
-        </View>
+        )}
 
-        {/* All categories */}
-        {CATEGORIES.map((cat) => (
+        {/* Categories */}
+        {filteredCats.map((cat) => (
           <CategoryBlock
             key={cat.id}
             cat={cat}
@@ -303,7 +406,19 @@ export function DesktopAppsSection({ onNavigate }: { onNavigate: (section: Deskt
           />
         ))}
 
-        <View style={{ height: 40 }} />
+        {filteredCats.length === 0 && (
+          <View style={styles.emptyState}>
+            <Ionicons name="search-outline" size={42} color={colors.textMuted} />
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>
+              No apps match “{filter}”
+            </Text>
+            <Text style={[styles.emptySub, { color: colors.textMuted }]}>
+              Try a different keyword or clear the filter.
+            </Text>
+          </View>
+        )}
+
+        <View style={{ height: 48 }} />
       </ScrollView>
     </View>
   );
@@ -312,110 +427,190 @@ export function DesktopAppsSection({ onNavigate }: { onNavigate: (section: Deskt
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create<any>({
-  root: { flex: 1, flexDirection: "row" },
+  root: { flex: 1 },
 
-  sideNav: {
-    width: 200,
-    borderRightWidth: StyleSheet.hairlineWidth,
-    paddingTop: 20,
-    paddingHorizontal: 8,
+  // Page header
+  pageHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 32,
+    paddingVertical: 22,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 16,
+  },
+  pageHeaderLeft: { flex: 1, minWidth: 0 },
+  pageTitle: { fontSize: 24, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
+  pageSub: { fontSize: 13.5, fontFamily: "Inter_400Regular", marginTop: 4 },
+
+  filterWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    height: 36,
+    borderRadius: 9,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    width: 240,
     flexShrink: 0,
   },
-  sideTitle: {
-    fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-    paddingHorizontal: 10,
-    marginBottom: 8,
+  filterInput: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    outlineStyle: "none" as any,
+    paddingVertical: 0,
   },
-  sideItem: {
+
+  scrollContent: { padding: 32, paddingTop: 24 },
+
+  // Featured row
+  featuredRow: {
+    flexDirection: "row",
+    gap: 14,
+    marginBottom: 32,
+    flexWrap: "wrap",
+  },
+  featuredCol: { flex: 1, minWidth: 280 },
+
+  banner: {
+    height: 132,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+    position: "relative",
+  },
+  bannerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.18)",
+  },
+  bannerContent: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    borderRadius: 9,
-    marginBottom: 2,
+    gap: 14,
+    paddingHorizontal: 18,
   },
-  sideIconWrap: {
-    width: 26,
-    height: 26,
+  bannerIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 13,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bannerTitle: { fontSize: 17, fontFamily: "Inter_700Bold", color: "#fff", letterSpacing: -0.2 },
+  bannerSub: {
+    fontSize: 12.5,
+    fontFamily: "Inter_400Regular",
+    color: "rgba(255,255,255,0.88)",
+    marginTop: 4,
+    lineHeight: 17,
+  },
+  bannerBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
+    backgroundColor: "rgba(255,255,255,0.22)",
+  },
+  bannerBadgeText: { fontSize: 9.5, fontFamily: "Inter_700Bold", color: "#fff", letterSpacing: 0.4 },
+  bannerCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: 7,
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.18)",
   },
-  sideLabel: { fontSize: 13.5 },
+  bannerCtaText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
 
-  main: { flex: 1 },
-  mainContent: { padding: 24 },
-
-  hero: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-    padding: 20,
-    borderRadius: 14,
-    borderBottomWidth: 0,
-    marginBottom: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  heroIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  heroTitle: { fontSize: 22, fontFamily: "Inter_700Bold", letterSpacing: -0.4 },
-  heroSub: { fontSize: 14, fontFamily: "Inter_400Regular", marginTop: 3 },
-
+  // Category
   catBlock: { marginBottom: 28 },
-  catHeader: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
+  catHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    marginBottom: 14,
+  },
   catIconWrap: {
-    width: 26,
-    height: 26,
-    borderRadius: 7,
+    width: 24,
+    height: 24,
+    borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
   },
-  catTitle: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  catTitle: { fontSize: 15, fontFamily: "Inter_700Bold", letterSpacing: -0.2 },
+  catCount: {
+    paddingHorizontal: 7,
+    paddingVertical: 1.5,
+    borderRadius: 5,
+  },
+  catCountText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
 
-  tileGrid: { gap: 8 },
+  // Tiles
+  tileGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginHorizontal: -7,
+  },
+  tileCol: {
+    width: "33.3333%",
+    paddingHorizontal: 7,
+    paddingBottom: 12,
+  },
 
   tile: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
+    gap: 12,
     padding: 14,
-    borderRadius: 12,
+    borderRadius: 11,
     borderWidth: StyleSheet.hairlineWidth,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 1,
   },
   tileIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
   },
-  tileMeta: { flex: 1 },
-  tileLabel: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  tileSub: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 3, lineHeight: 18 },
-
-  badge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 5,
+  tileMeta: { flex: 1, minWidth: 0 },
+  tileLabel: { fontSize: 13.5, fontFamily: "Inter_600SemiBold", letterSpacing: -0.1 },
+  tileSub: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    marginTop: 3,
+    lineHeight: 16,
   },
-  badgeText: { fontSize: 10, fontFamily: "Inter_700Bold" },
+
+  tileBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  tileBadgeText: {
+    fontSize: 9.5,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 0.4,
+  },
+
+  tileArrow: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 64,
+    gap: 8,
+  },
+  emptyTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  emptySub: { fontSize: 13, fontFamily: "Inter_400Regular" },
 });

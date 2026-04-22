@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -21,61 +22,56 @@ import type { DesktopSection } from "./DesktopWrapper";
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 const BRAND = "#00BCD4";
 
-// ─── Live unread counts hook ─────────────────────────────────────────────────
+// ─── Live unread counts hook ────────────────────────────────────────────────
 
-function useUnreadCounts(userId: string | null) {
+export function useUnreadCounts(userId: string | null) {
   const [notifCount, setNotifCount] = useState(0);
   const [chatCount, setChatCount] = useState(0);
 
   useEffect(() => {
     if (!userId) { setNotifCount(0); setChatCount(0); return; }
 
-    // Fetch notification unread count
-    supabase
-      .from("notifications")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .eq("is_read", false)
-      .then(({ count }) => setNotifCount(count ?? 0));
+    const refreshNotif = () =>
+      supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("is_read", false)
+        .then(({ count }) => setNotifCount(count ?? 0));
 
-    // Fetch chat unread count (chats with unread_count > 0)
-    supabase
-      .from("chat_members")
-      .select("unread_count")
-      .eq("user_id", userId)
-      .gt("unread_count", 0)
-      .then(({ data }) => {
-        const total = (data || []).reduce((sum: number, r: any) => sum + (r.unread_count || 0), 0);
-        setChatCount(total);
-      });
+    const refreshChat = () =>
+      supabase
+        .from("chat_members")
+        .select("unread_count")
+        .eq("user_id", userId)
+        .gt("unread_count", 0)
+        .then(({ data }) => {
+          const total = (data || []).reduce(
+            (sum: number, r: any) => sum + (r.unread_count || 0),
+            0,
+          );
+          setChatCount(total);
+        });
 
-    // Subscribe to new notifications
+    refreshNotif();
+    refreshChat();
+
     const notifSub = supabase
       .channel(`nav-notifs-${userId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, () => {
-        supabase
-          .from("notifications")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", userId)
-          .eq("is_read", false)
-          .then(({ count }) => setNotifCount(count ?? 0));
-      })
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
+        () => refreshNotif(),
+      )
       .subscribe();
 
-    // Subscribe to chat member changes
     const chatSub = supabase
       .channel(`nav-chats-${userId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_members", filter: `user_id=eq.${userId}` }, () => {
-        supabase
-          .from("chat_members")
-          .select("unread_count")
-          .eq("user_id", userId)
-          .gt("unread_count", 0)
-          .then(({ data }) => {
-            const total = (data || []).reduce((sum: number, r: any) => sum + (r.unread_count || 0), 0);
-            setChatCount(total);
-          });
-      })
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "chat_members", filter: `user_id=eq.${userId}` },
+        () => refreshChat(),
+      )
       .subscribe();
 
     return () => {
@@ -87,112 +83,40 @@ function useUnreadCounts(userId: string | null) {
   return { notifCount, chatCount };
 }
 
-// ─── Badge pill ───────────────────────────────────────────────────────────────
-
-function CountBadge({ count, color = "#FF3B30" }: { count: number; color?: string }) {
-  if (count <= 0) return null;
-  return (
-    <View style={[badgeStyles.wrap, { backgroundColor: color }]}>
-      <Text style={badgeStyles.text}>{count > 99 ? "99+" : count}</Text>
-    </View>
-  );
-}
-
-const badgeStyles = StyleSheet.create({
-  wrap: {
-    position: "absolute",
-    top: -4,
-    right: -4,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 3,
-  },
-  text: { color: "#fff", fontSize: 9, fontFamily: "Inter_700Bold" },
-});
-
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type DropdownItem = {
-  key: string;
+type NavItem = {
+  key: DesktopSection | string;
   label: string;
   icon: React.ComponentProps<typeof Ionicons>["name"];
+  iconActive?: React.ComponentProps<typeof Ionicons>["name"];
   section?: DesktopSection;
   route?: string;
-  color?: string;
-  badge?: string;
-  dividerAbove?: boolean;
-};
-
-type NavDef = {
-  key: DesktopSection | "create" | "match";
-  label: string;
-  icon?: React.ComponentProps<typeof Ionicons>["name"];
-  dropdown?: DropdownItem[];
+  badge?: number;
   requiresAuth?: boolean;
+  pill?: string;
+  pillColor?: string;
 };
 
-// ─── Dropdown item data ───────────────────────────────────────────────────────
+type NavGroup = {
+  title?: string;
+  items: NavItem[];
+};
 
-const CONNECT_ITEMS: DropdownItem[] = [
-  { key: "messages",   label: "Messages",       icon: "chatbubble-ellipses",   section: "chats" },
-  { key: "contacts",   label: "Contacts",        icon: "people",                section: "contacts" },
-  { key: "grp-create", label: "Create Group",   icon: "people-circle-outline", route: "/group/create" },
-  { key: "chn-create", label: "Create Channel", icon: "megaphone-outline",     route: "/channel/create" },
-];
+// ─── Sidebar nav row ─────────────────────────────────────────────────────────
 
-const CREATE_ITEMS: DropdownItem[] = [
-  { key: "post",    label: "New Post",      icon: "create-outline",    route: "/moments/create" },
-  { key: "article", label: "Write Article", icon: "newspaper-outline", route: "/moments/create-article" },
-  { key: "video",   label: "Upload Video",  icon: "videocam-outline",  route: "/moments/create-video" },
-  { key: "story",   label: "New Story",     icon: "add-circle-outline",route: "/stories/create" },
-];
-
-const WALLET_ITEMS: DropdownItem[] = [
-  { key: "wallet",    label: "My Wallet",  icon: "wallet",             section: "wallet" },
-  { key: "topup",     label: "Top Up",     icon: "add-circle",         route: "/wallet/topup" },
-  { key: "transfer",  label: "Transfer",   icon: "swap-horizontal",    route: "/mini-programs/transfer" },
-  { key: "requests",  label: "Requests",   icon: "receipt-outline",    route: "/wallet/requests" },
-  { key: "giftvault", label: "Gift Vault", icon: "gift",               route: "/wallet/gift-vault" },
-];
-
-const APPS_ITEMS_COL1: DropdownItem[] = [
-  { key: "ai",       label: "AfuAI",         icon: "sparkles",        section: "ai",            badge: "AI",  color: BRAND },
-  { key: "games",    label: "Games",          icon: "game-controller", route: "/games",                        color: "#007AFF" },
-  { key: "gifts",    label: "Gifts",          icon: "gift",            route: "/gifts",                        color: "#AF52DE" },
-  { key: "match",    label: "AfuMatch",       icon: "heart",           section: "match",                       color: "#FF2D55" },
-  { key: "events",   label: "Events",         icon: "calendar",        route: "/digital-events",               color: "#FF9500" },
-];
-
-const APPS_ITEMS_COL2: DropdownItem[] = [
-  { key: "store",     label: "Marketplace",   icon: "storefront",      route: "/store",                        color: "#FF2D55" },
-  { key: "freelance", label: "Freelance",     icon: "briefcase",       route: "/freelance",                    color: "#34C759" },
-  { key: "files",     label: "File Manager",  icon: "folder",          route: "/file-manager",                 color: "#5856D6" },
-  { key: "saved",     label: "Saved Posts",   icon: "bookmark",        route: "/saved-posts",                  color: "#FF6B35" },
-  { key: "referral",  label: "Referral",      icon: "people",          route: "/referral",                     color: "#00C781" },
-];
-
-const NAV_DEFS: NavDef[] = [
-  { key: "discover", label: "Home",        icon: "home-outline" },
-  { key: "search",   label: "Explore",     icon: "search-outline" },
-  { key: "chats",    label: "Connect",     dropdown: CONNECT_ITEMS,   requiresAuth: true },
-  { key: "create",   label: "Create",      dropdown: CREATE_ITEMS,    requiresAuth: true },
-  { key: "wallet",   label: "Wallet",      dropdown: WALLET_ITEMS,    requiresAuth: true },
-  { key: "apps",     label: "Apps",        icon: "grid-outline" },
-];
-
-// ─── Dropdown row ─────────────────────────────────────────────────────────────
-
-function DropdownRow({
+function NavRow({
   item,
-  onPress,
+  active,
   colors,
+  accent,
+  onPress,
 }: {
-  item: DropdownItem;
-  onPress: () => void;
+  item: NavItem;
+  active: boolean;
   colors: any;
+  accent: string;
+  onPress: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const hoverProps =
@@ -200,226 +124,77 @@ function DropdownRow({
       ? { onMouseEnter: () => setHovered(true), onMouseLeave: () => setHovered(false) }
       : {};
 
+  const bg = active ? accent + "16" : hovered ? colors.text + "08" : "transparent";
+  const fg = active ? accent : colors.text;
+  const iconName = active && item.iconActive ? item.iconActive : item.icon;
+
   return (
     <TouchableOpacity
       onPress={onPress}
-      activeOpacity={0.8}
-      style={[styles.menuRow, hovered && { backgroundColor: colors.accent + "10" }]}
+      activeOpacity={0.85}
+      style={[styles.navRow, { backgroundColor: bg }]}
       {...(hoverProps as any)}
     >
-      <View style={[styles.menuIconWrap, { backgroundColor: (item.color ?? BRAND) + "18" }]}>
-        <Ionicons name={item.icon} size={14} color={item.color ?? BRAND} />
-      </View>
-      <Text style={[styles.menuRowLabel, { color: colors.text }]}>{item.label}</Text>
-      {!!item.badge && (
-        <View style={[styles.menuBadge, { backgroundColor: (item.color ?? BRAND) + "20" }]}>
-          <Text style={[styles.menuBadgeText, { color: item.color ?? BRAND }]}>{item.badge}</Text>
+      {active && <View style={[styles.navActiveBar, { backgroundColor: accent }]} />}
+      <Ionicons name={iconName} size={18} color={fg} />
+      <Text
+        style={[
+          styles.navLabel,
+          { color: fg, fontFamily: active ? "Inter_600SemiBold" : "Inter_500Medium" },
+        ]}
+        numberOfLines={1}
+      >
+        {item.label}
+      </Text>
+      {item.pill ? (
+        <View
+          style={[
+            styles.pill,
+            { backgroundColor: (item.pillColor ?? accent) + "1F" },
+          ]}
+        >
+          <Text style={[styles.pillText, { color: item.pillColor ?? accent }]}>
+            {item.pill}
+          </Text>
         </View>
-      )}
+      ) : null}
+      {!!item.badge && item.badge > 0 ? (
+        <View style={[styles.badge, { backgroundColor: "#FF3B30" }]}>
+          <Text style={styles.badgeText}>{item.badge > 99 ? "99+" : item.badge}</Text>
+        </View>
+      ) : null}
     </TouchableOpacity>
   );
 }
 
-// ─── Dropdown panel (single or dual column) ──────────────────────────────────
+// ─── User menu (popover) ─────────────────────────────────────────────────────
 
-function DropdownPanel({
-  col1,
-  col2,
-  onClose,
-  onSection,
-  colors,
-}: {
-  col1: DropdownItem[];
-  col2?: DropdownItem[];
-  onClose: () => void;
-  onSection: (s: DesktopSection) => void;
-  colors: any;
-}) {
-  function handle(item: DropdownItem) {
-    onClose();
-    if (item.section) { onSection(item.section); return; }
-    if (item.route) router.push(item.route as any);
-  }
+type MenuItem = {
+  key: string;
+  label: string;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  section?: DesktopSection;
+  route?: string;
+  color?: string;
+  divider?: boolean;
+};
 
-  return (
-    <View style={[styles.dropdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      {/* col1 */}
-      <View style={col2 ? { flex: 1 } : undefined}>
-        {col1.map((item) => (
-          <React.Fragment key={item.key}>
-            {item.dividerAbove && <View style={[styles.ddivider, { backgroundColor: colors.border }]} />}
-            <DropdownRow item={item} onPress={() => handle(item)} colors={colors} />
-          </React.Fragment>
-        ))}
-      </View>
-      {/* col2 */}
-      {col2 && (
-        <>
-          <View style={[styles.ddividerV, { backgroundColor: colors.border }]} />
-          <View style={{ flex: 1 }}>
-            {col2.map((item) => (
-              <React.Fragment key={item.key}>
-                {item.dividerAbove && <View style={[styles.ddivider, { backgroundColor: colors.border }]} />}
-                <DropdownRow item={item} onPress={() => handle(item)} colors={colors} />
-              </React.Fragment>
-            ))}
-          </View>
-        </>
-      )}
-    </View>
-  );
-}
-
-// ─── Single nav tab (hover-to-open, Vercel-style) ────────────────────────────
-
-function NavTab({
-  def,
-  isActive,
-  onPress,
-  onSection,
-  colors,
-}: {
-  def: NavDef;
-  isActive: boolean;
-  onPress: () => void;
-  onSection: (s: DesktopSection) => void;
-  colors: any;
-}) {
-  const [open, setOpen] = useState(false);
-  const [visible, setVisible] = useState(false);
-  const [hovered, setHovered] = useState(false);
-  const animVal = useRef(new Animated.Value(0)).current;
-  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const trigHovered = useRef(false);
-  const ddHovered = useRef(false);
-  const hasDropdown = !!def.dropdown || def.key === "apps";
-  const isApps = def.key === "apps";
-
-  // Animate in/out
-  useEffect(() => {
-    if (open) {
-      setVisible(true);
-      Animated.spring(animVal, { toValue: 1, useNativeDriver: true, speed: 28, bounciness: 1 }).start();
-    } else {
-      Animated.timing(animVal, { toValue: 0, duration: 110, useNativeDriver: true }).start(() => setVisible(false));
-    }
-  }, [open]);
-
-  function scheduleOpen() {
-    if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
-    if (!open) {
-      openTimer.current = setTimeout(() => setOpen(true), 80);
-    }
-  }
-
-  function scheduleClose() {
-    if (openTimer.current) { clearTimeout(openTimer.current); openTimer.current = null; }
-    closeTimer.current = setTimeout(() => {
-      if (!trigHovered.current && !ddHovered.current) setOpen(false);
-    }, 140);
-  }
-
-  const triggerProps = Platform.OS === "web" ? {
-    onMouseEnter: () => {
-      trigHovered.current = true;
-      setHovered(true);
-      if (hasDropdown) scheduleOpen();
-    },
-    onMouseLeave: () => {
-      trigHovered.current = false;
-      setHovered(false);
-      if (hasDropdown) scheduleClose();
-    },
-  } : {};
-
-  const panelProps = Platform.OS === "web" ? {
-    onMouseEnter: () => {
-      ddHovered.current = true;
-      if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
-    },
-    onMouseLeave: () => {
-      ddHovered.current = false;
-      scheduleClose();
-    },
-  } : {};
-
-  function handlePress() {
-    if (hasDropdown) setOpen((v) => !v);
-    else if (isApps) onSection("apps");
-    else onPress();
-  }
-
-  const activeColor = BRAND;
-  const textColor = isActive ? activeColor : colors.textMuted;
-
-  const dropAnim = {
-    opacity: animVal,
-    transform: [{ translateY: animVal.interpolate({ inputRange: [0, 1], outputRange: [-5, 0] }) }],
-  };
-
-  return (
-    <View style={{ position: "relative" }}>
-      <TouchableOpacity
-        onPress={handlePress}
-        activeOpacity={0.8}
-        style={[
-          styles.navTab,
-          hovered && !isActive && { backgroundColor: colors.textMuted + "0d" },
-        ]}
-        {...(triggerProps as any)}
-      >
-        {def.icon && <Ionicons name={def.icon as any} size={16} color={textColor} />}
-        <Text style={[styles.navTabLabel, { color: textColor, fontFamily: isActive ? "Inter_600SemiBold" : "Inter_500Medium" }]}>
-          {def.label}
-        </Text>
-        {hasDropdown && (
-          <Ionicons name={open ? "chevron-up" : "chevron-down"} size={11} color={textColor} />
-        )}
-        {isActive && <View style={[styles.activeIndicator, { backgroundColor: activeColor }]} />}
-      </TouchableOpacity>
-
-      {visible && hasDropdown && (
-        <>
-          <Pressable
-            style={{ position: "fixed" as any, top: 0, left: 0, right: 0, bottom: 0, zIndex: 997 }}
-            onPress={() => setOpen(false)}
-          />
-          <Animated.View style={[dropAnim, { position: "absolute" as any, top: 44, left: 0, zIndex: 999 }]} {...(panelProps as any)}>
-            <DropdownPanel
-              col1={isApps ? APPS_ITEMS_COL1 : def.dropdown!}
-              col2={isApps ? APPS_ITEMS_COL2 : undefined}
-              onClose={() => setOpen(false)}
-              onSection={(s) => { setOpen(false); onSection(s); }}
-              colors={colors}
-            />
-          </Animated.View>
-        </>
-      )}
-    </View>
-  );
-}
-
-// ─── User menu ────────────────────────────────────────────────────────────────
-
-function buildUserMenu(isAdmin: boolean): DropdownItem[] {
-  const base: DropdownItem[] = [
-    { key: "profile",      label: "View Profile",     icon: "person-circle-outline",    section: "profile" },
-    { key: "edit",         label: "Edit Profile",      icon: "create-outline",           route: "/profile/edit" },
-    { key: "digitalid",   label: "Digital ID",        icon: "id-card-outline",           route: "/digital-id" },
-    { key: "achievements", label: "Achievements",     icon: "trophy-outline",            route: "/achievements" },
-    { key: "prestige",     label: "Prestige",         icon: "ribbon-outline",            route: "/prestige" },
-    { key: "premium",      label: "Go Premium",       icon: "star-outline",              route: "/premium",          color: "#D4A853" },
-    { key: "usernames",    label: "Username Market",  icon: "at-outline",               route: "/username-market" },
-    { key: "settings",     label: "Settings",         icon: "settings-outline",          section: "settings",       dividerAbove: true },
+function buildUserMenu(isAdmin: boolean): MenuItem[] {
+  const items: MenuItem[] = [
+    { key: "profile",      label: "View profile",     icon: "person-circle-outline",  section: "profile" },
+    { key: "edit",         label: "Edit profile",      icon: "create-outline",         route: "/profile/edit" },
+    { key: "digitalid",    label: "Digital ID",        icon: "id-card-outline",        route: "/digital-id" },
+    { key: "achievements", label: "Achievements",      icon: "trophy-outline",         route: "/achievements" },
+    { key: "premium",      label: "Go Premium",        icon: "star-outline",           route: "/premium",     color: "#D4A853", divider: true },
+    { key: "settings",     label: "Settings",          icon: "settings-outline",       section: "settings" },
   ];
   if (isAdmin) {
-    base.push({ key: "admin", label: "Admin Panel", icon: "shield-checkmark-outline", route: "/admin", color: "#FF3B30" });
+    items.push({ key: "admin", label: "Admin Panel", icon: "shield-checkmark-outline", route: "/admin", color: "#FF3B30" });
   }
-  return base;
+  return items;
 }
 
-function UserMenuPanel({
+function UserMenuPopover({
   profile,
   colors,
   themeMode,
@@ -437,76 +212,153 @@ function UserMenuPanel({
   cycleTheme: () => void;
 }) {
   const isAdmin = profile?.is_admin ?? false;
-  const menuItems = buildUserMenu(isAdmin);
+  const items = buildUserMenu(isAdmin);
 
   const themeLabel =
-    themeMode === "dark" ? "Light mode" : themeMode === "light" ? "System theme" : "Dark mode";
+    themeMode === "dark" ? "Light theme" : themeMode === "light" ? "System theme" : "Dark theme";
   const themeIcon: React.ComponentProps<typeof Ionicons>["name"] =
     themeMode === "dark" ? "sunny-outline" : themeMode === "light" ? "contrast-outline" : "moon-outline";
 
-  function handle(item: DropdownItem) {
+  function handle(it: MenuItem) {
     onClose();
-    if (item.section) { onSection(item.section); return; }
-    if (item.route) router.push(item.route as any);
+    if (it.section) onSection(it.section);
+    else if (it.route) router.push(it.route as any);
   }
 
   return (
-    <View style={[styles.userMenuPanel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      {/* Header */}
-      <View style={[styles.userMenuHeader, { borderBottomColor: colors.border }]}>
-        <Avatar uri={profile?.avatar_url ?? null} name={profile?.display_name || "?"} size={36} style={{ borderRadius: 8 }} />
-        <View style={{ flex: 1, marginLeft: 10 }}>
-          <Text style={[styles.umName, { color: colors.text }]} numberOfLines={1}>
+    <View style={[styles.userPopover, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={[styles.userPopoverHeader, { borderBottomColor: colors.border }]}>
+        <Avatar
+          uri={profile?.avatar_url ?? null}
+          name={profile?.display_name || "?"}
+          size={40}
+          style={{ borderRadius: 10 }}
+        />
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={[styles.upName, { color: colors.text }]} numberOfLines={1}>
             {profile?.display_name || "User"}
           </Text>
-          <Text style={[styles.umHandle, { color: colors.textMuted }]} numberOfLines={1}>
+          <Text style={[styles.upHandle, { color: colors.textMuted }]} numberOfLines={1}>
             @{profile?.handle || "user"}
           </Text>
         </View>
       </View>
 
-      {/* Menu items */}
-      {menuItems.map((item) => (
-        <React.Fragment key={item.key}>
-          {item.dividerAbove && <View style={[styles.ddivider, { backgroundColor: colors.border }]} />}
-          <DropdownRow item={item} onPress={() => handle(item)} colors={colors} />
+      {items.map((it) => (
+        <React.Fragment key={it.key}>
+          {it.divider && <View style={[styles.popDivider, { backgroundColor: colors.border }]} />}
+          <PopoverRow item={it} onPress={() => handle(it)} colors={colors} />
         </React.Fragment>
       ))}
 
-      <View style={[styles.ddivider, { backgroundColor: colors.border }]} />
+      <View style={[styles.popDivider, { backgroundColor: colors.border }]} />
 
-      {/* Theme */}
-      <TouchableOpacity onPress={() => { onClose(); cycleTheme(); }} activeOpacity={0.8} style={styles.menuRow}>
-        <View style={[styles.menuIconWrap, { backgroundColor: colors.textMuted + "18" }]}>
-          <Ionicons name={themeIcon} size={14} color={colors.textMuted} />
-        </View>
-        <Text style={[styles.menuRowLabel, { color: colors.text }]}>{themeLabel}</Text>
-      </TouchableOpacity>
+      <PopoverRow
+        item={{ key: "theme", label: themeLabel, icon: themeIcon }}
+        onPress={() => { onClose(); cycleTheme(); }}
+        colors={colors}
+      />
 
-      {/* Sign out */}
-      <TouchableOpacity onPress={onSignOut} activeOpacity={0.8} style={styles.menuRow}>
-        <View style={[styles.menuIconWrap, { backgroundColor: "#FF3B30" + "18" }]}>
-          <Ionicons name="log-out-outline" size={14} color="#FF3B30" />
-        </View>
-        <Text style={[styles.menuRowLabel, { color: "#FF3B30" }]}>Sign Out</Text>
-      </TouchableOpacity>
+      <PopoverRow
+        item={{ key: "out", label: "Sign out", icon: "log-out-outline", color: "#FF3B30" }}
+        onPress={onSignOut}
+        colors={colors}
+      />
     </View>
   );
 }
 
-// ─── Main export ──────────────────────────────────────────────────────────────
+function PopoverRow({ item, onPress, colors }: { item: MenuItem; onPress: () => void; colors: any }) {
+  const [hovered, setHovered] = useState(false);
+  const hoverProps =
+    Platform.OS === "web"
+      ? { onMouseEnter: () => setHovered(true), onMouseLeave: () => setHovered(false) }
+      : {};
+  const fg = item.color ?? colors.text;
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.85}
+      style={[styles.popRow, hovered && { backgroundColor: colors.text + "08" }]}
+      {...(hoverProps as any)}
+    >
+      <Ionicons name={item.icon} size={16} color={fg} style={{ width: 22 }} />
+      <Text style={[styles.popLabel, { color: fg }]}>{item.label}</Text>
+    </TouchableOpacity>
+  );
+}
 
-type Props = {
+// ─── Sidebar (main left rail) ────────────────────────────────────────────────
+
+type SidebarProps = {
   activeSection: DesktopSection;
   onSectionChange: (s: DesktopSection) => void;
   hasSession: boolean;
 };
 
-export function DesktopTopNav({ activeSection, onSectionChange, hasSession }: Props) {
+export function DesktopSidebar({ activeSection, onSectionChange, hasSession }: SidebarProps) {
   const { user, profile, signOut } = useAuth();
-  const { colors, isDark, themeMode, setThemeMode } = useTheme();
+  const { colors, accent, themeMode, setThemeMode } = useTheme();
+  const { notifCount, chatCount } = useUnreadCounts(hasSession ? user?.id ?? null : null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const { notifCount, chatCount } = useUnreadCounts(hasSession ? (user?.id ?? null) : null);
+  const [search, setSearch] = useState("");
+
+  const groups: NavGroup[] = [
+    {
+      items: [
+        { key: "discover",      label: "Home",          icon: "home-outline",                iconActive: "home",                section: "discover" },
+        { key: "search",        label: "Explore",       icon: "compass-outline",             iconActive: "compass",             section: "search" },
+        { key: "chats",         label: "Messages",      icon: "chatbubbles-outline",         iconActive: "chatbubbles",         section: "chats",         requiresAuth: true, badge: chatCount },
+        { key: "notifications", label: "Notifications", icon: "notifications-outline",       iconActive: "notifications",       section: "notifications", requiresAuth: true, badge: notifCount },
+      ],
+    },
+    {
+      title: "Workspace",
+      items: [
+        { key: "ai",       label: "AfuAI",     icon: "sparkles-outline",     iconActive: "sparkles",     section: "ai",       requiresAuth: true, pill: "AI" },
+        { key: "match",    label: "AfuMatch",  icon: "heart-outline",        iconActive: "heart",        section: "match",    requiresAuth: true, pill: "NEW", pillColor: "#FF2D55" },
+        { key: "wallet",   label: "Wallet",    icon: "wallet-outline",       iconActive: "wallet",       section: "wallet",   requiresAuth: true },
+        { key: "contacts", label: "Contacts",  icon: "people-outline",       iconActive: "people",       section: "contacts", requiresAuth: true },
+        { key: "apps",     label: "Apps",      icon: "grid-outline",         iconActive: "grid",         section: "apps" },
+      ],
+    },
+    {
+      title: "Library",
+      items: [
+        { key: "saved",   label: "Saved",      icon: "bookmark-outline",      iconActive: "bookmark",      route: "/saved-posts" },
+        { key: "myposts", label: "My posts",   icon: "document-text-outline", iconActive: "document-text", route: "/my-posts" },
+        { key: "store",   label: "Marketplace",icon: "storefront-outline",    iconActive: "storefront",    route: "/store" },
+        { key: "games",   label: "Games",      icon: "game-controller-outline", iconActive: "game-controller", route: "/games" },
+      ],
+    },
+  ];
+
+  const visibleGroups = groups
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((it) => !it.requiresAuth || hasSession),
+    }))
+    .filter((g) => g.items.length > 0);
+
+  const filteredGroups = search.trim()
+    ? visibleGroups
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((it) =>
+            it.label.toLowerCase().includes(search.trim().toLowerCase()),
+          ),
+        }))
+        .filter((g) => g.items.length > 0)
+    : visibleGroups;
+
+  function handleNavPress(it: NavItem) {
+    if (it.requiresAuth && !hasSession) {
+      router.push("/(auth)/login" as any);
+      return;
+    }
+    if (it.section) onSectionChange(it.section);
+    else if (it.route) router.push(it.route as any);
+  }
 
   function cycleTheme() {
     const next = themeMode === "system" ? "dark" : themeMode === "dark" ? "light" : "system";
@@ -520,145 +372,142 @@ export function DesktopTopNav({ activeSection, onSectionChange, hasSession }: Pr
       {
         text: "Sign Out",
         style: "destructive",
-        onPress: async () => { await signOut(); router.replace("/(auth)/login"); },
+        onPress: async () => {
+          await signOut();
+          router.replace("/(auth)/login");
+        },
       },
     ]);
   }
 
-  function isSectionActive(def: NavDef): boolean {
-    if (def.key === "create") return false;
-    if (def.dropdown) {
-      return def.dropdown.some((d) => d.section === activeSection);
-    }
-    return def.key === activeSection;
-  }
-
   return (
-    <View style={[styles.topbar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-      {/* Left: logo + nav */}
-      <View style={styles.leftRow}>
-        <TouchableOpacity onPress={() => onSectionChange("discover")} activeOpacity={0.85} style={styles.logoBtn}>
-          <View style={[styles.logoCircle, { backgroundColor: BRAND }]}>
-            <Image source={afuSymbol} style={styles.logoImg} resizeMode="contain" />
-          </View>
-          <Text style={[styles.logoLabel, { color: colors.text }]}>AfuChat</Text>
-        </TouchableOpacity>
+    <View style={[styles.sidebar, { backgroundColor: colors.surface, borderRightColor: colors.border }]}>
+      {/* Brand */}
+      <TouchableOpacity
+        onPress={() => onSectionChange("discover")}
+        activeOpacity={0.85}
+        style={styles.brand}
+      >
+        <View style={[styles.brandMark, { backgroundColor: accent }]}>
+          <Image source={afuSymbol} style={styles.brandImg} resizeMode="contain" />
+        </View>
+        <Text style={[styles.brandText, { color: colors.text }]}>AfuChat</Text>
+      </TouchableOpacity>
 
-        <View style={[styles.navSep, { backgroundColor: colors.border }]} />
-
-        {NAV_DEFS.map((def) => {
-          if (def.requiresAuth && !hasSession) return null;
-          return (
-            <NavTab
-              key={def.key}
-              def={def}
-              isActive={isSectionActive(def)}
-              onPress={() => {
-                if (def.key !== "create" && !def.dropdown) {
-                  onSectionChange(def.key as DesktopSection);
-                }
-              }}
-              onSection={onSectionChange}
-              colors={colors}
-            />
-          );
-        })}
+      {/* Search */}
+      <View style={[styles.searchWrap, { backgroundColor: colors.background, borderColor: colors.border }]}>
+        <Ionicons name="search" size={14} color={colors.textMuted} />
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search"
+          placeholderTextColor={colors.textMuted}
+          style={[styles.searchInput, { color: colors.text }]}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => setSearch("")} hitSlop={8}>
+            <Ionicons name="close-circle" size={14} color={colors.textMuted} />
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* Right: actions */}
-      <View style={styles.rightRow}>
-        {hasSession && (
-          <>
-            {/* Notifications */}
-            <TouchableOpacity
-              onPress={() => onSectionChange("notifications")}
-              activeOpacity={0.8}
-              style={[styles.iconBtn, activeSection === "notifications" && { backgroundColor: BRAND + "18" }]}
-            >
-              <Ionicons
-                name={activeSection === "notifications" ? "notifications" : "notifications-outline"}
-                size={19}
-                color={activeSection === "notifications" ? BRAND : colors.textMuted}
+      {/* Compose */}
+      {hasSession && (
+        <TouchableOpacity
+          onPress={() => router.push("/moments/create" as any)}
+          activeOpacity={0.9}
+          style={[styles.composeBtn, { backgroundColor: accent }]}
+        >
+          <Ionicons name="add" size={16} color="#fff" />
+          <Text style={styles.composeText}>New post</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Nav groups (scrollable) */}
+      <View style={styles.navScroll}>
+        {filteredGroups.map((group, idx) => (
+          <View key={idx} style={{ marginTop: idx === 0 ? 4 : 14 }}>
+            {!!group.title && (
+              <Text style={[styles.groupTitle, { color: colors.textMuted }]}>{group.title}</Text>
+            )}
+            {group.items.map((it) => (
+              <NavRow
+                key={it.key}
+                item={it}
+                active={it.section === activeSection}
+                colors={colors}
+                accent={accent}
+                onPress={() => handleNavPress(it)}
               />
-              <CountBadge count={notifCount} />
-            </TouchableOpacity>
-
-            {/* Messages shortcut */}
-            <TouchableOpacity
-              onPress={() => onSectionChange("chats")}
-              activeOpacity={0.8}
-              style={[styles.iconBtn, activeSection === "chats" && { backgroundColor: BRAND + "18" }]}
-            >
-              <Ionicons
-                name={activeSection === "chats" ? "chatbubble-ellipses" : "chatbubble-ellipses-outline"}
-                size={19}
-                color={activeSection === "chats" ? BRAND : colors.textMuted}
-              />
-              <CountBadge count={chatCount} />
-            </TouchableOpacity>
-
-            {/* Match shortcut */}
-            <TouchableOpacity
-              onPress={() => onSectionChange("match")}
-              activeOpacity={0.8}
-              style={[styles.iconBtn, activeSection === "match" && { backgroundColor: "#FF2D55" + "18" }]}
-            >
-              <Ionicons
-                name={activeSection === "match" ? "heart" : "heart-outline"}
-                size={19}
-                color={activeSection === "match" ? "#FF2D55" : colors.textMuted}
-              />
-            </TouchableOpacity>
-
-            {/* Post button */}
-            <TouchableOpacity
-              onPress={() => router.push("/moments/create" as any)}
-              activeOpacity={0.85}
-              style={[styles.postBtn, { backgroundColor: BRAND }]}
-            >
-              <Ionicons name="add" size={16} color="#fff" />
-              <Text style={styles.postBtnLabel}>Post</Text>
-            </TouchableOpacity>
-
-            {/* Avatar + menu */}
-            <View style={{ position: "relative" as any }}>
-              <TouchableOpacity
-                onPress={() => setUserMenuOpen((v) => !v)}
-                activeOpacity={0.8}
-                style={styles.avatarBtn}
-              >
-                <Avatar uri={profile?.avatar_url ?? null} name={profile?.display_name || "?"} size={30} style={{ borderRadius: 6 }} />
-                <Ionicons name={userMenuOpen ? "chevron-up" : "chevron-down"} size={11} color={colors.textMuted} style={{ marginLeft: 2 }} />
-              </TouchableOpacity>
-
-              {userMenuOpen && (
-                <>
-                  <Pressable
-                    style={[StyleSheet.absoluteFillObject as any, { position: "fixed" as any, top: 0, left: 0, right: 0, bottom: 0, zIndex: 998 }]}
-                    onPress={() => setUserMenuOpen(false)}
-                  />
-                  <UserMenuPanel
-                    profile={profile}
-                    colors={colors}
-                    themeMode={themeMode}
-                    onSection={(s) => { setUserMenuOpen(false); onSectionChange(s); }}
-                    onClose={() => setUserMenuOpen(false)}
-                    onSignOut={handleSignOut}
-                    cycleTheme={cycleTheme}
-                  />
-                </>
-              )}
-            </View>
-          </>
+            ))}
+          </View>
+        ))}
+        {filteredGroups.length === 0 && (
+          <Text style={[styles.emptySearch, { color: colors.textMuted }]}>
+            No results for “{search}”
+          </Text>
         )}
+      </View>
 
-        {!hasSession && (
-          <View style={styles.authBtns}>
-            <TouchableOpacity onPress={() => router.push("/(auth)/login" as any)} activeOpacity={0.8} style={[styles.loginBtn, { borderColor: colors.border }]}>
-              <Text style={[styles.loginBtnLabel, { color: colors.text }]}>Log in</Text>
+      {/* Footer: user / auth */}
+      <View style={[styles.sidebarFooter, { borderTopColor: colors.border }]}>
+        {hasSession ? (
+          <View style={{ position: "relative" }}>
+            <TouchableOpacity
+              onPress={() => setUserMenuOpen((v) => !v)}
+              activeOpacity={0.85}
+              style={[styles.userCard, { backgroundColor: userMenuOpen ? colors.text + "08" : "transparent" }]}
+            >
+              <Avatar
+                uri={profile?.avatar_url ?? null}
+                name={profile?.display_name || "?"}
+                size={32}
+                style={{ borderRadius: 8 }}
+              />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1}>
+                  {profile?.display_name || "User"}
+                </Text>
+                <Text style={[styles.userHandle, { color: colors.textMuted }]} numberOfLines={1}>
+                  @{profile?.handle || "user"}
+                </Text>
+              </View>
+              <Ionicons name="ellipsis-horizontal" size={16} color={colors.textMuted} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push("/(auth)/register" as any)} activeOpacity={0.85} style={[styles.signupBtn, { backgroundColor: BRAND }]}>
-              <Text style={styles.signupBtnLabel}>Sign up free</Text>
+
+            {userMenuOpen && (
+              <>
+                <Pressable
+                  style={{ position: "fixed" as any, top: 0, left: 0, right: 0, bottom: 0, zIndex: 998 }}
+                  onPress={() => setUserMenuOpen(false)}
+                />
+                <UserMenuPopover
+                  profile={profile}
+                  colors={colors}
+                  themeMode={themeMode}
+                  onSection={(s) => { setUserMenuOpen(false); onSectionChange(s); }}
+                  onClose={() => setUserMenuOpen(false)}
+                  onSignOut={handleSignOut}
+                  cycleTheme={cycleTheme}
+                />
+              </>
+            )}
+          </View>
+        ) : (
+          <View style={styles.authBtns}>
+            <TouchableOpacity
+              onPress={() => router.push("/(auth)/login" as any)}
+              activeOpacity={0.85}
+              style={[styles.loginBtn, { borderColor: colors.border }]}
+            >
+              <Text style={[styles.loginText, { color: colors.text }]}>Log in</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push("/(auth)/register" as any)}
+              activeOpacity={0.9}
+              style={[styles.signupBtn, { backgroundColor: accent }]}
+            >
+              <Text style={styles.signupText}>Sign up free</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -667,141 +516,173 @@ export function DesktopTopNav({ activeSection, onSectionChange, hasSession }: Pr
   );
 }
 
-/** Backwards-compat alias */
-export const DesktopIconRail = DesktopTopNav;
+// Backwards-compat exports for any importers
+export const DesktopTopNav = DesktopSidebar;
+export const DesktopIconRail = DesktopSidebar;
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create<any>({
-  topbar: {
-    height: 52,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 18,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+  sidebar: {
+    width: 260,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingTop: 14,
     flexShrink: 0,
-    zIndex: 100,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    flexDirection: "column",
   },
-
-  leftRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    gap: 2,
-    overflow: "hidden",
-  },
-
-  rightRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    flexShrink: 0,
-  },
-
-  // Logo
-  logoBtn: { flexDirection: "row", alignItems: "center", gap: 8, marginRight: 4 },
-  logoCircle: { width: 30, height: 30, borderRadius: 7, alignItems: "center", justifyContent: "center" },
-  logoImg: { width: 17, height: 17, tintColor: "#fff" },
-  logoLabel: { fontSize: 16, fontFamily: "Inter_700Bold", letterSpacing: -0.3 },
-
-  navSep: { width: 1, height: 20, marginHorizontal: 8, opacity: 0.35 },
-
-  // Nav tab
-  navTab: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 10,
-    height: 36,
-    borderRadius: 4,
-    position: "relative",
-  },
-  navTabLabel: { fontSize: 13.5 },
-  activeIndicator: {
-    position: "absolute",
-    bottom: -8,
-    left: 10,
-    right: 10,
-    height: 2,
-    borderRadius: 1,
-  },
-
-  // Dropdown
-  dropdown: {
-    flexDirection: "row",
-    minWidth: 200,
-    borderRadius: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 6,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 16,
-    // @ts-ignore
-    backdropFilter: "blur(12px)",
-  },
-  menuRow: {
+  brand: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 6,
+    paddingBottom: 12,
   },
-  menuIconWrap: {
-    width: 26,
-    height: 26,
-    borderRadius: 7,
+  brandMark: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },
-  menuRowLabel: {
-    fontSize: 13.5,
-    fontFamily: "Inter_500Medium",
+  brandImg: { width: 17, height: 17, tintColor: "#fff" },
+  brandText: { fontSize: 16, fontFamily: "Inter_700Bold", letterSpacing: -0.3 },
+
+  searchWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    height: 34,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 10,
+    marginBottom: 10,
+  },
+  searchInput: {
     flex: 1,
-  },
-  menuBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 5,
-  },
-  menuBadgeText: {
-    fontSize: 10,
-    fontFamily: "Inter_700Bold",
-  },
-  ddivider: {
-    height: StyleSheet.hairlineWidth,
-    marginVertical: 4,
-    marginHorizontal: 12,
-  },
-  ddividerV: {
-    width: StyleSheet.hairlineWidth,
-    marginVertical: 6,
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    outlineStyle: "none" as any,
+    paddingVertical: 0,
   },
 
-  // User menu
-  userMenuPanel: {
+  composeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    height: 36,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  composeText: { color: "#fff", fontSize: 13.5, fontFamily: "Inter_600SemiBold" },
+
+  navScroll: { flex: 1, marginTop: 4 },
+  groupTitle: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    paddingHorizontal: 10,
+    marginBottom: 4,
+    marginTop: 2,
+  },
+
+  navRow: {
+    position: "relative",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingLeft: 12,
+    paddingRight: 10,
+    height: 34,
+    borderRadius: 7,
+    marginBottom: 1,
+  },
+  navActiveBar: {
     position: "absolute",
-    top: 44,
-    right: 0,
-    width: 248,
-    borderRadius: 6,
+    left: 0,
+    top: 8,
+    bottom: 8,
+    width: 2.5,
+    borderRadius: 2,
+  },
+  navLabel: { flex: 1, fontSize: 13.5 },
+
+  pill: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  pillText: { fontSize: 9.5, fontFamily: "Inter_700Bold", letterSpacing: 0.4 },
+
+  badge: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
+
+  emptySearch: {
+    fontSize: 12,
+    paddingHorizontal: 10,
+    paddingTop: 12,
+    fontFamily: "Inter_400Regular",
+  },
+
+  sidebarFooter: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 8,
+    marginTop: 8,
+  },
+  userCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  userName: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  userHandle: { fontSize: 11.5, fontFamily: "Inter_400Regular", marginTop: 1 },
+
+  authBtns: { gap: 8, paddingHorizontal: 4, paddingTop: 4 },
+  loginBtn: {
+    height: 34,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loginText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  signupBtn: {
+    height: 34,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  signupText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
+
+  // Popover
+  userPopover: {
+    position: "absolute",
+    bottom: 50,
+    left: 0,
+    width: 240,
+    borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: 6,
     zIndex: 999,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 16,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 28,
+    elevation: 20,
   },
-  userMenuHeader: {
+  userPopoverHeader: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12,
@@ -809,41 +690,22 @@ const styles = StyleSheet.create<any>({
     borderBottomWidth: StyleSheet.hairlineWidth,
     marginBottom: 4,
   },
-  umName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  umHandle: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
+  upName: { fontSize: 13.5, fontFamily: "Inter_600SemiBold" },
+  upHandle: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
 
-  // Right side actions
-  iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 4,
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-    overflow: "visible",
-  },
-  postBtn: {
+  popRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 14,
+    gap: 10,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 4,
+    marginHorizontal: 4,
+    borderRadius: 6,
   },
-  postBtnLabel: { color: "#fff", fontSize: 13.5, fontFamily: "Inter_600SemiBold" },
-  avatarBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 5,
-    borderRadius: 4,
+  popLabel: { fontSize: 13, fontFamily: "Inter_500Medium", flex: 1 },
+  popDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 12,
+    marginVertical: 4,
   },
-
-  // Auth
-  authBtns: { flexDirection: "row", alignItems: "center", gap: 8 },
-  loginBtn: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 4, borderWidth: 1 },
-  loginBtnLabel: { fontSize: 13.5, fontFamily: "Inter_600SemiBold" },
-  signupBtn: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 4 },
-  signupBtnLabel: { color: "#fff", fontSize: 13.5, fontFamily: "Inter_600SemiBold" },
 });
