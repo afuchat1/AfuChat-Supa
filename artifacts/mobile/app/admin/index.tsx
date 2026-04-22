@@ -1848,6 +1848,8 @@ const styles = StyleSheet.create({
   postContent: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
   postActions: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   actionBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+  actionBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  filterInput: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, borderColor: "transparent" },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10 },
   planCard: { padding: 16, borderRadius: 14, gap: 8 },
   planHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },

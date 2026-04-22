@@ -364,6 +364,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingTop: 24,
   },
+  endBtn: {
+    marginTop: 24,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#FF3B30",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+  },
   avatarRing: {
     padding: 6,
     borderRadius: 999,

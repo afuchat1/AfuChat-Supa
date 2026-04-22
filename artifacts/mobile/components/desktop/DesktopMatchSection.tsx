@@ -467,7 +467,7 @@ const styles = StyleSheet.create<any>({
     justifyContent: "center",
   },
   emptyTitle: { fontSize: 22, fontFamily: "Inter_700Bold", textAlign: "center" },
-  emptySub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22, maxWidth: 340, textAlign: "center" },
+  emptySub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22, maxWidth: 340 },
   primaryBtn: {
     flexDirection: "row",
     alignItems: "center",

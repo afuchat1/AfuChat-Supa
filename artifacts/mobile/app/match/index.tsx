@@ -505,7 +505,7 @@ function MatchesTab() {
     <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }} showsVerticalScrollIndicator={false}>
       {matches.map((m) => {
         const age = m.other.show_age ? calcAge(m.other.date_of_birth) : null;
-        const lastMsg = m.other.last_msg;
+        const lastMsg = (m.other as any).last_msg;
         return (
           <Pressable
             key={m.id}

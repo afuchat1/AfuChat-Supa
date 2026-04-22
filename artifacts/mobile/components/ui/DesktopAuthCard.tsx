@@ -29,17 +29,14 @@ export function DesktopAuthCard({ children }: Props) {
         <View
           style={[
             styles.card,
+            { backgroundColor: colors.background } as any,
             {
-              backgroundColor: colors.background,
-              // @ts-ignore
               boxShadow: isDark
                 ? "0 0 0 1px rgba(255,255,255,0.07), 0 16px 48px rgba(0,0,0,0.5)"
                 : "0 0 0 1px rgba(0,0,0,0.06), 0 16px 48px rgba(0,0,0,0.1)",
-              // @ts-ignore
               maxHeight: "88vh",
-              // @ts-ignore
               overflowY: "auto",
-            },
+            } as any,
           ]}
         >
           {children}
