@@ -15,10 +15,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { AFUAI_BOT_ID } from "@/lib/afuAiBot";
 import { useAuth } from "@/context/AuthContext";
-import { useTheme } from "@/hooks/useTheme";
-import { Avatar } from "@/components/ui/Avatar";
-
-const BRAND = "#00BCD4";
+import {
+  DesktopButton,
+  DesktopEmptyState,
+  DesktopIconButton,
+  DesktopLoadingState,
+  DesktopPageHeader,
+  DesktopPanel,
+  DesktopSectionShell,
+  useDesktopTheme,
+} from "./ui";
 
 type Message = {
   id: string;
@@ -27,36 +33,36 @@ type Message = {
   sent_at: string;
 };
 
-type Suggestion = { id: string; label: string; icon: React.ComponentProps<typeof Ionicons>["name"] };
+type Suggestion = {
+  id: string;
+  label: string;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+};
 
 const SUGGESTIONS: Suggestion[] = [
-  { id: "s1", label: "Write a professional bio for me",   icon: "person-outline" },
-  { id: "s2", label: "Summarize the latest tech news",    icon: "newspaper-outline" },
-  { id: "s3", label: "Help me draft a message",           icon: "chatbubble-outline" },
-  { id: "s4", label: "Explain blockchain to me simply",   icon: "bulb-outline" },
-  { id: "s5", label: "Give me 5 business ideas",          icon: "briefcase-outline" },
-  { id: "s6", label: "Write a creative short story",      icon: "library-outline" },
+  { id: "s1", label: "Write a professional bio for me", icon: "person-outline" },
+  { id: "s2", label: "Summarize the latest tech news", icon: "newspaper-outline" },
+  { id: "s3", label: "Help me draft a message", icon: "chatbubble-outline" },
+  { id: "s4", label: "Explain blockchain to me simply", icon: "bulb-outline" },
+  { id: "s5", label: "Give me 5 business ideas", icon: "briefcase-outline" },
+  { id: "s6", label: "Write a creative short story", icon: "library-outline" },
 ];
 
 function timeStr(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function Bubble({
-  msg,
-  isMe,
-  colors,
-  accent,
-}: {
-  msg: Message;
-  isMe: boolean;
-  colors: any;
-  accent: string;
-}) {
+function Bubble({ msg, isMe }: { msg: Message; isMe: boolean }) {
+  const t = useDesktopTheme();
   return (
-    <View style={[styles.bubbleRow, isMe ? styles.bubbleRowMe : styles.bubbleRowAI]}>
+    <View
+      style={[
+        styles.bubbleRow,
+        isMe ? styles.bubbleRowMe : styles.bubbleRowAI,
+      ]}
+    >
       {!isMe && (
-        <View style={[styles.aiBadge, { backgroundColor: accent }]}>
+        <View style={[styles.aiBadge, { backgroundColor: t.accent }]}>
           <Ionicons name="sparkles" size={12} color="#fff" />
         </View>
       )}
@@ -64,19 +70,28 @@ function Bubble({
         style={[
           styles.bubble,
           isMe
-            ? [styles.bubbleMe, { backgroundColor: accent }]
-            : [styles.bubbleAI, { backgroundColor: colors.surface, borderColor: colors.border }],
+            ? { backgroundColor: t.accent }
+            : {
+                backgroundColor: t.panelBgRaised,
+                borderColor: t.border,
+                borderWidth: StyleSheet.hairlineWidth,
+              },
         ]}
       >
         <Text
           style={[
             styles.bubbleText,
-            { color: isMe ? "#fff" : colors.text },
+            { color: isMe ? "#fff" : t.text },
           ]}
         >
           {msg.encrypted_content}
         </Text>
-        <Text style={[styles.bubbleTime, { color: isMe ? "rgba(255,255,255,0.65)" : colors.textMuted }]}>
+        <Text
+          style={[
+            styles.bubbleTime,
+            { color: isMe ? "rgba(255,255,255,0.7)" : t.textMuted },
+          ]}
+        >
           {timeStr(msg.sent_at)}
         </Text>
       </View>
@@ -85,8 +100,8 @@ function Bubble({
 }
 
 export function DesktopAISection() {
-  const { colors, accent } = useTheme();
-  const { user, profile } = useAuth();
+  const t = useDesktopTheme();
+  const { user } = useAuth();
   const [chatId, setChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -104,12 +119,15 @@ export function DesktopAISection() {
     if (!user) return;
     setLoading(true);
     try {
-      const { data: chatId } = await supabase.rpc("get_or_create_direct_chat", {
+      const { data: cid } = await supabase.rpc("get_or_create_direct_chat", {
         other_user_id: AFUAI_BOT_ID,
       });
-      if (!chatId) { setLoading(false); return; }
-      setChatId(chatId);
-      await loadMessages(chatId);
+      if (!cid) {
+        setLoading(false);
+        return;
+      }
+      setChatId(cid);
+      await loadMessages(cid);
     } catch {
       setLoading(false);
     }
@@ -132,12 +150,26 @@ export function DesktopAISection() {
     if (!chatId) return;
     const ch = supabase
       .channel(`ai-chat-${chatId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `chat_id=eq.${chatId}` }, (p) => {
-        setMessages((prev) => [...prev, p.new as Message]);
-        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
-      })
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `chat_id=eq.${chatId}`,
+        },
+        (p) => {
+          setMessages((prev) => [...prev, p.new as Message]);
+          setTimeout(
+            () => listRef.current?.scrollToEnd({ animated: true }),
+            60,
+          );
+        },
+      )
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => {
+      supabase.removeChannel(ch);
+    };
   }, [chatId]);
 
   async function send(text?: string) {
@@ -157,7 +189,11 @@ export function DesktopAISection() {
   }
 
   function handleKey(e: any) {
-    if (Platform.OS === "web" && e.nativeEvent?.key === "Enter" && !e.nativeEvent?.shiftKey) {
+    if (
+      Platform.OS === "web" &&
+      e.nativeEvent?.key === "Enter" &&
+      !e.nativeEvent?.shiftKey
+    ) {
       e.preventDefault?.();
       send();
     }
@@ -165,163 +201,234 @@ export function DesktopAISection() {
 
   if (!user) {
     return (
-      <View style={[styles.root, { backgroundColor: colors.background }]}>
-        <View style={styles.center}>
-          <Ionicons name="sparkles" size={52} color={accent} />
-          <Text style={[styles.centerTitle, { color: colors.text }]}>AfuAI Assistant</Text>
-          <Text style={[styles.centerSub, { color: colors.textMuted }]}>Sign in to chat with AfuAI</Text>
-        </View>
-      </View>
+      <DesktopSectionShell>
+        <DesktopPanel flex={1}>
+          <DesktopEmptyState
+            icon="sparkles"
+            title="AfuAI Assistant"
+            subtitle="Sign in to chat with AfuAI."
+          />
+        </DesktopPanel>
+      </DesktopSectionShell>
     );
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <View style={[styles.aiAvatar, { backgroundColor: accent }]}>
-          <Ionicons name="sparkles" size={20} color="#fff" />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>AfuAI</Text>
-          <Text style={[styles.headerSub, { color: colors.textMuted }]}>Your intelligent assistant</Text>
-        </View>
-        <View style={[styles.liveDot, { backgroundColor: "#34C759" }]} />
-        <Text style={[styles.liveLabel, { color: "#34C759" }]}>Online</Text>
-      </View>
-
-      {/* Messages */}
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={52}
-      >
-        {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={accent} size="large" />
-          </View>
-        ) : messages.length === 0 ? (
-          <ScrollView contentContainerStyle={styles.emptyArea} showsVerticalScrollIndicator={false}>
-            <View style={[styles.emptyIcon, { backgroundColor: accent + "18" }]}>
-              <Ionicons name="sparkles" size={40} color={accent} />
-            </View>
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>Ask AfuAI anything</Text>
-            <Text style={[styles.emptySub, { color: colors.textMuted }]}>
-              Get help with writing, research, ideas, coding, and much more.
-            </Text>
-            <View style={styles.suggestGrid}>
-              {SUGGESTIONS.map((s) => (
-                <TouchableOpacity
-                  key={s.id}
-                  onPress={() => send(s.label)}
-                  activeOpacity={0.8}
-                  style={[styles.suggestBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                >
-                  <Ionicons name={s.icon} size={16} color={accent} />
-                  <Text style={[styles.suggestLabel, { color: colors.text }]}>{s.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
-        ) : (
-          <FlatList
-            ref={listRef}
-            data={messages}
-            keyExtractor={(m) => m.id}
-            contentContainerStyle={styles.msgList}
-            showsVerticalScrollIndicator={false}
-            onLayout={() => listRef.current?.scrollToEnd({ animated: false })}
-            renderItem={({ item }) => (
-              <Bubble
-                msg={item}
-                isMe={item.sender_id === user.id}
-                colors={colors}
-                accent={accent}
+    <DesktopSectionShell>
+      <DesktopPanel flex={1}>
+        <DesktopPageHeader
+          icon="sparkles"
+          title="AfuAI"
+          subtitle="Your intelligent assistant"
+          right={
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <View
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: 4,
+                  backgroundColor: t.success,
+                }}
               />
-            )}
-          />
-        )}
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontFamily: "Inter_600SemiBold",
+                  color: t.success,
+                }}
+              >
+                Online
+              </Text>
+            </View>
+          }
+        />
 
-        {/* Input */}
-        <View style={[styles.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-          {messages.length > 0 && (
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={52}
+        >
+          {loading ? (
+            <DesktopLoadingState />
+          ) : messages.length === 0 ? (
             <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.quickSuggests}
+              contentContainerStyle={styles.emptyArea}
+              showsVerticalScrollIndicator={false}
             >
-              {SUGGESTIONS.slice(0, 4).map((s) => (
-                <TouchableOpacity
-                  key={s.id}
-                  onPress={() => send(s.label)}
-                  activeOpacity={0.8}
-                  style={[styles.quickSuggestPill, { backgroundColor: accent + "14", borderColor: accent + "40" }]}
-                >
-                  <Text style={[styles.quickSuggestText, { color: accent }]}>{s.label}</Text>
-                </TouchableOpacity>
-              ))}
+              <View
+                style={[styles.emptyIcon, { backgroundColor: t.accent + "18" }]}
+              >
+                <Ionicons name="sparkles" size={40} color={t.accent} />
+              </View>
+              <Text style={[styles.emptyTitle, { color: t.text }]}>
+                Ask AfuAI anything
+              </Text>
+              <Text style={[styles.emptySub, { color: t.textMuted }]}>
+                Get help with writing, research, ideas, coding, and much more.
+              </Text>
+              <View style={styles.suggestGrid}>
+                {SUGGESTIONS.map((s) => (
+                  <SuggestionRow
+                    key={s.id}
+                    label={s.label}
+                    icon={s.icon}
+                    onPress={() => send(s.label)}
+                  />
+                ))}
+              </View>
             </ScrollView>
-          )}
-          <View style={styles.inputRow}>
-            <TextInput
-              ref={inputRef}
-              value={input}
-              onChangeText={setInput}
-              onKeyPress={handleKey}
-              placeholder="Message AfuAI..."
-              placeholderTextColor={colors.textMuted}
-              multiline
-              style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
-            />
-            <TouchableOpacity
-              onPress={() => send()}
-              activeOpacity={0.8}
-              disabled={!input.trim() || sending}
-              style={[styles.sendBtn, { backgroundColor: input.trim() ? accent : colors.border }]}
-            >
-              {sending ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Ionicons name="arrow-up" size={18} color="#fff" />
+          ) : (
+            <FlatList
+              ref={listRef}
+              data={messages}
+              keyExtractor={(m) => m.id}
+              contentContainerStyle={styles.msgList}
+              showsVerticalScrollIndicator={false}
+              onLayout={() =>
+                listRef.current?.scrollToEnd({ animated: false })
+              }
+              renderItem={({ item }) => (
+                <Bubble msg={item} isMe={item.sender_id === user.id} />
               )}
-            </TouchableOpacity>
+            />
+          )}
+
+          {/* Input area */}
+          <View
+            style={{
+              paddingHorizontal: 18,
+              paddingTop: 10,
+              paddingBottom: 14,
+              backgroundColor: t.panelHeaderBg,
+              borderTopWidth: StyleSheet.hairlineWidth,
+              borderTopColor: t.border,
+              flexShrink: 0,
+            }}
+          >
+            {messages.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.quickSuggests}
+              >
+                {SUGGESTIONS.slice(0, 4).map((s) => (
+                  <TouchableOpacity
+                    key={s.id}
+                    onPress={() => send(s.label)}
+                    activeOpacity={0.85}
+                    style={[
+                      styles.quickSuggestPill,
+                      {
+                        backgroundColor: t.accent + "14",
+                        borderColor: t.accent + "40",
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.quickSuggestText, { color: t.accent }]}
+                    >
+                      {s.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+            <View style={styles.inputRow}>
+              <TextInput
+                ref={inputRef}
+                value={input}
+                onChangeText={setInput}
+                onKeyPress={handleKey}
+                placeholder="Message AfuAI..."
+                placeholderTextColor={t.textMuted}
+                multiline
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: t.inputBg,
+                    borderColor: t.inputBorder,
+                    color: t.text,
+                    ...(Platform.OS === "web"
+                      ? ({ outlineStyle: "none" } as any)
+                      : null),
+                  },
+                ]}
+              />
+              <DesktopIconButton
+                icon={sending ? "hourglass" : "arrow-up"}
+                onPress={() => send()}
+                size={42}
+                variant="filled"
+                color="#fff"
+                style={{
+                  backgroundColor: input.trim() ? t.accent : t.chipBg,
+                  opacity: input.trim() && !sending ? 1 : 0.6,
+                }}
+              />
+            </View>
+            <Text style={[styles.disclaimer, { color: t.textMuted }]}>
+              AfuAI can make mistakes. Verify important info.
+            </Text>
           </View>
-          <Text style={[styles.disclaimer, { color: colors.textMuted }]}>
-            AfuAI can make mistakes. Verify important info.
-          </Text>
-        </View>
-      </KeyboardAvoidingView>
-    </View>
+        </KeyboardAvoidingView>
+      </DesktopPanel>
+    </DesktopSectionShell>
+  );
+}
+
+function SuggestionRow({
+  label,
+  icon,
+  onPress,
+}: {
+  label: string;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  onPress: () => void;
+}) {
+  const t = useDesktopTheme();
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.85}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        padding: 14,
+        borderRadius: 12,
+        backgroundColor: t.panelBgRaised,
+        borderColor: t.border,
+        borderWidth: StyleSheet.hairlineWidth,
+      }}
+    >
+      <View
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 9,
+          backgroundColor: t.accent + "14",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Ionicons name={icon} size={16} color={t.accent} />
+      </View>
+      <Text
+        style={{
+          flex: 1,
+          fontSize: 14,
+          fontFamily: "Inter_500Medium",
+          color: t.text,
+        }}
+      >
+        {label}
+      </Text>
+      <Ionicons name="arrow-up-outline" size={14} color={t.textMuted} />
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create<any>({
-  root: { flex: 1, flexDirection: "column" },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
-  centerTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
-  centerSub: { fontSize: 14, fontFamily: "Inter_400Regular" },
-
-  header: {
-    height: 58,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 20,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexShrink: 0,
-  },
-  aiAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: { fontSize: 15, fontFamily: "Inter_700Bold" },
-  headerSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
-  liveDot: { width: 7, height: 7, borderRadius: 4 },
-  liveLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-
   emptyArea: {
     flexGrow: 1,
     alignItems: "center",
@@ -337,21 +444,30 @@ const styles = StyleSheet.create<any>({
     justifyContent: "center",
     marginBottom: 20,
   },
-  emptyTitle: { fontSize: 24, fontFamily: "Inter_700Bold", marginBottom: 8, textAlign: "center" },
-  emptySub: { fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22, marginBottom: 32 },
-  suggestGrid: { width: "100%", gap: 10, maxWidth: 700 },
-  suggestBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+  emptyTitle: {
+    fontSize: 24,
+    fontFamily: "Inter_700Bold",
+    marginBottom: 8,
+    textAlign: "center",
+    letterSpacing: -0.3,
   },
-  suggestLabel: { fontSize: 14, fontFamily: "Inter_500Medium", flex: 1 },
+  emptySub: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    lineHeight: 21,
+    marginBottom: 32,
+    maxWidth: 460,
+  },
+  suggestGrid: { width: "100%", gap: 10, maxWidth: 720 },
 
-  msgList: { padding: 20, gap: 6 },
-  bubbleRow: { flexDirection: "row", alignItems: "flex-end", marginBottom: 6, maxWidth: "72%" },
+  msgList: { padding: 22, gap: 6 },
+  bubbleRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    marginBottom: 6,
+    maxWidth: "72%",
+  },
   bubbleRowMe: { alignSelf: "flex-end", justifyContent: "flex-end" },
   bubbleRowAI: { alignSelf: "flex-start", gap: 8 },
   aiBadge: {
@@ -363,17 +479,18 @@ const styles = StyleSheet.create<any>({
     flexShrink: 0,
   },
   bubble: { borderRadius: 14, padding: 12, maxWidth: 560 },
-  bubbleMe: {},
-  bubbleAI: { borderWidth: StyleSheet.hairlineWidth },
-  bubbleText: { fontSize: 14.5, fontFamily: "Inter_400Regular", lineHeight: 21 },
-  bubbleTime: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 6, textAlign: "right" },
-
-  inputBar: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 14,
-    flexShrink: 0,
+  bubbleText: {
+    fontSize: 14.5,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 21,
   },
+  bubbleTime: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    marginTop: 6,
+    textAlign: "right",
+  },
+
   quickSuggests: { gap: 8, paddingBottom: 10 },
   quickSuggestPill: {
     paddingHorizontal: 12,
@@ -386,20 +503,18 @@ const styles = StyleSheet.create<any>({
   input: {
     flex: 1,
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
     fontSize: 14.5,
     fontFamily: "Inter_400Regular",
     maxHeight: 140,
     minHeight: 44,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  sendBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 11,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
+  disclaimer: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    marginTop: 8,
   },
-  disclaimer: { fontSize: 11, fontFamily: "Inter_400Regular", textAlign: "center", marginTop: 8 },
 });

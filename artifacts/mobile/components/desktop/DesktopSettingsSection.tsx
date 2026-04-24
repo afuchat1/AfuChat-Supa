@@ -1,20 +1,25 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
-  ActivityIndicator,
   Platform,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
+import {
+  DesktopButton,
+  DesktopPageHeader,
+  DesktopPanel,
+  DesktopSectionShell,
+  useDesktopTheme,
+  useHover,
+} from "./ui";
 
 const BRAND = "#00BCD4";
 
@@ -26,19 +31,32 @@ type SettingsTab = {
 };
 
 const TABS: SettingsTab[] = [
-  { id: "account",      label: "Account",          icon: "person-outline" },
-  { id: "privacy",      label: "Privacy",           icon: "shield-outline" },
-  { id: "security",     label: "Security",          icon: "lock-closed-outline" },
-  { id: "notifications",label: "Notifications",     icon: "notifications-outline" },
-  { id: "chats",        label: "Chat Settings",     icon: "chatbubble-outline" },
-  { id: "appearance",   label: "Appearance",        icon: "contrast-outline" },
-  { id: "language",     label: "Language",          icon: "language-outline" },
-  { id: "advanced",     label: "Advanced Features", icon: "flask-outline" },
-  { id: "about",        label: "About",             icon: "information-circle-outline" },
-  { id: "danger",       label: "Danger Zone",       icon: "warning-outline",   color: "#FF3B30" },
+  { id: "account",       label: "Account",          icon: "person-outline" },
+  { id: "privacy",       label: "Privacy",          icon: "shield-outline" },
+  { id: "security",      label: "Security",         icon: "lock-closed-outline" },
+  { id: "notifications", label: "Notifications",    icon: "notifications-outline" },
+  { id: "chats",         label: "Chats",            icon: "chatbubble-outline" },
+  { id: "appearance",    label: "Appearance",       icon: "contrast-outline" },
+  { id: "language",      label: "Language",         icon: "language-outline" },
+  { id: "advanced",      label: "Advanced",         icon: "flask-outline" },
+  { id: "about",         label: "About",            icon: "information-circle-outline" },
+  { id: "danger",        label: "Danger Zone",      icon: "warning-outline", color: "#FF3B30" },
 ];
 
-// ─── Setting rows ─────────────────────────────────────────────────────────────
+const TAB_DESC: Record<string, { title: string; subtitle?: string; icon: React.ComponentProps<typeof Ionicons>["name"] }> = {
+  account:       { title: "Account",          subtitle: "Manage your identity and monetization",   icon: "person-outline" },
+  privacy:       { title: "Privacy",          subtitle: "Control who can see and reach you",       icon: "shield-outline" },
+  security:      { title: "Security",         subtitle: "Keep your account safe",                  icon: "lock-closed-outline" },
+  notifications: { title: "Notifications",    subtitle: "Choose what reaches your inbox",          icon: "notifications-outline" },
+  chats:         { title: "Chats",            subtitle: "Receipts, media, and backups",            icon: "chatbubble-outline" },
+  appearance:    { title: "Appearance",       subtitle: "Theme and colors",                        icon: "contrast-outline" },
+  language:      { title: "Language",         subtitle: "Pick the language for AfuChat",           icon: "language-outline" },
+  advanced:      { title: "Advanced",         subtitle: "Experimental features and customization", icon: "flask-outline" },
+  about:         { title: "About",            subtitle: "Legal, support, and version info",        icon: "information-circle-outline" },
+  danger:        { title: "Danger Zone",      subtitle: "Irreversible account actions",            icon: "warning-outline" },
+};
+
+/* ─── Setting row & helpers ─────────────────────────────────────────────── */
 
 function SettingRow({
   icon,
@@ -46,275 +64,309 @@ function SettingRow({
   sub,
   onPress,
   right,
-  colors,
   iconColor,
+  isLast,
 }: {
   icon: React.ComponentProps<typeof Ionicons>["name"];
   label: string;
   sub?: string;
   onPress?: () => void;
   right?: React.ReactNode;
-  colors: any;
   iconColor?: string;
+  isLast?: boolean;
 }) {
-  const [hovered, setHovered] = useState(false);
-  const hoverProps =
-    Platform.OS === "web"
-      ? { onMouseEnter: () => setHovered(true), onMouseLeave: () => setHovered(false) }
-      : {};
-
+  const t = useDesktopTheme();
+  const [hovered, hp] = useHover();
   const inner = (
-    <View style={[styles.settingRow, hovered && onPress && { backgroundColor: colors.accent + "08" }]} {...(hoverProps as any)}>
-      <View style={[styles.settingIconWrap, { backgroundColor: (iconColor ?? BRAND) + "16" }]}>
-        <Ionicons name={icon} size={16} color={iconColor ?? BRAND} />
+    <View
+      style={[
+        styles.row,
+        {
+          backgroundColor: hovered && onPress ? t.rowHover : "transparent",
+          borderBottomColor: t.border,
+          borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
+        },
+      ]}
+      {...(hp as any)}
+    >
+      <View style={[styles.rowIcon, { backgroundColor: (iconColor ?? t.accent) + "1A" }]}>
+        <Ionicons name={icon} size={15} color={iconColor ?? t.accent} />
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.settingLabel, { color: colors.text }]}>{label}</Text>
-        {sub && <Text style={[styles.settingSub, { color: colors.textMuted }]}>{sub}</Text>}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[styles.rowLabel, { color: t.text }]}>{label}</Text>
+        {sub ? <Text style={[styles.rowSub, { color: t.textMuted }]}>{sub}</Text> : null}
       </View>
-      {right ?? (onPress && <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />)}
+      {right ?? (onPress && <Ionicons name="chevron-forward" size={15} color={t.textMuted} />)}
     </View>
   );
-
   return onPress ? (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.8}>{inner}</TouchableOpacity>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.85}>{inner}</TouchableOpacity>
   ) : (
     inner
   );
 }
 
-function SectionHeader({ title, colors }: { title: string; colors: any }) {
+function GroupHeader({ title }: { title: string }) {
+  const t = useDesktopTheme();
   return (
-    <Text style={[styles.sectionHeader, { color: colors.textMuted }]}>{title.toUpperCase()}</Text>
+    <Text
+      style={{
+        fontFamily: "Inter_600SemiBold",
+        fontSize: 11,
+        letterSpacing: 0.7,
+        color: t.textMuted,
+        textTransform: "uppercase",
+        marginTop: 18,
+        marginBottom: 8,
+      }}
+    >
+      {title}
+    </Text>
   );
 }
 
-// ─── Tab content ─────────────────────────────────────────────────────────────
+function Group({ children }: { children: React.ReactNode }) {
+  return <DesktopPanel>{children}</DesktopPanel>;
+}
 
-function AccountTab({ colors, profile }: { colors: any; profile: any }) {
+/* ─── Tabs ─────────────────────────────────────────────────────────────── */
+
+function AccountTab({ profile }: { profile: any }) {
+  const t = useDesktopTheme();
   return (
-    <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.tabBody} showsVerticalScrollIndicator={false}>
       {/* Profile card */}
-      <View style={[styles.profileCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Avatar uri={profile?.avatar_url ?? null} name={profile?.display_name || "?"} size={64} style={{ borderRadius: 14 }} />
-        <View style={{ flex: 1, marginLeft: 14 }}>
-          <Text style={[styles.profileName, { color: colors.text }]}>{profile?.display_name || "User"}</Text>
-          <Text style={[styles.profileHandle, { color: colors.textMuted }]}>@{profile?.handle || "user"}</Text>
-          {profile?.bio && (
-            <Text style={[styles.profileBio, { color: colors.textMuted }]} numberOfLines={2}>{profile.bio}</Text>
-          )}
+      <DesktopPanel>
+        <View style={{ flexDirection: "row", alignItems: "center", padding: 18, gap: 14 }}>
+          <Avatar
+            uri={profile?.avatar_url ?? null}
+            name={profile?.display_name || "?"}
+            size={64}
+            style={{ borderRadius: 14 }}
+          />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontFamily: "Inter_700Bold", fontSize: 17, color: t.text, letterSpacing: -0.2 }}>
+              {profile?.display_name || "User"}
+            </Text>
+            <Text style={{ fontFamily: "Inter_400Regular", fontSize: 13, color: t.textMuted, marginTop: 2 }}>
+              @{profile?.handle || "user"}
+            </Text>
+            {!!profile?.bio && (
+              <Text
+                style={{ fontFamily: "Inter_400Regular", fontSize: 13, color: t.textSub ?? t.text, marginTop: 6, lineHeight: 18 }}
+                numberOfLines={2}
+              >
+                {profile.bio}
+              </Text>
+            )}
+          </View>
+          <DesktopButton
+            label="Edit profile"
+            icon="create-outline"
+            variant="secondary"
+            onPress={() => router.push("/profile/edit" as any)}
+          />
         </View>
-        <TouchableOpacity
-          onPress={() => router.push("/profile/edit" as any)}
-          activeOpacity={0.8}
-          style={[styles.editBtn, { backgroundColor: BRAND + "14", borderColor: BRAND + "30" }]}
-        >
-          <Ionicons name="create-outline" size={14} color={BRAND} />
-          <Text style={[styles.editBtnLabel, { color: BRAND }]}>Edit</Text>
-        </TouchableOpacity>
-      </View>
+      </DesktopPanel>
 
-      <SectionHeader title="Account" colors={colors} />
-      <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <SettingRow icon="mail-outline"         label="Email Address"      sub={profile?.email || "Not set"}         colors={colors} />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="call-outline"          label="Phone Number"       sub="Tap to add or change"                onPress={() => {}} colors={colors} />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="at-outline"            label="Username"           sub={`@${profile?.handle || "user"}`}     onPress={() => router.push("/username-market" as any)} colors={colors} />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="id-card-outline"       label="Digital ID"         sub="View your digital identity card"     onPress={() => router.push("/digital-id" as any)} colors={colors} />
-      </View>
+      <GroupHeader title="Account" />
+      <Group>
+        <SettingRow icon="mail-outline"     label="Email Address" sub={profile?.email || "Not set"} />
+        <SettingRow icon="call-outline"     label="Phone Number"  sub="Tap to add or change" onPress={() => {}} />
+        <SettingRow icon="at-outline"       label="Username"      sub={`@${profile?.handle || "user"}`} onPress={() => router.push("/username-market" as any)} />
+        <SettingRow icon="id-card-outline"  label="Digital ID"    sub="View your digital identity card" onPress={() => router.push("/digital-id" as any)} isLast />
+      </Group>
 
-      <SectionHeader title="Linked Accounts" colors={colors} />
-      <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <SettingRow icon="logo-google"           label="Google"             sub="Connect Google account"              onPress={() => router.push("/linked-accounts" as any)} colors={colors} />
-      </View>
+      <GroupHeader title="Linked accounts" />
+      <Group>
+        <SettingRow icon="logo-google" label="Google" sub="Connect Google account" onPress={() => router.push("/linked-accounts" as any)} isLast />
+      </Group>
 
-      <SectionHeader title="Monetization" colors={colors} />
-      <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <SettingRow icon="star-outline"          label="Premium"            sub="Upgrade to Premium"                  onPress={() => router.push("/premium" as any)} colors={colors} iconColor="#D4A853" />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="ribbon-outline"        label="Prestige"           sub="View your prestige level"            onPress={() => router.push("/prestige" as any)} colors={colors} iconColor="#AF52DE" />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="cash-outline"          label="Monetize"           sub="Earn from your content"              onPress={() => router.push("/monetize" as any)} colors={colors} iconColor="#34C759" />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="people-outline"        label="Referral Program"   sub="Invite friends and earn rewards"     onPress={() => router.push("/referral" as any)} colors={colors} iconColor="#00C781" />
-      </View>
+      <GroupHeader title="Monetization" />
+      <Group>
+        <SettingRow icon="star-outline"     label="Premium"          sub="Upgrade to Premium" onPress={() => router.push("/premium" as any)} iconColor="#D4A853" />
+        <SettingRow icon="ribbon-outline"   label="Prestige"         sub="View your prestige level" onPress={() => router.push("/prestige" as any)} iconColor="#AF52DE" />
+        <SettingRow icon="cash-outline"     label="Monetize"         sub="Earn from your content" onPress={() => router.push("/monetize" as any)} iconColor="#34C759" />
+        <SettingRow icon="people-outline"   label="Referral Program" sub="Invite friends and earn rewards" onPress={() => router.push("/referral" as any)} iconColor="#00C781" isLast />
+      </Group>
     </ScrollView>
   );
 }
 
-function PrivacyTab({ colors }: { colors: any }) {
+function PrivacyTab() {
   return (
-    <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
-      <SectionHeader title="Privacy" colors={colors} />
-      <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <SettingRow icon="eye-outline"           label="Account Visibility"    onPress={() => router.push("/settings/privacy-visibility" as any)} colors={colors} />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="person-outline"        label="Profile Information"   onPress={() => router.push("/settings/privacy-account" as any)} colors={colors} />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="chatbubble-outline"    label="Messages"              onPress={() => router.push("/settings/privacy-messages" as any)} colors={colors} />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="hand-left-outline"     label="Interactions"          onPress={() => router.push("/settings/privacy-interactions" as any)} colors={colors} />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="people-circle-outline" label="Restricted Accounts"  onPress={() => router.push("/settings/privacy-restricted" as any)} colors={colors} />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="ban-outline"           label="Blocked Accounts"      onPress={() => router.push("/settings/blocked" as any)} colors={colors} iconColor="#FF3B30" />
-      </View>
-
-      <SectionHeader title="Data" colors={colors} />
-      <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <SettingRow icon="download-outline"   label="Download Your Data"     onPress={() => router.push("/settings/privacy-download" as any)} colors={colors} />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="server-outline"     label="Data Usage"             onPress={() => router.push("/settings/privacy-data" as any)} colors={colors} />
-      </View>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.tabBody} showsVerticalScrollIndicator={false}>
+      <GroupHeader title="Privacy" />
+      <Group>
+        <SettingRow icon="eye-outline"           label="Account Visibility"   onPress={() => router.push("/settings/privacy-visibility" as any)} />
+        <SettingRow icon="person-outline"        label="Profile Information"  onPress={() => router.push("/settings/privacy-account" as any)} />
+        <SettingRow icon="chatbubble-outline"    label="Messages"             onPress={() => router.push("/settings/privacy-messages" as any)} />
+        <SettingRow icon="hand-left-outline"     label="Interactions"         onPress={() => router.push("/settings/privacy-interactions" as any)} />
+        <SettingRow icon="people-circle-outline" label="Restricted Accounts"  onPress={() => router.push("/settings/privacy-restricted" as any)} />
+        <SettingRow icon="ban-outline"           label="Blocked Accounts"     onPress={() => router.push("/settings/blocked" as any)} iconColor="#FF3B30" isLast />
+      </Group>
+      <GroupHeader title="Data" />
+      <Group>
+        <SettingRow icon="download-outline" label="Download Your Data" onPress={() => router.push("/settings/privacy-download" as any)} />
+        <SettingRow icon="server-outline"   label="Data Usage"         onPress={() => router.push("/settings/privacy-data" as any)} isLast />
+      </Group>
     </ScrollView>
   );
 }
 
-function SecurityTab({ colors }: { colors: any }) {
+function SecurityTab() {
   return (
-    <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
-      <SectionHeader title="Security" colors={colors} />
-      <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <SettingRow icon="lock-closed-outline"  label="Change Password"        onPress={() => router.push("/settings/security" as any)} colors={colors} />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="shield-checkmark-outline" label="Two-Factor Auth"    onPress={() => router.push("/settings/security" as any)} colors={colors} />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="phone-portrait-outline"   label="Device Security"   onPress={() => router.push("/device-security" as any)} colors={colors} />
-      </View>
-
-      <SectionHeader title="Sessions" colors={colors} />
-      <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <SettingRow icon="desktop-outline"   label="Active Sessions"           sub="Manage logged-in devices"   onPress={() => {}} colors={colors} />
-      </View>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.tabBody} showsVerticalScrollIndicator={false}>
+      <GroupHeader title="Security" />
+      <Group>
+        <SettingRow icon="lock-closed-outline"      label="Change Password"  onPress={() => router.push("/settings/security" as any)} />
+        <SettingRow icon="shield-checkmark-outline" label="Two-Factor Auth"  onPress={() => router.push("/settings/security" as any)} />
+        <SettingRow icon="phone-portrait-outline"   label="Device Security"  onPress={() => router.push("/device-security" as any)} isLast />
+      </Group>
+      <GroupHeader title="Sessions" />
+      <Group>
+        <SettingRow icon="desktop-outline" label="Active Sessions" sub="Manage logged-in devices" onPress={() => {}} isLast />
+      </Group>
     </ScrollView>
   );
 }
 
-function NotificationsTab({ colors }: { colors: any }) {
+function NotificationsTab() {
   return (
-    <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
-      <SectionHeader title="Notifications" colors={colors} />
-      <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <SettingRow icon="notifications-outline" label="Push Notifications"  onPress={() => router.push("/settings/notifications" as any)} colors={colors} />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="mail-outline"          label="Email Notifications" onPress={() => router.push("/settings/notifications" as any)} colors={colors} />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="megaphone-outline"     label="Mentions & Tags"     onPress={() => router.push("/settings/notifications" as any)} colors={colors} />
-      </View>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.tabBody} showsVerticalScrollIndicator={false}>
+      <GroupHeader title="Notifications" />
+      <Group>
+        <SettingRow icon="notifications-outline" label="Push Notifications"  onPress={() => router.push("/settings/notifications" as any)} />
+        <SettingRow icon="mail-outline"          label="Email Notifications" onPress={() => router.push("/settings/notifications" as any)} />
+        <SettingRow icon="megaphone-outline"     label="Mentions & Tags"     onPress={() => router.push("/settings/notifications" as any)} isLast />
+      </Group>
     </ScrollView>
   );
 }
 
-function ChatsTab({ colors }: { colors: any }) {
+function ChatsTab() {
   return (
-    <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
-      <SectionHeader title="Chat Settings" colors={colors} />
-      <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <SettingRow icon="eye-outline"         label="Read Receipts"       onPress={() => router.push("/settings/chat" as any)} colors={colors} />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="cloud-upload-outline" label="Media Auto-download" onPress={() => router.push("/settings/chat" as any)} colors={colors} />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="archive-outline"      label="Chat Backup"        onPress={() => router.push("/settings/chat" as any)} colors={colors} />
-      </View>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.tabBody} showsVerticalScrollIndicator={false}>
+      <GroupHeader title="Chat preferences" />
+      <Group>
+        <SettingRow icon="eye-outline"          label="Read Receipts"       onPress={() => router.push("/settings/chat" as any)} />
+        <SettingRow icon="cloud-upload-outline" label="Media Auto-download" onPress={() => router.push("/settings/chat" as any)} />
+        <SettingRow icon="archive-outline"      label="Chat Backup"         onPress={() => router.push("/settings/chat" as any)} isLast />
+      </Group>
     </ScrollView>
   );
 }
 
-function AppearanceTab({ colors, themeMode, cycleTheme }: { colors: any; themeMode: string; cycleTheme: () => void }) {
+function AppearanceTab({ themeMode, setMode }: { themeMode: string; setMode: (m: any) => void }) {
+  const t = useDesktopTheme();
   const themes = [
-    { key: "system", label: "System", icon: "contrast-outline" as const },
-    { key: "light",  label: "Light",  icon: "sunny-outline" as const },
-    { key: "dark",   label: "Dark",   icon: "moon-outline" as const },
+    { key: "system", label: "System", icon: "contrast-outline" as const, sub: "Match your device theme" },
+    { key: "light",  label: "Light",  icon: "sunny-outline"    as const, sub: "Always use light theme" },
+    { key: "dark",   label: "Dark",   icon: "moon-outline"     as const, sub: "Always use dark theme" },
   ];
-
   return (
-    <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
-      <SectionHeader title="Theme" colors={colors} />
-      <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        {themes.map((t, i) => (
-          <React.Fragment key={t.key}>
-            {i > 0 && <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />}
-            <TouchableOpacity
-              onPress={cycleTheme}
-              activeOpacity={0.8}
-              style={styles.settingRow}
-            >
-              <View style={[styles.settingIconWrap, { backgroundColor: BRAND + "16" }]}>
-                <Ionicons name={t.icon} size={16} color={BRAND} />
-              </View>
-              <Text style={[styles.settingLabel, { color: colors.text, flex: 1 }]}>{t.label}</Text>
-              {themeMode === t.key && <Ionicons name="checkmark-circle" size={20} color={BRAND} />}
-            </TouchableOpacity>
-          </React.Fragment>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.tabBody} showsVerticalScrollIndicator={false}>
+      <GroupHeader title="Theme" />
+      <Group>
+        {themes.map((th, i) => (
+          <SettingRow
+            key={th.key}
+            icon={th.icon}
+            label={th.label}
+            sub={th.sub}
+            onPress={() => setMode(th.key)}
+            right={
+              themeMode === th.key ? <Ionicons name="checkmark-circle" size={20} color={t.accent} /> : null
+            }
+            isLast={i === themes.length - 1}
+          />
         ))}
-      </View>
-
-      <SectionHeader title="Accent Color" colors={colors} />
-      <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <SettingRow icon="color-palette-outline" label="Accent Color" sub="Open in Advanced Features" onPress={() => router.push("/advanced-features" as any)} colors={colors} />
-      </View>
+      </Group>
+      <GroupHeader title="Personalization" />
+      <Group>
+        <SettingRow
+          icon="color-palette-outline"
+          label="Accent Color"
+          sub="Open in Advanced features"
+          onPress={() => router.push("/advanced-features" as any)}
+          isLast
+        />
+      </Group>
     </ScrollView>
   );
 }
 
-function AboutTab({ colors }: { colors: any }) {
+function AboutTab() {
+  const t = useDesktopTheme();
   return (
-    <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
-      <SectionHeader title="App" colors={colors} />
-      <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <SettingRow icon="information-circle-outline" label="About AfuChat"      onPress={() => router.push("/about" as any)} colors={colors} />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="document-text-outline"       label="Terms of Service"  onPress={() => router.push("/terms" as any)} colors={colors} />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="shield-outline"              label="Privacy Policy"     onPress={() => router.push("/privacy" as any)} colors={colors} />
-        <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="headset-outline"             label="Support"            onPress={() => router.push("/support" as any)} colors={colors} />
-      </View>
-      <View style={[styles.versionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={[styles.versionIcon, { backgroundColor: BRAND + "18" }]}>
-          <Ionicons name="logo-react" size={22} color={BRAND} />
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.tabBody} showsVerticalScrollIndicator={false}>
+      <GroupHeader title="App" />
+      <Group>
+        <SettingRow icon="information-circle-outline" label="About AfuChat"     onPress={() => router.push("/about" as any)} />
+        <SettingRow icon="document-text-outline"      label="Terms of Service"  onPress={() => router.push("/terms" as any)} />
+        <SettingRow icon="shield-outline"             label="Privacy Policy"    onPress={() => router.push("/privacy" as any)} />
+        <SettingRow icon="headset-outline"            label="Support"           onPress={() => router.push("/support" as any)} isLast />
+      </Group>
+      <View style={{ marginTop: 24, alignItems: "center" }}>
+        <View
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 16,
+            backgroundColor: t.accent + "1A",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Ionicons name="logo-react" size={26} color={t.accent} />
         </View>
-        <Text style={[styles.versionTitle, { color: colors.text }]}>AfuChat</Text>
-        <Text style={[styles.versionNum, { color: colors.textMuted }]}>Version 2.0</Text>
+        <Text style={{ marginTop: 10, fontFamily: "Inter_700Bold", fontSize: 16, color: t.text }}>AfuChat</Text>
+        <Text style={{ marginTop: 4, fontFamily: "Inter_400Regular", fontSize: 12, color: t.textMuted }}>Version 2.0</Text>
       </View>
     </ScrollView>
   );
 }
 
-function DangerTab({ colors, signOut }: { colors: any; signOut: () => void }) {
+function DangerTab({ signOut }: { signOut: () => void }) {
+  const t = useDesktopTheme();
   return (
-    <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
-      <View style={[styles.dangerBanner, { backgroundColor: "#FF3B30" + "0d", borderColor: "#FF3B30" + "30" }]}>
-        <Ionicons name="warning" size={20} color="#FF3B30" />
-        <Text style={[styles.dangerBannerText, { color: "#FF3B30" }]}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.tabBody} showsVerticalScrollIndicator={false}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+          padding: 14,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: t.danger + "55",
+          backgroundColor: t.danger + "12",
+        }}
+      >
+        <Ionicons name="warning" size={20} color={t.danger} />
+        <Text style={{ flex: 1, color: t.danger, fontFamily: "Inter_500Medium", fontSize: 13.5, lineHeight: 19 }}>
           Actions in this section are irreversible. Proceed with caution.
         </Text>
       </View>
-      <SectionHeader title="Session" colors={colors} />
-      <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <SettingRow icon="log-out-outline" label="Sign Out" sub="Sign out of your account" onPress={signOut} colors={colors} iconColor="#FF3B30" />
-      </View>
-      <SectionHeader title="Account" colors={colors} />
-      <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <SettingRow icon="trash-outline" label="Delete Account" sub="Permanently delete your account and all data" onPress={() => {}} colors={colors} iconColor="#FF3B30" />
-      </View>
+      <GroupHeader title="Session" />
+      <Group>
+        <SettingRow icon="log-out-outline" label="Sign Out" sub="Sign out of your account" onPress={signOut} iconColor="#FF3B30" isLast />
+      </Group>
+      <GroupHeader title="Account" />
+      <Group>
+        <SettingRow icon="trash-outline" label="Delete Account" sub="Permanently delete your account and all data" onPress={() => {}} iconColor="#FF3B30" isLast />
+      </Group>
     </ScrollView>
   );
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+/* ─── Main ──────────────────────────────────────────────────────────────── */
 
 export function DesktopSettingsSection() {
-  const { colors, themeMode, setThemeMode } = useTheme();
+  const { themeMode, setThemeMode } = useTheme();
+  const t = useDesktopTheme();
   const { profile, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState("account");
-
-  function cycleTheme() {
-    const next = themeMode === "system" ? "dark" : themeMode === "dark" ? "light" : "system";
-    setThemeMode(next);
-  }
 
   async function handleSignOut() {
     await signOut();
@@ -323,185 +375,163 @@ export function DesktopSettingsSection() {
 
   function renderContent() {
     switch (activeTab) {
-      case "account":        return <AccountTab colors={colors} profile={profile} />;
-      case "privacy":        return <PrivacyTab colors={colors} />;
-      case "security":       return <SecurityTab colors={colors} />;
-      case "notifications":  return <NotificationsTab colors={colors} />;
-      case "chats":          return <ChatsTab colors={colors} />;
-      case "appearance":     return <AppearanceTab colors={colors} themeMode={themeMode} cycleTheme={cycleTheme} />;
-      case "language":       return (
-        <ScrollView contentContainerStyle={styles.tabContent}>
-          <SectionHeader title="Language" colors={colors} />
-          <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <SettingRow icon="language-outline" label="App Language" sub="English" onPress={() => router.push("/language-settings" as any)} colors={colors} />
-          </View>
+      case "account":       return <AccountTab profile={profile} />;
+      case "privacy":       return <PrivacyTab />;
+      case "security":      return <SecurityTab />;
+      case "notifications": return <NotificationsTab />;
+      case "chats":         return <ChatsTab />;
+      case "appearance":    return <AppearanceTab themeMode={themeMode} setMode={setThemeMode} />;
+      case "language":      return (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.tabBody}>
+          <GroupHeader title="Language" />
+          <Group>
+            <SettingRow icon="language-outline" label="App Language" sub="English" onPress={() => router.push("/language-settings" as any)} isLast />
+          </Group>
         </ScrollView>
       );
-      case "advanced":       return (
-        <ScrollView contentContainerStyle={styles.tabContent}>
-          <SectionHeader title="Advanced" colors={colors} />
-          <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <SettingRow icon="flask-outline"  label="Advanced Features" sub="Manage beta features and customization" onPress={() => router.push("/advanced-features" as any)} colors={colors} />
-          </View>
+      case "advanced":      return (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.tabBody}>
+          <GroupHeader title="Advanced" />
+          <Group>
+            <SettingRow icon="flask-outline" label="Advanced Features" sub="Manage beta features and customization" onPress={() => router.push("/advanced-features" as any)} isLast />
+          </Group>
         </ScrollView>
       );
-      case "about":          return <AboutTab colors={colors} />;
-      case "danger":         return <DangerTab colors={colors} signOut={handleSignOut} />;
-      default:               return null;
+      case "about":         return <AboutTab />;
+      case "danger":        return <DangerTab signOut={handleSignOut} />;
+      default:              return null;
     }
   }
 
+  const desc = TAB_DESC[activeTab] ?? TAB_DESC.account;
+
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* Left sidebar */}
-      <View style={[styles.sidebar, { backgroundColor: colors.surface, borderRightColor: colors.border }]}>
-        <Text style={[styles.sidebarTitle, { color: colors.text }]}>Settings</Text>
-        {TABS.map((tab) => {
-          const isActive = tab.id === activeTab;
-          const tColor = tab.color ?? BRAND;
-          return (
-            <TouchableOpacity
-              key={tab.id}
-              onPress={() => setActiveTab(tab.id)}
-              activeOpacity={0.8}
-              style={[styles.sideTab, isActive && { backgroundColor: tColor + "14" }]}
-            >
-              <View style={[styles.sideTabIcon, isActive && { backgroundColor: tColor + "20" }]}>
-                <Ionicons name={tab.icon} size={15} color={isActive ? tColor : colors.textMuted} />
-              </View>
-              <Text
-                style={[
-                  styles.sideTabLabel,
-                  { color: isActive ? tColor : colors.text, fontFamily: isActive ? "Inter_600SemiBold" : "Inter_500Medium" },
-                ]}
-              >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+    <DesktopSectionShell padded={false} style={{ flexDirection: "row" }}>
+      {/* Left rail */}
+      <View
+        style={[
+          styles.sidebar,
+          { backgroundColor: t.panelBg, borderRightColor: t.border },
+        ]}
+      >
+        <Text style={[styles.sidebarTitle, { color: t.text }]}>Settings</Text>
+        <View style={Platform.OS === "web" ? ({ overflowY: "auto", flex: 1 } as any) : { flex: 1 }}>
+          {TABS.map((tab) => {
+            const isActive = tab.id === activeTab;
+            const tColor = tab.color ?? t.accent;
+            return (
+              <SidebarTab
+                key={tab.id}
+                tab={tab}
+                isActive={isActive}
+                tintColor={tColor}
+                onPress={() => setActiveTab(tab.id)}
+              />
+            );
+          })}
+        </View>
       </View>
 
       {/* Content */}
-      <View style={styles.content}>
-        {renderContent()}
+      <View style={{ flex: 1, padding: 18, ...(Platform.OS === "web" ? ({ overflow: "auto" } as any) : {}) }}>
+        <View style={{ width: "100%", maxWidth: 760, alignSelf: "center", flex: 1 }}>
+          <DesktopPanel flex={1}>
+            <DesktopPageHeader title={desc.title} subtitle={desc.subtitle} icon={desc.icon} />
+            <View style={{ flex: 1 }}>{renderContent()}</View>
+          </DesktopPanel>
+        </View>
       </View>
-    </View>
+    </DesktopSectionShell>
+  );
+}
+
+function SidebarTab({
+  tab,
+  isActive,
+  tintColor,
+  onPress,
+}: {
+  tab: SettingsTab;
+  isActive: boolean;
+  tintColor: string;
+  onPress: () => void;
+}) {
+  const t = useDesktopTheme();
+  const [hovered, hp] = useHover();
+  const bg = isActive ? tintColor + "16" : hovered ? t.rowHover : "transparent";
+  const fg = isActive ? tintColor : t.text;
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.85}
+      style={[styles.sideTab, { backgroundColor: bg }]}
+      {...(hp as any)}
+    >
+      {isActive && <View style={[styles.sideTabBar, { backgroundColor: tintColor }]} />}
+      <Ionicons name={tab.icon} size={15} color={fg} />
+      <Text
+        style={{
+          color: fg,
+          fontSize: 13.5,
+          fontFamily: isActive ? "Inter_600SemiBold" : "Inter_500Medium",
+        }}
+      >
+        {tab.label}
+      </Text>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create<any>({
-  root: { flex: 1, flexDirection: "row" },
-
   sidebar: {
     width: 220,
     borderRightWidth: StyleSheet.hairlineWidth,
-    paddingTop: 20,
+    paddingTop: 16,
     paddingHorizontal: 10,
     flexShrink: 0,
+    flexDirection: "column",
   },
   sidebarTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontFamily: "Inter_700Bold",
-    marginBottom: 16,
-    paddingHorizontal: 8,
+    letterSpacing: -0.2,
+    marginBottom: 12,
+    paddingHorizontal: 10,
   },
   sideTab: {
+    position: "relative",
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 9,
-    borderRadius: 9,
+    borderRadius: 8,
     marginBottom: 2,
   },
-  sideTabIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 7,
-    alignItems: "center",
-    justifyContent: "center",
+  sideTabBar: {
+    position: "absolute",
+    left: 0,
+    top: 8,
+    bottom: 8,
+    width: 2.5,
+    borderRadius: 2,
   },
-  sideTabLabel: { fontSize: 14 },
+  tabBody: { padding: 18, gap: 0, paddingBottom: 32 },
 
-  content: { flex: 1 },
-  tabContent: { padding: 28, gap: 4 },
-
-  sectionHeader: {
-    fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: 0.7,
-    marginBottom: 8,
-    marginTop: 16,
-    paddingHorizontal: 4,
-  },
-
-  group: {
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden",
-  },
-  groupDivider: { height: StyleSheet.hairlineWidth },
-
-  settingRow: {
+  row: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     paddingHorizontal: 14,
-    paddingVertical: 13,
+    paddingVertical: 12,
   },
-  settingIconWrap: {
+  rowIcon: {
     width: 30,
     height: 30,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },
-  settingLabel: { fontSize: 14.5, fontFamily: "Inter_500Medium" },
-  settingSub: { fontSize: 12.5, fontFamily: "Inter_400Regular", marginTop: 2 },
-
-  profileCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: 8,
-  },
-  profileName: { fontSize: 17, fontFamily: "Inter_700Bold" },
-  profileHandle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
-  profileBio: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 4 },
-  editBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  editBtnLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-
-  dangerBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 8,
-  },
-  dangerBannerText: { flex: 1, fontSize: 13.5, fontFamily: "Inter_500Medium", lineHeight: 20 },
-
-  versionCard: {
-    alignItems: "center",
-    padding: 24,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginTop: 16,
-    gap: 6,
-  },
-  versionIcon: { width: 48, height: 48, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  versionTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  versionNum: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  rowLabel: { fontSize: 13.5, fontFamily: "Inter_500Medium" },
+  rowSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
 });

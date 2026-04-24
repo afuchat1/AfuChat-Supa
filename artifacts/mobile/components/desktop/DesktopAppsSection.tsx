@@ -14,6 +14,7 @@ import { router } from "expo-router";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import type { DesktopSection } from "@/components/DesktopWrapper";
+import { useDesktopTheme } from "./ui";
 
 const BRAND = "#00BCD4";
 const GOLD = "#D4A853";
@@ -313,9 +314,22 @@ export function DesktopAppsSection({
   onNavigate: (section: DesktopSection) => void;
 }) {
   const { colors, accent } = useTheme();
+  const t = useDesktopTheme();
   const { profile } = useAuth();
   const isAdmin = (profile as any)?.is_admin ?? false;
   const [filter, setFilter] = useState("");
+
+  const themedColors = useMemo(
+    () => ({
+      ...colors,
+      background: t.contentBg,
+      surface: t.panelBg,
+      border: t.border,
+      text: t.text,
+      textMuted: t.textMuted,
+    }),
+    [colors, t],
+  );
 
   const featured = useMemo(
     () =>
@@ -339,32 +353,32 @@ export function DesktopAppsSection({
   }, [filter]);
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
+    <View style={[styles.root, { backgroundColor: t.contentBg }]}>
       {/* Top section header */}
-      <View style={[styles.pageHeader, { borderBottomColor: colors.border }]}>
+      <View style={[styles.pageHeader, { borderBottomColor: t.border, backgroundColor: t.panelHeaderBg }]}>
         <View style={styles.pageHeaderLeft}>
-          <Text style={[styles.pageTitle, { color: colors.text }]}>Apps</Text>
-          <Text style={[styles.pageSub, { color: colors.textMuted }]}>
+          <Text style={[styles.pageTitle, { color: t.text }]}>Apps</Text>
+          <Text style={[styles.pageSub, { color: t.textMuted }]}>
             All your tools, services, and entertainment in one place
           </Text>
         </View>
         <View
           style={[
             styles.filterWrap,
-            { backgroundColor: colors.surface, borderColor: colors.border },
+            { backgroundColor: t.inputBg, borderColor: t.inputBorder },
           ]}
         >
-          <Ionicons name="search" size={14} color={colors.textMuted} />
+          <Ionicons name="search" size={14} color={t.textMuted} />
           <TextInput
             value={filter}
             onChangeText={setFilter}
             placeholder="Filter apps"
-            placeholderTextColor={colors.textMuted}
-            style={[styles.filterInput, { color: colors.text }]}
+            placeholderTextColor={t.textMuted}
+            style={[styles.filterInput, { color: t.text }]}
           />
           {filter.length > 0 && (
             <TouchableOpacity onPress={() => setFilter("")} hitSlop={8}>
-              <Ionicons name="close-circle" size={14} color={colors.textMuted} />
+              <Ionicons name="close-circle" size={14} color={t.textMuted} />
             </TouchableOpacity>
           )}
         </View>
@@ -382,7 +396,7 @@ export function DesktopAppsSection({
               <View key={app.id} style={styles.featuredCol}>
                 <FeaturedBanner
                   app={app}
-                  colors={colors}
+                  colors={themedColors}
                   accent={accent}
                   onPress={() => {
                     if (app.section) onNavigate(app.section);
@@ -399,7 +413,7 @@ export function DesktopAppsSection({
           <CategoryBlock
             key={cat.id}
             cat={cat}
-            colors={colors}
+            colors={themedColors}
             accent={accent}
             onNavigate={onNavigate}
             isAdmin={isAdmin}
@@ -408,11 +422,11 @@ export function DesktopAppsSection({
 
         {filteredCats.length === 0 && (
           <View style={styles.emptyState}>
-            <Ionicons name="search-outline" size={42} color={colors.textMuted} />
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>
+            <Ionicons name="search-outline" size={42} color={t.textMuted} />
+            <Text style={[styles.emptyTitle, { color: t.text }]}>
               No apps match “{filter}”
             </Text>
-            <Text style={[styles.emptySub, { color: colors.textMuted }]}>
+            <Text style={[styles.emptySub, { color: t.textMuted }]}>
               Try a different keyword or clear the filter.
             </Text>
           </View>

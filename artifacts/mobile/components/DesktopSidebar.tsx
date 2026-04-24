@@ -17,6 +17,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { showAlert } from "@/lib/alert";
+import { useDesktopTheme } from "./desktop/ui";
 import type { DesktopSection } from "./DesktopWrapper";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
@@ -108,14 +109,12 @@ type NavGroup = {
 function NavRow({
   item,
   active,
-  colors,
-  accent,
+  t,
   onPress,
 }: {
   item: NavItem;
   active: boolean;
-  colors: any;
-  accent: string;
+  t: ReturnType<typeof useDesktopTheme>;
   onPress: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
@@ -124,8 +123,8 @@ function NavRow({
       ? { onMouseEnter: () => setHovered(true), onMouseLeave: () => setHovered(false) }
       : {};
 
-  const bg = active ? accent + "16" : hovered ? colors.text + "08" : "transparent";
-  const fg = active ? accent : colors.text;
+  const bg = active ? t.rowActive : hovered ? t.rowHover : "transparent";
+  const fg = active ? t.accent : hovered ? t.text : t.textSub ?? t.text;
   const iconName = active && item.iconActive ? item.iconActive : item.icon;
 
   return (
@@ -135,8 +134,8 @@ function NavRow({
       style={[styles.navRow, { backgroundColor: bg }]}
       {...(hoverProps as any)}
     >
-      {active && <View style={[styles.navActiveBar, { backgroundColor: accent }]} />}
-      <Ionicons name={iconName} size={18} color={fg} />
+      {active && <View style={[styles.navActiveBar, { backgroundColor: t.accent }]} />}
+      <Ionicons name={iconName} size={17} color={fg} />
       <Text
         style={[
           styles.navLabel,
@@ -150,10 +149,10 @@ function NavRow({
         <View
           style={[
             styles.pill,
-            { backgroundColor: (item.pillColor ?? accent) + "1F" },
+            { backgroundColor: (item.pillColor ?? t.accent) + "1F" },
           ]}
         >
-          <Text style={[styles.pillText, { color: item.pillColor ?? accent }]}>
+          <Text style={[styles.pillText, { color: item.pillColor ?? t.accent }]}>
             {item.pill}
           </Text>
         </View>
@@ -299,6 +298,7 @@ type SidebarProps = {
 export function DesktopSidebar({ activeSection, onSectionChange, hasSession }: SidebarProps) {
   const { user, profile, signOut } = useAuth();
   const { colors, accent, themeMode, setThemeMode } = useTheme();
+  const t = useDesktopTheme();
   const { notifCount, chatCount } = useUnreadCounts(hasSession ? user?.id ?? null : null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -381,32 +381,32 @@ export function DesktopSidebar({ activeSection, onSectionChange, hasSession }: S
   }
 
   return (
-    <View style={[styles.sidebar, { backgroundColor: colors.surface, borderRightColor: colors.border }]}>
+    <View style={[styles.sidebar, { backgroundColor: t.sidebarBg, borderRightColor: t.border }]}>
       {/* Brand */}
       <TouchableOpacity
         onPress={() => onSectionChange("discover")}
         activeOpacity={0.85}
         style={styles.brand}
       >
-        <View style={[styles.brandMark, { backgroundColor: accent }]}>
+        <View style={[styles.brandMark, { backgroundColor: t.accent }]}>
           <Image source={afuSymbol} style={styles.brandImg} resizeMode="contain" />
         </View>
-        <Text style={[styles.brandText, { color: colors.text }]}>AfuChat</Text>
+        <Text style={[styles.brandText, { color: t.text }]}>AfuChat</Text>
       </TouchableOpacity>
 
       {/* Search */}
-      <View style={[styles.searchWrap, { backgroundColor: colors.background, borderColor: colors.border }]}>
-        <Ionicons name="search" size={14} color={colors.textMuted} />
+      <View style={[styles.searchWrap, { backgroundColor: t.inputBg, borderColor: t.inputBorder }]}>
+        <Ionicons name="search" size={14} color={t.textMuted} />
         <TextInput
           value={search}
           onChangeText={setSearch}
-          placeholder="Search"
-          placeholderTextColor={colors.textMuted}
-          style={[styles.searchInput, { color: colors.text }]}
+          placeholder="Search navigation"
+          placeholderTextColor={t.textMuted}
+          style={[styles.searchInput, { color: t.text }]}
         />
         {search.length > 0 && (
           <TouchableOpacity onPress={() => setSearch("")} hitSlop={8}>
-            <Ionicons name="close-circle" size={14} color={colors.textMuted} />
+            <Ionicons name="close-circle" size={14} color={t.textMuted} />
           </TouchableOpacity>
         )}
       </View>
@@ -416,7 +416,7 @@ export function DesktopSidebar({ activeSection, onSectionChange, hasSession }: S
         <TouchableOpacity
           onPress={() => router.push("/moments/create" as any)}
           activeOpacity={0.9}
-          style={[styles.composeBtn, { backgroundColor: accent }]}
+          style={[styles.composeBtn, { backgroundColor: t.accent }]}
         >
           <Ionicons name="add" size={16} color="#fff" />
           <Text style={styles.composeText}>New post</Text>
@@ -424,39 +424,38 @@ export function DesktopSidebar({ activeSection, onSectionChange, hasSession }: S
       )}
 
       {/* Nav groups (scrollable) */}
-      <View style={styles.navScroll}>
+      <View style={[styles.navScroll, Platform.OS === "web" ? ({ overflowY: "auto" } as any) : null]}>
         {filteredGroups.map((group, idx) => (
           <View key={idx} style={{ marginTop: idx === 0 ? 4 : 14 }}>
             {!!group.title && (
-              <Text style={[styles.groupTitle, { color: colors.textMuted }]}>{group.title}</Text>
+              <Text style={[styles.groupTitle, { color: t.textMuted }]}>{group.title}</Text>
             )}
             {group.items.map((it) => (
               <NavRow
                 key={it.key}
                 item={it}
                 active={it.section === activeSection}
-                colors={colors}
-                accent={accent}
+                t={t}
                 onPress={() => handleNavPress(it)}
               />
             ))}
           </View>
         ))}
         {filteredGroups.length === 0 && (
-          <Text style={[styles.emptySearch, { color: colors.textMuted }]}>
+          <Text style={[styles.emptySearch, { color: t.textMuted }]}>
             No results for “{search}”
           </Text>
         )}
       </View>
 
       {/* Footer: user / auth */}
-      <View style={[styles.sidebarFooter, { borderTopColor: colors.border }]}>
+      <View style={[styles.sidebarFooter, { borderTopColor: t.border }]}>
         {hasSession ? (
           <View style={{ position: "relative" }}>
             <TouchableOpacity
               onPress={() => setUserMenuOpen((v) => !v)}
               activeOpacity={0.85}
-              style={[styles.userCard, { backgroundColor: userMenuOpen ? colors.text + "08" : "transparent" }]}
+              style={[styles.userCard, { backgroundColor: userMenuOpen ? t.rowHover : "transparent" }]}
             >
               <Avatar
                 uri={profile?.avatar_url ?? null}
@@ -465,14 +464,14 @@ export function DesktopSidebar({ activeSection, onSectionChange, hasSession }: S
                 style={{ borderRadius: 8 }}
               />
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1}>
+                <Text style={[styles.userName, { color: t.text }]} numberOfLines={1}>
                   {profile?.display_name || "User"}
                 </Text>
-                <Text style={[styles.userHandle, { color: colors.textMuted }]} numberOfLines={1}>
+                <Text style={[styles.userHandle, { color: t.textMuted }]} numberOfLines={1}>
                   @{profile?.handle || "user"}
                 </Text>
               </View>
-              <Ionicons name="ellipsis-horizontal" size={16} color={colors.textMuted} />
+              <Ionicons name="ellipsis-horizontal" size={16} color={t.textMuted} />
             </TouchableOpacity>
 
             {userMenuOpen && (
@@ -483,7 +482,7 @@ export function DesktopSidebar({ activeSection, onSectionChange, hasSession }: S
                 />
                 <UserMenuPopover
                   profile={profile}
-                  colors={colors}
+                  colors={{ surface: t.panelBg, border: t.borderStrong, text: t.text, textMuted: t.textMuted }}
                   themeMode={themeMode}
                   onSection={(s) => { setUserMenuOpen(false); onSectionChange(s); }}
                   onClose={() => setUserMenuOpen(false)}
@@ -498,14 +497,14 @@ export function DesktopSidebar({ activeSection, onSectionChange, hasSession }: S
             <TouchableOpacity
               onPress={() => router.push("/(auth)/login" as any)}
               activeOpacity={0.85}
-              style={[styles.loginBtn, { borderColor: colors.border }]}
+              style={[styles.loginBtn, { borderColor: t.borderStrong }]}
             >
-              <Text style={[styles.loginText, { color: colors.text }]}>Log in</Text>
+              <Text style={[styles.loginText, { color: t.text }]}>Log in</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => router.push("/(auth)/register" as any)}
               activeOpacity={0.9}
-              style={[styles.signupBtn, { backgroundColor: accent }]}
+              style={[styles.signupBtn, { backgroundColor: t.accent }]}
             >
               <Text style={styles.signupText}>Sign up free</Text>
             </TouchableOpacity>

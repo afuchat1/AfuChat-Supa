@@ -25,6 +25,12 @@ import { RichText } from "@/components/ui/RichText";
 import { DesktopRightPanel } from "@/components/DesktopRightPanel";
 import { sharePost } from "@/lib/share";
 import { useDataMode } from "@/context/DataModeContext";
+import {
+  DesktopButton,
+  DesktopPanel,
+  DesktopSectionShell,
+  useDesktopTheme,
+} from "./ui";
 
 const BRAND = "#00BCD4";
 
@@ -64,44 +70,84 @@ function timeAgo(iso: string) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-function LoginPrompt({ visible, onClose, colors }: { visible: boolean; onClose: () => void; colors: any }) {
+function LoginPrompt({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const t = useDesktopTheme();
+  useEffect(() => {
+    if (Platform.OS !== "web" || !visible) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [visible, onClose]);
+
   if (!visible) return null;
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
-      <TouchableOpacity style={modal.backdrop} activeOpacity={1} onPress={onClose}>
-        <View style={[modal.card, { backgroundColor: colors.card }]}>
-          <Ionicons name="person-circle-outline" size={52} color={BRAND} style={{ marginBottom: 10 }} />
-          <Text style={[modal.title, { color: colors.text }]}>Sign in to interact</Text>
-          <Text style={[modal.sub, { color: colors.textMuted }]}>
-            Create an account or log in to like, comment and join the conversation.
-          </Text>
-          <TouchableOpacity
-            style={[modal.loginBtn, { backgroundColor: BRAND }]}
-            onPress={() => { onClose(); router.push("/(auth)/login" as any); }}
+      <TouchableOpacity
+        style={[modal.backdrop, { backgroundColor: t.modalBackdrop }]}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation?.()}>
+          <View
+            style={[
+              modal.card,
+              {
+                backgroundColor: t.panelBg,
+                borderColor: t.border,
+                borderWidth: StyleSheet.hairlineWidth,
+              },
+            ]}
           >
-            <Text style={modal.loginBtnText}>Log in</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[modal.registerBtn, { borderColor: BRAND }]}
-            onPress={() => { onClose(); router.push("/(auth)/register" as any); }}
-          >
-            <Text style={[modal.registerBtnText, { color: BRAND }]}>Create account</Text>
-          </TouchableOpacity>
-        </View>
+            <View
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 16,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: t.accent + "1A",
+                marginBottom: 4,
+              }}
+            >
+              <Ionicons name="person-circle-outline" size={32} color={t.accent} />
+            </View>
+            <Text style={[modal.title, { color: t.text }]}>Sign in to interact</Text>
+            <Text style={[modal.sub, { color: t.textMuted }]}>
+              Create an account or log in to like, comment and join the conversation.
+            </Text>
+            <View style={{ width: "100%", gap: 8, marginTop: 8 }}>
+              <DesktopButton
+                label="Log in"
+                onPress={() => {
+                  onClose();
+                  router.push("/(auth)/login" as any);
+                }}
+                fullWidth
+              />
+              <DesktopButton
+                label="Create account"
+                variant="secondary"
+                onPress={() => {
+                  onClose();
+                  router.push("/(auth)/register" as any);
+                }}
+                fullWidth
+              />
+            </View>
+          </View>
+        </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
   );
 }
 
 const modal = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" },
-  card: { width: 340, borderRadius: 4, padding: 28, alignItems: "center", gap: 10 },
-  title: { fontSize: 20, fontFamily: "Inter_700Bold", textAlign: "center" },
-  sub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
-  loginBtn: { width: "100%" as any, paddingVertical: 13, borderRadius: 4, alignItems: "center", marginTop: 6 },
-  loginBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  registerBtn: { width: "100%" as any, paddingVertical: 12, borderRadius: 4, alignItems: "center", borderWidth: 1 },
-  registerBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  backdrop: { flex: 1, alignItems: "center", justifyContent: "center" },
+  card: { width: 380, borderRadius: 14, padding: 24, alignItems: "center", gap: 8 },
+  title: { fontSize: 19, fontFamily: "Inter_700Bold", textAlign: "center", letterSpacing: -0.2 },
+  sub: { fontSize: 13.5, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20, maxWidth: 320 },
 });
 
 function ComposeBox({ profile, colors, isLoggedIn, onAuthRequired, onPost }: {
@@ -590,7 +636,7 @@ export function DesktopDiscoverSection() {
 
   return (
     <View style={styles.root}>
-      <LoginPrompt visible={showLoginPrompt} onClose={() => setShowLoginPrompt(false)} colors={colors} />
+      <LoginPrompt visible={showLoginPrompt} onClose={() => setShowLoginPrompt(false)} />
 
       {/* Feed column */}
       <View

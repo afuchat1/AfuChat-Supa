@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import {
   Animated,
   Dimensions,
+  Easing,
   Modal,
   PanResponder,
   Platform,
@@ -11,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { BlurView } from "expo-blur";
+import { useTheme } from "@/hooks/useTheme";
 
 const SCREEN_H = Dimensions.get("window").height;
 const CLOSE_THRESHOLD = 100;
@@ -25,7 +27,16 @@ interface Props {
   maxHeight?: string | number;
   overlayColor?: string;
   useGlass?: boolean;
+  /** Desktop-only: card width preset. Defaults to "md" (560px). */
+  desktopSize?: "sm" | "md" | "lg" | "xl";
 }
+
+const DESKTOP_SIZE_MAP: Record<NonNullable<Props["desktopSize"]>, number> = {
+  sm: 420,
+  md: 560,
+  lg: 720,
+  xl: 960,
+};
 
 export default function SwipeableBottomSheet({
   visible,
@@ -33,50 +44,70 @@ export default function SwipeableBottomSheet({
   children,
   backgroundColor,
   maxHeight = "85%",
-  overlayColor = "rgba(0,0,0,0.5)",
+  overlayColor,
   useGlass = true,
+  desktopSize = "md",
 }: Props) {
   const { width } = useWindowDimensions();
+  const { colors, isDark } = useTheme();
   const isDesktop = Platform.OS === "web" && width >= DESKTOP_BP;
   const isIOS = Platform.OS === "ios";
 
-  const resolvedBg = backgroundColor ?? (isIOS ? "transparent" : "rgba(18,22,28,0.96)");
+  // Desktop colors are theme-aware (the previous version was hardcoded dark).
+  const desktopBg =
+    backgroundColor ?? (isDark ? "#13181F" : "#FFFFFF");
+  const desktopBorder = isDark ? "rgba(255,255,255,0.10)" : "rgba(15,20,30,0.12)";
+  const desktopOverlay =
+    overlayColor ?? (isDark ? "rgba(2,5,10,0.62)" : "rgba(15,20,30,0.42)");
+
+  // Mobile colors keep the current dark sheet by default.
+  const mobileBg = backgroundColor ?? (isIOS ? "transparent" : "rgba(18,22,28,0.96)");
+  const mobileOverlay = overlayColor ?? "rgba(0,0,0,0.5)";
 
   const translateY = useRef(new Animated.Value(SCREEN_H)).current;
   const opacity = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(0.95)).current;
+  const scale = useRef(new Animated.Value(0.96)).current;
+  const desktopTranslate = useRef(new Animated.Value(8)).current;
 
   useEffect(() => {
     if (isDesktop) {
       if (visible) {
         Animated.parallel([
-          Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
-          Animated.spring(scale, { toValue: 1, tension: 140, friction: 16, useNativeDriver: true }),
+          Animated.timing(opacity, {
+            toValue: 1,
+            duration: 180,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.spring(scale, { toValue: 1, tension: 200, friction: 20, useNativeDriver: true }),
+          Animated.spring(desktopTranslate, { toValue: 0, tension: 200, friction: 20, useNativeDriver: true }),
         ]).start();
       } else {
         opacity.setValue(0);
-        scale.setValue(0.95);
+        scale.setValue(0.96);
+        desktopTranslate.setValue(8);
       }
     } else {
       if (visible) {
-        Animated.spring(translateY, {
-          toValue: 0,
-          useNativeDriver: true,
-          tension: 60,
-          friction: 11,
-        }).start();
+        Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 60, friction: 11 }).start();
       } else {
         translateY.setValue(SCREEN_H);
       }
     }
   }, [visible, isDesktop]);
 
+  // ESC closes on desktop
+  useEffect(() => {
+    if (!isDesktop || !visible || Platform.OS !== "web") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isDesktop, visible, onClose]);
+
   function dismissMobile() {
-    Animated.timing(translateY, {
-      toValue: SCREEN_H,
-      duration: 220,
-      useNativeDriver: true,
-    }).start(() => onClose());
+    Animated.timing(translateY, { toValue: SCREEN_H, duration: 220, useNativeDriver: true }).start(() => onClose());
   }
 
   const panResponder = useRef(
@@ -90,35 +121,47 @@ export default function SwipeableBottomSheet({
         if (g.dy > CLOSE_THRESHOLD || g.vy > VELOCITY_THRESHOLD) {
           dismissMobile();
         } else {
-          Animated.spring(translateY, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 80,
-            friction: 12,
-          }).start();
+          Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 80, friction: 12 }).start();
         }
       },
-    })
+    }),
   ).current;
 
   if (!visible) return null;
 
   if (isDesktop) {
+    const cardWidth = DESKTOP_SIZE_MAP[desktopSize];
     return (
       <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
-        <Animated.View style={[styles.desktopOverlay, { opacity, backgroundColor: overlayColor }]}>
+        <Animated.View
+          style={[
+            styles.desktopOverlay,
+            {
+              opacity,
+              backgroundColor: desktopOverlay,
+              ...(Platform.OS === "web" ? ({ backdropFilter: "blur(8px)" } as any) : {}),
+            },
+          ]}
+        >
           <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
           <Animated.View
             style={[
               styles.desktopCard,
-              { transform: [{ scale }] },
+              {
+                width: "100%",
+                maxWidth: cardWidth,
+                backgroundColor: desktopBg,
+                borderColor: desktopBorder,
+                transform: [{ scale }, { translateY: desktopTranslate }],
+                ...(Platform.OS === "web"
+                  ? ({
+                      boxShadow:
+                        "0 28px 80px rgba(0,0,0,0.32), 0 4px 12px rgba(0,0,0,0.10)",
+                    } as any)
+                  : {}),
+              },
             ]}
           >
-            {isIOS && useGlass ? (
-              <BlurView intensity={80} tint="dark" style={[StyleSheet.absoluteFill, { borderRadius: 16 }]} />
-            ) : (
-              <View style={[StyleSheet.absoluteFill, { backgroundColor: resolvedBg, borderRadius: 16 }]} />
-            )}
             <View style={styles.desktopCardInner}>{children}</View>
           </Animated.View>
         </Animated.View>
@@ -129,7 +172,7 @@ export default function SwipeableBottomSheet({
   return (
     <Modal visible={visible} animationType="none" transparent onRequestClose={dismissMobile}>
       <View style={styles.overlay}>
-        <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: overlayColor }]} onPress={dismissMobile} />
+        <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: mobileOverlay }]} onPress={dismissMobile} />
         <Animated.View
           style={[
             styles.sheet,
@@ -139,7 +182,16 @@ export default function SwipeableBottomSheet({
           {isIOS && useGlass ? (
             <BlurView intensity={85} tint="dark" style={[StyleSheet.absoluteFill, styles.blurSheet]} />
           ) : (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: resolvedBg, borderTopLeftRadius: 24, borderTopRightRadius: 24 }]} />
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  backgroundColor: mobileBg,
+                  borderTopLeftRadius: 24,
+                  borderTopRightRadius: 24,
+                },
+              ]}
+            />
           )}
           <View style={styles.sheetBorder} pointerEvents="none" />
           <View {...panResponder.panHandlers} style={styles.handleArea}>
@@ -153,19 +205,9 @@ export default function SwipeableBottomSheet({
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    overflow: "hidden",
-  },
-  blurSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-  },
+  overlay: { flex: 1, justifyContent: "flex-end" },
+  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: "hidden" },
+  blurSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24 },
   sheetBorder: {
     position: "absolute",
     top: 0,
@@ -179,39 +221,16 @@ const styles = StyleSheet.create({
     borderRightWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.10)",
   },
-  handleArea: {
-    alignItems: "center",
-    paddingTop: 12,
-    paddingBottom: 4,
-    zIndex: 1,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "rgba(255,255,255,0.20)",
-  },
-  sheetContent: {
-    zIndex: 1,
-  },
-  desktopOverlay: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  handleArea: { alignItems: "center", paddingTop: 12, paddingBottom: 4, zIndex: 1 },
+  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.20)" },
+  sheetContent: { zIndex: 1 },
+
+  desktopOverlay: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   desktopCard: {
-    width: "100%",
-    maxWidth: 520,
-    maxHeight: "82%",
+    maxHeight: "86%",
     borderRadius: 16,
     overflow: "hidden",
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.10)",
-    ...Platform.select({
-      web: { boxShadow: "0 12px 50px rgba(0,0,0,0.36)" } as any,
-    }),
   },
-  desktopCardInner: {
-    zIndex: 1,
-  },
+  desktopCardInner: { zIndex: 1, flexShrink: 1 },
 });

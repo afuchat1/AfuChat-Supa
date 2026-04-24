@@ -12,12 +12,19 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/context/AuthContext";
-import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
-
-const BRAND = "#00BCD4";
+import {
+  DesktopButton,
+  DesktopChip,
+  DesktopEmptyState,
+  DesktopPageHeader,
+  DesktopPanel,
+  DesktopSectionShell,
+  DesktopToolbar,
+  useDesktopTheme,
+  useHover,
+} from "./ui";
 
 type UserResult = {
   id: string;
@@ -52,6 +59,14 @@ const TABS: { key: Tab; label: string; icon: React.ComponentProps<typeof Ionicon
   { key: "channels", label: "Channels", icon: "megaphone-outline" },
 ];
 
+const SUGGESTED = [
+  "afuchat",
+  "music",
+  "fashion",
+  "tech",
+  "africa",
+];
+
 function timeAgo(iso: string) {
   const d = new Date(iso);
   const now = new Date();
@@ -62,10 +77,26 @@ function timeAgo(iso: string) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-export function DesktopSearchSection() {
-  const { colors, isDark } = useTheme();
-  const { user } = useAuth();
+function ResultRow({ children, onPress }: { children: React.ReactNode; onPress: () => void }) {
+  const t = useDesktopTheme();
+  const [hovered, hp] = useHover();
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.85}
+      style={[
+        styles.resultRow,
+        { borderBottomColor: t.border, backgroundColor: hovered ? t.rowHover : "transparent" },
+      ]}
+      {...(hp as any)}
+    >
+      {children}
+    </TouchableOpacity>
+  );
+}
 
+export function DesktopSearchSection() {
+  const t = useDesktopTheme();
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<Tab>("people");
   const [searching, setSearching] = useState(false);
@@ -112,231 +143,187 @@ export function DesktopSearchSection() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [query, doSearch]);
 
+  const trimmed = query.trim();
   const hasResults = users.length > 0 || posts.length > 0 || channels.length > 0;
-  const isEmpty = query.trim().length >= 2 && !searching && !hasResults;
+  const isEmpty = trimmed.length >= 2 && !searching && !hasResults;
+
+  const data: (UserResult | PostResult | ChannelResult)[] =
+    tab === "people" ? users : tab === "posts" ? posts : channels;
 
   return (
-    <View style={[styles.root, { backgroundColor: isDark ? "#0f0f12" : "#f8f9fc" }]}>
-      {/* Search header */}
-      <View style={[styles.searchHeader, { backgroundColor: isDark ? "#0f0f12" : "#ffffff", borderBottomColor: colors.border }]}>
-        <Text style={[styles.pageTitle, { color: colors.text }]}>Search</Text>
-        <View style={[styles.searchBar, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
-          <Ionicons name="search-outline" size={18} color={colors.textMuted} />
-          <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Search people, posts, channels…"
-            placeholderTextColor={colors.textMuted}
-            value={query}
-            onChangeText={setQuery}
-            autoFocus={Platform.OS === "web"}
+    <DesktopSectionShell>
+      <View style={{ width: "100%", maxWidth: 880, alignSelf: "center", flex: 1 }}>
+        <DesktopPanel flex={1}>
+          <DesktopPageHeader
+            icon="search-outline"
+            title="Search"
+            subtitle="Find people, posts and channels across AfuChat"
           />
-          {query.length > 0 && (
-            <TouchableOpacity onPress={() => setQuery("")} hitSlop={10}>
-              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-            </TouchableOpacity>
-          )}
-          {searching && <ActivityIndicator size="small" color={colors.accent} />}
-        </View>
-      </View>
 
-      {/* Tabs */}
-      {query.trim().length >= 2 && (
-        <View style={[styles.tabRow, { backgroundColor: isDark ? "#0f0f12" : "#ffffff", borderBottomColor: colors.border }]}>
-          {TABS.map((t) => (
-            <TouchableOpacity
-              key={t.key}
-              onPress={() => setTab(t.key)}
-              style={[styles.tab, tab === t.key && { borderBottomColor: colors.accent, borderBottomWidth: 2 }]}
-              activeOpacity={0.8}
+          {/* Search bar */}
+          <View style={{ paddingHorizontal: 18, paddingTop: 14 }}>
+            <View
+              style={[
+                styles.searchBar,
+                { backgroundColor: t.inputBg, borderColor: t.inputBorder },
+              ]}
             >
-              <Ionicons name={t.icon} size={14} color={tab === t.key ? colors.accent : colors.textMuted} />
-              <Text style={[styles.tabLabel, { color: tab === t.key ? colors.accent : colors.textMuted }, tab === t.key && { fontFamily: "Inter_600SemiBold" }]}>
-                {t.label}
-                {t.key === "people" && users.length > 0 ? ` (${users.length})` : ""}
-                {t.key === "posts" && posts.length > 0 ? ` (${posts.length})` : ""}
-                {t.key === "channels" && channels.length > 0 ? ` (${channels.length})` : ""}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-
-      {/* Results */}
-      <View style={styles.results}>
-        {query.trim().length < 2 ? (
-          <View style={styles.promptWrap}>
-            <Ionicons name="search" size={52} color={colors.textMuted} />
-            <Text style={[styles.promptTitle, { color: colors.text }]}>Discover AfuChat</Text>
-            <Text style={[styles.promptSub, { color: colors.textMuted }]}>
-              Search for people, posts, channels and more
-            </Text>
-          </View>
-        ) : isEmpty ? (
-          <View style={styles.promptWrap}>
-            <Ionicons name="search-outline" size={48} color={colors.textMuted} />
-            <Text style={[styles.promptTitle, { color: colors.text }]}>No results for "{query}"</Text>
-            <Text style={[styles.promptSub, { color: colors.textMuted }]}>Try a different search term</Text>
-          </View>
-        ) : (
-          <FlatList<UserResult | PostResult | ChannelResult>
-            data={(tab === "people" ? users : tab === "posts" ? posts : channels) as (UserResult | PostResult | ChannelResult)[]}
-            keyExtractor={(item) => item.id}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.resultList}
-            renderItem={({ item }) => {
-              if (tab === "people") {
-                const u = item as UserResult;
-                return (
-                  <TouchableOpacity
-                    style={[styles.resultRow, { borderBottomColor: colors.border }]}
-                    onPress={() => router.push({ pathname: "/contact/[id]", params: { id: u.id } })}
-                    activeOpacity={0.8}
-                  >
-                    <Avatar uri={u.avatar_url} name={u.display_name} size={46} />
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-                        <Text style={[styles.resultName, { color: colors.text }]}>{u.display_name}</Text>
-                        <VerifiedBadge isVerified={u.is_verified} isOrganizationVerified={u.is_organization_verified} size={13} />
-                      </View>
-                      <Text style={[styles.resultHandle, { color: colors.textMuted }]}>@{u.handle}</Text>
-                      {u.bio && (
-                        <Text style={[styles.resultBio, { color: colors.textMuted }]} numberOfLines={2}>{u.bio}</Text>
-                      )}
-                    </View>
-                    <TouchableOpacity
-                      style={[styles.actionBtn, { borderColor: colors.accent }]}
-                      onPress={() => router.push({ pathname: "/contact/[id]", params: { id: u.id } })}
-                    >
-                      <Text style={[styles.actionBtnText, { color: colors.accent }]}>View</Text>
-                    </TouchableOpacity>
-                  </TouchableOpacity>
-                );
-              }
-              if (tab === "posts") {
-                const p = item as PostResult;
-                return (
-                  <TouchableOpacity
-                    style={[styles.resultRow, { borderBottomColor: colors.border }]}
-                    onPress={() => router.push({ pathname: "/post/[id]", params: { id: p.id } } as any)}
-                    activeOpacity={0.8}
-                  >
-                    <Avatar uri={(p as PostResult).author?.avatar_url || null} name={(p as PostResult).author?.display_name || "?"} size={38} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.resultHandle, { color: colors.accent }]}>
-                        @{(p as PostResult).author?.handle} · {timeAgo((p as PostResult).created_at)}
-                      </Text>
-                      <Text style={[styles.resultBio, { color: colors.text }]} numberOfLines={3}>{(p as PostResult).content}</Text>
-                    </View>
-                    <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
-                  </TouchableOpacity>
-                );
-              }
-              const ch = item as ChannelResult;
-              return (
-                <TouchableOpacity
-                  style={[styles.resultRow, { borderBottomColor: colors.border }]}
-                  onPress={() => router.push(`/chat/${ch.id}` as any)}
-                  activeOpacity={0.8}
-                >
-                  <Avatar uri={ch.avatar_url} name={ch.name} size={46} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.resultName, { color: colors.text }]}>{ch.name}</Text>
-                    {ch.description && (
-                      <Text style={[styles.resultBio, { color: colors.textMuted }]} numberOfLines={2}>{ch.description}</Text>
-                    )}
-                    <Text style={[styles.resultHandle, { color: colors.textMuted }]}>
-                      {ch.subscriber_count} subscribers
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={[styles.actionBtn, { borderColor: colors.accent }]}
-                    onPress={() => router.push(`/chat/${ch.id}` as any)}
-                  >
-                    <Text style={[styles.actionBtnText, { color: colors.accent }]}>Open</Text>
-                  </TouchableOpacity>
+              <Ionicons name="search-outline" size={17} color={t.textMuted} />
+              <TextInput
+                style={[styles.searchInput, { color: t.text }]}
+                placeholder="Type to search…"
+                placeholderTextColor={t.textMuted}
+                value={query}
+                onChangeText={setQuery}
+                autoFocus={Platform.OS === "web"}
+                returnKeyType="search"
+              />
+              {searching ? (
+                <ActivityIndicator size="small" color={t.accent} />
+              ) : query.length > 0 ? (
+                <TouchableOpacity onPress={() => setQuery("")} hitSlop={10}>
+                  <Ionicons name="close-circle" size={17} color={t.textMuted} />
                 </TouchableOpacity>
-              );
-            }}
-          />
-        )}
+              ) : null}
+            </View>
+          </View>
+
+          {/* Tabs (only show when searching) */}
+          {trimmed.length >= 2 && (
+            <DesktopToolbar style={{ flexWrap: "wrap" as any }}>
+              {TABS.map((tt) => {
+                const count = tt.key === "people" ? users.length : tt.key === "posts" ? posts.length : channels.length;
+                return (
+                  <DesktopChip
+                    key={tt.key}
+                    icon={tt.icon}
+                    label={`${tt.label}${count > 0 ? ` · ${count}` : ""}`}
+                    active={tab === tt.key}
+                    onPress={() => setTab(tt.key)}
+                  />
+                );
+              })}
+            </DesktopToolbar>
+          )}
+
+          {/* Results / empty / prompt */}
+          {trimmed.length < 2 ? (
+            <View style={{ flex: 1, padding: 24 }}>
+              <DesktopEmptyState
+                icon="compass-outline"
+                title="Search AfuChat"
+                subtitle="Try a name, a topic, or a channel — start typing to see live results."
+              />
+              <View style={{ marginTop: 24, alignItems: "center" }}>
+                <Text style={{ color: t.textMuted, fontFamily: "Inter_500Medium", fontSize: 12, marginBottom: 8 }}>
+                  TRENDING
+                </Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, justifyContent: "center" }}>
+                  {SUGGESTED.map((s) => (
+                    <DesktopChip key={s} label={`#${s}`} onPress={() => setQuery(s)} />
+                  ))}
+                </View>
+              </View>
+            </View>
+          ) : isEmpty ? (
+            <DesktopEmptyState
+              icon="search-outline"
+              title={`No results for “${query}”`}
+              subtitle="Try a different keyword or check the spelling."
+            />
+          ) : (
+            <FlatList
+              data={data}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingBottom: 24 }}
+              renderItem={({ item }) => {
+                if (tab === "people") {
+                  const u = item as UserResult;
+                  return (
+                    <ResultRow onPress={() => router.push({ pathname: "/contact/[id]", params: { id: u.id } })}>
+                      <Avatar uri={u.avatar_url} name={u.display_name} size={42} />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                          <Text style={[styles.resultName, { color: t.text }]} numberOfLines={1}>{u.display_name}</Text>
+                          <VerifiedBadge isVerified={u.is_verified} isOrganizationVerified={u.is_organization_verified} size={13} />
+                        </View>
+                        <Text style={[styles.resultHandle, { color: t.textMuted }]}>@{u.handle}</Text>
+                        {!!u.bio && (
+                          <Text style={[styles.resultBio, { color: t.textSub ?? t.text }]} numberOfLines={2}>{u.bio}</Text>
+                        )}
+                      </View>
+                      <DesktopButton label="View" variant="secondary" size="sm" onPress={() => router.push({ pathname: "/contact/[id]", params: { id: u.id } })} />
+                    </ResultRow>
+                  );
+                }
+                if (tab === "posts") {
+                  const p = item as PostResult;
+                  return (
+                    <ResultRow onPress={() => router.push({ pathname: "/post/[id]", params: { id: p.id } } as any)}>
+                      <Avatar uri={p.author?.avatar_url || null} name={p.author?.display_name || "?"} size={36} />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={[styles.resultHandle, { color: t.accent }]}>
+                          @{p.author?.handle} · {timeAgo(p.created_at)}
+                        </Text>
+                        <Text style={[styles.resultBio, { color: t.text }]} numberOfLines={3}>{p.content}</Text>
+                      </View>
+                      <Ionicons name="arrow-forward" size={16} color={t.textMuted} />
+                    </ResultRow>
+                  );
+                }
+                const ch = item as ChannelResult;
+                return (
+                  <ResultRow onPress={() => router.push(`/chat/${ch.id}` as any)}>
+                    <Avatar uri={ch.avatar_url} name={ch.name} size={42} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={[styles.resultName, { color: t.text }]} numberOfLines={1}>{ch.name}</Text>
+                      {!!ch.description && (
+                        <Text style={[styles.resultBio, { color: t.textSub ?? t.text }]} numberOfLines={2}>{ch.description}</Text>
+                      )}
+                      <Text style={[styles.resultHandle, { color: t.textMuted }]}>
+                        {ch.subscriber_count} subscribers
+                      </Text>
+                    </View>
+                    <DesktopButton label="Open" variant="secondary" size="sm" onPress={() => router.push(`/chat/${ch.id}` as any)} />
+                  </ResultRow>
+                );
+              }}
+            />
+          )}
+        </DesktopPanel>
       </View>
-    </View>
+    </DesktopSectionShell>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, flexDirection: "column", overflow: "hidden" },
-  searchHeader: {
-    paddingHorizontal: 28,
-    paddingTop: 24,
-    paddingBottom: 16,
-    gap: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  pageTitle: { fontSize: 24, fontFamily: "Inter_700Bold", letterSpacing: -0.4 },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: "Inter_400Regular",
     padding: 0,
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null),
   },
-  tabRow: {
-    flexDirection: "row",
-    paddingHorizontal: 24,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  tab: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
-  },
-  tabLabel: { fontSize: 14, fontFamily: "Inter_500Medium" },
-  results: { flex: 1, overflow: "hidden" },
-  resultList: {
-    maxWidth: 720,
-    alignSelf: "center",
-    width: "100%" as any,
-    paddingBottom: 40,
-  },
-  promptWrap: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-    padding: 48,
-  },
-  promptTitle: { fontSize: 20, fontFamily: "Inter_700Bold", textAlign: "center" },
-  promptSub: { fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22 },
   resultRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    paddingVertical: 13,
+    paddingHorizontal: 18,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  resultName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  resultHandle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
+  resultName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  resultHandle: { fontSize: 12.5, fontFamily: "Inter_400Regular", marginTop: 2 },
   resultBio: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 4, lineHeight: 18 },
-  actionBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    alignSelf: "center",
-    flexShrink: 0,
-  },
-  actionBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
 });

@@ -1,8 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Animated,
+  Easing,
   Platform,
   Pressable,
   StyleSheet,
+  Text,
   TouchableOpacity,
   View,
   useWindowDimensions,
@@ -24,6 +27,7 @@ import { DesktopAppsSection } from "./desktop/DesktopAppsSection";
 import { DesktopAISection } from "./desktop/DesktopAISection";
 import { DesktopMatchSection } from "./desktop/DesktopMatchSection";
 import { DesktopSettingsSection } from "./desktop/DesktopSettingsSection";
+import { useDesktopTheme } from "./desktop/ui";
 
 const DESKTOP_BREAKPOINT = 960;
 
@@ -46,6 +50,58 @@ const AUTHED_SECTIONS: DesktopSection[] = [
 
 const BASE_FIRST_SEGMENTS = new Set(["", "index", "(tabs)", "+html", "+not-found"]);
 
+/* ─────────────────────────────────────────────────────────────────────────────
+ *  Pretty title for the detail-route modal — derived from current path segments.
+ *  Falls back to "Details" when nothing matches.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+const SEG_TITLES: Record<string, string> = {
+  post: "Post",
+  channel: "Channel",
+  group: "Group",
+  story: "Story",
+  stories: "Story",
+  video: "Video",
+  videos: "Videos",
+  article: "Article",
+  profile: "Profile",
+  user: "Profile",
+  contact: "Contact",
+  wallet: "Wallet",
+  premium: "Premium",
+  monetize: "Monetize",
+  events: "Events",
+  store: "Marketplace",
+  freelance: "Freelance",
+  saved: "Saved",
+  saved_posts: "Saved posts",
+  bookmarks: "Bookmarks",
+  notifications: "Notifications",
+  achievements: "Achievements",
+  prestige: "Prestige",
+  digital_id: "Digital ID",
+  referral: "Referral",
+  match: "Match",
+  ai: "AfuAI",
+  apps: "Apps",
+  admin: "Admin panel",
+  settings: "Settings",
+  help: "Help center",
+  search: "Search",
+  edit: "Edit",
+  create: "Create",
+  topup: "Top-up",
+  transfer: "Transfer",
+};
+
+function titleFromSegments(segs: readonly string[]): string {
+  for (const raw of segs) {
+    const key = raw.replace(/^\(/, "").replace(/\)$/, "").replace(/-/g, "_").toLowerCase();
+    if (SEG_TITLES[key]) return SEG_TITLES[key];
+  }
+  return "Details";
+}
+
 function sectionFromSegments(segs: readonly string[]): DesktopSection {
   const flat = segs.join("/");
   if (flat.includes("notifications")) return "notifications";
@@ -65,8 +121,134 @@ function isDetailRoute(segs: readonly string[]): boolean {
   return !BASE_FIRST_SEGMENTS.has(segs[0]);
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+ *  Detail-route modal — pro centered card, blurred backdrop, ESC to close.
+ *  Replaces the old fake-macOS-window look with a clean app-modal pattern.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+function DetailModal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const t = useDesktopTheme();
+  const opacity = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.97)).current;
+  const translate = useRef(new Animated.Value(10)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: Platform.OS !== "web",
+      }),
+      Animated.spring(scale, { toValue: 1, tension: 200, friction: 20, useNativeDriver: Platform.OS !== "web" }),
+      Animated.spring(translate, { toValue: 0, tension: 200, friction: 20, useNativeDriver: Platform.OS !== "web" }),
+    ]).start();
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.modalBackdrop,
+        {
+          backgroundColor: t.modalBackdrop,
+          opacity,
+          ...(Platform.OS === "web" ? ({ backdropFilter: "blur(8px)" } as any) : {}),
+        },
+      ]}
+    >
+      <Pressable style={styles.backdropPress} onPress={onClose} />
+      <Animated.View
+        style={[
+          styles.modalSheet,
+          {
+            backgroundColor: t.panelBg,
+            borderColor: t.borderStrong,
+            transform: [{ scale }, { translateY: translate }],
+            ...(Platform.OS === "web"
+              ? ({
+                  boxShadow:
+                    "0 30px 80px rgba(0,0,0,0.34), 0 6px 18px rgba(0,0,0,0.14)",
+                } as any)
+              : {}),
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.modalHeader,
+            { borderBottomColor: t.border, backgroundColor: t.panelHeaderBg },
+          ]}
+        >
+          <View
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 9,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: t.accent + "1A",
+            }}
+          >
+            <Ionicons name="albums-outline" size={15} color={t.accent} />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              numberOfLines={1}
+              style={{
+                fontFamily: "Inter_700Bold",
+                fontSize: 15,
+                color: t.text,
+                letterSpacing: -0.2,
+              }}
+            >
+              {title}
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={{
+                marginTop: 2,
+                fontFamily: "Inter_400Regular",
+                fontSize: 12,
+                color: t.textMuted,
+              }}
+            >
+              Press Esc to close
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={onClose}
+            activeOpacity={0.85}
+            style={[styles.headerBtn, { backgroundColor: t.chipBg }]}
+          >
+            <Ionicons name="close" size={15} color={t.text} />
+          </TouchableOpacity>
+        </View>
+        <View style={[styles.modalContent, { backgroundColor: t.panelBg }]}>{children}</View>
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
 function DesktopShell({ children }: { children: React.ReactNode }) {
   const { colors } = useTheme();
+  const t = useDesktopTheme();
   const { session } = useAuth();
   const segments = useSegments();
 
@@ -99,9 +281,14 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
   );
 
   const showModal = isDetailRoute(segments);
+  const modalTitle = showModal ? titleFromSegments(segments) : "Details";
+
+  const closeModal = useCallback(() => {
+    try { router.back(); } catch { router.replace("/(tabs)" as any); }
+  }, []);
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
+    <View style={[styles.root, { backgroundColor: t.appBg }]}>
       {/* Persistent left sidebar */}
       <DesktopSidebar
         activeSection={activeSection}
@@ -110,7 +297,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
       />
 
       {/* Main canvas */}
-      <View style={[styles.main, { backgroundColor: colors.background }]}>
+      <View style={[styles.main, { backgroundColor: t.contentBg }]}>
         <View style={styles.sectionLayer}>
           {activeSection === "chats"         && <DesktopChatsSection />}
           {activeSection === "discover"      && <DesktopDiscoverSection />}
@@ -128,34 +315,9 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
 
       {/* Detail-route modal overlay */}
       {Platform.OS === "web" && showModal && (
-        <View style={styles.modalBackdrop}>
-          <Pressable
-            style={styles.backdropPress}
-            onPress={() => {
-              try { router.back(); } catch { router.replace("/(tabs)" as any); }
-            }}
-          />
-          <View style={[styles.modalSheet, { backgroundColor: colors.background, borderColor: colors.border }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-              <View style={styles.modalDots}>
-                <View style={[styles.modalDot, { backgroundColor: "#FF5F57" }]} />
-                <View style={[styles.modalDot, { backgroundColor: "#FEBC2E" }]} />
-                <View style={[styles.modalDot, { backgroundColor: "#28C840" }]} />
-              </View>
-              <View style={{ flex: 1 }} />
-              <TouchableOpacity
-                onPress={() => {
-                  try { router.back(); } catch { router.replace("/(tabs)" as any); }
-                }}
-                style={[styles.closeBtn, { backgroundColor: colors.text + "0F" }]}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="close" size={16} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.modalContent}>{children}</View>
-          </View>
-        </View>
+        <DetailModal title={modalTitle} onClose={closeModal}>
+          {children}
+        </DetailModal>
       )}
     </View>
   );
@@ -185,42 +347,32 @@ const styles = StyleSheet.create<any>({
     zIndex: 500,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(8, 12, 20, 0.55)",
-    // @ts-ignore
-    backdropFilter: "blur(6px)",
   },
   backdropPress: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   modalSheet: {
-    width: "62%",
-    maxWidth: 880,
-    minWidth: 540,
-    height: "86%",
-    borderRadius: 14,
+    width: "70%",
+    maxWidth: 1000,
+    minWidth: 580,
+    height: "88%",
+    borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
     flexDirection: "column",
     zIndex: 501,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 28 },
-    shadowOpacity: 0.32,
-    shadowRadius: 60,
-    elevation: 24,
   },
   modalHeader: {
-    height: 44,
+    height: 56,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexShrink: 0,
     gap: 12,
   },
-  modalDots: { flexDirection: "row", gap: 6 },
-  modalDot: { width: 11, height: 11, borderRadius: 6 },
-  closeBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 7,
+  headerBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
   },

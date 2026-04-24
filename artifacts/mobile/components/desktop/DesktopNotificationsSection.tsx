@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,9 +12,19 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
-import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
-import Colors from "@/constants/colors";
+import {
+  DesktopButton,
+  DesktopChip,
+  DesktopEmptyState,
+  DesktopLoadingState,
+  DesktopPageHeader,
+  DesktopPanel,
+  DesktopSectionShell,
+  DesktopToolbar,
+  useDesktopTheme,
+  useHover,
+} from "./ui";
 
 const BRAND = "#00BCD4";
 
@@ -82,43 +93,69 @@ function timeAgo(iso: string) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-function NotifRow({ item, colors, onPress, onMarkRead }: {
+function NotifRow({
+  item,
+  onPress,
+  onMarkRead,
+}: {
   item: NotifItem;
-  colors: any;
   onPress: () => void;
   onMarkRead: (id: string) => void;
 }) {
+  const t = useDesktopTheme();
   const cfg = getConfig(item.type);
+  const [hovered, hp] = useHover();
+
   return (
     <TouchableOpacity
       onPress={onPress}
-      activeOpacity={0.8}
+      activeOpacity={0.85}
       style={[
         styles.notifRow,
-        { backgroundColor: item.is_read ? "transparent" : colors.accent + "08", borderBottomColor: colors.border },
+        {
+          backgroundColor: !item.is_read
+            ? t.accent + "0F"
+            : hovered
+              ? t.rowHover
+              : "transparent",
+          borderBottomColor: t.border,
+        },
       ]}
+      {...(hp as any)}
     >
-      {!item.is_read && <View style={[styles.unreadDot, { backgroundColor: colors.accent }]} />}
+      {!item.is_read && <View style={[styles.unreadDot, { backgroundColor: t.accent }]} />}
 
-      <View style={[styles.notifIcon, { backgroundColor: cfg.color + "18" }]}>
-        <Ionicons name={cfg.icon as any} size={18} color={cfg.color} />
+      <View style={[styles.notifIcon, { backgroundColor: cfg.color + "1A" }]}>
+        <Ionicons name={cfg.icon as any} size={16} color={cfg.color} />
       </View>
 
-      <View style={styles.notifBody}>
-        <View style={styles.notifTop}>
-          {item.actor && (
-            <Avatar uri={item.actor.avatar_url} name={item.actor.display_name} size={28} />
-          )}
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.notifText, { color: colors.text }]}>
-              {item.actor ? (
-                <Text style={{ fontFamily: "Inter_600SemiBold" }}>{item.actor.display_name} </Text>
-              ) : null}
-              <Text style={{ color: colors.textMuted }}>{cfg.label}</Text>
-            </Text>
-            <Text style={[styles.notifTime, { color: colors.textMuted }]}>{timeAgo(item.created_at)}</Text>
+      <View style={{ flexShrink: 0 }}>
+        {item.actor ? (
+          <Avatar uri={item.actor.avatar_url} name={item.actor.display_name} size={36} />
+        ) : (
+          <View
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: t.chipBg,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ionicons name="alert-circle-outline" size={18} color={t.textMuted} />
           </View>
-        </View>
+        )}
+      </View>
+
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[styles.notifText, { color: t.text }]} numberOfLines={2}>
+          {item.actor ? (
+            <Text style={{ fontFamily: "Inter_600SemiBold" }}>{item.actor.display_name} </Text>
+          ) : null}
+          <Text style={{ color: t.textMuted, fontFamily: "Inter_400Regular" }}>{cfg.label}</Text>
+        </Text>
+        <Text style={[styles.notifTime, { color: t.textMuted }]}>{timeAgo(item.created_at)}</Text>
       </View>
 
       {!item.is_read && (
@@ -127,7 +164,7 @@ function NotifRow({ item, colors, onPress, onMarkRead }: {
           hitSlop={10}
           style={styles.markReadBtn}
         >
-          <Ionicons name="checkmark-circle-outline" size={16} color={colors.textMuted} />
+          <Ionicons name="checkmark-circle-outline" size={18} color={t.textMuted} />
         </TouchableOpacity>
       )}
     </TouchableOpacity>
@@ -135,13 +172,12 @@ function NotifRow({ item, colors, onPress, onMarkRead }: {
 }
 
 export function DesktopNotificationsSection() {
-  const { colors, isDark } = useTheme();
   const { user } = useAuth();
+  const t = useDesktopTheme();
 
   const [notifs, setNotifs] = useState<NotifItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState<Category>("all");
-  const [unreadCount, setUnreadCount] = useState(0);
 
   const loadNotifs = useCallback(async () => {
     if (!user) return;
@@ -158,23 +194,40 @@ export function DesktopNotificationsSection() {
       actor: n.profiles || null,
     }));
     setNotifs(items);
-    setUnreadCount(items.filter((n) => !n.is_read).length);
     setLoading(false);
   }, [user]);
 
   useEffect(() => { loadNotifs(); }, [loadNotifs]);
 
+  // realtime
+  useEffect(() => {
+    if (!user) return;
+    const ch = supabase
+      .channel(`desktop-notifs:${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
+        () => loadNotifs(),
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [user, loadNotifs]);
+
+  const unreadCount = useMemo(() => notifs.filter((n) => !n.is_read).length, [notifs]);
+
   async function markRead(id: string) {
     await supabase.from("notifications").update({ is_read: true }).eq("id", id);
-    setNotifs((prev) => prev.map((n) => n.id === id ? { ...n, is_read: true } : n));
-    setUnreadCount((c) => Math.max(0, c - 1));
+    setNotifs((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
   }
 
   async function markAllRead() {
     if (!user) return;
-    await supabase.from("notifications").update({ is_read: true }).eq("user_id", user.id).eq("is_read", false);
+    await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("user_id", user.id)
+      .eq("is_read", false);
     setNotifs((prev) => prev.map((n) => ({ ...n, is_read: true })));
-    setUnreadCount(0);
   }
 
   function handlePress(item: NotifItem) {
@@ -184,165 +237,129 @@ export function DesktopNotificationsSection() {
     if (route) router.push(route as any);
   }
 
-  const filtered = notifs.filter((n) => {
-    if (category === "all") return true;
-    return getConfig(n.type).category === category;
-  });
+  // category counts
+  const counts = useMemo(() => {
+    const m: Record<Category, number> = { all: notifs.length, social: 0, marketplace: 0, payments: 0, system: 0 };
+    for (const n of notifs) {
+      const c = getConfig(n.type).category;
+      m[c] = (m[c] || 0) + 1;
+    }
+    return m;
+  }, [notifs]);
+
+  const filtered = notifs.filter((n) => category === "all" || getConfig(n.type).category === category);
 
   return (
-    <View style={[styles.root, { backgroundColor: isDark ? "#0f0f12" : "#f8f9fc" }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: isDark ? "#0f0f12" : "#ffffff", borderBottomColor: colors.border }]}>
-        <View>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
-          {unreadCount > 0 && (
-            <Text style={[styles.headerSub, { color: colors.textMuted }]}>
-              {unreadCount} unread
-            </Text>
-          )}
-        </View>
-        {unreadCount > 0 && (
-          <TouchableOpacity onPress={markAllRead} style={[styles.markAllBtn, { borderColor: colors.border }]}>
-            <Ionicons name="checkmark-done-outline" size={15} color={colors.accent} />
-            <Text style={[styles.markAllText, { color: colors.accent }]}>Mark all read</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Category tabs */}
-      <View style={[styles.catRow, { backgroundColor: isDark ? "#0f0f12" : "#ffffff", borderBottomColor: colors.border }]}>
-        {CATEGORIES.map((cat) => (
-          <TouchableOpacity
-            key={cat.id}
-            onPress={() => setCategory(cat.id)}
-            style={[
-              styles.catTab,
-              category === cat.id && { borderBottomColor: colors.accent, borderBottomWidth: 2 },
-            ]}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name={cat.icon}
-              size={14}
-              color={category === cat.id ? colors.accent : colors.textMuted}
-            />
-            <Text
-              style={[
-                styles.catLabel,
-                { color: category === cat.id ? colors.accent : colors.textMuted },
-                category === cat.id && { fontFamily: "Inter_600SemiBold" },
-              ]}
-            >
-              {cat.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* List */}
-      <View style={styles.listWrap}>
-        {loading ? (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-            <ActivityIndicator color={colors.accent} />
-          </View>
-        ) : (
-          <FlatList
-            data={filtered}
-            keyExtractor={(n) => n.id}
-            renderItem={({ item }) => (
-              <NotifRow
-                item={item}
-                colors={colors}
-                onPress={() => handlePress(item)}
-                onMarkRead={markRead}
-              />
-            )}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.listContent}
-            ListEmptyComponent={
-              <View style={styles.emptyWrap}>
-                <Ionicons name="notifications-off-outline" size={48} color={colors.textMuted} />
-                <Text style={[styles.emptyText, { color: colors.textMuted }]}>No notifications</Text>
-              </View>
+    <DesktopSectionShell>
+      <View
+        style={{
+          width: "100%",
+          maxWidth: 880,
+          alignSelf: "center",
+          flex: 1,
+          flexDirection: "column",
+        }}
+      >
+        <DesktopPanel flex={1}>
+          <DesktopPageHeader
+            icon="notifications-outline"
+            title="Notifications"
+            subtitle={
+              loading
+                ? "Loading…"
+                : unreadCount > 0
+                  ? `${unreadCount} unread${notifs.length ? ` of ${notifs.length}` : ""}`
+                  : `All caught up · ${notifs.length} total`
+            }
+            right={
+              unreadCount > 0 ? (
+                <DesktopButton
+                  label="Mark all as read"
+                  icon="checkmark-done-outline"
+                  variant="secondary"
+                  size="sm"
+                  onPress={markAllRead}
+                />
+              ) : null
             }
           />
-        )}
+
+          <DesktopToolbar style={{ flexWrap: "wrap" as any, gap: 6 }}>
+            {CATEGORIES.map((cat) => (
+              <DesktopChip
+                key={cat.id}
+                icon={cat.icon}
+                label={`${cat.label}${counts[cat.id] ? ` · ${counts[cat.id]}` : ""}`}
+                active={category === cat.id}
+                onPress={() => setCategory(cat.id)}
+              />
+            ))}
+          </DesktopToolbar>
+
+          {loading ? (
+            <DesktopLoadingState label="Loading notifications" />
+          ) : filtered.length === 0 ? (
+            <DesktopEmptyState
+              icon="notifications-off-outline"
+              title="Nothing here yet"
+              subtitle={
+                category === "all"
+                  ? "When someone interacts with you, you'll see it here."
+                  : "No notifications match this filter."
+              }
+              action={
+                category !== "all"
+                  ? { label: "Show all", icon: "list-outline", onPress: () => setCategory("all") }
+                  : undefined
+              }
+            />
+          ) : (
+            <FlatList
+              data={filtered}
+              keyExtractor={(n) => n.id}
+              renderItem={({ item }) => (
+                <NotifRow item={item} onPress={() => handlePress(item)} onMarkRead={markRead} />
+              )}
+              showsVerticalScrollIndicator={false}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingBottom: 24 }}
+            />
+          )}
+        </DesktopPanel>
       </View>
-    </View>
+    </DesktopSectionShell>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, flexDirection: "column", overflow: "hidden" },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 28,
-    paddingTop: 24,
-    paddingBottom: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerTitle: { fontSize: 24, fontFamily: "Inter_700Bold", letterSpacing: -0.4 },
-  headerSub: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
-  markAllBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  markAllText: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  catRow: {
-    flexDirection: "row",
-    paddingHorizontal: 24,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  catTab: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
-  },
-  catLabel: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  listWrap: { flex: 1, maxWidth: 760, alignSelf: "center", width: "100%" as any },
-  listContent: { paddingBottom: 40 },
   notifRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     position: "relative",
   },
   unreadDot: {
     position: "absolute",
-    left: 8,
+    left: 6,
     top: "50%" as any,
-    transform: [{ translateY: -4 }],
+    transform: [{ translateY: -3 }],
     width: 6,
     height: 6,
     borderRadius: 3,
   },
   notifIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 11,
+    width: 32,
+    height: 32,
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
+    marginLeft: 4,
   },
-  notifBody: { flex: 1, minWidth: 0 },
-  notifTop: { flexDirection: "row", alignItems: "center", gap: 8 },
-  notifText: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20, flex: 1 },
-  notifTime: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 3 },
+  notifText: { fontSize: 13.5, lineHeight: 19 },
+  notifTime: { fontSize: 11.5, fontFamily: "Inter_400Regular", marginTop: 3 },
   markReadBtn: { padding: 6, flexShrink: 0 },
-  emptyWrap: { alignItems: "center", paddingTop: 80, gap: 12 },
-  emptyText: { fontSize: 16, fontFamily: "Inter_500Medium" },
 });
