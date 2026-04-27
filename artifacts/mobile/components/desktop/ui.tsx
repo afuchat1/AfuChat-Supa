@@ -967,38 +967,28 @@ export function DesktopSheet({
 
   const dim = SIZE_MAP[size];
 
-  return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <Animated.View
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            backgroundColor: t.modalBackdrop,
-            opacity,
-            ...(Platform.OS === "web" ? ({ backdropFilter: "blur(8px)" } as any) : {}),
-          },
-        ]}
+  // ── Desktop web: render as a right-docked side panel with NO backdrop,
+  // so the rest of the page stays fully visible and interactive.
+  if (Platform.OS === "web") {
+    return (
+      <View
+        // @ts-ignore — web-only fixed positioning
+        style={{
+          position: "fixed" as any,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: "100%",
+          maxWidth: dim.w,
+          zIndex: 1000,
+          backgroundColor: t.panelBg,
+          borderLeftWidth: StyleSheet.hairlineWidth,
+          borderLeftColor: t.borderStrong,
+          boxShadow: "-12px 0 32px rgba(0,0,0,0.18)" as any,
+          display: "flex" as any,
+          flexDirection: "column",
+        }}
       >
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }} pointerEvents="box-none">
-          <Animated.View
-            style={{
-              width: "100%",
-              maxWidth: dim.w,
-              maxHeight: "92%",
-              ...(typeof dim.h === "number" ? { height: dim.h } : dim.h !== "auto" ? { height: dim.h } : {}),
-              backgroundColor: t.panelBg,
-              borderRadius: 16,
-              borderWidth: StyleSheet.hairlineWidth,
-              borderColor: t.borderStrong,
-              overflow: "hidden",
-              opacity,
-              transform: [{ scale }, { translateY: translate }],
-              ...(Platform.OS === "web"
-                ? ({ boxShadow: "0 30px 80px rgba(0,0,0,0.32), 0 4px 12px rgba(0,0,0,0.10)" } as any)
-                : {}),
-            }}
-          >
             {(title != null || icon || headerRight != null) && (
               <View
                 style={{
@@ -1066,6 +1056,122 @@ export function DesktopSheet({
                   flexShrink: 1,
                   ...(scrollable && Platform.OS === "web" ? ({ overflow: "auto" } as any) : {}),
                 },
+                contentStyle,
+              ]}
+            >
+              {children}
+            </View>
+
+            {footer && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "flex-end",
+                  gap: 8,
+                  paddingHorizontal: 18,
+                  paddingVertical: 12,
+                  borderTopWidth: StyleSheet.hairlineWidth,
+                  borderTopColor: t.border,
+                  backgroundColor: t.panelHeaderBg,
+                }}
+              >
+                {footer}
+              </View>
+            )}
+      </View>
+    );
+  }
+
+  // ── Native (iOS/Android): keep the original centered modal behavior.
+  return (
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          { backgroundColor: t.modalBackdrop, opacity },
+        ]}
+      >
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }} pointerEvents="box-none">
+          <Animated.View
+            style={{
+              width: "100%",
+              maxWidth: dim.w,
+              maxHeight: "92%",
+              ...(typeof dim.h === "number" ? { height: dim.h } : dim.h !== "auto" ? { height: dim.h } : {}),
+              backgroundColor: t.panelBg,
+              borderRadius: 16,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: t.borderStrong,
+              overflow: "hidden",
+              opacity,
+              transform: [{ scale }, { translateY: translate }],
+            } as any}
+          >
+            {(title != null || icon || headerRight != null) && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 12,
+                  paddingHorizontal: 18,
+                  paddingVertical: 14,
+                  borderBottomWidth: StyleSheet.hairlineWidth,
+                  borderBottomColor: t.border,
+                  backgroundColor: t.panelHeaderBg,
+                }}
+              >
+                {icon && (
+                  <View
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 9,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: t.accent + "1A",
+                    }}
+                  >
+                    <Ionicons name={icon} size={16} color={t.accent} />
+                  </View>
+                )}
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  {title != null && (
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        fontFamily: "Inter_700Bold",
+                        fontSize: 15,
+                        color: t.text,
+                        letterSpacing: -0.2,
+                      }}
+                    >
+                      {title}
+                    </Text>
+                  )}
+                  {subtitle != null && (
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        marginTop: 2,
+                        fontFamily: "Inter_400Regular",
+                        fontSize: 12.5,
+                        color: t.textMuted,
+                      }}
+                    >
+                      {subtitle}
+                    </Text>
+                  )}
+                </View>
+                {headerRight}
+                <DesktopIconButton icon="close" onPress={onClose} size={30} />
+              </View>
+            )}
+
+            <View
+              style={[
+                { flexGrow: 1, flexShrink: 1 },
                 contentStyle,
               ]}
             >

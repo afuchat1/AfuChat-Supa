@@ -131,41 +131,28 @@ export default function SwipeableBottomSheet({
 
   if (isDesktop) {
     const cardWidth = DESKTOP_SIZE_MAP[desktopSize];
+    // Right-docked side panel, no backdrop, doesn't cover the page content.
     return (
-      <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
-        <Animated.View
-          style={[
-            styles.desktopOverlay,
-            {
-              opacity,
-              backgroundColor: desktopOverlay,
-              ...(Platform.OS === "web" ? ({ backdropFilter: "blur(8px)" } as any) : {}),
-            },
-          ]}
-        >
-          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-          <Animated.View
-            style={[
-              styles.desktopCard,
-              {
-                width: "100%",
-                maxWidth: cardWidth,
-                backgroundColor: desktopBg,
-                borderColor: desktopBorder,
-                transform: [{ scale }, { translateY: desktopTranslate }],
-                ...(Platform.OS === "web"
-                  ? ({
-                      boxShadow:
-                        "0 28px 80px rgba(0,0,0,0.32), 0 4px 12px rgba(0,0,0,0.10)",
-                    } as any)
-                  : {}),
-              },
-            ]}
-          >
-            <View style={styles.desktopCardInner}>{children}</View>
-          </Animated.View>
-        </Animated.View>
-      </Modal>
+      <View
+        // @ts-ignore — web-only fixed positioning
+        style={{
+          position: "fixed" as any,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: "100%",
+          maxWidth: cardWidth,
+          zIndex: 1000,
+          backgroundColor: desktopBg,
+          borderLeftWidth: StyleSheet.hairlineWidth,
+          borderLeftColor: desktopBorder,
+          boxShadow: "-12px 0 32px rgba(0,0,0,0.18)" as any,
+          display: "flex" as any,
+          flexDirection: "column",
+        }}
+      >
+        <View style={[styles.desktopCardInner, { flex: 1 }]}>{children}</View>
+      </View>
     );
   }
 
