@@ -5,7 +5,6 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
   useWindowDimensions,
@@ -50,58 +49,6 @@ const AUTHED_SECTIONS: DesktopSection[] = [
 
 const BASE_FIRST_SEGMENTS = new Set(["", "index", "(tabs)", "+html", "+not-found"]);
 
-/* ─────────────────────────────────────────────────────────────────────────────
- *  Pretty title for the detail-route modal — derived from current path segments.
- *  Falls back to "Details" when nothing matches.
- * ──────────────────────────────────────────────────────────────────────────── */
-
-const SEG_TITLES: Record<string, string> = {
-  post: "Post",
-  channel: "Channel",
-  group: "Group",
-  story: "Story",
-  stories: "Story",
-  video: "Video",
-  videos: "Videos",
-  article: "Article",
-  profile: "Profile",
-  user: "Profile",
-  contact: "Contact",
-  wallet: "Wallet",
-  premium: "Premium",
-  monetize: "Monetize",
-  events: "Events",
-  store: "Marketplace",
-  freelance: "Freelance",
-  saved: "Saved",
-  saved_posts: "Saved posts",
-  bookmarks: "Bookmarks",
-  notifications: "Notifications",
-  achievements: "Achievements",
-  prestige: "Prestige",
-  digital_id: "Digital ID",
-  referral: "Referral",
-  match: "Match",
-  ai: "AfuAI",
-  apps: "Apps",
-  admin: "Admin panel",
-  settings: "Settings",
-  help: "Help center",
-  search: "Search",
-  edit: "Edit",
-  create: "Create",
-  topup: "Top-up",
-  transfer: "Transfer",
-};
-
-function titleFromSegments(segs: readonly string[]): string {
-  for (const raw of segs) {
-    const key = raw.replace(/^\(/, "").replace(/\)$/, "").replace(/-/g, "_").toLowerCase();
-    if (SEG_TITLES[key]) return SEG_TITLES[key];
-  }
-  return "Details";
-}
-
 function sectionFromSegments(segs: readonly string[]): DesktopSection {
   const flat = segs.join("/");
   if (flat.includes("notifications")) return "notifications";
@@ -127,11 +74,9 @@ function isDetailRoute(segs: readonly string[]): boolean {
  * ──────────────────────────────────────────────────────────────────────────── */
 
 function DetailModal({
-  title,
   onClose,
   children,
 }: {
-  title: string;
   onClose: () => void;
   children: React.ReactNode;
 }) {
@@ -169,7 +114,7 @@ function DetailModal({
         {
           backgroundColor: t.modalBackdrop,
           opacity,
-          ...(Platform.OS === "web" ? ({ backdropFilter: "blur(8px)" } as any) : {}),
+          ...(Platform.OS === "web" ? ({ backdropFilter: "blur(6px)" } as any) : {}),
         },
       ]}
     >
@@ -184,63 +129,32 @@ function DetailModal({
             ...(Platform.OS === "web"
               ? ({
                   boxShadow:
-                    "0 30px 80px rgba(0,0,0,0.34), 0 6px 18px rgba(0,0,0,0.14)",
+                    "0 24px 70px rgba(0,0,0,0.34), 0 4px 14px rgba(0,0,0,0.14)",
                 } as any)
               : {}),
           },
         ]}
       >
-        <View
+        <View style={[styles.modalContent, { backgroundColor: t.panelBg }]}>{children}</View>
+        <TouchableOpacity
+          onPress={onClose}
+          activeOpacity={0.85}
+          accessibilityLabel="Close"
           style={[
-            styles.modalHeader,
-            { borderBottomColor: t.border, backgroundColor: t.panelHeaderBg },
+            styles.modalCloseFab,
+            {
+              backgroundColor: t.chipBg,
+              borderColor: t.border,
+              ...(Platform.OS === "web"
+                ? ({
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+                  } as any)
+                : {}),
+            },
           ]}
         >
-          <View
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 9,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: t.accent + "1A",
-            }}
-          >
-            <Ionicons name="albums-outline" size={15} color={t.accent} />
-          </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text
-              numberOfLines={1}
-              style={{
-                fontFamily: "Inter_700Bold",
-                fontSize: 15,
-                color: t.text,
-                letterSpacing: -0.2,
-              }}
-            >
-              {title}
-            </Text>
-            <Text
-              numberOfLines={1}
-              style={{
-                marginTop: 2,
-                fontFamily: "Inter_400Regular",
-                fontSize: 12,
-                color: t.textMuted,
-              }}
-            >
-              Press Esc to close
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={onClose}
-            activeOpacity={0.85}
-            style={[styles.headerBtn, { backgroundColor: t.chipBg }]}
-          >
-            <Ionicons name="close" size={15} color={t.text} />
-          </TouchableOpacity>
-        </View>
-        <View style={[styles.modalContent, { backgroundColor: t.panelBg }]}>{children}</View>
+          <Ionicons name="close" size={16} color={t.text} />
+        </TouchableOpacity>
       </Animated.View>
     </Animated.View>
   );
@@ -281,7 +195,6 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
   );
 
   const showModal = isDetailRoute(segments);
-  const modalTitle = showModal ? titleFromSegments(segments) : "Details";
 
   const closeModal = useCallback(() => {
     try { router.back(); } catch { router.replace("/(tabs)" as any); }
@@ -315,7 +228,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
 
       {/* Detail-route modal overlay */}
       {Platform.OS === "web" && showModal && (
-        <DetailModal title={modalTitle} onClose={closeModal}>
+        <DetailModal onClose={closeModal}>
           {children}
         </DetailModal>
       )}
@@ -350,31 +263,27 @@ const styles = StyleSheet.create<any>({
   },
   backdropPress: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   modalSheet: {
-    width: "70%",
-    maxWidth: 1000,
-    minWidth: 580,
-    height: "88%",
-    borderRadius: 16,
+    width: "100%",
+    maxWidth: 460,
+    height: "92%",
+    maxHeight: 820,
+    borderRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
     flexDirection: "column",
     zIndex: 501,
   },
-  modalHeader: {
-    height: 56,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexShrink: 0,
-    gap: 12,
-  },
-  headerBtn: {
+  modalContent: { flex: 1, overflow: "hidden", borderRadius: 18 },
+  modalCloseFab: {
+    position: "absolute",
+    top: 10,
+    right: 10,
     width: 30,
     height: 30,
-    borderRadius: 9,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: StyleSheet.hairlineWidth,
+    zIndex: 510,
   },
-  modalContent: { flex: 1, overflow: "hidden" },
 });

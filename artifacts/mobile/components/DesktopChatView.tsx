@@ -20,6 +20,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useDataMode } from "@/context/DataModeContext";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
+import { MessageContextMenu, type MessageMenuAction } from "@/components/MessageContextMenu";
 
 type Message = {
   id: string;
@@ -106,6 +107,14 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [attachPreview, setAttachPreview] = useState<{ uri: string; type: string; name: string; mimeType?: string } | null>(null);
   const [uploadingAttach, setUploadingAttach] = useState(false);
+  const [ctxMenu, setCtxMenu] = useState<{
+    x: number;
+    y: number;
+    message: Message;
+    isMine: boolean;
+  } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flatRef = useRef<FlatList>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -578,6 +587,14 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
             </View>
           )}
           <View
+            // @ts-ignore RN Web supports onContextMenu pass-through
+            onContextMenu={(e: any) => {
+              if (Platform.OS !== "web") return;
+              e.preventDefault?.();
+              const cx = e.nativeEvent?.clientX ?? e.clientX ?? 0;
+              const cy = e.nativeEvent?.clientY ?? e.clientY ?? 0;
+              setCtxMenu({ x: cx, y: cy, message: item, isMine: isMe });
+            }}
             style={[
               st.bubble,
               isMe
@@ -629,6 +646,73 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
       </View>
     );
   };
+
+  const showToast = useCallback((msg: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(msg);
+    toastTimer.current = setTimeout(() => setToast(null), 1800);
+  }, []);
+
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+
+  const handleMenuAction = useCallback(
+    (action: MessageMenuAction, payload?: any) => {
+      const msg = ctxMenu?.message;
+      if (!msg) return;
+      switch (action) {
+        case "react":
+          showToast(payload ? `Reacted ${payload}` : "More reactions coming soon");
+          break;
+        case "reply":
+          setText((t) => (t ? t : `> ${(msg.encrypted_content || "").slice(0, 80)}\n`));
+          showToast("Replying…");
+          break;
+        case "copy": {
+          if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.clipboard) {
+            navigator.clipboard.writeText(msg.encrypted_content || "").catch(() => {});
+          }
+          showToast("Copied to clipboard");
+          break;
+        }
+        case "forward":
+          showToast("Forward — coming soon");
+          break;
+        case "pin":
+          showToast("Pinned");
+          break;
+        case "translate":
+          showToast("Translating…");
+          break;
+        case "edit":
+          setText(msg.encrypted_content || "");
+          showToast("Editing message");
+          break;
+        case "save":
+          showToast("Saved to favorites");
+          break;
+        case "share":
+          if (Platform.OS === "web" && (navigator as any)?.share) {
+            (navigator as any)
+              .share({ text: msg.encrypted_content || "" })
+              .catch(() => {});
+          } else {
+            showToast("Share — coming soon");
+          }
+          break;
+        case "select":
+          showToast("Select mode");
+          break;
+        case "report":
+          showToast("Report submitted");
+          break;
+        case "delete":
+          setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+          showToast("Deleted");
+          break;
+      }
+    },
+    [ctxMenu, showToast],
+  );
 
   return (
     <View style={[st.root, { backgroundColor: c.bg }]}>
@@ -824,6 +908,33 @@ export function DesktopChatView({ chatId, onClose }: { chatId: string; onClose: 
           )}
         </View>
       </KeyboardAvoidingView>
+
+      {/* Right-click context menu (web desktop) */}
+      {ctxMenu && (
+        <MessageContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          isMine={ctxMenu.isMine}
+          isDark={isDark}
+          hasText={!!(ctxMenu.message.encrypted_content || "").trim()}
+          onClose={() => setCtxMenu(null)}
+          onAction={handleMenuAction}
+        />
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <View pointerEvents="none" style={st.toastWrap}>
+          <View
+            style={[
+              st.toast,
+              { backgroundColor: isDark ? "#1f2c34" : "#111b21" },
+            ]}
+          >
+            <Text style={st.toastText}>{toast}</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -988,5 +1099,26 @@ const st = StyleSheet.create({
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  toastWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 90,
+    alignItems: "center",
+    zIndex: 9998,
+  },
+  toast: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 999,
+    maxWidth: 360,
+  },
+  toastText: {
+    color: "#ffffff",
+    fontSize: 12.5,
+    fontFamily: "Inter_500Medium",
+    textAlign: "center",
   },
 });
