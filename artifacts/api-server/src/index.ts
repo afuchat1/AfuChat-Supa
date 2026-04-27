@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startRealtimeWatcher } from "./services/realtimeWatcher";
+import { startVideoEncoder } from "./services/videoEncoder";
 
 const rawPort = process.env["PORT"];
 
@@ -26,4 +27,10 @@ app.listen(port, (err) => {
 
   // Start background Supabase realtime watcher for email notifications
   startRealtimeWatcher();
+
+  // Start the video encoding worker (no-op if SUPABASE_SERVICE_ROLE_KEY
+  // is missing or VIDEO_WORKER_ENABLED=false).
+  startVideoEncoder().catch((err) =>
+    logger.error({ err }, "failed to start video encoder"),
+  );
 });

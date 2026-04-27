@@ -23,6 +23,7 @@ import {
 import { Image as ExpoImage } from "expo-image";
 import { useDataMode } from "@/context/DataModeContext";
 import { getCachedVideoUri, cacheVideo } from "@/lib/videoCache";
+import { useResolvedVideoSource } from "@/hooks/useResolvedVideoSource";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -535,6 +536,8 @@ function VideoItem({
   const cacheAttempted = useRef(false);
 
   const isOriginalAudio = !item.audio_name || item.audio_name.toLowerCase().startsWith("original audio");
+  const resolved = useResolvedVideoSource(item.id, item.video_url, { targetHeight: 720 });
+  const playbackUri = cachedUri || resolved.uri || item.video_url;
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -649,7 +652,7 @@ function VideoItem({
         {isNearActive ? (
           <Video
             ref={videoRef}
-            source={{ uri: cachedUri || item.video_url }}
+            source={{ uri: playbackUri }}
             style={StyleSheet.absoluteFill}
             resizeMode={ResizeMode.CONTAIN}
             shouldPlay={isActive && !paused && (!isLowData || !!cachedUri || manualPlay)}

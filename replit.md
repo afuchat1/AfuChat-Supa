@@ -191,3 +191,50 @@ All surfaces now pick the best available thumbnail using priority: `post_images[
 - **Next** → **Get Started** CTA button at bottom
 - Stored in `AsyncStorage` key `afu_welcome_guide_v1_seen` — shown exactly once
 - Wired in `(tabs)/_layout.tsx` after `onboarding_completed === true`, shows user's first name on slide 1
+
+## Hybrid Video Pipeline (H.264 + AV1)
+
+Async, DB-backed encoding queue producing adaptive renditions (360p/720p/1080p) in
+both H.264 (universal compatibility) and AV1 (smaller files for capable devices).
+HLS/DASH not implemented yet — architecture leaves the hooks open.
+
+**Schema** (`supabase/migrations/20260427_video_pipeline.sql`, must be applied on Supabase):
+- `video_assets` — one row per source upload (status: pending/encoding/ready/failed, poster_path)
+- `video_renditions` — one row per (asset, codec, height) output
+- `video_jobs` — work queue, claimed atomically via `claim_video_job(worker_id, codecs[])` (FOR UPDATE SKIP LOCKED)
+- `posts.video_asset_id` FK for fast manifest lookup at playback
+- DB trigger flips `video_assets.status='ready'` once the H.264 baseline (≥720p) lands
+- RLS: public select, service-role-only writes
+
+**API server** (`artifacts/api-server/`):
+- `lib/supabaseAdmin.ts` — singleton service-role client (graceful no-op when key missing)
+- `lib/ffmpeg.ts` — typed spawn helpers, encoder ladder builder (libx264 + libsvtav1)
+- `lib/videoStorage.ts` — Supabase Storage `videos` bucket I/O
+- `routes/videos.ts` — `POST /api/videos`, `GET /api/videos/:id`, `GET /api/videos/:id/manifest`,
+  `GET /api/videos/by-post/:postId/manifest`. Manifest sources are codec-priority sorted
+  (H.264=10, AV1=50; 720<1080<360 height boost).
+- `services/videoEncoder.ts` — background worker started from `index.ts`. Boots only
+  when `SUPABASE_SERVICE_ROLE_KEY` is set AND ffmpeg/libx264 are present. Claims jobs,
+  encodes, uploads to `{owner}/encoded/{asset}/{codec}_{h}p.mp4`, extracts a 1-second
+  poster frame, retries with backoff, skips upscale jobs.
+
+**Mobile** (`artifacts/mobile/`):
+- `lib/videoApi.ts` — `registerVideoAsset`, `getPostVideoManifest`, `getAssetVideoManifest`,
+  `pickBestSource`, `isAv1Supported` (uses `MediaSource.isTypeSupported` on web; AV1
+  disabled on native because expo-av support is inconsistent).
+- `hooks/useResolvedVideoSource.ts` — picks the best ready rendition for a post and
+  polls every 8s (up to ~64s) so freshly uploaded posts swap to the optimized rendition
+  without a refresh. Falls back to the original `video_url` until renditions are ready.
+- `app/moments/create-video.tsx` — calls `registerVideoAsset` after the post insert
+  (non-blocking — encoder failures never break posting).
+- `components/VideoFeed.tsx` and `app/video/[id].tsx` — both wired through the resolver
+  hook; the existing `videoCache` layer still applies for the source URL fallback.
+
+**Operational requirements** (must be done by the user):
+1. Apply `supabase/migrations/20260427_video_pipeline.sql` on the Supabase project
+   (cannot be applied locally — depends on the `auth` schema).
+2. Set the `SUPABASE_SERVICE_ROLE_KEY` secret in Replit. Until set, the encoder worker
+   stays disabled and `POST /api/videos` returns 503; videos still play via the
+   original source URL.
+3. The `videos` Storage bucket must allow service-role writes under
+   `{userId}/encoded/{asset}/...` (existing upload code already uses `{userId}/...`).

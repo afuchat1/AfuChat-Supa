@@ -23,6 +23,7 @@ import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { uploadToStorage } from "@/lib/mediaUpload";
+import { registerVideoAsset } from "@/lib/videoApi";
 
 const MAX_DURATION_SECONDS = 90;
 const WARN_SIZE_MB = 80;
@@ -42,6 +43,8 @@ export default function CreateVideoScreen() {
   const [videoMime, setVideoMime] = useState<string | undefined>(undefined);
   const [duration, setDuration] = useState<number>(0);
   const [fileSize, setFileSize] = useState<number>(0);
+  const [videoWidth, setVideoWidth] = useState<number | null>(null);
+  const [videoHeight, setVideoHeight] = useState<number | null>(null);
   const [caption, setCaption] = useState("");
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
@@ -83,6 +86,8 @@ export default function CreateVideoScreen() {
       setVideoMime(asset.mimeType || undefined);
       setDuration(dur);
       setFileSize(0);
+      setVideoWidth((asset as any).width ?? null);
+      setVideoHeight((asset as any).height ?? null);
       try {
         const info = await FileSystem.getInfoAsync(asset.uri);
         if (info.exists) setFileSize((info as any).size ?? 0);
@@ -137,17 +142,36 @@ export default function CreateVideoScreen() {
       } catch (_) {}
 
       setUploadProgress("Publishing…");
-      const { error } = await supabase.from("posts").insert({
-        author_id: user!.id,
-        content: caption.trim(),
-        video_url: publicUrl,
-        image_url: thumbnailPublicUrl,
-        post_type: "video",
-        visibility: "public",
-        view_count: 0,
-        ...(soundName && !soundDismissed ? { audio_name: soundName } : {}),
-      });
+      const { data: insertedPost, error } = await supabase
+        .from("posts")
+        .insert({
+          author_id: user!.id,
+          content: caption.trim(),
+          video_url: publicUrl,
+          image_url: thumbnailPublicUrl,
+          post_type: "video",
+          visibility: "public",
+          view_count: 0,
+          ...(soundName && !soundDismissed ? { audio_name: soundName } : {}),
+        })
+        .select("id")
+        .single();
       if (error) throw error;
+
+      // Kick off server-side encoding (H.264 baseline first, AV1 in
+      // background). Failure here is non-fatal — the original source URL
+      // remains playable until renditions finish.
+      const newPostId = (insertedPost as { id?: string } | null)?.id ?? null;
+      registerVideoAsset({
+        source_path: filePath,
+        post_id: newPostId,
+        duration: duration > 0 ? duration : null,
+        width: videoWidth,
+        height: videoHeight,
+        source_size_bytes: fileSize > 0 ? fileSize : null,
+        source_mime: resolvedMime,
+      }).catch((e) => console.warn("registerVideoAsset:", e));
+
       try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("post_created"); } catch (_) {}
       router.back();
     } catch (err: any) {

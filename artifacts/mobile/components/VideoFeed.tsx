@@ -22,6 +22,7 @@ import Colors from "@/constants/colors";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { notifyPostLike, notifyNewFollow } from "@/lib/notifyUser";
 import { useDataMode } from "@/context/DataModeContext";
+import { useResolvedVideoSource } from "@/hooks/useResolvedVideoSource";
 
 const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get("window");
 
@@ -87,6 +88,7 @@ function VideoItem({
   const shouldPlay = isLowData ? (manualPlay && isActive && !paused) : (isActive && !paused);
   const isOwnVideo = currentUserId === item.author_id;
   const showFollowButton = !isOwnVideo && !item.following;
+  const resolved = useResolvedVideoSource(item.id, item.video_url, { targetHeight: 720 });
 
   return (
     <View style={styles.videoItem}>
@@ -104,7 +106,7 @@ function VideoItem({
       >
         <Video
           ref={videoRef}
-          source={{ uri: item.video_url }}
+          source={{ uri: resolved.uri || item.video_url }}
           style={StyleSheet.absoluteFill}
           resizeMode={ResizeMode.COVER}
           shouldPlay={shouldPlay}
