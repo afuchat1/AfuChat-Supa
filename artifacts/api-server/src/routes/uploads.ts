@@ -25,10 +25,32 @@ import {
   presignPutUrl,
   publicUrlForKey,
   R2_PUBLIC_BASE_URL,
+  sumPrefix,
 } from "../lib/r2";
 import { logger } from "../lib/logger";
 
 const router = Router();
+
+/** Default storage quota per user, in bytes (5 GB). */
+const DEFAULT_QUOTA_BYTES = 5 * 1024 * 1024 * 1024;
+function quotaBytesForUser(_userId: string): number {
+  // Hook for future per-tier quotas (e.g. premium users get more).
+  return DEFAULT_QUOTA_BYTES;
+}
+
+/** Buckets whose paths are scoped by user id (path begins with `<userId>/`). */
+const USER_SCOPED_BUCKETS = [
+  "avatars",
+  "banners",
+  "post-images",
+  "videos",
+  "stories",
+  "group-avatars",
+  "chat-media",
+  "voice-messages",
+  "shop-media",
+  "match-photos",
+];
 
 /** Allow-list of logical bucket names to prevent arbitrary writes. */
 const ALLOWED_BUCKETS = new Set([
@@ -72,6 +94,49 @@ router.get("/uploads/config", (_req, res) => {
     publicBaseUrl: R2_PUBLIC_BASE_URL,
     configured: isR2Configured(),
   });
+});
+
+/**
+ * GET /api/uploads/usage
+ *   Returns the calling user's R2 storage footprint, broken down per
+ *   logical bucket, plus their quota.
+ */
+router.get("/uploads/usage", async (req, res) => {
+  if (!isR2Configured()) {
+    return res.status(503).json({ error: "R2 storage not configured" });
+  }
+  const userId = await authedUserId(req, res);
+  if (!userId) return;
+
+  try {
+    const perBucket: Record<string, { bytes: number; count: number }> = {};
+    let totalBytes = 0;
+    let totalCount = 0;
+
+    await Promise.all(
+      USER_SCOPED_BUCKETS.map(async (bucket) => {
+        const prefix = `${bucket}/${userId}/`;
+        const { bytes, count } = await sumPrefix(prefix);
+        perBucket[bucket] = { bytes, count };
+        totalBytes += bytes;
+        totalCount += count;
+      }),
+    );
+
+    const quota = quotaBytesForUser(userId);
+    res.json({
+      user_id: userId,
+      used_bytes: totalBytes,
+      used_count: totalCount,
+      quota_bytes: quota,
+      remaining_bytes: Math.max(0, quota - totalBytes),
+      percent_used: quota > 0 ? totalBytes / quota : 0,
+      per_bucket: perBucket,
+    });
+  } catch (e: any) {
+    logger.error({ err: e, userId }, "usage lookup failed");
+    res.status(500).json({ error: e?.message || "Failed to compute usage" });
+  }
 });
 
 router.post("/uploads/sign", async (req, res) => {

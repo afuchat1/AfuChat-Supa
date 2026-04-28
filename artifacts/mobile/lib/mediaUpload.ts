@@ -230,6 +230,47 @@ const MIME_TO_EXT: Record<string, string> = {
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
 };
 
+/**
+ * Per-bucket usage breakdown for the calling user.
+ * Backed by GET /api/uploads/usage on the API server.
+ */
+export interface StorageUsage {
+  user_id: string;
+  used_bytes: number;
+  used_count: number;
+  quota_bytes: number;
+  remaining_bytes: number;
+  percent_used: number;
+  per_bucket: Record<string, { bytes: number; count: number }>;
+}
+
+export async function getStorageUsage(): Promise<StorageUsage | null> {
+  try {
+    const session = (await supabase.auth.getSession()).data.session;
+    if (!session) return null;
+    const r = await fetch(apiUrl("/uploads/usage"), {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (!r.ok) return null;
+    return (await r.json()) as StorageUsage;
+  } catch {
+    return null;
+  }
+}
+
+/** Format a byte count like 1234567 → "1.18 MB" with sensible units. */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  let n = bytes;
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024;
+    i++;
+  }
+  return `${n.toFixed(n >= 100 || i === 0 ? 0 : n >= 10 ? 1 : 2)} ${units[i]}`;
+}
+
 export async function uploadChatMedia(
   bucket: string,
   chatId: string,

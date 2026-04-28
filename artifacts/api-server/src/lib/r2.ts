@@ -4,6 +4,9 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
   DeleteObjectCommand,
+  ListObjectsV2Command,
+  PutBucketLifecycleConfigurationCommand,
+  type LifecycleRule,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Upload } from "@aws-sdk/lib-storage";
@@ -159,4 +162,80 @@ export async function deleteObject(key: string) {
   const s3 = getR2Client();
   if (!s3) throw new Error("R2 not configured");
   return s3.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+}
+
+/**
+ * List all objects under a key prefix and sum their sizes.
+ * Walks pagination internally. Use for storage-usage calculations.
+ */
+export async function sumPrefix(
+  prefix: string,
+): Promise<{ bytes: number; count: number }> {
+  const s3 = getR2Client();
+  if (!s3) throw new Error("R2 not configured");
+
+  let bytes = 0;
+  let count = 0;
+  let token: string | undefined = undefined;
+  do {
+    const out = await s3.send(
+      new ListObjectsV2Command({
+        Bucket: R2_BUCKET,
+        Prefix: prefix,
+        ContinuationToken: token,
+      }),
+    );
+    for (const obj of out.Contents ?? []) {
+      bytes += obj.Size ?? 0;
+      count += 1;
+    }
+    token = out.IsTruncated ? out.NextContinuationToken : undefined;
+  } while (token);
+  return { bytes, count };
+}
+
+/**
+ * Apply the AfuChat default lifecycle rules to the R2 bucket.
+ *
+ *   1. Abort incomplete multipart uploads after 7 days (defensive cleanup).
+ *   2. Expire objects under stories/ after 30 days (stories are ephemeral).
+ *   3. Expire objects under chat-media/ that have an `expiresAt` tag of
+ *      "ephemeral" after 30 days (used for disappearing-message media).
+ */
+export async function applyDefaultLifecycle(): Promise<void> {
+  const s3 = getR2Client();
+  if (!s3) throw new Error("R2 not configured");
+
+  const rules: LifecycleRule[] = [
+    {
+      ID: "abort-incomplete-multipart-7d",
+      Status: "Enabled",
+      Filter: { Prefix: "" },
+      AbortIncompleteMultipartUpload: { DaysAfterInitiation: 7 },
+    },
+    {
+      ID: "expire-stories-30d",
+      Status: "Enabled",
+      Filter: { Prefix: "stories/" },
+      Expiration: { Days: 30 },
+    },
+    {
+      ID: "expire-ephemeral-chat-media-30d",
+      Status: "Enabled",
+      Filter: {
+        And: {
+          Prefix: "chat-media/",
+          Tags: [{ Key: "lifecycle", Value: "ephemeral" }],
+        },
+      },
+      Expiration: { Days: 30 },
+    },
+  ];
+
+  await s3.send(
+    new PutBucketLifecycleConfigurationCommand({
+      Bucket: R2_BUCKET,
+      LifecycleConfiguration: { Rules: rules },
+    }),
+  );
 }
