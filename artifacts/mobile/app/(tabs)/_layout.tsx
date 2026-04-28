@@ -13,7 +13,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
-import { useIsDesktop } from "@/hooks/useIsDesktop";
 import CommunityBanner from "@/components/ui/CommunityBanner";
 import { useTour, TOUR_KEY } from "@/context/TourContext";
 
@@ -48,15 +47,14 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   const isIOS = Platform.OS === "ios";
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const isDesktop = useIsDesktop();
   const { registerLayout, step, advance } = useTour();
   const pathname = usePathname();
   const registeredRef = useRef(false);
 
-  const hideTabs = isDesktop || (!isLoggedIn && Platform.OS === "web");
+  const hideTabs = !isLoggedIn && Platform.OS === "web";
 
   useEffect(() => {
-    if (isDesktop || hideTabs) return;
+    if (hideTabs) return;
     if (registeredRef.current) return;
     registeredRef.current = true;
 
@@ -79,7 +77,7 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
         h: tabBarH,
       });
     });
-  }, [isDesktop, hideTabs, insets.bottom, registerLayout]);
+  }, [hideTabs, insets.bottom, registerLayout]);
 
   useEffect(() => {
     if (!step) return;
@@ -180,7 +178,6 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
 
 export default function TabLayout() {
   const { session, profile, loading } = useAuth();
-  const isDesktop = useIsDesktop();
   const { startTour } = useTour();
 
   useEffect(() => {
@@ -189,12 +186,12 @@ export default function TabLayout() {
       router.replace({ pathname: "/onboarding", params: { userId: session.user.id } });
       return;
     }
-    if (session && profile?.onboarding_completed && !isDesktop) {
+    if (session && profile?.onboarding_completed) {
       AsyncStorage.getItem(TOUR_KEY).then((seen) => {
         if (!seen) startTour();
       });
     }
-  }, [session, profile, loading, isDesktop]);
+  }, [session, profile, loading]);
 
   const layout = isLiquidGlassAvailable()
     ? <NativeTabLayout />

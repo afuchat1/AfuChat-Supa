@@ -25,7 +25,6 @@ import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { WalletSkeleton } from "@/components/ui/Skeleton";
-import { useIsDesktop } from "@/hooks/useIsDesktop";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { cacheWallet, getCachedWallet, isOnline } from "@/lib/offlineStore";
 
@@ -160,7 +159,6 @@ export default function WalletScreen() {
   const { colors } = useTheme();
   const { user, profile, refreshProfile } = useAuth();
   const insets = useSafeAreaInsets();
-  const isDesktop = useIsDesktop();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -396,17 +394,17 @@ export default function WalletScreen() {
   })();
 
   const BalanceCard = (
-    <View style={[styles.balanceCard, { backgroundColor: colors.accent, margin: isDesktop ? 0 : 16, borderRadius: isDesktop ? 0 : 20 }]}>
+    <View style={[styles.balanceCard, { backgroundColor: colors.accent }]}>
       <View style={styles.balanceRow}>
         <View style={styles.balanceItem}>
-          <Ionicons name="flash" size={isDesktop ? 32 : 24} color="rgba(255,255,255,0.9)" />
-          <Text style={[styles.balanceValue, isDesktop && { fontSize: 36 }]}>{profile?.xp || 0}</Text>
+          <Ionicons name="flash" size={24} color="rgba(255,255,255,0.9)" />
+          <Text style={styles.balanceValue}>{profile?.xp || 0}</Text>
           <Text style={styles.balanceLabel}>Nexa</Text>
         </View>
         <View style={styles.balanceDivider} />
         <View style={styles.balanceItem}>
-          <Ionicons name="diamond" size={isDesktop ? 32 : 24} color="rgba(255,255,255,0.9)" />
-          <Text style={[styles.balanceValue, isDesktop && { fontSize: 36 }]}>{profile?.acoin || 0}</Text>
+          <Ionicons name="diamond" size={24} color="rgba(255,255,255,0.9)" />
+          <Text style={styles.balanceValue}>{profile?.acoin || 0}</Text>
           <Text style={styles.balanceLabel}>ACoin</Text>
         </View>
       </View>
@@ -443,7 +441,7 @@ export default function WalletScreen() {
   );
 
   const TabFilters = (
-    <View style={[styles.tabRow, isDesktop && { marginHorizontal: 16, marginTop: 16 }]}>
+    <View style={styles.tabRow}>
       {(["all", "nexa", "acoin", "gifts"] as const).map((tab) => (
         <TouchableOpacity key={tab} style={[styles.tab, activeTab === tab && { backgroundColor: colors.accent }]} onPress={() => setActiveTab(tab)}>
           <Text style={[styles.tabText, activeTab === tab && { color: "#fff" }]}>
@@ -507,125 +505,40 @@ export default function WalletScreen() {
       <View style={[
         styles.header,
         {
-          paddingTop: isDesktop ? 20 : insets.top + 8,
+          paddingTop: insets.top + 8,
           backgroundColor: colors.surface,
           borderBottomColor: colors.border,
           alignItems: "center",
         },
       ]}>
-        {!isDesktop && (
-          <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-        )}
-        <Text style={[styles.headerTitle, { color: colors.text, fontSize: isDesktop ? 20 : 17 }]}>
-          {isDesktop ? "💰 My Wallet" : "Wallet"}
-        </Text>
-        {isDesktop ? (
-          <TouchableOpacity
-            style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.accent + "15", paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20 }}
-            onPress={() => router.push("/wallet/topup")}
-          >
-            <Ionicons name="add" size={16} color={colors.accent} />
-            <Text style={{ color: colors.accent, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>Top Up</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={{ width: 24 }} />
-        )}
+        <TouchableOpacity onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Wallet</Text>
+        <View style={{ width: 24 }} />
       </View>
 
-      {isDesktop ? (
-        /* ── Desktop: two-column dashboard layout ── */
-        <View style={{ flex: 1, flexDirection: "row" }}>
-          {/* Left panel: balance + actions */}
-          <ScrollView
-            style={[dwStyles.leftPanel, { borderRightColor: colors.border }]}
-            contentContainerStyle={{ paddingBottom: 40 }}
-            showsVerticalScrollIndicator={false}
-          >
-            {BalanceCard}
-
-            {currencySettings && (
-              <View style={[styles.rateCard, { backgroundColor: colors.surface, marginHorizontal: 16, marginTop: 12 }]}>
-                <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
-                <Text style={[styles.rateText, { color: colors.textMuted }]}>
-                  {currencySettings.nexa_to_acoin_rate} Nexa = 1 ACoin · Fee {currencySettings.conversion_fee_percent}%
-                </Text>
-              </View>
-            )}
-
-            {/* Desktop stat cards */}
-            <View style={dwStyles.statGrid}>
-              <View style={[dwStyles.statCard, { backgroundColor: colors.surface }]}>
-                <Ionicons name="trending-up" size={20} color="#34C759" />
-                <Text style={[dwStyles.statValue, { color: colors.text }]}>
-                  {transactions.filter((t) => t.amount > 0).reduce((s, t) => s + Math.abs(t.amount), 0)}
-                </Text>
-                <Text style={[dwStyles.statLabel, { color: colors.textMuted }]}>Total Received</Text>
-              </View>
-              <View style={[dwStyles.statCard, { backgroundColor: colors.surface }]}>
-                <Ionicons name="trending-down" size={20} color="#FF3B30" />
-                <Text style={[dwStyles.statValue, { color: colors.text }]}>
-                  {transactions.filter((t) => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0)}
-                </Text>
-                <Text style={[dwStyles.statLabel, { color: colors.textMuted }]}>Total Sent</Text>
-              </View>
-              <View style={[dwStyles.statCard, { backgroundColor: colors.surface }]}>
-                <Ionicons name="receipt-outline" size={20} color={colors.accent} />
-                <Text style={[dwStyles.statValue, { color: colors.text }]}>{transactions.length}</Text>
-                <Text style={[dwStyles.statLabel, { color: colors.textMuted }]}>Transactions</Text>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[dwStyles.requestsBtn, { backgroundColor: colors.accent }]}
-              onPress={() => router.push("/wallet/requests")}
-            >
-              <Ionicons name="receipt-outline" size={18} color="#fff" />
-              <Text style={dwStyles.requestsBtnText}>Payment Requests</Text>
-              {pendingRequestCount > 0 && (
-                <View style={styles.requestBadge}>
-                  <Text style={styles.requestBadgeText}>{pendingRequestCount > 9 ? "9+" : pendingRequestCount}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </ScrollView>
-
-          {/* Right panel: transaction history */}
-          <View style={{ flex: 1 }}>
-            <View style={[dwStyles.txHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-              <Text style={[dwStyles.txHeaderTitle, { color: colors.text }]}>Transaction History</Text>
-              {TabFilters}
-            </View>
-            {TxList}
-          </View>
+      {BalanceCard}
+      {currencySettings && (
+        <View style={[styles.rateCard, { backgroundColor: colors.surface }]}>
+          <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
+          <Text style={[styles.rateText, { color: colors.textMuted }]}>
+            Rate: {currencySettings.nexa_to_acoin_rate} Nexa = 1 ACoin {"\u00b7"} Fee: {currencySettings.conversion_fee_percent}%
+          </Text>
         </View>
-      ) : (
-        /* ── Mobile: stacked layout ── */
-        <>
-          {BalanceCard}
-          {currencySettings && (
-            <View style={[styles.rateCard, { backgroundColor: colors.surface }]}>
-              <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
-              <Text style={[styles.rateText, { color: colors.textMuted }]}>
-                Rate: {currencySettings.nexa_to_acoin_rate} Nexa = 1 ACoin {"\u00b7"} Fee: {currencySettings.conversion_fee_percent}%
-              </Text>
-            </View>
-          )}
-          {TabFilters}
-          {TxList}
-          {/* Hidden gift vault entry — only visible on ACoin tab at bottom */}
-          {activeTab === "acoin" && (
-            <Pressable
-              style={[styles.vaultEntry, { borderTopColor: colors.border }]}
-              onPress={() => router.push("/wallet/gift-vault" as any)}
-            >
-              <Ionicons name="gift-outline" size={13} color={colors.textMuted} />
-              <Text style={[styles.vaultEntryText, { color: colors.textMuted }]}>Gift Vault</Text>
-              <Ionicons name="chevron-forward" size={11} color={colors.textMuted} />
-            </Pressable>
-          )}
-        </>
+      )}
+      {TabFilters}
+      {TxList}
+      {/* Hidden gift vault entry — only visible on ACoin tab at bottom */}
+      {activeTab === "acoin" && (
+        <Pressable
+          style={[styles.vaultEntry, { borderTopColor: colors.border }]}
+          onPress={() => router.push("/wallet/gift-vault" as any)}
+        >
+          <Ionicons name="gift-outline" size={13} color={colors.textMuted} />
+          <Text style={[styles.vaultEntryText, { color: colors.textMuted }]}>Gift Vault</Text>
+          <Ionicons name="chevron-forward" size={11} color={colors.textMuted} />
+        </Pressable>
       )}
 
       <TransactionDetailModal tx={selectedTx} visible={!!selectedTx} onClose={() => setSelectedTx(null)} colors={colors} />
@@ -741,60 +654,4 @@ const detailStyles = StyleSheet.create({
   rowLabel: { fontSize: 14, fontFamily: "Inter_400Regular", flex: 1 },
   rowValue: { fontSize: 14, fontFamily: "Inter_600SemiBold", textAlign: "right", flex: 1.5 },
   divider: { height: StyleSheet.hairlineWidth },
-});
-
-const dwStyles = StyleSheet.create({
-  leftPanel: {
-    width: 380,
-    borderRightWidth: StyleSheet.hairlineWidth,
-    flexShrink: 0,
-  },
-  txHeader: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 4,
-  },
-  txHeaderTitle: {
-    fontSize: 16,
-    fontFamily: "Inter_700Bold",
-  },
-  statGrid: {
-    flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  statCard: {
-    flex: 1,
-    borderRadius: 14,
-    padding: 14,
-    alignItems: "center",
-    gap: 4,
-  },
-  statValue: {
-    fontSize: 20,
-    fontFamily: "Inter_700Bold",
-  },
-  statLabel: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-    textAlign: "center",
-  },
-  requestsBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginHorizontal: 16,
-    marginTop: 16,
-    paddingVertical: 12,
-    borderRadius: 14,
-  },
-  requestsBtnText: {
-    color: "#fff",
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-  },
 });

@@ -111,16 +111,7 @@ export default function Root({ children }: PropsWithChildren) {
           /* Pointer cursor on interactive elements */
           [role="button"], button, a, [data-testid] { cursor: pointer !important; }
 
-          /* Mobile web: narrow centered shell */
-          @media (max-width: 767px) {
-            body { background-color: #f0ece7; }
-          }
-
-          /* Desktop: full-width, DesktopWrapper handles layout */
-          @media (min-width: 768px) {
-            body { background-color: #eef0f4; }
-            #root { width: 100%; }
-          }
+          body { background-color: #f0ece7; }
 
           @media (prefers-color-scheme: dark) {
             body { background-color: #0a0a0a; }

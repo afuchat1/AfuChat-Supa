@@ -20,8 +20,6 @@ import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
-import { useIsDesktop } from "@/hooks/useIsDesktop";
-import { useDesktopDetail } from "@/context/DesktopDetailContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { StoryRing } from "@/components/ui/StoryRing";
 import { Separator } from "@/components/ui/Separator";
@@ -271,8 +269,6 @@ const storyBarStyles = StyleSheet.create({
 export default function ChatsScreen() {
   const { colors } = useTheme();
   const { user, profile, linkedAccounts, switchAccount } = useAuth();
-  const isDesktop = useIsDesktop();
-  const { openDetail } = useDesktopDetail();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
 
@@ -687,11 +683,7 @@ export default function ChatsScreen() {
               item={item}
               onPress={() => {
                 Haptics.selectionAsync();
-                if (isDesktop) {
-                  openDetail({ type: "chat", id: item.id });
-                } else {
-                  router.push({ pathname: "/chat/[id]", params: { id: item.id } });
-                }
+                router.push({ pathname: "/chat/[id]", params: { id: item.id } });
               }}
             />
           )}

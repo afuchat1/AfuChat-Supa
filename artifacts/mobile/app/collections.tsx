@@ -15,7 +15,6 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
-import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
@@ -170,7 +169,6 @@ function CreateSheet({
 export default function CollectionsScreen() {
   const { colors, isDark } = useTheme();
   const { user, profile } = useAuth();
-  const isDesktop = useIsDesktop();
   const insets = useSafeAreaInsets();
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -366,8 +364,7 @@ export default function CollectionsScreen() {
         <FlatList
           data={collections}
           keyExtractor={(item) => item.id}
-          numColumns={isDesktop ? 3 : 2}
-          key={isDesktop ? "desktop" : "mobile"}
+          numColumns={2}
           contentContainerStyle={{ padding: 14, gap: 12, paddingBottom: 40 }}
           columnWrapperStyle={{ gap: 12 }}
           renderItem={({ item }) => (

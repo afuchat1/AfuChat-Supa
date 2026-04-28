@@ -25,7 +25,6 @@ import { WebView } from "react-native-webview";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
-import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { showAlert } from "@/lib/alert";
 import { GoogleLogo, GitHubLogo, XLogo, GitLabLogo, PhoneLogo } from "@/components/ui/OAuthLogos";
 
@@ -88,53 +87,6 @@ function OAuthBtn({ label, logo, onPress, loading, colors, isDark }: any) {
 }
 const oauthSt = StyleSheet.create({
   btn: { width: 52, height: 52, borderRadius: 26, borderWidth: 1, alignItems: "center", justifyContent: "center", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 },
-});
-
-// ─── Desktop brand panel ──────────────────────────────────────────────────────
-function BrandPanel() {
-  return (
-    <View style={brandSt.panel}>
-      <View style={brandSt.circleA} />
-      <View style={brandSt.circleB} />
-      <View style={brandSt.inner}>
-        <View style={brandSt.logoRow}>
-          <Image source={afuSymbol} style={brandSt.logo} resizeMode="contain" />
-          <Text style={brandSt.logoText}>AfuChat</Text>
-        </View>
-        <View style={{ flex: 1, justifyContent: "center" }}>
-          <Text style={brandSt.headline}>{"Join the\ncommunity\ntoday."}</Text>
-          <Text style={brandSt.sub}>Millions of people connect, share, and grow on AfuChat every day.</Text>
-        </View>
-        <View style={brandSt.features}>
-          {[
-            { icon: "shield-checkmark-outline", label: "Secure & private by default" },
-            { icon: "flash-outline",            label: "Fast, real-time conversations" },
-            { icon: "globe-outline",            label: "Connect across 100+ countries" },
-            { icon: "star-outline",             label: "Free forever with premium options" },
-          ].map((f) => (
-            <View key={f.icon} style={brandSt.featureRow}>
-              <Ionicons name={f.icon as any} size={15} color="rgba(255,255,255,0.8)" />
-              <Text style={brandSt.featureLabel}>{f.label}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-    </View>
-  );
-}
-const brandSt = StyleSheet.create<any>({
-  panel: { flex: 1, overflow: "hidden", position: "relative", backgroundColor: "#0097A7" },
-  circleA: { position: "absolute", top: -130, right: -130, width: 400, height: 400, borderRadius: 200, backgroundColor: "rgba(255,255,255,0.07)" },
-  circleB: { position: "absolute", bottom: -90, left: -90, width: 300, height: 300, borderRadius: 150, backgroundColor: "rgba(255,255,255,0.05)" },
-  inner: { flex: 1, padding: 56, justifyContent: "space-between" },
-  logoRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  logo: { width: 36, height: 36, tintColor: "#fff" },
-  logoText: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#fff", letterSpacing: -0.3 },
-  headline: { fontSize: 42, fontFamily: "Inter_700Bold", color: "#fff", letterSpacing: -1.5, lineHeight: 50, marginBottom: 16 },
-  sub: { fontSize: 15, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.75)", lineHeight: 23 },
-  features: { gap: 10 },
-  featureRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  featureLabel: { fontSize: 14, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.8)" },
 });
 
 // ─── Email verification modal ─────────────────────────────────────────────────
@@ -252,10 +204,9 @@ const termsSt = StyleSheet.create({
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function RegisterScreen() {
-  const { colors, isDark, setThemeMode } = useTheme();
+  const { colors, isDark } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const isDesktop = useIsDesktop();
 
   useEffect(() => { if (user) router.replace("/(tabs)"); }, [user]);
 
@@ -410,43 +361,6 @@ export default function RegisterScreen() {
     </>
   );
 
-  // ── Desktop ───────────────────────────────────────────────────────────────
-  if (isDesktop) {
-    return (
-      <View style={[deskSt.root, { backgroundColor: isDark ? "#09090B" : "#F4F4F5" }]}>
-        <TouchableOpacity
-          style={[deskSt.backBtn, { backgroundColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.07)" }]}
-          onPress={() => (router.canGoBack() ? router.back() : router.replace("/" as any))}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="arrow-back" size={16} color={isDark ? "#fff" : "#000"} />
-        </TouchableOpacity>
-        <TouchableOpacity style={[deskSt.themeBtn, { backgroundColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.07)" }]} onPress={() => setThemeMode(isDark ? "light" : "dark")}>
-          <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={16} color={isDark ? "#fff" : "#000"} />
-        </TouchableOpacity>
-
-        <BrandPanel />
-
-        <View style={[deskSt.formSide, { backgroundColor: isDark ? "#09090B" : "#FFFFFF" }]}>
-          <ScrollView contentContainerStyle={deskSt.formScroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            <View style={deskSt.formCard}>
-              <View style={{ marginBottom: 8 }}>
-                <Image source={afuSymbol} style={[deskSt.headerLogo, { tintColor: "#00BCD4" }]} resizeMode="contain" />
-                <Text style={[deskSt.headerTitle, { color: colors.text }]}>Create your account</Text>
-                <Text style={[deskSt.headerSub, { color: colors.textSecondary }]}>Join AfuChat — it's free and takes less than a minute.</Text>
-              </View>
-              {FormContent}
-            </View>
-          </ScrollView>
-        </View>
-
-        <VerifyEmailModal visible={verifyVisible} onClose={() => setVerifyVisible(false)} email={signupEmail} onVerified={onVerified} colors={colors} isDark={isDark} />
-        {oauthModalUrl && <OAuthWebModal url={oauthModalUrl} onClose={() => { setOauthModalUrl(null); setOauthLoading(null); }} onNav={(s: any) => { if (s.url && isOAuthRedirect(s.url)) handleOAuthRedirect(s.url); }} onShouldLoad={(r: any) => { if (r.url && isOAuthRedirect(r.url)) { handleOAuthRedirect(r.url); return false; } return true; }} colors={colors} />}
-      </View>
-    );
-  }
-
-  // ── Mobile ────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <TouchableOpacity
@@ -477,18 +391,6 @@ const formSt = StyleSheet.create({
   primaryBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold", letterSpacing: 0.1 },
   switchRow: { flexDirection: "row", justifyContent: "center", flexWrap: "wrap" },
   switchText: { fontSize: 14, fontFamily: "Inter_400Regular" },
-});
-
-const deskSt = StyleSheet.create<any>({
-  root: { flex: 1, flexDirection: "row", position: "relative" },
-  themeBtn: { position: "absolute", top: 20, right: 20, zIndex: 10, width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  backBtn: { position: "absolute", top: 20, left: 20, zIndex: 10, width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  formSide: { flex: 1, maxWidth: 520 },
-  formScroll: { flexGrow: 1, justifyContent: "center", padding: 48 },
-  formCard: { width: "100%", maxWidth: 400, alignSelf: "center", gap: 20 },
-  headerLogo: { width: 40, height: 40, marginBottom: 10 },
-  headerTitle: { fontSize: 26, fontFamily: "Inter_700Bold", letterSpacing: -0.5, marginBottom: 4 },
-  headerSub: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22 },
 });
 
 const mobBackSt = StyleSheet.create({

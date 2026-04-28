@@ -16,7 +16,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { DesktopWrapper } from "@/components/DesktopWrapper";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { CallManager } from "@/components/CallManager";
 import { LanguageProvider } from "@/context/LanguageContext";
@@ -242,31 +241,29 @@ export default function RootLayout() {
                 <AuthProvider>
                   <ThemeSyncManager />
                   <GoogleOneTap />
-                  <DesktopWrapper>
-                    <LanguageProvider>
-                      <ChatPreferencesProvider>
-                      <AdvancedFeaturesProvider>
-                      <DataModeProvider>
-                      <TourProvider>
-                      <PushNotificationManager />
-                      <CallManager />
-                      <AppLockGate>
-                        <RootLayoutNav />
-                      </AppLockGate>
-                      <ProductTour />
-                      <IOSAlert
-                        visible={alertState.visible}
-                        title={alertState.title}
-                        message={alertState.message}
-                        buttons={alertState.buttons}
-                        onDismiss={dismissAlert}
-                      />
-                      </TourProvider>
-                      </DataModeProvider>
-                      </AdvancedFeaturesProvider>
-                      </ChatPreferencesProvider>
-                    </LanguageProvider>
-                  </DesktopWrapper>
+                  <LanguageProvider>
+                    <ChatPreferencesProvider>
+                    <AdvancedFeaturesProvider>
+                    <DataModeProvider>
+                    <TourProvider>
+                    <PushNotificationManager />
+                    <CallManager />
+                    <AppLockGate>
+                      <RootLayoutNav />
+                    </AppLockGate>
+                    <ProductTour />
+                    <IOSAlert
+                      visible={alertState.visible}
+                      title={alertState.title}
+                      message={alertState.message}
+                      buttons={alertState.buttons}
+                      onDismiss={dismissAlert}
+                    />
+                    </TourProvider>
+                    </DataModeProvider>
+                    </AdvancedFeaturesProvider>
+                    </ChatPreferencesProvider>
+                  </LanguageProvider>
                 </AuthProvider>
               </AppAccentProvider>
               </ThemeProvider>

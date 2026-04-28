@@ -1,6 +1,6 @@
 # Overview
 
-This project is a pnpm workspace monorepo utilizing TypeScript to develop AfuChat, a WeChat-style chat super app. AfuChat aims to provide a comprehensive communication and lifestyle platform, connecting users through chat, social features, and integrated services. The platform is designed for cross-platform compatibility, running on mobile (iOS/Android), web, and desktop.
+This project is a pnpm workspace monorepo utilizing TypeScript to develop AfuChat, a WeChat-style chat super app. AfuChat aims to provide a comprehensive communication and lifestyle platform, connecting users through chat, social features, and integrated services. The platform targets mobile (iOS/Android) with mobile-web parity; all desktop-specific UI has been removed to keep the APK small.
 
 Key capabilities include (latest: Telegram Mini App support):
 - Real-time chat and social networking features (posts, stories, follows) with end-to-end encrypted direct messaging.
@@ -47,8 +47,8 @@ The project is structured as a pnpm monorepo using TypeScript, with distinct pac
 - **Typography**: Inter font family.
 - **Theming**: Dark/light theme support (dark uses Google-style warm greys, light uses cream tones), persisted via `AsyncStorage`.
 - **App Accent Color**: User-selectable accent color via `AppAccentContext` (AsyncStorage key `app_color_theme`). Six options: Teal (#00BCD4, default), Blue (#2196F3), Purple (#9C27B0), Rose (#E91E63), Amber (#FF9800), Emerald (#4CAF50). The `useTheme()` hook returns `accent` and overrides `colors.accent/tint/tabIconSelected/online/unread`. Color picker is in the Me tab under Appearance. Static StyleSheet references use `Colors.brand` (the constant default teal); dynamic theming is applied via inline styles.
-- **Liquid Glass UI**: `GlassView` component (`components/ui/GlassView.tsx`) uses `BlurView` on iOS (intensity 72+), semi-transparent fallback on Android/web. Applied to `SwipeableBottomSheet` (both mobile sheet and desktop modal), video `CommentsSheet` modal, and the `ProductTour` tooltip.
-- **Responsive Design**: Utilizes `useWindowDimensions()` and custom `useResponsive()` hooks for dynamic layouts across web, mobile, and desktop.
+- **Liquid Glass UI**: `GlassView` component (`components/ui/GlassView.tsx`) uses `BlurView` on iOS (intensity 72+), semi-transparent fallback on Android/web. Applied to `SwipeableBottomSheet`, video `CommentsSheet` modal, and the `ProductTour` tooltip.
+- **Responsive Design**: Utilizes `useWindowDimensions()` and custom `useResponsive()` hooks for dynamic layouts on phone/tablet form factors.
 - **UI Components**: Reusable components for avatars, verified badges, skeletons, offline banners, and swipeable bottom sheets.
 - **Input Styling**: Consistent rounded `borderRadius: 12` for all input fields.
 
@@ -126,33 +126,21 @@ Applied gates:
 - **Monetize** (`app/monetize.tsx`) — Silver required
 - **AfuAI chat tap** (`app/(tabs)/index.tsx`) — Platinum intercept, routes to `/premium`
 
-## Desktop UI Overhaul (Full Desktop Experience)
+## Desktop UI Removal
 
-`DesktopSidebar.tsx` — Fully rewritten top nav (`DesktopTopNav`):
-- **Logo**: AfuChat logo + wordmark, links to Home/Discover section
-- **Nav items** (left): Home, Explore, Connect▼ (Messages, Contacts, Create Group/Channel), Create▼ (Post, Article, Video, Story), Wallet▼ (My Wallet, Top Up, Transfer, Requests, Gift Vault), Apps — all with dropdown panels; auth-gated items hidden for logged-out users
-- **Icon rail** (right, logged-in only): Notifications bell with live unread badge, Messages icon with live unread count badge, Match heart shortcut, Post quick-action button, Avatar dropdown menu
-- **Avatar menu**: Profile, Edit, Digital ID, Achievements, Prestige, Go Premium, Username Market, Settings, Admin (if admin), theme toggle, Sign Out
-- **Auth buttons** (right, logged-out): Log in + Sign up free
-- **Live unread counts**: `useUnreadCounts` hook subscribes to Supabase Realtime for `notifications` and `chat_members` tables and updates badge counts in real-time
-- **Apps dropdown**: 2-column grid with AfuAI, Games, Gifts, Match, Events, Marketplace, Freelance, Files, Saved, Referral
+All desktop-specific UI was removed to shrink the APK and lighten the codebase. The app now ships a single mobile layout that also serves on web.
 
-`DesktopWrapper.tsx` — Updated section routing:
-- New section types: `ai | apps | match | settings`
-- Auth-guard redirects to login for protected sections
-- All new sections rendered
+Removed:
+- `components/DesktopWrapper.tsx`, `components/DesktopSidebar.tsx`, `components/DesktopRightPanel.tsx`, `components/DesktopChatView.tsx`, `components/DesktopPostView.tsx`
+- Entire `components/desktop/` folder (Apps/AI/Match/Settings/Contacts/Discover sections + `ui.tsx`)
+- `components/ui/DesktopAuthCard.tsx`
+- `context/DesktopDetailContext.tsx`, `hooks/useIsDesktop.ts`
 
-New desktop section files:
-- `components/desktop/DesktopAppsSection.tsx` — Full apps launcher with category left-sidebar (Intelligence, Social, Entertainment, Finance, Marketplace, Tools, Account) and list-style app tiles with gradient icons. Shows `adminOnly` apps only to admin users.
-- `components/desktop/DesktopAISection.tsx` — Full-featured AI chat interface with message history, suggestion chips, real-time streaming via Supabase channel. Uses `get_or_create_direct_chat` RPC with AfuAI bot ID.
-- `components/desktop/DesktopMatchSection.tsx` — Dating/match section with profile cards (photo, bio, tags), like/pass action buttons, sidebar quick links for filters and settings. Reads from `match_profiles` and writes to `match_likes`.
-- `components/desktop/DesktopSettingsSection.tsx` — Settings panel with sidebar tabs (Account, Privacy, Security, Notifications, Chats, Appearance, Language, Advanced, Danger Zone), routing to existing app routes via `router.push`.
-
-## Desktop Contacts Section
-
-`components/desktop/DesktopContactsSection.tsx` — two-panel desktop contacts view added to the sidebar nav ("Contacts" icon). Left panel: alphabetically grouped list of people the user follows, with search, online indicators, and "Add Contact" flow. Right panel: inline profile card showing avatar, verified badge, follower/following counts, follow toggle, Message button, and a 3-column posts grid with best-thumbnail detection. Clicking a post navigates to its detail/video page.
-
-`DesktopWrapper.tsx` and `DesktopSidebar.tsx` updated to include the `"contacts"` section.
+Simplified:
+- `app/_layout.tsx` no longer wraps the tree in a desktop shell
+- `app/+html.tsx` uses a single body background (no desktop media query)
+- All `isDesktop` branches collapsed to mobile in `app/(tabs)/{_layout,index,discover,search}.tsx`, `app/collections.tsx`, `app/wallet/index.tsx`, `app/(auth)/{login,register}.tsx`, `app/chat/[id].tsx`
+- `components/SwipeableBottomSheet.tsx` and `components/gifts/GiftPickerSheet.tsx` are mobile-only (no side-docked desktop variants)
 
 ## Post Thumbnail Detection
 
@@ -160,7 +148,6 @@ All surfaces now pick the best available thumbnail using priority: `post_images[
 
 - `contact/[id].tsx`: Video posts now render `image_url` behind the play-button overlay (previously showed a blank dark background).
 - `post/[id].tsx`: Query now fetches `article_title`; article posts render a bold title above the body text in the detail view.
-- `DesktopDiscoverSection.tsx`: Already correct — video card uses `image_url`, regular posts use `post_images → image_url`.
 
 ## Offline Improvements
 

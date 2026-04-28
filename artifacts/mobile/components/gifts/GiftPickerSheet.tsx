@@ -6,14 +6,12 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -241,8 +239,6 @@ export default function GiftPickerSheet({
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { getDynamicPrice, statsMap } = useGiftPrices();
-  const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === "web" && width >= 960;
 
   const [gifts, setGifts] = useState<DbGift[]>([]);
   const [loading, setLoading] = useState(true);
@@ -308,18 +304,18 @@ export default function GiftPickerSheet({
     <Modal
       visible={visible}
       transparent
-      animationType={isDesktop ? "fade" : "slide"}
+      animationType="slide"
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <View style={[styles.overlay, isDesktop && styles.overlayDesktop]}>
+      <View style={styles.overlay}>
         <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
         <KeyboardAvoidingView
           behavior="padding"
-          style={[styles.kavWrapper, isDesktop && styles.kavWrapperDesktop]}
+          style={styles.kavWrapper}
         >
-          <View style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: isDesktop ? 20 : insets.bottom + 12 }, isDesktop && styles.sheetDesktop]}>
-            {!isDesktop && <View style={[styles.dragHandle, { backgroundColor: colors.border }]} />}
+          <View style={[styles.sheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 12 }]}>
+            <View style={[styles.dragHandle, { backgroundColor: colors.border }]} />
 
             <View style={styles.header}>
               <View>
@@ -475,29 +471,14 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.55)",
     justifyContent: "flex-end",
   },
-  overlayDesktop: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
   kavWrapper: {
     width: "100%",
-  },
-  kavWrapperDesktop: {
-    width: "100%",
-    maxWidth: 560,
-    maxHeight: "88%",
   },
   sheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: 8,
     maxHeight: Dimensions.get("window").height * 0.82,
-  },
-  sheetDesktop: {
-    borderRadius: 16,
-    paddingTop: 20,
-    maxHeight: undefined,
-    ...Platform.select({ web: { boxShadow: "0 8px 40px rgba(0,0,0,0.22)" } as any }),
   },
   dragHandle: {
     width: 40,

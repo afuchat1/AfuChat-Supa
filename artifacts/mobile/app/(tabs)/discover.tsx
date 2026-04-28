@@ -38,9 +38,7 @@ import { sharePost } from "@/lib/share";
 import { matchInterestsWeighted, recordInteraction, getLearnedInterestBoosts, computeFeedScore, diversifyFeed, type FeedSignals } from "@/lib/feedAlgorithm";
 import { useLanguage } from "@/context/LanguageContext";
 import { translateText, LANG_LABELS } from "@/lib/translate";
-import { useDesktopDetail } from "@/context/DesktopDetailContext";
 import { useTour } from "@/context/TourContext";
-import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { useDataMode } from "@/context/DataModeContext";
 
 type PostItem = {
@@ -98,9 +96,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
   const { preferredLang } = useLanguage();
   const { width: screenW } = useWindowDimensions();
   const cardInsets = useCardInsets();
-  const isDesktop = useIsDesktop();
   const { isLowData } = useDataMode();
-  const { openDetail } = useDesktopDetail();
   const { user: currentUser } = useAuth();
   const [displayContent, setDisplayContent] = useState(item.content);
   const [isTranslated, setIsTranslated] = useState(false);
@@ -140,11 +136,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
       router.push({ pathname: "/video/[id]", params: { id: item.id } });
       return;
     }
-    if (isDesktop) {
-      openDetail({ type: "post", id: item.id });
-    } else {
-      router.push({ pathname: "/post/[id]", params: { id: item.id } });
-    }
+    router.push({ pathname: "/post/[id]", params: { id: item.id } });
   }
 
   async function capturePostImage() {
@@ -476,12 +468,7 @@ export default function DiscoverScreen() {
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
-  const isDesktop = useIsDesktop();
   const { isLowData } = useDataMode();
-  const SIDEBAR_W = 280;
-  const RIGHT_PANEL_W = screenWidth >= 1280 ? 380 : 0;
-  const centerW = isDesktop ? screenWidth - SIDEBAR_W - RIGHT_PANEL_W : screenWidth;
-  const desktopColWidth = isDesktop ? Math.floor((centerW - 32) / 2) : undefined;
   const [feedTab, setFeedTab] = useState<"for_you" | "following">("for_you");
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1149,24 +1136,18 @@ export default function DiscoverScreen() {
       ) : (
         <FlatList
           ref={flatListRef}
-          key={isDesktop ? "desktop-2col" : "mobile-1col"}
           data={posts}
-          numColumns={isDesktop ? 2 : 1}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <View style={isDesktop ? { flex: 1, maxWidth: desktopColWidth } : undefined}>
-              <PostCard
-                item={item}
-                onToggleLike={toggleLike}
-                onToggleBookmark={toggleBookmark}
-                onToggleFollow={toggleFollow}
-                onImagePress={imgViewer.openViewer}
-                colWidth={desktopColWidth}
-              />
-            </View>
+            <PostCard
+              item={item}
+              onToggleLike={toggleLike}
+              onToggleBookmark={toggleBookmark}
+              onToggleFollow={toggleFollow}
+              onImagePress={imgViewer.openViewer}
+            />
           )}
-          columnWrapperStyle={isDesktop ? { gap: 0, paddingHorizontal: 8 } : undefined}
-          contentContainerStyle={{ gap: isDesktop ? 0 : 8, paddingVertical: 8, paddingBottom: insets.bottom + 52 + 80 + 50 }}
+          contentContainerStyle={{ gap: 8, paddingVertical: 8, paddingBottom: insets.bottom + 52 + 80 + 50 }}
           showsVerticalScrollIndicator={false}
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}

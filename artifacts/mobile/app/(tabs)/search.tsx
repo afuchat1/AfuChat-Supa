@@ -32,7 +32,6 @@ import * as Haptics from "expo-haptics";
 
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
-import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { supabase } from "@/lib/supabase";
 import { RichText } from "@/components/ui/RichText";
 import {
@@ -200,18 +199,14 @@ export default function SearchScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const isDesktop = useIsDesktop();
   const { width: SW } = useWindowDimensions();
   const { tag: incomingTag } = useLocalSearchParams<{ tag?: string }>();
   const handledTagRef = useRef<string | null>(null);
 
   const QUICK_GAP = 10;
   const QUICK_COLS = 4;
-  const SIDEBAR_W = 280;
-  const RIGHT_W = SW >= 1280 ? 380 : 0;
-  const contentW = isDesktop ? SW - SIDEBAR_W - RIGHT_W : SW;
-  const quickCardW = Math.floor((contentW - 32 - QUICK_GAP * (QUICK_COLS - 1)) / QUICK_COLS);
-  const scrollPB = isDesktop ? 32 : insets.bottom + 52 + 16;
+  const quickCardW = Math.floor((SW - 32 - QUICK_GAP * (QUICK_COLS - 1)) / QUICK_COLS);
+  const scrollPB = insets.bottom + 52 + 16;
 
   const inputRef = useRef<TextInput>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -933,7 +928,7 @@ export default function SearchScreen() {
   }
 
   function VideoGrid({ videos, compact }: { videos: VideoResult[]; compact?: boolean }) {
-    const COLS = compact ? 2 : (isDesktop ? 3 : 2);
+    const COLS = 2;
     const GAP = 8;
     const HPAD = 16;
     const cardW = Math.floor((SW - HPAD * 2 - GAP * (COLS - 1)) / COLS);

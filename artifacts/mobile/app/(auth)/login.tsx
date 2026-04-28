@@ -24,7 +24,6 @@ import { WebView } from "react-native-webview";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
-import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { showAlert } from "@/lib/alert";
 import { GoogleLogo, GitHubLogo, XLogo, GitLabLogo, PhoneLogo } from "@/components/ui/OAuthLogos";
 
@@ -154,69 +153,6 @@ const oauthSt = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-});
-
-// ─── Desktop brand panel ──────────────────────────────────────────────────────
-function BrandPanel() {
-  return (
-    <View style={brandSt.panel}>
-      <View style={brandSt.circleA} />
-      <View style={brandSt.circleB} />
-      <View style={brandSt.inner}>
-        <View style={brandSt.logoRow}>
-          <Image source={afuSymbol} style={brandSt.logo} resizeMode="contain" />
-          <Text style={brandSt.logoText}>AfuChat</Text>
-        </View>
-        <View style={{ flex: 1, justifyContent: "center" }}>
-          <Text style={brandSt.headline}>{"Connect with\neveryone,\neverywhere."}</Text>
-          <Text style={brandSt.sub}>Messages, communities, and AI — all in one place.</Text>
-        </View>
-        <View style={brandSt.features}>
-          {[
-            { icon: "chatbubbles-outline", label: "Real-time messaging" },
-            { icon: "people-outline",      label: "Communities & channels" },
-            { icon: "sparkles-outline",    label: "AI assistant built-in" },
-            { icon: "wallet-outline",      label: "AfuPay digital wallet" },
-          ].map((f) => (
-            <View key={f.icon} style={brandSt.featureRow}>
-              <Ionicons name={f.icon as any} size={15} color="rgba(255,255,255,0.8)" />
-              <Text style={brandSt.featureLabel}>{f.label}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-    </View>
-  );
-}
-const brandSt = StyleSheet.create<any>({
-  panel: {
-    flex: 1,
-    overflow: "hidden",
-    position: "relative",
-    backgroundColor: "#0097A7",
-  },
-  circleA: {
-    position: "absolute", top: -130, right: -130,
-    width: 400, height: 400, borderRadius: 200,
-    backgroundColor: "rgba(255,255,255,0.07)",
-  },
-  circleB: {
-    position: "absolute", bottom: -90, left: -90,
-    width: 300, height: 300, borderRadius: 150,
-    backgroundColor: "rgba(255,255,255,0.05)",
-  },
-  inner: { flex: 1, padding: 56, justifyContent: "space-between" },
-  logoRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  logo: { width: 36, height: 36, tintColor: "#fff" },
-  logoText: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#fff", letterSpacing: -0.3 },
-  headline: {
-    fontSize: 42, fontFamily: "Inter_700Bold", color: "#fff",
-    letterSpacing: -1.5, lineHeight: 50, marginBottom: 16,
-  },
-  sub: { fontSize: 15, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.75)", lineHeight: 23 },
-  features: { gap: 10 },
-  featureRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  featureLabel: { fontSize: 14, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.8)" },
 });
 
 // ─── Forgot password modal ────────────────────────────────────────────────────
@@ -362,10 +298,9 @@ function OAuthWebModal({
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function LoginScreen() {
-  const { colors, isDark, setThemeMode } = useTheme();
+  const { colors, isDark } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const isDesktop = useIsDesktop();
 
   useEffect(() => { if (user) router.replace("/(tabs)"); }, [user]);
 
@@ -478,7 +413,6 @@ export default function LoginScreen() {
     } catch { setOauthLoading(null); showAlert("Error", "Could not complete sign in."); }
   }
 
-  // ── Form card (shared between desktop & mobile) ───────────────────────────
   const FormContent = (
     <>
       {/* Fields */}
@@ -516,50 +450,6 @@ export default function LoginScreen() {
     </>
   );
 
-  // ── Desktop ───────────────────────────────────────────────────────────────
-  if (isDesktop) {
-    return (
-      <View style={[deskSt.root, { backgroundColor: isDark ? "#09090B" : "#F4F4F5" }]}>
-        {/* Back button */}
-        <TouchableOpacity
-          style={[deskSt.backBtn, { backgroundColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.07)" }]}
-          onPress={() => (router.canGoBack() ? router.back() : router.replace("/" as any))}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="arrow-back" size={16} color={isDark ? "#fff" : "#000"} />
-        </TouchableOpacity>
-        {/* Theme toggle */}
-        <TouchableOpacity
-          style={[deskSt.themeBtn, { backgroundColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.07)" }]}
-          onPress={() => setThemeMode(isDark ? "light" : "dark")}
-        >
-          <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={16} color={isDark ? "#fff" : "#000"} />
-        </TouchableOpacity>
-
-        <BrandPanel />
-
-        {/* Form side */}
-        <View style={[deskSt.formSide, { backgroundColor: isDark ? "#09090B" : "#FFFFFF" }]}>
-          <ScrollView contentContainerStyle={deskSt.formScroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            <View style={deskSt.formCard}>
-              {/* Header */}
-              <View style={{ marginBottom: 8 }}>
-                <Image source={afuSymbol} style={[deskSt.headerLogo, { tintColor: "#00BCD4" }]} resizeMode="contain" />
-                <Text style={[deskSt.headerTitle, { color: colors.text }]}>Sign in to AfuChat</Text>
-                <Text style={[deskSt.headerSub, { color: colors.textSecondary }]}>Welcome back. Enter your details below.</Text>
-              </View>
-              {FormContent}
-            </View>
-          </ScrollView>
-        </View>
-
-        <ForgotPasswordModal visible={forgotVisible} onClose={() => setForgotVisible(false)} colors={colors} isDark={isDark} />
-        {oauthModalUrl && <OAuthWebModal url={oauthModalUrl} onClose={() => { setOauthModalUrl(null); setOauthLoading(null); }} onNav={(s) => { if (s.url && isOAuthRedirect(s.url)) handleOAuthRedirect(s.url); }} onShouldLoad={(r) => { if (r.url && isOAuthRedirect(r.url)) { handleOAuthRedirect(r.url); return false; } return true; }} colors={colors} />}
-      </View>
-    );
-  }
-
-  // ── Mobile ────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <TouchableOpacity
@@ -591,18 +481,6 @@ const formSt = StyleSheet.create({
   primaryBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold", letterSpacing: 0.1 },
   switchRow: { flexDirection: "row", justifyContent: "center", flexWrap: "wrap" },
   switchText: { fontSize: 14, fontFamily: "Inter_400Regular" },
-});
-
-const deskSt = StyleSheet.create<any>({
-  root: { flex: 1, flexDirection: "row", position: "relative" },
-  themeBtn: { position: "absolute", top: 20, right: 20, zIndex: 10, width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  backBtn: { position: "absolute", top: 20, left: 20, zIndex: 10, width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  formSide: { flex: 1, maxWidth: 520 },
-  formScroll: { flexGrow: 1, justifyContent: "center", padding: 48 },
-  formCard: { width: "100%", maxWidth: 400, alignSelf: "center", gap: 20 },
-  headerLogo: { width: 40, height: 40, marginBottom: 10 },
-  headerTitle: { fontSize: 26, fontFamily: "Inter_700Bold", letterSpacing: -0.5, marginBottom: 4 },
-  headerSub: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22 },
 });
 
 const mobBackSt = StyleSheet.create({

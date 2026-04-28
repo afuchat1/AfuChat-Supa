@@ -355,32 +355,17 @@ function TypingBubble({ names, colors }: { names: string[]; colors: any }) {
 
 function BottomSheet({ visible, onClose, children }: { visible: boolean; onClose: () => void; children: React.ReactNode }) {
   const { colors } = useTheme();
-  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
-  const isDesktop = Platform.OS === "web" && screenWidth >= 960;
+  const { height: screenHeight } = useWindowDimensions();
 
   const translateY = useRef(new Animated.Value(screenHeight)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(0.95)).current;
 
   useEffect(() => {
-    if (isDesktop) {
-      if (visible) {
-        Animated.parallel([
-          Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
-          Animated.spring(scale, { toValue: 1, tension: 140, friction: 16, useNativeDriver: true }),
-        ]).start();
-      } else {
-        opacity.setValue(0);
-        scale.setValue(0.95);
-      }
+    if (visible) {
+      Animated.spring(translateY, { toValue: 0, useNativeDriver: true, damping: 20 }).start();
     } else {
-      if (visible) {
-        Animated.spring(translateY, { toValue: 0, useNativeDriver: true, damping: 20 }).start();
-      } else {
-        Animated.timing(translateY, { toValue: screenHeight, duration: 250, useNativeDriver: true }).start();
-      }
+      Animated.timing(translateY, { toValue: screenHeight, duration: 250, useNativeDriver: true }).start();
     }
-  }, [visible, screenHeight, isDesktop]);
+  }, [visible, screenHeight]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -397,27 +382,6 @@ function BottomSheet({ visible, onClose, children }: { visible: boolean; onClose
   ).current;
 
   if (!visible) return null;
-
-  if (isDesktop) {
-    return (
-      <View style={[StyleSheet.absoluteFill, st.desktopSheetOverlay]}>
-        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
-        <Animated.View
-          style={[
-            st.desktopSheetCard,
-            {
-              backgroundColor: colors.surface,
-              opacity,
-              transform: [{ scale }],
-              maxHeight: screenHeight * 0.75,
-            },
-          ]}
-        >
-          {children}
-        </Animated.View>
-      </View>
-    );
-  }
 
   return (
     <View style={StyleSheet.absoluteFill}>
