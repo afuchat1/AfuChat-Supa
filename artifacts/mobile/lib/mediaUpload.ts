@@ -1,5 +1,25 @@
+/**
+ * Media upload helpers — Cloudflare R2 backed.
+ *
+ * The mobile client never touches R2 credentials directly. Instead it
+ * asks the API server for a short-lived presigned PUT URL, then PUTs
+ * the file to R2 from the device. The returned `publicUrl` is what we
+ * persist into the relevant DB column.
+ */
+
 import { Platform } from "react-native";
-import { supabase, supabaseUrl, supabaseAnonKey } from "./supabase";
+import { supabase } from "./supabase";
+
+// Resolve the API server base URL the same way videoApi.ts does so all
+// modules agree on where /api lives.
+const API_BASE: string = (() => {
+  const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
+  if (domain) return `https://${domain}`;
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    return window.location.origin;
+  }
+  return "";
+})();
 
 const MIME_MAP: Record<string, string> = {
   jpg: "image/jpeg",
@@ -26,42 +46,95 @@ function getMime(ext: string): string {
   return MIME_MAP[ext.toLowerCase()] || "application/octet-stream";
 }
 
-async function uploadViaRestApi(
+function apiUrl(path: string): string {
+  const base = API_BASE.replace(/\/+$/, "");
+  return `${base}/api${path}`;
+}
+
+async function getSignedUpload(
   bucket: string,
   filePath: string,
-  body: FormData | Blob | File,
+  contentType: string,
   accessToken: string,
-  isFormData: boolean,
+): Promise<{ uploadUrl: string; publicUrl: string } | { error: string }> {
+  try {
+    const r = await fetch(apiUrl("/uploads/sign"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ bucket, path: filePath, contentType }),
+    });
+    if (!r.ok) {
+      let msg = `Sign failed (${r.status})`;
+      try {
+        const j = await r.json();
+        msg = j.error || j.message || msg;
+      } catch {}
+      return { error: msg };
+    }
+    const j = await r.json();
+    if (!j.uploadUrl || !j.publicUrl) return { error: "Bad sign response" };
+    return { uploadUrl: j.uploadUrl as string, publicUrl: j.publicUrl as string };
+  } catch (e: any) {
+    return { error: e?.message || "Sign request failed" };
+  }
+}
+
+async function putToR2(
+  uploadUrl: string,
+  body: Blob | ArrayBuffer | Uint8Array,
+  contentType: string,
 ): Promise<{ ok: boolean; error: string | null }> {
-  const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
-  const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucket}/${encodedPath}`;
-
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${accessToken}`,
-    "x-upsert": "true",
-    apikey: supabaseAnonKey,
-  };
-
-  if (!isFormData && body instanceof Blob) {
-    headers["Content-Type"] = (body as File).type || "application/octet-stream";
+  try {
+    const r = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": contentType },
+      body: body as any,
+    });
+    if (!r.ok) {
+      let msg = `Upload failed (${r.status})`;
+      try {
+        const t = await r.text();
+        if (t) msg += `: ${t.slice(0, 200)}`;
+      } catch {}
+      return { ok: false, error: msg };
+    }
+    return { ok: true, error: null };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "Upload error" };
   }
+}
 
-  const response = await fetch(uploadUrl, {
-    method: "POST",
-    headers,
-    body,
-  });
-
-  if (!response.ok) {
-    let errMsg = "Upload failed";
-    try {
-      const parsed = await response.json();
-      errMsg = parsed.message || parsed.error || errMsg;
-    } catch {}
-    return { ok: false, error: `${errMsg} (${response.status})` };
+async function fileUriToBlob(fileUri: string, mime: string): Promise<Blob> {
+  if (fileUri.startsWith("data:")) {
+    const [header, b64] = fileUri.split(",");
+    const dataMime = header?.match(/data:([^;]+)/)?.[1] || mime;
+    const byteStr = atob(b64);
+    const bytes = new Uint8Array(byteStr.length);
+    for (let i = 0; i < byteStr.length; i++) bytes[i] = byteStr.charCodeAt(i);
+    return new Blob([bytes], { type: dataMime });
   }
-
-  return { ok: true, error: null };
+  try {
+    const response = await fetch(fileUri);
+    return await response.blob();
+  } catch {
+    return await new Promise<Blob>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", fileUri, true);
+      xhr.responseType = "blob";
+      xhr.onload = () => {
+        if (xhr.status === 200 || xhr.status === 0) {
+          resolve(xhr.response as Blob);
+        } else {
+          reject(new Error(`XHR failed: ${xhr.status}`));
+        }
+      };
+      xhr.onerror = () => reject(new Error("XHR network error"));
+      xhr.send();
+    });
+  }
 }
 
 export async function uploadToStorage(
@@ -76,77 +149,39 @@ export async function uploadToStorage(
       resolvedMime = fileUri.match(/data:([^;]+)/)?.[1] || undefined;
     }
     const ext = fileUri.startsWith("data:")
-      ? (resolvedMime?.split("/")?.[1]?.replace("jpeg", "jpg") || "bin")
-      : (fileUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "bin");
+      ? resolvedMime?.split("/")?.[1]?.replace("jpeg", "jpg") || "bin"
+      : fileUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "bin";
     const mime = resolvedMime || getMime(ext);
 
     const session = (await supabase.auth.getSession()).data.session;
     if (!session) return { publicUrl: null, error: "Not authenticated" };
 
-    if (Platform.OS !== "web") {
-      const formData = new FormData();
-      formData.append("file", {
-        uri: fileUri,
-        name: filePath.split("/").pop() || "file",
-        type: mime,
-      } as any);
+    const signed = await getSignedUpload(bucket, filePath, mime, session.access_token);
+    if ("error" in signed) return { publicUrl: null, error: signed.error };
 
-      const result = await uploadViaRestApi(bucket, filePath, formData, session.access_token, true);
-      if (!result.ok) return { publicUrl: null, error: result.error };
-    } else {
-      let blob: Blob;
+    let body: Blob | ArrayBuffer;
 
-      if (fileUri.startsWith("data:")) {
-        const [header, b64] = fileUri.split(",");
-        const dataMime = header?.match(/data:([^;]+)/)?.[1] || mime;
-        const byteStr = atob(b64);
-        const bytes = new Uint8Array(byteStr.length);
-        for (let i = 0; i < byteStr.length; i++) bytes[i] = byteStr.charCodeAt(i);
-        blob = new Blob([bytes], { type: dataMime });
-      } else {
-        try {
-          const response = await fetch(fileUri);
-          blob = await response.blob();
-        } catch {
-          try {
-            blob = await new Promise<Blob>((resolve, reject) => {
-              const xhr = new XMLHttpRequest();
-              xhr.open("GET", fileUri, true);
-              xhr.responseType = "blob";
-              xhr.onload = () => {
-                if (xhr.status === 200 || xhr.status === 0) {
-                  resolve(xhr.response as Blob);
-                } else {
-                  reject(new Error(`XHR failed: ${xhr.status}`));
-                }
-              };
-              xhr.onerror = () => reject(new Error("XHR network error"));
-              xhr.send();
-            });
-          } catch {
-            return { publicUrl: null, error: "Could not read selected file. Please try again." };
-          }
-        }
+    if (Platform.OS !== "web" && !fileUri.startsWith("data:") && !fileUri.startsWith("blob:")) {
+      // React Native: prefer reading as ArrayBuffer via fetch — RN's fetch
+      // supports file:// URIs and works for binary PUT bodies.
+      try {
+        const r = await fetch(fileUri);
+        body = await r.arrayBuffer();
+      } catch (e: any) {
+        return { publicUrl: null, error: `Could not read file: ${e?.message || e}` };
       }
-
-      const fileName = filePath.split("/").pop() || "file";
-      const file = new File([blob], fileName, { type: mime });
-
-      const restResult = await uploadViaRestApi(bucket, filePath, file, session.access_token, false);
-      if (!restResult.ok) {
-        const sdkResult = await supabase.storage
-          .from(bucket)
-          .upload(filePath, file, { contentType: mime, upsert: true });
-        if (sdkResult.error) return { publicUrl: null, error: sdkResult.error.message };
+    } else {
+      try {
+        body = await fileUriToBlob(fileUri, mime);
+      } catch (e: any) {
+        return { publicUrl: null, error: "Could not read selected file. Please try again." };
       }
     }
 
-    const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
-    const url = data?.publicUrl;
-    if (!url) return { publicUrl: null, error: "Could not get public URL" };
+    const put = await putToR2(signed.uploadUrl, body, mime);
+    if (!put.ok) return { publicUrl: null, error: put.error };
 
-    const cacheBustedUrl = `${url}?t=${Date.now()}`;
-    return { publicUrl: cacheBustedUrl, error: null };
+    return { publicUrl: `${signed.publicUrl}?t=${Date.now()}`, error: null };
   } catch (e: any) {
     return { publicUrl: null, error: e?.message || "Upload failed" };
   }
@@ -211,9 +246,10 @@ export async function uploadChatMedia(
   const mimeExt = contentType ? MIME_TO_EXT[contentType.toLowerCase()] : undefined;
   const ext = nameExt || uriExt || mimeExt || "file";
   const fileName = originalName || `${Date.now()}.${ext}`;
-  const filePath = bucket === "voice-messages"
-    ? `${userId}/${fileName}`
-    : `${userId}/${chatId}/${fileName}`;
+  const filePath =
+    bucket === "voice-messages"
+      ? `${userId}/${fileName}`
+      : `${userId}/${chatId}/${fileName}`;
 
   const resolvedContentType = contentType || getMime(ext);
   return uploadToStorage(bucket, filePath, fileUri, resolvedContentType);

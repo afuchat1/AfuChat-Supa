@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "@/lib/supabase";
+import { uploadToStorage } from "@/lib/mediaUpload";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
@@ -129,18 +130,23 @@ export default function MatchProfileEditScreen() {
     setPhotos((prev) => [...prev, newPhoto]);
 
     try {
-      const ext = asset.uri.split(".").pop() ?? "jpg";
-      const path = `${user?.id}/${Date.now()}.${ext}`;
-      const res = await fetch(asset.uri);
-      const blob = await res.blob();
-      const { data, error } = await supabase.storage.from("match-photos").upload(path, blob, { contentType: `image/${ext}` });
-      if (!error && data) {
-        const { data: urlData } = supabase.storage.from("match-photos").getPublicUrl(data.path);
+      const ext = asset.uri.split(".").pop()?.toLowerCase() ?? "jpg";
+      const safeExt = ext === "jpeg" ? "jpg" : ext;
+      const path = `${user?.id}/${Date.now()}.${safeExt}`;
+      const { publicUrl, error } = await uploadToStorage(
+        "match-photos",
+        path,
+        asset.uri,
+        `image/${safeExt === "jpg" ? "jpeg" : safeExt}`,
+      );
+      if (!error && publicUrl) {
         setPhotos((prev) => {
           const updated = [...prev];
-          updated[idx] = { ...updated[idx], url: urlData.publicUrl, uploading: false };
+          updated[idx] = { ...updated[idx], url: publicUrl, uploading: false };
           return updated;
         });
+      } else {
+        setPhotos((prev) => prev.filter((_, j) => j !== idx));
       }
     } catch { setPhotos((prev) => prev.filter((_, j) => j !== idx)); }
   }

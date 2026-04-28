@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
+import { uploadToStorage } from "@/lib/mediaUpload";
 import { Shop, ShopProduct, ShopOrder, SHOP_CATEGORIES, PRODUCT_CATEGORIES, ORDER_STATUS_LABELS, ESCROW_STATUS_LABELS, formatShopAcoin, formatShopUGX, PLATFORM_FEE_PCT } from "@/lib/shop";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
@@ -98,28 +99,20 @@ export default function ShopManage() {
 
   async function uploadImage(uri: string, path: string): Promise<string | null> {
     try {
+      if (!user) return null;
       const ext = uri.split(".").pop()?.toLowerCase() || "jpg";
-      const fileName = `${path}/${Date.now()}.${ext}`;
-      if (Platform.OS === "web") {
-        const resp = await fetch(uri);
-        const blob = await resp.blob();
-        const { data, error } = await supabase.storage.from("shop-media").upload(fileName, blob, { contentType: blob.type || "image/jpeg", upsert: true });
-        if (error) return null;
-        const { data: { publicUrl } } = supabase.storage.from("shop-media").getPublicUrl(fileName);
-        return publicUrl;
-      } else {
-        const formData = new FormData();
-        formData.append("file", { uri, name: fileName, type: `image/${ext}` } as any);
-        const { data: sessionData } = await supabase.auth.getSession();
-        const resp = await fetch(`https://rhnsjqqtdzlkvqazfcbg.supabase.co/storage/v1/object/shop-media/${fileName}`, {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${sessionData?.session?.access_token}`, "x-upsert": "true" },
-          body: formData,
-        });
-        if (!resp.ok) return null;
-        const { data: { publicUrl } } = supabase.storage.from("shop-media").getPublicUrl(fileName);
-        return publicUrl;
-      }
+      const safeExt = ext === "jpeg" ? "jpg" : ext;
+      // Path must start with the user's id to satisfy server-side scoping.
+      const fileName = `${user.id}/${path}/${Date.now()}.${safeExt}`;
+      const contentType = `image/${safeExt === "jpg" ? "jpeg" : safeExt}`;
+      const { publicUrl, error } = await uploadToStorage(
+        "shop-media",
+        fileName,
+        uri,
+        contentType,
+      );
+      if (error || !publicUrl) return null;
+      return publicUrl;
     } catch { return null; }
   }
 
