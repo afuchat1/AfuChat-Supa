@@ -1,0 +1,104 @@
+General
+
+Custom Domains
+
+Public Development URL
+
+R2 Data Catalog
+
+CORS Policy
+
+Object Lifecycle Rules
+
+Bucket Lock Rules
+
+Event Notifications
+
+On Demand Migration
+
+Local Uploads
+
+Default Storage Class
+
+Delete Bucket
+
+General
+Name:
+afuchat-media
+
+Created:
+Apr 15, 2026
+Location:
+Western Europe (WEUR)
+
+S3 API:
+https://42e79186125e8ff83e51f15816e074de.r2.cloudflarestorage.com/afuchat-media
+Click to copy
+Custom Domains
+Expose the contents of this R2 bucket to the internet through a custom domain. Recommended for production use.
+
+Domain	Minimum TLS	Status	Access	
+cdn.afuchat.com
+
+1.0	
+
+Public Development URL
+Expose the contents of this R2 bucket to the internet through the Public Development URL when enabled.
+
+https://pub-2e81c468eb99436690ca6da9f89191ce.r2.dev
+Click to copy
+This URL is rate-limited and not recommended for production. Cloudflare features like Access and Caching are unavailable. Connect a custom domain to the bucket to support production workloads.
+
+R2 Data Catalog
+Add an Apache Iceberg REST catalog, to allow query engines to manage and query Iceberg tables stored in R2.
+
+The R2 Data Catalog is disabled for this bucket.
+CORS Policy
+Configure CORS headers that R2 will set when accessing this bucket's contents from a browser.
+
+There is no CORS Policy defined for this bucket.
+Object Lifecycle Rules
+Specify rules to automatically manage objects after a specified time.
+
+
+Rule Name
+Prefix
+Actions
+Status
+
+Default Multipart Abort Rule
+--
+Abort uploads after 7 day(s)
+
+Bucket Lock Rules
+Set a retention policy to prevent object overwrites and deletions until the specified period ends.
+
+There are no bucket lock rules defined for this bucket.
+Event Notifications
+Automatically trigger Workers and take action when data in your R2 bucket changes by using Cloudflare Queues.
+
+Using event notifications requires you to purchase a Workers Paid plan.
+Explore what's offered.
+Blog post
+Read our blog post to learn more about what's new and how event notifications can be used to create automated functions.
+
+Documentation
+Read our documentation to learn more about functionality and how to use event notifications.
+
+Pay-as-you-go
+Workers Paid Plan required
+On Demand Migration
+Continuously migrate data from an Amazon S3 and Google Cloud bucket to this bucket only as read requests are made.
+
+On Demand Migration is not enabled for this bucket.
+Local Uploads
+Improve performance for cross-region uploads. Check your Request Distribution metrics to see where your requests originate.
+
+Local Uploads
+Default Storage Class
+Specify which storage class new objects will automatically be placed in.
+
+Class:
+Standard
+Delete Bucket
+Permanently delete this bucket and all configurations associated with it.
