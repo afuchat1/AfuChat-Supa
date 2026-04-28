@@ -179,6 +179,13 @@ export default function SettingsScreen() {
             value={dataSaverEnabled}
             onValueChange={toggleDataSaver}
           />
+          <Separator indent={54} />
+          <MenuItem
+            icon="cloud-outline"
+            iconBg="#0A84FF"
+            label="Storage"
+            onPress={() => router.push("/settings/storage")}
+          />
         </Section>
 
         {/* Privacy & Security */}
