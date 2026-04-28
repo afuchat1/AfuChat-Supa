@@ -35,6 +35,7 @@ import { DataModeProvider } from "@/context/DataModeContext";
 import GoogleOneTap from "@/components/ui/GoogleOneTap";
 import { TourProvider } from "@/context/TourContext";
 import ProductTour from "@/components/ui/ProductTour";
+import { DesktopShell } from "@/components/desktop/DesktopShell";
 
 try { setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`); } catch (_) {}
 
@@ -249,7 +250,9 @@ export default function RootLayout() {
                     <PushNotificationManager />
                     <CallManager />
                     <AppLockGate>
-                      <RootLayoutNav />
+                      <DesktopShell>
+                        <RootLayoutNav />
+                      </DesktopShell>
                     </AppLockGate>
                     <ProductTour />
                     <IOSAlert

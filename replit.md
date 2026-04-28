@@ -1,6 +1,6 @@
 # Overview
 
-This project is a pnpm workspace monorepo utilizing TypeScript to develop AfuChat, a WeChat-style chat super app. AfuChat aims to provide a comprehensive communication and lifestyle platform, connecting users through chat, social features, and integrated services. The platform targets mobile (iOS/Android) with mobile-web parity; all desktop-specific UI has been removed to keep the APK small.
+This project is a pnpm workspace monorepo utilizing TypeScript to develop AfuChat, a WeChat-style chat super app. AfuChat aims to provide a comprehensive communication and lifestyle platform, connecting users through chat, social features, and integrated services. The platform targets mobile (iOS/Android) with mobile-web parity; on web, a flat Replit-style desktop shell (sidebar + main area, with centered modal panels for compose/edit routes) wraps the same screens at viewport widths ≥ 1024 px and the bottom tab bar is hidden — see `components/desktop/DesktopShell.tsx` and `components/desktop/DesktopSidebar.tsx`.
 
 Key capabilities include (latest: Telegram Mini App support):
 - Real-time chat and social networking features (posts, stories, follows) with end-to-end encrypted direct messaging.

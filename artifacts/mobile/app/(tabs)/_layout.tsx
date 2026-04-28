@@ -15,6 +15,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import CommunityBanner from "@/components/ui/CommunityBanner";
 import { useTour, TOUR_KEY } from "@/context/TourContext";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -49,9 +50,10 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   const { colors } = useTheme();
   const { registerLayout, step, advance } = useTour();
   const pathname = usePathname();
+  const { isDesktop } = useIsDesktop();
   const registeredRef = useRef(false);
 
-  const hideTabs = !isLoggedIn && Platform.OS === "web";
+  const hideTabs = isDesktop || (!isLoggedIn && Platform.OS === "web");
 
   useEffect(() => {
     if (hideTabs) return;
