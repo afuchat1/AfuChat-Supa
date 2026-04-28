@@ -48,7 +48,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd artifacts/api-server && pnpm run build && pnpm run start"
+args = "cd artifacts/api-server && pnpm run build && PORT=3000 pnpm run start"
 waitForPort = 3000
 
 [[ports]]
