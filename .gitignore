@@ -47,3 +47,21 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Environment variables / secrets — never commit
+.env
+.env.*
+!.env.example
+*.env
+*.env.local
+
+# Local databases / dumps — never commit
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.dump
+*.sql.gz
+*.bak
