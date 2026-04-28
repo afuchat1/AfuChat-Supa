@@ -638,9 +638,10 @@ export function DesktopDiscoverSection() {
     <View style={styles.root}>
       <LoginPrompt visible={showLoginPrompt} onClose={() => setShowLoginPrompt(false)} />
 
+      <View style={styles.canvas}>
       {/* Feed column */}
       <View
-        style={[styles.feedArea, { borderRightColor: colors.border }]}
+        style={[styles.feedArea, { borderRightColor: colors.border, borderLeftColor: colors.border }]}
         onLayout={(e) => setFeedWidth(e.nativeEvent.layout.width)}
       >
         {/* Sticky header */}
@@ -735,12 +736,21 @@ export function DesktopDiscoverSection() {
       <View style={[styles.rightPanel, { backgroundColor: colors.background, borderLeftColor: colors.border }]}>
         <DesktopRightPanel activeTab="discover" colors={colors} />
       </View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, flexDirection: "row", overflow: "hidden" },
+  root: { flex: 1, flexDirection: "row", overflow: "hidden", justifyContent: "center" },
+  canvas: {
+    flex: 1,
+    flexDirection: "row",
+    overflow: "hidden",
+    maxWidth: 1200,
+    width: "100%",
+    alignSelf: "center",
+  },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
 
   feedArea: {
@@ -748,7 +758,8 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     overflow: "hidden",
     borderRightWidth: StyleSheet.hairlineWidth,
-    maxWidth: 620,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    maxWidth: 720,
   },
   feedHeader: {
     paddingHorizontal: 16,
@@ -882,7 +893,9 @@ const styles = StyleSheet.create({
   actionCount: { fontSize: 13, fontFamily: "Inter_400Regular" },
 
   rightPanel: {
-    width: 340,
+    flex: 1,
+    minWidth: 320,
+    maxWidth: 380,
     flexShrink: 0,
     overflow: "hidden",
   },

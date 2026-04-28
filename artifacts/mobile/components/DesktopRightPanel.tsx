@@ -72,6 +72,36 @@ const sb = StyleSheet.create({
   },
 });
 
+function JoinCard({ colors }: { colors: any }) {
+  return (
+    <View style={[rp.card, { backgroundColor: colors.surface, padding: 18, gap: 8 }]}>
+      <Text style={[rp.sectionTitle, { color: colors.text, paddingHorizontal: 0, paddingTop: 0 }]}>
+        New to AfuChat?
+      </Text>
+      <Text style={{ color: colors.textMuted, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 }}>
+        Sign up to follow people, post your own content, like and chat with the community.
+      </Text>
+      <TouchableOpacity
+        style={[rp.ctaPrimary, { backgroundColor: colors.accent }]}
+        onPress={() => router.push("/(auth)/register" as any)}
+        activeOpacity={0.85}
+      >
+        <Text style={rp.ctaPrimaryText}>Create account</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[rp.ctaSecondary, { borderColor: colors.border }]}
+        onPress={() => router.push("/(auth)/login" as any)}
+        activeOpacity={0.85}
+      >
+        <Text style={[rp.ctaSecondaryText, { color: colors.text }]}>Log in</Text>
+      </TouchableOpacity>
+      <Text style={{ color: colors.textMuted, fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 4, lineHeight: 16 }}>
+        By signing up, you agree to the Terms of Service and Privacy Policy, including Cookie Use.
+      </Text>
+    </View>
+  );
+}
+
 function WhoToFollow({ colors }: { colors: any }) {
   const { user } = useAuth();
   const [users, setUsers] = useState<SuggestedUser[]>([]);
@@ -236,6 +266,7 @@ export function DesktopRightPanel({ activeTab, colors }: { activeTab: string; co
       showsVerticalScrollIndicator={false}
     >
       <SearchBar colors={colors} />
+      {!session && <JoinCard colors={colors} />}
       <TrendingTopics colors={colors} />
       {session && <WhoToFollow colors={colors} />}
 
@@ -311,4 +342,21 @@ const rp = StyleSheet.create({
   },
   emptyTitle: { fontSize: 20, fontFamily: "Inter_700Bold", textAlign: "center" },
   emptySub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 21 },
+
+  ctaPrimary: {
+    paddingVertical: 10,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 6,
+  },
+  ctaPrimaryText: { color: "#fff", fontSize: 14, fontFamily: "Inter_700Bold" },
+  ctaSecondary: {
+    paddingVertical: 9,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+  ctaSecondaryText: { fontSize: 14, fontFamily: "Inter_700Bold" },
 });
