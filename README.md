@@ -1,8 +1,6 @@
 <div align="center">
   <img src="artifacts/mobile/assets/images/logo.png" alt="AfuChat Logo" width="120" />
   <h1>AfuChat</h1>
-  <p>A WeChat-style chat super app — messaging, social, AI, payments & more</p>
-
   <!-- Language & Runtime Banners -->
   ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
   ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
