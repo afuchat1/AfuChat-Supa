@@ -25,6 +25,7 @@ import {
   updateCallStatus,
 } from "@/lib/callSignaling";
 import { WebVideoStream } from "@/components/call/WebVideoStream";
+import { CallChatPanel } from "@/components/call/CallChatPanel";
 import { notifyCallInitiated } from "@/lib/notifyUser";
 
 type CallState = "connecting" | "ringing" | "active" | "ended";
@@ -51,6 +52,7 @@ export default function CallScreen() {
   const [localStream, setLocalStream] = useState<any>(null);
   const [remoteStream, setRemoteStream] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const sessionRef = useRef<CallSession | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -90,7 +92,8 @@ export default function CallScreen() {
   );
 
   useEffect(() => {
-    if (!id || !user || Platform.OS === "web") return;
+    if (!id || !user) return;
+    if (Platform.OS === "web" && !isCallSupported()) return;
 
     let cancelled = false;
 
@@ -341,6 +344,14 @@ export default function CallScreen() {
                 <Text style={styles.controlLabel}>Flip</Text>
               </TouchableOpacity>
             )}
+
+            <TouchableOpacity
+              style={[styles.controlBtn, chatOpen && styles.controlBtnActive]}
+              onPress={() => setChatOpen((v) => !v)}
+            >
+              <Ionicons name="chatbubble-ellipses" size={24} color="#fff" />
+              <Text style={styles.controlLabel}>Chat</Text>
+            </TouchableOpacity>
           </View>
 
           <TouchableOpacity
@@ -352,6 +363,17 @@ export default function CallScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {id && user && (
+        <CallChatPanel
+          visible={chatOpen}
+          callId={String(id)}
+          selfId={user.id}
+          selfName={(user as any).user_metadata?.display_name || "You"}
+          otherName={otherPerson?.display_name || "Caller"}
+          onClose={() => setChatOpen(false)}
+        />
+      )}
     </View>
   );
 }
