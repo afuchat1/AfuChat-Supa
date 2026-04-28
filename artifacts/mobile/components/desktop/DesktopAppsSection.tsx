@@ -85,7 +85,7 @@ const CATEGORIES: Category[] = [
     title: "Marketplace",
     icon: "storefront",
     apps: [
-      { id: "shop",       label: "Marketplace", sub: "Shop from verified organization stores.", icon: "storefront", gradient: ["#FF2D55", "#FF6B35"], badge: "NEW", route: "/store", adminOnly: true },
+      { id: "shop",       label: "Marketplace", sub: "Shop from verified organization stores.", icon: "storefront", gradient: ["#FF2D55", "#FF6B35"], badge: "NEW", route: "/store" },
       { id: "usernames",  label: "Usernames",   sub: "Buy and sell premium @handles.",          icon: "at",         gradient: ["#007AFF", "#5AC8FA"],               route: "/username-market", adminOnly: true },
       { id: "miniapps",   label: "Mini Apps",   sub: "Browse and publish lightweight mini apps.", icon: "grid",      gradient: [BRAND, "#0097A7"], badge: "NEW",   route: "/apps" },
     ],

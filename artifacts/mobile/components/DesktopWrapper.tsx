@@ -49,6 +49,9 @@ const AUTHED_SECTIONS: DesktopSection[] = [
 
 const BASE_FIRST_SEGMENTS = new Set(["", "index", "(tabs)", "+html", "+not-found"]);
 
+// Detail routes that should fill the full content area (no centered modal).
+const FULLSCREEN_DETAIL_ROUTES = new Set(["games", "store"]);
+
 function sectionFromSegments(segs: readonly string[]): DesktopSection {
   const flat = segs.join("/");
   if (flat.includes("notifications")) return "notifications";
@@ -197,7 +200,9 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
     [segments, session],
   );
 
-  const showModal = isDetailRoute(segments);
+  const isFullscreenDetail =
+    isDetailRoute(segments) && FULLSCREEN_DETAIL_ROUTES.has(segments[0] ?? "");
+  const showModal = isDetailRoute(segments) && !isFullscreenDetail;
   const isAuthRoute = segments[0] === "(auth)";
 
   const closeModal = useCallback(() => {
@@ -215,19 +220,23 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
 
       {/* Main canvas */}
       <View style={[styles.main, { backgroundColor: t.contentBg }]}>
-        <View style={styles.sectionLayer}>
-          {activeSection === "chats"         && <DesktopChatsSection />}
-          {activeSection === "discover"      && <DesktopDiscoverSection />}
-          {activeSection === "search"        && <DesktopSearchSection />}
-          {activeSection === "notifications" && <DesktopNotificationsSection />}
-          {activeSection === "wallet"        && <DesktopWalletSection />}
-          {activeSection === "contacts"      && <DesktopContactsSection />}
-          {activeSection === "profile"       && <DesktopProfileSection />}
-          {activeSection === "apps"          && <DesktopAppsSection onNavigate={handleSectionChange} />}
-          {activeSection === "ai"            && <DesktopAISection />}
-          {activeSection === "match"         && <DesktopMatchSection />}
-          {activeSection === "settings"      && <DesktopSettingsSection />}
-        </View>
+        {isFullscreenDetail ? (
+          <View style={styles.fullscreenLayer}>{children}</View>
+        ) : (
+          <View style={styles.sectionLayer}>
+            {activeSection === "chats"         && <DesktopChatsSection />}
+            {activeSection === "discover"      && <DesktopDiscoverSection />}
+            {activeSection === "search"        && <DesktopSearchSection />}
+            {activeSection === "notifications" && <DesktopNotificationsSection />}
+            {activeSection === "wallet"        && <DesktopWalletSection />}
+            {activeSection === "contacts"      && <DesktopContactsSection />}
+            {activeSection === "profile"       && <DesktopProfileSection />}
+            {activeSection === "apps"          && <DesktopAppsSection onNavigate={handleSectionChange} />}
+            {activeSection === "ai"            && <DesktopAISection />}
+            {activeSection === "match"         && <DesktopMatchSection />}
+            {activeSection === "settings"      && <DesktopSettingsSection />}
+          </View>
+        )}
       </View>
 
       {/* Detail-route modal overlay */}
@@ -257,6 +266,7 @@ const styles = StyleSheet.create<any>({
   root: { flex: 1, flexDirection: "row" },
   main: { flex: 1, flexDirection: "column", overflow: "hidden" },
   sectionLayer: { flex: 1, flexDirection: "row" },
+  fullscreenLayer: { flex: 1 },
 
   modalBackdrop: {
     position: "absolute",
