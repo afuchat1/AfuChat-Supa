@@ -76,9 +76,11 @@ function isDetailRoute(segs: readonly string[]): boolean {
 function DetailModal({
   onClose,
   children,
+  wide = false,
 }: {
   onClose: () => void;
   children: React.ReactNode;
+  wide?: boolean;
 }) {
   const t = useDesktopTheme();
   const opacity = useRef(new Animated.Value(0)).current;
@@ -122,6 +124,7 @@ function DetailModal({
       <Animated.View
         style={[
           styles.modalSheet,
+          wide && styles.modalSheetWide,
           {
             backgroundColor: t.panelBg,
             borderColor: t.borderStrong,
@@ -195,6 +198,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
   );
 
   const showModal = isDetailRoute(segments);
+  const isAuthRoute = segments[0] === "(auth)";
 
   const closeModal = useCallback(() => {
     try { router.back(); } catch { router.replace("/(tabs)" as any); }
@@ -228,7 +232,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
 
       {/* Detail-route modal overlay */}
       {Platform.OS === "web" && showModal && (
-        <DetailModal onClose={closeModal}>
+        <DetailModal onClose={closeModal} wide={isAuthRoute}>
           {children}
         </DetailModal>
       )}
@@ -272,6 +276,10 @@ const styles = StyleSheet.create<any>({
     overflow: "hidden",
     flexDirection: "column",
     zIndex: 501,
+  },
+  modalSheetWide: {
+    maxWidth: 920,
+    maxHeight: 640,
   },
   modalContent: { flex: 1, overflow: "hidden", borderRadius: 18 },
   modalCloseFab: {
