@@ -233,8 +233,22 @@ HLS/DASH not implemented yet — architecture leaves the hooks open.
 **Operational requirements** (must be done by the user):
 1. Apply `supabase/migrations/20260427_video_pipeline.sql` on the Supabase project
    (cannot be applied locally — depends on the `auth` schema).
-2. Set the `SUPABASE_SERVICE_ROLE_KEY` secret in Replit. Until set, the encoder worker
-   stays disabled and `POST /api/videos` returns 503; videos still play via the
-   original source URL.
-3. The `videos` Storage bucket must allow service-role writes under
+2. The `videos` Storage bucket must allow service-role writes under
    `{userId}/encoded/{asset}/...` (existing upload code already uses `{userId}/...`).
+
+## Secrets Policy (IMPORTANT)
+
+**`SUPABASE_SERVICE_ROLE_KEY` MUST live only in Supabase Edge Function secrets** —
+never in Replit env vars, never in `.env`, never anywhere outside Supabase.
+
+Consequences on the Replit-hosted Express API server (`artifacts/api-server`):
+- `getSupabaseAdmin()` returns `null` → all admin-scoped routes degrade gracefully
+  (videos pipeline, account purge, admin endpoints, support endpoints,
+  realtime email watcher, etc.).
+- The video encoder worker stays disabled and `POST /api/videos` returns 503.
+  Videos still play via the original uploaded source URL — only the
+  re-encoding-to-multi-rendition optimization is skipped.
+
+If admin-scoped functionality is ever needed beyond what Supabase Edge Functions
+already provide, port the route into a new Edge Function under
+`supabase/functions/<name>/` rather than adding the service-role key here.
