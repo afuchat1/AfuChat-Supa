@@ -7,7 +7,14 @@ let RTCIceCandidate: any;
 let mediaDevices: any;
 let RTCView: any;
 
-if (Platform.OS !== "web") {
+if (Platform.OS === "web") {
+  if (typeof window !== "undefined") {
+    RTCPeerConnection = (window as any).RTCPeerConnection;
+    RTCSessionDescription = (window as any).RTCSessionDescription;
+    RTCIceCandidate = (window as any).RTCIceCandidate;
+    mediaDevices = (navigator as any)?.mediaDevices;
+  }
+} else {
   try {
     const webrtc = require("react-native-webrtc");
     RTCPeerConnection = webrtc.RTCPeerConnection;
@@ -19,6 +26,24 @@ if (Platform.OS !== "web") {
 }
 
 export { RTCView };
+
+export function isCallSupported(): boolean {
+  return !!(RTCPeerConnection && mediaDevices?.getUserMedia);
+}
+
+/**
+ * Get a renderable URL for a MediaStream. Native uses stream.toURL();
+ * the browser uses the stream object directly through the <video>.srcObject.
+ */
+export function getStreamForRender(stream: any): { url: string | null; raw: any } {
+  if (!stream) return { url: null, raw: null };
+  if (Platform.OS === "web") return { url: null, raw: stream };
+  try {
+    return { url: stream.toURL?.() ?? null, raw: stream };
+  } catch {
+    return { url: null, raw: stream };
+  }
+}
 
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
@@ -149,7 +174,10 @@ export class CallSession {
   }
 
   async start(callType: CallType) {
-    if (Platform.OS === "web" || !RTCPeerConnection) return;
+    if (!RTCPeerConnection || !mediaDevices?.getUserMedia) {
+      this.onError?.("Calls aren't supported on this device.");
+      return;
+    }
     this.callType = callType;
 
     try {

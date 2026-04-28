@@ -19,7 +19,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="AfuChat" />
         <meta name="description" content="AfuChat is Uganda's #1 super app — built in Entebbe, Kitooro. Chat in real time, discover trending content, share moments, send money, and build your community. The all-in-one social platform for Uganda and Africa." />
-        <meta name="theme-color" content="#00897B" />
+        <meta name="theme-color" content="#00BCD4" />
         <meta name="keywords" content="AfuChat, Uganda super app, Uganda social media, chat app Uganda, messaging Uganda, social platform Uganda, best app Uganda, super app Africa, Entebbe app, Uganda chat, connect Uganda, Uganda community, Uganda trending, AfuChat Uganda, Uganda mobile app, Uganda fintech app, send money Uganda, Uganda social network" />
         <meta name="author" content="AfuChat — Entebbe, Uganda" />
         <meta name="robots" content="index, follow" />
@@ -111,10 +111,24 @@ export default function Root({ children }: PropsWithChildren) {
           /* Pointer cursor on interactive elements */
           [role="button"], button, a, [data-testid] { cursor: pointer !important; }
 
-          body { background-color: #f0ece7; }
+          body { background-color: #FDF8F3; }
 
           @media (prefers-color-scheme: dark) {
-            body { background-color: #0a0a0a; }
+            body { background-color: #000000; }
+          }
+
+          /* Desktop: drop the custom Inter font and use the OS system stack */
+          @media (min-width: 1024px) {
+            html, body, [data-font="system"], [data-font="system"] * {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, "Noto Sans", sans-serif !important;
+              letter-spacing: 0 !important;
+            }
+            /* Keep icon fonts intact (Ionicons, Material) */
+            [class*="ionicon"], [class*="material-icon"], [class*="MaterialCommunityIcons"],
+            [class*="FontAwesome"], [data-icon] {
+              font-family: inherit !important;
+            }
           }
         `}} />
       </head>

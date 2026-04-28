@@ -10,6 +10,8 @@ import {
   View,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
+import { DesktopCameraFallback } from "@/components/desktop/DesktopCameraFallback";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -247,6 +249,19 @@ function Section({ title, icon, children }: { title: string; icon: string; child
 }
 
 export default function IdScannerScreen() {
+  const { isDesktop } = useIsDesktop();
+  if (isDesktop) {
+    return (
+      <DesktopCameraFallback
+        title="ID verification on phone"
+        description="Open AfuChat on a phone with a camera to scan or capture an ID. Use this code to jump straight to the scanner."
+      />
+    );
+  }
+  return <IdScannerScreenMobile />;
+}
+
+function IdScannerScreenMobile() {
   const { profile } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();

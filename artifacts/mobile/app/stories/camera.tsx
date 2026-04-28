@@ -14,6 +14,8 @@ import * as ImagePicker from "expo-image-picker";
 import Colors from "@/constants/colors";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { showAlert } from "@/lib/alert";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
+import { DesktopCameraFallback } from "@/components/desktop/DesktopCameraFallback";
 
 type CameraMode = "photo" | "video";
 
@@ -402,6 +404,15 @@ function NativeCameraScreen() {
 }
 
 export default function StoryCameraScreen() {
+  const { isDesktop } = useIsDesktop();
+  if (isDesktop) {
+    return (
+      <DesktopCameraFallback
+        title="Capture stories on your phone"
+        description="Stories use your phone's camera and microphone. Scan this code to open the camera on AfuChat mobile."
+      />
+    );
+  }
   if (Platform.OS === "web") {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, backgroundColor: "#000" }}>

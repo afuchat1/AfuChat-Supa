@@ -91,16 +91,19 @@ export default function ChatSettingsScreen() {
     if (!user) return;
     setBackingUp(true);
     try {
-      const { data: chatIds } = await supabase.from("chat_members").select("chat_id").eq("user_id", user.id);
-      if (!chatIds || chatIds.length === 0) { showAlert("Backup", "No chats to back up."); return; }
-      await supabase.from("chat_backups").upsert({
-        user_id: user.id,
-        backed_up_at: new Date().toISOString(),
-        chat_count: chatIds.length,
-      }, { onConflict: "user_id" });
-      showAlert("Backup Complete", `${chatIds.length} chat(s) have been backed up to the cloud.`);
-    } catch (e: any) {
-      showAlert("Backup Failed", "Could not complete backup. Try again later.");
+      const { count } = await supabase
+        .from("chat_members")
+        .select("chat_id", { count: "exact", head: true })
+        .eq("user_id", user.id);
+      const n = count ?? 0;
+      if (n === 0) {
+        showAlert("Backup", "No chats to back up.");
+        return;
+      }
+      showAlert(
+        "Cloud sync is automatic",
+        `Your ${n} chat${n === 1 ? "" : "s"} are continuously synced to AfuChat cloud while you're online — no manual backup needed.`,
+      );
     } finally {
       setBackingUp(false);
     }

@@ -67,7 +67,11 @@ export function DesktopShell({ children }: { children: React.ReactNode }) {
   const modal = matchModal(pathname);
 
   return (
-    <View style={[styles.root, { backgroundColor: bg }]}>
+    <View
+      style={[styles.root, { backgroundColor: bg }]}
+      // @ts-expect-error react-native-web maps dataSet to data-* attributes
+      dataSet={{ font: "system" }}
+    >
       <DesktopSidebar />
       <View style={[styles.main, { backgroundColor: contentBg }]}>
         {modal ? (

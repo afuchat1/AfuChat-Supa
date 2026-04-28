@@ -28,6 +28,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
+import { DesktopCameraFallback } from "@/components/desktop/DesktopCameraFallback";
 
 function WebQRScanner({ onScanned, active }: { onScanned: (data: string) => void; active: boolean }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -115,6 +117,19 @@ type ScannedProfile = {
 type ActionMode = "pay" | "request";
 
 export default function ScanScreen() {
+  const { isDesktop } = useIsDesktop();
+  if (isDesktop) {
+    return (
+      <DesktopCameraFallback
+        title="Scan to pay or request"
+        description="Camera access is disabled on desktop for safety. Open AfuChat on your phone and use this code to continue the wallet scan flow."
+      />
+    );
+  }
+  return <ScanScreenMobile />;
+}
+
+function ScanScreenMobile() {
   const { colors } = useTheme();
   const { user, profile, refreshProfile } = useAuth();
   const insets = useSafeAreaInsets();

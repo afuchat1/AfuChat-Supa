@@ -21,8 +21,10 @@ import {
   CallType,
   RTCView,
   getCall,
+  isCallSupported,
   updateCallStatus,
 } from "@/lib/callSignaling";
+import { WebVideoStream } from "@/components/call/WebVideoStream";
 import { notifyCallInitiated } from "@/lib/notifyUser";
 
 type CallState = "connecting" | "ringing" | "active" | "ended";
@@ -198,12 +200,12 @@ export default function CallScreen() {
     } catch (_) {}
   }
 
-  if (Platform.OS === "web") {
+  if (Platform.OS === "web" && !isCallSupported()) {
     return (
       <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
         <Ionicons name="call-outline" size={48} color="#fff" />
         <Text style={styles.notSupported}>
-          Voice & video calls are available on the mobile app.
+          Your browser doesn't support voice or video calls. Try Chrome, Edge or Safari.
         </Text>
         <TouchableOpacity style={styles.endBtn} onPress={() => router.back()}>
           <Ionicons name="close" size={28} color="#fff" />
@@ -225,7 +227,9 @@ export default function CallScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {isVideo && remoteStream && RTCView ? (
+      {isVideo && remoteStream && Platform.OS === "web" ? (
+        <WebVideoStream stream={remoteStream} style={StyleSheet.absoluteFill} />
+      ) : isVideo && remoteStream && RTCView ? (
         <RTCView
           streamURL={remoteStream.toURL()}
           style={StyleSheet.absoluteFill}
@@ -272,7 +276,11 @@ export default function CallScreen() {
           />
         )}
 
-        {isVideo && localStream && RTCView && (
+        {isVideo && localStream && Platform.OS === "web" ? (
+          <View style={[styles.localVideoWrap, { bottom: insets.bottom + 120 }]}>
+            <WebVideoStream stream={localStream} style={styles.localVideo} mirror muted />
+          </View>
+        ) : isVideo && localStream && RTCView ? (
           <View style={[styles.localVideoWrap, { bottom: insets.bottom + 120 }]}>
             <RTCView
               streamURL={localStream.toURL()}
@@ -281,7 +289,7 @@ export default function CallScreen() {
               mirror={true}
             />
           </View>
-        )}
+        ) : null}
 
         <View style={[styles.controls, { paddingBottom: insets.bottom + 24 }]}>
           <View style={styles.controlRow}>
