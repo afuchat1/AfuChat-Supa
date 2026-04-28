@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { loadAppSettings } from "./lib/bootstrap";
 import { startRealtimeWatcher } from "./services/realtimeWatcher";
 import { startVideoEncoder } from "./services/videoEncoder";
 
@@ -16,6 +17,10 @@ const port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
+
+// Bootstrap runtime settings from Supabase before listening so that
+// modules like r2.ts see the right env vars when they're first used.
+await loadAppSettings();
 
 app.listen(port, (err) => {
   if (err) {

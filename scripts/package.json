@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "migrate-storage": "node migrate-storage.mjs",
-    "setup-r2-lifecycle": "node setup-r2-lifecycle.mjs"
+    "setup-r2-lifecycle": "node setup-r2-lifecycle.mjs",
+    "push-secrets-to-supabase": "node push-secrets-to-supabase.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1037.0",
