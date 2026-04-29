@@ -151,6 +151,30 @@ export default function PhoneAuthScreen() {
     return () => clearInterval(id);
   }, [cooldown]);
 
+  function friendlyOtpError(message: string): { title: string; body: string } {
+    const m = (message || "").toLowerCase();
+    if (m.includes("provider is not enabled") || m.includes("unsupported provider")) {
+      return {
+        title: "Phone sign-in unavailable",
+        body:
+          "Phone sign-in isn't enabled for this project yet. Please use email or a social provider to continue.",
+      };
+    }
+    if (
+      m.includes("unverified") ||
+      m.includes("trial accounts") ||
+      m.includes("21608")
+    ) {
+      return {
+        title: "Twilio trial restriction",
+        body:
+          "This Twilio account is on a trial plan and can only text numbers you've verified in the Twilio console. " +
+          "For testing, use the demo number +256 705 085055 with code 777777, or upgrade your Twilio account.",
+      };
+    }
+    return { title: "Couldn't send code", body: message };
+  }
+
   async function sendCode() {
     const e164 = buildE164(country, local);
     if (!isValidE164(e164)) {
@@ -164,7 +188,8 @@ export default function PhoneAuthScreen() {
     });
     setLoading(false);
     if (error) {
-      showAlert("Couldn't send code", error.message);
+      const f = friendlyOtpError(error.message);
+      showAlert(f.title, f.body);
       return;
     }
     setConfirmedPhone(e164);
@@ -201,7 +226,8 @@ export default function PhoneAuthScreen() {
     });
     setLoading(false);
     if (error) {
-      showAlert("Couldn't resend", error.message);
+      const f = friendlyOtpError(error.message);
+      showAlert(f.title.replace("send", "resend"), f.body);
       return;
     }
     setCooldown(RESEND_COOLDOWN);

@@ -1,22 +1,28 @@
 /**
- * Media upload helpers — Cloudflare R2 backed.
+ * Media upload helpers — Supabase Storage backed.
  *
- * The mobile client never touches R2 credentials directly. Instead it
- * asks the API server for a short-lived presigned PUT URL, then PUTs
- * the file to R2 from the device. The returned `publicUrl` is what we
- * persist into the relevant DB column.
+ * The mobile client uploads files directly to Supabase Storage using the
+ * authenticated user's session. Buckets and RLS policies are configured
+ * server-side in Supabase. The returned `publicUrl` is what we persist
+ * into the relevant DB column.
+ *
+ * Works identically on native (iOS/Android) and on the web because we
+ * always normalize the file URI into a Blob/ArrayBuffer before upload.
  */
 
 import { Platform } from "react-native";
 import { supabase } from "./supabase";
 
-// Resolve the API server base URL the same way videoApi.ts does so all
-// modules agree on where /api lives.
+// Resolve the API server base URL — used for storage usage stats and the
+// optional video transcoding pipeline. Uploads themselves go straight to
+// Supabase Storage, so they don't need this.
 const API_BASE: string = (() => {
+  const explicit = (process.env.EXPO_PUBLIC_API_URL || "").trim();
+  if (explicit) return explicit.replace(/\/+$/, "");
   const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
-  if (domain) return `https://${domain}`;
+  if (domain) return `https://${domain}`.replace(/\/+$/, "");
   if (Platform.OS === "web" && typeof window !== "undefined") {
-    return window.location.origin;
+    return window.location.origin.replace(/\/+$/, "");
   }
   return "";
 })();
@@ -47,64 +53,21 @@ function getMime(ext: string): string {
 }
 
 function apiUrl(path: string): string {
-  const base = API_BASE.replace(/\/+$/, "");
-  return `${base}/api${path}`;
+  return `${API_BASE}/api${path}`;
 }
 
-async function getSignedUpload(
-  bucket: string,
-  filePath: string,
-  contentType: string,
-  accessToken: string,
-): Promise<{ uploadUrl: string; publicUrl: string } | { error: string }> {
-  try {
-    const r = await fetch(apiUrl("/uploads/sign"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ bucket, path: filePath, contentType }),
-    });
-    if (!r.ok) {
-      let msg = `Sign failed (${r.status})`;
-      try {
-        const j = await r.json();
-        msg = j.error || j.message || msg;
-      } catch {}
-      return { error: msg };
-    }
-    const j = await r.json();
-    if (!j.uploadUrl || !j.publicUrl) return { error: "Bad sign response" };
-    return { uploadUrl: j.uploadUrl as string, publicUrl: j.publicUrl as string };
-  } catch (e: any) {
-    return { error: e?.message || "Sign request failed" };
-  }
-}
+/**
+ * Map "logical" bucket names (used throughout the app) to the actual
+ * Supabase Storage bucket id. Most buckets share the same name, but a
+ * couple were renamed in Supabase.
+ */
+const BUCKET_ALIAS: Record<string, string> = {
+  "chat-media": "chat-attachments",
+  banners: "profile-banners",
+};
 
-async function putToR2(
-  uploadUrl: string,
-  body: Blob | ArrayBuffer | Uint8Array,
-  contentType: string,
-): Promise<{ ok: boolean; error: string | null }> {
-  try {
-    const r = await fetch(uploadUrl, {
-      method: "PUT",
-      headers: { "Content-Type": contentType },
-      body: body as any,
-    });
-    if (!r.ok) {
-      let msg = `Upload failed (${r.status})`;
-      try {
-        const t = await r.text();
-        if (t) msg += `: ${t.slice(0, 200)}`;
-      } catch {}
-      return { ok: false, error: msg };
-    }
-    return { ok: true, error: null };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || "Upload error" };
-  }
+function resolveBucket(bucket: string): string {
+  return BUCKET_ALIAS[bucket] || bucket;
 }
 
 async function fileUriToBlob(fileUri: string, mime: string): Promise<Blob> {
@@ -153,35 +116,61 @@ export async function uploadToStorage(
       : fileUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "bin";
     const mime = resolvedMime || getMime(ext);
 
-    const session = (await supabase.auth.getSession()).data.session;
-    if (!session) return { publicUrl: null, error: "Not authenticated" };
-
-    const signed = await getSignedUpload(bucket, filePath, mime, session.access_token);
-    if ("error" in signed) return { publicUrl: null, error: signed.error };
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      return { publicUrl: null, error: "Not authenticated" };
+    }
 
     let body: Blob | ArrayBuffer;
 
-    if (Platform.OS !== "web" && !fileUri.startsWith("data:") && !fileUri.startsWith("blob:")) {
-      // React Native: prefer reading as ArrayBuffer via fetch — RN's fetch
-      // supports file:// URIs and works for binary PUT bodies.
+    if (
+      Platform.OS !== "web" &&
+      !fileUri.startsWith("data:") &&
+      !fileUri.startsWith("blob:")
+    ) {
+      // React Native: read the file as ArrayBuffer. The supabase-js client
+      // uploads ArrayBuffer cleanly without going through Blob, which can
+      // be flaky on Hermes for large files.
       try {
         const r = await fetch(fileUri);
         body = await r.arrayBuffer();
       } catch (e: any) {
-        return { publicUrl: null, error: `Could not read file: ${e?.message || e}` };
+        return {
+          publicUrl: null,
+          error: `Could not read file: ${e?.message || e}`,
+        };
       }
     } else {
       try {
         body = await fileUriToBlob(fileUri, mime);
-      } catch (e: any) {
-        return { publicUrl: null, error: "Could not read selected file. Please try again." };
+      } catch {
+        return {
+          publicUrl: null,
+          error: "Could not read selected file. Please try again.",
+        };
       }
     }
 
-    const put = await putToR2(signed.uploadUrl, body, mime);
-    if (!put.ok) return { publicUrl: null, error: put.error };
+    const realBucket = resolveBucket(bucket);
+    const { error: upErr } = await supabase.storage
+      .from(realBucket)
+      .upload(filePath, body as any, {
+        contentType: mime,
+        upsert: true,
+        cacheControl: "3600",
+      });
 
-    return { publicUrl: `${signed.publicUrl}?t=${Date.now()}`, error: null };
+    if (upErr) {
+      return { publicUrl: null, error: upErr.message || "Upload failed" };
+    }
+
+    const { data: pub } = supabase.storage
+      .from(realBucket)
+      .getPublicUrl(filePath);
+    if (!pub?.publicUrl) {
+      return { publicUrl: null, error: "Failed to resolve public URL" };
+    }
+    return { publicUrl: `${pub.publicUrl}?t=${Date.now()}`, error: null };
   } catch (e: any) {
     return { publicUrl: null, error: e?.message || "Upload failed" };
   }
@@ -227,12 +216,14 @@ const MIME_TO_EXT: Record<string, string> = {
   "audio/x-caf": "caf",
   "application/pdf": "pdf",
   "application/msword": "doc",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+    "docx",
 };
 
 /**
  * Per-bucket usage breakdown for the calling user.
- * Backed by GET /api/uploads/usage on the API server.
+ * Backed by GET /api/uploads/usage on the API server. If the API server
+ * isn't reachable (or R2 isn't configured), returns null silently.
  */
 export interface StorageUsage {
   user_id: string;
@@ -246,13 +237,16 @@ export interface StorageUsage {
 
 export async function getStorageUsage(): Promise<StorageUsage | null> {
   try {
+    if (!API_BASE) return null;
     const session = (await supabase.auth.getSession()).data.session;
     if (!session) return null;
     const r = await fetch(apiUrl("/uploads/usage"), {
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
     if (!r.ok) return null;
-    return (await r.json()) as StorageUsage;
+    const text = await r.text();
+    if (!text || text.trimStart().startsWith("<")) return null;
+    return JSON.parse(text) as StorageUsage;
   } catch {
     return null;
   }

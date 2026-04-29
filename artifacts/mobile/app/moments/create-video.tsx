@@ -51,19 +51,57 @@ export default function CreateVideoScreen() {
   const [soundDismissed, setSoundDismissed] = useState(false);
   const videoRef = useRef<Video>(null);
 
-  if (Platform.OS === "web") {
-    return (
-      <View style={[styles.root, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }]}>
-        <Ionicons name="phone-portrait-outline" size={48} color={colors.textMuted} />
-        <Text style={{ color: colors.text, fontSize: 18, fontFamily: "Inter_600SemiBold", marginTop: 16 }}>Video posting is only available in the app</Text>
-        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 20, backgroundColor: colors.accent, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20 }}>
-          <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Go Back</Text>
-        </TouchableOpacity>
-      </View>
-    );
+  // Web doesn't expose the native media library API; we fall back to a
+  // hidden <input type="file"> picker.
+  const webFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  function pickVideoWeb() {
+    if (Platform.OS !== "web") return;
+    if (!webFileInputRef.current) return;
+    webFileInputRef.current.click();
+  }
+
+  async function handleWebFileChange(file: File | null) {
+    if (!file) return;
+    if (file.size > 200 * 1024 * 1024) {
+      showAlert("Too large", "Please pick a video smaller than 200 MB.");
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setVideoUri(objectUrl);
+    setVideoMime(file.type || undefined);
+    setFileSize(file.size || 0);
+
+    // Probe duration + dimensions from a hidden <video> element so we can
+    // validate length and pass them to the encoder pipeline.
+    try {
+      const probe = document.createElement("video");
+      probe.preload = "metadata";
+      probe.src = objectUrl;
+      await new Promise<void>((resolve, reject) => {
+        probe.onloadedmetadata = () => resolve();
+        probe.onerror = () => reject(new Error("Could not read video"));
+      });
+      const dur = isFinite(probe.duration) ? probe.duration : 0;
+      if (dur > MAX_DURATION_SECONDS) {
+        URL.revokeObjectURL(objectUrl);
+        setVideoUri(null);
+        showAlert("Too long", `Videos must be ${MAX_DURATION_SECONDS} seconds or shorter.`);
+        return;
+      }
+      setDuration(dur);
+      setVideoWidth(probe.videoWidth || null);
+      setVideoHeight(probe.videoHeight || null);
+    } catch {
+      // Non-fatal — we'll just upload without metadata.
+    }
   }
 
   async function pickVideo() {
+    if (Platform.OS === "web") {
+      pickVideoWeb();
+      return;
+    }
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
       showAlert("Permission required", "Please allow access to your media library to pick a video.");
@@ -189,6 +227,23 @@ export default function CreateVideoScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {/* Hidden file picker for web */}
+      {Platform.OS === "web" ? (
+        // @ts-ignore — react-native-web renders this as a real <input>
+        <input
+          ref={webFileInputRef as any}
+          type="file"
+          accept="video/mp4,video/quicktime,video/webm,video/x-matroska,video/*"
+          style={{ display: "none" }}
+          onChange={(e: any) => {
+            const f = e.target?.files?.[0] ?? null;
+            handleWebFileChange(f);
+            // Reset so the same file can be picked again.
+            if (e.target) e.target.value = "";
+          }}
+        />
+      ) : null}
+
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 8, borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn} hitSlop={8}>

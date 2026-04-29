@@ -43,6 +43,7 @@ const MIME_TYPES = {
  * These are the pages that Google will crawl and index.
  */
 const SEO_ROUTE = /^(\/@[^/]|\/p\/|\/post\/|\/og\/|\/sitemap\.xml$|\/robots\.txt$|\/.well-known\/)/;
+const API_ROUTE = /^\/api\//;
 
 function proxyToApi(req, res) {
   const options = {
@@ -122,9 +123,10 @@ const server = http.createServer((req, res) => {
     pathname = pathname.slice(basePath.length) || "/";
   }
 
-  // Root path and API-driven SEO routes → proxy to Express API server
-  // This gives Google properly server-rendered HTML with full metadata
-  if (pathname === "/" || SEO_ROUTE.test(pathname)) {
+  // Root path, /api/*, and SEO routes → proxy to Express API server.
+  // Without proxying /api/* the web client would receive the SPA
+  // index.html for backend calls and crash with a JSON parse error.
+  if (pathname === "/" || API_ROUTE.test(pathname) || SEO_ROUTE.test(pathname)) {
     return proxyToApi(req, res);
   }
 

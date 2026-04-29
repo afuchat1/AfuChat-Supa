@@ -12,14 +12,16 @@ import { supabase, supabaseUrl } from "./supabase";
 // The API server base URL. _layout.tsx sets the api-client base URL via
 // `setBaseUrl(https://${EXPO_PUBLIC_DOMAIN})`, but this module fetches
 // directly so it can be used outside the generated react-query client.
+//
+// On the web the same origin is used because both Metro (dev) and the
+// production serve.js proxy `/api/*` to the Express API server.
 const API_BASE: string = (() => {
+  const explicit = (process.env.EXPO_PUBLIC_API_URL || "").trim();
+  if (explicit) return explicit.replace(/\/+$/, "");
   const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
-  if (domain) return `https://${domain}`;
-  // In local dev the API server is the same origin on web; native bundles
-  // need to reach it through the public URL anyway, so this is mostly a
-  // safety fallback used when EXPO_PUBLIC_DOMAIN is unset.
+  if (domain) return `https://${domain}`.replace(/\/+$/, "");
   if (Platform.OS === "web" && typeof window !== "undefined") {
-    return window.location.origin;
+    return window.location.origin.replace(/\/+$/, "");
   }
   return "";
 })();
@@ -91,18 +93,35 @@ export async function registerVideoAsset(
       headers,
       body: JSON.stringify(input),
     });
+    const text = await res.text();
+    if (!text || text.trimStart().startsWith("<")) {
+      // Either an empty body or an HTML page from the SPA fallback —
+      // neither of which we can parse as JSON.
+      console.warn("registerVideoAsset: non-JSON response", res.status);
+      return null;
+    }
     if (!res.ok) {
       try {
-        const err = await res.json();
+        const err = JSON.parse(text);
         console.warn("registerVideoAsset failed:", res.status, err?.error);
       } catch {
         console.warn("registerVideoAsset failed:", res.status);
       }
       return null;
     }
-    return (await res.json()) as RegisterVideoAssetResult;
+    return JSON.parse(text) as RegisterVideoAssetResult;
   } catch (e) {
     console.warn("registerVideoAsset network error:", e);
+    return null;
+  }
+}
+
+async function safeJson<T>(res: Response): Promise<T | null> {
+  try {
+    const text = await res.text();
+    if (!text || text.trimStart().startsWith("<")) return null;
+    return JSON.parse(text) as T;
+  } catch {
     return null;
   }
 }
@@ -114,7 +133,7 @@ export async function getAssetVideoManifest(
   try {
     const res = await fetch(`${API_BASE}/api/videos/${assetId}/manifest`);
     if (!res.ok) return null;
-    return (await res.json()) as VideoManifest;
+    return await safeJson<VideoManifest>(res);
   } catch {
     return null;
   }
@@ -129,7 +148,7 @@ export async function getPostVideoManifest(
       `${API_BASE}/api/videos/by-post/${postId}/manifest`,
     );
     if (!res.ok) return null;
-    return (await res.json()) as VideoManifest;
+    return await safeJson<VideoManifest>(res);
   } catch {
     return null;
   }

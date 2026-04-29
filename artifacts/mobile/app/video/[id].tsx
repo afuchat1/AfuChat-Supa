@@ -1745,28 +1745,6 @@ export default function VideoPlayerScreen() {
     }
   }, [user]);
 
-  if (Platform.OS === "web") {
-    return (
-      <View style={mStyles.center}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-        <View style={{ alignItems: "center", gap: 16, paddingHorizontal: 40 }}>
-          <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(255,255,255,0.06)", alignItems: "center", justifyContent: "center" }}>
-            <Ionicons name="phone-portrait-outline" size={36} color={accent} />
-          </View>
-          <Text style={{ color: "#fff", fontSize: 20, fontFamily: "Inter_700Bold", textAlign: "center" }}>
-            Videos are only available in the app
-          </Text>
-          <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 }}>
-            Download the AfuChat app to watch videos, interact with creators, and discover trending content.
-          </Text>
-          <TouchableOpacity onPress={() => router.back()} style={{ backgroundColor: accent, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 24, marginTop: 8 }}>
-            <Text style={{ color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" }}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
   if (loading) {
     return (
       <View style={mStyles.center}>
