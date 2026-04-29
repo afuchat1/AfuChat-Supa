@@ -206,21 +206,20 @@ Applied gates:
 - **Monetize** (`app/monetize.tsx`) — Silver required
 - **AfuAI chat tap** (`app/(tabs)/index.tsx`) — Platinum intercept, routes to `/premium`
 
-## Desktop UI Removal
+## Desktop Shell (rebuilt 2026-04-29)
 
-All desktop-specific UI was removed to shrink the APK and lighten the codebase. The app now ships a single mobile layout that also serves on web.
+The desktop layout is owned by two files and only mounts when `useIsDesktop()` is true (viewport ≥ 1024 px on web):
 
-Removed:
-- `components/DesktopWrapper.tsx`, `components/DesktopSidebar.tsx`, `components/DesktopRightPanel.tsx`, `components/DesktopChatView.tsx`, `components/DesktopPostView.tsx`
-- Entire `components/desktop/` folder (Apps/AI/Match/Settings/Contacts/Discover sections + `ui.tsx`)
-- `components/ui/DesktopAuthCard.tsx`
-- `context/DesktopDetailContext.tsx`, `hooks/useIsDesktop.ts`
+- `components/desktop/DesktopShell.tsx` — root layout. On web the sidebar is rendered with `position: fixed` (`top:0, left:0, bottom:0`) so it never moves when the main content scrolls, and the main column reserves the same space via `paddingLeft: SIDEBAR_WIDTH`. Routes matching `FULLSCREEN_PATTERNS` (`/`, `/(auth)/*`, `/onboarding/*`, `/call/*`, `/video/*`, `/stories/{view,camera}`) bypass the shell entirely. Routes matching `MODAL_PATTERNS` (profile/edit, moments/create, group/create, stories/create, red-envelope, terms, privacy, mini-programs/transfer, mini-programs/fee-details, language-settings, linked-accounts) render as a centred modal card on a backdrop while the sidebar stays visible behind.
+- `components/desktop/DesktopSidebar.tsx` — exports `SIDEBAR_WIDTH = 248`. Width is locked via `width / minWidth / maxWidth` so it cannot reflow regardless of route or content. Layout: brand row → primary CTA (New chat / Sign in) → scrollable nav grouped into `Main` (Chats, Discover, Moments, AfuAI, Notifications), `Services` (Wallet, Marketplace, Apps), `More` (Premium, Help & Support, Settings) → footer with user card + sign-out menu (or theme toggle when signed out). Each nav row supports right-click context menu (Open / Open in new tab / Copy link) on web.
 
-Simplified:
-- `app/_layout.tsx` no longer wraps the tree in a desktop shell
-- `app/+html.tsx` uses a single body background (no desktop media query)
-- All `isDesktop` branches collapsed to mobile in `app/(tabs)/{_layout,index,discover,search}.tsx`, `app/collections.tsx`, `app/wallet/index.tsx`, `app/(auth)/{login,register}.tsx`, `app/chat/[id].tsx`
-- `components/SwipeableBottomSheet.tsx` and `components/gifts/GiftPickerSheet.tsx` are mobile-only (no side-docked desktop variants)
+## Watch Together (removed 2026-04-29)
+
+The live-matches / Watch Together feature was deleted entirely.
+
+- DB tables dropped (with all data) via Supabase Management API and recorded in migration `supabase/migrations/20260429_drop_watch_together.sql`: `watch_reactions`, `watch_messages`, `watch_match_events`, `watch_rooms`, `watch_matches`, plus helper functions `fn_watch_create_room`, `fn_watch_event_to_message`, `fn_watch_matches_touch`.
+- Files removed: `app/watch/index.tsx`, `app/watch/[matchId].tsx`, `lib/watchTogether.ts`.
+- The "Watch Together" tile was removed from the Entertainment section of `app/(tabs)/apps.tsx`, and the feature was de-listed in `app/terms.tsx`.
 
 ## Post Thumbnail Detection
 

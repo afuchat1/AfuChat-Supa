@@ -1,11 +1,37 @@
+/**
+ * Desktop shell — fully rebuilt.
+ *
+ * Layout contract:
+ *   ┌─────────────────────────────────────────────────────────┐
+ *   │ ┌──────────┐ ┌──────────────────────────────────────┐   │
+ *   │ │ SIDEBAR  │ │ MAIN CONTENT (route children)        │   │
+ *   │ │ FIXED    │ │ scrolls independently                │   │
+ *   │ │ 248px    │ │                                      │   │
+ *   │ └──────────┘ └──────────────────────────────────────┘   │
+ *   └─────────────────────────────────────────────────────────┘
+ *
+ * Behaviour:
+ *   • The sidebar uses `position: fixed` on web so it never moves when the
+ *     content area scrolls and its width is locked at SIDEBAR_WIDTH.
+ *   • The main column reserves that exact same width via `paddingLeft` so
+ *     content never slides under the sidebar and the layout doesn't shift
+ *     between routes.
+ *   • Fullscreen routes (auth, onboarding, calls, splash, video, story
+ *     viewer/camera) bypass the shell entirely.
+ *   • A small set of "modal-style" routes are rendered as a centred card on
+ *     top of a backdrop, while still keeping the sidebar visible behind it.
+ */
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, usePathname } from "expo-router";
 
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { useTheme } from "@/hooks/useTheme";
-import { DesktopSidebar } from "@/components/desktop/DesktopSidebar";
+import {
+  DesktopSidebar,
+  SIDEBAR_WIDTH,
+} from "@/components/desktop/DesktopSidebar";
 
 const FULLSCREEN_PATTERNS: RegExp[] = [
   /^\/$/,
@@ -51,7 +77,6 @@ export function DesktopShell({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  // Fullscreen takeovers (auth, onboarding, calls, splash, video) – no shell.
   if (isFullscreen(pathname)) {
     return <>{children}</>;
   }
@@ -65,14 +90,44 @@ export function DesktopShell({ children }: { children: React.ReactNode }) {
 
   const modal = matchModal(pathname);
 
+  // On web we glue the sidebar to the viewport so scrolling content never
+  // moves it. On native (rare path: this component only mounts when the
+  // viewport hits the desktop breakpoint, which only really happens on web)
+  // we fall back to the original flex-row layout.
+  const sidebarStyle =
+    Platform.OS === "web"
+      ? [
+          styles.sidebarFixed,
+          { width: SIDEBAR_WIDTH, height: "100vh" as any },
+        ]
+      : [styles.sidebarFlex, { width: SIDEBAR_WIDTH }];
+
+  const mainStyle =
+    Platform.OS === "web"
+      ? [
+          styles.mainWeb,
+          {
+            backgroundColor: contentBg,
+            paddingLeft: SIDEBAR_WIDTH,
+            minHeight: "100vh" as any,
+          },
+        ]
+      : [styles.mainNative, { backgroundColor: contentBg }];
+
   return (
     <View
-      style={[styles.root, { backgroundColor: bg }]}
+      style={[
+        Platform.OS === "web" ? styles.rootWeb : styles.rootNative,
+        { backgroundColor: bg },
+      ]}
       // @ts-expect-error react-native-web maps dataSet to data-* attributes
       dataSet={{ font: "system" }}
     >
-      <DesktopSidebar />
-      <View style={[styles.main, { backgroundColor: contentBg }]}>
+      <View style={sidebarStyle}>
+        <DesktopSidebar />
+      </View>
+
+      <View style={mainStyle}>
         {modal ? (
           <View style={[styles.backdrop, { backgroundColor: modalBackdrop }]}>
             <View
@@ -115,12 +170,30 @@ export function DesktopShell({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  root: {
+  rootWeb: {
+    flex: 1,
+    minHeight: "100vh" as any,
+  },
+  rootNative: {
     flex: 1,
     flexDirection: "row",
     height: "100%",
   },
-  main: {
+  sidebarFixed: {
+    position: "fixed" as any,
+    top: 0,
+    left: 0,
+    bottom: 0,
+    zIndex: 50,
+  },
+  sidebarFlex: {
+    height: "100%",
+  },
+  mainWeb: {
+    flex: 1,
+    minWidth: 0,
+  },
+  mainNative: {
     flex: 1,
     minWidth: 0,
     height: "100%",
@@ -133,6 +206,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
+    minHeight: "100vh" as any,
   },
   modalCard: {
     width: "100%",

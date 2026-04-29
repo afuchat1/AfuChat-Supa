@@ -223,7 +223,7 @@ const SECTIONS: Section[] = [
     clauses: [
       {
         heading: "6.1 Built-In Services",
-        body: "AfuChat provides a curated set of in-app services and features (such as Wallet, Marketplace, Freelance, Games, Watch Together, and Events) accessible from the Apps tab. All services are operated by AfuChat and run natively inside the app.",
+        body: "AfuChat provides a curated set of in-app services and features (such as Wallet, Marketplace, Freelance, Games, and Events) accessible from the Apps tab. All services are operated by AfuChat and run natively inside the app.",
       },
       {
         heading: "6.2 Acceptable Use",

@@ -1,3 +1,16 @@
+/**
+ * Desktop sidebar — fully rebuilt.
+ *
+ * Design goals:
+ *   1. Fixed width of SIDEBAR_WIDTH (=248px). The sidebar must never resize,
+ *      regardless of which route is active or how wide the viewport is.
+ *   2. Sticky on web: rendered as `position: fixed` so page-level scrolling
+ *      inside the main content area never moves it.
+ *   3. Persistent across all in-shell navigations — DesktopShell mounts this
+ *      once and routes only swap the right-hand content area.
+ *   4. Self-scrollable nav list when there are too many items, while the
+ *      brand row, primary CTA, and footer remain pinned.
+ */
 import React, { useState } from "react";
 import {
   Image,
@@ -17,129 +30,170 @@ import { Avatar } from "@/components/ui/Avatar";
 import { supabase } from "@/lib/supabase";
 import { ContextMenu, useContextMenu } from "@/components/desktop/ContextMenu";
 
+export const SIDEBAR_WIDTH = 248;
+
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
 type NavItem = {
   key: string;
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
+  iconActive?: keyof typeof Ionicons.glyphMap;
   route: string;
   match: (pathname: string) => boolean;
   requiresAuth?: boolean;
 };
 
-const PRIMARY: NavItem[] = [
+type NavSection = {
+  key: string;
+  title?: string;
+  items: NavItem[];
+};
+
+const SECTIONS: NavSection[] = [
   {
-    key: "chats",
-    label: "Chats",
-    icon: "chatbubbles-outline",
-    route: "/(tabs)",
-    match: (p) => p === "/" || p === "/index" || p.startsWith("/chat"),
-    requiresAuth: true,
+    key: "main",
+    items: [
+      {
+        key: "chats",
+        label: "Chats",
+        icon: "chatbubbles-outline",
+        iconActive: "chatbubbles",
+        route: "/(tabs)",
+        match: (p) => p === "/" || p === "/index" || p.startsWith("/chat"),
+        requiresAuth: true,
+      },
+      {
+        key: "discover",
+        label: "Discover",
+        icon: "compass-outline",
+        iconActive: "compass",
+        route: "/discover",
+        match: (p) =>
+          p === "/discover" ||
+          p.startsWith("/post") ||
+          p.startsWith("/article") ||
+          p.startsWith("/video"),
+      },
+      {
+        key: "moments",
+        label: "Moments",
+        icon: "images-outline",
+        iconActive: "images",
+        route: "/moments",
+        match: (p) => p.startsWith("/moments"),
+        requiresAuth: true,
+      },
+      {
+        key: "ai",
+        label: "AfuAI",
+        icon: "sparkles-outline",
+        iconActive: "sparkles",
+        route: "/ai",
+        match: (p) => p.startsWith("/ai"),
+        requiresAuth: true,
+      },
+      {
+        key: "notifications",
+        label: "Notifications",
+        icon: "notifications-outline",
+        iconActive: "notifications",
+        route: "/notifications",
+        match: (p) => p.startsWith("/notifications"),
+        requiresAuth: true,
+      },
+    ],
   },
   {
-    key: "discover",
-    label: "Discover",
-    icon: "compass-outline",
-    route: "/discover",
-    match: (p) => p === "/discover" || p.startsWith("/post") || p.startsWith("/article") || p.startsWith("/video"),
+    key: "services",
+    title: "Services",
+    items: [
+      {
+        key: "wallet",
+        label: "Wallet",
+        icon: "wallet-outline",
+        iconActive: "wallet",
+        route: "/wallet",
+        match: (p) => p.startsWith("/wallet"),
+        requiresAuth: true,
+      },
+      {
+        key: "shop",
+        label: "Marketplace",
+        icon: "bag-outline",
+        iconActive: "bag",
+        route: "/shop",
+        match: (p) => p.startsWith("/shop") || p.startsWith("/store"),
+      },
+      {
+        key: "apps",
+        label: "Apps",
+        icon: "grid-outline",
+        iconActive: "grid",
+        route: "/apps",
+        match: (p) => p === "/apps" || p.startsWith("/apps/"),
+      },
+    ],
   },
   {
-    key: "moments",
-    label: "Moments",
-    icon: "images-outline",
-    route: "/moments",
-    match: (p) => p.startsWith("/moments"),
-    requiresAuth: true,
-  },
-  {
-    key: "apps",
-    label: "Apps",
-    icon: "grid-outline",
-    route: "/apps",
-    match: (p) => p === "/apps" || p.startsWith("/apps/"),
-  },
-  {
-    key: "ai",
-    label: "AI Chat",
-    icon: "sparkles-outline",
-    route: "/ai",
-    match: (p) => p.startsWith("/ai"),
-    requiresAuth: true,
-  },
-  {
-    key: "wallet",
-    label: "Wallet",
-    icon: "wallet-outline",
-    route: "/wallet",
-    match: (p) => p.startsWith("/wallet"),
-    requiresAuth: true,
-  },
-  {
-    key: "shop",
-    label: "Marketplace",
-    icon: "bag-outline",
-    route: "/shop",
-    match: (p) => p.startsWith("/shop") || p.startsWith("/store"),
-  },
-  {
-    key: "notifications",
-    label: "Notifications",
-    icon: "notifications-outline",
-    route: "/notifications",
-    match: (p) => p.startsWith("/notifications"),
-    requiresAuth: true,
+    key: "more",
+    title: "More",
+    items: [
+      {
+        key: "premium",
+        label: "Premium",
+        icon: "star-outline",
+        iconActive: "star",
+        route: "/premium",
+        match: (p) => p === "/premium",
+      },
+      {
+        key: "support",
+        label: "Help & Support",
+        icon: "help-circle-outline",
+        iconActive: "help-circle",
+        route: "/support",
+        match: (p) => p.startsWith("/support"),
+      },
+      {
+        key: "settings",
+        label: "Settings",
+        icon: "settings-outline",
+        iconActive: "settings",
+        route: "/settings",
+        match: (p) => p.startsWith("/settings"),
+        requiresAuth: true,
+      },
+    ],
   },
 ];
 
-const SECONDARY: NavItem[] = [
-  {
-    key: "premium",
-    label: "Premium",
-    icon: "star-outline",
-    route: "/premium",
-    match: (p) => p === "/premium",
-  },
-  {
-    key: "support",
-    label: "Help & Support",
-    icon: "help-circle-outline",
-    route: "/support",
-    match: (p) => p.startsWith("/support"),
-  },
-  {
-    key: "settings",
-    label: "Settings",
-    icon: "settings-outline",
-    route: "/settings",
-    match: (p) => p.startsWith("/settings"),
-    requiresAuth: true,
-  },
-];
-
-type SidebarNavItemProps = {
-  item: NavItem;
-  active: boolean;
-  disabled: boolean;
-  activeBg: string;
-  hoverBg: string;
+type ThemePack = {
+  bg: string;
+  border: string;
   textPrimary: string;
   textMuted: string;
+  hoverBg: string;
+  activeBg: string;
+  activeText: string;
+  sectionLabel: string;
   accent: string;
-  onActivate: () => void;
+  menuBg: string;
 };
 
 function SidebarNavItem({
   item,
   active,
   disabled,
-  activeBg,
-  hoverBg,
-  textPrimary,
-  textMuted,
-  accent,
+  theme,
   onActivate,
-}: SidebarNavItemProps) {
+}: {
+  item: NavItem;
+  active: boolean;
+  disabled: boolean;
+  theme: ThemePack;
+  onActivate: () => void;
+}) {
   const { menuProps, bind } = useContextMenu([
     [
       {
@@ -171,34 +225,57 @@ function SidebarNavItem({
             const url = `${window.location.origin}${item.route}`;
             try {
               await navigator.clipboard.writeText(url);
-            } catch {}
+            } catch {
+              /* noop */
+            }
           }
         },
       },
     ],
   ]);
 
+  const iconColor = active
+    ? theme.accent
+    : disabled
+      ? theme.textMuted
+      : theme.textPrimary;
+  const labelColor = active
+    ? theme.activeText
+    : disabled
+      ? theme.textMuted
+      : theme.textPrimary;
+
   const content = (
     <Pressable
       onPress={onActivate}
-      style={({ hovered }: any) => [
+      style={({ hovered, pressed }: any) => [
         styles.navItem,
-        { backgroundColor: active ? activeBg : hovered ? hoverBg : "transparent" },
+        {
+          backgroundColor: active
+            ? theme.activeBg
+            : hovered || pressed
+              ? theme.hoverBg
+              : "transparent",
+        },
       ]}
     >
+      {active ? (
+        <View style={[styles.activeIndicator, { backgroundColor: theme.accent }]} />
+      ) : null}
       <Ionicons
-        name={item.icon}
-        size={18}
-        color={active ? accent : disabled ? textMuted : textPrimary}
+        name={(active && item.iconActive) || item.icon}
+        size={19}
+        color={iconColor}
       />
       <Text
         style={[
           styles.navLabel,
           {
-            color: active ? accent : disabled ? textMuted : textPrimary,
-            fontWeight: active ? "600" : "500",
+            color: labelColor,
+            fontFamily: active ? "Inter_600SemiBold" : "Inter_500Medium",
           },
         ]}
+        numberOfLines={1}
       >
         {item.label}
       </Text>
@@ -221,12 +298,18 @@ export function DesktopSidebar() {
   const isLoggedIn = !!session;
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const sidebarBg = isDark ? "#0E0E10" : "#F7F8FA";
-  const borderColor = isDark ? "#1F1F23" : "#E6E7EB";
-  const textPrimary = isDark ? "#F2F2F2" : "#1A1A1A";
-  const textMuted = isDark ? "#8B8B90" : "#6B6F76";
-  const hoverBg = isDark ? "#1A1A1D" : "#EDEFF3";
-  const activeBg = isDark ? "#1F2024" : "#E8EAF0";
+  const theme: ThemePack = {
+    bg: isDark ? "#0B0B0E" : "#FAFBFC",
+    border: isDark ? "#1C1C20" : "#E6E8EC",
+    textPrimary: isDark ? "#EDEDF0" : "#1A1A1F",
+    textMuted: isDark ? "#7E8088" : "#6A6E78",
+    hoverBg: isDark ? "#16171B" : "#EEF0F4",
+    activeBg: isDark ? "#1C1F2A" : "#E7EBFA",
+    activeText: isDark ? "#FFFFFF" : "#1A1A1F",
+    sectionLabel: isDark ? "#6B6F78" : "#8A8F9C",
+    accent: colors.accent,
+    menuBg: isDark ? "#15161B" : "#FFFFFF",
+  };
 
   function go(route: string, requiresAuth?: boolean) {
     if (requiresAuth && !isLoggedIn) {
@@ -236,73 +319,67 @@ export function DesktopSidebar() {
     router.push(route as any);
   }
 
-  function renderItem(item: NavItem) {
-    const active = item.match(pathname);
-    const disabled = item.requiresAuth && !isLoggedIn;
-    return (
-      <SidebarNavItem
-        key={item.key}
-        item={item}
-        active={active}
-        disabled={!!disabled}
-        activeBg={activeBg}
-        hoverBg={hoverBg}
-        textPrimary={textPrimary}
-        textMuted={textMuted}
-        accent={colors.accent}
-        onActivate={() => go(item.route, item.requiresAuth)}
-      />
-    );
+  function nextThemeMode() {
+    return themeMode === "light"
+      ? "dark"
+      : themeMode === "dark"
+        ? "system"
+        : "light";
   }
 
   return (
     <View
       style={[
         styles.sidebar,
-        { backgroundColor: sidebarBg, borderRightColor: borderColor },
+        { backgroundColor: theme.bg, borderRightColor: theme.border },
       ]}
     >
       {/* Brand */}
       <Pressable
         onPress={() => router.push("/(tabs)" as any)}
-        style={styles.brandRow}
+        style={({ hovered }: any) => [
+          styles.brandRow,
+          { opacity: hovered ? 0.85 : 1 },
+        ]}
       >
         <Image source={afuSymbol} style={styles.brandLogo} resizeMode="contain" />
-        <Text style={[styles.brandText, { color: textPrimary }]}>AfuChat</Text>
+        <Text style={[styles.brandText, { color: theme.textPrimary }]}>
+          AfuChat
+        </Text>
       </Pressable>
 
-      <View style={[styles.divider, { backgroundColor: borderColor }]} />
-
-      {/* New chat / compose CTA */}
-      {isLoggedIn ? (
-        <Pressable
-          onPress={() => router.push("/contact" as any)}
-          style={({ hovered }: any) => [
-            styles.cta,
-            {
-              backgroundColor: colors.accent,
-              opacity: hovered ? 0.92 : 1,
-            },
-          ]}
-        >
-          <Ionicons name="create-outline" size={16} color="#FFFFFF" />
-          <Text style={styles.ctaText}>New chat</Text>
-        </Pressable>
-      ) : (
-        <Pressable
-          onPress={() => router.push("/(auth)/login" as any)}
-          style={({ hovered }: any) => [
-            styles.cta,
-            {
-              backgroundColor: colors.accent,
-              opacity: hovered ? 0.92 : 1,
-            },
-          ]}
-        >
-          <Ionicons name="log-in-outline" size={16} color="#FFFFFF" />
-          <Text style={styles.ctaText}>Sign in</Text>
-        </Pressable>
-      )}
+      {/* Compose CTA */}
+      <View style={styles.ctaWrap}>
+        {isLoggedIn ? (
+          <Pressable
+            onPress={() => router.push("/contact" as any)}
+            style={({ hovered, pressed }: any) => [
+              styles.cta,
+              {
+                backgroundColor: theme.accent,
+                opacity: pressed ? 0.85 : hovered ? 0.92 : 1,
+              },
+            ]}
+          >
+            <Ionicons name="create-outline" size={16} color="#FFFFFF" />
+            <Text style={styles.ctaText}>New chat</Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={() => router.push("/(auth)/login" as any)}
+            style={({ hovered, pressed }: any) => [
+              styles.cta,
+              {
+                backgroundColor: theme.accent,
+                opacity: pressed ? 0.85 : hovered ? 0.92 : 1,
+              },
+            ]}
+          >
+            <Ionicons name="log-in-outline" size={16} color="#FFFFFF" />
+            <Text style={styles.ctaText}>Sign in</Text>
+          </Pressable>
+        )}
+      </View>
 
       {/* Navigation */}
       <ScrollView
@@ -310,51 +387,71 @@ export function DesktopSidebar() {
         contentContainerStyle={styles.navContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.navGroup}>{PRIMARY.map(renderItem)}</View>
-
-        <View
-          style={[styles.divider, { backgroundColor: borderColor, marginVertical: 12 }]}
-        />
-
-        <View style={styles.navGroup}>{SECONDARY.map(renderItem)}</View>
+        {SECTIONS.map((section, idx) => (
+          <View key={section.key} style={idx === 0 ? null : styles.sectionGap}>
+            {section.title ? (
+              <Text style={[styles.sectionLabel, { color: theme.sectionLabel }]}>
+                {section.title}
+              </Text>
+            ) : null}
+            <View style={styles.navGroup}>
+              {section.items.map((item) => (
+                <SidebarNavItem
+                  key={item.key}
+                  item={item}
+                  active={item.match(pathname)}
+                  disabled={!!(item.requiresAuth && !isLoggedIn)}
+                  theme={theme}
+                  onActivate={() => go(item.route, item.requiresAuth)}
+                />
+              ))}
+            </View>
+          </View>
+        ))}
       </ScrollView>
 
-      {/* User card / footer */}
-      <View style={[styles.footer, { borderTopColor: borderColor }]}>
+      {/* Footer */}
+      <View style={[styles.footer, { borderTopColor: theme.border }]}>
         {isLoggedIn ? (
           <View>
             <Pressable
               onPress={() => setMenuOpen((v) => !v)}
-              style={({ hovered }: any) => [
+              style={({ hovered, pressed }: any) => [
                 styles.userCard,
-                { backgroundColor: hovered ? hoverBg : "transparent" },
+                {
+                  backgroundColor: pressed
+                    ? theme.activeBg
+                    : hovered
+                      ? theme.hoverBg
+                      : "transparent",
+                },
               ]}
             >
               <Avatar
                 uri={profile?.avatar_url ?? null}
-                name={profile?.display_name || profile?.username || "User"}
-                size={32}
+                name={profile?.display_name || (profile as any)?.handle || "User"}
+                size={34}
               />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text
-                  style={[styles.userName, { color: textPrimary }]}
+                  style={[styles.userName, { color: theme.textPrimary }]}
                   numberOfLines={1}
                 >
-                  {profile?.display_name || profile?.username || "User"}
+                  {profile?.display_name || (profile as any)?.handle || "User"}
                 </Text>
-                {profile?.username ? (
+                {(profile as any)?.handle ? (
                   <Text
-                    style={[styles.userHandle, { color: textMuted }]}
+                    style={[styles.userHandle, { color: theme.textMuted }]}
                     numberOfLines={1}
                   >
-                    @{profile.username}
+                    @{(profile as any).handle}
                   </Text>
                 ) : null}
               </View>
               <Ionicons
                 name={menuOpen ? "chevron-down" : "chevron-up"}
                 size={14}
-                color={textMuted}
+                color={theme.textMuted}
               />
             </Pressable>
 
@@ -362,103 +459,62 @@ export function DesktopSidebar() {
               <View
                 style={[
                   styles.menu,
-                  { backgroundColor: isDark ? "#16161A" : "#FFFFFF", borderColor },
+                  { backgroundColor: theme.menuBg, borderColor: theme.border },
                 ]}
               >
-                <Pressable
+                <MenuRow
+                  icon="person-outline"
+                  label="My profile"
+                  theme={theme}
                   onPress={() => {
                     setMenuOpen(false);
                     router.push("/(tabs)/me" as any);
                   }}
-                  style={({ hovered }: any) => [
-                    styles.menuItem,
-                    { backgroundColor: hovered ? hoverBg : "transparent" },
-                  ]}
-                >
-                  <Ionicons name="person-outline" size={16} color={textPrimary} />
-                  <Text style={[styles.menuItemText, { color: textPrimary }]}>
-                    Profile
-                  </Text>
-                </Pressable>
-                <Pressable
+                />
+                <MenuRow
+                  icon="create-outline"
+                  label="Edit profile"
+                  theme={theme}
                   onPress={() => {
                     setMenuOpen(false);
                     router.push("/profile/edit" as any);
                   }}
-                  style={({ hovered }: any) => [
-                    styles.menuItem,
-                    { backgroundColor: hovered ? hoverBg : "transparent" },
-                  ]}
-                >
-                  <Ionicons name="create-outline" size={16} color={textPrimary} />
-                  <Text style={[styles.menuItemText, { color: textPrimary }]}>
-                    Edit profile
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    const next =
-                      themeMode === "light"
-                        ? "dark"
-                        : themeMode === "dark"
-                          ? "system"
-                          : "light";
-                    setThemeMode(next as any);
-                  }}
-                  style={({ hovered }: any) => [
-                    styles.menuItem,
-                    { backgroundColor: hovered ? hoverBg : "transparent" },
-                  ]}
-                >
-                  <Ionicons
-                    name={
-                      themeMode === "dark"
-                        ? "moon-outline"
-                        : themeMode === "light"
-                          ? "sunny-outline"
-                          : "contrast-outline"
-                    }
-                    size={16}
-                    color={textPrimary}
-                  />
-                  <Text style={[styles.menuItemText, { color: textPrimary }]}>
-                    Theme: {themeMode}
-                  </Text>
-                </Pressable>
-                <View style={[styles.divider, { backgroundColor: borderColor }]} />
-                <Pressable
+                />
+                <MenuRow
+                  icon={
+                    themeMode === "dark"
+                      ? "moon-outline"
+                      : themeMode === "light"
+                        ? "sunny-outline"
+                        : "contrast-outline"
+                  }
+                  label={`Theme: ${themeMode}`}
+                  theme={theme}
+                  onPress={() => setThemeMode(nextThemeMode() as any)}
+                />
+                <View
+                  style={[styles.menuDivider, { backgroundColor: theme.border }]}
+                />
+                <MenuRow
+                  icon="log-out-outline"
+                  label="Sign out"
+                  theme={theme}
+                  destructive
                   onPress={async () => {
                     setMenuOpen(false);
                     await supabase.auth.signOut();
                     router.replace("/(auth)/login" as any);
                   }}
-                  style={({ hovered }: any) => [
-                    styles.menuItem,
-                    { backgroundColor: hovered ? hoverBg : "transparent" },
-                  ]}
-                >
-                  <Ionicons name="log-out-outline" size={16} color="#EF4444" />
-                  <Text style={[styles.menuItemText, { color: "#EF4444" }]}>
-                    Sign out
-                  </Text>
-                </Pressable>
+                />
               </View>
             ) : null}
           </View>
         ) : (
           <Pressable
-            onPress={() => {
-              const next =
-                themeMode === "light"
-                  ? "dark"
-                  : themeMode === "dark"
-                    ? "system"
-                    : "light";
-              setThemeMode(next as any);
-            }}
+            onPress={() => setThemeMode(nextThemeMode() as any)}
             style={({ hovered }: any) => [
               styles.themeToggle,
-              { backgroundColor: hovered ? hoverBg : "transparent" },
+              { backgroundColor: hovered ? theme.hoverBg : "transparent" },
             ]}
           >
             <Ionicons
@@ -470,10 +526,14 @@ export function DesktopSidebar() {
                     : "contrast-outline"
               }
               size={16}
-              color={textMuted}
+              color={theme.textMuted}
             />
-            <Text style={[styles.themeToggleText, { color: textMuted }]}>
-              {themeMode === "system" ? "System theme" : themeMode === "dark" ? "Dark mode" : "Light mode"}
+            <Text style={[styles.themeToggleText, { color: theme.textMuted }]}>
+              {themeMode === "system"
+                ? "System theme"
+                : themeMode === "dark"
+                  ? "Dark mode"
+                  : "Light mode"}
             </Text>
           </Pressable>
         )}
@@ -482,9 +542,45 @@ export function DesktopSidebar() {
   );
 }
 
+function MenuRow({
+  icon,
+  label,
+  theme,
+  onPress,
+  destructive,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  theme: ThemePack;
+  onPress: () => void;
+  destructive?: boolean;
+}) {
+  const color = destructive ? "#EF4444" : theme.textPrimary;
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ hovered, pressed }: any) => [
+        styles.menuItem,
+        {
+          backgroundColor: pressed
+            ? theme.activeBg
+            : hovered
+              ? theme.hoverBg
+              : "transparent",
+        },
+      ]}
+    >
+      <Ionicons name={icon} size={16} color={color} />
+      <Text style={[styles.menuItemText, { color }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   sidebar: {
-    width: 240,
+    width: SIDEBAR_WIDTH,
+    minWidth: SIDEBAR_WIDTH,
+    maxWidth: SIDEBAR_WIDTH,
     height: "100%",
     borderRightWidth: 1,
     flexDirection: "column",
@@ -493,38 +589,36 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 16,
-    paddingTop: 18,
+    paddingHorizontal: 18,
+    paddingTop: 20,
     paddingBottom: 14,
   },
   brandLogo: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 7,
   },
   brandText: {
     fontFamily: "Inter_700Bold",
-    fontSize: 16,
+    fontSize: 17,
     letterSpacing: 0.2,
   },
-  divider: {
-    height: 1,
-    width: "100%",
+  ctaWrap: {
+    paddingHorizontal: 12,
+    paddingBottom: 12,
   },
   cta: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    height: 36,
-    marginHorizontal: 12,
-    marginVertical: 12,
-    borderRadius: 8,
+    height: 38,
+    borderRadius: 10,
   },
   ctaText: {
     color: "#FFFFFF",
     fontFamily: "Inter_600SemiBold",
-    fontSize: 13,
+    fontSize: 13.5,
   },
   navScroll: {
     flex: 1,
@@ -532,6 +626,17 @@ const styles = StyleSheet.create({
   navContent: {
     paddingHorizontal: 8,
     paddingBottom: 16,
+  },
+  sectionGap: {
+    marginTop: 14,
+  },
+  sectionLabel: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   navGroup: {
     gap: 2,
@@ -541,12 +646,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
+    paddingVertical: 9,
+    borderRadius: 8,
+    position: "relative",
+  },
+  activeIndicator: {
+    position: "absolute",
+    left: 0,
+    top: 8,
+    bottom: 8,
+    width: 3,
+    borderTopRightRadius: 3,
+    borderBottomRightRadius: 3,
   },
   navLabel: {
-    fontFamily: "Inter_500Medium",
-    fontSize: 13,
+    fontSize: 13.5,
+    flex: 1,
   },
   footer: {
     borderTopWidth: 1,
@@ -558,7 +673,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 8,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 10,
   },
   userName: {
     fontFamily: "Inter_600SemiBold",
@@ -571,7 +686,7 @@ const styles = StyleSheet.create({
   },
   menu: {
     marginTop: 6,
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
     paddingVertical: 4,
     overflow: "hidden",
@@ -581,19 +696,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 9,
   },
   menuItemText: {
     fontFamily: "Inter_500Medium",
     fontSize: 13,
+  },
+  menuDivider: {
+    height: 1,
+    width: "100%",
+    marginVertical: 4,
   },
   themeToggle: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 6,
+    paddingVertical: 9,
+    borderRadius: 8,
   },
   themeToggleText: {
     fontFamily: "Inter_500Medium",

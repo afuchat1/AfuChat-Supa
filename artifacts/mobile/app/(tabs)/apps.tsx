@@ -102,15 +102,6 @@ const CATEGORIES: Category[] = [
     title: "Entertainment",
     apps: [
       {
-        id: "watch",
-        label: "Watch Together",
-        icon: "football",
-        gradient: ["#FF2D55", "#FF375F"],
-        route: "/watch",
-        badge: "LIVE",
-        featuredSub: "Watch live matches with friends — chat & react in real time.",
-      },
-      {
         id: "games",
         label: "Games",
         icon: "game-controller",
