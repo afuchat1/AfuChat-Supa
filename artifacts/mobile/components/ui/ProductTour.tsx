@@ -219,13 +219,7 @@ export default function ProductTour() {
             tint={isDark ? "dark" : "light"}
             style={[
               styles.tooltip,
-              {
-                left: tooltipLeft,
-                top: tooltipTop,
-                width: TOOLTIP_W,
-                borderColor: tooltipBorder,
-                overflow: "hidden",
-              },
+              { borderColor: tooltipBorder, overflow: "hidden" },
             ]}
           >
             {children}
@@ -236,9 +230,6 @@ export default function ProductTour() {
             style={[
               styles.tooltip,
               {
-                left: tooltipLeft,
-                top: tooltipTop,
-                width: TOOLTIP_W,
                 backgroundColor: isDark ? "#1A2030" : "#FFFFFF",
                 borderColor: tooltipBorder,
               },
@@ -249,7 +240,7 @@ export default function ProductTour() {
         );
 
   return (
-    <View style={[StyleSheet.absoluteFill, { pointerEvents: "box-none" } as any]}>
+    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {/* Dim regions */}
       <View style={[styles.dim, { left: 0, top: 0, right: 0, height: Math.max(0, ty), pointerEvents: "none" } as any]} />
       <View style={[styles.dim, { left: 0, top: ty + th, right: 0, bottom: 0, pointerEvents: "none" } as any]} />
