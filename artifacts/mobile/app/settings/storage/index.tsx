@@ -15,13 +15,14 @@ import { useTheme } from "@/hooks/useTheme";
 import { Separator } from "@/components/ui/Separator";
 import {
   getStorageUsage,
+  getCachedStorageUsage,
   formatBytes,
   type StorageUsage,
 } from "@/lib/mediaUpload";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
-const BUCKET_META: Record<
+export const BUCKET_META: Record<
   string,
   { label: string; icon: IconName; color: string }
 > = {
@@ -37,7 +38,7 @@ const BUCKET_META: Record<
   "match-photos": { label: "Match photos", icon: "heart", color: "#FF375F" },
 };
 
-function bucketMeta(key: string) {
+export function bucketMeta(key: string) {
   return (
     BUCKET_META[key] ?? {
       label: key,
@@ -51,52 +52,56 @@ export default function StorageSettingsScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [usage, setUsage] = useState<StorageUsage | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [hydrated, setHydrated] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Instant first paint from disk cache.
+  useEffect(() => {
+    let alive = true;
+    getCachedStorageUsage().then((cached) => {
+      if (!alive) return;
+      if (cached) setUsage(cached);
+      setHydrated(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const load = useCallback(async () => {
     try {
       const u = await getStorageUsage();
       if (!u) {
         setError("Couldn't load storage usage. Pull down to retry.");
-        setUsage(null);
       } else {
         setError(null);
         setUsage(u);
       }
     } catch (e: any) {
       setError(e?.message || "Couldn't load storage usage.");
-      setUsage(null);
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
+  // Fetch fresh data after hydration.
   useEffect(() => {
-    load();
-  }, [load]);
+    if (hydrated) load();
+  }, [hydrated, load]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     load();
   }, [load]);
 
-  // Sort buckets by size desc, hide empty ones unless everything is empty.
-  const breakdown = (() => {
-    if (!usage) return [];
-    const entries = Object.entries(usage.per_bucket).map(([k, v]) => ({
-      key: k,
-      bytes: v.bytes,
-      count: v.count,
-    }));
-    const nonEmpty = entries.filter((e) => e.bytes > 0);
-    const sorted = (nonEmpty.length ? nonEmpty : entries).sort(
-      (a, b) => b.bytes - a.bytes,
-    );
-    return sorted;
-  })();
+  // Fixed bucket order so the list doesn't reshuffle as data refreshes.
+  const orderedBuckets = Object.keys(BUCKET_META);
+  const breakdown = orderedBuckets.map((key) => ({
+    key,
+    bytes: usage?.per_bucket?.[key]?.bytes ?? 0,
+    count: usage?.per_bucket?.[key]?.count ?? 0,
+  }));
 
   const percent = usage
     ? Math.min(100, Math.max(0, usage.percent_used * 100))
@@ -107,6 +112,9 @@ export default function StorageSettingsScreen() {
     : percent > 80
       ? "#FF9500"
       : colors.accent;
+
+  // Loading skeleton: only when we have no data at all yet.
+  const showSkeleton = !usage && hydrated && !error;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
@@ -145,14 +153,8 @@ export default function StorageSettingsScreen() {
           />
         }
       >
-        {loading ? (
-          <View style={styles.loadingWrap}>
-            <ActivityIndicator color={colors.accent} />
-          </View>
-        ) : error ? (
-          <View
-            style={[styles.errorCard, { backgroundColor: colors.surface }]}
-          >
+        {error && !usage ? (
+          <View style={[styles.errorCard, { backgroundColor: colors.surface }]}>
             <Ionicons
               name="cloud-offline-outline"
               size={28}
@@ -163,7 +165,7 @@ export default function StorageSettingsScreen() {
             </Text>
             <TouchableOpacity
               onPress={() => {
-                setLoading(true);
+                setError(null);
                 load();
               }}
               style={[styles.retryBtn, { backgroundColor: colors.accent }]}
@@ -171,7 +173,7 @@ export default function StorageSettingsScreen() {
               <Text style={styles.retryBtnText}>Try again</Text>
             </TouchableOpacity>
           </View>
-        ) : usage ? (
+        ) : (
           <>
             {/* Usage summary card */}
             <View
@@ -180,47 +182,76 @@ export default function StorageSettingsScreen() {
               <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>
                 Used
               </Text>
-              <Text style={[styles.summaryValue, { color: colors.text }]}>
-                {formatBytes(usage.used_bytes)}
-                <Text style={[styles.summaryQuota, { color: colors.textMuted }]}>
-                  {"  of "}
-                  {formatBytes(usage.quota_bytes)}
+              {usage ? (
+                <Text style={[styles.summaryValue, { color: colors.text }]}>
+                  {formatBytes(usage.used_bytes)}
+                  <Text
+                    style={[styles.summaryQuota, { color: colors.textMuted }]}
+                  >
+                    {"  of "}
+                    {formatBytes(usage.quota_bytes)}
+                  </Text>
                 </Text>
-              </Text>
+              ) : (
+                <View
+                  style={[
+                    styles.skel,
+                    { backgroundColor: colors.border, width: 180, height: 28 },
+                  ]}
+                />
+              )}
 
               <View
-                style={[
-                  styles.barTrack,
-                  { backgroundColor: colors.border },
-                ]}
+                style={[styles.barTrack, { backgroundColor: colors.border }]}
               >
                 <View
                   style={[
                     styles.barFill,
                     {
                       backgroundColor: barColor,
-                      width: `${percent}%`,
+                      width: usage ? `${percent}%` : "0%",
                     },
                   ]}
                 />
               </View>
 
               <View style={styles.summaryFooter}>
-                <Text style={[styles.summaryFooterText, { color: colors.textMuted }]}>
-                  {overQuota
-                    ? "Over quota"
-                    : `${formatBytes(usage.remaining_bytes)} free`}
+                <Text
+                  style={[styles.summaryFooterText, { color: colors.textMuted }]}
+                >
+                  {usage
+                    ? overQuota
+                      ? "Over quota"
+                      : `${formatBytes(usage.remaining_bytes)} free`
+                    : "Loading…"}
                 </Text>
-                <Text style={[styles.summaryFooterText, { color: colors.textMuted }]}>
-                  {usage.used_count.toLocaleString()}{" "}
-                  {usage.used_count === 1 ? "file" : "files"}
-                </Text>
+                <View style={styles.summaryRight}>
+                  {refreshing ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={colors.textMuted}
+                      style={{ marginRight: 6 }}
+                    />
+                  ) : null}
+                  <Text
+                    style={[
+                      styles.summaryFooterText,
+                      { color: colors.textMuted },
+                    ]}
+                  >
+                    {usage
+                      ? `${usage.used_count.toLocaleString()} ${
+                          usage.used_count === 1 ? "file" : "files"
+                        }`
+                      : ""}
+                  </Text>
+                </View>
               </View>
             </View>
 
-            {/* Per-bucket breakdown */}
+            {/* Per-bucket breakdown — every row tappable, even empty ones. */}
             <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
-              BY TYPE
+              BY TYPE — TAP TO MANAGE
             </Text>
             <View
               style={[
@@ -230,46 +261,70 @@ export default function StorageSettingsScreen() {
             >
               {breakdown.map((row, i) => {
                 const meta = bucketMeta(row.key);
-                const totalBytes = usage.used_bytes || 1;
+                const totalBytes = usage?.used_bytes || 1;
                 const pctOfUsed = (row.bytes / totalBytes) * 100;
+                const sub = usage
+                  ? `${row.count.toLocaleString()} ${
+                      row.count === 1 ? "file" : "files"
+                    }${
+                      row.bytes > 0
+                        ? ` · ${pctOfUsed < 1 ? "<1" : pctOfUsed.toFixed(0)}%`
+                        : ""
+                    }`
+                  : showSkeleton
+                    ? "Loading…"
+                    : "—";
                 return (
                   <React.Fragment key={row.key}>
                     {i > 0 ? <Separator indent={54} /> : null}
-                    <View style={styles.row}>
+                    <TouchableOpacity
+                      activeOpacity={0.6}
+                      onPress={() =>
+                        router.push(`/settings/storage/${row.key}` as any)
+                      }
+                      style={styles.row}
+                    >
                       <View
-                        style={[styles.iconWrap, { backgroundColor: meta.color }]}
+                        style={[
+                          styles.iconWrap,
+                          { backgroundColor: meta.color },
+                        ]}
                       >
                         <Ionicons name={meta.icon} size={18} color="#fff" />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={[styles.rowLabel, { color: colors.text }]}>
+                        <Text
+                          style={[styles.rowLabel, { color: colors.text }]}
+                        >
                           {meta.label}
                         </Text>
                         <Text
                           style={[styles.rowSub, { color: colors.textMuted }]}
                         >
-                          {row.count.toLocaleString()}{" "}
-                          {row.count === 1 ? "file" : "files"}
-                          {row.bytes > 0
-                            ? ` · ${pctOfUsed < 1 ? "<1" : pctOfUsed.toFixed(0)}%`
-                            : ""}
+                          {sub}
                         </Text>
                       </View>
                       <Text style={[styles.rowSize, { color: colors.text }]}>
-                        {formatBytes(row.bytes)}
+                        {usage ? formatBytes(row.bytes) : "—"}
                       </Text>
-                    </View>
+                      <Ionicons
+                        name="chevron-forward"
+                        size={18}
+                        color={colors.textMuted}
+                        style={{ marginLeft: 4 }}
+                      />
+                    </TouchableOpacity>
                   </React.Fragment>
                 );
               })}
             </View>
 
             <Text style={[styles.footnote, { color: colors.textMuted }]}>
-              Stories and disappearing chat media are auto-deleted after 30
-              days. Pull down to refresh.
+              Tap a category to view individual files and free up space. Stories
+              and disappearing chat media are auto-deleted after 30 days.
             </Text>
           </>
-        ) : null}
+        )}
       </ScrollView>
     </View>
   );
@@ -288,8 +343,6 @@ const styles = StyleSheet.create({
   backBtn: { width: 44, alignItems: "center" },
   headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
   body: { paddingTop: 24, paddingHorizontal: 16 },
-
-  loadingWrap: { paddingVertical: 60, alignItems: "center" },
 
   errorCard: {
     padding: 24,
@@ -315,6 +368,7 @@ const styles = StyleSheet.create({
   },
   summaryValue: { fontSize: 26, fontFamily: "Inter_600SemiBold" },
   summaryQuota: { fontSize: 16, fontFamily: "Inter_400Regular" },
+  skel: { borderRadius: 6, marginTop: 4 },
   barTrack: {
     height: 8,
     borderRadius: 4,
@@ -325,8 +379,10 @@ const styles = StyleSheet.create({
   summaryFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
     marginTop: 10,
   },
+  summaryRight: { flexDirection: "row", alignItems: "center" },
   summaryFooterText: { fontSize: 13, fontFamily: "Inter_400Regular" },
 
   sectionTitle: {

@@ -190,6 +190,42 @@ export async function deleteObject(key: string) {
   return s3.send(new DeleteObjectCommand({ Bucket: getR2Bucket(), Key: key }));
 }
 
+export interface ListedObject {
+  key: string;
+  size: number;
+  lastModified?: Date;
+}
+
+/**
+ * List a single page of objects under a key prefix.
+ * Returns up to `maxKeys` items plus a continuation token if more exist.
+ */
+export async function listPrefixPage(
+  prefix: string,
+  continuationToken?: string,
+  maxKeys = 100,
+): Promise<{ items: ListedObject[]; nextToken: string | null }> {
+  const s3 = getR2Client();
+  if (!s3) throw new Error("R2 not configured");
+  const out = await s3.send(
+    new ListObjectsV2Command({
+      Bucket: getR2Bucket(),
+      Prefix: prefix,
+      ContinuationToken: continuationToken,
+      MaxKeys: Math.max(1, Math.min(1000, maxKeys)),
+    }),
+  );
+  const items: ListedObject[] = (out.Contents ?? []).map((o) => ({
+    key: o.Key || "",
+    size: o.Size ?? 0,
+    lastModified: o.LastModified,
+  }));
+  return {
+    items,
+    nextToken: out.IsTruncated ? out.NextContinuationToken || null : null,
+  };
+}
+
 /**
  * List all objects under a key prefix and sum their sizes.
  * Walks pagination internally. Use for storage-usage calculations.

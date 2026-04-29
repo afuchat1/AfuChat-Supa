@@ -26,6 +26,8 @@ import {
   publicUrlForKey,
   getR2PublicBaseUrl,
   sumPrefix,
+  listPrefixPage,
+  deleteObject,
 } from "../lib/r2";
 import { logger } from "../lib/logger";
 
@@ -136,6 +138,133 @@ router.get("/uploads/usage", async (req, res) => {
   } catch (e: any) {
     logger.error({ err: e, userId }, "usage lookup failed");
     res.status(500).json({ error: e?.message || "Failed to compute usage" });
+  }
+});
+
+/**
+ * GET /api/uploads/list?bucket=<bucket>&token=<continuation>
+ *   Lists the calling user's files inside a single bucket. Paginated.
+ */
+router.get("/uploads/list", async (req, res) => {
+  if (!isR2Configured()) {
+    return res.status(503).json({ error: "R2 storage not configured" });
+  }
+  const userId = await authedUserId(req, res);
+  if (!userId) return;
+
+  const bucket = String(req.query.bucket || "");
+  if (!bucket || !ALLOWED_BUCKETS.has(bucket)) {
+    return res.status(400).json({ error: "Invalid or missing bucket" });
+  }
+  const token = req.query.token ? String(req.query.token) : undefined;
+
+  try {
+    const prefix = `${bucket}/${userId}/`;
+    const { items, nextToken } = await listPrefixPage(prefix, token, 100);
+    const baseUrl = getR2PublicBaseUrl();
+    res.json({
+      bucket,
+      items: items.map((o) => ({
+        key: o.key,
+        size: o.size,
+        last_modified: o.lastModified ? o.lastModified.toISOString() : null,
+        url: baseUrl
+          ? `${baseUrl}/${o.key.split("/").map(encodeURIComponent).join("/")}`
+          : null,
+      })),
+      next_token: nextToken,
+    });
+  } catch (e: any) {
+    logger.error({ err: e, userId, bucket }, "list failed");
+    res.status(500).json({ error: e?.message || "Failed to list files" });
+  }
+});
+
+/**
+ * DELETE /api/uploads/object
+ *   body: { key: string }
+ *   Deletes a single object the user owns. The key must start with
+ *   `<bucket>/<userId>/` so users can't delete each other's files.
+ */
+router.delete("/uploads/object", async (req, res) => {
+  if (!isR2Configured()) {
+    return res.status(503).json({ error: "R2 storage not configured" });
+  }
+  const userId = await authedUserId(req, res);
+  if (!userId) return;
+
+  const key = String((req.body || {}).key || "").trim();
+  if (!key || key.length > MAX_PATH_LEN) {
+    return res.status(400).json({ error: "Invalid or missing key" });
+  }
+  if (key.includes("..") || key.startsWith("/")) {
+    return res.status(400).json({ error: "Invalid key" });
+  }
+  const slash = key.indexOf("/");
+  const bucket = slash > 0 ? key.slice(0, slash) : "";
+  if (!bucket || !ALLOWED_BUCKETS.has(bucket)) {
+    return res.status(400).json({ error: "Invalid bucket in key" });
+  }
+  const expectedPrefix = `${bucket}/${userId}/`;
+  if (!key.startsWith(expectedPrefix)) {
+    return res.status(403).json({ error: "Cannot delete other users' files" });
+  }
+
+  try {
+    await deleteObject(key);
+
+    // Best-effort cleanup of DB rows that reference this file so the UI
+    // doesn't show broken posts/avatars after a deletion.
+    const admin = getSupabaseAdmin();
+    if (admin) {
+      const baseUrl = getR2PublicBaseUrl();
+      const publicUrl = baseUrl
+        ? `${baseUrl}/${key.split("/").map(encodeURIComponent).join("/")}`
+        : null;
+      try {
+        if (bucket === "avatars" && publicUrl) {
+          await admin
+            .from("profiles")
+            .update({ avatar_url: null })
+            .eq("id", userId)
+            .like("avatar_url", `${publicUrl}%`);
+        } else if (bucket === "banners" && publicUrl) {
+          await admin
+            .from("profiles")
+            .update({ banner_url: null })
+            .eq("id", userId)
+            .like("banner_url", `${publicUrl}%`);
+        } else if (bucket === "post-images" && publicUrl) {
+          await admin
+            .from("posts")
+            .delete()
+            .eq("author_id", userId)
+            .like("image_url", `${publicUrl}%`);
+        } else if (bucket === "videos" && publicUrl) {
+          await admin
+            .from("posts")
+            .delete()
+            .eq("author_id", userId)
+            .like("video_url", `${publicUrl}%`);
+        } else if (bucket === "stories" && publicUrl) {
+          await admin
+            .from("stories")
+            .delete()
+            .eq("user_id", userId)
+            .like("media_url", `${publicUrl}%`);
+        }
+      } catch (cleanupErr: any) {
+        logger.warn(
+          { err: cleanupErr, key, bucket },
+          "DB cleanup after delete failed (non-fatal)",
+        );
+      }
+    }
+
+    res.json({ ok: true, key });
+  } catch (e: any) {
+    logger.error({ err: e, userId, key }, "delete failed");
+    res.status(500).json({ error: e?.message || "Failed to delete file" });
   }
 });
 

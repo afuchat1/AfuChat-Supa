@@ -234,32 +234,6 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
 
           {/* ── VIDEO: thumbnail preview card ── */}
           {item.post_type === "video" && item.video_url && (
-            Platform.OS === "web" ? (
-              <View style={styles.videoCard}>
-                <View style={styles.videoThumb}>
-                  <VideoThumbnail
-                    videoUrl={item.video_url!}
-                    fallbackImageUrl={item.image_url}
-                    style={StyleSheet.absoluteFill}
-                    lowData={isLowData}
-                  />
-                  <View style={StyleSheet.absoluteFill}>
-                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                      <View style={styles.playCircle}>
-                        <Ionicons name="play" size={22} color="#fff" />
-                      </View>
-                    </View>
-                    <View style={{ position: "absolute", top: 8, right: 10, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                      <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 10, fontFamily: "Inter_600SemiBold" }}>App only</Text>
-                    </View>
-                  </View>
-                  <View style={styles.videoBadge}>
-                    <Ionicons name="videocam" size={11} color="#fff" />
-                    <Text style={styles.videoBadgeText}>Video</Text>
-                  </View>
-                </View>
-              </View>
-            ) : (
               <TouchableOpacity
                 activeOpacity={0.88}
                 onPress={() => router.push({ pathname: "/video/[id]", params: { id: item.id } })}
@@ -281,7 +255,6 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
                   </View>
                 </View>
               </TouchableOpacity>
-            )
           )}
 
           {/* ── ARTICLE: distinctive card ── */}
@@ -1211,8 +1184,8 @@ export default function DiscoverScreen() {
             <Text style={[styles.createPickerTitle, { color: colors.text }]}>What would you like to create?</Text>
             {[
               { icon: "create-outline", label: "Post", desc: "Share a thought, photo, or link", route: "/moments/create", color: colors.accent },
+              { icon: "videocam-outline", label: "Video", desc: "Share a short video clip", route: "/moments/create-video", color: "#FF3B30" },
               { icon: "document-text-outline", label: "Article", desc: "Write a long-form article", route: "/moments/create-article", color: "#007AFF" },
-              ...(Platform.OS !== "web" ? [{ icon: "videocam-outline", label: "Video", desc: "Share a short video clip", route: "/moments/create-video", color: "#FF3B30" }] : []),
             ].map((opt) => (
               <TouchableOpacity
                 key={opt.label}

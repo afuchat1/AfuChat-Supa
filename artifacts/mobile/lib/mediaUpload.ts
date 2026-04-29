@@ -14,6 +14,7 @@
  */
 
 import { Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./supabase";
 
 // Resolve the API server base URL — used for sign requests and storage
@@ -302,6 +303,21 @@ export interface StorageUsage {
   per_bucket: Record<string, { bytes: number; count: number }>;
 }
 
+const USAGE_CACHE_KEY = "@afuchat:storage_usage_v1";
+
+/** Read the last-known usage from disk for instant first paint. */
+export async function getCachedStorageUsage(): Promise<StorageUsage | null> {
+  try {
+    const raw = await AsyncStorage.getItem(USAGE_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.used_bytes !== "number") return null;
+    return parsed as StorageUsage;
+  } catch {
+    return null;
+  }
+}
+
 export async function getStorageUsage(): Promise<StorageUsage | null> {
   try {
     if (!API_BASE) return null;
@@ -313,9 +329,81 @@ export async function getStorageUsage(): Promise<StorageUsage | null> {
     if (!r.ok) return null;
     const text = await r.text();
     if (!text || text.trimStart().startsWith("<")) return null;
-    return JSON.parse(text) as StorageUsage;
+    const parsed = JSON.parse(text) as StorageUsage;
+    AsyncStorage.setItem(USAGE_CACHE_KEY, JSON.stringify(parsed)).catch(() => {});
+    return parsed;
   } catch {
     return null;
+  }
+}
+
+export interface StoredFile {
+  key: string;
+  size: number;
+  last_modified: string | null;
+  url: string | null;
+}
+
+/** List the user's files inside one logical bucket. Paginated. */
+export async function listUserFiles(
+  bucket: string,
+  token?: string,
+): Promise<{ items: StoredFile[]; nextToken: string | null } | null> {
+  try {
+    if (!API_BASE) return null;
+    const session = (await supabase.auth.getSession()).data.session;
+    if (!session) return null;
+    const url = new URL(apiUrl("/uploads/list"), "http://x");
+    url.searchParams.set("bucket", bucket);
+    if (token) url.searchParams.set("token", token);
+    const path = url.pathname + url.search;
+    const r = await fetch(`${API_BASE}${path}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (!r.ok) return null;
+    const text = await r.text();
+    if (!text || text.trimStart().startsWith("<")) return null;
+    const json = JSON.parse(text);
+    return {
+      items: Array.isArray(json.items) ? json.items : [],
+      nextToken: json.next_token || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Delete one file from the user's CDN storage. */
+export async function deleteUserFile(
+  key: string,
+): Promise<{ ok: boolean; error: string | null }> {
+  try {
+    if (!API_BASE) return { ok: false, error: "API not configured" };
+    const session = (await supabase.auth.getSession()).data.session;
+    if (!session) return { ok: false, error: "Not signed in" };
+    const r = await fetch(apiUrl("/uploads/object"), {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ key }),
+    });
+    const text = await r.text();
+    if (text.trimStart().startsWith("<")) {
+      return { ok: false, error: "Service unreachable" };
+    }
+    let json: any = {};
+    try {
+      json = text ? JSON.parse(text) : {};
+    } catch {
+      /* ignore */
+    }
+    if (!r.ok) return { ok: false, error: json?.error || `Failed (${r.status})` };
+    AsyncStorage.removeItem(USAGE_CACHE_KEY).catch(() => {});
+    return { ok: true, error: null };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "Delete failed" };
   }
 }
 
