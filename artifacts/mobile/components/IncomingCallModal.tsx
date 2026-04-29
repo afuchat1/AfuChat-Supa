@@ -23,6 +23,7 @@ interface Props {
 export function IncomingCallModal({ call, onDismiss }: Props) {
   const insets = useSafeAreaInsets();
   const ringSound = useRef<Audio.Sound | null>(null);
+  const webRingRef = useRef<{ stop: () => void } | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(-160)).current;
   const [visible, setVisible] = useState(false);
@@ -38,10 +39,11 @@ export function IncomingCallModal({ call, onDismiss }: Props) {
       toValue: 0,
       tension: 60,
       friction: 10,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== "web",
     }).start();
     startPulse();
-    if (Platform.OS !== "web") playRingtone();
+    if (Platform.OS === "web") playWebRingtone();
+    else playRingtone();
 
     const autoDeclineTimer = setTimeout(async () => {
       await updateCallStatus(call.id, "missed");
@@ -58,15 +60,61 @@ export function IncomingCallModal({ call, onDismiss }: Props) {
         Animated.timing(pulseAnim, {
           toValue: 1.15,
           duration: 600,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== "web",
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
           duration: 600,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== "web",
         }),
       ])
     ).start();
+  }
+
+  /**
+   * Web ringtone: synthesise a soft two-tone ring with WebAudio so we don't
+   * have to ship an audio file or fight browser autoplay restrictions on a
+   * static <audio src>. If the AudioContext is suspended (no user gesture
+   * yet), the call simply makes no sound — the visual modal still shows.
+   */
+  function playWebRingtone() {
+    try {
+      const w: any = typeof window !== "undefined" ? window : null;
+      if (!w) return;
+      const Ctx = w.AudioContext || w.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      let stopped = false;
+      let timer: any;
+      function ring() {
+        if (stopped) return;
+        const t0 = ctx.currentTime;
+        for (let i = 0; i < 2; i++) {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.value = 480;
+          const start = t0 + i * 0.5;
+          gain.gain.setValueAtTime(0.0001, start);
+          gain.gain.exponentialRampToValueAtTime(0.18, start + 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.4);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(start);
+          osc.stop(start + 0.45);
+        }
+        timer = setTimeout(ring, 2500);
+      }
+      ring();
+      webRingRef.current = {
+        stop() {
+          stopped = true;
+          if (timer) clearTimeout(timer);
+          ctx.close().catch(() => {});
+        },
+      };
+    } catch (_) {
+      /* ignore — web audio not available */
+    }
   }
 
   async function playRingtone() {
@@ -90,6 +138,10 @@ export function IncomingCallModal({ call, onDismiss }: Props) {
       await ringSound.current.unloadAsync().catch(() => {});
       ringSound.current = null;
     }
+    if (webRingRef.current) {
+      try { webRingRef.current.stop(); } catch (_) {}
+      webRingRef.current = null;
+    }
     pulseAnim.stopAnimation();
   }
 
@@ -97,7 +149,7 @@ export function IncomingCallModal({ call, onDismiss }: Props) {
     Animated.timing(slideAnim, {
       toValue: -160,
       duration: 250,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== "web",
     }).start(() => {
       setVisible(false);
       stopRing();

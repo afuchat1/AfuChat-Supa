@@ -16,7 +16,7 @@ export function CallManager() {
   const activeCallId = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!user || Platform.OS === "web") return;
+    if (!user) return;
 
     const unsubscribe = listenForIncomingCalls(user.id, (call) => {
       if (activeCallId.current === call.id) return;
