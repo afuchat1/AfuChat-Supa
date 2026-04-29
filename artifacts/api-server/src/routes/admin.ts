@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { logger } from "../lib/logger";
+import { SUPABASE_URL } from "../lib/constants";
 
 const router = Router();
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
+const supabaseUrl = SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 // POST /api/admin/broadcast-push

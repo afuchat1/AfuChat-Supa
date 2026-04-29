@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { createClient } from "@supabase/supabase-js";
+import { SUPABASE_URL } from "../lib/constants";
 
 const router = Router();
 
@@ -11,7 +12,7 @@ router.post("/account-purge", async (req, res) => {
       return res.status(503).json({ error: "Purge endpoint not configured" });
     }
 
-    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
+    const supabaseUrl = SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
     if (!supabaseUrl || !supabaseKey) {
       return res.status(503).json({ error: "Supabase not configured" });

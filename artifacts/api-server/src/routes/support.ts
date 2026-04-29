@@ -2,10 +2,11 @@ import { Router, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { logger } from "../lib/logger";
 import { emailUserStaffReply } from "../lib/email";
+import { SUPABASE_URL } from "../lib/constants";
 
 const router = Router();
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
+const supabaseUrl = SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 function getAdmin() {

@@ -10,18 +10,10 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
-CLOUDFLARE_ACCOUNT_ID = "42e79186125e8ff83e51f15816e074de"
-R2_S3_ENDPOINT = "https://42e79186125e8ff83e51f15816e074de.r2.cloudflarestorage.com"
-SUPABASE_URL = "https://rhnsjqqtdzlkvqazfcbg.supabase.co"
 SUPABASE_PROJECT_REF = "rhnsjqqtdzlkvqazfcbg"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJobnNqcXF0ZHpsa3ZxYXpmY2JnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2NzA4NjksImV4cCI6MjA3NzI0Njg2OX0.j8zuszO1K6Apjn-jRiVUyZeqe3Re424xyOho9qDl_oY"
 SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJobnNqcXF0ZHpsa3ZxYXpmY2JnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTY3MDg2OSwiZXhwIjoyMDc3MjQ2ODY5fQ.2EkaV3a2lgTxVVJUtNpIygnaRg6z45qR4OjM4M16qMs"
 SUPABASE_ACCESS_TOKEN = "sbp_e31b4dde2ec5db723018df7a4fdac16fe00f07b0"
-R2_BUCKET = "afuchat-media"
-R2_PUBLIC_BASE_URL = "https://cdn.afuchat.com"
-R2_DEV_PUBLIC_URL = "https://pub-2e81c468eb99436690ca6da9f89191ce.r2.dev"
-CLOUDFLARE_R2_ACCESS_KEY_ID = "40916680c4892042d4ce49396ef62819"
-CLOUDFLARE_R2_SECRET_ACCESS_KEY = "6f838ffd49ed7cb39e550ac54af69a15ec05d5d6d5cb8c1e07fc500598a49146"
 
 [workflows]
 runButton = "Project"

@@ -1,8 +1,9 @@
 import { Router, type Request, type Response } from "express";
+import { SUPABASE_URL } from "../lib/constants";
 
 const router = Router();
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
+const supabaseUrl = SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
 
 const requestCounts = new Map<string, { count: number; resetAt: number }>();

@@ -3,26 +3,30 @@
  * Supabase Storage → Cloudflare R2 migration
  * ──────────────────────────────────────────
  *
- * Walks every object in every Supabase Storage bucket listed below and copies
- * it to the configured R2 bucket under the key `<bucket>/<original-path>`.
- * Then rewrites every DB column that points to a Supabase Storage URL so it
- * points to the new R2 public URL instead.
+ * Phase 1 (copy):
+ *   Auto-discovers every bucket in Supabase Storage and walks every object
+ *   recursively, copying it to the configured R2 bucket under the key
+ *   `<bucket>/<original-path>`. Idempotent — already-present R2 keys are
+ *   skipped via HeadObject.
+ *
+ * Phase 2 (rewrite):
+ *   Auto-discovers every text/varchar column in the public schema that
+ *   contains '/storage/v1/object/' URLs and rewrites them to point at
+ *   R2_PUBLIC_BASE_URL. Views are skipped automatically.
  *
  * Required env vars:
  *   SUPABASE_URL                 (or EXPO_PUBLIC_SUPABASE_URL)
- *   SUPABASE_SERVICE_ROLE_KEY
+ *   SUPABASE_SERVICE_ROLE_KEY    (for Storage API)
+ *   SUPABASE_ACCESS_TOKEN        (for Management API SQL execution)
+ *   SUPABASE_PROJECT_REF
  *   CLOUDFLARE_ACCOUNT_ID        (or R2_S3_ENDPOINT)
  *   CLOUDFLARE_R2_ACCESS_KEY_ID
  *   CLOUDFLARE_R2_SECRET_ACCESS_KEY
  *   R2_BUCKET                    default: afuchat-media
  *   R2_PUBLIC_BASE_URL           e.g. https://cdn.afuchat.com
- *   DATABASE_URL                 Postgres connection string for URL rewrites
- *                                (Supabase project DB or any DB hosting the
- *                                relevant tables — must contain the same
- *                                schema as the app).
  *
  * Optional flags:
- *   --buckets=avatars,videos     Restrict to specific logical buckets
+ *   --buckets=avatars,videos     Restrict to specific source buckets
  *   --dry-run                    Don't write anything, just report
  *   --skip-copy                  Skip object copy phase
  *   --skip-rewrite               Skip DB URL rewrite phase
@@ -31,11 +35,9 @@
 
 import {
   S3Client,
-  PutObjectCommand,
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
-import { Client as PgClient } from "pg";
 import { Readable } from "node:stream";
 
 const args = Object.fromEntries(
@@ -45,8 +47,14 @@ const args = Object.fromEntries(
   }),
 );
 
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL;
+const SUPABASE_URL = (
+  process.env.SUPABASE_URL ||
+  process.env.EXPO_PUBLIC_SUPABASE_URL ||
+  ""
+).replace(/\/+$/, "");
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const MGMT_TOKEN = process.env.SUPABASE_ACCESS_TOKEN;
+const PROJECT_REF = process.env.SUPABASE_PROJECT_REF;
 const ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
 const R2_ENDPOINT =
   process.env.R2_S3_ENDPOINT ||
@@ -55,26 +63,12 @@ const R2_KEY = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID;
 const R2_SECRET = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY;
 const R2_BUCKET = process.env.R2_BUCKET || "afuchat-media";
 const R2_PUBLIC = (process.env.R2_PUBLIC_BASE_URL || "").replace(/\/+$/, "");
-const DATABASE_URL = process.env.DATABASE_URL;
 
-const ALL_BUCKETS = [
-  "avatars",
-  "banners",
-  "post-images",
-  "videos",
-  "stories",
-  "group-avatars",
-  "chat-media",
-  "voice-messages",
-  "shop-media",
-  "match-photos",
-];
-
-const buckets = args.buckets ? args.buckets.split(",") : ALL_BUCKETS;
 const dryRun = args["dry-run"] === "true";
 const skipCopy = args["skip-copy"] === "true";
 const skipRewrite = args["skip-rewrite"] === "true";
 const concurrency = Number(args.concurrency || 8);
+const bucketFilter = args.buckets ? args.buckets.split(",") : null;
 
 function fail(msg) {
   console.error(`ERROR: ${msg}`);
@@ -83,19 +77,22 @@ function fail(msg) {
 
 if (!SUPABASE_URL) fail("SUPABASE_URL is required");
 if (!SERVICE_KEY) fail("SUPABASE_SERVICE_ROLE_KEY is required");
+if (!skipRewrite && (!MGMT_TOKEN || !PROJECT_REF))
+  fail("SUPABASE_ACCESS_TOKEN + SUPABASE_PROJECT_REF required for rewrite phase");
 if (!skipCopy && (!R2_ENDPOINT || !R2_KEY || !R2_SECRET))
   fail("R2 credentials required for copy phase");
-if (!skipRewrite && !DATABASE_URL) fail("DATABASE_URL required for rewrite phase");
-if (!skipRewrite && !R2_PUBLIC) fail("R2_PUBLIC_BASE_URL required for rewrite phase");
+if (!skipRewrite && !R2_PUBLIC)
+  fail("R2_PUBLIC_BASE_URL required for rewrite phase");
 
-const s3 =
-  !skipCopy
-    ? new S3Client({
-        region: "auto",
-        endpoint: R2_ENDPOINT,
-        credentials: { accessKeyId: R2_KEY, secretAccessKey: R2_SECRET },
-      })
-    : null;
+const s3 = !skipCopy
+  ? new S3Client({
+      region: "auto",
+      endpoint: R2_ENDPOINT,
+      credentials: { accessKeyId: R2_KEY, secretAccessKey: R2_SECRET },
+    })
+  : null;
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ─── Supabase Storage helpers ─────────────────────────────────────────────
 
@@ -105,8 +102,19 @@ const SB_HEADERS = {
   "Content-Type": "application/json",
 };
 
-async function listBucketRecursive(bucket, prefix = "") {
-  const out = [];
+async function listAllBuckets() {
+  const r = await fetch(`${SUPABASE_URL}/storage/v1/bucket`, {
+    headers: SB_HEADERS,
+  });
+  if (!r.ok) throw new Error(`list buckets failed (${r.status}): ${await r.text()}`);
+  const buckets = await r.json();
+  return buckets.map((b) => b.name);
+}
+
+/** List one folder (single page, paginated) — returns files + subfolders. */
+async function listFolder(bucket, prefix) {
+  const files = [];
+  const subfolders = [];
   let offset = 0;
   const limit = 1000;
   while (true) {
@@ -129,15 +137,43 @@ async function listBucketRecursive(bucket, prefix = "") {
     for (const it of items) {
       const fullPath = prefix ? `${prefix}/${it.name}` : it.name;
       if (it.id === null && it.metadata === null) {
-        // Folder
-        const sub = await listBucketRecursive(bucket, fullPath);
-        out.push(...sub);
+        subfolders.push(fullPath);
       } else {
-        out.push({ path: fullPath, size: it.metadata?.size ?? 0, mime: it.metadata?.mimetype });
+        files.push({
+          path: fullPath,
+          size: it.metadata?.size ?? 0,
+          mime: it.metadata?.mimetype,
+        });
       }
     }
     if (items.length < limit) break;
     offset += limit;
+  }
+  return { files, subfolders };
+}
+
+/**
+ * BFS-walk every folder in a bucket with parallel fan-out so listing
+ * 200+ user folders takes seconds instead of minutes.
+ */
+async function listBucketRecursive(bucket, listConcurrency = 16) {
+  const out = [];
+  let frontier = [""];
+  let depth = 0;
+  while (frontier.length) {
+    const nextFrontier = [];
+    process.stdout.write(`  list depth=${depth} folders=${frontier.length}…\n`);
+    for (let i = 0; i < frontier.length; i += listConcurrency) {
+      const chunk = frontier.slice(i, i + listConcurrency);
+      const results = await Promise.all(chunk.map((p) => listFolder(bucket, p)));
+      for (const { files, subfolders } of results) {
+        out.push(...files);
+        nextFrontier.push(...subfolders);
+      }
+    }
+    process.stdout.write(`    files+=${out.length}, next-depth folders=${nextFrontier.length}\n`);
+    frontier = nextFrontier;
+    depth++;
   }
   return out;
 }
@@ -210,11 +246,44 @@ async function runWithConcurrency(items, worker, n) {
   return results;
 }
 
+// ─── Management API SQL helper ───────────────────────────────────────────
+
+async function mgmtSql(query) {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const r = await fetch(
+      `https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${MGMT_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ query }),
+      },
+    );
+    if (r.status === 429) {
+      const wait = 2000 * (attempt + 1);
+      console.log(`  (rate limited, sleeping ${wait}ms)`);
+      await sleep(wait);
+      continue;
+    }
+    if (!r.ok) {
+      throw new Error(`mgmt sql ${r.status}: ${(await r.text()).slice(0, 300)}`);
+    }
+    return r.json();
+  }
+  throw new Error("mgmt sql: rate limited too many times");
+}
+
 // ─── Phase 1: copy objects ────────────────────────────────────────────────
 
 const summary = { buckets: {}, totalCopied: 0, totalExists: 0, totalErrors: 0 };
 
 if (!skipCopy) {
+  let buckets = await listAllBuckets();
+  if (bucketFilter) buckets = buckets.filter((b) => bucketFilter.includes(b));
+  console.log(`[copy] discovered ${buckets.length} buckets: ${buckets.join(", ")}`);
+
   for (const bucket of buckets) {
     console.log(`\n[copy] bucket=${bucket}`);
     let items;
@@ -244,54 +313,90 @@ if (!skipCopy) {
     summary.totalErrors += errors;
     console.log(`  done: copied=${copied} skipped=${exists} errors=${errors}`);
   }
-  console.log(`\n[copy summary] copied=${summary.totalCopied} skipped=${summary.totalExists} errors=${summary.totalErrors}`);
+  console.log(
+    `\n[copy summary] copied=${summary.totalCopied} skipped=${summary.totalExists} errors=${summary.totalErrors}`,
+  );
 }
 
 // ─── Phase 2: rewrite DB URLs ─────────────────────────────────────────────
 
 if (!skipRewrite) {
-  console.log(`\n[rewrite] connecting to DATABASE_URL`);
-  const pg = new PgClient({ connectionString: DATABASE_URL });
-  await pg.connect();
+  console.log(`\n[rewrite] discovering columns containing storage URLs…`);
 
-  const oldPrefix = `${SUPABASE_URL.replace(/\/+$/, "")}/storage/v1/object/public/`;
+  // Discover every (table, column) in the public schema where any row
+  // contains a Supabase Storage URL. We scan text/varchar columns in
+  // BASE TABLES only (skipping views, which can't be UPDATE'd).
+  const discoverSql = `
+    DO $$
+    DECLARE
+      r record;
+      cnt int;
+    BEGIN
+      CREATE TEMP TABLE IF NOT EXISTS _scan(t text, c text, n int) ON COMMIT DROP;
+      TRUNCATE _scan;
+      FOR r IN
+        SELECT c.table_name, c.column_name
+        FROM information_schema.columns c
+        JOIN information_schema.tables t
+          ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+        WHERE c.table_schema = 'public'
+          AND c.data_type IN ('text', 'character varying', 'varchar')
+          AND t.table_type = 'BASE TABLE'
+      LOOP
+        BEGIN
+          EXECUTE format(
+            'SELECT count(*) FROM public.%I WHERE %I LIKE %L',
+            r.table_name, r.column_name, '%storage/v1/object/%'
+          ) INTO cnt;
+          IF cnt > 0 THEN
+            INSERT INTO _scan VALUES (r.table_name, r.column_name, cnt);
+          END IF;
+        EXCEPTION WHEN OTHERS THEN
+          NULL;
+        END;
+      END LOOP;
+    END $$;
+    SELECT t, c, n FROM _scan ORDER BY n DESC;
+  `;
+
+  const targets = await mgmtSql(discoverSql);
+  console.log(
+    `[rewrite] discovered ${targets.length} columns with storage URLs ` +
+      `(${targets.reduce((s, r) => s + r.n, 0)} rows total)`,
+  );
+  for (const r of targets) console.log(`  - ${r.t}.${r.c}  (${r.n} rows)`);
+
+  const oldPrefix = `${SUPABASE_URL}/storage/v1/object/public/`;
   const newPrefix = `${R2_PUBLIC}/`;
 
-  // table, column, [opt: extra WHERE]
-  const targets = [
-    ["public.profiles", "avatar_url"],
-    ["public.profiles", "banner_url"],
-    ["public.posts", "image_url"],
-    ["public.posts", "video_url"],
-    ["public.post_images", "image_url"],
-    ["public.mini_apps", "icon_url"],
-    ["public.video_assets", "source_path"],
-    ["public.video_assets", "poster_path"],
-    ["public.video_renditions", "storage_path"],
-    ["public.match_profiles", "media_url"],
-    ["public.match_photos", "url"],
-  ];
+  console.log(`\n[rewrite] mapping`);
+  console.log(`  FROM: ${oldPrefix}`);
+  console.log(`  TO:   ${newPrefix}`);
+  if (dryRun) console.log("  (dry-run: no UPDATEs will run)");
 
-  for (const [table, col] of targets) {
+  for (const { t: table, c: col } of targets) {
     try {
-      const sql = `UPDATE ${table} SET ${col} = REPLACE(${col}, $1, $2) WHERE ${col} LIKE $3`;
-      const params = [oldPrefix, newPrefix, oldPrefix + "%"];
+      // We use REPLACE() to swap the prefix in place so any sub-path is
+      // preserved (including bucket name + user id + filename).
+      const sql = dryRun
+        ? `SELECT count(*)::int AS n FROM public."${table}" WHERE "${col}" LIKE '${oldPrefix.replace(/'/g, "''")}%'`
+        : `UPDATE public."${table}" SET "${col}" = REPLACE("${col}", '${oldPrefix.replace(/'/g, "''")}', '${newPrefix.replace(/'/g, "''")}') WHERE "${col}" LIKE '${oldPrefix.replace(/'/g, "''")}%'`;
+      const r = await mgmtSql(sql);
       if (dryRun) {
-        const r = await pg.query(
-          `SELECT count(*)::int AS n FROM ${table} WHERE ${col} LIKE $1`,
-          [oldPrefix + "%"],
-        );
-        console.log(`  [dry] ${table}.${col}: ${r.rows[0].n} rows would be rewritten`);
+        console.log(`  [dry] ${table}.${col}: would rewrite ${r[0]?.n ?? 0} rows`);
       } else {
-        const r = await pg.query(sql, params);
-        console.log(`  ${table}.${col}: ${r.rowCount} rows rewritten`);
+        // Management API doesn't return rowCount for UPDATE; do a verify count.
+        const verify = await mgmtSql(
+          `SELECT count(*)::int AS n FROM public."${table}" WHERE "${col}" LIKE '${oldPrefix.replace(/'/g, "''")}%'`,
+        );
+        const remaining = verify[0]?.n ?? 0;
+        console.log(`  ${table}.${col}: rewritten (${remaining} rows still on old URL)`);
       }
+      await sleep(400); // be kind to the rate limiter
     } catch (e) {
       console.error(`  ${table}.${col}: ${e.message}`);
     }
   }
-
-  await pg.end();
 }
 
 console.log("\nDONE");
