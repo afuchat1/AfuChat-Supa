@@ -4,7 +4,7 @@ import { Tabs, usePathname } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { Dimensions, Image, Platform, StyleSheet, useColorScheme } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -51,6 +51,7 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   const { registerLayout, step, advance } = useTour();
   const pathname = usePathname();
   const { isDesktop } = useIsDesktop();
+  const prevPathnameRef = useRef(pathname);
 
   const hideTabs = isDesktop || (!isLoggedIn && Platform.OS === "web");
 
@@ -80,6 +81,9 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
 
   useEffect(() => {
     if (!step) return;
+    // Only advance when the user actually navigates to a tab, not on step changes
+    if (prevPathnameRef.current === pathname) return;
+    prevPathnameRef.current = pathname;
     if (step.id === "discover" && pathname === "/discover") advance();
     if (step.id === "chat" && (pathname === "/" || pathname === "/index")) advance();
     if (step.id === "apps" && pathname === "/apps") advance();

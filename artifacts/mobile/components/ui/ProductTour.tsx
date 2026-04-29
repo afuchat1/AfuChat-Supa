@@ -35,6 +35,16 @@ export default function ProductTour() {
   const pulseAlpha = useRef(new Animated.Value(0.5)).current;
   const pulseRef = useRef<Animated.CompositeAnimation | null>(null);
 
+  // Auto-skip steps whose target element hasn't been registered yet
+  useEffect(() => {
+    if (!isActive || !step) return;
+    if (layouts[step.targetId]) return; // target is registered, nothing to do
+    const timer = setTimeout(() => {
+      advance();
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [isActive, step?.id, layouts]);
+
   const stopAnimations = useCallback(() => {
     pulseRef.current?.stop();
     pulseRef.current = null;
