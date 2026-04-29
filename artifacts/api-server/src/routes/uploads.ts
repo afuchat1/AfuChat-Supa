@@ -18,7 +18,7 @@
  *     r2://afuchat-media/<bucket>/<path>
  */
 
-import { Router, type Request, type Response } from "express";
+import { Router, raw, type Request, type Response } from "express";
 import { getSupabaseAdmin } from "../lib/supabaseAdmin";
 import {
   isR2Configured,
@@ -28,10 +28,13 @@ import {
   sumPrefix,
   listPrefixPage,
   deleteObject,
+  putObject,
 } from "../lib/r2";
 import { logger } from "../lib/logger";
 
 const router = Router();
+
+const MAX_PROXY_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 /** Default storage quota per user, in bytes (5 GB). */
 const DEFAULT_QUOTA_BYTES = 5 * 1024 * 1024 * 1024;
@@ -323,5 +326,77 @@ router.post("/uploads/sign", async (req, res) => {
     res.status(500).json({ error: e?.message || "Failed to sign upload" });
   }
 });
+
+/**
+ * POST /api/uploads/upload?bucket=<bucket>&path=<path>
+ *   Body: raw bytes of the file, with `Content-Type` header set.
+ *   Auth: Bearer <supabase access_token>.
+ *
+ * Server-side proxy that streams the bytes to R2. Used by the web client
+ * because browser PUT directly to *.r2.cloudflarestorage.com is blocked
+ * by CORS unless the bucket is explicitly configured. Native clients can
+ * still use the presigned PUT path above.
+ */
+router.post(
+  "/uploads/upload",
+  raw({ type: () => true, limit: MAX_PROXY_UPLOAD_BYTES }),
+  async (req, res) => {
+    if (!isR2Configured()) {
+      return res.status(503).json({ error: "R2 storage not configured" });
+    }
+    const userId = await authedUserId(req, res);
+    if (!userId) return;
+
+    const bucket = String(req.query.bucket || "").trim();
+    const path = String(req.query.path || "").trim();
+    const contentType =
+      String(req.headers["content-type"] || "application/octet-stream") ||
+      "application/octet-stream";
+
+    if (!bucket || !ALLOWED_BUCKETS.has(bucket)) {
+      return res.status(400).json({ error: "Invalid or missing bucket" });
+    }
+    if (!path || path.length > MAX_PATH_LEN) {
+      return res.status(400).json({ error: "Invalid or missing path" });
+    }
+    if (path.includes("..") || path.startsWith("/")) {
+      return res.status(400).json({ error: "Invalid path" });
+    }
+
+    const SCOPED = new Set([
+      "avatars",
+      "banners",
+      "post-images",
+      "videos",
+      "stories",
+      "shop-media",
+      "match-photos",
+      "voice-messages",
+      "chat-media",
+      "group-avatars",
+    ]);
+    if (SCOPED.has(bucket) && !path.startsWith(`${userId}/`)) {
+      return res.status(403).json({ error: "Path must start with your user id" });
+    }
+
+    const body = req.body;
+    if (!Buffer.isBuffer(body) || body.length === 0) {
+      return res.status(400).json({ error: "Empty or invalid body" });
+    }
+    if (body.length > MAX_PROXY_UPLOAD_BYTES) {
+      return res.status(413).json({ error: "File too large" });
+    }
+
+    const key = `${bucket}/${path}`;
+    try {
+      await putObject(key, body, contentType);
+      const publicUrl = publicUrlForKey(key);
+      res.json({ ok: true, key, publicUrl, size: body.length });
+    } catch (e: any) {
+      logger.error({ err: e, key }, "proxy upload failed");
+      res.status(500).json({ error: e?.message || "Upload failed" });
+    }
+  },
+);
 
 export default router;

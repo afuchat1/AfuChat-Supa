@@ -165,6 +165,59 @@ async function getSignedUpload(
   };
 }
 
+async function proxyUpload(
+  bucket: string,
+  filePath: string,
+  body: Blob | ArrayBuffer,
+  contentType: string,
+): Promise<{ publicUrl: string | null; error: string | null }> {
+  if (!API_BASE) {
+    return { publicUrl: null, error: "API base URL not configured" };
+  }
+  const session = (await supabase.auth.getSession()).data.session;
+  if (!session) {
+    return { publicUrl: null, error: "Not authenticated" };
+  }
+  const qs = new URLSearchParams({ bucket, path: filePath }).toString();
+  let resp: Response;
+  try {
+    resp = await fetch(`${apiUrl("/uploads/upload")}?${qs}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": contentType,
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: body as any,
+    });
+  } catch (e: any) {
+    return { publicUrl: null, error: `Upload failed: ${e?.message || e}` };
+  }
+  const text = await resp.text();
+  if (text.trimStart().startsWith("<")) {
+    return {
+      publicUrl: null,
+      error:
+        "Upload service unreachable (received HTML instead of JSON). Try again in a moment.",
+    };
+  }
+  let json: any;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return {
+      publicUrl: null,
+      error: `Invalid response from upload service: ${text.slice(0, 120)}`,
+    };
+  }
+  if (!resp.ok) {
+    return { publicUrl: null, error: json?.error || `Upload failed (${resp.status})` };
+  }
+  if (!json?.publicUrl) {
+    return { publicUrl: null, error: "Upload service returned no URL" };
+  }
+  return { publicUrl: json.publicUrl, error: null };
+}
+
 /**
  * Upload a file to Cloudflare R2 via the presigned-PUT flow.
  *
@@ -215,6 +268,20 @@ export async function uploadToStorage(
     }
 
     const realBucket = resolveBucket(bucket);
+
+    // On the web, browser PUT directly to *.r2.cloudflarestorage.com is
+    // blocked by CORS unless the bucket is explicitly configured. Route
+    // the upload through our API server instead, which streams the bytes
+    // to R2 server-side. Native clients keep using the presigned PUT
+    // path (no CORS, saves API server bandwidth on big videos).
+    if (Platform.OS === "web") {
+      const proxied = await proxyUpload(realBucket, filePath, body, mime);
+      if (proxied.error || !proxied.publicUrl) {
+        return { publicUrl: null, error: proxied.error || "Upload failed" };
+      }
+      return { publicUrl: `${proxied.publicUrl}?t=${Date.now()}`, error: null };
+    }
+
     const sign = await getSignedUpload(realBucket, filePath, mime);
     if (sign.error || !sign.data) {
       return { publicUrl: null, error: sign.error || "Sign failed" };
