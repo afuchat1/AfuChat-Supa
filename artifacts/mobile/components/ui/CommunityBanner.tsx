@@ -124,8 +124,7 @@ export default function CommunityBanner({ userId }: { userId: string }) {
     >
       <View style={StyleSheet.absoluteFill}>
         <Animated.View
-          style={[styles.backdrop, { opacity: backdropAnim }]}
-          pointerEvents="none"
+          style={[styles.backdrop, { opacity: backdropAnim, pointerEvents: "none" } as any]}
         />
         <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
 

@@ -251,22 +251,10 @@ export default function ProductTour() {
   return (
     <View style={[StyleSheet.absoluteFill, { pointerEvents: "box-none" } as any]}>
       {/* Dim regions */}
-      <View
-        style={[styles.dim, { left: 0, top: 0, right: 0, height: Math.max(0, ty) }]}
-        pointerEvents="none"
-      />
-      <View
-        style={[styles.dim, { left: 0, top: ty + th, right: 0, bottom: 0 }]}
-        pointerEvents="none"
-      />
-      <View
-        style={[styles.dim, { left: 0, top: ty, width: Math.max(0, tx), height: th }]}
-        pointerEvents="none"
-      />
-      <View
-        style={[styles.dim, { left: tx + tw, top: ty, right: 0, height: th }]}
-        pointerEvents="none"
-      />
+      <View style={[styles.dim, { left: 0, top: 0, right: 0, height: Math.max(0, ty), pointerEvents: "none" } as any]} />
+      <View style={[styles.dim, { left: 0, top: ty + th, right: 0, bottom: 0, pointerEvents: "none" } as any]} />
+      <View style={[styles.dim, { left: 0, top: ty, width: Math.max(0, tx), height: th, pointerEvents: "none" } as any]} />
+      <View style={[styles.dim, { left: tx + tw, top: ty, right: 0, height: th, pointerEvents: "none" } as any]} />
 
       {/* Spotlight ring */}
       <Animated.View
