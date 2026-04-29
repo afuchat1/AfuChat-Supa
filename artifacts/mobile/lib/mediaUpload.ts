@@ -139,7 +139,13 @@ async function getSignedUpload(
   } catch (e: any) {
     return { data: null, error: `Network error: ${e?.message || e}` };
   }
-  const text = await resp.text();
+  const text = await resp.text().catch(() => "");
+  if (!text) {
+    return {
+      data: null,
+      error: `Upload service returned an empty response (HTTP ${resp.status}). Please try again.`,
+    };
+  }
   if (text.trimStart().startsWith("<")) {
     return {
       data: null,
@@ -151,10 +157,13 @@ async function getSignedUpload(
   try {
     json = JSON.parse(text);
   } catch {
-    return { data: null, error: `Invalid response from upload service: ${text.slice(0, 120)}` };
+    return {
+      data: null,
+      error: `Upload service responded with HTTP ${resp.status}: ${text.slice(0, 120)}`,
+    };
   }
   if (!resp.ok) {
-    return { data: null, error: json?.error || `Sign failed (${resp.status})` };
+    return { data: null, error: json?.error || `Sign failed (HTTP ${resp.status})` };
   }
   if (!json?.uploadUrl || !json?.publicUrl) {
     return { data: null, error: "Sign endpoint returned no URL" };
@@ -178,6 +187,22 @@ async function proxyUpload(
   if (!session) {
     return { publicUrl: null, error: "Not authenticated" };
   }
+
+  // Reject empty payloads early so the user gets a clear message instead
+  // of a confusing "Invalid response from upload service" later on.
+  const bodySize =
+    body instanceof Blob
+      ? body.size
+      : body instanceof ArrayBuffer
+        ? body.byteLength
+        : 0;
+  if (!bodySize) {
+    return {
+      publicUrl: null,
+      error: "Selected file is empty or could not be read.",
+    };
+  }
+
   const qs = new URLSearchParams({ bucket, path: filePath }).toString();
   let resp: Response;
   try {
@@ -192,7 +217,25 @@ async function proxyUpload(
   } catch (e: any) {
     return { publicUrl: null, error: `Upload failed: ${e?.message || e}` };
   }
-  const text = await resp.text();
+
+  const text = await resp.text().catch(() => "");
+
+  // Empty body → server returned a status with no payload (proxy timeout,
+  // load balancer interruption, browser-side abort, etc.). Surface the
+  // status code so the user (and we) know what actually happened.
+  if (!text) {
+    if (resp.ok) {
+      return {
+        publicUrl: null,
+        error: `Upload service returned an empty response (HTTP ${resp.status}). Please try again.`,
+      };
+    }
+    return {
+      publicUrl: null,
+      error: `Upload failed (HTTP ${resp.status}). Please try again in a moment.`,
+    };
+  }
+
   if (text.trimStart().startsWith("<")) {
     return {
       publicUrl: null,
@@ -200,17 +243,21 @@ async function proxyUpload(
         "Upload service unreachable (received HTML instead of JSON). Try again in a moment.",
     };
   }
+
   let json: any;
   try {
     json = JSON.parse(text);
   } catch {
     return {
       publicUrl: null,
-      error: `Invalid response from upload service: ${text.slice(0, 120)}`,
+      error: `Upload failed (HTTP ${resp.status}): ${text.slice(0, 120)}`,
     };
   }
   if (!resp.ok) {
-    return { publicUrl: null, error: json?.error || `Upload failed (${resp.status})` };
+    return {
+      publicUrl: null,
+      error: json?.error || `Upload failed (HTTP ${resp.status})`,
+    };
   }
   if (!json?.publicUrl) {
     return { publicUrl: null, error: "Upload service returned no URL" };
