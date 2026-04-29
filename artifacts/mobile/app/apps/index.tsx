@@ -31,6 +31,17 @@ type MiniApp = {
 
 const FEATURED: MiniApp[] = [
   {
+    id: "builtin-watch",
+    slug: "watch",
+    name: "Watch Together",
+    tagline: "Live match rooms · chat & react in real time",
+    category: "entertainment",
+    icon_url: null,
+    open_count: 0,
+    status: "approved",
+    author_id: "afuchat",
+  },
+  {
     id: "builtin-email",
     slug: "email",
     name: "AfuChat Mail",
@@ -241,7 +252,13 @@ function AppCard({ app, colors, mine }: { app: MiniApp; colors: any; mine: boole
   return (
     <TouchableOpacity
       activeOpacity={0.7}
-      onPress={() => router.push(`/apps/${app.slug}` as any)}
+      onPress={() => {
+        if (app.slug === "watch") {
+          router.push("/watch" as any);
+        } else {
+          router.push(`/apps/${app.slug}` as any);
+        }
+      }}
       style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
     >
       {app.icon_url ? (
