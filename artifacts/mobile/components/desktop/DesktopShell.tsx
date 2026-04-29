@@ -85,12 +85,14 @@ export function DesktopShell({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  const bg = isDark ? "#000000" : "#FFFFFF";
-  const contentBg = isDark ? "#000000" : "#FDF8F3";
-  const modalBackdrop = isDark ? "rgba(0,0,0,0.65)" : "rgba(20,20,30,0.45)";
-  const modalCardBg = isDark ? "#0E0E10" : "#FFFFFF";
-  const modalBorder = isDark ? "#1F1F23" : "#E6E7EB";
-  const modalHeaderText = isDark ? "#F2F2F2" : "#1A1A1A";
+  // Flat / YouTube-style: a single surface color across sidebar, top bar
+  // and main content area. No tonal borders between regions.
+  const bg = isDark ? "#0F0F0F" : "#FFFFFF";
+  const contentBg = bg;
+  const modalBackdrop = isDark ? "rgba(0,0,0,0.7)" : "rgba(15,15,15,0.55)";
+  const modalCardBg = isDark ? "#181818" : "#FFFFFF";
+  const modalBorder = isDark ? "#272727" : "#E5E5E5";
+  const modalHeaderText = isDark ? "#F1F1F1" : "#0F0F0F";
 
   const modal = matchModal(pathname);
 

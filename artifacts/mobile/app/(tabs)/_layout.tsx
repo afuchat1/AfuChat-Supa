@@ -100,8 +100,7 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
           : {
               position: "absolute",
               backgroundColor: isIOS ? "transparent" : colors.surface,
-              borderTopWidth: StyleSheet.hairlineWidth,
-              borderTopColor: colors.border,
+              borderTopWidth: 0,
               elevation: 0,
               height: 52 + (insets.bottom > 0 ? insets.bottom : 8),
               paddingBottom: insets.bottom > 0 ? insets.bottom : 8,

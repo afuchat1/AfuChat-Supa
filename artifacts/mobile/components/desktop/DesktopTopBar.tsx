@@ -198,19 +198,19 @@ type ThemePack = {
 function useThemePack(): ThemePack {
   const { isDark, colors } = useTheme();
   return {
-    bg: isDark ? "#0B0B0E" : "#FFFFFF",
-    border: isDark ? "#1C1C20" : "#E6E8EC",
-    text: isDark ? "#EDEDF0" : "#1A1A1F",
-    textMuted: isDark ? "#7E8088" : "#6A6E78",
-    hoverBg: isDark ? "#16171B" : "#F2F4F7",
-    activeBg: isDark ? "#1C1F2A" : "#E7EBFA",
-    activeText: isDark ? "#FFFFFF" : "#1A1A1F",
+    bg: isDark ? "#0F0F0F" : "#FFFFFF",
+    border: isDark ? "#272727" : "#E5E5E5",
+    text: isDark ? "#F1F1F1" : "#0F0F0F",
+    textMuted: isDark ? "#8A8A8A" : "#606060",
+    hoverBg: isDark ? "#272727" : "#F2F2F2",
+    activeBg: isDark ? "#272727" : "#F2F2F2",
+    activeText: isDark ? "#FFFFFF" : "#0F0F0F",
     accent: colors.accent,
-    inputBg: isDark ? "#15161B" : "#F2F4F7",
-    pillBg: isDark ? "#15161B" : "#FFF6E6",
-    badgeBg: "#EF4444",
-    menuBg: isDark ? "#15161B" : "#FFFFFF",
-    menuShadow: isDark ? "rgba(0,0,0,0.6)" : "rgba(20,20,30,0.18)",
+    inputBg: isDark ? "#1F1F1F" : "#F2F2F2",
+    pillBg: isDark ? "#1F1F1F" : "#F2F2F2",
+    badgeBg: "#FF3B30",
+    menuBg: isDark ? "#212121" : "#FFFFFF",
+    menuShadow: "transparent",
   };
 }
 
@@ -466,7 +466,6 @@ export function DesktopTopBar() {
         styles.bar,
         {
           backgroundColor: theme.bg,
-          borderBottomColor: theme.border,
           height: TOPBAR_HEIGHT,
         },
       ]}
@@ -625,7 +624,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
-    borderBottomWidth: 1,
     gap: 16,
   },
   left: {
@@ -664,11 +662,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 6,
     zIndex: 1000,
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    // @ts-expect-error rn-web supports
-    boxShadow: "0 10px 28px rgba(0,0,0,0.15)",
   },
   dropdownRow: {
     flexDirection: "row",
@@ -714,10 +707,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 10,
-    height: 30,
+    paddingHorizontal: 12,
+    height: 32,
     borderRadius: 999,
-    borderWidth: 1,
   },
   coinText: {
     fontFamily: "Inter_600SemiBold",
