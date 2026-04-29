@@ -24,7 +24,7 @@ import {
   isR2Configured,
   presignPutUrl,
   publicUrlForKey,
-  R2_PUBLIC_BASE_URL,
+  getR2PublicBaseUrl,
   sumPrefix,
 } from "../lib/r2";
 import { logger } from "../lib/logger";
@@ -91,7 +91,7 @@ async function authedUserId(req: Request, res: Response): Promise<string | null>
 /** Public, unauthenticated endpoint so clients know R2 base URL + bucket. */
 router.get("/uploads/config", (_req, res) => {
   res.json({
-    publicBaseUrl: R2_PUBLIC_BASE_URL,
+    publicBaseUrl: getR2PublicBaseUrl(),
     configured: isR2Configured(),
   });
 });

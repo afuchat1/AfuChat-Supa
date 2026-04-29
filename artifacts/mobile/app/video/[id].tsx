@@ -1640,7 +1640,23 @@ export default function VideoPlayerScreen() {
   async function handleDownload(item: VideoPost) {
     if (downloading) return;
     if (Platform.OS === "web") {
-      showToast("Download is only available in the app");
+      // Browser-native download — let the URL stream straight to the user's
+      // Downloads folder via an anchor with the `download` attribute.
+      try {
+        const ext =
+          item.video_url.split("?")[0].split(".").pop()?.toLowerCase() || "mp4";
+        const a = document.createElement("a");
+        a.href = item.video_url;
+        a.download = `afuchat_${item.id}.${ext}`;
+        a.target = "_blank";
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        showToast("⬇ Download started");
+      } catch {
+        showToast("Couldn't start download");
+      }
       return;
     }
     setDownloading(true);

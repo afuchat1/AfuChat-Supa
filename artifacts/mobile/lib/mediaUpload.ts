@@ -1,21 +1,25 @@
 /**
- * Media upload helpers — Supabase Storage backed.
+ * Media upload helpers — Cloudflare R2 backed.
  *
- * The mobile client uploads files directly to Supabase Storage using the
- * authenticated user's session. Buckets and RLS policies are configured
- * server-side in Supabase. The returned `publicUrl` is what we persist
- * into the relevant DB column.
+ * Uploads flow:
+ *   1. Client requests a short-lived presigned PUT URL from the API server
+ *      (`POST /api/uploads/sign`) using the user's Supabase access token.
+ *   2. Client PUTs the file bytes directly to Cloudflare R2.
+ *   3. The CDN URL (`https://cdn.afuchat.com/<bucket>/<path>`) is returned
+ *      to the caller, who writes it into whichever Supabase table needs it.
  *
- * Works identically on native (iOS/Android) and on the web because we
- * always normalize the file URI into a Blob/ArrayBuffer before upload.
+ * Supabase therefore only stores the *reference* (the CDN URL) inside the
+ * relevant row — the actual file bytes live on R2 / cdn.afuchat.com and
+ * are served from there.
  */
 
 import { Platform } from "react-native";
 import { supabase } from "./supabase";
 
-// Resolve the API server base URL — used for storage usage stats and the
-// optional video transcoding pipeline. Uploads themselves go straight to
-// Supabase Storage, so they don't need this.
+// Resolve the API server base URL — used for sign requests and storage
+// usage stats. On the web we default to the same origin, which is then
+// proxied to the API server by `metro.config.js` (dev) and `serve.js`
+// (prod).
 const API_BASE: string = (() => {
   const explicit = (process.env.EXPO_PUBLIC_API_URL || "").trim();
   if (explicit) return explicit.replace(/\/+$/, "");
@@ -57,13 +61,16 @@ function apiUrl(path: string): string {
 }
 
 /**
- * Map "logical" bucket names (used throughout the app) to the actual
- * Supabase Storage bucket id. Most buckets share the same name, but a
- * couple were renamed in Supabase.
+ * Map "logical" bucket names used throughout the app to the R2 key prefix.
+ * The R2 bucket is a single `afuchat-media` and these names become folders
+ * inside it. Two historical Supabase bucket names are aliased so older
+ * call sites keep working.
  */
 const BUCKET_ALIAS: Record<string, string> = {
-  "chat-media": "chat-attachments",
-  banners: "profile-banners",
+  "chat-media": "chat-media",
+  "chat-attachments": "chat-media",
+  banners: "banners",
+  "profile-banners": "banners",
 };
 
 function resolveBucket(bucket: string): string {
@@ -100,6 +107,70 @@ async function fileUriToBlob(fileUri: string, mime: string): Promise<Blob> {
   }
 }
 
+interface SignedUpload {
+  uploadUrl: string;
+  publicUrl: string;
+  key: string;
+}
+
+async function getSignedUpload(
+  bucket: string,
+  filePath: string,
+  contentType: string,
+): Promise<{ data: SignedUpload | null; error: string | null }> {
+  if (!API_BASE) {
+    return { data: null, error: "API base URL not configured" };
+  }
+  const session = (await supabase.auth.getSession()).data.session;
+  if (!session) {
+    return { data: null, error: "Not authenticated" };
+  }
+  let resp: Response;
+  try {
+    resp = await fetch(apiUrl("/uploads/sign"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ bucket, path: filePath, contentType }),
+    });
+  } catch (e: any) {
+    return { data: null, error: `Network error: ${e?.message || e}` };
+  }
+  const text = await resp.text();
+  if (text.trimStart().startsWith("<")) {
+    return {
+      data: null,
+      error:
+        "Upload service unreachable (received HTML instead of JSON). Try again in a moment.",
+    };
+  }
+  let json: any;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return { data: null, error: `Invalid response from upload service: ${text.slice(0, 120)}` };
+  }
+  if (!resp.ok) {
+    return { data: null, error: json?.error || `Sign failed (${resp.status})` };
+  }
+  if (!json?.uploadUrl || !json?.publicUrl) {
+    return { data: null, error: "Sign endpoint returned no URL" };
+  }
+  return {
+    data: { uploadUrl: json.uploadUrl, publicUrl: json.publicUrl, key: json.key },
+    error: null,
+  };
+}
+
+/**
+ * Upload a file to Cloudflare R2 via the presigned-PUT flow.
+ *
+ * `bucket` is the *logical* bucket name (avatars, post-images, videos, …)
+ * and is used as the key prefix inside the single R2 bucket.
+ * Returns the CDN URL of the uploaded object on success.
+ */
 export async function uploadToStorage(
   bucket: string,
   filePath: string,
@@ -116,21 +187,12 @@ export async function uploadToStorage(
       : fileUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "bin";
     const mime = resolvedMime || getMime(ext);
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) {
-      return { publicUrl: null, error: "Not authenticated" };
-    }
-
     let body: Blob | ArrayBuffer;
-
     if (
       Platform.OS !== "web" &&
       !fileUri.startsWith("data:") &&
       !fileUri.startsWith("blob:")
     ) {
-      // React Native: read the file as ArrayBuffer. The supabase-js client
-      // uploads ArrayBuffer cleanly without going through Blob, which can
-      // be flaky on Hermes for large files.
       try {
         const r = await fetch(fileUri);
         body = await r.arrayBuffer();
@@ -152,25 +214,30 @@ export async function uploadToStorage(
     }
 
     const realBucket = resolveBucket(bucket);
-    const { error: upErr } = await supabase.storage
-      .from(realBucket)
-      .upload(filePath, body as any, {
-        contentType: mime,
-        upsert: true,
-        cacheControl: "3600",
+    const sign = await getSignedUpload(realBucket, filePath, mime);
+    if (sign.error || !sign.data) {
+      return { publicUrl: null, error: sign.error || "Sign failed" };
+    }
+
+    let putResp: Response;
+    try {
+      putResp = await fetch(sign.data.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": mime },
+        body: body as any,
       });
-
-    if (upErr) {
-      return { publicUrl: null, error: upErr.message || "Upload failed" };
+    } catch (e: any) {
+      return { publicUrl: null, error: `Upload failed: ${e?.message || e}` };
+    }
+    if (!putResp.ok) {
+      const text = await putResp.text().catch(() => "");
+      return {
+        publicUrl: null,
+        error: `Upload rejected (${putResp.status}): ${text.slice(0, 120) || "no body"}`,
+      };
     }
 
-    const { data: pub } = supabase.storage
-      .from(realBucket)
-      .getPublicUrl(filePath);
-    if (!pub?.publicUrl) {
-      return { publicUrl: null, error: "Failed to resolve public URL" };
-    }
-    return { publicUrl: `${pub.publicUrl}?t=${Date.now()}`, error: null };
+    return { publicUrl: `${sign.data.publicUrl}?t=${Date.now()}`, error: null };
   } catch (e: any) {
     return { publicUrl: null, error: e?.message || "Upload failed" };
   }
