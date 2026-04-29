@@ -16,6 +16,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
+import { AvatarViewer } from "@/components/ui/AvatarViewer";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { notifyNewFollow } from "@/lib/notifyUser";
@@ -88,6 +89,7 @@ export default function ContactProfileScreen() {
   const [postsLoading, setPostsLoading] = useState(true);
   const [showBadgeInfo, setShowBadgeInfo] = useState(false);
   const [hasShop, setHasShop] = useState(false);
+  const [avatarOpen, setAvatarOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -298,10 +300,14 @@ export default function ContactProfileScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
         <View style={[st.heroCard, { backgroundColor: colors.surface }]}>
           <View style={st.avatarSection}>
-            <View style={st.avatarWrap}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => setAvatarOpen(true)}
+              style={st.avatarWrap}
+            >
               <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={96} />
               {onlineStatus?.isOnline && <View style={st.onlineDot} />}
-            </View>
+            </TouchableOpacity>
           </View>
 
           <TouchableOpacity style={st.nameRow} activeOpacity={0.8} onPress={() => (profile?.is_verified || profile?.is_organization_verified) && setShowBadgeInfo(!showBadgeInfo)}>
@@ -540,6 +546,12 @@ export default function ContactProfileScreen() {
           )}
         </View>
       </ScrollView>
+      <AvatarViewer
+        visible={avatarOpen}
+        uri={profile?.avatar_url}
+        name={profile?.display_name || undefined}
+        onClose={() => setAvatarOpen(false)}
+      />
     </View>
   );
 }

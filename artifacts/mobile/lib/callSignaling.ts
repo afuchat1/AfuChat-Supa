@@ -61,6 +61,31 @@ export type CallStatus =
   | "missed"
   | "busy";
 
+/**
+ * Quality buckets surfaced to the UI. Computed from the underlying
+ * `RTCPeerConnection.iceConnectionState` and per-tick `getStats()`
+ * samples (round-trip time, packet loss, jitter).
+ */
+export type CallQuality =
+  | "connecting"
+  | "excellent"
+  | "good"
+  | "poor"
+  | "reconnecting"
+  | "disconnected";
+
+export interface CallQualityStats {
+  quality: CallQuality;
+  /** Round-trip time in milliseconds, if available. */
+  rttMs: number | null;
+  /** Fraction of packets lost in the last sample (0-1). */
+  packetLoss: number | null;
+  /** Jitter in milliseconds, if available. */
+  jitterMs: number | null;
+  /** Raw ICE connection state for debugging. */
+  iceState: string | null;
+}
+
 export interface CallRecord {
   id: string;
   room_id: string;
@@ -164,12 +189,26 @@ export class CallSession {
   private offerRetransmitTimer: ReturnType<typeof setInterval> | null = null;
   private answered = false;
   private calleeReady = false;
+  private statsTimer: ReturnType<typeof setInterval> | null = null;
+  private lastStatsSample: {
+    timestamp: number;
+    packetsLost: number;
+    packetsReceived: number;
+  } | null = null;
+  private currentQuality: CallQualityStats = {
+    quality: "connecting",
+    rttMs: null,
+    packetLoss: null,
+    jitterMs: null,
+    iceState: null,
+  };
 
   public onLocalStream?: (stream: any) => void;
   public onRemoteStream?: (stream: any) => void;
   public onCallEnded?: () => void;
   public onCallConnected?: () => void;
   public onError?: (err: string) => void;
+  public onQualityChange?: (stats: CallQualityStats) => void;
 
   constructor(callId: string, isCaller: boolean) {
     this.callId = callId;
@@ -228,12 +267,37 @@ export class CallSession {
       const state = this.pc?.connectionState;
       if (state === "connected") {
         this.onCallConnected?.();
+        this.startStatsMonitor();
       } else if (
         state === "disconnected" ||
         state === "failed" ||
         state === "closed"
       ) {
         this.onCallEnded?.();
+      }
+    };
+
+    this.pc.oniceconnectionstatechange = () => {
+      const ice = this.pc?.iceConnectionState as string | undefined;
+      if (!ice) return;
+      this.currentQuality.iceState = ice;
+      let next: CallQuality | null = null;
+      if (ice === "checking" || ice === "new") next = "connecting";
+      else if (ice === "disconnected") next = "reconnecting";
+      else if (ice === "failed" || ice === "closed") next = "disconnected";
+      else if (ice === "connected" || ice === "completed") {
+        // keep whatever the stats monitor set, otherwise mark good
+        if (
+          this.currentQuality.quality === "connecting" ||
+          this.currentQuality.quality === "reconnecting" ||
+          this.currentQuality.quality === "disconnected"
+        ) {
+          next = "good";
+        }
+      }
+      if (next && next !== this.currentQuality.quality) {
+        this.currentQuality = { ...this.currentQuality, quality: next };
+        this.onQualityChange?.(this.currentQuality);
       }
     };
 
@@ -413,6 +477,139 @@ export class CallSession {
     }
   }
 
+  /**
+   * Sample WebRTC stats every 2s to derive an accurate quality bucket from
+   * RTT, jitter, and packet loss. Falls back to ICE state alone if the
+   * browser/native shim doesn't expose `getStats`.
+   */
+  private startStatsMonitor() {
+    if (this.statsTimer) return;
+    if (!this.pc || typeof this.pc.getStats !== "function") return;
+    this.statsTimer = setInterval(() => {
+      this.sampleStats().catch(() => {});
+    }, 2000);
+    // Take an immediate sample so the indicator updates fast.
+    this.sampleStats().catch(() => {});
+  }
+
+  private stopStatsMonitor() {
+    if (this.statsTimer) {
+      clearInterval(this.statsTimer);
+      this.statsTimer = null;
+    }
+    this.lastStatsSample = null;
+  }
+
+  private async sampleStats() {
+    if (!this.pc) return;
+    let report: any;
+    try {
+      report = await this.pc.getStats();
+    } catch {
+      return;
+    }
+    let rttMs: number | null = null;
+    let jitterMs: number | null = null;
+    let packetsLost = 0;
+    let packetsReceived = 0;
+    const iter = typeof report?.values === "function" ? report.values() : report;
+    if (iter && typeof iter[Symbol.iterator] === "function") {
+      for (const stat of iter as Iterable<any>) {
+        if (!stat || typeof stat !== "object") continue;
+        if (
+          stat.type === "candidate-pair" &&
+          (stat.state === "succeeded" || stat.nominated) &&
+          typeof stat.currentRoundTripTime === "number"
+        ) {
+          rttMs = stat.currentRoundTripTime * 1000;
+        }
+        if (stat.type === "inbound-rtp" && !stat.isRemote) {
+          if (typeof stat.jitter === "number") {
+            const j = stat.jitter * 1000;
+            jitterMs = jitterMs == null ? j : Math.max(jitterMs, j);
+          }
+          if (typeof stat.packetsLost === "number") {
+            packetsLost += stat.packetsLost;
+          }
+          if (typeof stat.packetsReceived === "number") {
+            packetsReceived += stat.packetsReceived;
+          }
+        }
+        if (
+          stat.type === "remote-inbound-rtp" &&
+          typeof stat.roundTripTime === "number" &&
+          rttMs == null
+        ) {
+          rttMs = stat.roundTripTime * 1000;
+        }
+      }
+    }
+
+    let packetLoss: number | null = null;
+    const now = Date.now();
+    if (this.lastStatsSample) {
+      const dLost = packetsLost - this.lastStatsSample.packetsLost;
+      const dRecv = packetsReceived - this.lastStatsSample.packetsReceived;
+      const total = dLost + dRecv;
+      if (total > 0) packetLoss = Math.max(0, dLost) / total;
+    }
+    this.lastStatsSample = { timestamp: now, packetsLost, packetsReceived };
+
+    // Don't override an actively-degraded ICE state.
+    const ice = this.currentQuality.iceState;
+    if (ice === "disconnected") {
+      this.currentQuality = {
+        ...this.currentQuality,
+        rttMs,
+        jitterMs,
+        packetLoss,
+      };
+      this.onQualityChange?.(this.currentQuality);
+      return;
+    }
+    if (ice === "failed" || ice === "closed") return;
+
+    // Bucket quality from measured metrics. Thresholds chosen for voice/video
+    // calls: <150ms RTT + <2% loss feels excellent; >400ms or >8% loss is poor.
+    let quality: CallQuality = "good";
+    const lossPct = packetLoss == null ? 0 : packetLoss * 100;
+    const rtt = rttMs ?? 0;
+    const jit = jitterMs ?? 0;
+    if (rtt < 150 && lossPct < 2 && jit < 30) quality = "excellent";
+    else if (rtt < 300 && lossPct < 5 && jit < 60) quality = "good";
+    else quality = "poor";
+
+    // If we have no measurements yet (first sample after connect), prefer
+    // "good" over a stale "connecting".
+    if (
+      rttMs == null &&
+      packetLoss == null &&
+      jitterMs == null &&
+      this.currentQuality.quality === "connecting"
+    ) {
+      quality = "good";
+    }
+
+    const next: CallQualityStats = {
+      quality,
+      rttMs,
+      packetLoss,
+      jitterMs,
+      iceState: ice,
+    };
+    const changed =
+      next.quality !== this.currentQuality.quality ||
+      next.rttMs !== this.currentQuality.rttMs ||
+      next.packetLoss !== this.currentQuality.packetLoss ||
+      next.jitterMs !== this.currentQuality.jitterMs;
+    this.currentQuality = next;
+    if (changed) this.onQualityChange?.(this.currentQuality);
+  }
+
+  getQuality(): CallQualityStats {
+    return this.currentQuality;
+  }
+
   private async drainCandidates() {
     for (const c of this.pendingCandidates) {
       try {
@@ -458,6 +655,7 @@ export class CallSession {
 
   cleanup() {
     this.stopOfferRetransmit();
+    this.stopStatsMonitor();
     this.localStream?.getTracks().forEach((t: any) => t.stop());
     this.pc?.close();
     this.channel?.unsubscribe();

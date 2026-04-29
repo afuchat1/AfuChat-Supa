@@ -14,8 +14,10 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/ui/Avatar";
+import { AvatarViewer } from "@/components/ui/AvatarViewer";
 import { useAuth } from "@/context/AuthContext";
 import {
+  CallQualityStats,
   CallRecord,
   CallSession,
   CallType,
@@ -26,6 +28,7 @@ import {
 } from "@/lib/callSignaling";
 import { WebVideoStream } from "@/components/call/WebVideoStream";
 import { CallChatPanel } from "@/components/call/CallChatPanel";
+import { CallQualityBadge } from "@/components/call/CallQualityBadge";
 import { notifyCallInitiated } from "@/lib/notifyUser";
 
 type CallState = "connecting" | "ringing" | "active" | "ended";
@@ -53,6 +56,14 @@ export default function CallScreen() {
   const [remoteStream, setRemoteStream] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const [quality, setQuality] = useState<CallQualityStats>({
+    quality: "connecting",
+    rttMs: null,
+    packetLoss: null,
+    jitterMs: null,
+    iceState: null,
+  });
 
   const sessionRef = useRef<CallSession | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -132,6 +143,7 @@ export default function CallScreen() {
         endCall("ended");
       };
       session.onError = (msg) => setError(msg);
+      session.onQualityChange = (q) => setQuality(q);
 
       if (amCaller) {
         await playRingtone();
@@ -223,7 +235,11 @@ export default function CallScreen() {
       : callState === "ringing"
       ? "Ringing..."
       : callState === "active"
-      ? formatDuration(duration)
+      ? quality.quality === "reconnecting"
+        ? "Reconnecting…"
+        : quality.quality === "disconnected"
+        ? "Connection lost"
+        : formatDuration(duration)
       : "Call ended";
 
   return (
@@ -245,13 +261,17 @@ export default function CallScreen() {
 
       <View style={[styles.overlay, { paddingTop: insets.top + 16 }]}>
         <View style={styles.callerSection}>
-          <View style={styles.avatarRing}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => setAvatarOpen(true)}
+            style={styles.avatarRing}
+          >
             <Avatar
               uri={otherPerson?.avatar_url}
               name={otherPerson?.display_name || "?"}
               size={isVideo && callState === "active" ? 72 : 100}
             />
-          </View>
+          </TouchableOpacity>
           <Text style={styles.callerName}>
             {otherPerson?.display_name || "Unknown"}
           </Text>
@@ -260,6 +280,11 @@ export default function CallScreen() {
             <View style={styles.callTypeBadge}>
               <Ionicons name="videocam" size={14} color="#fff" />
               <Text style={styles.callTypeTxt}>Video call</Text>
+            </View>
+          )}
+          {callState === "active" && (
+            <View style={styles.qualityWrap}>
+              <CallQualityBadge stats={quality} />
             </View>
           )}
         </View>
@@ -374,6 +399,13 @@ export default function CallScreen() {
           onClose={() => setChatOpen(false)}
         />
       )}
+
+      <AvatarViewer
+        visible={avatarOpen}
+        uri={otherPerson?.avatar_url}
+        name={otherPerson?.display_name || undefined}
+        onClose={() => setAvatarOpen(false)}
+      />
     </View>
   );
 }
@@ -440,6 +472,9 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 12,
     fontFamily: "Inter_500Medium",
+  },
+  qualityWrap: {
+    marginTop: 10,
   },
   localVideoWrap: {
     position: "absolute",

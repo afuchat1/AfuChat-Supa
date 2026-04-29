@@ -25,6 +25,7 @@ import { useAuth } from "@/context/AuthContext";
 import { showAlert } from "@/lib/alert";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
+import { AvatarViewer } from "@/components/ui/AvatarViewer";
 import { Separator } from "@/components/ui/Separator";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import Colors from "@/constants/colors";
@@ -184,6 +185,7 @@ function XpLevelBar({ xp }: { xp: number }) {
 export default function MeScreen() {
   const { colors, accent } = useTheme();
   const { profile, isPremium, subscription, loading } = useAuth();
+  const [avatarOpen, setAvatarOpen] = useState(false);
   const isAdmin = !!profile?.is_admin;
   const insets = useSafeAreaInsets();
 
@@ -213,7 +215,12 @@ export default function MeScreen() {
         onPress={() => router.push("/profile/edit")}
         activeOpacity={0.85}
       >
-        <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={68} premium={isPremium} />
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => setAvatarOpen(true)}
+        >
+          <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={68} premium={isPremium} />
+        </TouchableOpacity>
         <View style={styles.profileInfo}>
           <View style={styles.nameRow}>
             <Text style={[styles.profileName, { color: colors.text }]}>
@@ -374,6 +381,12 @@ export default function MeScreen() {
       )}
 
     </ScrollView>
+    <AvatarViewer
+      visible={avatarOpen}
+      uri={profile?.avatar_url}
+      name={profile?.display_name || undefined}
+      onClose={() => setAvatarOpen(false)}
+    />
     </View>
   );
 }
