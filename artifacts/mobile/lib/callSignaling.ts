@@ -161,6 +161,9 @@ export class CallSession {
   private pendingCandidates: any[] = [];
   private remoteDescSet = false;
   private callType: CallType = "voice";
+  private offerRetransmitTimer: ReturnType<typeof setInterval> | null = null;
+  private answered = false;
+  private calleeReady = false;
 
   public onLocalStream?: (stream: any) => void;
   public onRemoteStream?: (stream: any) => void;
@@ -214,14 +217,10 @@ export class CallSession {
 
     this.pc.onicecandidate = (event: any) => {
       if (event.candidate) {
-        this.channel?.send({
-          type: "broadcast",
-          event: "ice-candidate",
-          payload: {
-            candidate: event.candidate.toJSON(),
-            from: this.isCaller ? "caller" : "callee",
-          },
-        });
+        this.broadcast("ice-candidate", {
+          candidate: event.candidate.toJSON(),
+          from: this.isCaller ? "caller" : "callee",
+        }).catch(() => {});
       }
     };
 
@@ -239,7 +238,7 @@ export class CallSession {
     };
 
     this.channel = supabase.channel(`call:${this.callId}`, {
-      config: { broadcast: { self: false } },
+      config: { broadcast: { self: false, ack: true } },
     });
 
     this.channel.on(
@@ -247,18 +246,20 @@ export class CallSession {
       { event: "offer" },
       async ({ payload }: any) => {
         if (!this.isCaller && this.pc) {
-          await this.pc.setRemoteDescription(
-            new RTCSessionDescription(payload.offer)
-          );
-          this.remoteDescSet = true;
-          await this.drainCandidates();
-          const answer = await this.pc.createAnswer();
-          await this.pc.setLocalDescription(answer);
-          this.channel.send({
-            type: "broadcast",
-            event: "answer",
-            payload: { answer: this.pc.localDescription },
-          });
+          if (this.remoteDescSet) return; // ignore retransmits once we've answered
+          try {
+            await this.pc.setRemoteDescription(
+              new RTCSessionDescription(payload.offer)
+            );
+            this.remoteDescSet = true;
+            await this.drainCandidates();
+            const answer = await this.pc.createAnswer();
+            await this.pc.setLocalDescription(answer);
+            await this.broadcast("answer", { answer: this.pc.localDescription });
+          } catch (e) {
+            // If the remote description is already set or in a bad state,
+            // ignore — the next ICE round will recover.
+          }
         }
       }
     );
@@ -267,15 +268,19 @@ export class CallSession {
       "broadcast",
       { event: "answer" },
       async ({ payload }: any) => {
-        if (this.isCaller && this.pc) {
-          await this.pc.setRemoteDescription(
-            new RTCSessionDescription(payload.answer)
-          );
-          this.remoteDescSet = true;
-          await this.drainCandidates();
-          await updateCallStatus(this.callId, "active", {
-            answered_at: new Date().toISOString(),
-          });
+        if (this.isCaller && this.pc && !this.answered) {
+          this.answered = true;
+          this.stopOfferRetransmit();
+          try {
+            await this.pc.setRemoteDescription(
+              new RTCSessionDescription(payload.answer)
+            );
+            this.remoteDescSet = true;
+            await this.drainCandidates();
+            await updateCallStatus(this.callId, "active", {
+              answered_at: new Date().toISOString(),
+            });
+          } catch (_) {}
         }
       }
     );
@@ -301,12 +306,25 @@ export class CallSession {
       }
     );
 
+    // Callee → caller "I've joined and I'm ready" handshake. Without
+    // this, the caller sends the offer before the callee's WebSocket is
+    // open and supabase-realtime falls back to slow REST broadcast,
+    // which often loses the message and leaves the call stuck on
+    // "Connecting...".
+    this.channel.on("broadcast", { event: "callee-ready" }, () => {
+      if (this.isCaller && !this.calleeReady) {
+        this.calleeReady = true;
+        // Send the offer immediately now that we know the callee is listening.
+        this.sendOfferNow().catch(() => {});
+      }
+    });
+
     this.channel.on("broadcast", { event: "end-call" }, () => {
       this.cleanup();
       this.onCallEnded?.();
     });
 
-    await this.channel.subscribe();
+    await this.waitForSubscribed();
 
     if (this.isCaller) {
       const offer = await this.pc.createOffer({
@@ -314,12 +332,84 @@ export class CallSession {
         offerToReceiveVideo: callType === "video",
       });
       await this.pc.setLocalDescription(offer);
-      await new Promise((r) => setTimeout(r, 600));
-      this.channel.send({
-        type: "broadcast",
-        event: "offer",
-        payload: { offer: this.pc.localDescription },
+      // Start retransmitting the offer every 1.5s until we receive an
+      // answer. The first attempt fires immediately; subsequent attempts
+      // cover the case where the callee subscribed after our first send.
+      this.startOfferRetransmit();
+    } else {
+      // Tell the caller we're listening. Retry a couple of times in case
+      // the caller's subscription wasn't ready when we sent it.
+      for (let i = 0; i < 5; i++) {
+        await this.broadcast("callee-ready", {});
+        await new Promise((r) => setTimeout(r, 500));
+        if (this.remoteDescSet) break;
+      }
+    }
+  }
+
+  /** Wait until the realtime channel reaches the SUBSCRIBED state. */
+  private waitForSubscribed(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        // Don't reject — fall back to REST broadcast rather than failing
+        // the call entirely.
+        resolve();
+      }, 5000);
+      this.channel.subscribe((status: string) => {
+        if (settled) return;
+        if (status === "SUBSCRIBED") {
+          settled = true;
+          clearTimeout(timeout);
+          resolve();
+        } else if (
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT" ||
+          status === "CLOSED"
+        ) {
+          settled = true;
+          clearTimeout(timeout);
+          reject(new Error(`Realtime ${status}`));
+        }
       });
+    });
+  }
+
+  /** Send a broadcast over the realtime channel. */
+  private async broadcast(event: string, payload: any) {
+    try {
+      await this.channel?.send({ type: "broadcast", event, payload });
+    } catch (_) {}
+  }
+
+  private async sendOfferNow() {
+    if (this.answered || !this.pc?.localDescription) return;
+    await this.broadcast("offer", {
+      offer: this.pc.localDescription,
+    });
+  }
+
+  private startOfferRetransmit() {
+    this.stopOfferRetransmit();
+    // First send immediately
+    this.sendOfferNow().catch(() => {});
+    let attempts = 0;
+    this.offerRetransmitTimer = setInterval(() => {
+      attempts++;
+      if (this.answered || attempts > 20) {
+        this.stopOfferRetransmit();
+        return;
+      }
+      this.sendOfferNow().catch(() => {});
+    }, 1500);
+  }
+
+  private stopOfferRetransmit() {
+    if (this.offerRetransmitTimer) {
+      clearInterval(this.offerRetransmitTimer);
+      this.offerRetransmitTimer = null;
     }
   }
 
@@ -363,14 +453,11 @@ export class CallSession {
   }
 
   sendEndSignal() {
-    this.channel?.send({
-      type: "broadcast",
-      event: "end-call",
-      payload: {},
-    });
+    this.broadcast("end-call", {}).catch(() => {});
   }
 
   cleanup() {
+    this.stopOfferRetransmit();
     this.localStream?.getTracks().forEach((t: any) => t.stop());
     this.pc?.close();
     this.channel?.unsubscribe();

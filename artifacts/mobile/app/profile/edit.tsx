@@ -17,7 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "@/lib/supabase";
-import { uploadAvatar as uploadAvatarMedia } from "@/lib/mediaUpload";
+import { uploadAvatarWithError } from "@/lib/mediaUpload";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
@@ -59,11 +59,14 @@ export default function EditProfileScreen() {
 
   async function uploadAvatar(): Promise<string | null> {
     if (!avatarUri || !profile?.id) return null;
-    const url = await uploadAvatarMedia(profile.id, avatarUri);
-    if (!url) {
-      showAlert("Upload failed", "Could not upload avatar. Please try again.");
+    const { publicUrl, error } = await uploadAvatarWithError(profile.id, avatarUri);
+    if (!publicUrl) {
+      showAlert(
+        "Upload failed",
+        error || "Could not upload avatar. Please try again.",
+      );
     }
-    return url;
+    return publicUrl;
   }
 
   async function save() {

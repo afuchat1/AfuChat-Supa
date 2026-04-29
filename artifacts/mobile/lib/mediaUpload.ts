@@ -315,23 +315,30 @@ export async function uploadAvatar(
   userId: string,
   imageUri: string,
 ): Promise<string | null> {
-  const ext = imageUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
+  const result = await uploadAvatarWithError(userId, imageUri);
+  if (result.error) {
+    console.warn("Avatar upload failed:", result.error);
+  }
+  return result.publicUrl;
+}
+
+/**
+ * Same as `uploadAvatar` but returns the error string so callers can
+ * surface a specific message to the user instead of a generic
+ * "Could not upload avatar".
+ */
+export async function uploadAvatarWithError(
+  userId: string,
+  imageUri: string,
+): Promise<{ publicUrl: string | null; error: string | null }> {
+  const ext = imageUri.startsWith("data:")
+    ? imageUri.match(/data:image\/([^;]+)/)?.[1]?.replace("jpeg", "jpg") || "jpg"
+    : imageUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
   const safeExt = ["png", "webp"].includes(ext) ? ext : "jpg";
   const fileName = `${userId}/avatar_${Date.now()}.${safeExt}`;
   const contentType = `image/${safeExt === "jpg" ? "jpeg" : safeExt}`;
 
-  const { publicUrl, error } = await uploadToStorage(
-    "avatars",
-    fileName,
-    imageUri,
-    contentType,
-  );
-
-  if (error) {
-    console.warn("Avatar upload failed:", error);
-    return null;
-  }
-  return publicUrl;
+  return uploadToStorage("avatars", fileName, imageUri, contentType);
 }
 
 const MIME_TO_EXT: Record<string, string> = {
