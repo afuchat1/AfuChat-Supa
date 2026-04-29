@@ -1,0 +1,179 @@
+Build a “Watch Together” live match feature for AfuChat focused on real-time chat and fan interaction (NOT video streaming).
+
+## 🎯 Goal
+
+Create a simple, fast, and engaging experience where users can join live football match rooms, chat, and react in real time while watching matches externally.
+
+---
+
+## ⚙️ Core Features
+
+### 1. Live Matches List (Home Screen)
+
+* Fetch live and upcoming matches from a football API (e.g., SportMonks or API-Football)
+* Display:
+
+  * Team names
+  * Score (if live)
+  * Match time (e.g., 34’)
+  * Status (LIVE / UPCOMING)
+* CTA button: “Join Room”
+* Auto-refresh every 30–60 seconds
+
+---
+
+### 2. Auto Match Room Creation
+
+* Automatically create a room when a match status becomes LIVE
+* Room ID format: `match_<fixture_id>`
+* Store in database:
+
+  * match_id
+  * teams
+  * start_time
+  * status
+
+---
+
+### 3. Match Room UI
+
+#### Header (sticky)
+
+* Team names + score
+* Match time (e.g., 67’)
+* LIVE indicator (red dot)
+
+#### Reactions Bar
+
+* Buttons:
+
+  * ⚽ Goal
+  * 🔥 Fire
+  * 😱 Wow
+  * 😡 Ref
+* On click:
+
+  * Increment reaction count (real-time)
+  * Trigger floating animation (frontend)
+* Store counts in DB or realtime state
+
+#### Chat Section
+
+* Real-time messaging using Supabase Realtime
+* Message types:
+
+  * user messages
+  * system messages (e.g., “⚽ GOAL! Team A scored”)
+
+#### Input Box
+
+* Text input + emoji support
+* Send message instantly
+
+---
+
+### 4. Smart Match Events (from API)
+
+* Listen for events:
+
+  * Goals
+  * Red/Yellow cards
+  * Half-time / Full-time
+* On event:
+
+  * Insert system message into chat
+  * Optionally trigger UI highlight
+
+---
+
+### 5. Presence / Online Count
+
+* Show number of active users in room
+* Use Supabase presence or lightweight tracking
+
+---
+
+## 🗄 Database (Supabase)
+
+### rooms
+
+* id
+* match_id
+* teams
+* status
+* created_at
+
+### messages
+
+* id
+* room_id
+* user_id
+* content
+* type (user/system)
+* created_at
+
+### reactions
+
+* id
+* room_id
+* reaction_type
+* count
+
+---
+
+## 🔄 Realtime
+
+Use Supabase Realtime for:
+
+* Chat messages
+* Reaction updates
+* Presence (optional)
+
+---
+
+## 🎨 UI/UX Guidelines
+
+* Dark mode default
+* Clean, minimal layout
+* Sticky header
+* Smooth animations (reactions floating up)
+* Fast loading (optimize for low bandwidth)
+
+---
+
+## 🚫 Important Constraints
+
+* DO NOT implement video streaming
+* DO NOT embed illegal streams
+* This feature is chat + data only
+
+---
+
+## 🚀 Optional Enhancements (if time allows)
+
+* Polls (Who will win?)
+* Voice chat rooms
+* Notifications for goals
+* “Top fans” leaderboard per match
+
+---
+
+## 📦 Deliverables
+
+* Fully working frontend screens
+* Supabase schema + integration
+* API integration for match data
+* Realtime chat + reactions working
+* Clean and responsive UI
+
+---
+
+## 🧠 Key Principle
+
+Focus on:
+
+* Speed
+* Simplicity
+* Real-time interaction
+
+This is a “second-screen experience” where users chat while watching matches elsewhere.

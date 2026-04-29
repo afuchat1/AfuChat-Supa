@@ -30,9 +30,11 @@
 
 ---
 
+> ⚠️ **Before contributing, read [DEVELOPMENT_RULES.md](./DEVELOPMENT_RULES.md).** Supabase and Cloudflare R2 are locked infrastructure — do not migrate, replace, or "modernize" them.
+
 ## Overview
 
-AfuChat is a full-featured super app built with React Native and Expo. It combines real-time messaging, a social feed, AI assistant, virtual currency, gifting, games, digital services, and more — all in one platform. The backend is powered by Supabase for auth, real-time subscriptions, edge functions, and storage.
+AfuChat is a full-featured super app built with React Native and Expo. It combines real-time messaging, a social feed, AI assistant, virtual currency, gifting, games, digital services, and more — all in one platform. The backend is powered by Supabase for auth, real-time subscriptions, edge functions, and storage. Media is served from Cloudflare R2 via `https://cdn.afuchat.com`.
 
 ---
 

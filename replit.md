@@ -14,6 +14,85 @@ Key capabilities include (latest: Telegram Mini App support):
 
 The project leverages an existing Supabase backend for data persistence and authentication, focusing on delivering a rich, interactive, and secure user experience.
 
+# Critical Architecture Constraints — DO NOT CHANGE
+
+These are load-bearing infrastructure decisions. Every developer (and every AI agent) working on AfuChat MUST treat them as immutable. Violations will break production for real users and waste days of rework.
+
+## 1. Supabase is the ONLY backend
+
+**Do NOT migrate, replace, mirror, or "modernize" Supabase.** The following Supabase surfaces are production:
+- **Auth** — `@supabase/supabase-js` `auth.signIn*`, OAuth providers, OTP, session refresh, multi-account switching, Telegram Mini App auth (`supabase/functions/telegram-auth`).
+- **Postgres database** — every `*.sql` file under `supabase/migrations/` is the source of truth. Tables: `profiles`, `posts`, `stories`, `messages`, `chats`, `chat_drafts`, `ai_conversations`, `ai_messages`, `notification_preferences`, `pesapal_orders`, `acoin_transactions`, `transaction_requests`, `mini_apps`, `video_assets`, `video_renditions`, `video_jobs`, `app_settings`, `freelance_listings`, `freelance_orders`, `freelance_reviews`, plus all RLS policies, RPC functions (`credit_acoin`, `lookup_profile_by_afu_id`, `claim_video_job`, `bump_mini_app_open`, `award_xp`), triggers, and indexes.
+- **Realtime** — chat, presence, typing indicators, call signaling (`call:<id>`, `call_chat:<callId>`), live discover feed, transaction requests, story bar updates. The mobile app subscribes via `supabase.channel(...)`.
+- **Storage policies** — bucket policies for `videos` and the legacy avatars/post-images buckets are in migrations.
+- **Edge Functions** — `supabase/functions/*` (ai-chat, generate-ai-image, pesapal-initiate, pesapal-ipn, register-push-token, send-marketing-email, send-password-reset, send-push-notification, telegram-auth, transcribe-audio). These are deployed to Supabase Functions and wired into Supabase Auth hooks (`hook_send_email_uri`) and Pesapal IPN.
+
+### Forbidden actions
+
+- ❌ Do NOT replace Supabase Auth with Replit Auth, Clerk, NextAuth, Firebase, Auth0, or anything else.
+- ❌ Do NOT migrate the database to Neon, Replit Postgres, PlanetScale, or any other Postgres host. The `DATABASE_URL` env var that points to the Replit dev DB is **not used** by the app — leave it alone.
+- ❌ Do NOT rewrite Supabase Edge Functions as Express routes in `artifacts/api-server`. The API server is for things that need long-running workers (video encoding) or cross-service orchestration (R2 presigned URLs). Auth-tied user actions stay in edge functions.
+- ❌ Do NOT change RLS policies, RPC function signatures, or table column names without coordinating a matching client-side change AND a backwards-compatible migration.
+- ❌ Do NOT hard-delete Supabase migration files. New migrations only — additive and idempotent (`ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`, `DROP POLICY IF EXISTS` before `CREATE POLICY`).
+- ❌ Do NOT remove `@supabase/supabase-js` from `package.json` in either `artifacts/mobile` or `artifacts/api-server`.
+
+### Allowed actions
+
+- ✅ Add new tables, columns, RPCs, RLS policies in a new dated migration under `supabase/migrations/YYYYMMDD_description.sql`.
+- ✅ Add new edge functions under `supabase/functions/<name>/index.ts` and register them in `supabase/config.toml`.
+- ✅ Read from / write to existing Supabase tables from new screens, respecting RLS.
+
+## 2. Cloudflare R2 is the ONLY media CDN
+
+**Do NOT migrate, replace, or duplicate the R2 setup.** All user-uploaded media (avatars, post images, videos, stories, group avatars, chat media, voice messages, shop media, match photos, banners) lives in the single R2 bucket `afuchat-media` and is served via `https://cdn.afuchat.com`.
+
+### How it works (do not change this flow)
+
+1. Mobile client (`artifacts/mobile/lib/mediaUpload.ts`) calls `POST /api/uploads/sign` with `{ bucket, contentType }`.
+2. API server (`artifacts/api-server/src/routes/uploads.ts`) returns a short-lived presigned PUT URL using the AWS S3 SDK pointed at the R2 S3 endpoint.
+3. Client PUTs bytes directly to R2.
+4. Client writes the resulting `https://cdn.afuchat.com/<bucket>/<userId>/<filename>` URL into the relevant Supabase row.
+5. Supabase only stores the URL string. The bytes never touch Supabase Storage.
+
+### R2 secrets live in Supabase, not in env files
+
+`artifacts/api-server/src/lib/bootstrap.ts` reads `public.app_settings` (a service-role-only table) at boot and merges these keys into `process.env`:
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_R2_ACCESS_KEY_ID`
+- `CLOUDFLARE_R2_SECRET_ACCESS_KEY`
+- `R2_BUCKET`
+- `R2_PUBLIC_BASE_URL`
+- `R2_DEV_PUBLIC_URL`
+- `R2_S3_ENDPOINT`
+
+The R2 client (`artifacts/api-server/src/lib/r2.ts`) reads these **lazily from `process.env`** so it picks them up after bootstrap — do not refactor this to read at module load time, that breaks production.
+
+To push new R2 keys to Supabase: `pnpm --filter @workspace/scripts push-secrets-to-supabase`.
+
+### Forbidden actions
+
+- ❌ Do NOT migrate media to Supabase Storage, Replit Object Storage, AWS S3, Vercel Blob, Cloudinary, ImageKit, UploadThing, or anywhere else.
+- ❌ Do NOT change `https://cdn.afuchat.com` to a different domain. Rewriting URLs would break every existing post / avatar / video that's already in production.
+- ❌ Do NOT split the bucket into multiple R2 buckets. Logical groupings (avatars, posts, videos, …) are KEY PREFIXES inside the single `afuchat-media` bucket — that's deliberate.
+- ❌ Do NOT hard-code R2 credentials in source files, `.env`, `app.json`, or any deployment config. They live in `app_settings` only.
+- ❌ Do NOT change the lifecycle rules (`abort-multipart-7d`, `expire-stories-30d`, `expire-ephemeral-chat-media-30d`) without explicit owner approval.
+
+### Allowed actions
+
+- ✅ Add new logical key prefixes (e.g. `articles/`, `match-rooms/`) by passing a new `bucket` value to `POST /api/uploads/sign`. The presigner accepts any string that matches `^[a-z0-9-]+$`.
+- ✅ Read media from `cdn.afuchat.com` from any new feature.
+- ✅ Add new lifecycle rules via `pnpm --filter @workspace/scripts setup-r2-lifecycle` after coordinating with the owner.
+
+## 3. The `lib/` directory is owner-controlled
+
+Do not change files under `lib/` (the workspace shared libraries: `lib/api-spec`, `lib/api-client-react`, `lib/api-zod`, `lib/db`) without explicit owner approval. These are consumed by both `artifacts/mobile` and `artifacts/api-server`; a careless edit ripples everywhere.
+
+## 4. Replit dev environment specifics
+
+- The `DATABASE_URL` env var pointing to a Replit-provisioned Postgres exists for tooling only. It is NOT the app's database.
+- Do not commit the `SUPABASE_SERVICE_ROLE_KEY` into the mobile bundle or any client-readable file. It belongs only in the API server env and Supabase Function secrets.
+- Do not expose any key prefixed with `EXPO_PUBLIC_` other than the existing `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` — anything else with that prefix ships to users' browsers.
+
 # User Preferences
 
 I prefer clear and concise information.
