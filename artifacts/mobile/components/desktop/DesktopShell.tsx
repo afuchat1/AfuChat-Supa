@@ -32,6 +32,10 @@ import {
   DesktopSidebar,
   SIDEBAR_WIDTH,
 } from "@/components/desktop/DesktopSidebar";
+import {
+  DesktopTopBar,
+  TOPBAR_HEIGHT,
+} from "@/components/desktop/DesktopTopBar";
 
 const FULLSCREEN_PATTERNS: RegExp[] = [
   /^\/$/,
@@ -102,6 +106,14 @@ export function DesktopShell({ children }: { children: React.ReactNode }) {
         ]
       : [styles.sidebarFlex, { width: SIDEBAR_WIDTH }];
 
+  const topBarStyle =
+    Platform.OS === "web"
+      ? [
+          styles.topBarFixed,
+          { left: SIDEBAR_WIDTH, height: TOPBAR_HEIGHT },
+        ]
+      : null;
+
   const mainStyle =
     Platform.OS === "web"
       ? [
@@ -109,6 +121,7 @@ export function DesktopShell({ children }: { children: React.ReactNode }) {
           {
             backgroundColor: contentBg,
             paddingLeft: SIDEBAR_WIDTH,
+            paddingTop: TOPBAR_HEIGHT,
             minHeight: "100vh" as any,
           },
         ]
@@ -126,6 +139,12 @@ export function DesktopShell({ children }: { children: React.ReactNode }) {
       <View style={sidebarStyle}>
         <DesktopSidebar />
       </View>
+
+      {topBarStyle ? (
+        <View style={topBarStyle}>
+          <DesktopTopBar />
+        </View>
+      ) : null}
 
       <View style={mainStyle}>
         {modal ? (
@@ -188,6 +207,12 @@ const styles = StyleSheet.create({
   },
   sidebarFlex: {
     height: "100%",
+  },
+  topBarFixed: {
+    position: "fixed" as any,
+    top: 0,
+    right: 0,
+    zIndex: 40,
   },
   mainWeb: {
     flex: 1,
