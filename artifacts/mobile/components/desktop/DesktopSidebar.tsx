@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import {
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +15,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { supabase } from "@/lib/supabase";
+import { ContextMenu, useContextMenu } from "@/components/desktop/ContextMenu";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -115,6 +117,103 @@ const SECONDARY: NavItem[] = [
   },
 ];
 
+type SidebarNavItemProps = {
+  item: NavItem;
+  active: boolean;
+  disabled: boolean;
+  activeBg: string;
+  hoverBg: string;
+  textPrimary: string;
+  textMuted: string;
+  accent: string;
+  onActivate: () => void;
+};
+
+function SidebarNavItem({
+  item,
+  active,
+  disabled,
+  activeBg,
+  hoverBg,
+  textPrimary,
+  textMuted,
+  accent,
+  onActivate,
+}: SidebarNavItemProps) {
+  const { menuProps, bind } = useContextMenu([
+    [
+      {
+        key: "open",
+        label: "Open",
+        icon: "open-outline",
+        onSelect: onActivate,
+      },
+      {
+        key: "open-new-tab",
+        label: "Open in new tab",
+        icon: "open-outline",
+        onSelect: () => {
+          if (typeof window !== "undefined") {
+            window.open(item.route, "_blank", "noopener,noreferrer");
+          }
+        },
+      },
+      {
+        key: "copy-link",
+        label: "Copy link",
+        icon: "link-outline",
+        onSelect: async () => {
+          if (
+            typeof window !== "undefined" &&
+            typeof navigator !== "undefined" &&
+            navigator.clipboard
+          ) {
+            const url = `${window.location.origin}${item.route}`;
+            try {
+              await navigator.clipboard.writeText(url);
+            } catch {}
+          }
+        },
+      },
+    ],
+  ]);
+
+  const content = (
+    <Pressable
+      onPress={onActivate}
+      style={({ hovered }: any) => [
+        styles.navItem,
+        { backgroundColor: active ? activeBg : hovered ? hoverBg : "transparent" },
+      ]}
+    >
+      <Ionicons
+        name={item.icon}
+        size={18}
+        color={active ? accent : disabled ? textMuted : textPrimary}
+      />
+      <Text
+        style={[
+          styles.navLabel,
+          {
+            color: active ? accent : disabled ? textMuted : textPrimary,
+            fontWeight: active ? "600" : "500",
+          },
+        ]}
+      >
+        {item.label}
+      </Text>
+    </Pressable>
+  );
+
+  if (Platform.OS !== "web") return content;
+  return (
+    <View {...bind}>
+      <ContextMenu {...menuProps} />
+      {content}
+    </View>
+  );
+}
+
 export function DesktopSidebar() {
   const pathname = usePathname() || "/";
   const { colors, isDark, themeMode, setThemeMode } = useTheme();
@@ -141,31 +240,18 @@ export function DesktopSidebar() {
     const active = item.match(pathname);
     const disabled = item.requiresAuth && !isLoggedIn;
     return (
-      <Pressable
+      <SidebarNavItem
         key={item.key}
-        onPress={() => go(item.route, item.requiresAuth)}
-        style={({ hovered }: any) => [
-          styles.navItem,
-          { backgroundColor: active ? activeBg : hovered ? hoverBg : "transparent" },
-        ]}
-      >
-        <Ionicons
-          name={item.icon}
-          size={18}
-          color={active ? colors.accent : disabled ? textMuted : textPrimary}
-        />
-        <Text
-          style={[
-            styles.navLabel,
-            {
-              color: active ? colors.accent : disabled ? textMuted : textPrimary,
-              fontWeight: active ? "600" : "500",
-            },
-          ]}
-        >
-          {item.label}
-        </Text>
-      </Pressable>
+        item={item}
+        active={active}
+        disabled={!!disabled}
+        activeBg={activeBg}
+        hoverBg={hoverBg}
+        textPrimary={textPrimary}
+        textMuted={textMuted}
+        accent={colors.accent}
+        onActivate={() => go(item.route, item.requiresAuth)}
+      />
     );
   }
 

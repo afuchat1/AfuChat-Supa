@@ -30,6 +30,7 @@ import OfflineBanner from "@/components/ui/OfflineBanner";
 import { cacheConversations, getCachedConversations, isOnline } from "@/lib/offlineStore";
 import { addOnlineListener } from "@/lib/offlineSync";
 import { wasChatRecentlyVisited, clearChatVisited } from "@/lib/chatVisited";
+import { showAlert, confirmAlert } from "@/lib/alert";
 
 type StoryUser = {
   userId: string;
@@ -78,8 +79,53 @@ function isUserOnline(lastSeen: string | null, showOnline: boolean): boolean {
   return Date.now() - new Date(lastSeen).getTime() < 2 * 60 * 1000;
 }
 
-function ChatRow({ item, onPress }: { item: ChatItem; onPress: () => void }) {
+function ChatRow({
+  item,
+  onPress,
+  onAction,
+}: {
+  item: ChatItem;
+  onPress: () => void;
+  onAction?: (
+    action: "togglePin" | "toggleArchive" | "delete" | "open",
+    item: ChatItem,
+  ) => void;
+}) {
   const { colors } = useTheme();
+  // Lazy import to avoid touching native paths.
+  const { useContextMenu, ContextMenu } =
+    require("@/components/desktop/ContextMenu") as typeof import("@/components/desktop/ContextMenu");
+  const { bind, menuProps } = useContextMenu([
+    [
+      {
+        key: "open",
+        label: "Open chat",
+        icon: "open-outline",
+        onSelect: () => onAction?.("open", item),
+      },
+      {
+        key: "pin",
+        label: item.is_pinned ? "Unpin chat" : "Pin chat",
+        icon: item.is_pinned ? "pin" : "pin-outline",
+        onSelect: () => onAction?.("togglePin", item),
+      },
+      {
+        key: "archive",
+        label: item.is_archived ? "Unarchive" : "Archive",
+        icon: item.is_archived ? "archive" : "archive-outline",
+        onSelect: () => onAction?.("toggleArchive", item),
+      },
+    ],
+    [
+      {
+        key: "delete",
+        label: "Delete chat",
+        icon: "trash-outline",
+        destructive: true,
+        onSelect: () => onAction?.("delete", item),
+      },
+    ],
+  ]);
   const displayName = item.is_group || item.is_channel ? item.name : item.other_display_name;
   const avatar = item.is_group || item.is_channel ? item.avatar_url : item.other_avatar;
   const hasUnread = item.unread_count > 0 && !wasChatRecentlyVisited(item.id);
@@ -101,6 +147,8 @@ function ChatRow({ item, onPress }: { item: ChatItem; onPress: () => void }) {
   }, [hasUnread]);
 
   return (
+    <View {...bind}>
+      <ContextMenu {...menuProps} />
     <TouchableOpacity
       style={[styles.row, { backgroundColor: colors.surface }]}
       onPress={onPress}
@@ -154,6 +202,7 @@ function ChatRow({ item, onPress }: { item: ChatItem; onPress: () => void }) {
         </View>
       </View>
     </TouchableOpacity>
+    </View>
   );
 }
 
@@ -452,6 +501,71 @@ export default function ChatsScreen() {
   useEffect(() => { loadChats(); }, [loadChats]);
   useFocusEffect(useCallback(() => { loadChats(true); }, [loadChats]));
 
+  // Right-click context-menu actions on chat list rows.
+  const handleChatAction = useCallback(
+    async (
+      action: "togglePin" | "toggleArchive" | "delete" | "open",
+      item: ChatItem,
+    ) => {
+      if (action === "open") {
+        Haptics.selectionAsync();
+        router.push({ pathname: "/chat/[id]", params: { id: item.id } });
+        return;
+      }
+      if (action === "togglePin") {
+        const next = !item.is_pinned;
+        setChats((prev) =>
+          prev.map((c) => (c.id === item.id ? { ...c, is_pinned: next } : c)),
+        );
+        const { error } = await supabase
+          .from("chats")
+          .update({ is_pinned: next })
+          .eq("id", item.id);
+        if (error) {
+          showAlert("Couldn't update pin", error.message);
+          loadChats(true);
+        }
+        return;
+      }
+      if (action === "toggleArchive") {
+        const next = !item.is_archived;
+        // Archived chats are filtered out of the list (loadChats uses
+        // is_archived=false), so just remove locally for instant feedback.
+        setChats((prev) =>
+          next ? prev.filter((c) => c.id !== item.id) : prev,
+        );
+        const { error } = await supabase
+          .from("chats")
+          .update({ is_archived: next })
+          .eq("id", item.id);
+        if (error) {
+          showAlert("Couldn't archive chat", error.message);
+          loadChats(true);
+        }
+        return;
+      }
+      if (action === "delete") {
+        const ok = await confirmAlert(
+          "Delete chat?",
+          "This will permanently delete this conversation for everyone.",
+          { confirmText: "Delete", destructive: true },
+        );
+        if (!ok) return;
+        setChats((prev) => prev.filter((c) => c.id !== item.id));
+        const { error } = await supabase
+          .from("chats")
+          .delete()
+          .eq("id", item.id);
+        if (error) {
+          showAlert("Couldn't delete chat", error.message);
+          loadChats(true);
+        }
+        return;
+      }
+    },
+    [loadChats],
+  );
+
   useEffect(() => {
     if (!user) return;
     import("../../lib/rewardXp").then(({ rewardXp }) => rewardXp("daily_login")).catch(() => {});
@@ -685,6 +799,7 @@ export default function ChatsScreen() {
                 Haptics.selectionAsync();
                 router.push({ pathname: "/chat/[id]", params: { id: item.id } });
               }}
+              onAction={handleChatAction}
             />
           )}
           ItemSeparatorComponent={() => <Separator indent={74} />}

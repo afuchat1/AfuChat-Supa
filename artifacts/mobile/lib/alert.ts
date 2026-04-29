@@ -98,3 +98,35 @@ function _webFallback(
   if (idx >= 0 && idx < actionBtns.length) actionBtns[idx].onPress?.();
   else cancelBtn?.onPress?.();
 }
+
+/**
+ * Promise-based two-button confirmation built on top of `showAlert`.
+ * Resolves to `true` if the user confirms, `false` if they cancel.
+ *
+ * Useful for destructive actions where we want to await the answer
+ * inline instead of nesting callbacks.
+ */
+export function confirmAlert(
+  title: string,
+  message?: string,
+  options?: {
+    confirmText?: string;
+    cancelText?: string;
+    destructive?: boolean;
+  },
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    showAlert(title, message, [
+      {
+        text: options?.cancelText || "Cancel",
+        style: "cancel",
+        onPress: () => resolve(false),
+      },
+      {
+        text: options?.confirmText || "OK",
+        style: options?.destructive ? "destructive" : "default",
+        onPress: () => resolve(true),
+      },
+    ]);
+  });
+}
