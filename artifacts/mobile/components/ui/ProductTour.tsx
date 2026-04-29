@@ -21,6 +21,7 @@ const DIM = "rgba(0,0,0,0.65)";
 const ACCENT = "#00BCD4";
 const TOOLTIP_H_EST = 166;
 const MARGIN = 14;
+const USE_NATIVE_DRIVER = Platform.OS !== "web";
 
 export default function ProductTour() {
   const { isActive, step, stepIndex, totalSteps, layouts, advance, skip } = useTour();
@@ -41,7 +42,11 @@ export default function ProductTour() {
 
   useEffect(() => {
     if (!isActive || !step) {
-      Animated.timing(opacity, { toValue: 0, duration: 180, useNativeDriver: true }).start();
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: USE_NATIVE_DRIVER,
+      }).start();
       stopAnimations();
       return;
     }
@@ -50,20 +55,46 @@ export default function ProductTour() {
     slideY.setValue(step.placement === "above" ? 14 : -14);
 
     Animated.parallel([
-      Animated.spring(opacity, { toValue: 1, tension: 70, friction: 10, useNativeDriver: true }),
-      Animated.spring(slideY, { toValue: 0, tension: 70, friction: 10, useNativeDriver: true }),
+      Animated.spring(opacity, {
+        toValue: 1,
+        tension: 70,
+        friction: 10,
+        useNativeDriver: USE_NATIVE_DRIVER,
+      }),
+      Animated.spring(slideY, {
+        toValue: 0,
+        tension: 70,
+        friction: 10,
+        useNativeDriver: USE_NATIVE_DRIVER,
+      }),
     ]).start();
 
     stopAnimations();
     pulseRef.current = Animated.loop(
       Animated.sequence([
         Animated.parallel([
-          Animated.timing(pulseScale, { toValue: 1.09, duration: 820, useNativeDriver: true }),
-          Animated.timing(pulseAlpha, { toValue: 0.85, duration: 820, useNativeDriver: true }),
+          Animated.timing(pulseScale, {
+            toValue: 1.09,
+            duration: 820,
+            useNativeDriver: USE_NATIVE_DRIVER,
+          }),
+          Animated.timing(pulseAlpha, {
+            toValue: 0.85,
+            duration: 820,
+            useNativeDriver: USE_NATIVE_DRIVER,
+          }),
         ]),
         Animated.parallel([
-          Animated.timing(pulseScale, { toValue: 1, duration: 820, useNativeDriver: true }),
-          Animated.timing(pulseAlpha, { toValue: 0.30, duration: 820, useNativeDriver: true }),
+          Animated.timing(pulseScale, {
+            toValue: 1,
+            duration: 820,
+            useNativeDriver: USE_NATIVE_DRIVER,
+          }),
+          Animated.timing(pulseAlpha, {
+            toValue: 0.30,
+            duration: 820,
+            useNativeDriver: USE_NATIVE_DRIVER,
+          }),
         ]),
       ])
     );
@@ -85,7 +116,6 @@ export default function ProductTour() {
   const targetCenterX = target.x + target.w / 2;
   const targetCenterY = target.y + target.h / 2;
 
-  // Clamping bounds
   const minTop = insets.top + MARGIN;
   const maxTop = SH - TOOLTIP_H_EST - insets.bottom - MARGIN;
   const minLeft = MARGIN;
@@ -134,7 +164,12 @@ export default function ProductTour() {
   const tooltipBg = isDark ? "rgba(18,22,30,0.82)" : "rgba(255,255,255,0.82)";
   const tooltipBorder = isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.08)";
 
-  const arrowBaseColor = Platform.OS === "ios" ? "transparent" : (isDark ? "#1A2030" : "#FFFFFF");
+  const arrowBaseColor =
+    Platform.OS === "ios"
+      ? "transparent"
+      : isDark
+      ? "#1A2030"
+      : "#FFFFFF";
 
   const arrowStyle = ((): object => {
     const base = { position: "absolute" as const, width: 0, height: 0 };
@@ -176,53 +211,65 @@ export default function ProductTour() {
 
   const isLast = stepIndex === totalSteps - 1;
 
-  const TooltipWrapper = Platform.OS === "ios"
-    ? ({ children }: { children: React.ReactNode }) => (
-        <BlurView
-          intensity={78}
-          tint={isDark ? "dark" : "light"}
-          style={[
-            styles.tooltip,
-            {
-              left: tooltipLeft,
-              top: tooltipTop,
-              width: TOOLTIP_W,
-              borderColor: tooltipBorder,
-              overflow: "hidden",
-            },
-          ]}
-        >
-          {children}
-        </BlurView>
-      )
-    : ({ children }: { children: React.ReactNode }) => (
-        <View
-          style={[
-            styles.tooltip,
-            {
-              left: tooltipLeft,
-              top: tooltipTop,
-              width: TOOLTIP_W,
-              backgroundColor: isDark ? "#1A2030" : "#FFFFFF",
-              borderColor: tooltipBorder,
-            },
-          ]}
-        >
-          {children}
-        </View>
-      );
+  const TooltipWrapper =
+    Platform.OS === "ios"
+      ? ({ children }: { children: React.ReactNode }) => (
+          <BlurView
+            intensity={78}
+            tint={isDark ? "dark" : "light"}
+            style={[
+              styles.tooltip,
+              {
+                left: tooltipLeft,
+                top: tooltipTop,
+                width: TOOLTIP_W,
+                borderColor: tooltipBorder,
+                overflow: "hidden",
+              },
+            ]}
+          >
+            {children}
+          </BlurView>
+        )
+      : ({ children }: { children: React.ReactNode }) => (
+          <View
+            style={[
+              styles.tooltip,
+              {
+                left: tooltipLeft,
+                top: tooltipTop,
+                width: TOOLTIP_W,
+                backgroundColor: isDark ? "#1A2030" : "#FFFFFF",
+                borderColor: tooltipBorder,
+              },
+            ]}
+          >
+            {children}
+          </View>
+        );
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+    <View style={[StyleSheet.absoluteFill, { pointerEvents: "box-none" } as any]}>
       {/* Dim regions */}
-      <View pointerEvents="none" style={[styles.dim, { left: 0, top: 0, right: 0, height: Math.max(0, ty) }]} />
-      <View pointerEvents="none" style={[styles.dim, { left: 0, top: ty + th, right: 0, bottom: 0 }]} />
-      <View pointerEvents="none" style={[styles.dim, { left: 0, top: ty, width: Math.max(0, tx), height: th }]} />
-      <View pointerEvents="none" style={[styles.dim, { left: tx + tw, top: ty, right: 0, height: th }]} />
+      <View
+        style={[styles.dim, { left: 0, top: 0, right: 0, height: Math.max(0, ty) }]}
+        pointerEvents="none"
+      />
+      <View
+        style={[styles.dim, { left: 0, top: ty + th, right: 0, bottom: 0 }]}
+        pointerEvents="none"
+      />
+      <View
+        style={[styles.dim, { left: 0, top: ty, width: Math.max(0, tx), height: th }]}
+        pointerEvents="none"
+      />
+      <View
+        style={[styles.dim, { left: tx + tw, top: ty, right: 0, height: th }]}
+        pointerEvents="none"
+      />
 
       {/* Spotlight ring */}
       <Animated.View
-        pointerEvents="none"
         style={{
           position: "absolute",
           left: tx, top: ty, width: tw, height: th,
@@ -235,7 +282,8 @@ export default function ProductTour() {
           shadowOffset: { width: 0, height: 0 },
           shadowOpacity: 0.7,
           shadowRadius: 10,
-        }}
+          pointerEvents: "none",
+        } as any}
       />
 
       {/* Tooltip */}
@@ -262,7 +310,12 @@ export default function ProductTour() {
                   style={[
                     styles.dot,
                     {
-                      backgroundColor: i === stepIndex ? ACCENT : (isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.15)"),
+                      backgroundColor:
+                        i === stepIndex
+                          ? ACCENT
+                          : isDark
+                          ? "rgba(255,255,255,0.18)"
+                          : "rgba(0,0,0,0.15)",
                       width: i === stepIndex ? 14 : 6,
                     },
                   ]}
@@ -270,7 +323,18 @@ export default function ProductTour() {
               ))}
             </View>
             <TouchableOpacity onPress={() => skip()} hitSlop={10}>
-              <Text style={[styles.skipText, { color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }]}>Skip</Text>
+              <Text
+                style={[
+                  styles.skipText,
+                  {
+                    color: isDark
+                      ? "rgba(255,255,255,0.4)"
+                      : "rgba(0,0,0,0.4)",
+                  },
+                ]}
+              >
+                Skip
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -278,7 +342,9 @@ export default function ProductTour() {
           <Text style={[styles.title, { color: colors.text }]}>{step.title}</Text>
 
           {/* Description */}
-          <Text style={[styles.desc, { color: colors.textMuted }]}>{step.description}</Text>
+          <Text style={[styles.desc, { color: colors.textMuted }]}>
+            {step.description}
+          </Text>
 
           {/* Hint + Next */}
           <View style={styles.footer}>

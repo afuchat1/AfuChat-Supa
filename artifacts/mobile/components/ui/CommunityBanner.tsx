@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 
 const STORAGE_KEY = "afu_community_banner_v1_seen";
-const BRAND = "#00BCD4";
+const USE_NATIVE_DRIVER = Platform.OS !== "web";
 
 type Channel = {
   label: string;
@@ -78,12 +78,12 @@ export default function CommunityBanner({ userId }: { userId: string }) {
             toValue: 0,
             tension: 65,
             friction: 11,
-            useNativeDriver: true,
+            useNativeDriver: USE_NATIVE_DRIVER,
           }),
           Animated.timing(backdropAnim, {
             toValue: 1,
             duration: 280,
-            useNativeDriver: true,
+            useNativeDriver: USE_NATIVE_DRIVER,
           }),
         ]).start();
       }
@@ -95,12 +95,12 @@ export default function CommunityBanner({ userId }: { userId: string }) {
       Animated.timing(slideAnim, {
         toValue: 600,
         duration: 280,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(backdropAnim, {
         toValue: 0,
         duration: 240,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start(() => {
       setVisible(false);
@@ -115,71 +115,84 @@ export default function CommunityBanner({ userId }: { userId: string }) {
   if (!visible) return null;
 
   return (
-    <Modal transparent animationType="none" visible={visible} statusBarTranslucent onRequestClose={dismiss}>
-      <Animated.View style={[styles.backdrop, { opacity: backdropAnim }]}>
+    <Modal
+      transparent
+      animationType="none"
+      visible={visible}
+      statusBarTranslucent
+      onRequestClose={dismiss}
+    >
+      <View style={StyleSheet.absoluteFill}>
+        <Animated.View
+          style={[styles.backdrop, { opacity: backdropAnim }]}
+          pointerEvents="none"
+        />
         <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
-      </Animated.View>
 
-      <Animated.View
-        style={[
-          styles.sheet,
-          { paddingBottom: Math.max(insets.bottom, 20), transform: [{ translateY: slideAnim }] },
-        ]}
-      >
-        <LinearGradient
-          colors={["#00BCD4", "#0097A7"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.header}
+        <Animated.View
+          style={[
+            styles.sheet,
+            {
+              paddingBottom: Math.max(insets.bottom, 20),
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
         >
-          <View style={styles.headerIconWrap}>
-            <Ionicons name="people-circle" size={38} color="#fff" />
-          </View>
-          <Text style={styles.headerTitle}>Join Our Community</Text>
-          <Text style={styles.headerSub}>
-            Stay connected with AfuChat on Telegram & WhatsApp
-          </Text>
-
-          <TouchableOpacity style={styles.closeBtn} onPress={dismiss} hitSlop={12}>
-            <Ionicons name="close" size={20} color="rgba(255,255,255,0.8)" />
-          </TouchableOpacity>
-        </LinearGradient>
-
-        <View style={styles.channels}>
-          {CHANNELS.map((ch) => (
-            <TouchableOpacity
-              key={ch.url}
-              style={styles.channelRow}
-              activeOpacity={0.75}
-              onPress={() => openLink(ch.url)}
-            >
-              <View style={[styles.channelIcon, { backgroundColor: ch.bg }]}>
-                <Ionicons name={ch.icon as any} size={22} color={ch.iconColor} />
-              </View>
-              <View style={styles.channelText}>
-                <Text style={styles.channelLabel}>{ch.label}</Text>
-                <Text style={styles.channelSub}>{ch.sub}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color="#bbb" />
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <TouchableOpacity style={styles.cta} activeOpacity={0.85} onPress={dismiss}>
           <LinearGradient
             colors={["#00BCD4", "#0097A7"]}
             start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.ctaGradient}
+            end={{ x: 1, y: 1 }}
+            style={styles.header}
           >
-            <Text style={styles.ctaText}>Got it, thanks!</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+            <View style={styles.headerIconWrap}>
+              <Ionicons name="people-circle" size={38} color="#fff" />
+            </View>
+            <Text style={styles.headerTitle}>Join Our Community</Text>
+            <Text style={styles.headerSub}>
+              Stay connected with AfuChat on Telegram & WhatsApp
+            </Text>
 
-        <TouchableOpacity onPress={dismiss} style={styles.skipBtn} hitSlop={12}>
-          <Text style={styles.skipText}>Maybe later</Text>
-        </TouchableOpacity>
-      </Animated.View>
+            <TouchableOpacity style={styles.closeBtn} onPress={dismiss} hitSlop={12}>
+              <Ionicons name="close" size={20} color="rgba(255,255,255,0.8)" />
+            </TouchableOpacity>
+          </LinearGradient>
+
+          <View style={styles.channels}>
+            {CHANNELS.map((ch) => (
+              <TouchableOpacity
+                key={ch.url}
+                style={styles.channelRow}
+                activeOpacity={0.75}
+                onPress={() => openLink(ch.url)}
+              >
+                <View style={[styles.channelIcon, { backgroundColor: ch.bg }]}>
+                  <Ionicons name={ch.icon as any} size={22} color={ch.iconColor} />
+                </View>
+                <View style={styles.channelText}>
+                  <Text style={styles.channelLabel}>{ch.label}</Text>
+                  <Text style={styles.channelSub}>{ch.sub}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#bbb" />
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <TouchableOpacity style={styles.cta} activeOpacity={0.85} onPress={dismiss}>
+            <LinearGradient
+              colors={["#00BCD4", "#0097A7"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.ctaGradient}
+            >
+              <Text style={styles.ctaText}>Got it, thanks!</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={dismiss} style={styles.skipBtn} hitSlop={12}>
+            <Text style={styles.skipText}>Maybe later</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
     </Modal>
   );
 }

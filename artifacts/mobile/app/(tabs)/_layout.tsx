@@ -4,7 +4,7 @@ import { Tabs, usePathname } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import { Dimensions, Image, Platform, StyleSheet, useColorScheme } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -51,14 +51,11 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   const { registerLayout, step, advance } = useTour();
   const pathname = usePathname();
   const { isDesktop } = useIsDesktop();
-  const registeredRef = useRef(false);
 
   const hideTabs = isDesktop || (!isLoggedIn && Platform.OS === "web");
 
   useEffect(() => {
     if (hideTabs) return;
-    if (registeredRef.current) return;
-    registeredRef.current = true;
 
     const { width: SW, height: SH } = Dimensions.get("window");
     const tabBarH = 52 + (insets.bottom > 0 ? insets.bottom : 8);
