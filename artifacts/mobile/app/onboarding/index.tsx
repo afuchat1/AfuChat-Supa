@@ -29,6 +29,11 @@ import Colors from "@/constants/colors";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { showAlert } from "@/lib/alert";
 import { COUNTRIES, type Country } from "@/constants/countries";
+import {
+  parsePhoneNumberFromString,
+  AsYouType,
+  type CountryCode,
+} from "libphonenumber-js";
 import { Avatar } from "@/components/ui/Avatar";
 import { ensureAfuAiChat } from "@/lib/afuAiBot";
 
@@ -212,10 +217,64 @@ export default function OnboardingScreen() {
     }
   }
 
+  // Strip leading 0 (the national trunk prefix many countries use locally,
+  // e.g. Ugandans typing 0772... instead of 772...).
+  function normalizeLocalNumber(raw: string): string {
+    const digits = raw.replace(/\D/g, "");
+    return digits.startsWith("0") ? digits.replace(/^0+/, "") : digits;
+  }
+
+  // Format the phone for display as the user types, in the style native to
+  // the selected country (e.g. "772 123 456" for Uganda).
+  function formatPhoneForDisplay(raw: string): string {
+    if (!selectedCountry) return raw;
+    const local = normalizeLocalNumber(raw);
+    try {
+      const formatter = new AsYouType(selectedCountry.code as CountryCode);
+      return formatter.input(local);
+    } catch {
+      return local;
+    }
+  }
+
+  // Validate the number against the selected country's actual rules using
+  // libphonenumber-js. Returns a structured result so we can show specific
+  // hints (e.g. "too short", "wrong prefix").
+  function getPhoneValidation(): {
+    valid: boolean;
+    reason?: "empty" | "tooShort" | "tooLong" | "invalid";
+    e164?: string;
+  } {
+    if (!selectedCountry) return { valid: false, reason: "empty" };
+    const local = normalizeLocalNumber(phoneNumber);
+    if (!local) return { valid: false, reason: "empty" };
+
+    try {
+      const parsed = parsePhoneNumberFromString(
+        `${selectedCountry.dial}${local}`,
+        selectedCountry.code as CountryCode,
+      );
+      if (parsed?.isValid()) {
+        return { valid: true, e164: parsed.number };
+      }
+      // Detect length problems specifically so we can show a useful hint.
+      const expected = selectedCountry.phoneLength;
+      const min = Math.min(...expected);
+      const max = Math.max(...expected);
+      if (local.length < min) return { valid: false, reason: "tooShort" };
+      if (local.length > max) return { valid: false, reason: "tooLong" };
+      return { valid: false, reason: "invalid" };
+    } catch {
+      // Library doesn't recognise the country — fall back to length check.
+      const ok = selectedCountry.phoneLength.includes(local.length);
+      return ok
+        ? { valid: true, e164: `${selectedCountry.dial}${local}` }
+        : { valid: false, reason: "invalid" };
+    }
+  }
+
   function validatePhone(): boolean {
-    if (!selectedCountry) return false;
-    const digits = phoneNumber.replace(/\D/g, "");
-    return selectedCountry.phoneLength.includes(digits.length);
+    return getPhoneValidation().valid;
   }
 
   function canProceed(): boolean {
@@ -547,23 +606,45 @@ export default function OnboardingScreen() {
                   style={[styles.input, { color: colors.text }]}
                   placeholder={selectedCountry ? `${"0".repeat(selectedCountry.phoneLength[0])}` : "Phone number"}
                   placeholderTextColor={colors.textMuted}
-                  value={phoneNumber}
-                  onChangeText={(v) => setPhoneNumber(v.replace(/[^0-9]/g, ""))}
+                  value={
+                    selectedCountry
+                      ? formatPhoneForDisplay(phoneNumber)
+                      : phoneNumber
+                  }
+                  onChangeText={(v) => {
+                    // Strip non-digits, drop leading 0s, cap at the country's
+                    // longest accepted length so the user can't overshoot.
+                    const cleaned = normalizeLocalNumber(v);
+                    const max = selectedCountry
+                      ? Math.max(...selectedCountry.phoneLength)
+                      : 15;
+                    setPhoneNumber(cleaned.slice(0, max));
+                  }}
                   keyboardType="phone-pad"
-                  maxLength={selectedCountry ? Math.max(...selectedCountry.phoneLength) : 15}
                 />
               </View>
             </View>
-            {selectedCountry && phoneNumber.length > 0 && !validatePhone() && (
-              <Text style={[styles.errorHint]}>
-                {selectedCountry.name} numbers must be {selectedCountry.phoneLength.join(" or ")} digits
-              </Text>
-            )}
-            {selectedCountry && validatePhone() && (
-              <Text style={[styles.successHint]}>
-                Valid {selectedCountry.name} phone number
-              </Text>
-            )}
+            {(() => {
+              if (!selectedCountry || phoneNumber.length === 0) return null;
+              const v = getPhoneValidation();
+              if (v.valid) {
+                return (
+                  <Text style={styles.successHint}>
+                    ✓ Valid {selectedCountry.name} phone number
+                  </Text>
+                );
+              }
+              const expected = selectedCountry.phoneLength.join(" or ");
+              let msg = `Enter a valid ${selectedCountry.name} mobile number.`;
+              if (v.reason === "tooShort") {
+                msg = `Number is too short — ${selectedCountry.name} numbers are ${expected} digits.`;
+              } else if (v.reason === "tooLong") {
+                msg = `Number is too long — ${selectedCountry.name} numbers are ${expected} digits.`;
+              } else if (v.reason === "invalid") {
+                msg = `That doesn't look like a valid ${selectedCountry.name} number. Check the format and try again.`;
+              }
+              return <Text style={styles.errorHint}>{msg}</Text>;
+            })()}
           </View>
         </View>
       </View>
