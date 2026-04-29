@@ -22,7 +22,6 @@ const MODAL_PATTERNS: { pattern: RegExp; title: string }[] = [
   { pattern: /^\/moments\/create/, title: "New moment" },
   { pattern: /^\/group\/create/, title: "New group" },
   { pattern: /^\/stories\/create/, title: "New story" },
-  { pattern: /^\/apps\/submit/, title: "Submit an app" },
   { pattern: /^\/red-envelope\//, title: "Red envelope" },
   { pattern: /^\/terms$/, title: "Terms of Service" },
   { pattern: /^\/privacy$/, title: "Privacy Policy" },

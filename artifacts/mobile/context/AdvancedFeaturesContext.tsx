@@ -32,7 +32,6 @@ export type AdvancedFeatureSettings = {
   auto_reply_enabled: boolean;
   auto_reply_message: string;
   chat_summary: boolean;
-  link_to_mini_app: boolean;
   keyword_alerts: boolean;
   keyword_alerts_list: string;
   chat_export_format: string;
@@ -72,7 +71,6 @@ const defaults: AdvancedFeatureSettings = {
   auto_reply_enabled: false,
   auto_reply_message: "I'm currently unavailable. I'll reply soon!",
   chat_summary: false,
-  link_to_mini_app: false,
   keyword_alerts: false,
   keyword_alerts_list: "",
   chat_export_format: "pdf",

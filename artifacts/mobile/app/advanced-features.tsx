@@ -536,15 +536,6 @@ export default function AdvancedFeaturesScreen() {
             requiredTier="silver"
           />
           <ToggleRow
-            icon="apps-outline"
-            iconBg="#00BCD4"
-            label="Link to Mini App"
-            desc="Convert shared links into interactive mini-apps (Beta)"
-            value={features.link_to_mini_app}
-            onValueChange={(v) => toggle("link_to_mini_app", v)}
-            requiredTier="gold"
-          />
-          <ToggleRow
             icon="filter-outline"
             iconBg="#8E8E93"
             label="Content Filter"

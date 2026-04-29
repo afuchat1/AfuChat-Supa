@@ -219,27 +219,23 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    title: "6. Mini-Apps & Developer Terms",
+    title: "6. In-App Services & Features",
     clauses: [
       {
-        heading: "6.1 Mini-App Platform",
-        body: "AfuChat provides a mini-app platform allowing third-party developers to build lightweight applications that run inside AfuChat. All mini-apps must be approved by AfuChat before publication.",
+        heading: "6.1 Built-In Services",
+        body: "AfuChat provides a curated set of in-app services and features (such as Wallet, Marketplace, Freelance, Games, Watch Together, and Events) accessible from the Apps tab. All services are operated by AfuChat and run natively inside the app.",
       },
       {
-        heading: "6.2 Developer Obligations",
-        body: "Developers must:\n\n• Adhere to AfuChat's API usage policies\n• Not collect user data beyond what is necessary for the mini-app\n• Not use AfuChat APIs to build competing services\n• Maintain their apps and respond to reports within 5 business days\n• Not inject malicious code or engage in deceptive practices",
+        heading: "6.2 Acceptable Use",
+        body: "When using any in-app service, you agree to:\n\n• Comply with AfuChat's policies and applicable laws\n• Not abuse, exploit, or attempt to reverse engineer any service\n• Not use services to harm, defraud, or harass other users\n• Report bugs or security issues to AfuChat support",
       },
       {
         heading: "6.3 Revenue & Monetization",
-        body: "Mini-app developers may monetize through ACoins. AfuChat takes a 10% revenue share on all ACoins spent within mini-apps. External payment methods are prohibited within mini-apps.",
+        body: "Some services allow you to earn or spend ACoins. AfuChat may apply platform fees on transactions, which will be disclosed at the point of transaction. External payment methods are prohibited within in-app services unless explicitly enabled by AfuChat.",
       },
       {
-        heading: "6.4 Data & Privacy",
-        body: "Mini-apps may only access user data with explicit user consent. Collected data must be treated in accordance with AfuChat's Privacy Policy and applicable data protection laws. Data may not be sold or shared with third parties.",
-      },
-      {
-        heading: "6.5 Termination of Mini-Apps",
-        body: "AfuChat may remove any mini-app that violates these terms, poses security risks, or degrades platform performance. Developers will be notified with a 14-day remediation window for non-critical violations.",
+        heading: "6.4 Service Availability",
+        body: "AfuChat may add, modify, or remove in-app services at any time. We will provide reasonable notice for material changes that affect your data or balances.",
       },
     ],
   },

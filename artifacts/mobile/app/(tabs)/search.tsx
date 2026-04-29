@@ -50,7 +50,7 @@ const MATCH = "#FF2D55";
 const GOLD = "#D4A853";
 const SUCCESS = "#34C759";
 
-type SearchTab = "all" | "people" | "posts" | "videos" | "channels" | "events" | "gifts" | "apps" | "shops";
+type SearchTab = "all" | "people" | "posts" | "videos" | "channels" | "events" | "gifts" | "shops";
 
 const TABS: { id: SearchTab; label: string; icon: string }[] = [
   { id: "all",      label: "All",      icon: "apps-outline" },
@@ -61,7 +61,6 @@ const TABS: { id: SearchTab; label: string; icon: string }[] = [
   { id: "events",   label: "Events",   icon: "calendar-outline" },
   { id: "gifts",    label: "Gifts",    icon: "gift-outline" },
   { id: "shops",    label: "Shops",    icon: "storefront-outline" },
-  { id: "apps",     label: "Apps",     icon: "grid-outline" },
 ];
 
 const RARITY_COLORS: Record<string, string> = {
@@ -72,34 +71,6 @@ const RARITY_COLORS: Record<string, string> = {
   legendary: "#FFB74D",
 };
 
-const PLATFORM_APPS = [
-  { id: "afuai",        label: "AfuAI",          desc: "Your intelligent assistant. Ask anything.",          icon: "sparkles" as const,         gradient: ["#00BCD4","#0097A7"] as [string,string], route: "/ai",             category: "Intelligence" },
-  { id: "wallet",       label: "Wallet",          desc: "Send, receive and manage your ACoins & Nexa.",       icon: "wallet" as const,           gradient: ["#00BCD4","#26C6DA"] as [string,string], route: "/wallet",         category: "Finance" },
-  { id: "services",     label: "Services",        desc: "Pay bills, top up, and access local services.",      icon: "card" as const,             gradient: ["#AF52DE","#BF5AF2"] as [string,string], route: "/mini-programs",  category: "Finance" },
-  { id: "freelance",    label: "Freelance",       desc: "Hire talent or find work on AfuFreelance.",          icon: "briefcase" as const,        gradient: ["#34C759","#30D158"] as [string,string], route: "/freelance",      category: "Finance" },
-  { id: "games",        label: "Games",           desc: "Play mini games and win ACoins.",                    icon: "game-controller" as const,  gradient: ["#007AFF","#0A84FF"] as [string,string], route: "/games",          category: "Entertainment" },
-  { id: "gifts",        label: "Gifts",           desc: "Send animated gifts to people you love.",            icon: "gift" as const,             gradient: ["#FF3B30","#FF453A"] as [string,string], route: "/gifts",          category: "Entertainment" },
-  { id: "shop",         label: "Marketplace",     desc: "Shop from verified organization stores.",            icon: "storefront" as const,       gradient: ["#AF52DE","#BF5AF2"] as [string,string], route: "/store",          category: "Entertainment" },
-  { id: "files",        label: "Files",           desc: "Store and share your files securely.",               icon: "folder" as const,           gradient: ["#5856D6","#6E6CD3"] as [string,string], route: "/file-manager",   category: "Tools" },
-  { id: "digitalid",    label: "Digital ID",      desc: "Your verifiable 3D digital identity card.",          icon: "id-card" as const,          gradient: ["#1E3A5F","#2C5282"] as [string,string], route: "/digital-id",     category: "Tools" },
-  { id: "saved",        label: "Saved Posts",     desc: "All your bookmarked posts in one place.",            icon: "bookmark" as const,         gradient: ["#FF6B35","#FF8C00"] as [string,string], route: "/saved-posts",    category: "Tools" },
-  { id: "collections",  label: "Collections",     desc: "Curate and share themed collections.",               icon: "albums" as const,           gradient: ["#BF5AF2","#AF52DE"] as [string,string], route: "/collections",    category: "Tools" },
-  { id: "match",        label: "AfuMatch",        desc: "Meet new people and find meaningful connections.",   icon: "heart" as const,            gradient: ["#FF2D55","#FF375F"] as [string,string], route: "/match",          category: "Community" },
-  { id: "events",       label: "Events",          desc: "Discover local and online events near you.",         icon: "calendar" as const,         gradient: ["#FF9500","#FFCC00"] as [string,string], route: "/digital-events", category: "Community" },
-  { id: "referral",     label: "Referral",        desc: "Invite friends and earn Nexa rewards.",              icon: "people" as const,           gradient: ["#34C759","#00C781"] as [string,string], route: "/referral",       category: "Community" },
-  { id: "usernames",    label: "Usernames",       desc: "Buy and sell premium @handles.",                     icon: "at" as const,               gradient: ["#007AFF","#5AC8FA"] as [string,string], route: "/username-market",category: "Community" },
-  { id: "prestige",     label: "Prestige",        desc: "Your reputation and rank on AfuChat.",               icon: "trophy" as const,           gradient: ["#D4A853","#F5C842"] as [string,string], route: "/prestige",       category: "Community" },
-  { id: "premium",      label: "Premium",         desc: "Unlock exclusive features and perks.",               icon: "star" as const,             gradient: ["#FF9500","#FF6B00"] as [string,string], route: "/premium",        category: "Community" },
-  { id: "snake",        label: "Snake",           desc: "Classic snake game. Eat dots, grow, survive.",       icon: "game-controller" as const,  gradient: ["#34C759","#30D158"] as [string,string], route: "/games/snake",    category: "Games" },
-  { id: "tetris",       label: "Tetris",          desc: "Stack falling blocks to clear lines.",               icon: "game-controller" as const,  gradient: ["#007AFF","#0A84FF"] as [string,string], route: "/games/tetris",   category: "Games" },
-  { id: "minesweeper",  label: "Minesweeper",     desc: "Clear the board without hitting a mine.",            icon: "game-controller" as const,  gradient: ["#FF9500","#FFCC00"] as [string,string], route: "/games/minesweeper",category: "Games" },
-  { id: "2048",         label: "2048",            desc: "Merge tiles to reach 2048.",                         icon: "game-controller" as const,  gradient: ["#AF52DE","#BF5AF2"] as [string,string], route: "/games/game-2048",category: "Games" },
-  { id: "flappy",       label: "Flappy Bird",     desc: "Fly through the pipes without crashing.",            icon: "game-controller" as const,  gradient: ["#FF3B30","#FF453A"] as [string,string], route: "/games/flappy",   category: "Games" },
-  { id: "space",        label: "Space Shooter",   desc: "Blast enemies in deep space.",                       icon: "game-controller" as const,  gradient: ["#1E3A5F","#2C5282"] as [string,string], route: "/games/space-shooter",category: "Games" },
-  { id: "memory",       label: "Memory Match",    desc: "Test your memory with card matching.",               icon: "game-controller" as const,  gradient: ["#5856D6","#6E6CD3"] as [string,string], route: "/games/memory-match",category: "Games" },
-  { id: "brickbreak",   label: "Brick Breaker",   desc: "Break all the bricks before time runs out.",         icon: "game-controller" as const,  gradient: ["#FF2D55","#FF375F"] as [string,string], route: "/games/brick-breaker",category: "Games" },
-];
-
 const QUICK_CATEGORIES = [
   { id: "people",   label: "People",   icon: "people",        gradient: [BRAND, "#0097A7"],       route: null },
   { id: "posts",    label: "Posts",    icon: "document-text", gradient: ["#007AFF", "#0A84FF"],   route: null },
@@ -109,7 +80,6 @@ const QUICK_CATEGORIES = [
   { id: "gifts",    label: "Gifts",    icon: "gift",          gradient: ["#FF3B30", "#FF453A"],   route: "/gifts" },
   { id: "shops",    label: "Market",   icon: "storefront",    gradient: ["#34C759", "#30D158"],   route: "/store" },
   { id: "match",    label: "AfuMatch", icon: "heart",         gradient: [MATCH, "#FF375F"],       route: "/match" },
-  { id: "apps",     label: "All Apps", icon: "grid",          gradient: ["#5856D6", "#6E6CD3"],   route: "/apps" },
 ];
 
 const TRENDING_TAGS = ["gaming","photography","music","travel","coding","fitness","cooking","art","fashion","tech","crypto","design","startup","afuchat","movies"];
@@ -121,7 +91,6 @@ type ChannelResult  = { id:string; name:string; description:string|null; avatar_
 type EventResult    = { id:string; title:string; description:string|null; emoji:string; price:number; event_date:string; capacity:number; tickets_sold:number; category:string|null; creator_name:string; creator_handle:string };
 type GiftResult     = { id:string; name:string; emoji:string; base_xp_cost:number; rarity:string; description:string|null };
 type ShopResult     = { id:string; kind:"product"|"freelance"|"community"; title:string; desc:string|null; emoji:string|null; image_url:string|null; price:number; badge:string|null; seller_name:string; route:string };
-type AppResult      = typeof PLATFORM_APPS[number];
 
 type AllResults = {
   people:   PersonResult[];
@@ -131,10 +100,9 @@ type AllResults = {
   events:   EventResult[];
   gifts:    GiftResult[];
   shops:    ShopResult[];
-  apps:     AppResult[];
 };
 
-const EMPTY: AllResults = { people:[], posts:[], videos:[], channels:[], events:[], gifts:[], shops:[], apps:[] };
+const EMPTY: AllResults = { people:[], posts:[], videos:[], channels:[], events:[], gifts:[], shops:[] };
 
 function timeAgo(iso:string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -301,16 +269,6 @@ export default function SearchScreen() {
     else { setSuggestions([]); setShowSuggest(false); }
   }
 
-  const searchApps = useCallback((q: string): AppResult[] => {
-    if (!q || q.length < 1) return [];
-    const lower = q.toLowerCase();
-    return PLATFORM_APPS.filter(a =>
-      a.label.toLowerCase().includes(lower) ||
-      a.desc.toLowerCase().includes(lower) ||
-      a.category.toLowerCase().includes(lower)
-    ).slice(0, 8);
-  }, []);
-
   const performSearch = useCallback(async (q: string, currentTab: SearchTab, vOnly: boolean, sort: "relevance"|"recent"|"popular") => {
     const trimmed = q.trim();
     if (trimmed.length < 1 && currentTab !== "videos") {
@@ -405,9 +363,7 @@ export default function SearchScreen() {
         fetches.push(Promise.resolve({ data: shops, merged: true }));
       } else fetches.push(Promise.resolve({ data: [] }));
 
-      fetches.push(Promise.resolve({ data: searchApps(trimmed) }));
-
-      const [peopleRes, postsRes, videosRes, channelsRes, eventsRes, giftsRes, shopsRes, appsRes] = await Promise.all(fetches);
+      const [peopleRes, postsRes, videosRes, channelsRes, eventsRes, giftsRes, shopsRes] = await Promise.all(fetches);
       if (id !== searchIdRef.current) return;
 
       const people: PersonResult[] = peopleRes.data || [];
@@ -442,17 +398,16 @@ export default function SearchScreen() {
 
       const gifts: GiftResult[] = giftsRes.data || [];
       const shops: ShopResult[] = (shopsRes.data && !shopsRes.merged) ? [] : (shopsRes.data || []);
-      const apps: AppResult[] = appsRes.data || [];
 
-      const total = people.length + posts.length + videos.length + channels.length + events.length + gifts.length + shops.length + apps.length;
-      setResults({ people, posts, videos, channels, events, gifts, shops, apps });
+      const total = people.length + posts.length + videos.length + channels.length + events.length + gifts.length + shops.length;
+      setResults({ people, posts, videos, channels, events, gifts, shops });
       setTotalCount(total);
     } catch (e) {
       console.warn("Search error:", e);
     } finally {
       if (id === searchIdRef.current) setLoading(false);
     }
-  }, [searchApps]);
+  }, []);
 
   useEffect(() => {
     if (!incomingTag || incomingTag === handledTagRef.current) return;
@@ -551,7 +506,6 @@ export default function SearchScreen() {
     events:   results.events.length,
     gifts:    results.gifts.length,
     shops:    results.shops.length,
-    apps:     results.apps.length,
   }), [results, totalCount]);
 
   const cleanQuery = query.trim().replace(/^[#@]/, "");
@@ -797,28 +751,6 @@ export default function SearchScreen() {
     );
   }
 
-  function AppCard({ a, i }: { a: AppResult; i: number }) {
-    return (
-      <Animated.View entering={FadeInRight.delay(i*25).duration(220)}>
-        <TouchableOpacity style={[styles.card, { backgroundColor:colors.surface }]} onPress={() => router.push(a.route as any)} activeOpacity={0.75}>
-          <LinearGradient colors={a.gradient} style={[styles.av52, { borderRadius:16, alignItems:"center", justifyContent:"center" }]}>
-            <Ionicons name={a.icon} size={24} color="#fff" />
-          </LinearGradient>
-          <View style={{ flex:1, gap:4 }}>
-            <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
-              <Text style={[styles.cardTitle, { color:colors.text }]}>{a.label}</Text>
-              <View style={[styles.catPill, { backgroundColor:a.gradient[0]+"22" }]}>
-                <Text style={{ color:a.gradient[0], fontSize:9, fontFamily:"Inter_600SemiBold" }}>{a.category}</Text>
-              </View>
-            </View>
-            <Text style={[styles.bioText, { color:colors.textSecondary }]} numberOfLines={2}>{a.desc}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  }
-
   function renderResults() {
     const showPeople   = (tab === "all" || tab === "people")   && results.people.length > 0;
     const showPosts    = (tab === "all" || tab === "posts")    && results.posts.length > 0;
@@ -827,8 +759,7 @@ export default function SearchScreen() {
     const showEvents   = (tab === "all" || tab === "events")   && results.events.length > 0;
     const showGifts    = (tab === "all" || tab === "gifts")    && results.gifts.length > 0;
     const showShops    = (tab === "all" || tab === "shops")    && results.shops.length > 0;
-    const showApps     = (tab === "all" || tab === "apps")     && results.apps.length > 0;
-    const anyResults = showPeople || showPosts || showVideos || showChannels || showEvents || showGifts || showShops || showApps;
+    const anyResults = showPeople || showPosts || showVideos || showChannels || showEvents || showGifts || showShops;
 
     if (!anyResults) {
       return (
@@ -917,12 +848,6 @@ export default function SearchScreen() {
           </View>
         )}
 
-        {showApps && (
-          <View style={{ paddingTop:16 }}>
-            <SectionLabel icon="grid" label="Apps & Games" count={results.apps.length} onSeeAll={undefined} />
-            {results.apps.map((a, i) => <AppCard key={a.id} a={a} i={i} />)}
-          </View>
-        )}
       </ScrollView>
     );
   }
