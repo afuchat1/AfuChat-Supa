@@ -102,25 +102,75 @@ export default function OnboardingScreen() {
 
   async function detectCountry() {
     if (selectedCountry) return;
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") return;
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Low,
-      });
-      const [geo] = await Location.reverseGeocodeAsync({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
-      if (geo?.isoCountryCode) {
-        const match = COUNTRIES.find(
-          (c) => c.code.toUpperCase() === geo.isoCountryCode?.toUpperCase()
-        );
-        if (match) {
-          setSelectedCountry(match);
-        }
+
+    // Pick a country by ISO code from our list.
+    const pickByCode = (code?: string | null) => {
+      if (!code) return false;
+      const match = COUNTRIES.find(
+        (c) => c.code.toUpperCase() === code.toUpperCase(),
+      );
+      if (match) {
+        setSelectedCountry(match);
+        return true;
       }
-    } catch (_) {}
+      return false;
+    };
+
+    // 1) Silent IP-based lookup — no permission prompt, works on web and
+    //    native. Tries a couple of free providers in case one is down.
+    const ipEndpoints = [
+      { url: "https://ipwho.is/", field: "country_code" },
+      { url: "https://ipapi.co/json/", field: "country" },
+    ];
+    for (const { url, field } of ipEndpoints) {
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 4000);
+        const res = await fetch(url, { signal: ctrl.signal });
+        clearTimeout(timer);
+        if (!res.ok) continue;
+        const json = await res.json();
+        if (pickByCode(json?.[field])) return;
+      } catch {
+        /* try next provider */
+      }
+    }
+
+    // 2) Web fallback: derive country from the browser locale
+    //    (e.g. "en-UG" → "UG"). No popup, instant.
+    if (Platform.OS === "web") {
+      try {
+        const langs: string[] = (navigator as any)?.languages?.length
+          ? (navigator as any).languages
+          : [navigator.language];
+        for (const lang of langs) {
+          const region = lang?.split("-")[1];
+          if (pickByCode(region)) return;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    // 3) Native fallback only — use device location if the user has
+    //    already granted permission. We never prompt here so onboarding
+    //    stays popup-free; users can still tap to pick manually.
+    if (Platform.OS !== "web") {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== "granted") return;
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Low,
+        });
+        const [geo] = await Location.reverseGeocodeAsync({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+        pickByCode(geo?.isoCountryCode);
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   function animateProgress(nextStep: number) {
