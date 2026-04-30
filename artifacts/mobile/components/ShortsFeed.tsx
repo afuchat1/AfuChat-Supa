@@ -125,6 +125,14 @@ function WebShortsPlayer({
     hideTimer.current = setTimeout(() => setShowControls(false), 1500);
   }
 
+  // Stop click bubbling so the parent layout can never end up double-handling
+  // the same press (which previously made pause/play look stuck).
+  function handleClick(e: any) {
+    if (preloadOnly) return;
+    if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+    onTogglePause();
+  }
+
   return (
     <View style={StyleSheet.absoluteFill}>
       {/* @ts-expect-error react-native-web exposes raw HTML elements via createElement */}
@@ -135,7 +143,7 @@ function WebShortsPlayer({
         loop
         muted={muted}
         preload="auto"
-        onClick={preloadOnly ? undefined : onTogglePause}
+        onClick={handleClick}
         onMouseMove={preloadOnly ? undefined : handlePointer}
         onEnded={onEnded}
         style={{
@@ -659,6 +667,47 @@ export default function ShortsFeed({
       setActiveIndex(first.index);
     }
   }).current;
+
+  const listRef = useRef<FlatList>(null);
+  // Pause toggle exposed by the active card so the page-level Space key
+  // listener can drive it without prop-drilling.
+  const activeToggleRef = useRef<(() => void) | null>(null);
+
+  // Web keyboard controls: Space → pause/play, ArrowUp/Down → prev/next.
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (t) {
+        const tag = t.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (t as any).isContentEditable) {
+          return;
+        }
+      }
+      if (e.code === "Space" || e.key === " ") {
+        if (activeToggleRef.current) {
+          e.preventDefault();
+          activeToggleRef.current();
+        }
+        return;
+      }
+      if (e.key === "ArrowDown" || e.key === "PageDown") {
+        e.preventDefault();
+        const next = Math.min(activeIndex + 1, Math.max(posts.length - 1, 0));
+        if (next !== activeIndex) {
+          listRef.current?.scrollToIndex({ index: next, animated: true });
+        }
+      } else if (e.key === "ArrowUp" || e.key === "PageUp") {
+        e.preventDefault();
+        const prev = Math.max(activeIndex - 1, 0);
+        if (prev !== activeIndex) {
+          listRef.current?.scrollToIndex({ index: prev, animated: true });
+        }
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [activeIndex, posts.length]);
 
   async function toggleLike(postId: string, currentlyLiked: boolean) {
     if (!user) { router.push("/(auth)/login" as any); return; }

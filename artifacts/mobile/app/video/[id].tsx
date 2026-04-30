@@ -60,6 +60,7 @@ function WebVideoPlayer({
   paused,
   preloadOnly,
   onTogglePause,
+  onDoubleTap,
   onProgress,
   onBuffering,
   externalRef,
@@ -69,11 +70,13 @@ function WebVideoPlayer({
   paused: boolean;
   preloadOnly: boolean;
   onTogglePause: () => void;
+  onDoubleTap?: () => void;
   onProgress: (positionMs: number, durationMs: number) => void;
   onBuffering: (buffering: boolean) => void;
   externalRef?: React.MutableRefObject<HTMLVideoElement | null>;
 }) {
   const innerRef = useRef<HTMLVideoElement | null>(null);
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function setRef(el: HTMLVideoElement | null) {
     innerRef.current = el;
@@ -103,6 +106,40 @@ function WebVideoPlayer({
     }
   }, [active]);
 
+  useEffect(() => () => {
+    if (clickTimer.current) clearTimeout(clickTimer.current);
+  }, []);
+
+  // Pause/play click handler with click-vs-double-click disambiguation so a
+  // double-tap-to-like doesn't also flip the paused state twice (which made
+  // it appear that pause/play didn't work).
+  function handleClick(e: any) {
+    if (preloadOnly) return;
+    if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+    if (clickTimer.current) {
+      clearTimeout(clickTimer.current);
+      clickTimer.current = null;
+    }
+    if (onDoubleTap) {
+      clickTimer.current = setTimeout(() => {
+        onTogglePause();
+        clickTimer.current = null;
+      }, 220);
+    } else {
+      onTogglePause();
+    }
+  }
+
+  function handleDblClick(e: any) {
+    if (preloadOnly || !onDoubleTap) return;
+    if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+    if (clickTimer.current) {
+      clearTimeout(clickTimer.current);
+      clickTimer.current = null;
+    }
+    onDoubleTap();
+  }
+
   return (
     // @ts-expect-error react-native-web exposes raw HTML elements via createElement
     <video
@@ -111,7 +148,8 @@ function WebVideoPlayer({
       playsInline
       loop
       preload="auto"
-      onClick={preloadOnly ? undefined : onTogglePause}
+      onClick={handleClick}
+      onDoubleClick={handleDblClick}
       onTimeUpdate={(e: any) => {
         const v = e.currentTarget as HTMLVideoElement;
         if (v.duration) onProgress(v.currentTime * 1000, v.duration * 1000);
@@ -602,6 +640,7 @@ function VideoItem({
   onRecordView: (postId: string) => void;
   onOpenMenu: (item: VideoPost) => void;
   onOpenSound: (item: VideoPost, albumArtUrl: string | null, trackArtist: string | null) => void;
+  activeToggleRef?: React.MutableRefObject<(() => void) | null>;
 }) {
   const { accent } = useAppAccent();
   const [paused, setPaused] = useState(false);
@@ -714,14 +753,7 @@ function VideoItem({
   function handleTap() {
     const now = Date.now();
     if (now - lastTap.current < 300) {
-      if (!item.liked) {
-        onLike(item.id, false);
-      }
-      Animated.sequence([
-        Animated.timing(doubleTapHeart, { toValue: 1, duration: 150, useNativeDriver: USE_NATIVE }),
-        Animated.delay(600),
-        Animated.timing(doubleTapHeart, { toValue: 0, duration: 250, useNativeDriver: USE_NATIVE }),
-      ]).start();
+      triggerLikeBurst();
       lastTap.current = 0;
     } else {
       lastTap.current = now;
@@ -732,6 +764,29 @@ function VideoItem({
       }, 300);
     }
   }
+
+  function triggerLikeBurst() {
+    if (!item.liked) {
+      onLike(item.id, false);
+    }
+    Animated.sequence([
+      Animated.timing(doubleTapHeart, { toValue: 1, duration: 150, useNativeDriver: USE_NATIVE }),
+      Animated.delay(600),
+      Animated.timing(doubleTapHeart, { toValue: 0, duration: 250, useNativeDriver: USE_NATIVE }),
+    ]).start();
+  }
+
+  // When this card is the active one on web, register its pause toggle so the
+  // page-level Space-key handler can reach it.
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    if (!isActive) return;
+    if (!activeToggleRef) return;
+    activeToggleRef.current = () => setPaused((p) => !p);
+    return () => {
+      if (activeToggleRef.current) activeToggleRef.current = null;
+    };
+  }, [isActive, activeToggleRef]);
 
   function handleLike() {
     Animated.sequence([
@@ -777,7 +832,12 @@ function VideoItem({
           },
         ]}
       >
-      <Pressable style={StyleSheet.absoluteFill} onPress={handleTap} onLongPress={() => onOpenMenu(item)} delayLongPress={380}>
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        onPress={Platform.OS === "web" ? undefined : handleTap}
+        onLongPress={() => onOpenMenu(item)}
+        delayLongPress={380}
+      >
         {shouldMountVideo ? (
           Platform.OS === "web" ? (
             <WebVideoPlayer
@@ -786,6 +846,7 @@ function VideoItem({
               paused={paused || (isLowData && !cachedUri && !manualPlay)}
               preloadOnly={preloadOnly}
               onTogglePause={() => setPaused((p) => !p)}
+              onDoubleTap={triggerLikeBurst}
               onProgress={(pos, dur) => {
                 if (!dur) return;
                 setDurationMs(dur);
@@ -1528,6 +1589,50 @@ export default function VideoPlayerScreen() {
   const listRef = useRef<FlatList>(null);
   const initialScrollDone = useRef(false);
   const tabAnim = useRef(new Animated.Value(0)).current;
+  // Pause toggle exposed by the *currently active* card so keyboard handlers
+  // (Space) can drive it without prop-drilling through the card tree.
+  const activeToggleRef = useRef<(() => void) | null>(null);
+
+  // Web-only keyboard controls:
+  //   • Space  → toggle pause/play on the active video (and prevent the
+  //              browser's default page-scroll behaviour).
+  //   • ArrowDown / ArrowUp / PageDown / PageUp / Home / End fall through to
+  //     the FlatList so the existing snap-scroll behaviour acts as the
+  //     "scroll" the user expects.
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (t) {
+        const tag = t.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (t as any).isContentEditable) {
+          return;
+        }
+      }
+      if (e.code === "Space" || e.key === " ") {
+        if (activeToggleRef.current) {
+          e.preventDefault();
+          activeToggleRef.current();
+        }
+        return;
+      }
+      if (e.key === "ArrowDown" || e.key === "PageDown") {
+        e.preventDefault();
+        const next = Math.min(activeIndex + 1, Math.max(videos.length - 1, 0));
+        if (next !== activeIndex) {
+          listRef.current?.scrollToIndex({ index: next, animated: true });
+        }
+      } else if (e.key === "ArrowUp" || e.key === "PageUp") {
+        e.preventDefault();
+        const prev = Math.max(activeIndex - 1, 0);
+        if (prev !== activeIndex) {
+          listRef.current?.scrollToIndex({ index: prev, animated: true });
+        }
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [activeIndex, videos.length]);
 
   function switchTab(tab: "for_you" | "following") {
     if (tab === videoTab) return;
@@ -1983,6 +2088,7 @@ export default function VideoPlayerScreen() {
                 onRecordView={handleRecordView}
                 onOpenMenu={handleOpenMenu}
                 onOpenSound={handleOpenSound}
+                activeToggleRef={activeToggleRef}
               />
             );
           }}
