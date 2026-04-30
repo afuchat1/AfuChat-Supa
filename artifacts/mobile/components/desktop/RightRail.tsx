@@ -37,6 +37,17 @@ type TrendingTag = {
   posts: number;
 };
 
+type SuggestedCommunity = {
+  id: string;
+  name: string;
+  description: string | null;
+  emoji: string | null;
+  price: number;
+  member_count: number;
+  tags: string[] | null;
+  reason: string;
+};
+
 function extractHashtags(text: string | null | undefined): string[] {
   if (!text) return [];
   const matches = text.match(/#\w+/g);
@@ -49,6 +60,7 @@ export function RightRail() {
   const { user } = useAuth();
   const [suggested, setSuggested] = useState<SuggestedProfile[]>([]);
   const [trending, setTrending] = useState<TrendingTag[]>([]);
+  const [communities, setCommunities] = useState<SuggestedCommunity[]>([]);
   const [loading, setLoading] = useState(true);
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
 
@@ -57,13 +69,17 @@ export function RightRail() {
 
     // ── Who to follow ──
     let myFollowing = new Set<string>();
+    let myInterests: string[] = [];
     if (user) {
-      const { data: f } = await supabase
-        .from("follows")
-        .select("following_id")
-        .eq("follower_id", user.id);
+      const [{ data: f }, { data: profileSelf }] = await Promise.all([
+        supabase.from("follows").select("following_id").eq("follower_id", user.id),
+        supabase.from("profiles").select("interests").eq("id", user.id).maybeSingle(),
+      ]);
       myFollowing = new Set((f || []).map((r: any) => r.following_id));
       setFollowingIds(myFollowing);
+      myInterests = ((profileSelf as any)?.interests || [])
+        .map((s: string) => String(s).toLowerCase().trim())
+        .filter(Boolean);
     }
 
     const { data: profiles } = await supabase
@@ -77,6 +93,62 @@ export function RightRail() {
       .filter((p: any) => !myFollowing.has(p.id))
       .slice(0, 5);
     setSuggested(filtered as SuggestedProfile[]);
+
+    // ── Suggested communities (interest + follow-based ranking) ──
+    let myCommunityIds = new Set<string>();
+    if (user) {
+      const { data: mine } = await supabase
+        .from("community_members")
+        .select("community_id")
+        .eq("user_id", user.id);
+      myCommunityIds = new Set((mine || []).map((r: any) => r.community_id));
+    }
+
+    // Communities friends are in (collaborative signal) — only when we have follows
+    const friendCommunityCount = new Map<string, number>();
+    if (myFollowing.size > 0) {
+      const { data: friendMemberships } = await supabase
+        .from("community_members")
+        .select("community_id, user_id")
+        .in("user_id", [...myFollowing])
+        .limit(500);
+      for (const row of friendMemberships || []) {
+        const cid = (row as any).community_id as string;
+        friendCommunityCount.set(cid, (friendCommunityCount.get(cid) || 0) + 1);
+      }
+    }
+
+    const { data: pool } = await supabase
+      .from("paid_communities")
+      .select("id, name, description, emoji, price, member_count, tags")
+      .order("member_count", { ascending: false })
+      .limit(60);
+
+    const interestSet = new Set(myInterests);
+    const ranked: SuggestedCommunity[] = (pool || [])
+      .filter((c: any) => !myCommunityIds.has(c.id))
+      .map((c: any) => {
+        const tags: string[] = Array.isArray(c.tags)
+          ? c.tags.map((t: string) => String(t).toLowerCase().trim()).filter(Boolean)
+          : [];
+        const tagOverlap = tags.filter((t) => interestSet.has(t));
+        const friends = friendCommunityCount.get(c.id) || 0;
+        // Score: interest matches dominate, then friend overlap, then popularity tiebreaker.
+        const score =
+          tagOverlap.length * 100 +
+          friends * 25 +
+          Math.log1p(c.member_count || 0);
+        const reason =
+          tagOverlap.length > 0
+            ? `Matches your interest in #${tagOverlap[0]}`
+            : friends > 0
+            ? `${friends} ${friends === 1 ? "person you follow is" : "people you follow are"} in this`
+            : `${c.member_count || 0} ${c.member_count === 1 ? "member" : "members"}`;
+        return { ...c, tags, reason, _score: score } as SuggestedCommunity & { _score: number };
+      })
+      .sort((a, b) => (b as any)._score - (a as any)._score)
+      .slice(0, 4);
+    setCommunities(ranked);
 
     // ── Trending hashtags (from posts in the last 7 days) ──
     const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
@@ -181,6 +253,58 @@ export function RightRail() {
           ]}
         >
           <Text style={[styles.showMoreText, { color: colors.accent }]}>Show more</Text>
+        </Pressable>
+      </View>
+
+      {/* Suggested communities card */}
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.cardTitle, { color: colors.text }]}>Communities for you</Text>
+        {loading ? (
+          <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>
+        ) : communities.length === 0 ? (
+          <Text style={[styles.empty, { color: colors.textMuted }]}>No suggestions yet</Text>
+        ) : (
+          communities.map((c) => (
+            <Pressable
+              key={c.id}
+              onPress={() => router.push("/paid-communities" as any)}
+              style={({ hovered }: any) => [
+                styles.communityRow,
+                { backgroundColor: hovered ? colors.backgroundTertiary : "transparent" },
+              ]}
+            >
+              <View style={[styles.communityEmoji, { backgroundColor: colors.backgroundTertiary }]}>
+                <Text style={styles.communityEmojiText}>{c.emoji || "🏠"}</Text>
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
+                  {c.name}
+                </Text>
+                <Text style={[styles.communityReason, { color: colors.textMuted }]} numberOfLines={1}>
+                  {c.reason}
+                </Text>
+              </View>
+              <View style={[styles.pricePill, { borderColor: colors.border }]}>
+                {c.price > 0 ? (
+                  <>
+                    <Ionicons name="diamond-outline" size={11} color={colors.textMuted} />
+                    <Text style={[styles.pricePillText, { color: colors.text }]}>{c.price}</Text>
+                  </>
+                ) : (
+                  <Text style={[styles.pricePillText, { color: colors.text }]}>Free</Text>
+                )}
+              </View>
+            </Pressable>
+          ))
+        )}
+        <Pressable
+          onPress={() => router.push("/(tabs)/communities" as any)}
+          style={({ hovered }: any) => [
+            styles.showMore,
+            { opacity: hovered ? 0.7 : 1 },
+          ]}
+        >
+          <Text style={[styles.showMoreText, { color: colors.accent }]}>Browse all communities</Text>
         </Pressable>
       </View>
 
@@ -290,6 +414,37 @@ const styles = StyleSheet.create({
   trendIndex: { fontFamily: "Inter_400Regular", fontSize: 11 },
   trendTag: { fontFamily: "Inter_700Bold", fontSize: 14 },
   trendCount: { fontFamily: "Inter_400Regular", fontSize: 11 },
+  communityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+  },
+  communityEmoji: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  communityEmojiText: { fontSize: 22 },
+  communityReason: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    marginTop: 2,
+  },
+  pricePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  pricePillText: { fontFamily: "Inter_600SemiBold", fontSize: 11 },
   footer: {
     paddingHorizontal: 6,
     paddingTop: 8,
