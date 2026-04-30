@@ -12,7 +12,6 @@ import { router, useLocalSearchParams, useRootNavigationState } from "expo-route
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
-import Colors from "@/constants/colors";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
@@ -42,19 +41,14 @@ export default function HandleScreen() {
   const navigationState = useRootNavigationState();
   const hasNavigated = useRef(false);
   const [profileId, setProfileId] = useState<string | null>(null);
+  const [profileNotFound, setProfileNotFound] = useState(false);
   const [dataReady, setDataReady] = useState(false);
 
-  const isProfileLink = rawHandle?.startsWith("@");
   const cleanHandle = (rawHandle || "").replace(/^@/, "").toLowerCase();
   const isValidHandle = /^[a-zA-Z0-9_]+$/.test(cleanHandle);
 
   useEffect(() => {
     if (!cleanHandle || !isValidHandle) {
-      setDataReady(true);
-      return;
-    }
-    if (!isProfileLink) {
-      AsyncStorage.setItem("referrer_handle", cleanHandle).catch(() => {});
       setDataReady(true);
       return;
     }
@@ -65,11 +59,18 @@ export default function HandleScreen() {
       .eq("handle", cleanHandle)
       .single()
       .then(({ data }) => {
-        if (data) setProfileId(data.id);
+        if (data?.id) {
+          setProfileId(data.id);
+        } else {
+          setProfileNotFound(true);
+        }
         setDataReady(true);
       })
-      .then(undefined, () => setDataReady(true));
-  }, [cleanHandle, isProfileLink, isValidHandle]);
+      .catch(() => {
+        setProfileNotFound(true);
+        setDataReady(true);
+      });
+  }, [cleanHandle, isValidHandle]);
 
   useEffect(() => {
     if (hasNavigated.current) return;
@@ -84,20 +85,17 @@ export default function HandleScreen() {
       return;
     }
 
-    if (isProfileLink) {
+    if (session) {
       if (profileId) {
         safeNavigate("/contact/[id]", { id: profileId });
       } else {
         safeNavigate("/(tabs)/discover");
       }
     } else {
-      if (session) {
-        safeNavigate("/(tabs)");
-      } else {
-        safeNavigate("/(auth)/register");
-      }
+      AsyncStorage.setItem("referrer_handle", cleanHandle).catch(() => {});
+      safeNavigate("/(auth)/register");
     }
-  }, [dataReady, authLoading, navigationState?.key, cleanHandle, isProfileLink, isValidHandle, profileId, session]);
+  }, [dataReady, authLoading, navigationState?.key, cleanHandle, isValidHandle, profileId, profileNotFound, session]);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -107,15 +105,11 @@ export default function HandleScreen() {
       if (!dataReady) return;
       hasNavigated.current = true;
       if (typeof window !== "undefined") {
-        if (isProfileLink) {
-          window.location.href = "/discover";
-        } else {
-          window.location.href = "/";
-        }
+        window.location.href = session ? "/" : "/register";
       }
     }, 8000);
     return () => clearTimeout(timeout);
-  }, [isProfileLink, dataReady]);
+  }, [dataReady, session]);
 
   return (
     <View style={[styles.container, { backgroundColor: accent, paddingTop: insets.top }]}>
@@ -123,7 +117,7 @@ export default function HandleScreen() {
       <Text style={styles.brandText}>AfuChat</Text>
       <ActivityIndicator size="small" color="#fff" style={styles.loader} />
       <Text style={styles.subText}>
-        {isProfileLink ? "Loading profile..." : "Processing invite..."}
+        {session ? "Loading profile..." : "Processing invite..."}
       </Text>
     </View>
   );
