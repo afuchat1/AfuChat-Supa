@@ -20,6 +20,7 @@ import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { Avatar } from "@/components/ui/Avatar";
 import { StoryRing } from "@/components/ui/StoryRing";
 import { Separator } from "@/components/ui/Separator";
@@ -315,19 +316,22 @@ const storyBarStyles = StyleSheet.create({
   name: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 4, textAlign: "center" },
 });
 
+type ChatTabKey = "all" | "unread" | "personal" | "groups" | "channels";
+
 export default function ChatsScreen() {
   const { colors } = useTheme();
   const { user, profile, linkedAccounts, switchAccount } = useAuth();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const { isDesktop } = useIsDesktop();
 
   const [chats, setChats] = useState<ChatItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
-  const [searchFocused, setSearchFocused] = useState(false);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
+  const [tabFilter, setTabFilter] = useState<ChatTabKey>("all");
 
   const fetchUnreadCount = useCallback(() => {
     if (!user) return;
@@ -638,14 +642,33 @@ export default function ChatsScreen() {
     };
   }, [user, chatIdsKey, loadChats]);
 
+  const tabFiltered = chats.filter((c) => {
+    if (tabFilter === "unread") return c.unread_count > 0;
+    if (tabFilter === "personal") return !c.is_group && !c.is_channel;
+    if (tabFilter === "groups") return c.is_group && !c.is_channel;
+    if (tabFilter === "channels") return c.is_channel;
+    return true;
+  });
+
   const filtered = search
-    ? chats.filter((c) => {
+    ? tabFiltered.filter((c) => {
         const name = c.is_group || c.is_channel ? c.name : c.other_display_name;
         return name?.toLowerCase().includes(search.toLowerCase());
       })
-    : chats;
+    : tabFiltered;
 
   const totalUnread = chats.reduce((sum, c) => sum + c.unread_count, 0);
+  const personalCount = chats.filter((c) => !c.is_group && !c.is_channel).length;
+  const groupsCount = chats.filter((c) => c.is_group && !c.is_channel).length;
+  const channelsCount = chats.filter((c) => c.is_channel).length;
+
+  const TABS: { key: ChatTabKey; label: string; icon: keyof typeof Ionicons.glyphMap; count: number }[] = [
+    { key: "all", label: "All chats", icon: "chatbubbles-outline", count: chats.length },
+    { key: "unread", label: "Unread", icon: "mail-unread-outline", count: totalUnread },
+    { key: "personal", label: "Personal", icon: "person-outline", count: personalCount },
+    { key: "groups", label: "Groups", icon: "people-outline", count: groupsCount },
+    { key: "channels", label: "Channels", icon: "megaphone-outline", count: channelsCount },
+  ];
 
   useEffect(() => {
     navigation.setOptions({
@@ -656,12 +679,12 @@ export default function ChatsScreen() {
   if (!user) return <Redirect href="/(tabs)/discover" />;
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
       <OfflineBanner />
       <View
         style={[
           styles.header,
-          { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border },
+          { paddingTop: insets.top + 8, backgroundColor: colors.background },
         ]}
       >
         {/* Account avatar stack — left side */}
@@ -739,20 +762,15 @@ export default function ChatsScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={[styles.searchWrap, { backgroundColor: colors.surface }]}>
+      <View style={[styles.searchWrap, { backgroundColor: colors.background }]}>
         <View style={[
           styles.searchBox,
-          {
-            backgroundColor: colors.inputBg,
-            borderColor: searchFocused ? colors.accent : colors.border,
-            shadowColor: searchFocused ? colors.accent : "#000",
-            shadowOpacity: searchFocused ? 0.18 : 0.05,
-          },
+          { backgroundColor: colors.backgroundSecondary },
         ]}>
           <Ionicons
-            name={searchFocused ? "search" : "search-outline"}
+            name="search-outline"
             size={19}
-            color={searchFocused ? colors.accent : colors.textMuted}
+            color={colors.textMuted}
           />
           <TextInput
             style={[styles.searchInput, { color: colors.text }]}
@@ -761,8 +779,6 @@ export default function ChatsScreen() {
             value={search}
             onChangeText={setSearch}
             returnKeyType="search"
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
           />
           {search.length > 0 ? (
             <Pressable onPress={() => setSearch("")} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
@@ -778,43 +794,92 @@ export default function ChatsScreen() {
         </View>
       </View>
 
-      {loading ? (
-        <View style={{ padding: 8 }}>{[1,2,3,4,5,6].map(i => <ChatRowSkeleton key={i} />)}</View>
-      ) : filtered.length === 0 ? (
-        <View style={styles.center}>
-          <Ionicons name="chatbubbles-outline" size={64} color={colors.textMuted} />
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>No chats yet</Text>
-          <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-            Start a conversation from Contacts
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <ChatRow
-              item={item}
-              onPress={() => {
-                Haptics.selectionAsync();
-                router.push({ pathname: "/chat/[id]", params: { id: item.id } });
-              }}
-              onAction={handleChatAction}
+      <View style={[styles.body, isDesktop && styles.bodyRow]}>
+        {isDesktop && (
+          <View style={styles.rail}>
+            {TABS.map((tab) => {
+              const active = tabFilter === tab.key;
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={styles.railTab}
+                  onPress={() => setTabFilter(tab.key)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.railIconWrap}>
+                    <Ionicons
+                      name={tab.icon}
+                      size={22}
+                      color={active ? colors.text : colors.textMuted}
+                    />
+                    {tab.count > 0 && (
+                      <View style={[styles.railBadge, { backgroundColor: tab.key === "unread" ? "#FF3B30" : colors.backgroundSecondary }]}>
+                        <Text style={[styles.railBadgeText, { color: tab.key === "unread" ? "#fff" : colors.textSecondary }]}>
+                          {tab.count > 99 ? "99+" : tab.count}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text
+                    style={[
+                      styles.railLabel,
+                      {
+                        color: active ? colors.text : colors.textMuted,
+                        fontFamily: active ? "Inter_700Bold" : "Inter_500Medium",
+                      },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {tab.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        <View style={{ flex: 1 }}>
+          {loading ? (
+            <View style={{ padding: 8 }}>{[1,2,3,4,5,6].map(i => <ChatRowSkeleton key={i} />)}</View>
+          ) : filtered.length === 0 ? (
+            <View style={styles.center}>
+              <Ionicons name="chatbubbles-outline" size={64} color={colors.textMuted} />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                {tabFilter === "all" ? "No chats yet" : `No ${TABS.find(t => t.key === tabFilter)?.label.toLowerCase()}`}
+              </Text>
+              <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                {tabFilter === "all" ? "Start a conversation from Contacts" : "Try another filter"}
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={filtered}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <ChatRow
+                  item={item}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    router.push({ pathname: "/chat/[id]", params: { id: item.id } });
+                  }}
+                  onAction={handleChatAction}
+                />
+              )}
+              ItemSeparatorComponent={() => <Separator indent={74} />}
+              ListHeaderComponent={user && tabFilter === "all" && !search ? <StoriesBar userId={user.id} colors={colors} /> : null}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={() => { setRefreshing(true); loadChats(); }}
+                  tintColor={colors.accent}
+                />
+              }
+              contentContainerStyle={{ paddingBottom: insets.bottom + 52 + 80 + 50 }}
+              showsVerticalScrollIndicator={false}
             />
           )}
-          ItemSeparatorComponent={() => <Separator indent={74} />}
-          ListHeaderComponent={user ? <StoriesBar userId={user.id} colors={colors} /> : null}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => { setRefreshing(true); loadChats(); }}
-              tintColor={colors.accent}
-            />
-          }
-          contentContainerStyle={{ paddingBottom: insets.bottom + 52 + 80 + 50 }}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+        </View>
+      </View>
 
       {user && (
         <>
@@ -849,7 +914,48 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  body: { flex: 1 },
+  bodyRow: { flexDirection: "row" },
+  rail: {
+    width: 88,
+    paddingTop: 4,
+    paddingHorizontal: 4,
+    gap: 2,
+  },
+  railTab: {
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    alignItems: "center",
+    gap: 4,
+  },
+  railIconWrap: {
+    width: 36,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  railLabel: {
+    fontSize: 11,
+    letterSpacing: 0.1,
+    textAlign: "center",
+  },
+  railBadge: {
+    position: "absolute",
+    top: -4,
+    right: -2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+  },
+  railBadgeText: {
+    fontSize: 10,
+    fontFamily: "Inter_700Bold",
+    lineHeight: 12,
   },
   headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
   headerIcon: { padding: 4, position: "relative" },
@@ -870,15 +976,12 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 14,
-    paddingHorizontal: 13,
-    height: 44,
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    height: 40,
     gap: 9,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 2,
   },
-  searchInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 44, letterSpacing: 0.1 },
+  searchInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 40, letterSpacing: 0.1 },
   clearBtn: {
     width: 22,
     height: 22,
