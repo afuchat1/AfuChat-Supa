@@ -26,6 +26,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, usePathname } from "expo-router";
 
+import { useAuth } from "@/context/AuthContext";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { useTheme } from "@/hooks/useTheme";
 import {
@@ -37,16 +38,18 @@ import {
   TOPBAR_HEIGHT,
 } from "@/components/desktop/DesktopTopBar";
 import { ChatsListPanel } from "@/app/(tabs)/index";
+import { ChatHomePlaceholder } from "@/components/desktop/ChatHomePlaceholder";
 
 const FULLSCREEN_PATTERNS: RegExp[] = [
-  /^\/$/,
-  /^\/index$/,
   /^\/\(auth\)/,
   /^\/onboarding/,
   /^\/call(\/|$)/,
   /^\/video\//,
   /^\/stories\/(view|camera)/,
 ];
+
+// Routes where the chats list panel (master-detail layout) is shown.
+const CHAT_HOME_PATTERNS: RegExp[] = [/^\/$/, /^\/index$/];
 
 const MODAL_PATTERNS: { pattern: RegExp; title: string }[] = [
   { pattern: /^\/profile\/edit/, title: "Edit profile" },
@@ -76,13 +79,19 @@ function isFullscreen(pathname: string) {
 export function DesktopShell({ children }: { children: React.ReactNode }) {
   const { isDesktop } = useIsDesktop();
   const { isDark } = useTheme();
+  const { session } = useAuth();
   const pathname = usePathname() || "/";
 
   if (!isDesktop) {
     return <>{children}</>;
   }
 
-  if (isFullscreen(pathname)) {
+  // The chats home (`/`, `/index`) is shared with the auth-redirect splash.
+  // Without a session we let it render fullscreen so the splash spinner
+  // isn't framed by the desktop shell during the brief redirect window.
+  const isChatHome = CHAT_HOME_PATTERNS.some((rx) => rx.test(pathname)) && !!session;
+
+  if (isFullscreen(pathname) || (CHAT_HOME_PATTERNS.some((rx) => rx.test(pathname)) && !session)) {
     return <>{children}</>;
   }
 
@@ -97,10 +106,14 @@ export function DesktopShell({ children }: { children: React.ReactNode }) {
 
   const modal = matchModal(pathname);
   // WhatsApp/Telegram-style master-detail: when a chat conversation is open
-  // (/chat/[id]) we render the chats list as a sticky 360px panel on the
-  // left and the chat conversation to its right. The chats list is owned
-  // by `ChatsListPanel` so it stays mounted when navigating between chats.
+  // (/chat/[id]) OR when the user is on the chats home tab, we render the
+  // chats list as a sticky 360px panel on the left. On the chats home tab
+  // the right side shows a friendly empty state (`<ChatHomePlaceholder />`),
+  // and on `/chat/[id]` the chat conversation is rendered to the right.
+  // The chats list is owned by `ChatsListPanel` so it stays mounted while
+  // the user navigates between chats.
   const isChatRoute = /^\/chat\/[^/]+/.test(pathname);
+  const showMasterDetail = isChatRoute || isChatHome;
 
   // On web we glue the sidebar to the viewport so scrolling content never
   // moves it. On native (rare path: this component only mounts when the
@@ -188,10 +201,12 @@ export function DesktopShell({ children }: { children: React.ReactNode }) {
               <View style={styles.modalBody}>{children}</View>
             </View>
           </View>
-        ) : isChatRoute ? (
+        ) : showMasterDetail ? (
           <View style={styles.masterDetail}>
             <ChatsListPanel />
-            <View style={styles.detailColumn}>{children}</View>
+            <View style={styles.detailColumn}>
+              {isChatHome ? <ChatHomePlaceholder /> : children}
+            </View>
           </View>
         ) : (
           <View style={styles.content}>{children}</View>

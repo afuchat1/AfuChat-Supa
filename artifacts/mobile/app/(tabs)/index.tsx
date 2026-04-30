@@ -969,10 +969,17 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
 
 /**
  * Default route export — the chats screen as it appears at /(tabs).
- * On desktop this becomes a "Select a chat" placeholder because
- * `DesktopShell` mounts a persistent `ChatsListPanel` to the left.
+ *
+ * On mobile we render the full chats list. On desktop we render a tiny
+ * stub: `DesktopShell` mounts the persistent `ChatsListPanel` on the left
+ * and the `ChatHomePlaceholder` empty state on the right, so this route
+ * just needs to occupy the slot and not render its own duplicate list.
  */
 export default function ChatsRoute() {
+  const { isDesktop } = useIsDesktop();
+  // On desktop the shell takes over rendering for the chats home; return
+  // an empty fragment to avoid mounting the chats screen twice.
+  if (isDesktop) return <View style={{ flex: 1 }} />;
   return <ChatsScreen />;
 }
 
