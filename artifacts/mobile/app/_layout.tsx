@@ -36,7 +36,7 @@ import GoogleOneTap from "@/components/ui/GoogleOneTap";
 import { TourProvider } from "@/context/TourContext";
 import ProductTour from "@/components/ui/ProductTour";
 import { DesktopShell } from "@/components/desktop/DesktopShell";
-import { DevViewSwitcher } from "@/components/dev/DevViewSwitcher";
+import { DevViewToolbar } from "@/components/dev/DevViewToolbar";
 
 try { setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`); } catch (_) {}
 
@@ -252,7 +252,7 @@ export default function RootLayout() {
                         <RootLayoutNav />
                       </DesktopShell>
                     </AppLockGate>
-                    <DevViewSwitcher />
+                    <DevViewToolbar />
                     <ProductTour />
                     <IOSAlert
                       visible={alertState.visible}
