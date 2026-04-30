@@ -115,6 +115,12 @@ export function DesktopShell({ children }: { children: React.ReactNode }) {
   const isChatRoute = /^\/chat\/[^/]+/.test(pathname);
   const showMasterDetail = isChatRoute || isChatHome;
 
+  // When the dev preview toolbar is mounted (web + __DEV__), shift everything
+  // down by its height so it doesn't overlap the AfuChat brand in the sidebar.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const __dev__ = typeof (globalThis as any).__DEV__ !== "undefined" ? (globalThis as any).__DEV__ : true;
+  const devToolbarOffset = Platform.OS === "web" && __dev__ ? 34 : 0;
+
   // On web we glue the sidebar to the viewport so scrolling content never
   // moves it. On native (rare path: this component only mounts when the
   // viewport hits the desktop breakpoint, which only really happens on web)
@@ -123,7 +129,11 @@ export function DesktopShell({ children }: { children: React.ReactNode }) {
     Platform.OS === "web"
       ? [
           styles.sidebarFixed,
-          { width: SIDEBAR_WIDTH, height: "100vh" as any },
+          {
+            width: SIDEBAR_WIDTH,
+            height: `calc(100vh - ${devToolbarOffset}px)` as any,
+            top: devToolbarOffset,
+          },
         ]
       : [styles.sidebarFlex, { width: SIDEBAR_WIDTH }];
 
@@ -131,7 +141,7 @@ export function DesktopShell({ children }: { children: React.ReactNode }) {
     Platform.OS === "web"
       ? [
           styles.topBarFixed,
-          { left: SIDEBAR_WIDTH, height: TOPBAR_HEIGHT },
+          { left: SIDEBAR_WIDTH, height: TOPBAR_HEIGHT, top: devToolbarOffset },
         ]
       : null;
 
@@ -142,7 +152,7 @@ export function DesktopShell({ children }: { children: React.ReactNode }) {
           {
             backgroundColor: contentBg,
             paddingLeft: SIDEBAR_WIDTH,
-            paddingTop: TOPBAR_HEIGHT,
+            paddingTop: TOPBAR_HEIGHT + devToolbarOffset,
             minHeight: "100vh" as any,
           },
         ]
