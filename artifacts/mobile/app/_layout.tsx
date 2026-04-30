@@ -101,6 +101,7 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" options={{ animation: Platform.OS === "web" ? "none" : "fade" }} />
       <Stack.Screen name="chat/[id]" />
       <Stack.Screen name="contact/[id]" />
+      <Stack.Screen name="moments/index" options={{ headerShown: false }} />
       <Stack.Screen name="moments/create" options={bottomSheetAnim} />
       <Stack.Screen name="profile/edit" options={bottomSheetAnim} />
       <Stack.Screen name="group/create" options={bottomSheetAnim} />
