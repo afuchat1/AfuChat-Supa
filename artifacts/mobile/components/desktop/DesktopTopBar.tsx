@@ -215,9 +215,18 @@ function useThemePack(): ThemePack {
 }
 
 /**
- * Click-anchored dropdown. The trigger renders inline; on press, the panel
- * is positioned absolutely just below the trigger via a measured rect.
+ * Vercel-style hover-to-open dropdown.
+ *
+ * - Opens instantly on mouse-enter of the trigger button.
+ * - Stays open while the cursor is over the trigger OR the panel.
+ * - Closes after a short grace delay once the cursor leaves both zones,
+ *   so the user can comfortably move from button → panel without the
+ *   menu snapping shut.
+ * - Clicking still works (for keyboard / touch users).
+ * - Escape always closes.
  */
+const LEAVE_DELAY_MS = 120; // ms before closing after cursor leaves
+
 function NavDropdown({
   item,
   active,
@@ -233,38 +242,49 @@ function NavDropdown({
 }) {
   const triggerRef = useRef<View | null>(null);
   const [open, setOpen] = useState(false);
-  const [coords, setCoords] = useState<{ left: number; top: number } | null>(
-    null,
-  );
+  const [coords, setCoords] = useState<{ left: number; top: number } | null>(null);
+  const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const measure = () => {
     if (Platform.OS !== "web") return;
     const node: any = triggerRef.current as any;
     if (!node || !node.getBoundingClientRect) return;
     const rect = node.getBoundingClientRect();
-    setCoords({ left: rect.left, top: rect.bottom + 6 });
+    setCoords({ left: rect.left, top: rect.bottom + 4 });
+  };
+
+  const openMenu = () => {
+    if (leaveTimer.current) clearTimeout(leaveTimer.current);
+    if (!open) {
+      measure();
+      setOpen(true);
+    }
+  };
+
+  const scheduleClose = () => {
+    leaveTimer.current = setTimeout(() => setOpen(false), LEAVE_DELAY_MS);
+  };
+
+  const cancelClose = () => {
+    if (leaveTimer.current) clearTimeout(leaveTimer.current);
   };
 
   useEffect(() => {
-    if (!open || Platform.OS !== "web") return;
-    const onDown = (e: MouseEvent) => {
-      const node: any = triggerRef.current as any;
-      if (node && node.contains && node.contains(e.target)) return;
-      // Allow clicks inside the panel via data attribute
-      const t = e.target as HTMLElement | null;
-      if (t && t.closest && t.closest('[data-nav-dropdown="1"]')) return;
-      setOpen(false);
+    return () => {
+      if (leaveTimer.current) clearTimeout(leaveTimer.current);
     };
+  }, []);
+
+  useEffect(() => {
+    if (!open || Platform.OS !== "web") return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
     const onResize = () => setOpen(false);
-    window.addEventListener("mousedown", onDown);
     window.addEventListener("keydown", onKey);
     window.addEventListener("resize", onResize);
     window.addEventListener("scroll", onResize, true);
     return () => {
-      window.removeEventListener("mousedown", onDown);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("resize", onResize);
       window.removeEventListener("scroll", onResize, true);
@@ -278,15 +298,20 @@ function NavDropdown({
     }
     if (open) {
       setOpen(false);
-      return;
+    } else {
+      measure();
+      setOpen(true);
     }
-    measure();
-    setOpen(true);
   };
 
   return (
     <>
-      <View ref={triggerRef as any}>
+      <View
+        ref={triggerRef as any}
+        // @ts-expect-error react-native-web passes through onMouseEnter/Leave
+        onMouseEnter={item.subItems?.length ? openMenu : undefined}
+        onMouseLeave={item.subItems?.length ? scheduleClose : undefined}
+      >
         <Pressable
           onPress={onPressTrigger}
           style={({ hovered, pressed }: any) => [
@@ -332,6 +357,9 @@ function NavDropdown({
         <View
           // @ts-expect-error react-native-web maps dataSet to data-* attrs
           dataSet={{ "nav-dropdown": "1" }}
+          // @ts-expect-error react-native-web passes through mouse events
+          onMouseEnter={cancelClose}
+          onMouseLeave={scheduleClose}
           style={[
             styles.dropdownPanel,
             {
@@ -369,10 +397,7 @@ function NavDropdown({
                 </Text>
                 {sub.description ? (
                   <Text
-                    style={[
-                      styles.dropdownDesc,
-                      { color: theme.textMuted },
-                    ]}
+                    style={[styles.dropdownDesc, { color: theme.textMuted }]}
                     numberOfLines={1}
                   >
                     {sub.description}
