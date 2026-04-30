@@ -141,7 +141,9 @@ function WebShortsPlayer({
         style={{
           width: "100%",
           height: "100%",
-          objectFit: "cover",
+          // Show the video in its original aspect ratio with no cropping —
+          // matches YouTube Shorts desktop behaviour and the /video/[id] page.
+          objectFit: "contain",
           backgroundColor: "#000",
           cursor: preloadOnly ? "default" : "pointer",
         }}
@@ -191,7 +193,7 @@ function NativeShortsPlayer({
         ref={ref}
         source={{ uri: src }}
         style={StyleSheet.absoluteFill}
-        resizeMode={ResizeMode.COVER}
+        resizeMode={ResizeMode.CONTAIN}
         shouldPlay={active && !paused && !preloadOnly}
         isLooping
         isMuted={muted}

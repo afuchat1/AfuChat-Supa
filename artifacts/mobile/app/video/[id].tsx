@@ -43,6 +43,93 @@ import { BlurView } from "expo-blur";
 
 const USE_NATIVE = Platform.OS !== "web";
 
+/**
+ * Lightweight HTML5 video player used on web only.
+ *
+ * The expo-av <Video> component on web wraps a native <video> behind a heavy
+ * abstraction that adds noticeable startup latency (~700ms-1.2s before the
+ * first frame paints). Switching to a raw <video> element on web brings the
+ * /video/[id] page to parity with the Shorts feed (which already does this).
+ *
+ * Native (iOS / Android) keeps using expo-av — there is no <video> element on
+ * native and expo-av is well-tuned for those platforms.
+ */
+function WebVideoPlayer({
+  src,
+  active,
+  paused,
+  preloadOnly,
+  onTogglePause,
+  onProgress,
+  onBuffering,
+  externalRef,
+}: {
+  src: string;
+  active: boolean;
+  paused: boolean;
+  preloadOnly: boolean;
+  onTogglePause: () => void;
+  onProgress: (positionMs: number, durationMs: number) => void;
+  onBuffering: (buffering: boolean) => void;
+  externalRef?: React.MutableRefObject<HTMLVideoElement | null>;
+}) {
+  const innerRef = useRef<HTMLVideoElement | null>(null);
+
+  function setRef(el: HTMLVideoElement | null) {
+    innerRef.current = el;
+    if (externalRef) externalRef.current = el;
+  }
+
+  // Drive playback from React state.
+  useEffect(() => {
+    const el = innerRef.current;
+    if (!el) return;
+    if (active && !paused && !preloadOnly) {
+      const p = el.play();
+      if (p && typeof (p as any).catch === "function") {
+        (p as any).catch(() => { /* autoplay blocked — user must tap */ });
+      }
+    } else {
+      el.pause();
+    }
+  }, [active, paused, src, preloadOnly]);
+
+  // Reset to start when becoming inactive so re-entry plays from the top.
+  useEffect(() => {
+    const el = innerRef.current;
+    if (!el) return;
+    if (!active) {
+      try { el.currentTime = 0; } catch { /* ignore */ }
+    }
+  }, [active]);
+
+  return (
+    // @ts-expect-error react-native-web exposes raw HTML elements via createElement
+    <video
+      ref={setRef}
+      src={src}
+      playsInline
+      loop
+      preload="auto"
+      onClick={preloadOnly ? undefined : onTogglePause}
+      onTimeUpdate={(e: any) => {
+        const v = e.currentTarget as HTMLVideoElement;
+        if (v.duration) onProgress(v.currentTime * 1000, v.duration * 1000);
+      }}
+      onWaiting={() => onBuffering(true)}
+      onPlaying={() => onBuffering(false)}
+      onCanPlay={() => onBuffering(false)}
+      style={{
+        width: "100%",
+        height: "100%",
+        objectFit: "contain",
+        backgroundColor: "#000",
+        cursor: preloadOnly ? "default" : "pointer",
+      }}
+    />
+  );
+}
+
 type VideoPost = {
   id: string;
   author_id: string;
@@ -533,7 +620,19 @@ function VideoItem({
   const lastTap = useRef(0);
   const insets = useSafeAreaInsets();
   const videoRef = useRef<Video>(null);
+  const webVideoRef = useRef<HTMLVideoElement | null>(null);
   const cacheAttempted = useRef(false);
+
+  // Desktop "card" layout (YouTube-Shorts-style centered video). On mobile and
+  // small viewports we keep the existing edge-to-edge fullscreen experience.
+  const isDesktop = Platform.OS === "web" && screenW >= 768;
+  // 9:16 card sized to fit the visible area minus the header.
+  const cardHeight = isDesktop
+    ? Math.max(420, Math.min(screenH - 80, 880))
+    : screenH;
+  const cardWidth = isDesktop
+    ? Math.min(Math.round(cardHeight * (9 / 16)), screenW - 240)
+    : screenW;
 
   const isOriginalAudio = !item.audio_name || item.audio_name.toLowerCase().startsWith("original audio");
   const resolved = useResolvedVideoSource(item.id, item.video_url, { targetHeight: 720 });
@@ -646,20 +745,67 @@ function VideoItem({
 
   const watermarkRotate = watermarkSpin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
 
+  // Mount the video for the active item AND its 2 neighbours so swipes feel
+  // instant — neighbours preload metadata silently in the background. This
+  // mirrors the ShortsFeed behaviour and is the main reason the Shorts tab
+  // currently feels faster than this screen.
+  const preloadOnly = !isActive && isNearActive;
+  const shouldMountVideo = isActive || isNearActive;
+  const canPlay = isActive && !paused && (!isLowData || !!cachedUri || manualPlay);
+
   return (
-    <View style={[vStyles.item, { width: screenW, height: screenH }]}>
+    <View
+      style={[
+        vStyles.item,
+        {
+          width: screenW,
+          height: screenH,
+          alignItems: isDesktop ? "center" : "stretch",
+          justifyContent: isDesktop ? "center" : "flex-start",
+        },
+      ]}
+    >
+      <View
+        style={[
+          {
+            width: cardWidth,
+            height: cardHeight,
+            backgroundColor: "#000",
+            position: "relative",
+            overflow: "hidden",
+            borderRadius: isDesktop ? 16 : 0,
+          },
+        ]}
+      >
       <Pressable style={StyleSheet.absoluteFill} onPress={handleTap} onLongPress={() => onOpenMenu(item)} delayLongPress={380}>
-        {isNearActive ? (
-          <Video
-            ref={videoRef}
-            source={{ uri: playbackUri }}
-            style={StyleSheet.absoluteFill}
-            resizeMode={ResizeMode.CONTAIN}
-            shouldPlay={isActive && !paused && (!isLowData || !!cachedUri || manualPlay)}
-            isLooping
-            isMuted={false}
-            onPlaybackStatusUpdate={onPlaybackStatus}
-          />
+        {shouldMountVideo ? (
+          Platform.OS === "web" ? (
+            <WebVideoPlayer
+              src={playbackUri}
+              active={isActive}
+              paused={paused || (isLowData && !cachedUri && !manualPlay)}
+              preloadOnly={preloadOnly}
+              onTogglePause={() => setPaused((p) => !p)}
+              onProgress={(pos, dur) => {
+                if (!dur) return;
+                setDurationMs(dur);
+                setProgress(pos / dur);
+              }}
+              onBuffering={setBuffering}
+              externalRef={webVideoRef}
+            />
+          ) : (
+            <Video
+              ref={videoRef}
+              source={{ uri: playbackUri }}
+              style={StyleSheet.absoluteFill}
+              resizeMode={ResizeMode.CONTAIN}
+              shouldPlay={canPlay && !preloadOnly}
+              isLooping
+              isMuted={false}
+              onPlaybackStatusUpdate={onPlaybackStatus}
+            />
+          )
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />
         )}
@@ -849,6 +995,7 @@ function VideoItem({
         <View style={[vStyles.progressFill, { width: `${progress * 100}%` }]} />
         <View style={[vStyles.progressThumb, { left: `${progress * 100}%` as any }]} />
       </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -1812,11 +1959,12 @@ export default function VideoPlayerScreen() {
           keyExtractor={(v) => v.id}
           renderItem={({ item, index }) => {
             const isActive = index === activeIndex;
-            // On cellular: only mount Video for the active item
-            // On Wi-Fi: also preload the next item in queue
-            const isNearActive = isLowData
-              ? isActive
-              : isActive || index === activeIndex + 1;
+            // On cellular: only mount Video for the active item.
+            // On Wi-Fi: also preload BOTH neighbours (prev + next) so swipes
+            // in either direction feel instant — this matches the ShortsFeed
+            // behaviour and is critical for the perceived speed.
+            const distance = Math.abs(index - activeIndex);
+            const isNearActive = isLowData ? isActive : distance <= 2;
             return (
               <VideoItem
                 item={item}
@@ -1846,9 +1994,9 @@ export default function VideoPlayerScreen() {
           decelerationRate="fast"
           snapToAlignment="start"
           snapToInterval={SCREEN_H}
-          windowSize={3}
-          initialNumToRender={1}
-          maxToRenderPerBatch={1}
+          windowSize={5}
+          initialNumToRender={3}
+          maxToRenderPerBatch={3}
           onScrollToIndexFailed={(info) => {
             setTimeout(() => {
               listRef.current?.scrollToIndex({ index: info.index, animated: false });
