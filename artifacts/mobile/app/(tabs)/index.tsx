@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Redirect, router, useFocusEffect, useNavigation } from "expo-router";
+import { Redirect, router, useFocusEffect, useNavigation, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
@@ -84,6 +84,7 @@ function ChatRow({
   item,
   onPress,
   onAction,
+  isActive,
 }: {
   item: ChatItem;
   onPress: () => void;
@@ -91,6 +92,7 @@ function ChatRow({
     action: "togglePin" | "toggleArchive" | "delete" | "open",
     item: ChatItem,
   ) => void;
+  isActive?: boolean;
 }) {
   const { colors } = useTheme();
   // Lazy import to avoid touching native paths.
@@ -151,7 +153,7 @@ function ChatRow({
     <View {...bind}>
       <ContextMenu {...menuProps} />
     <TouchableOpacity
-      style={[styles.row, { backgroundColor: colors.surface }]}
+      style={[styles.row, { backgroundColor: isActive ? colors.backgroundSecondary : colors.surface }]}
       onPress={onPress}
       activeOpacity={0.7}
     >
@@ -318,12 +320,26 @@ const storyBarStyles = StyleSheet.create({
 
 type ChatTabKey = "all" | "unread" | "personal" | "groups" | "channels";
 
-export default function ChatsScreen() {
+/**
+ * The chats screen. By default this renders as a full-page route (chats tab).
+ * When mounted with `panelMode`, it renders as a fixed-width 360px column
+ * suitable for a WhatsApp/Telegram-style master-detail layout (the chat list
+ * stays sticky on the left, the chat conversation is rendered to its right).
+ *
+ * `DesktopShell` mounts `<ChatsListPanel />` (which is `<ChatsScreen panelMode />`)
+ * for any `/chat/[id]` route so the chats list is persistent while a chat is
+ * open. On the chats tab itself, `panelMode` is false and the list takes the
+ * full route width as usual.
+ */
+function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
   const { colors } = useTheme();
   const { user, profile, linkedAccounts, switchAccount } = useAuth();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { isDesktop } = useIsDesktop();
+  const pathname = usePathname() || "/";
+  const activeChatMatch = pathname.match(/^\/chat\/([^/]+)/);
+  const activeChatId = activeChatMatch ? activeChatMatch[1] : null;
 
   const [chats, setChats] = useState<ChatItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -671,16 +687,49 @@ export default function ChatsScreen() {
   ];
 
   useEffect(() => {
+    if (panelMode) return;
     navigation.setOptions({
       tabBarBadge: totalUnread > 0 ? (totalUnread > 99 ? "99+" : totalUnread) : undefined,
     });
-  }, [navigation, totalUnread]);
+  }, [navigation, totalUnread, panelMode]);
 
-  if (!user) return <Redirect href="/(tabs)/discover" />;
+  if (!user) {
+    if (panelMode) {
+      return (
+        <View style={[styles.root, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center", padding: 24 }]}>
+          <Ionicons name="chatbubbles-outline" size={48} color={colors.textMuted} />
+          <Text style={[styles.emptyTitle, { color: colors.text, marginTop: 12 }]}>Sign in to chat</Text>
+        </View>
+      );
+    }
+    return <Redirect href="/(tabs)/discover" />;
+  }
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
+    <View
+      style={[
+        styles.root,
+        {
+          backgroundColor: colors.background,
+          width: panelMode ? 360 : undefined,
+          borderRightWidth: panelMode ? StyleSheet.hairlineWidth : 0,
+          borderRightColor: colors.border,
+        },
+      ]}
+    >
       <OfflineBanner />
+      {panelMode ? (
+        <View style={[styles.panelHeader, { backgroundColor: colors.background }]}>
+          <Text style={[styles.panelTitle, { color: colors.text }]}>Chats</Text>
+          <TouchableOpacity
+            onPress={() => router.push("/(tabs)/contacts")}
+            style={[styles.panelHeaderBtn, { backgroundColor: colors.backgroundSecondary }]}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="create-outline" size={18} color={colors.text} />
+          </TouchableOpacity>
+        </View>
+      ) : (
       <View
         style={[
           styles.header,
@@ -761,6 +810,7 @@ export default function ChatsScreen() {
           )}
         </TouchableOpacity>
       </View>
+      )}
 
       <View style={[styles.searchWrap, { backgroundColor: colors.background }]}>
         <View style={[
@@ -858,6 +908,7 @@ export default function ChatsScreen() {
               renderItem={({ item }) => (
                 <ChatRow
                   item={item}
+                  isActive={panelMode && item.id === activeChatId}
                   onPress={() => {
                     Haptics.selectionAsync();
                     router.push({ pathname: "/chat/[id]", params: { id: item.id } });
@@ -881,7 +932,17 @@ export default function ChatsScreen() {
         </View>
       </View>
 
-      {user && (
+      {user && panelMode && (
+        <TouchableOpacity
+          style={[styles.fab, { backgroundColor: colors.accent, bottom: 24, right: 24 }]}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/contacts"); }}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="create-outline" size={24} color="#fff" />
+        </TouchableOpacity>
+      )}
+
+      {user && !panelMode && (
         <>
           <TouchableOpacity
             style={[styles.fab, { backgroundColor: colors.accent, bottom: insets.bottom + 52 + 16 }]}
@@ -904,6 +965,24 @@ export default function ChatsScreen() {
       )}
     </View>
   );
+}
+
+/**
+ * Default route export — the chats screen as it appears at /(tabs).
+ * On desktop this becomes a "Select a chat" placeholder because
+ * `DesktopShell` mounts a persistent `ChatsListPanel` to the left.
+ */
+export default function ChatsRoute() {
+  return <ChatsScreen />;
+}
+
+/**
+ * Named export used by `DesktopShell` to render the chats list as a sticky
+ * 360px column on the left of any /(tabs) or /chat/* route. Includes its
+ * own data fetching, search, filter rail, and active-chat highlighting.
+ */
+export function ChatsListPanel() {
+  return <ChatsScreen panelMode />;
 }
 
 const styles = StyleSheet.create({
@@ -958,6 +1037,23 @@ const styles = StyleSheet.create({
     lineHeight: 12,
   },
   headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
+  panelHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  panelTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
+  panelHeaderBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   headerIcon: { padding: 4, position: "relative" },
   notifBadge: {
     position: "absolute",

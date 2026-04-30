@@ -36,6 +36,7 @@ import {
   DesktopTopBar,
   TOPBAR_HEIGHT,
 } from "@/components/desktop/DesktopTopBar";
+import { ChatsListPanel } from "@/app/(tabs)/index";
 
 const FULLSCREEN_PATTERNS: RegExp[] = [
   /^\/$/,
@@ -95,6 +96,11 @@ export function DesktopShell({ children }: { children: React.ReactNode }) {
   const modalHeaderText = isDark ? "#F1F1F1" : "#0F0F0F";
 
   const modal = matchModal(pathname);
+  // WhatsApp/Telegram-style master-detail: when a chat conversation is open
+  // (/chat/[id]) we render the chats list as a sticky 360px panel on the
+  // left and the chat conversation to its right. The chats list is owned
+  // by `ChatsListPanel` so it stays mounted when navigating between chats.
+  const isChatRoute = /^\/chat\/[^/]+/.test(pathname);
 
   // On web we glue the sidebar to the viewport so scrolling content never
   // moves it. On native (rare path: this component only mounts when the
@@ -182,6 +188,11 @@ export function DesktopShell({ children }: { children: React.ReactNode }) {
               <View style={styles.modalBody}>{children}</View>
             </View>
           </View>
+        ) : isChatRoute ? (
+          <View style={styles.masterDetail}>
+            <ChatsListPanel />
+            <View style={styles.detailColumn}>{children}</View>
+          </View>
         ) : (
           <View style={styles.content}>{children}</View>
         )}
@@ -227,6 +238,15 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  masterDetail: {
+    flex: 1,
+    flexDirection: "row",
+    minHeight: 0,
+  },
+  detailColumn: {
+    flex: 1,
+    minWidth: 0,
   },
   backdrop: {
     flex: 1,

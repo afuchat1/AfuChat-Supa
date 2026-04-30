@@ -103,68 +103,11 @@ const SECTIONS: NavSection[] = [
       },
     ],
   },
-  {
-    key: "services",
-    title: "Services",
-    items: [
-      {
-        key: "wallet",
-        label: "Wallet",
-        icon: "wallet-outline",
-        iconActive: "wallet",
-        route: "/wallet",
-        match: (p) => p.startsWith("/wallet"),
-        requiresAuth: true,
-      },
-      {
-        key: "shop",
-        label: "Marketplace",
-        icon: "bag-outline",
-        iconActive: "bag",
-        route: "/shop",
-        match: (p) => p.startsWith("/shop") || p.startsWith("/store"),
-      },
-      {
-        key: "apps",
-        label: "Apps",
-        icon: "grid-outline",
-        iconActive: "grid",
-        route: "/apps",
-        match: (p) => p === "/apps" || p.startsWith("/apps/"),
-      },
-    ],
-  },
-  {
-    key: "more",
-    title: "More",
-    items: [
-      {
-        key: "premium",
-        label: "Premium",
-        icon: "star-outline",
-        iconActive: "star",
-        route: "/premium",
-        match: (p) => p === "/premium",
-      },
-      {
-        key: "support",
-        label: "Help & Support",
-        icon: "help-circle-outline",
-        iconActive: "help-circle",
-        route: "/support",
-        match: (p) => p.startsWith("/support"),
-      },
-      {
-        key: "settings",
-        label: "Settings",
-        icon: "settings-outline",
-        iconActive: "settings",
-        route: "/settings",
-        match: (p) => p.startsWith("/settings"),
-        requiresAuth: true,
-      },
-    ],
-  },
+  // Note: Services (Wallet / Marketplace / Apps) and the Premium / Settings /
+  // Help group are intentionally NOT mirrored here — they already live in the
+  // top bar dropdowns. Keeping them out of the sidebar avoids duplicate nav
+  // and follows the rule: "if it's available in the header, it must not be in
+  // the left bar."
 ];
 
 type ThemePack = {
