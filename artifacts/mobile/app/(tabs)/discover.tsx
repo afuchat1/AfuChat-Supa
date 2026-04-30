@@ -190,7 +190,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
     <>
       <ViewShot ref={cardRef} options={{ format: "png", quality: 1, result: "tmpfile" }}>
         <TouchableOpacity
-          style={[styles.card, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}
+          style={[styles.card, { backgroundColor: colors.background, borderBottomColor: colors.border }]}
           onPress={openPost}
           activeOpacity={0.97}
           {...(Platform.OS === "web" ? { dataSet: { postCard: item.id } } as any : {})}
@@ -363,7 +363,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
           )}
 
           {/* ── Footer ── */}
-          <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
+          <View style={styles.cardFooter}>
             <TouchableOpacity style={styles.action} onPress={() => onToggleLike(item.id)}>
               <Ionicons
                 name={item.liked ? "heart" : "heart-outline"}
@@ -1004,32 +1004,40 @@ export default function DiscoverScreen() {
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
       <OfflineBanner />
       <View
         style={[
           styles.header,
-          { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border },
+          { paddingTop: insets.top + 8, backgroundColor: colors.background },
         ]}
       >
-        {/* Tab switcher */}
-        <View style={[styles.tabRow, { backgroundColor: "transparent" }]}>
+        {/* Tab switcher — YouTube-style underline tabs */}
+        <View style={styles.tabRow}>
           <TouchableOpacity
-            style={[styles.tabPill, feedTab === "for_you" && { backgroundColor: colors.accent }]}
+            style={[styles.tabPill, { borderBottomColor: feedTab === "for_you" ? colors.text : "transparent" }]}
             onPress={() => setFeedTab("for_you")}
           >
-            <Text style={[styles.tabPillText, { color: feedTab === "for_you" ? "#fff" : colors.textMuted }]}>
+            <Text style={[
+              styles.tabPillText,
+              { color: feedTab === "for_you" ? colors.text : colors.textMuted,
+                fontFamily: feedTab === "for_you" ? "Inter_700Bold" : "Inter_500Medium" },
+            ]}>
               For You
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tabPill, feedTab === "following" && { backgroundColor: colors.accent }]}
+            style={[styles.tabPill, { borderBottomColor: feedTab === "following" ? colors.text : "transparent" }]}
             onPress={() => {
               if (!user) { router.push("/(auth)/login"); return; }
               setFeedTab("following");
             }}
           >
-            <Text style={[styles.tabPillText, { color: feedTab === "following" ? "#fff" : colors.textMuted }]}>
+            <Text style={[
+              styles.tabPillText,
+              { color: feedTab === "following" ? colors.text : colors.textMuted,
+                fontFamily: feedTab === "following" ? "Inter_700Bold" : "Inter_500Medium" },
+            ]}>
               Following
             </Text>
           </TouchableOpacity>
@@ -1050,10 +1058,10 @@ export default function DiscoverScreen() {
         {!user && (
           <TouchableOpacity
             onPress={() => router.push("/(auth)/login")}
-            style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.accent, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20 }}
+            style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6 }}
           >
-            <Ionicons name="log-in-outline" size={16} color="#fff" />
-            <Text style={{ color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" }}>Sign In</Text>
+            <Ionicons name="log-in-outline" size={16} color={colors.text} />
+            <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>Sign in</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -1222,12 +1230,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingBottom: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingBottom: 0,
     gap: 12,
   },
-  tabRow: { flexDirection: "row", borderRadius: 22, padding: 3, flex: 1 },
-  tabPill: { flex: 1, paddingVertical: 7, borderRadius: 19, alignItems: "center" },
+  tabRow: { flexDirection: "row", flex: 1, gap: 8 },
+  tabPill: { paddingVertical: 12, paddingHorizontal: 16, alignItems: "center", borderBottomWidth: 3 },
   tabPillText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   card: {
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -1261,7 +1268,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
     gap: 18,
   },
   action: { flexDirection: "row", alignItems: "center", gap: 5 },

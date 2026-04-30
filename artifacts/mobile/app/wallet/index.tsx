@@ -394,42 +394,42 @@ export default function WalletScreen() {
   })();
 
   const BalanceCard = (
-    <View style={[styles.balanceCard, { backgroundColor: colors.accent }]}>
+    <View style={[styles.balanceCard, { borderBottomColor: colors.border }]}>
       <View style={styles.balanceRow}>
         <View style={styles.balanceItem}>
-          <Ionicons name="flash" size={24} color="rgba(255,255,255,0.9)" />
-          <Text style={styles.balanceValue}>{profile?.xp || 0}</Text>
-          <Text style={styles.balanceLabel}>Nexa</Text>
+          <Ionicons name="flash" size={22} color={colors.textMuted} />
+          <Text style={[styles.balanceValue, { color: colors.text }]}>{profile?.xp || 0}</Text>
+          <Text style={[styles.balanceLabel, { color: colors.textMuted }]}>Nexa</Text>
         </View>
-        <View style={styles.balanceDivider} />
+        <View style={[styles.balanceDivider, { backgroundColor: colors.border }]} />
         <View style={styles.balanceItem}>
-          <Ionicons name="diamond" size={24} color="rgba(255,255,255,0.9)" />
-          <Text style={styles.balanceValue}>{profile?.acoin || 0}</Text>
-          <Text style={styles.balanceLabel}>ACoin</Text>
+          <Ionicons name="diamond" size={22} color={colors.textMuted} />
+          <Text style={[styles.balanceValue, { color: colors.text }]}>{profile?.acoin || 0}</Text>
+          <Text style={[styles.balanceLabel, { color: colors.textMuted }]}>ACoin</Text>
         </View>
       </View>
       <View style={styles.btnRow}>
-        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "rgba(212,168,83,0.15)" }]} onPress={() => router.push("/wallet/topup")}>
-          <Ionicons name="diamond" size={16} color={Colors.gold} />
-          <Text style={[styles.actionBtnText, { color: Colors.gold }]}>Buy ACoin</Text>
+        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.backgroundSecondary }]} onPress={() => router.push("/wallet/topup")}>
+          <Ionicons name="diamond" size={16} color={colors.text} />
+          <Text style={[styles.actionBtnText, { color: colors.text }]}>Buy ACoin</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn} onPress={() => setShowTransfer(true)}>
-          <Ionicons name="send" size={16} color={colors.accent} />
-          <Text style={[styles.actionBtnText, { color: colors.accent }]}>Send</Text>
+        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.backgroundSecondary }]} onPress={() => setShowTransfer(true)}>
+          <Ionicons name="send" size={16} color={colors.text} />
+          <Text style={[styles.actionBtnText, { color: colors.text }]}>Send</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn} onPress={() => setShowConvert(true)}>
-          <Ionicons name="swap-horizontal" size={16} color={colors.accent} />
-          <Text style={[styles.actionBtnText, { color: colors.accent }]}>Convert</Text>
+        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.backgroundSecondary }]} onPress={() => setShowConvert(true)}>
+          <Ionicons name="swap-horizontal" size={16} color={colors.text} />
+          <Text style={[styles.actionBtnText, { color: colors.text }]}>Convert</Text>
         </TouchableOpacity>
       </View>
       <View style={styles.btnRow}>
-        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "rgba(255,255,255,0.22)" }]} onPress={() => router.push("/wallet/scan")}>
-          <Ionicons name="scan" size={16} color="#fff" />
-          <Text style={[styles.actionBtnText, { color: "#fff" }]}>Scan QR</Text>
+        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.backgroundSecondary }]} onPress={() => router.push("/wallet/scan")}>
+          <Ionicons name="scan" size={16} color={colors.text} />
+          <Text style={[styles.actionBtnText, { color: colors.text }]}>Scan QR</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "rgba(255,255,255,0.22)" }]} onPress={() => router.push("/wallet/requests")}>
-          <Ionicons name="receipt-outline" size={16} color="#fff" />
-          <Text style={[styles.actionBtnText, { color: "#fff" }]}>Requests</Text>
+        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.backgroundSecondary }]} onPress={() => router.push("/wallet/requests")}>
+          <Ionicons name="receipt-outline" size={16} color={colors.text} />
+          <Text style={[styles.actionBtnText, { color: colors.text }]}>Requests</Text>
           {pendingRequestCount > 0 && (
             <View style={styles.requestBadge}>
               <Text style={styles.requestBadgeText}>{pendingRequestCount > 9 ? "9+" : pendingRequestCount}</Text>
@@ -443,8 +443,16 @@ export default function WalletScreen() {
   const TabFilters = (
     <View style={styles.tabRow}>
       {(["all", "nexa", "acoin", "gifts"] as const).map((tab) => (
-        <TouchableOpacity key={tab} style={[styles.tab, activeTab === tab && { backgroundColor: colors.accent }]} onPress={() => setActiveTab(tab)}>
-          <Text style={[styles.tabText, activeTab === tab && { color: "#fff" }]}>
+        <TouchableOpacity
+          key={tab}
+          style={[styles.tab, { borderBottomColor: activeTab === tab ? colors.text : "transparent" }]}
+          onPress={() => setActiveTab(tab)}
+        >
+          <Text style={[
+            styles.tabText,
+            { color: activeTab === tab ? colors.text : colors.textMuted,
+              fontFamily: activeTab === tab ? "Inter_700Bold" : "Inter_500Medium" },
+          ]}>
             {tab === "all" ? "All" : tab === "nexa" ? "Nexa" : tab === "acoin" ? "ACoin" : "Gifts"}
           </Text>
         </TouchableOpacity>
@@ -598,22 +606,22 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  balanceCard: { margin: 16, borderRadius: 20, padding: 24, gap: 16 },
-  balanceRow: { flexDirection: "row", justifyContent: "space-around" },
-  balanceItem: { alignItems: "center", gap: 6 },
-  balanceValue: { fontSize: 28, fontFamily: "Inter_700Bold", color: "#fff" },
-  balanceLabel: { fontSize: 13, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.7)" },
-  balanceDivider: { width: 1, backgroundColor: "rgba(255,255,255,0.2)" },
-  btnRow: { flexDirection: "row", gap: 10 },
-  actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#fff", borderRadius: 14, paddingVertical: 10 },
-  actionBtnText: { color: Colors.brand, fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  balanceCard: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 20, gap: 18, borderBottomWidth: StyleSheet.hairlineWidth },
+  balanceRow: { flexDirection: "row", justifyContent: "space-around", paddingBottom: 4 },
+  balanceItem: { alignItems: "center", gap: 4 },
+  balanceValue: { fontSize: 32, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
+  balanceLabel: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  balanceDivider: { width: StyleSheet.hairlineWidth },
+  btnRow: { flexDirection: "row", gap: 8 },
+  actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 18, paddingVertical: 9 },
+  actionBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   requestBadge: { backgroundColor: "#FF3B30", borderRadius: 10, minWidth: 18, height: 18, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   requestBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
   rateCard: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 16, marginBottom: 8, padding: 10, borderRadius: 10 },
   rateText: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  tabRow: { flexDirection: "row", marginHorizontal: 16, marginBottom: 8, gap: 8 },
-  tab: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, backgroundColor: "transparent" },
-  tabText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#888" },
+  tabRow: { flexDirection: "row", marginHorizontal: 16, marginBottom: 4, gap: 4 },
+  tab: { paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 3 },
+  tabText: { fontSize: 13 },
   txRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
   txIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   txLabel: { fontSize: 15, fontFamily: "Inter_500Medium" },

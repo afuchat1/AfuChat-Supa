@@ -208,7 +208,18 @@ Applied gates:
 
 ## Desktop Shell (rebuilt 2026-04-29)
 
-The desktop chrome (sidebar + top bar) is intentionally **flat / YouTube-style**: a single surface color (`#FFFFFF` light / `#0F0F0F` dark) is shared across the sidebar, top bar, and main content area; there are no border-rights / border-bottoms / drop shadows between regions. Active nav rows use a subtle gray fill (`#F2F2F2` / `#272727`) plus bolder text — no accent pills, no left-edge stripes. Hover and active fills use the same color so the entire chrome behaves like a single document. The mobile classic tab bar (`app/(tabs)/_layout.tsx`) was likewise flattened by setting `borderTopWidth: 0`.
+The whole product (chrome + every screen) is intentionally **flat / YouTube-style**: a single surface color (`#FFFFFF` light / `#0F0F0F` dark) flows through the sidebar, top bar, and main content area — no border-rights, no border-bottoms, no drop shadows between regions. Active nav rows use a subtle gray fill (`#F2F2F2` / `#272727`) plus bolder text — no accent pills, no left-edge stripes. Hover and active fills use the same color so the entire chrome behaves like a single document. The mobile classic tab bar (`app/(tabs)/_layout.tsx`) is likewise flattened by setting `borderTopWidth: 0`.
+
+The light/dark palettes in `constants/colors.ts` are tuned to YouTube neutrals:
+
+- light: `background/surface/header = #FFFFFF`, `backgroundSecondary = #F2F2F2` (hover/pill fills), `backgroundTertiary = #F8F8F8`, `border/separator = #E5E5E5`, `text = #0F0F0F`, `textSecondary = #606060`, `textMuted = #909090`, `inputBg/bubbleIncoming = #F2F2F2`.
+- dark: `background/surface/header = #0F0F0F`, `backgroundSecondary = #272727`, `backgroundTertiary = #1F1F1F`, `border/separator = #303030`, `text = #F1F1F1`, `textSecondary = #AAAAAA`, `textMuted = #717171`, `inputBg/bubbleIncoming = #272727`.
+
+In-app screens follow the same flatness rules:
+
+- **Discover** (`app/(tabs)/discover.tsx`) — header has no border-bottom, "For You" / "Following" are YouTube-style underline tabs (3px bottom-border + bold text on the active tab), post cards sit on the page background with no surface chip and no top border on the footer action row.
+- **Apps** (`app/(tabs)/apps.tsx`) — the featured app row is a flat `Icon · Title · Sub · Open →` row with a neutral square icon (no `LinearGradient` hero); category sections drop the surface card wrapper and lay tiles directly on the page. Individual app tile icons retain their colored gradients because they read as product/launcher icons, not chrome.
+- **Wallet** (`app/wallet/index.tsx`) — balance is a hairline-divided header showing two large neutral stat blocks (Nexa / ACoin), action buttons (Buy ACoin / Send / Convert / Scan QR / Requests) are plain ghost pills using `colors.backgroundSecondary`, and the All / Nexa / ACoin / Gifts filters are underline tabs.
 
 The desktop layout is owned by three files and only mounts when `useIsDesktop()` is true (viewport ≥ 1024 px on web):
 

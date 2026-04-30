@@ -266,7 +266,7 @@ function AppTile({ app, onTap }: { app: AppItem; onTap: (id: string) => void }) 
 }
 
 function FeaturedBanner({ app, onTap }: { app: AppItem; onTap: (id: string) => void }) {
-  const { colors, accent } = useTheme();
+  const { colors } = useTheme();
   function handlePress() {
     Haptics.selectionAsync();
     onTap(app.id);
@@ -275,33 +275,22 @@ function FeaturedBanner({ app, onTap }: { app: AppItem; onTap: (id: string) => v
   return (
     <Pressable
       onPress={handlePress}
-      style={{ marginHorizontal: 16, marginBottom: 20, borderRadius: 20, overflow: "hidden" }}
-      android_ripple={{ color: "rgba(255,255,255,0.1)", borderless: false }}
+      style={[styles.featuredFlat, { borderBottomColor: colors.border }]}
+      android_ripple={{ color: colors.hover ?? "rgba(0,0,0,0.04)", borderless: false }}
     >
-      <LinearGradient
-        colors={[resolveGradient(app.gradient, accent)[0], resolveGradient(app.gradient, accent)[1], resolveGradient(app.gradient, accent)[1] + "CC"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.featuredGradient}
-      >
-        <View style={styles.featuredContent}>
-          <View style={styles.featuredLeft}>
-            <View style={styles.featuredIconWrap}>
-              <Ionicons name={app.icon} size={32} color="#fff" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.featuredTitle}>{app.label}</Text>
-              <Text style={styles.featuredSub} numberOfLines={2}>
-                {app.featuredSub ?? app.label}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.featuredCta}>
-            <Text style={[styles.featuredCtaText, { color: colors.accent }]}>Open</Text>
-            <Ionicons name="arrow-forward" size={14} color={colors.accent} />
-          </View>
-        </View>
-      </LinearGradient>
+      <View style={[styles.featuredFlatIcon, { backgroundColor: colors.backgroundSecondary }]}>
+        <Ionicons name={app.icon} size={26} color={colors.text} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.featuredFlatTitle, { color: colors.text }]}>{app.label}</Text>
+        <Text style={[styles.featuredFlatSub, { color: colors.textMuted }]} numberOfLines={2}>
+          {app.featuredSub ?? app.label}
+        </Text>
+      </View>
+      <View style={styles.featuredFlatCta}>
+        <Text style={[styles.featuredFlatCtaText, { color: colors.text }]}>Open</Text>
+        <Ionicons name="arrow-forward" size={15} color={colors.text} />
+      </View>
     </Pressable>
   );
 }
@@ -326,7 +315,7 @@ function TrendingSection({
         </Text>
         <Text style={{ fontSize: 14 }}>🔥</Text>
       </View>
-      <View style={[styles.categoryCard, { backgroundColor: colors.surface, marginHorizontal: 16 }]}>
+      <View style={[styles.categoryCard, { marginHorizontal: 16 }]}>
         <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
           {apps.map((app) => (
             <View key={app.id} style={{ width: TILE_WIDTH, alignItems: "center" }}>
@@ -465,7 +454,7 @@ export default function AppsScreen() {
             <Text style={[styles.categoryTitle, { color: colors.textSecondary }]}>
               {cat.title.toUpperCase()}
             </Text>
-            <View style={[styles.categoryCard, { backgroundColor: colors.surface }]}>
+            <View style={styles.categoryCard}>
               <View style={styles.appGrid}>
                 {cat.apps.map((app) => (
                   <AppTile key={app.id} app={app} onTap={trackTap} />
@@ -511,58 +500,46 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: "Inter_600SemiBold",
   },
-  featuredGradient: {
-    borderRadius: 20,
-  },
-  featuredContent: {
-    padding: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  featuredLeft: {
+  featuredFlat: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 4,
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    flex: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  featuredIconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.2)",
+  featuredFlatIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
-  featuredTitle: {
-    color: "#fff",
-    fontSize: 20,
+  featuredFlatTitle: {
+    fontSize: 16,
     fontFamily: "Inter_700Bold",
-    marginBottom: 4,
+    marginBottom: 2,
   },
-  featuredSub: {
-    color: "rgba(255,255,255,0.75)",
+  featuredFlatSub: {
     fontSize: 13,
     fontFamily: "Inter_400Regular",
     lineHeight: 18,
   },
-  featuredCta: {
+  featuredFlatCta: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#fff",
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    marginLeft: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
-  featuredCtaText: {
-    color: Colors.brand,
+  featuredFlatCtaText: {
     fontSize: 13,
     fontFamily: "Inter_600SemiBold",
   },
   category: {
-    marginBottom: 8,
+    marginBottom: 12,
   },
   categoryTitle: {
     fontSize: 12,
@@ -573,8 +550,7 @@ const styles = StyleSheet.create({
   },
   categoryCard: {
     marginHorizontal: 16,
-    borderRadius: 16,
-    padding: 12,
+    paddingVertical: 4,
   },
   appGrid: {
     flexDirection: "row",
