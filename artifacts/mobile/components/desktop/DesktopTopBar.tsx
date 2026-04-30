@@ -33,6 +33,7 @@ import { router, usePathname } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
+import type { StoredAccount } from "@/lib/accountStore";
 
 export const TOPBAR_HEIGHT = 56;
 
@@ -412,6 +413,299 @@ function NavDropdown({
   );
 }
 
+/**
+ * Account dropdown anchored to the user's avatar in the top right.
+ *
+ * Shows the active account, any other accounts the user has linked through the
+ * "Linked accounts" flow, plus quick links to add an account, edit / view the
+ * profile, and sign out. This replaces the previous avatar→/me navigation so
+ * desktop users get a one-click account switcher (mirrors WhatsApp/Telegram
+ * web's avatar menu).
+ */
+function ProfileDropdown({
+  theme,
+  profile,
+  currentUserId,
+  linkedAccounts,
+  onSwitchAccount,
+  onSignOut,
+}: {
+  theme: ThemePack;
+  profile: { display_name: string | null; handle: string | null; avatar_url: string | null } | null;
+  currentUserId: string | null;
+  linkedAccounts: StoredAccount[];
+  onSwitchAccount: (userId: string) => Promise<void>;
+  onSignOut: () => Promise<void>;
+}) {
+  const triggerRef = useRef<View | null>(null);
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<{ right: number; top: number } | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const measure = () => {
+    if (Platform.OS !== "web") return;
+    const node: any = triggerRef.current as any;
+    if (!node || !node.getBoundingClientRect) return;
+    const rect = node.getBoundingClientRect();
+    setCoords({
+      right: Math.max(8, window.innerWidth - rect.right),
+      top: rect.bottom + 6,
+    });
+  };
+
+  const toggle = () => {
+    if (open) {
+      setOpen(false);
+    } else {
+      measure();
+      setOpen(true);
+    }
+  };
+
+  useEffect(() => {
+    if (!open || Platform.OS !== "web") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const onResize = () => setOpen(false);
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as any;
+      if (target?.closest?.('[data-profile-dropdown="1"]')) return;
+      const trigger: any = triggerRef.current;
+      if (trigger && typeof trigger.contains === "function" && trigger.contains(target)) return;
+      setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", onResize, true);
+    window.addEventListener("mousedown", onClick);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", onResize, true);
+      window.removeEventListener("mousedown", onClick);
+    };
+  }, [open]);
+
+  function navigate(route: string) {
+    setOpen(false);
+    router.push(route as any);
+  }
+
+  async function handleSwitch(userId: string) {
+    if (userId === currentUserId || busy) return;
+    setBusy(userId);
+    try {
+      await onSwitchAccount(userId);
+    } finally {
+      setBusy(null);
+      setOpen(false);
+    }
+  }
+
+  async function handleSignOut() {
+    setOpen(false);
+    await onSignOut();
+  }
+
+  const displayName = profile?.display_name || "You";
+  const handle = profile?.handle || "";
+  const initial = (displayName || "U").trim().slice(0, 1).toUpperCase();
+  const otherAccounts = linkedAccounts.filter((a) => a.userId !== currentUserId);
+
+  function renderAvatar(uri: string | null | undefined, name: string | null | undefined, size: number) {
+    if (uri) {
+      return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2 }} />;
+    }
+    return (
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: theme.accent,
+        }}
+      >
+        <Text style={{ color: "#fff", fontFamily: "Inter_700Bold", fontSize: Math.max(11, Math.floor(size * 0.42)) }}>
+          {(name || "U").trim().slice(0, 1).toUpperCase()}
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      <View ref={triggerRef as any}>
+        <Pressable
+          onPress={toggle}
+          style={({ hovered, pressed }: any) => [
+            styles.avatarBtn,
+            {
+              borderColor: open ? theme.accent : theme.border,
+              opacity: pressed ? 0.85 : hovered ? 0.92 : 1,
+            },
+          ]}
+        >
+          {profile?.avatar_url ? (
+            <Image source={{ uri: profile.avatar_url }} style={styles.avatarImg} />
+          ) : (
+            <View style={[styles.avatarFallback, { backgroundColor: theme.accent }]}>
+              <Text style={styles.avatarFallbackText}>{initial}</Text>
+            </View>
+          )}
+        </Pressable>
+      </View>
+
+      {open && coords && Platform.OS === "web" ? (
+        <View
+          // @ts-expect-error react-native-web maps dataSet to data-* attrs
+          dataSet={{ "profile-dropdown": "1" }}
+          style={[
+            styles.profilePanel,
+            {
+              right: coords.right,
+              top: coords.top,
+              backgroundColor: theme.menuBg,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          {/* Active account header */}
+          <Pressable
+            onPress={() => navigate("/(tabs)/me")}
+            style={({ hovered }: any) => [
+              styles.profileHeader,
+              { backgroundColor: hovered ? theme.hoverBg : "transparent" },
+            ]}
+          >
+            {renderAvatar(profile?.avatar_url ?? null, displayName, 38)}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.profileName, { color: theme.text }]} numberOfLines={1}>
+                {displayName}
+              </Text>
+              {handle ? (
+                <Text style={[styles.profileHandle, { color: theme.textMuted }]} numberOfLines={1}>
+                  @{handle}
+                </Text>
+              ) : null}
+            </View>
+            <Ionicons name="chevron-forward" size={14} color={theme.textMuted} />
+          </Pressable>
+
+          <View style={[styles.profileDivider, { backgroundColor: theme.border }]} />
+
+          {/* Other linked accounts */}
+          {otherAccounts.length > 0 ? (
+            <>
+              <Text style={[styles.profileSection, { color: theme.textMuted }]}>Switch account</Text>
+              {otherAccounts.map((acct) => (
+                <Pressable
+                  key={acct.userId}
+                  onPress={() => handleSwitch(acct.userId)}
+                  disabled={!!busy}
+                  style={({ hovered }: any) => [
+                    styles.profileAccountRow,
+                    { backgroundColor: hovered ? theme.hoverBg : "transparent", opacity: busy && busy !== acct.userId ? 0.5 : 1 },
+                  ]}
+                >
+                  {renderAvatar(acct.avatarUrl, acct.displayName, 30)}
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[styles.profileAccountName, { color: theme.text }]} numberOfLines={1}>
+                      {acct.displayName || "Account"}
+                    </Text>
+                    <Text style={[styles.profileAccountSub, { color: theme.textMuted }]} numberOfLines={1}>
+                      {acct.handle ? `@${acct.handle}` : acct.email}
+                    </Text>
+                  </View>
+                  {busy === acct.userId ? (
+                    <Ionicons name="sync" size={14} color={theme.textMuted} />
+                  ) : (
+                    <Ionicons name="swap-horizontal-outline" size={14} color={theme.textMuted} />
+                  )}
+                </Pressable>
+              ))}
+              <View style={[styles.profileDivider, { backgroundColor: theme.border }]} />
+            </>
+          ) : null}
+
+          {/* Account / profile actions */}
+          <Pressable
+            onPress={() => navigate("/linked-accounts")}
+            style={({ hovered }: any) => [
+              styles.profileItem,
+              { backgroundColor: hovered ? theme.hoverBg : "transparent" },
+            ]}
+          >
+            <Ionicons name="person-add-outline" size={16} color={theme.text} />
+            <Text style={[styles.profileItemText, { color: theme.text }]}>Add another account</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => navigate("/linked-accounts")}
+            style={({ hovered }: any) => [
+              styles.profileItem,
+              { backgroundColor: hovered ? theme.hoverBg : "transparent" },
+            ]}
+          >
+            <Ionicons name="people-outline" size={16} color={theme.text} />
+            <Text style={[styles.profileItemText, { color: theme.text }]}>Manage accounts</Text>
+          </Pressable>
+
+          <View style={[styles.profileDivider, { backgroundColor: theme.border }]} />
+
+          <Pressable
+            onPress={() => navigate("/(tabs)/me")}
+            style={({ hovered }: any) => [
+              styles.profileItem,
+              { backgroundColor: hovered ? theme.hoverBg : "transparent" },
+            ]}
+          >
+            <Ionicons name="person-circle-outline" size={16} color={theme.text} />
+            <Text style={[styles.profileItemText, { color: theme.text }]}>My profile</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => navigate("/profile/edit")}
+            style={({ hovered }: any) => [
+              styles.profileItem,
+              { backgroundColor: hovered ? theme.hoverBg : "transparent" },
+            ]}
+          >
+            <Ionicons name="create-outline" size={16} color={theme.text} />
+            <Text style={[styles.profileItemText, { color: theme.text }]}>Edit profile</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => navigate("/settings")}
+            style={({ hovered }: any) => [
+              styles.profileItem,
+              { backgroundColor: hovered ? theme.hoverBg : "transparent" },
+            ]}
+          >
+            <Ionicons name="settings-outline" size={16} color={theme.text} />
+            <Text style={[styles.profileItemText, { color: theme.text }]}>Settings</Text>
+          </Pressable>
+
+          <View style={[styles.profileDivider, { backgroundColor: theme.border }]} />
+
+          <Pressable
+            onPress={handleSignOut}
+            style={({ hovered }: any) => [
+              styles.profileItem,
+              { backgroundColor: hovered ? theme.hoverBg : "transparent" },
+            ]}
+          >
+            <Ionicons name="log-out-outline" size={16} color="#FF3B30" />
+            <Text style={[styles.profileItemText, { color: "#FF3B30" }]}>Sign out</Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </>
+  );
+}
+
 function formatACoins(n: number): string {
   if (!Number.isFinite(n)) return "0";
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -422,7 +716,7 @@ function formatACoins(n: number): string {
 export function DesktopTopBar() {
   const theme = useThemePack();
   const pathname = usePathname() || "/";
-  const { session, profile } = useAuth();
+  const { session, profile, linkedAccounts, switchAccount, signOut } = useAuth();
   const isLoggedIn = !!session;
   const userId = session?.user?.id;
 
@@ -600,31 +894,18 @@ export function DesktopTopBar() {
         </Pressable>
 
         {isLoggedIn ? (
-          <Pressable
-            onPress={() => router.push("/(tabs)/me" as any)}
-            style={({ hovered, pressed }: any) => [
-              styles.avatarBtn,
-              { borderColor: theme.border, opacity: pressed ? 0.85 : hovered ? 0.92 : 1 },
-            ]}
-          >
-            {profile?.avatar_url ? (
-              <Image
-                source={{ uri: profile.avatar_url }}
-                style={styles.avatarImg}
-              />
-            ) : (
-              <View
-                style={[
-                  styles.avatarFallback,
-                  { backgroundColor: theme.accent },
-                ]}
-              >
-                <Text style={styles.avatarFallbackText}>
-                  {(profile?.display_name || "U").trim().slice(0, 1).toUpperCase()}
-                </Text>
-              </View>
-            )}
-          </Pressable>
+          <ProfileDropdown
+            theme={theme}
+            profile={profile}
+            currentUserId={userId ?? null}
+            linkedAccounts={linkedAccounts}
+            onSwitchAccount={async (id) => {
+              await switchAccount(id);
+            }}
+            onSignOut={async () => {
+              await signOut();
+            }}
+          />
         ) : (
           <Pressable
             onPress={() => router.push("/(auth)/login" as any)}
@@ -802,5 +1083,71 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontFamily: "Inter_600SemiBold",
     fontSize: 13,
+  },
+  profilePanel: {
+    position: "fixed" as any,
+    width: 280,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 6,
+    zIndex: 1000,
+    overflow: "hidden",
+  },
+  profileHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  profileName: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+  },
+  profileHandle: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    marginTop: 1,
+  },
+  profileSection: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  profileAccountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  profileAccountName: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 13,
+  },
+  profileAccountSub: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 11.5,
+    marginTop: 1,
+  },
+  profileItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  profileItemText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 13,
+  },
+  profileDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: 4,
+    marginHorizontal: 8,
   },
 });

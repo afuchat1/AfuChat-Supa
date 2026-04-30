@@ -319,6 +319,30 @@ HLS/DASH not implemented yet — architecture leaves the hooks open.
 2. The `videos` Storage bucket must allow service-role writes under
    `{userId}/encoded/{asset}/...` (existing upload code already uses `{userId}/...`).
 
+## Desktop UX decisions
+
+- **One official global search**: the desktop top bar
+  (`components/desktop/DesktopTopBar.tsx`) owns the search input. The
+  `app/(tabs)/search.tsx` page reads `?q=...` from URL params and hides its
+  own header/title/search input on desktop (kept on mobile). This avoids
+  the duplicate input that previously appeared on `/search`.
+- **Profile dropdown** (`ProfileDropdown` inside `DesktopTopBar.tsx`):
+  the avatar in the top-right opens a 280px panel listing the active
+  account, any other linked accounts (one-click switch via
+  `useAuth().switchAccount`), and shortcuts to Add account / Manage
+  accounts (`/linked-accounts`), My profile (`/(tabs)/me`), Edit profile
+  (`/profile/edit`), Settings, and Sign out. Closes on outside click,
+  scroll, escape, or resize. It replaces the previous direct
+  `router.push("/me")` behaviour.
+- **No tab-switch refreshes** (`context/AuthContext.tsx`):
+  `supabase.auth.onAuthStateChange` ignores `TOKEN_REFRESHED` (it patches
+  the new tokens onto the existing session object in place rather than
+  setting new state) and only updates `session`/`user` when the active
+  user id actually changes. Without this, every browser-tab focus on web
+  re-fetched the profile and cascaded a re-render through every
+  `useAuth()` consumer — making `/shorts` and `/video/[id]` visibly
+  "refresh" each time the user came back to the tab.
+
 ## Secrets Policy (IMPORTANT)
 
 **`SUPABASE_SERVICE_ROLE_KEY` MUST live only in Supabase Edge Function secrets** —

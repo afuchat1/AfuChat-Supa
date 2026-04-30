@@ -32,6 +32,7 @@ import * as Haptics from "expo-haptics";
 
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { supabase } from "@/lib/supabase";
 import { RichText } from "@/components/ui/RichText";
 import {
@@ -168,8 +169,10 @@ export default function SearchScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { width: SW } = useWindowDimensions();
-  const { tag: incomingTag } = useLocalSearchParams<{ tag?: string }>();
+  const { tag: incomingTag, q: incomingQ } = useLocalSearchParams<{ tag?: string; q?: string }>();
   const handledTagRef = useRef<string | null>(null);
+  const handledQRef = useRef<string | null>(null);
+  const { isDesktop } = useIsDesktop();
 
   const QUICK_GAP = 10;
   const QUICK_COLS = 4;
@@ -419,6 +422,20 @@ export default function SearchScreen() {
     addToHistory(q).then(setHistory);
     performSearch(q, "posts", false, "popular");
   }, [incomingTag, performSearch]);
+
+  // The official global search lives in the desktop top bar; when it submits,
+  // we land here with `?q=...`. Honour that param so the in-page filters /
+  // tabs respond to whatever was typed up top — no second search input needed.
+  useEffect(() => {
+    const incoming = (incomingQ || "").trim();
+    if (!incoming) return;
+    if (incoming === handledQRef.current) return;
+    handledQRef.current = incoming;
+    setQuery(incoming);
+    setHasSearched(false);
+    addToHistory(incoming).then(setHistory);
+    performSearch(incoming, tab, verifiedOnly, sortMode);
+  }, [incomingQ, performSearch, tab, verifiedOnly, sortMode]);
 
   function onChangeText(text: string) {
     setQuery(text);
@@ -1072,35 +1089,41 @@ export default function SearchScreen() {
   return (
     <View style={[styles.root, { backgroundColor:colors.backgroundSecondary }]}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border, zIndex: 20, overflow: "visible" as any }]}>
-        <Text style={[styles.headerTitle, { color:colors.text }]}>Search</Text>
+      <View style={[styles.header, { paddingTop: isDesktop ? 12 : insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border, zIndex: 20, overflow: "visible" as any }]}>
+        {/* On desktop the global search lives in the top bar, so we hide the
+            page title + search input here to avoid duplicating the same control. */}
+        {!isDesktop && (
+          <Text style={[styles.headerTitle, { color:colors.text }]}>Search</Text>
+        )}
 
-        {/* Search Bar */}
-        <View style={[styles.searchBar, { backgroundColor:colors.inputBg, borderColor: query.length > 0 ? BRAND+"50" : colors.border }]}>
-          <Ionicons name="search" size={18} color={query.length > 0 ? BRAND : colors.textMuted} style={{ marginRight:2 }} />
-          <TextInput
-            ref={inputRef}
-            style={[styles.searchInput, { color:colors.text }]}
-            placeholder="Search people, posts, gifts, apps…"
-            placeholderTextColor={colors.textMuted}
-            value={query}
-            onChangeText={onChangeText}
-            onSubmitEditing={onSubmit}
-            returnKeyType="search"
-            autoCorrect={false}
-            autoCapitalize="none"
-          />
-          {query.length > 0
-            ? <TouchableOpacity onPress={clearSearch} hitSlop={{ top:8, bottom:8, left:8, right:8 }}>
-                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-              </TouchableOpacity>
-            : Platform.OS === "web"
-              ? <TouchableOpacity onPress={startVoice} hitSlop={{ top:8, bottom:8, left:8, right:8 }}>
-                  <Ionicons name={isListening ? "mic" : "mic-outline"} size={18} color={isListening ? MATCH : colors.textMuted} />
+        {/* Search Bar — mobile only (desktop uses DesktopTopBar's search) */}
+        {!isDesktop && (
+          <View style={[styles.searchBar, { backgroundColor:colors.inputBg, borderColor: query.length > 0 ? BRAND+"50" : colors.border }]}>
+            <Ionicons name="search" size={18} color={query.length > 0 ? BRAND : colors.textMuted} style={{ marginRight:2 }} />
+            <TextInput
+              ref={inputRef}
+              style={[styles.searchInput, { color:colors.text }]}
+              placeholder="Search people, posts, gifts, apps…"
+              placeholderTextColor={colors.textMuted}
+              value={query}
+              onChangeText={onChangeText}
+              onSubmitEditing={onSubmit}
+              returnKeyType="search"
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+            {query.length > 0
+              ? <TouchableOpacity onPress={clearSearch} hitSlop={{ top:8, bottom:8, left:8, right:8 }}>
+                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
                 </TouchableOpacity>
-              : null
-          }
-        </View>
+              : Platform.OS === "web"
+                ? <TouchableOpacity onPress={startVoice} hitSlop={{ top:8, bottom:8, left:8, right:8 }}>
+                    <Ionicons name={isListening ? "mic" : "mic-outline"} size={18} color={isListening ? MATCH : colors.textMuted} />
+                  </TouchableOpacity>
+                : null
+            }
+          </View>
+        )}
 
         {/* Action row */}
         <View style={styles.actionRow}>
@@ -1153,8 +1176,9 @@ export default function SearchScreen() {
           })}
         </ScrollView>
 
-        {/* Suggestions dropdown — inside header so absolute top:"100%" sits just below it */}
-        {showSuggest && suggestions.length > 0 && (
+        {/* Suggestions dropdown — inside header so absolute top:"100%" sits just below it.
+            Hidden on desktop because the desktop top bar's search owns suggestions. */}
+        {!isDesktop && showSuggest && suggestions.length > 0 && (
           <Animated.View entering={FadeIn.duration(150)} style={[styles.suggestBox, { backgroundColor:colors.surface, borderColor:colors.border }]}>
             {suggestions.map(p => (
               <TouchableOpacity key={p.id} style={styles.suggestRow} onPress={() => onSuggestionPress(p)} activeOpacity={0.75}>

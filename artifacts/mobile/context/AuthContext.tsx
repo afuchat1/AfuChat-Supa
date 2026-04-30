@@ -271,23 +271,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshLinkedAccounts();
 
     const { data: listener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          fetchProfile(session.user.id);
-          // Register device on first sign-in to detect new devices
-          if (event === "SIGNED_IN") {
-            registerDeviceSession(session.user.id).catch(() => {});
-            fetchProfile(session.user.id).then(() => {
-              supabase.from("profiles").select("display_name").eq("id", session.user.id).single().then(({ data }) => {
-                ensureAfuAiChat(session.user.id, data?.display_name).catch(() => {});
-              });
-            }).catch(() => {});
-          }
-        } else {
+      (event, newSession) => {
+        // On the web, supabase-js silently rotates the access token whenever
+        // the browser tab regains focus and emits TOKEN_REFRESHED. The user
+        // identity hasn't changed, so re-setting session/user (which creates
+        // new object refs) and re-fetching the profile would cascade a
+        // re-render through every useAuth() consumer — making pages like
+        // /shorts and /video/[id] visibly "refresh" each time the user
+        // switches browser tabs and comes back. We keep the new tokens by
+        // patching the existing session object in place instead.
+        if (event === "TOKEN_REFRESHED") {
+          setSession((prev) => {
+            if (!prev || !newSession) return newSession;
+            if (prev.access_token === newSession.access_token) return prev;
+            return Object.assign(prev, {
+              access_token: newSession.access_token,
+              refresh_token: newSession.refresh_token,
+              expires_at: newSession.expires_at,
+              expires_in: newSession.expires_in,
+            });
+          });
+          return;
+        }
+
+        const newUserId = newSession?.user?.id ?? null;
+
+        // Skip no-op INITIAL_SESSION / SIGNED_IN replays on tab focus where
+        // the active user hasn't actually changed.
+        setSession((prev) => (prev?.user?.id === newUserId ? prev : newSession));
+        setUser((prev) => (prev?.id === newUserId ? prev : newSession?.user ?? null));
+
+        if (!newSession?.user) {
           setProfile(null);
           setSubscription(null);
+          return;
+        }
+
+        if (event === "SIGNED_IN") {
+          // Register device on first sign-in to detect new devices.
+          registerDeviceSession(newSession.user.id).catch(() => {});
+          fetchProfile(newSession.user.id).then(() => {
+            supabase.from("profiles").select("display_name").eq("id", newSession.user.id).single().then(({ data }) => {
+              ensureAfuAiChat(newSession.user.id, data?.display_name).catch(() => {});
+            });
+          }).catch(() => {});
         }
       }
     );
