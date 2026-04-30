@@ -18,7 +18,7 @@ import { Image as ExpoImage } from "expo-image";
 import { showAlert } from "@/lib/alert";
 import ViewShot from "react-native-view-shot";
 import { useSafeAreaInsets, useSafeAreaInsets as useCardInsets } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useNavigation } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { ImageViewer, useImageViewer } from "@/components/ImageViewer";
@@ -446,6 +446,7 @@ export default function DiscoverScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const { isLowData } = useDataMode();
   const { isDesktop } = useIsDesktop();
+  const navigation = useNavigation();
   const [feedTab, setFeedTab] = useState<"for_you" | "following" | "shorts">(() => {
     if (Platform.OS === "web" && typeof window !== "undefined") {
       const sp = new URLSearchParams(window.location.search);
@@ -454,6 +455,25 @@ export default function DiscoverScreen() {
     }
     return "for_you";
   });
+  // For You / Following filter inside the Shorts experience (mobile fullscreen).
+  const [shortsFilter, setShortsFilter] = useState<"for_you" | "following">("for_you");
+
+  // When the user opens Shorts on a mobile viewport we want a TikTok-style
+  // immersive experience: hide the bottom tab bar entirely. Restore it
+  // automatically when the user backs out of Shorts or unmounts.
+  const mobileShorts = feedTab === "shorts" && !isDesktop;
+  useEffect(() => {
+    const parent = navigation.getParent?.();
+    if (!parent) return;
+    if (mobileShorts) {
+      parent.setOptions({ tabBarStyle: { display: "none" } });
+    } else {
+      parent.setOptions({ tabBarStyle: undefined });
+    }
+    return () => {
+      parent.setOptions({ tabBarStyle: undefined });
+    };
+  }, [mobileShorts, navigation]);
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -1021,6 +1041,83 @@ export default function DiscoverScreen() {
     }
   }
 
+  // ─── Mobile fullscreen TikTok-style Shorts experience ───────────────
+  // Bypasses the normal discover chrome entirely: black background, custom
+  // mini header (back · For You/Following · search), and an edge-to-edge
+  // ShortsFeed in "fullscreen" layout. The bottom tab bar is hidden via
+  // navigation.setOptions in the effect above.
+  if (mobileShorts) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#000" }}>
+        <ShortsFeed
+          layout="fullscreen"
+          filter={shortsFilter}
+          bottomInset={insets.bottom}
+        />
+        {/* Top mini header overlay */}
+        <View
+          style={[
+            styles.shortsHeader,
+            { paddingTop: insets.top + 6, paddingBottom: 8 },
+          ]}
+          pointerEvents="box-none"
+        >
+          <TouchableOpacity
+            onPress={() => setFeedTab("for_you")}
+            hitSlop={10}
+            style={styles.shortsHeaderBtn}
+          >
+            <Ionicons name="chevron-back" size={26} color="#fff" />
+          </TouchableOpacity>
+
+          <View style={styles.shortsHeaderTabs}>
+            <TouchableOpacity
+              onPress={() => setShortsFilter("for_you")}
+              hitSlop={6}
+              style={styles.shortsHeaderTab}
+            >
+              <Text
+                style={[
+                  styles.shortsHeaderTabText,
+                  shortsFilter === "for_you" && styles.shortsHeaderTabTextActive,
+                ]}
+              >
+                For You
+              </Text>
+              {shortsFilter === "for_you" ? <View style={styles.shortsHeaderTabUnderline} /> : null}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                if (!user) { router.push("/(auth)/login"); return; }
+                setShortsFilter("following");
+              }}
+              hitSlop={6}
+              style={styles.shortsHeaderTab}
+            >
+              <Text
+                style={[
+                  styles.shortsHeaderTabText,
+                  shortsFilter === "following" && styles.shortsHeaderTabTextActive,
+                ]}
+              >
+                Following
+              </Text>
+              {shortsFilter === "following" ? <View style={styles.shortsHeaderTabUnderline} /> : null}
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            onPress={() => router.push("/(tabs)/search" as any)}
+            hitSlop={10}
+            style={styles.shortsHeaderBtn}
+          >
+            <Ionicons name="search" size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <OfflineBanner />
@@ -1283,6 +1380,48 @@ const styles = StyleSheet.create({
   tabRow: { flexDirection: "row", flex: 1, gap: 8 },
   tabPill: { paddingVertical: 12, paddingHorizontal: 16, alignItems: "center", borderBottomWidth: 3 },
   tabPillText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  shortsHeader: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    zIndex: 20,
+  },
+  shortsHeaderBtn: { padding: 4 },
+  shortsHeaderTabs: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 22,
+  },
+  shortsHeaderTab: {
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  shortsHeaderTabText: {
+    fontSize: 16,
+    fontFamily: "Inter_500Medium",
+    color: "rgba(255,255,255,0.65)",
+    textShadowColor: "rgba(0,0,0,0.55)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  shortsHeaderTabTextActive: {
+    color: "#fff",
+    fontFamily: "Inter_700Bold",
+  },
+  shortsHeaderTabUnderline: {
+    marginTop: 4,
+    width: 18,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: "#fff",
+  },
   card: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",

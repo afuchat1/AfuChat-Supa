@@ -1,19 +1,19 @@
 /**
- * ShortsFeed — YouTube Shorts–style vertical video feed.
+ * ShortsFeed — vertical short-video feed (TikTok / YouTube Shorts style).
  *
- *   • One video at a time, centered, locked to a 9:16 frame.
- *   • Real play/pause: tap the player or the dedicated control button.
- *   • Mute toggle, like, comment, share, and an in-rail "Following" CTA.
- *   • On web we use a native <video> element for the lowest-latency
- *     start-up and immediate seek/scrub via the CDN. On native we keep
- *     the existing <Video /> from expo-av for parity with the full-screen
- *     vertical reels.
- *   • The active card aggressively preloads the *next* video's metadata
- *     so swiping down feels instant.
- *
- * This component is mounted inside the Discover screen when the user
- * picks the "Shorts" sub-tab. It deliberately fetches its own data so
- * it can paginate independently of the main feed.
+ *   • Two layouts:
+ *       - "fullscreen" (mobile): edge-to-edge video, action rail overlaid on
+ *         the right, author + caption + audio overlaid on the bottom-left,
+ *         with the host (`discover.tsx`) hiding the bottom tab bar so the
+ *         experience is fully immersive like TikTok.
+ *       - "card" (desktop): a 9:16 card centered in the column with the
+ *         action rail living *next* to the player, not on top of it.
+ *   • Real play/pause: tap the player to toggle.
+ *   • Mute toggle, like, comment, bookmark, share, in-rail follow CTA.
+ *   • On web we use a native <video> element for the lowest-latency start-up;
+ *     on native we use <Video /> from expo-av.
+ *   • The active card and its two neighbours are mounted so swiping feels
+ *     instant — neighbours preload metadata silently in the background.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -36,10 +36,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
-import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { Avatar } from "@/components/ui/Avatar";
 import { useResolvedVideoSource } from "@/hooks/useResolvedVideoSource";
-import { useDataMode } from "@/context/DataModeContext";
 import { sharePost } from "@/lib/share";
 
 type ShortPost = {
@@ -53,8 +51,12 @@ type ShortPost = {
   liked: boolean;
   likeCount: number;
   replyCount: number;
+  bookmarked: boolean;
   following: boolean;
 };
+
+export type ShortsFilter = "for_you" | "following";
+export type ShortsLayout = "fullscreen" | "card";
 
 function formatCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -71,6 +73,7 @@ function WebShortsPlayer({
   active,
   paused,
   muted,
+  preloadOnly,
   onTogglePause,
   onEnded,
 }: {
@@ -78,6 +81,7 @@ function WebShortsPlayer({
   active: boolean;
   paused: boolean;
   muted: boolean;
+  preloadOnly: boolean;
   onTogglePause: () => void;
   onEnded: () => void;
 }) {
@@ -89,7 +93,7 @@ function WebShortsPlayer({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (active && !paused) {
+    if (active && !paused && !preloadOnly) {
       const playPromise = el.play();
       if (playPromise && typeof (playPromise as any).catch === "function") {
         (playPromise as any).catch(() => { /* autoplay blocked — user must tap */ });
@@ -97,7 +101,7 @@ function WebShortsPlayer({
     } else {
       el.pause();
     }
-  }, [active, paused, src]);
+  }, [active, paused, src, preloadOnly]);
 
   // Reset to start when becoming inactive so re-entry plays from the top.
   useEffect(() => {
@@ -123,7 +127,7 @@ function WebShortsPlayer({
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      {/* @ts-expect-error react-native-web exposes raw HTML elements via createElement, here we render directly */}
+      {/* @ts-expect-error react-native-web exposes raw HTML elements via createElement */}
       <video
         ref={ref}
         src={src}
@@ -131,18 +135,18 @@ function WebShortsPlayer({
         loop
         muted={muted}
         preload="auto"
-        onClick={onTogglePause}
-        onMouseMove={handlePointer}
+        onClick={preloadOnly ? undefined : onTogglePause}
+        onMouseMove={preloadOnly ? undefined : handlePointer}
         onEnded={onEnded}
         style={{
           width: "100%",
           height: "100%",
           objectFit: "cover",
           backgroundColor: "#000",
-          cursor: "pointer",
+          cursor: preloadOnly ? "default" : "pointer",
         }}
       />
-      {(paused || showControls) && (
+      {!preloadOnly && (paused || showControls) && (
         <Pressable
           onPress={onTogglePause}
           style={styles.centerPlayBtn}
@@ -166,27 +170,33 @@ function NativeShortsPlayer({
   active,
   paused,
   muted,
+  preloadOnly,
   onTogglePause,
 }: {
   src: string;
   active: boolean;
   paused: boolean;
   muted: boolean;
+  preloadOnly: boolean;
   onTogglePause: () => void;
 }) {
   const ref = useRef<Video>(null);
   return (
-    <TouchableOpacity activeOpacity={1} style={StyleSheet.absoluteFill} onPress={onTogglePause}>
+    <TouchableOpacity
+      activeOpacity={1}
+      style={StyleSheet.absoluteFill}
+      onPress={preloadOnly ? undefined : onTogglePause}
+    >
       <Video
         ref={ref}
         source={{ uri: src }}
         style={StyleSheet.absoluteFill}
         resizeMode={ResizeMode.COVER}
-        shouldPlay={active && !paused}
+        shouldPlay={active && !paused && !preloadOnly}
         isLooping
         isMuted={muted}
       />
-      {paused && (
+      {!preloadOnly && paused && (
         <View style={styles.centerPlayBtn} pointerEvents="none">
           <View style={styles.centerPlayCircle}>
             <Ionicons name="play" size={36} color="#fff" />
@@ -204,29 +214,41 @@ function NativeShortsPlayer({
 function ShortCard({
   item,
   active,
+  preloadOnly,
+  layout,
   cardWidth,
   cardHeight,
+  bottomInset,
   globalMuted,
   onToggleGlobalMuted,
   onLike,
+  onBookmark,
   onFollow,
   currentUserId,
 }: {
   item: ShortPost;
   active: boolean;
+  preloadOnly: boolean;
+  layout: ShortsLayout;
   cardWidth: number;
   cardHeight: number;
+  bottomInset: number;
   globalMuted: boolean;
   onToggleGlobalMuted: () => void;
   onLike: (postId: string, liked: boolean) => void;
+  onBookmark: (postId: string, bookmarked: boolean) => void;
   onFollow: (authorId: string) => void;
   currentUserId?: string;
 }) {
   const { colors } = useTheme();
   const [paused, setPaused] = useState(false);
   const heartScale = useRef(new Animated.Value(1)).current;
-  const resolved = useResolvedVideoSource(item.id, item.video_url, { targetHeight: 720 });
+  // Mobile fullscreen aims for 480p so the first frame arrives quickly;
+  // desktop card asks for 720p since the surface is larger.
+  const targetHeight = layout === "fullscreen" ? 480 : 720;
+  const resolved = useResolvedVideoSource(item.id, item.video_url, { targetHeight });
   const src = resolved.uri || item.video_url;
+  const isFullscreen = layout === "fullscreen";
 
   function handleTogglePause() {
     setPaused((p) => !p);
@@ -248,14 +270,16 @@ function ShortCard({
   const isOwnVideo = currentUserId === item.author_id;
   const showFollowBtn = !isOwnVideo && !item.following;
 
-  return (
-    <View style={[styles.cardOuter, { height: cardHeight }]}>
-      <View style={[styles.cardInner, { width: cardWidth, height: cardHeight, backgroundColor: "#000" }]}>
+  // ─── Fullscreen (mobile) ────────────────────────────────────────────
+  if (isFullscreen) {
+    return (
+      <View style={[styles.fullCard, { width: cardWidth, height: cardHeight, backgroundColor: "#000" }]}>
         {Platform.OS === "web" ? (
           <WebShortsPlayer
             src={src}
             active={active}
             paused={paused}
+            preloadOnly={preloadOnly}
             muted={globalMuted}
             onTogglePause={handleTogglePause}
             onEnded={() => { /* loop handled natively */ }}
@@ -265,6 +289,122 @@ function ShortCard({
             src={src}
             active={active}
             paused={paused}
+            preloadOnly={preloadOnly}
+            muted={globalMuted}
+            onTogglePause={handleTogglePause}
+          />
+        )}
+
+        {/* TikTok-style right-side action rail, overlaid on the video */}
+        <View style={[styles.fullRail, { bottom: bottomInset + 90 }]} pointerEvents="box-none">
+          <Pressable
+            onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } } as any)}
+            style={styles.fullAvatarWrap}
+          >
+            <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={44} />
+            {showFollowBtn ? (
+              <View style={styles.fullFollowBadge}>
+                <Ionicons name="add" size={14} color="#fff" />
+              </View>
+            ) : null}
+          </Pressable>
+
+          <Animated.View style={{ transform: [{ scale: heartScale }] }}>
+            <Pressable onPress={handleLike} style={styles.fullActionBtn} hitSlop={6}>
+              <Ionicons
+                name={item.liked ? "heart" : "heart-outline"}
+                size={32}
+                color={item.liked ? "#FF3B30" : "#fff"}
+              />
+              <Text style={styles.fullActionLabel}>{formatCount(item.likeCount)}</Text>
+            </Pressable>
+          </Animated.View>
+
+          <Pressable
+            onPress={() => router.push({ pathname: "/post/[id]", params: { id: item.id } } as any)}
+            style={styles.fullActionBtn}
+            hitSlop={6}
+          >
+            <Ionicons name="chatbubble-ellipses" size={30} color="#fff" />
+            <Text style={styles.fullActionLabel}>{formatCount(item.replyCount)}</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => onBookmark(item.id, item.bookmarked)}
+            style={styles.fullActionBtn}
+            hitSlop={6}
+          >
+            <Ionicons
+              name={item.bookmarked ? "bookmark" : "bookmark-outline"}
+              size={28}
+              color={item.bookmarked ? "#FFD60A" : "#fff"}
+            />
+          </Pressable>
+
+          <Pressable
+            onPress={() => sharePost({
+              postId: item.id,
+              authorName: item.profile.display_name,
+              content: item.content,
+            })}
+            style={styles.fullActionBtn}
+            hitSlop={6}
+          >
+            <Ionicons name="arrow-redo" size={30} color="#fff" />
+          </Pressable>
+        </View>
+
+        {/* Bottom-left: author + caption + audio source */}
+        <View style={[styles.fullBottomInfo, { bottom: bottomInset + 14 }]} pointerEvents="box-none">
+          <Pressable
+            onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } } as any)}
+            style={styles.fullAuthorRow}
+          >
+            <Text style={styles.fullHandle} numberOfLines={1}>@{item.profile.handle}</Text>
+          </Pressable>
+          {item.content ? (
+            <Text style={styles.fullCaption} numberOfLines={2}>{item.content}</Text>
+          ) : null}
+          <View style={styles.fullAudioRow}>
+            <Ionicons name="musical-notes" size={12} color="#fff" />
+            <Text style={styles.fullAudioText} numberOfLines={1}>
+              Original audio · {item.profile.display_name}
+            </Text>
+          </View>
+        </View>
+
+        {/* Top-right mute (subtle) */}
+        <Pressable
+          onPress={onToggleGlobalMuted}
+          style={[styles.muteBtn, { top: 60 }]}
+          hitSlop={8}
+        >
+          <Ionicons name={globalMuted ? "volume-mute" : "volume-high"} size={18} color="#fff" />
+        </Pressable>
+      </View>
+    );
+  }
+
+  // ─── Card (desktop) ────────────────────────────────────────────────
+  return (
+    <View style={[styles.cardOuter, { height: cardHeight }]}>
+      <View style={[styles.cardInner, { width: cardWidth, height: cardHeight, backgroundColor: "#000" }]}>
+        {Platform.OS === "web" ? (
+          <WebShortsPlayer
+            src={src}
+            active={active}
+            paused={paused}
+            preloadOnly={preloadOnly}
+            muted={globalMuted}
+            onTogglePause={handleTogglePause}
+            onEnded={() => { /* loop handled natively */ }}
+          />
+        ) : (
+          <NativeShortsPlayer
+            src={src}
+            active={active}
+            paused={paused}
+            preloadOnly={preloadOnly}
             muted={globalMuted}
             onTogglePause={handleTogglePause}
           />
@@ -339,6 +479,21 @@ function ShortCard({
         </View>
         <View style={styles.actionItem}>
           <Pressable
+            onPress={() => onBookmark(item.id, item.bookmarked)}
+            style={({ hovered }: any) => [
+              styles.actionBubble,
+              { backgroundColor: hovered ? colors.backgroundTertiary : colors.surface },
+            ]}
+          >
+            <Ionicons
+              name={item.bookmarked ? "bookmark" : "bookmark-outline"}
+              size={22}
+              color={item.bookmarked ? "#FFD60A" : colors.text}
+            />
+          </Pressable>
+        </View>
+        <View style={styles.actionItem}>
+          <Pressable
             onPress={() => sharePost({
               postId: item.id,
               authorName: item.profile.display_name,
@@ -362,33 +517,59 @@ function ShortCard({
 /*                              Feed list                                  */
 /* ─────────────────────────────────────────────────────────────────────── */
 
-export default function ShortsFeed({ topInset = 0 }: { topInset?: number }) {
+export default function ShortsFeed({
+  topInset = 0,
+  bottomInset = 0,
+  layout = "card",
+  filter = "for_you",
+}: {
+  topInset?: number;
+  bottomInset?: number;
+  layout?: ShortsLayout;
+  filter?: ShortsFilter;
+}) {
   const { user } = useAuth();
   const { colors } = useTheme();
-  const { isDesktop } = useIsDesktop();
-  const { isLowData } = useDataMode();
   const { width: winW, height: winH } = useWindowDimensions();
   const [posts, setPosts] = useState<ShortPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
   const [globalMuted, setGlobalMuted] = useState(true);
 
+  const isFullscreen = layout === "fullscreen";
+
   const cardHeight = useMemo(() => {
-    // Each card fills the visible viewport so swipe-to-snap works like Shorts.
+    if (isFullscreen) return Math.max(360, winH);
     const usable = winH - topInset;
     return Math.max(360, usable);
-  }, [winH, topInset]);
+  }, [winH, topInset, isFullscreen]);
 
   const cardWidth = useMemo(() => {
-    // 9:16 aspect, capped to the available column width.
+    if (isFullscreen) return winW;
     const target = (cardHeight - 32) * (9 / 16);
-    const maxByCol = isDesktop ? Math.min(420, winW - 200) : winW;
+    const maxByCol = Math.min(420, winW - 200);
     return Math.min(maxByCol, Math.max(280, target));
-  }, [cardHeight, winW, isDesktop]);
+  }, [cardHeight, winW, isFullscreen]);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
+
+    // For Following filter we narrow to the user's follow set.
+    let followingAuthorIds: string[] | null = null;
+    if (filter === "following" && user) {
+      const { data: follows } = await supabase
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", user.id);
+      followingAuthorIds = (follows || []).map((r: any) => r.following_id as string);
+      if (followingAuthorIds.length === 0) {
+        setPosts([]);
+        setLoading(false);
+        return;
+      }
+    }
+
+    let query = supabase
       .from("posts")
       .select(`
         id, author_id, content, video_url, created_at, view_count,
@@ -401,6 +582,12 @@ export default function ShortsFeed({ topInset = 0 }: { topInset?: number }) {
       .order("created_at", { ascending: false })
       .limit(30);
 
+    if (followingAuthorIds) {
+      query = query.in("author_id", followingAuthorIds);
+    }
+
+    const { data } = await query;
+
     if (!data || data.length === 0) {
       setPosts([]);
       setLoading(false);
@@ -410,7 +597,13 @@ export default function ShortsFeed({ topInset = 0 }: { topInset?: number }) {
     const postIds = data.map((p: any) => p.id);
     const authorIds = [...new Set(data.map((p: any) => p.author_id as string))];
 
-    const [{ data: likesData }, { data: repliesData }, { data: myLikes }, { data: myFollows }] = await Promise.all([
+    const [
+      { data: likesData },
+      { data: repliesData },
+      { data: myLikes },
+      { data: myFollows },
+      { data: myBookmarks },
+    ] = await Promise.all([
       supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds),
       supabase.from("post_replies").select("post_id").in("post_id", postIds),
       user
@@ -418,6 +611,9 @@ export default function ShortsFeed({ topInset = 0 }: { topInset?: number }) {
         : Promise.resolve({ data: [] as any[] }),
       user
         ? supabase.from("follows").select("following_id").eq("follower_id", user.id).in("following_id", authorIds)
+        : Promise.resolve({ data: [] as any[] }),
+      user
+        ? supabase.from("post_bookmarks").select("post_id").in("post_id", postIds).eq("user_id", user.id)
         : Promise.resolve({ data: [] as any[] }),
     ]);
 
@@ -427,6 +623,7 @@ export default function ShortsFeed({ topInset = 0 }: { topInset?: number }) {
     for (const r of repliesData || []) replyMap[(r as any).post_id] = (replyMap[(r as any).post_id] || 0) + 1;
     const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
     const followingSet = new Set((myFollows || []).map((f: any) => f.following_id as string));
+    const myBookmarkSet = new Set((myBookmarks || []).map((b: any) => b.post_id));
 
     setPosts(
       data.map((p: any) => ({
@@ -444,11 +641,12 @@ export default function ShortsFeed({ topInset = 0 }: { topInset?: number }) {
         liked: myLikeSet.has(p.id),
         likeCount: likeMap[p.id] || 0,
         replyCount: replyMap[p.id] || 0,
+        bookmarked: myBookmarkSet.has(p.id),
         following: followingSet.has(p.author_id),
       })),
     );
     setLoading(false);
-  }, [user]);
+  }, [user, filter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -476,6 +674,21 @@ export default function ShortsFeed({ topInset = 0 }: { topInset?: number }) {
     );
   }
 
+  async function toggleBookmark(postId: string, currentlyBookmarked: boolean) {
+    if (!user) { router.push("/(auth)/login" as any); return; }
+    if (currentlyBookmarked) {
+      await supabase.from("post_bookmarks").delete().eq("post_id", postId).eq("user_id", user.id);
+    } else {
+      await supabase.from("post_bookmarks").upsert(
+        { post_id: postId, user_id: user.id },
+        { onConflict: "post_id,user_id" },
+      );
+    }
+    setPosts((prev) => prev.map((p) =>
+      p.id === postId ? { ...p, bookmarked: !currentlyBookmarked } : p,
+    ));
+  }
+
   async function toggleFollow(authorId: string) {
     if (!user) { router.push("/(auth)/login" as any); return; }
     await supabase
@@ -486,21 +699,28 @@ export default function ShortsFeed({ topInset = 0 }: { topInset?: number }) {
 
   if (loading) {
     return (
-      <View style={[styles.loading, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={colors.accent} />
+      <View style={[styles.loading, { backgroundColor: isFullscreen ? "#000" : colors.background }]}>
+        <ActivityIndicator color={isFullscreen ? "#fff" : colors.accent} />
       </View>
     );
   }
 
   if (posts.length === 0) {
     return (
-      <View style={[styles.loading, { backgroundColor: colors.background }]}>
-        <Ionicons name="videocam-outline" size={48} color={colors.textMuted} />
-        <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 16, marginTop: 12 }}>
-          No shorts yet
+      <View style={[styles.loading, { backgroundColor: isFullscreen ? "#000" : colors.background }]}>
+        <Ionicons name="videocam-outline" size={48} color={isFullscreen ? "rgba(255,255,255,0.6)" : colors.textMuted} />
+        <Text style={{
+          color: isFullscreen ? "#fff" : colors.text,
+          fontFamily: "Inter_600SemiBold", fontSize: 16, marginTop: 12,
+        }}>
+          {filter === "following" ? "No shorts from people you follow" : "No shorts yet"}
         </Text>
-        <Text style={{ color: colors.textMuted, fontFamily: "Inter_400Regular", fontSize: 13, marginTop: 4, textAlign: "center", paddingHorizontal: 32 }}>
-          Be the first to post a short video.
+        <Text style={{
+          color: isFullscreen ? "rgba(255,255,255,0.6)" : colors.textMuted,
+          fontFamily: "Inter_400Regular", fontSize: 13,
+          marginTop: 4, textAlign: "center", paddingHorizontal: 32,
+        }}>
+          {filter === "following" ? "Follow creators to see their shorts here." : "Be the first to post a short video."}
         </Text>
       </View>
     );
@@ -510,19 +730,30 @@ export default function ShortsFeed({ topInset = 0 }: { topInset?: number }) {
     <FlatList
       data={posts}
       keyExtractor={(item) => item.id}
-      renderItem={({ item, index }) => (
-        <ShortCard
-          item={item}
-          active={index === activeIndex}
-          cardWidth={cardWidth}
-          cardHeight={cardHeight}
-          globalMuted={globalMuted}
-          onToggleGlobalMuted={() => setGlobalMuted((m) => !m)}
-          onLike={toggleLike}
-          onFollow={toggleFollow}
-          currentUserId={user?.id}
-        />
-      )}
+      renderItem={({ item, index }) => {
+        // Mount the active card and its 2 neighbours so swipes feel instant —
+        // neighbours render hidden but with preload="auto" so the first frame
+        // is ready by the time the user gets there.
+        const distance = Math.abs(index - activeIndex);
+        const preloadOnly = distance > 0 && distance <= 2;
+        return (
+          <ShortCard
+            item={item}
+            active={index === activeIndex}
+            preloadOnly={preloadOnly}
+            layout={layout}
+            cardWidth={cardWidth}
+            cardHeight={cardHeight}
+            bottomInset={bottomInset}
+            globalMuted={globalMuted}
+            onToggleGlobalMuted={() => setGlobalMuted((m) => !m)}
+            onLike={toggleLike}
+            onBookmark={toggleBookmark}
+            onFollow={toggleFollow}
+            currentUserId={user?.id}
+          />
+        );
+      }}
       pagingEnabled
       snapToAlignment="start"
       snapToInterval={cardHeight}
@@ -531,13 +762,17 @@ export default function ShortsFeed({ topInset = 0 }: { topInset?: number }) {
       onViewableItemsChanged={onViewableItemsChanged}
       viewabilityConfig={viewabilityConfig}
       getItemLayout={(_, index) => ({ length: cardHeight, offset: cardHeight * index, index })}
-      style={{ backgroundColor: colors.background }}
+      windowSize={5}
+      initialNumToRender={3}
+      maxToRenderPerBatch={3}
+      style={{ backgroundColor: isFullscreen ? "#000" : colors.background }}
     />
   );
 }
 
 const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80 },
+  /* ── Desktop card layout ────────────────────────────────────────── */
   cardOuter: {
     flexDirection: "row",
     alignItems: "center",
@@ -557,11 +792,7 @@ const styles = StyleSheet.create({
     bottom: 16,
     gap: 8,
   },
-  authorRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
+  authorRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   authorHandle: { color: "#fff", fontSize: 13, fontFamily: "Inter_700Bold" },
   authorName: { color: "rgba(255,255,255,0.7)", fontSize: 11, fontFamily: "Inter_400Regular" },
   caption: {
@@ -624,4 +855,86 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
   },
   actionLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+
+  /* ── Fullscreen (mobile) layout ─────────────────────────────────── */
+  fullCard: {
+    position: "relative",
+    overflow: "hidden",
+  },
+  fullRail: {
+    position: "absolute",
+    right: 10,
+    alignItems: "center",
+    gap: 18,
+  },
+  fullAvatarWrap: {
+    position: "relative",
+    marginBottom: 4,
+  },
+  fullFollowBadge: {
+    position: "absolute",
+    bottom: -6,
+    left: "50%",
+    marginLeft: -10,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#FF3B30",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#000",
+  },
+  fullActionBtn: {
+    alignItems: "center",
+    gap: 2,
+    minWidth: 48,
+  },
+  fullActionLabel: {
+    color: "#fff",
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    textShadowColor: "rgba(0,0,0,0.6)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  fullBottomInfo: {
+    position: "absolute",
+    left: 14,
+    right: 80,
+    gap: 6,
+  },
+  fullAuthorRow: { flexDirection: "row", alignItems: "center" },
+  fullHandle: {
+    color: "#fff",
+    fontSize: 16,
+    fontFamily: "Inter_700Bold",
+    textShadowColor: "rgba(0,0,0,0.6)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  fullCaption: {
+    color: "#fff",
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 19,
+    textShadowColor: "rgba(0,0,0,0.6)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  fullAudioRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 4,
+  },
+  fullAudioText: {
+    color: "#fff",
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    flex: 1,
+    textShadowColor: "rgba(0,0,0,0.6)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
 });
