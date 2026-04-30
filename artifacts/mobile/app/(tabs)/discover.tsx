@@ -42,7 +42,6 @@ import { useTour } from "@/context/TourContext";
 import { useDataMode } from "@/context/DataModeContext";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { DesktopFeedLayout, FEED_COLUMN_MAX_WIDTH } from "@/components/desktop/DesktopFeedLayout";
-import ShortsFeed from "@/components/ShortsFeed";
 
 type PostItem = {
   id: string;
@@ -440,40 +439,31 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
 
 export default function DiscoverScreen() {
   "use no memo";
-  const { colors, themeMode, setThemeMode } = useTheme();
+  const { colors } = useTheme();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const { isLowData } = useDataMode();
   const { isDesktop } = useIsDesktop();
   const navigation = useNavigation();
-  const [feedTab, setFeedTab] = useState<"for_you" | "following" | "shorts">(() => {
+  // Shorts now lives at /shorts (which redirects to /video/[id]). Any URL like
+  // ?tab=shorts is forwarded there so existing links keep working.
+  const [feedTab, setFeedTab] = useState<"for_you" | "following">(() => {
     if (Platform.OS === "web" && typeof window !== "undefined") {
       const sp = new URLSearchParams(window.location.search);
       const t = sp.get("tab");
-      if (t === "shorts" || t === "following" || t === "for_you") return t as any;
+      if (t === "following" || t === "for_you") return t as any;
     }
     return "for_you";
   });
-  // For You / Following filter inside the Shorts experience (mobile fullscreen).
-  const [shortsFilter, setShortsFilter] = useState<"for_you" | "following">("for_you");
-
-  // When the user opens Shorts on a mobile viewport we want a TikTok-style
-  // immersive experience: hide the bottom tab bar entirely. Restore it
-  // automatically when the user backs out of Shorts or unmounts.
-  const mobileShorts = feedTab === "shorts" && !isDesktop;
   useEffect(() => {
-    const parent = navigation.getParent?.();
-    if (!parent) return;
-    if (mobileShorts) {
-      parent.setOptions({ tabBarStyle: { display: "none" } });
-    } else {
-      parent.setOptions({ tabBarStyle: undefined });
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const sp = new URLSearchParams(window.location.search);
+      if (sp.get("tab") === "shorts") {
+        router.replace("/shorts" as any);
+      }
     }
-    return () => {
-      parent.setOptions({ tabBarStyle: undefined });
-    };
-  }, [mobileShorts, navigation]);
+  }, []);
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -827,13 +817,7 @@ export default function DiscoverScreen() {
 
   // Tab switch — show cached posts immediately, background-refresh if stale
   useEffect(() => {
-    // Shorts is a self-contained vertical-video screen; the standard post
-    // pipeline is bypassed for that tab.
-    if (feedTab === "shorts") {
-      setLoading(false);
-      return;
-    }
-    const dataTab = feedTab as "for_you" | "following";
+    const dataTab = feedTab;
     const STALE_MS = 3 * 60 * 1000;
     const cached = tabPostsCache.current[dataTab];
     const cacheAge = Date.now() - tabCacheTimestamp.current[dataTab];
@@ -975,7 +959,7 @@ export default function DiscoverScreen() {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     setRefreshing(true);
     setHasMore(true);
-    if (feedTab !== "shorts") loadPosts(feedTab);
+    loadPosts(feedTab);
   }
 
   async function toggleBookmark(postId: string) {
@@ -1041,82 +1025,9 @@ export default function DiscoverScreen() {
     }
   }
 
-  // ─── Mobile fullscreen TikTok-style Shorts experience ───────────────
-  // Bypasses the normal discover chrome entirely: black background, custom
-  // mini header (back · For You/Following · search), and an edge-to-edge
-  // ShortsFeed in "fullscreen" layout. The bottom tab bar is hidden via
-  // navigation.setOptions in the effect above.
-  if (mobileShorts) {
-    return (
-      <View style={{ flex: 1, backgroundColor: "#000" }}>
-        <ShortsFeed
-          layout="fullscreen"
-          filter={shortsFilter}
-          bottomInset={insets.bottom}
-        />
-        {/* Top mini header overlay */}
-        <View
-          style={[
-            styles.shortsHeader,
-            { paddingTop: insets.top + 6, paddingBottom: 8 },
-          ]}
-          pointerEvents="box-none"
-        >
-          <TouchableOpacity
-            onPress={() => setFeedTab("for_you")}
-            hitSlop={10}
-            style={styles.shortsHeaderBtn}
-          >
-            <Ionicons name="chevron-back" size={26} color="#fff" />
-          </TouchableOpacity>
-
-          <View style={styles.shortsHeaderTabs}>
-            <TouchableOpacity
-              onPress={() => setShortsFilter("for_you")}
-              hitSlop={6}
-              style={styles.shortsHeaderTab}
-            >
-              <Text
-                style={[
-                  styles.shortsHeaderTabText,
-                  shortsFilter === "for_you" && styles.shortsHeaderTabTextActive,
-                ]}
-              >
-                For You
-              </Text>
-              {shortsFilter === "for_you" ? <View style={styles.shortsHeaderTabUnderline} /> : null}
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => {
-                if (!user) { router.push("/(auth)/login"); return; }
-                setShortsFilter("following");
-              }}
-              hitSlop={6}
-              style={styles.shortsHeaderTab}
-            >
-              <Text
-                style={[
-                  styles.shortsHeaderTabText,
-                  shortsFilter === "following" && styles.shortsHeaderTabTextActive,
-                ]}
-              >
-                Following
-              </Text>
-              {shortsFilter === "following" ? <View style={styles.shortsHeaderTabUnderline} /> : null}
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            onPress={() => router.push("/(tabs)/search" as any)}
-            hitSlop={10}
-            style={styles.shortsHeaderBtn}
-          >
-            <Ionicons name="search" size={22} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
+  // The dedicated Shorts experience now lives at /shorts (which redirects to
+  // /video/[id]), so there is only ONE video player implementation app-wide.
+  // The Shorts pill in the discover header navigates there.
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -1158,37 +1069,24 @@ export default function DiscoverScreen() {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tabPill, { borderBottomColor: feedTab === "shorts" ? colors.text : "transparent" }]}
-            onPress={() => setFeedTab("shorts")}
+            style={styles.tabPill}
+            onPress={() => router.push("/shorts" as any)}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
               <Ionicons
-                name={feedTab === "shorts" ? "play-circle" : "play-circle-outline"}
+                name="play-circle-outline"
                 size={15}
-                color={feedTab === "shorts" ? colors.text : colors.textMuted}
+                color={colors.textMuted}
               />
               <Text style={[
                 styles.tabPillText,
-                { color: feedTab === "shorts" ? colors.text : colors.textMuted,
-                  fontFamily: feedTab === "shorts" ? "Inter_700Bold" : "Inter_500Medium" },
+                { color: colors.textMuted, fontFamily: "Inter_500Medium" },
               ]}>
                 Shorts
               </Text>
             </View>
           </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          onPress={() => setThemeMode(themeMode === "dark" ? "light" : themeMode === "light" ? "system" : "dark")}
-          hitSlop={8}
-          style={{ padding: 8 }}
-        >
-          <Ionicons
-            name={themeMode === "dark" ? "moon" : themeMode === "light" ? "sunny" : "phone-portrait-outline"}
-            size={20}
-            color={colors.textMuted}
-          />
-        </TouchableOpacity>
 
         {!user && (
           <TouchableOpacity
@@ -1228,10 +1126,7 @@ export default function DiscoverScreen() {
         </View>
       )}
 
-      {/* Shorts tab — vertical video feed */}
-      {feedTab === "shorts" ? (
-        <ShortsFeed topInset={insets.top + 64} />
-      ) : feedTab === "following" && !user ? (
+      {feedTab === "following" && !user ? (
         <View style={styles.center}>
           <Ionicons name="lock-closed-outline" size={56} color={colors.textMuted} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>Sign in to see Following</Text>
@@ -1284,7 +1179,7 @@ export default function DiscoverScreen() {
                 setHasMore(true);
                 setNewPostAuthors([]);
                 newPostAuthorIdsRef.current.clear();
-                if (feedTab !== "shorts") loadPosts(feedTab);
+                loadPosts(feedTab);
               }}
               tintColor={colors.accent}
             />
@@ -1299,7 +1194,7 @@ export default function DiscoverScreen() {
         />
       )}
       </DesktopFeedLayout>
-      {user && feedTab !== "shorts" && (
+      {user && (
         <TouchableOpacity
           ref={fabRef}
           style={[styles.fab, { backgroundColor: colors.accent, bottom: insets.bottom + 52 + 16 }]}
@@ -1380,48 +1275,6 @@ const styles = StyleSheet.create({
   tabRow: { flexDirection: "row", flex: 1, gap: 8 },
   tabPill: { paddingVertical: 12, paddingHorizontal: 16, alignItems: "center", borderBottomWidth: 3 },
   tabPillText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  shortsHeader: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 14,
-    zIndex: 20,
-  },
-  shortsHeaderBtn: { padding: 4 },
-  shortsHeaderTabs: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 22,
-  },
-  shortsHeaderTab: {
-    alignItems: "center",
-    paddingVertical: 4,
-  },
-  shortsHeaderTabText: {
-    fontSize: 16,
-    fontFamily: "Inter_500Medium",
-    color: "rgba(255,255,255,0.65)",
-    textShadowColor: "rgba(0,0,0,0.55)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  shortsHeaderTabTextActive: {
-    color: "#fff",
-    fontFamily: "Inter_700Bold",
-  },
-  shortsHeaderTabUnderline: {
-    marginTop: 4,
-    width: 18,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: "#fff",
-  },
   card: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",

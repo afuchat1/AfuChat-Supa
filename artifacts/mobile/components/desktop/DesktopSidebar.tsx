@@ -79,16 +79,8 @@ const SECTIONS: NavSection[] = [
         label: "Shorts",
         icon: "play-circle-outline",
         iconActive: "play-circle",
-        route: "/discover?tab=shorts",
-        match: (p) => p === "/shorts" || (typeof window !== "undefined" && window.location.search.includes("tab=shorts")),
-      },
-      {
-        key: "communities",
-        label: "Communities",
-        icon: "people-outline",
-        iconActive: "people",
-        route: "/communities",
-        match: (p) => p.startsWith("/communities") || p.startsWith("/paid-communities"),
+        route: "/shorts",
+        match: (p) => p === "/shorts" || p.startsWith("/video"),
       },
       {
         key: "moments",
