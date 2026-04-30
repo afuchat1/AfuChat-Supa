@@ -30,6 +30,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "location" as any, selected: "location.fill" as any }} />
         <Label>Discover</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="communities">
+        <Icon sf={{ default: "person.3" as any, selected: "person.3.fill" as any }} />
+        <Label>Communities</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="apps">
         <Icon sf={{ default: "square.grid.2x2", selected: "square.grid.2x2.fill" }} />
         <Label>Apps</Label>
@@ -61,13 +65,14 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
     const { width: SW, height: SH } = Dimensions.get("window");
     const tabBarH = 52 + (insets.bottom > 0 ? insets.bottom : 8);
     const tabBarTop = SH - tabBarH;
-    const tabW = SW / 4;
+    const tabW = SW / 5;
 
     const tabDefs = [
       { id: "tab-chat", index: 0 },
       { id: "tab-discover", index: 1 },
-      { id: "tab-apps", index: 2 },
-      { id: "tab-me", index: 3 },
+      { id: "tab-communities", index: 2 },
+      { id: "tab-apps", index: 3 },
+      { id: "tab-me", index: 4 },
     ];
     tabDefs.forEach(({ id, index }) => {
       registerLayout(id, {
@@ -148,6 +153,18 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
       <Tabs.Screen
         name="contacts"
         options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="communities"
+        options={{
+          title: "Communities",
+          tabBarIcon: ({ color, focused }) =>
+            isIOS ? (
+              <SymbolView name={(focused ? "person.3.fill" : "person.3") as any} tintColor={color} size={22} />
+            ) : (
+              <Ionicons name={focused ? "people" : "people-outline"} size={22} color={color} />
+            ),
+        }}
       />
       <Tabs.Screen
         name="apps"

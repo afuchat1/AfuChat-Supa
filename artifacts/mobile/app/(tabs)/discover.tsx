@@ -40,6 +40,9 @@ import { useLanguage } from "@/context/LanguageContext";
 import { translateText, LANG_LABELS } from "@/lib/translate";
 import { useTour } from "@/context/TourContext";
 import { useDataMode } from "@/context/DataModeContext";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
+import { DesktopFeedLayout, FEED_COLUMN_MAX_WIDTH } from "@/components/desktop/DesktopFeedLayout";
+import ShortsFeed from "@/components/ShortsFeed";
 
 type PostItem = {
   id: string;
@@ -442,7 +445,15 @@ export default function DiscoverScreen() {
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const { isLowData } = useDataMode();
-  const [feedTab, setFeedTab] = useState<"for_you" | "following">("for_you");
+  const { isDesktop } = useIsDesktop();
+  const [feedTab, setFeedTab] = useState<"for_you" | "following" | "shorts">(() => {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const sp = new URLSearchParams(window.location.search);
+      const t = sp.get("tab");
+      if (t === "shorts" || t === "following" || t === "for_you") return t as any;
+    }
+    return "for_you";
+  });
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -796,9 +807,16 @@ export default function DiscoverScreen() {
 
   // Tab switch — show cached posts immediately, background-refresh if stale
   useEffect(() => {
+    // Shorts is a self-contained vertical-video screen; the standard post
+    // pipeline is bypassed for that tab.
+    if (feedTab === "shorts") {
+      setLoading(false);
+      return;
+    }
+    const dataTab = feedTab as "for_you" | "following";
     const STALE_MS = 3 * 60 * 1000;
-    const cached = tabPostsCache.current[feedTab];
-    const cacheAge = Date.now() - tabCacheTimestamp.current[feedTab];
+    const cached = tabPostsCache.current[dataTab];
+    const cacheAge = Date.now() - tabCacheTimestamp.current[dataTab];
 
     setHasMore(true);
     setFollowingEmpty(false);
@@ -809,12 +827,12 @@ export default function DiscoverScreen() {
       setPosts(cached);
       setLoading(false);
       if (cacheAge >= STALE_MS) {
-        loadPostsRef.current(feedTab, true);
+        loadPostsRef.current(dataTab, true);
       }
     } else {
       setPosts([]);
       setLoading(true);
-      loadPostsRef.current(feedTab, false);
+      loadPostsRef.current(dataTab, false);
     }
   }, [feedTab]);
 
@@ -937,7 +955,7 @@ export default function DiscoverScreen() {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     setRefreshing(true);
     setHasMore(true);
-    loadPosts(feedTab);
+    if (feedTab !== "shorts") loadPosts(feedTab);
   }
 
   async function toggleBookmark(postId: string) {
@@ -1006,6 +1024,7 @@ export default function DiscoverScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <OfflineBanner />
+      <DesktopFeedLayout>
       <View
         style={[
           styles.header,
@@ -1040,6 +1059,25 @@ export default function DiscoverScreen() {
             ]}>
               Following
             </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabPill, { borderBottomColor: feedTab === "shorts" ? colors.text : "transparent" }]}
+            onPress={() => setFeedTab("shorts")}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Ionicons
+                name={feedTab === "shorts" ? "play-circle" : "play-circle-outline"}
+                size={15}
+                color={feedTab === "shorts" ? colors.text : colors.textMuted}
+              />
+              <Text style={[
+                styles.tabPillText,
+                { color: feedTab === "shorts" ? colors.text : colors.textMuted,
+                  fontFamily: feedTab === "shorts" ? "Inter_700Bold" : "Inter_500Medium" },
+              ]}>
+                Shorts
+              </Text>
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -1093,8 +1131,10 @@ export default function DiscoverScreen() {
         </View>
       )}
 
-      {/* Following tab — not signed in */}
-      {feedTab === "following" && !user ? (
+      {/* Shorts tab — vertical video feed */}
+      {feedTab === "shorts" ? (
+        <ShortsFeed topInset={insets.top + 64} />
+      ) : feedTab === "following" && !user ? (
         <View style={styles.center}>
           <Ionicons name="lock-closed-outline" size={56} color={colors.textMuted} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>Sign in to see Following</Text>
@@ -1142,7 +1182,13 @@ export default function DiscoverScreen() {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => { setRefreshing(true); setHasMore(true); setNewPostAuthors([]); newPostAuthorIdsRef.current.clear(); loadPosts(feedTab); }}
+              onRefresh={() => {
+                setRefreshing(true);
+                setHasMore(true);
+                setNewPostAuthors([]);
+                newPostAuthorIdsRef.current.clear();
+                if (feedTab !== "shorts") loadPosts(feedTab);
+              }}
               tintColor={colors.accent}
             />
           }
@@ -1155,7 +1201,8 @@ export default function DiscoverScreen() {
           }
         />
       )}
-      {user && (
+      </DesktopFeedLayout>
+      {user && feedTab !== "shorts" && (
         <TouchableOpacity
           ref={fabRef}
           style={[styles.fab, { backgroundColor: colors.accent, bottom: insets.bottom + 52 + 16 }]}
