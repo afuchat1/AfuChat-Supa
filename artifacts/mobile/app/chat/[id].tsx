@@ -17,7 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
@@ -994,7 +994,41 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   );
 }
 
-export default function ChatScreen() {
+/**
+ * Default export — auth guard wrapper.
+ *
+ * Conversations are private; we never want the chat UI shell (or any of its
+ * data-fetching hooks) to mount for an unauthenticated viewer. While auth is
+ * still being restored we show a centred spinner; once auth is known and
+ * there's no signed-in user we redirect to the login screen.
+ */
+export default function ChatScreenRoute() {
+  const { user, loading } = useAuth();
+  const { colors } = useTheme();
+
+  if (loading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: colors.background,
+        }}
+      >
+        <ActivityIndicator size="large" color={colors.accent} />
+      </View>
+    );
+  }
+
+  if (!user) {
+    return <Redirect href="/(auth)/login" />;
+  }
+
+  return <ChatScreen />;
+}
+
+function ChatScreen() {
   const { id, contactId, contactName, contactAvatar } = useLocalSearchParams<{
     id: string;
     contactId?: string;

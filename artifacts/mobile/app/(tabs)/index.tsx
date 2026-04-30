@@ -695,6 +695,8 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
 
   if (!user) {
     if (panelMode) {
+      // Inside the desktop master-detail panel — keep the layout intact and
+      // show a tasteful "sign in" placeholder instead of redirecting.
       return (
         <View style={[styles.root, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center", padding: 24 }]}>
           <Ionicons name="chatbubbles-outline" size={48} color={colors.textMuted} />
@@ -702,7 +704,9 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
         </View>
       );
     }
-    return <Redirect href="/(tabs)/discover" />;
+    // Chats are private — gate behind auth. Send anyone hitting the chats
+    // tab without a session straight to the login screen.
+    return <Redirect href="/(auth)/login" />;
   }
 
   return (
