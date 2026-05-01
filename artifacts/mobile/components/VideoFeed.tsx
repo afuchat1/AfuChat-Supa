@@ -14,17 +14,15 @@ import {
 import { Video, ResizeMode } from "expo-av";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
-import Colors from "@/constants/colors";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { notifyPostLike, notifyNewFollow } from "@/lib/notifyUser";
-import { useDataMode } from "@/context/DataModeContext";
 import { useResolvedVideoSource } from "@/hooks/useResolvedVideoSource";
 
 const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get("window");
+const PAGE_SIZE = 20;
 
 export type VideoPost = {
   id: string;
@@ -52,20 +50,17 @@ function VideoItem({
   onLike,
   onFollow,
   currentUserId,
-  isLowData,
 }: {
   item: VideoPost;
   isActive: boolean;
   onLike: (postId: string, liked: boolean) => void;
   onFollow: (authorId: string) => void;
   currentUserId?: string;
-  isLowData?: boolean;
 }) {
   const { accent } = useAppAccent();
   const videoRef = useRef<Video>(null);
   const [muted, setMuted] = useState(false);
   const [paused, setPaused] = useState(false);
-  const [manualPlay, setManualPlay] = useState(false);
   const heartScale = useRef(new Animated.Value(1)).current;
   const followScale = useRef(new Animated.Value(1)).current;
 
@@ -85,50 +80,35 @@ function VideoItem({
     onFollow(item.author_id);
   }
 
-  const shouldPlay = isLowData ? (manualPlay && isActive && !paused) : (isActive && !paused);
   const isOwnVideo = currentUserId === item.author_id;
   const showFollowButton = !isOwnVideo && !item.following;
   const resolved = useResolvedVideoSource(item.id, item.video_url, { targetHeight: 720 });
 
   return (
     <View style={styles.videoItem}>
-      {/* Video */}
+      {/* Video — always auto-plays when active */}
       <TouchableOpacity
         activeOpacity={1}
         style={StyleSheet.absoluteFill}
-        onPress={() => {
-          if (isLowData && !manualPlay) {
-            setManualPlay(true);
-          } else {
-            setPaused((p) => !p);
-          }
-        }}
+        onPress={() => setPaused((p) => !p)}
       >
         <Video
           ref={videoRef}
           source={{ uri: resolved.uri || item.video_url }}
           style={StyleSheet.absoluteFill}
           resizeMode={ResizeMode.COVER}
-          shouldPlay={shouldPlay}
+          shouldPlay={isActive && !paused}
           isLooping
           isMuted={muted}
         />
-        {isLowData && !manualPlay && (
-          <View style={styles.pauseOverlay}>
-            <Ionicons name="play-circle-outline" size={64} color="rgba(255,255,255,0.9)" />
-            <Text style={{ color: "rgba(255,255,255,0.75)", fontSize: 13, marginTop: 8, fontFamily: "Inter_400Regular" }}>
-              Data Saver — Tap to play
-            </Text>
-          </View>
-        )}
-        {(!isLowData || manualPlay) && paused && (
+        {paused && isActive && (
           <View style={styles.pauseOverlay}>
             <Ionicons name="play" size={52} color="rgba(255,255,255,0.85)" />
           </View>
         )}
       </TouchableOpacity>
 
-      {/* Dark gradient overlay */}
+      {/* Gradient overlay */}
       <View style={styles.gradient} pointerEvents="none" />
 
       {/* Bottom info */}
@@ -160,7 +140,6 @@ function VideoItem({
 
       {/* Right actions */}
       <View style={styles.rightActions}>
-        {/* Like */}
         <View style={styles.actionItem}>
           <Animated.View style={{ transform: [{ scale: heartScale }] }}>
             <TouchableOpacity onPress={handleLike} hitSlop={8}>
@@ -170,7 +149,6 @@ function VideoItem({
           <Text style={styles.actionCount}>{formatCount(item.likeCount)}</Text>
         </View>
 
-        {/* Comments */}
         <TouchableOpacity
           style={styles.actionItem}
           onPress={() => router.push({ pathname: "/post/[id]", params: { id: item.id } })}
@@ -179,7 +157,6 @@ function VideoItem({
           <Text style={styles.actionCount}>{formatCount(item.replyCount)}</Text>
         </TouchableOpacity>
 
-        {/* Mute */}
         <TouchableOpacity style={styles.actionItem} onPress={() => setMuted((m) => !m)}>
           <Ionicons name={muted ? "volume-mute" : "volume-high"} size={26} color="#fff" />
         </TouchableOpacity>
@@ -195,16 +172,64 @@ type Props = {
 export default function VideoFeed({ tabBarHeight = 52 }: Props) {
   const { accent } = useAppAccent();
   const { user, profile } = useAuth();
-  const { isLowData } = useDataMode();
-  const insets = useSafeAreaInsets();
 
   const [posts, setPosts] = useState<VideoPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
+  const cursorRef = useRef<string | null>(null);
+  const loadingMoreRef = useRef(false);
 
-  const fetchVideos = useCallback(async () => {
-    setLoading(true);
-    const { data } = await supabase
+  const enrichPosts = useCallback(async (rawPosts: any[]) => {
+    if (!rawPosts.length) return [];
+    const postIds = rawPosts.map((p: any) => p.id);
+    const authorIds = [...new Set(rawPosts.map((p: any) => p.author_id as string))];
+
+    const [{ data: likesData }, { data: repliesData }, { data: myLikes }, { data: myFollows }] = await Promise.all([
+      supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds),
+      supabase.from("post_replies").select("post_id").in("post_id", postIds),
+      user ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id) : Promise.resolve({ data: [] }),
+      user ? supabase.from("follows").select("following_id").eq("follower_id", user.id).in("following_id", authorIds) : Promise.resolve({ data: [] }),
+    ]);
+
+    const likeMap: Record<string, number> = {};
+    for (const l of (likesData || [])) likeMap[l.post_id] = (likeMap[l.post_id] || 0) + 1;
+    const replyMap: Record<string, number> = {};
+    for (const r of (repliesData || [])) replyMap[r.post_id] = (replyMap[r.post_id] || 0) + 1;
+    const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
+    const followingSet = new Set((myFollows || []).map((f: any) => f.following_id as string));
+
+    return rawPosts.map((p: any) => ({
+      id: p.id,
+      author_id: p.author_id,
+      content: p.content || "",
+      video_url: p.video_url,
+      created_at: p.created_at,
+      view_count: p.view_count || 0,
+      profile: {
+        display_name: p.profiles?.display_name || "User",
+        handle: p.profiles?.handle || "user",
+        avatar_url: p.profiles?.avatar_url || null,
+      },
+      liked: myLikeSet.has(p.id),
+      likeCount: likeMap[p.id] || 0,
+      replyCount: replyMap[p.id] || 0,
+      following: followingSet.has(p.author_id),
+    }));
+  }, [user]);
+
+  const fetchVideos = useCallback(async (cursor?: string | null) => {
+    if (cursor) {
+      if (loadingMoreRef.current) return;
+      loadingMoreRef.current = true;
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+      cursorRef.current = null;
+    }
+
+    let query = supabase
       .from("posts")
       .select(`
         id, author_id, content, video_url, created_at, view_count,
@@ -215,50 +240,49 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
       .eq("is_blocked", false)
       .not("video_url", "is", null)
       .order("created_at", { ascending: false })
-      .limit(30);
+      .limit(PAGE_SIZE);
+
+    if (cursor) {
+      query = query.lt("created_at", cursor);
+    }
+
+    const { data } = await query;
 
     if (data && data.length > 0) {
-      const postIds = data.map((p: any) => p.id);
-      const authorIds = [...new Set(data.map((p: any) => p.author_id as string))];
-
-      const [{ data: likesData }, { data: repliesData }, { data: myLikes }, { data: myFollows }] = await Promise.all([
-        supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds),
-        supabase.from("post_replies").select("post_id").in("post_id", postIds),
-        user ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id) : { data: [] },
-        user ? supabase.from("follows").select("following_id").eq("follower_id", user.id).in("following_id", authorIds) : { data: [] },
-      ]);
-
-      const likeMap: Record<string, number> = {};
-      for (const l of (likesData || [])) likeMap[l.post_id] = (likeMap[l.post_id] || 0) + 1;
-      const replyMap: Record<string, number> = {};
-      for (const r of (repliesData || [])) replyMap[r.post_id] = (replyMap[r.post_id] || 0) + 1;
-      const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
-      const followingSet = new Set((myFollows || []).map((f: any) => f.following_id as string));
-
-      setPosts(data.map((p: any) => ({
-        id: p.id,
-        author_id: p.author_id,
-        content: p.content || "",
-        video_url: p.video_url,
-        created_at: p.created_at,
-        view_count: p.view_count || 0,
-        profile: { display_name: p.profiles?.display_name || "User", handle: p.profiles?.handle || "user", avatar_url: p.profiles?.avatar_url || null },
-        liked: myLikeSet.has(p.id),
-        likeCount: likeMap[p.id] || 0,
-        replyCount: replyMap[p.id] || 0,
-        following: followingSet.has(p.author_id),
-      })));
+      const enriched = await enrichPosts(data);
+      cursorRef.current = data[data.length - 1].created_at;
+      setHasMore(data.length === PAGE_SIZE);
+      if (cursor) {
+        setPosts((prev) => [...prev, ...enriched]);
+      } else {
+        setPosts(enriched);
+      }
+    } else {
+      setHasMore(false);
+      if (!cursor) setPosts([]);
     }
-    setLoading(false);
-  }, [user]);
+
+    if (cursor) {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    } else {
+      setLoading(false);
+    }
+  }, [enrichPosts]);
 
   React.useEffect(() => { fetchVideos(); }, [fetchVideos]);
 
-  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+  const onEndReached = useCallback(() => {
+    if (!loadingMoreRef.current && hasMore && cursorRef.current) {
+      fetchVideos(cursorRef.current);
+    }
+  }, [hasMore, fetchVideos]);
+
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     if (viewableItems.length > 0 && viewableItems[0].index !== null) {
       setActiveIndex(viewableItems[0].index);
     }
-  }, []);
+  }).current;
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 
@@ -329,16 +353,23 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
           onLike={handleLike}
           onFollow={handleFollow}
           currentUserId={user?.id}
-          isLowData={isLowData}
         />
       )}
       pagingEnabled
       showsVerticalScrollIndicator={false}
       onViewableItemsChanged={onViewableItemsChanged}
-      viewabilityConfig={viewabilityConfig.current}
+      viewabilityConfig={viewabilityConfig}
       getItemLayout={(_, index) => ({ length: SCREEN_H, offset: SCREEN_H * index, index })}
-      snapToAlignment="start"
       decelerationRate="fast"
+      onEndReached={onEndReached}
+      onEndReachedThreshold={0.5}
+      ListFooterComponent={
+        loadingMore ? (
+          <View style={[styles.center, { height: SCREEN_H, backgroundColor: "#000" }]}>
+            <ActivityIndicator color="#fff" size="small" />
+          </View>
+        ) : null
+      }
       style={{ flex: 1, backgroundColor: "#000" }}
     />
   );
@@ -353,8 +384,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 320,
-    backgroundColor: "transparent",
-    backgroundImage: Platform.OS === "web" ? "linear-gradient(to bottom, transparent, rgba(0,0,0,0.85))" : undefined,
+    ...(Platform.OS === "web" ? { background: "linear-gradient(to top, rgba(0,0,0,0.85), transparent)" } : {}),
   } as any,
   pauseOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
   bottomInfo: { position: "absolute", bottom: 100, left: 16, right: 80 },

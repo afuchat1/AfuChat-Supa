@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { Platform } from "react-native";
 import {
   getCurrentDataMode,
   getIsWifi,
-  getManualOverride,
   initDataMode,
   setManualDataMode,
   subscribeDataMode,
@@ -18,25 +18,19 @@ type DataModeContextType = {
 };
 
 const DataModeContext = createContext<DataModeContextType>({
-  dataMode: "low",
-  isLowData: true,
-  isWifi: false,
-  dataSaverEnabled: true,
+  dataMode: "high",
+  isLowData: false,
+  isWifi: true,
+  dataSaverEnabled: false,
   toggleDataSaver: async () => {},
 });
 
-function isDataSaverOn(): boolean {
-  return getManualOverride() !== "high";
-}
-
 export function DataModeProvider({ children }: { children: React.ReactNode }) {
   const [dataMode, setDataMode] = useState<DataMode>(getCurrentDataMode());
-  const [dataSaverEnabled, setDataSaverEnabled] = useState<boolean>(isDataSaverOn());
   const [isWifi, setIsWifi] = useState<boolean>(getIsWifi());
 
   useEffect(() => {
     initDataMode().then(() => {
-      setDataSaverEnabled(isDataSaverOn());
       setIsWifi(getIsWifi());
       setDataMode(getCurrentDataMode());
     });
@@ -47,8 +41,11 @@ export function DataModeProvider({ children }: { children: React.ReactNode }) {
     return unsub;
   }, []);
 
+  // Data saver is only relevant on native and only when on cellular (not wifi)
+  const dataSaverEnabled = Platform.OS !== "web" && !isWifi && dataMode === "low";
+
   async function toggleDataSaver(enabled: boolean) {
-    setDataSaverEnabled(enabled);
+    if (Platform.OS === "web") return;
     await setManualDataMode(enabled ? "low" : "high");
     setDataMode(getCurrentDataMode());
     setIsWifi(getIsWifi());

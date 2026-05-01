@@ -7,8 +7,9 @@ type Listener = (mode: DataMode) => void;
 
 const STORAGE_KEY = "afu_data_mode_override";
 
-let _mode: DataMode = "low";
-let _isWifi: boolean = false;
+// Web always runs in high mode — no data saver on web.
+let _mode: DataMode = Platform.OS === "web" ? "high" : "low";
+let _isWifi: boolean = Platform.OS === "web";
 let _manualOverride: DataMode | null = null;
 let _listeners: Listener[] = [];
 let _initialized = false;
@@ -40,6 +41,13 @@ export async function initDataMode() {
   if (_initialized) return;
   _initialized = true;
 
+  // Web: always high — skip all network detection.
+  if (Platform.OS === "web") {
+    _isWifi = true;
+    _mode = "high";
+    return;
+  }
+
   try {
     const stored = await AsyncStorage.getItem(STORAGE_KEY);
     if (stored === "low" || stored === "high") {
@@ -48,27 +56,6 @@ export async function initDataMode() {
       _manualOverride = null;
     }
   } catch (_) {}
-
-  if (Platform.OS === "web") {
-    try {
-      const nav = navigator as any;
-      const conn = nav.connection || nav.mozConnection || nav.webkitConnection;
-      if (conn) {
-        const check = () => {
-          const isLow =
-            conn.saveData ||
-            conn.effectiveType === "slow-2g" ||
-            conn.effectiveType === "2g" ||
-            conn.effectiveType === "3g";
-          applyNetworkState(isLow ? "low" : "high");
-        };
-        check();
-        conn.addEventListener("change", check);
-      }
-    } catch (_) {}
-    notify(getEffectiveMode());
-    return;
-  }
 
   try {
     const NetInfo = require("@react-native-community/netinfo").default;
@@ -94,6 +81,7 @@ export function getIsWifi(): boolean {
 }
 
 export async function setManualDataMode(mode: DataMode | null) {
+  if (Platform.OS === "web") return; // no-op on web
   _manualOverride = mode;
   if (mode === null) {
     await AsyncStorage.removeItem(STORAGE_KEY);

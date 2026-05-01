@@ -16,7 +16,6 @@ import * as Haptics from "@/lib/haptics";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useTheme } from "@/hooks/useTheme";
-import { useDataMode } from "@/context/DataModeContext";
 import { showAlert } from "@/lib/alert";
 import { Separator } from "@/components/ui/Separator";
 import { useTour, TOUR_KEY } from "@/context/TourContext";
@@ -106,7 +105,6 @@ export default function SettingsScreen() {
   const { colors, themeMode, setThemeMode } = useTheme();
   const { langLabel } = useLanguage();
   const { signOut } = useAuth();
-  const { dataSaverEnabled, toggleDataSaver } = useDataMode();
   const { startTour } = useTour();
   const insets = useSafeAreaInsets();
 
@@ -190,15 +188,6 @@ export default function SettingsScreen() {
             iconBg="#32D74B"
             label="Chats"
             onPress={() => router.push("/settings/chat")}
-          />
-          <Separator indent={54} />
-          <ToggleItem
-            icon="speedometer-outline"
-            iconBg="#FF9500"
-            label="Data Saver"
-            subtitle="Reduces quality on mobile data · Auto-off on WiFi"
-            value={dataSaverEnabled}
-            onValueChange={toggleDataSaver}
           />
           <Separator indent={54} />
           <MenuItem

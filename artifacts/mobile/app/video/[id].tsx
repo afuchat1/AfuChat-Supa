@@ -21,7 +21,6 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { Image as ExpoImage } from "expo-image";
-import { useDataMode } from "@/context/DataModeContext";
 import { getCachedVideoUri, cacheVideo } from "@/lib/videoCache";
 import { useResolvedVideoSource } from "@/hooks/useResolvedVideoSource";
 import { router, useLocalSearchParams } from "expo-router";
@@ -617,7 +616,6 @@ function VideoItem({
   item,
   isActive,
   isNearActive,
-  isLowData,
   screenH,
   screenW,
   isFollowing,
@@ -635,7 +633,6 @@ function VideoItem({
   item: VideoPost;
   isActive: boolean;
   isNearActive: boolean;
-  isLowData: boolean;
   screenH: number;
   screenW: number;
   isFollowing: boolean;
@@ -657,7 +654,6 @@ function VideoItem({
   const [durationMs, setDurationMs] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [cachedUri, setCachedUri] = useState<string | null>(null);
-  const [manualPlay, setManualPlay] = useState(false);
   const [progressBarWidth, setProgressBarWidth] = useState(0);
   const [albumArtUrl, setAlbumArtUrl] = useState<string | null>(null);
   const [trackArtist, setTrackArtist] = useState<string | null>(null);
@@ -727,7 +723,7 @@ function VideoItem({
         getCachedVideoUri(item.video_url).then((existing) => {
           if (existing) {
             setCachedUri(existing);
-          } else if (!isLowData) {
+          } else {
             cacheVideo(item.video_url).then((local) => {
               if (local) setCachedUri(local);
             });
@@ -814,7 +810,7 @@ function VideoItem({
   // currently feels faster than this screen.
   const preloadOnly = !isActive && isNearActive;
   const shouldMountVideo = isActive || isNearActive;
-  const canPlay = isActive && !paused && (!isLowData || !!cachedUri || manualPlay);
+  const canPlay = isActive && !paused;
 
   return (
     <View
@@ -852,7 +848,7 @@ function VideoItem({
               src={playbackUri}
               poster={item.image_url}
               active={isActive}
-              paused={paused || (isLowData && !cachedUri && !manualPlay)}
+              paused={paused}
               preloadOnly={preloadOnly}
               onTogglePause={() => setPaused((p) => !p)}
               onDoubleTap={triggerLikeBurst}
@@ -883,27 +879,13 @@ function VideoItem({
         )}
       </Pressable>
 
-      {isActive && isLowData && !cachedUri && !manualPlay && (
-        <TouchableOpacity
-          style={vStyles.dataSaverGate}
-          onPress={() => setManualPlay(true)}
-          activeOpacity={0.85}
-        >
-          <View style={vStyles.dataSaverCircle}>
-            <Ionicons name="play" size={36} color="#fff" style={{ marginLeft: 4 }} />
-          </View>
-          <Text style={vStyles.dataSaverLabel}>Tap to play</Text>
-          <Text style={vStyles.dataSaverSub}>Data saver is on</Text>
-        </TouchableOpacity>
-      )}
-
-      {buffering && isActive && (!isLowData || !!cachedUri || manualPlay) && (
+      {buffering && isActive && (
         <View style={[vStyles.bufferOverlay, { pointerEvents: "none" as any }]}>
           <ActivityIndicator color="rgba(255,255,255,0.7)" size="small" />
         </View>
       )}
 
-      {paused && !buffering && (!isLowData || !!cachedUri || manualPlay) && (
+      {paused && !buffering && (
         <View style={[vStyles.pauseOverlay, { pointerEvents: "none" as any }]}>
           <View style={vStyles.pauseCircle}>
             <Ionicons name="play" size={32} color="#fff" style={{ marginLeft: 3 }} />
@@ -1075,26 +1057,6 @@ function VideoItem({
 const vStyles = StyleSheet.create({
   item: { backgroundColor: "#000" },
 
-  dataSaverGate: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.6)",
-    gap: 8,
-  },
-  dataSaverCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.35)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 4,
-  },
-  dataSaverLabel: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  dataSaverSub: { color: "rgba(255,255,255,0.55)", fontSize: 12, fontFamily: "Inter_400Regular" },
   bufferOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
   pauseOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
   pauseCircle: {
@@ -1588,11 +1550,13 @@ export default function VideoPlayerScreen() {
   // On desktop the shell reserves space for the sidebar and topbar.
   const EFF_W = isDesktopShell ? SCREEN_W - SIDEBAR_WIDTH : SCREEN_W;
   const EFF_H = isDesktopShell ? SCREEN_H - TOPBAR_HEIGHT : SCREEN_H;
-  const { isLowData } = useDataMode();
-
   const [videoTab, setVideoTab] = useState<"for_you" | "following">("for_you");
   const [videos, setVideos] = useState<VideoPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const cursorRef = useRef<string | null>(null);
+  const loadingMoreRef = useRef(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [followingSet, setFollowingSet] = useState<Set<string>>(new Set());
@@ -1661,9 +1625,36 @@ export default function VideoPlayerScreen() {
     setVideoTab(tab);
   }
 
-  const fetchVideos = useCallback(async (tab: "for_you" | "following") => {
-    setLoading(true);
-    setVideos([]);
+  const VIDEO_PAGE_SIZE = 30;
+
+  const fetchVideos = useCallback(async (tab: "for_you" | "following", cursor?: string | null) => {
+    const isLoadMore = !!cursor;
+    if (isLoadMore) {
+      if (loadingMoreRef.current) return;
+      loadingMoreRef.current = true;
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+      setVideos([]);
+      cursorRef.current = null;
+      setHasMore(true);
+    }
+
+    let followingIds: string[] = [];
+    if (tab === "following" && user) {
+      const { data: followData } = await supabase
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", user.id);
+      followingIds = (followData || []).map((f: any) => f.following_id);
+      if (followingIds.length === 0) {
+        setVideos([]);
+        setLoading(false);
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+        return;
+      }
+    }
 
     let query = supabase
       .from("posts")
@@ -1675,22 +1666,16 @@ export default function VideoPlayerScreen() {
       .eq("is_blocked", false)
       .not("video_url", "is", null)
       .order("created_at", { ascending: false })
-      .limit(100);
+      .limit(VIDEO_PAGE_SIZE);
 
-    if (tab === "following" && user) {
-      const { data: followData } = await supabase
-        .from("follows")
-        .select("following_id")
-        .eq("follower_id", user.id);
-      const followingIds = (followData || []).map((f: any) => f.following_id);
-      if (followingIds.length === 0) {
-        setVideos([]);
-        setLoading(false);
-        return;
-      }
+    if (tab === "following" && followingIds.length > 0) {
       query = query.in("author_id", followingIds).in("visibility", ["public", "followers"]);
     } else {
       query = query.eq("visibility", "public");
+    }
+
+    if (cursor) {
+      query = query.lt("created_at", cursor);
     }
 
     const { data } = await query;
@@ -1801,9 +1786,23 @@ export default function VideoPlayerScreen() {
       });
 
       scored.sort((a, b) => b.score - a.score);
-      setVideos(scored.map((s) => s.video));
+      const newVideos = scored.map((s) => s.video);
+      cursorRef.current = data[data.length - 1].created_at;
+      setHasMore(data.length === VIDEO_PAGE_SIZE);
+      if (isLoadMore) {
+        setVideos((prev) => [...prev, ...newVideos]);
+      } else {
+        setVideos(newVideos);
+      }
+    } else {
+      setHasMore(false);
     }
-    setLoading(false);
+    if (isLoadMore) {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    } else {
+      setLoading(false);
+    }
   }, [user]);
 
   useEffect(() => { fetchVideos(videoTab); }, [fetchVideos, videoTab]);
@@ -2098,18 +2097,14 @@ export default function VideoPlayerScreen() {
           keyExtractor={(v) => v.id}
           renderItem={({ item, index }) => {
             const isActive = index === activeIndex;
-            // On cellular: only mount Video for the active item.
-            // On Wi-Fi: also preload BOTH neighbours (prev + next) so swipes
-            // in either direction feel instant — this matches the ShortsFeed
-            // behaviour and is critical for the perceived speed.
+            // Preload 2 neighbours (prev + next) so swipes feel instant.
             const distance = Math.abs(index - activeIndex);
-            const isNearActive = isLowData ? isActive : distance <= 2;
+            const isNearActive = distance <= 2;
             return (
               <VideoItem
                 item={item}
                 isActive={isActive}
                 isNearActive={isNearActive}
-                isLowData={isLowData}
                 screenH={EFF_H}
                 screenW={EFF_W}
                 isFollowing={followingSet.has(item.author_id)}
@@ -2142,6 +2137,19 @@ export default function VideoPlayerScreen() {
               listRef.current?.scrollToIndex({ index: info.index, animated: false });
             }, 300);
           }}
+          onEndReached={() => {
+            if (!loadingMoreRef.current && hasMore && cursorRef.current) {
+              fetchVideos(videoTab, cursorRef.current);
+            }
+          }}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={{ width: EFF_W, height: EFF_H, alignItems: "center", justifyContent: "center", backgroundColor: "#000" }}>
+                <ActivityIndicator color="rgba(255,255,255,0.6)" size="small" />
+              </View>
+            ) : null
+          }
         />
       )}
 

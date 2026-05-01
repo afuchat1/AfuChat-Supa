@@ -554,8 +554,6 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   const BRAND = colors.accent;
   const { preferredLang, voiceToText, textToSpeech } = useLanguage();
   const { themeColors: chatTheme, bubbleRadius: chatRadius, prefs: chatPrefsLocal } = useChatPreferences();
-  const { isLowData } = useDataMode();
-  const [imageRevealed, setImageRevealed] = useState(!isLowData);
   const [translated, setTranslated] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
   const [showTranslated, setShowTranslated] = useState(false);
@@ -761,21 +759,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
 
           {hasImage ? (
             <>
-              {isLowData && !imageRevealed ? (
-                <TouchableOpacity
-                  onPress={() => setImageRevealed(true)}
-                  onLongPress={() => onLongPress(msg)}
-                  delayLongPress={300}
-                  activeOpacity={0.8}
-                  style={[st.attachImage, { backgroundColor: "rgba(0,0,0,0.12)", alignItems: "center", justifyContent: "center" }]}
-                >
-                  <Ionicons name="image-outline" size={28} color={isMe ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.35)"} />
-                  <Text style={{ fontSize: 11, color: isMe ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.4)", marginTop: 4, fontFamily: "Inter_400Regular" }}>
-                    Tap to load image
-                  </Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
+              <TouchableOpacity
                   onPress={() => onImageTap?.([msg.attachment_url!], 0)}
                   onLongPress={() => onLongPress(msg)}
                   delayLongPress={300}
@@ -783,7 +767,6 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
                 >
                   <Image source={{ uri: msg.attachment_url! }} style={st.attachImage} resizeMode="cover" />
                 </TouchableOpacity>
-              )}
               {hasTextContent && (
                 <RichText style={[st.bubbleText, { color: textColor, marginTop: 6, fontSize: chatPrefsLocal?.font_size ?? 15, lineHeight: (chatPrefsLocal?.font_size ?? 15) + 5 }]} linkColor={isMe ? "#FFFFFF" : "#00BCD4"}>{displayText}</RichText>
               )}

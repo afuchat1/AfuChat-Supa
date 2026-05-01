@@ -39,7 +39,6 @@ import { matchInterestsWeighted, recordInteraction, getLearnedInterestBoosts, co
 import { useLanguage } from "@/context/LanguageContext";
 import { translateText, LANG_LABELS } from "@/lib/translate";
 import { useTour } from "@/context/TourContext";
-import { useDataMode } from "@/context/DataModeContext";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { DesktopFeedLayout, FEED_COLUMN_MAX_WIDTH } from "@/components/desktop/DesktopFeedLayout";
 
@@ -98,7 +97,6 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
   const { preferredLang } = useLanguage();
   const { width: screenW } = useWindowDimensions();
   const cardInsets = useCardInsets();
-  const { isLowData } = useDataMode();
   const { user: currentUser } = useAuth();
   const { isDesktop } = useIsDesktop();
   const [displayContent, setDisplayContent] = useState(item.content);
@@ -248,7 +246,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
                     videoUrl={item.video_url!}
                     fallbackImageUrl={item.image_url}
                     style={StyleSheet.absoluteFill}
-                    lowData={isLowData}
+                    lowData={false}
                   />
                   <View style={styles.playCircle}>
                     <Ionicons name="play" size={22} color="#fff" />
@@ -269,8 +267,8 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
                   source={{ uri: allImages[0] }}
                   style={styles.articleCover}
                   contentFit="cover"
-                  cachePolicy={isLowData ? "disk" : "memory-disk"}
-                  priority={isLowData ? "low" : "normal"}
+                  cachePolicy="memory-disk"
+                  priority="normal"
                 />
               )}
               <View style={styles.articleCardBody}>
@@ -333,8 +331,8 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
                   source={{ uri: allImages[0] }}
                   style={{ width: singleImgW, height: Math.round(singleImgW * 0.62), borderRadius: 12 }}
                   contentFit="cover"
-                  cachePolicy={isLowData ? "disk" : "memory-disk"}
-                  priority={isLowData ? "low" : "high"}
+                  cachePolicy="memory-disk"
+                  priority="high"
                   transition={150}
                 />
               </TouchableOpacity>
@@ -356,8 +354,8 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
                         source={{ uri }}
                         style={{ width: multiImgW, height: Math.round(multiImgW * 0.75), borderRadius: 10 }}
                         contentFit="cover"
-                        cachePolicy={isLowData ? "disk" : "memory-disk"}
-                        priority="low"
+                        cachePolicy="memory-disk"
+                        priority="normal"
                         transition={150}
                       />
                     </TouchableOpacity>
@@ -446,7 +444,6 @@ export default function DiscoverScreen() {
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
-  const { isLowData } = useDataMode();
   const { isDesktop } = useIsDesktop();
   const navigation = useNavigation();
   // Shorts now lives at /shorts (which redirects to /video/[id]). Any URL like
@@ -475,7 +472,7 @@ export default function DiscoverScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [followingEmpty, setFollowingEmpty] = useState(false);
   const [bgRefreshing, setBgRefreshing] = useState(false);
-  const PAGE_SIZE = isLowData ? 12 : 30;
+  const PAGE_SIZE = 30;
   const imgViewer = useImageViewer();
 
   const { step: tourStep, registerLayout: registerTourLayout, advance: advanceTour } = useTour();
