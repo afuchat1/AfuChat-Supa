@@ -2377,7 +2377,7 @@ export default function VideoPlayerScreen() {
           decelerationRate="fast"
           snapToAlignment="start"
           snapToInterval={EFF_H}
-          style={{ backgroundColor: isDesktopShell ? colors.background : "#000" }}
+          style={{ flex: 1, backgroundColor: isDesktopShell ? colors.background : "#000" }}
           windowSize={5}
           initialNumToRender={3}
           maxToRenderPerBatch={3}

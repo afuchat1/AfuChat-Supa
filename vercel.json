@@ -5,7 +5,15 @@
   "framework": null,
   "rewrites": [
     {
-      "source": "/((?!_expo|assets|favicon\\.ico|favicon\\.png|metadata\\.json|manifest\\.json|logo\\.png|robots\\.txt|sitemap\\.xml).*)",
+      "source": "/p/:id",
+      "destination": "/api/og?type=post&id=:id"
+    },
+    {
+      "source": "/video/:id",
+      "destination": "/api/og?type=video&id=:id"
+    },
+    {
+      "source": "/((?!_expo|assets|favicon\\.ico|favicon\\.png|metadata\\.json|manifest\\.json|logo\\.png|robots\\.txt|sitemap\\.xml|api/).*)",
       "destination": "/index.html"
     }
   ],
