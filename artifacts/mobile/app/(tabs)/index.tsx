@@ -674,16 +674,16 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
     : tabFiltered;
 
   const totalUnread = chats.reduce((sum, c) => sum + c.unread_count, 0);
-  const personalCount = chats.filter((c) => !c.is_group && !c.is_channel).length;
-  const groupsCount = chats.filter((c) => c.is_group && !c.is_channel).length;
-  const channelsCount = chats.filter((c) => c.is_channel).length;
+  const personalUnread = chats.filter((c) => !c.is_group && !c.is_channel).reduce((sum, c) => sum + c.unread_count, 0);
+  const groupsUnread = chats.filter((c) => c.is_group && !c.is_channel).reduce((sum, c) => sum + c.unread_count, 0);
+  const channelsUnread = chats.filter((c) => c.is_channel).reduce((sum, c) => sum + c.unread_count, 0);
 
   const TABS: { key: ChatTabKey; label: string; icon: keyof typeof Ionicons.glyphMap; count: number }[] = [
-    { key: "all", label: "All chats", icon: "chatbubbles-outline", count: chats.length },
+    { key: "all", label: "All chats", icon: "chatbubbles-outline", count: totalUnread },
     { key: "unread", label: "Unread", icon: "mail-unread-outline", count: totalUnread },
-    { key: "personal", label: "Personal", icon: "person-outline", count: personalCount },
-    { key: "groups", label: "Groups", icon: "people-outline", count: groupsCount },
-    { key: "channels", label: "Channels", icon: "megaphone-outline", count: channelsCount },
+    { key: "personal", label: "Personal", icon: "person-outline", count: personalUnread },
+    { key: "groups", label: "Groups", icon: "people-outline", count: groupsUnread },
+    { key: "channels", label: "Channels", icon: "megaphone-outline", count: channelsUnread },
   ];
 
   useEffect(() => {
@@ -867,8 +867,8 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                       color={active ? colors.text : colors.textMuted}
                     />
                     {tab.count > 0 && (
-                      <View style={[styles.railBadge, { backgroundColor: tab.key === "unread" ? "#FF3B30" : colors.backgroundSecondary }]}>
-                        <Text style={[styles.railBadgeText, { color: tab.key === "unread" ? "#fff" : colors.textSecondary }]}>
+                      <View style={[styles.railBadge, { backgroundColor: "#FF3B30" }]}>
+                        <Text style={[styles.railBadgeText, { color: "#fff" }]}>
                           {tab.count > 99 ? "99+" : tab.count}
                         </Text>
                       </View>
