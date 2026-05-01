@@ -1796,6 +1796,7 @@ function ChatScreen() {
       const [
         { count: followersCount }, { count: followingCount }, { count: postsCount },
         { data: subData }, { data: recentAcoinTx }, { data: recentNexaSent }, { data: recentNexaRecv },
+        { data: recentChats }, { data: communities }, { data: contacts },
       ] = await Promise.all([
         supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", user.id),
         supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", user.id),
@@ -1804,8 +1805,13 @@ function ChatScreen() {
         supabase.from("acoin_transactions").select("id, amount, transaction_type, created_at, nexa_spent, fee_charged, metadata").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
         supabase.from("xp_transfers").select("id, amount, created_at, status, receiver:profiles!xp_transfers_receiver_id_fkey(handle, display_name)").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(5),
         supabase.from("xp_transfers").select("id, amount, created_at, status, sender:profiles!xp_transfers_sender_id_fkey(handle, display_name)").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(5),
+        supabase.from("chats").select("id, type, name, last_message, last_message_at, chat_members!inner(user_id), members:chat_members(profile:profiles(handle, display_name))").eq("chat_members.user_id", user.id).order("last_message_at", { ascending: false }).limit(8),
+        supabase.from("community_members").select("community:communities(name, description, member_count)").eq("user_id", user.id).limit(10),
+        supabase.from("follows").select("profile:profiles!follows_following_id_fkey(handle, display_name)").eq("follower_id", user.id).limit(12),
       ]);
+
       const premium = subData ? `${(subData as any).subscription_plans?.name} (${(subData as any).subscription_plans?.tier})` : "None";
+
       const txLines: string[] = [];
       (recentAcoinTx || []).forEach((t: any) => {
         const date = new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -1820,7 +1826,51 @@ function ChatScreen() {
         const sndr = t.sender;
         txLines.push(`  - [ref:${t.id}] ${new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}: Received ${t.amount} Nexa from @${sndr?.handle || "unknown"}`);
       });
-      return `USER CONTEXT:\n- Name: ${profile.display_name}\n- Handle: @${profile.handle}\n- Nexa: ${profile.xp || 0}\n- ACoin: ${profile.acoin || 0}\n- Grade: ${profile.current_grade || "Newcomer"}\n- Followers: ${followersCount || 0}, Following: ${followingCount || 0}, Posts: ${postsCount || 0}\n- Premium: ${premium}\nRECENT TRANSACTIONS:\n${txLines.join("\n") || "  None"}`;
+
+      const chatLines: string[] = (recentChats || []).map((c: any) => {
+        const others = (c.members || [])
+          .map((m: any) => m.profile)
+          .filter((p: any) => p && p.handle !== profile.handle)
+          .map((p: any) => `@${p.handle}`)
+          .join(", ");
+        const chatName = c.type === "direct" ? (others || "Direct chat") : (c.name || "Group chat");
+        const lastMsg = c.last_message ? `"${String(c.last_message).slice(0, 60)}${String(c.last_message).length > 60 ? "…" : ""}"` : "No messages yet";
+        const ago = c.last_message_at ? new Date(c.last_message_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
+        return `  - ${c.type === "group" ? "[Group] " : ""}${chatName}${ago ? ` (${ago})` : ""}: ${lastMsg}`;
+      });
+
+      const communityLines: string[] = (communities || []).map((cm: any) => {
+        const c = cm.community;
+        return `  - ${c?.name || "Unknown"} (${c?.member_count || 0} members)`;
+      });
+
+      const contactLines: string[] = (contacts || []).map((f: any) => {
+        const p = f.profile;
+        return p ? `@${p.handle} (${p.display_name})` : null;
+      }).filter(Boolean) as string[];
+
+      return [
+        `USER CONTEXT:`,
+        `- Name: ${profile.display_name}`,
+        `- Handle: @${profile.handle}`,
+        `- Bio: ${profile.bio || "Not set"}`,
+        `- Country: ${profile.country || "Not set"}`,
+        `- Nexa: ${profile.xp || 0} | ACoin: ${profile.acoin || 0} | Grade: ${profile.current_grade || "Newcomer"}`,
+        `- Followers: ${followersCount || 0} | Following: ${followingCount || 0} | Posts: ${postsCount || 0}`,
+        `- Premium: ${premium}`,
+        ``,
+        `RECENT CHATS (last 8):`,
+        chatLines.length ? chatLines.join("\n") : "  None",
+        ``,
+        `COMMUNITIES (member of ${communityLines.length}):`,
+        communityLines.length ? communityLines.join("\n") : "  None",
+        ``,
+        `FOLLOWING (first 12):`,
+        contactLines.length ? `  ${contactLines.join(", ")}` : "  None",
+        ``,
+        `RECENT TRANSACTIONS:`,
+        txLines.join("\n") || "  None",
+      ].join("\n");
     } catch { return ""; }
   }
 
