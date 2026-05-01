@@ -437,6 +437,7 @@ function ProfileDropdown({
   onSwitchAccount: (userId: string) => Promise<void>;
   onSignOut: () => Promise<void>;
 }) {
+  const { themeMode, setThemeMode } = useTheme();
   const triggerRef = useRef<View | null>(null);
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<{ right: number; top: number } | null>(null);
@@ -687,6 +688,42 @@ function ProfileDropdown({
             <Ionicons name="settings-outline" size={16} color={theme.text} />
             <Text style={[styles.profileItemText, { color: theme.text }]}>Settings</Text>
           </Pressable>
+
+          {/* Theme switcher */}
+          <View style={[styles.profileItem, { gap: 8 }]}>
+            <Ionicons
+              name={themeMode === "dark" ? "moon-outline" : themeMode === "light" ? "sunny-outline" : "contrast-outline"}
+              size={16}
+              color={theme.text}
+            />
+            <Text style={[styles.profileItemText, { color: theme.text, flex: 1 }]}>Theme</Text>
+            <View style={[styles.themeSegment, { backgroundColor: theme.inputBg, borderColor: theme.border }]}>
+              {(["light", "system", "dark"] as const).map((mode) => {
+                const active = themeMode === mode;
+                const icons = { light: "sunny", system: "contrast", dark: "moon" } as const;
+                const labels = { light: "Light", system: "Auto", dark: "Dark" } as const;
+                return (
+                  <Pressable
+                    key={mode}
+                    onPress={() => setThemeMode(mode)}
+                    style={[
+                      styles.themeSegmentBtn,
+                      active && { backgroundColor: theme.accent },
+                    ]}
+                  >
+                    <Ionicons
+                      name={active ? icons[mode] : (`${icons[mode]}-outline` as any)}
+                      size={13}
+                      color={active ? "#fff" : theme.textMuted}
+                    />
+                    <Text style={[styles.themeSegmentLabel, { color: active ? "#fff" : theme.textMuted }]}>
+                      {labels[mode]}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
 
           <View style={[styles.profileDivider, { backgroundColor: theme.border }]} />
 
@@ -1149,5 +1186,22 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     marginVertical: 4,
     marginHorizontal: 8,
+  },
+  themeSegment: {
+    flexDirection: "row",
+    borderRadius: 8,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  themeSegmentBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  themeSegmentLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
   },
 });
