@@ -100,6 +100,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
   const cardInsets = useCardInsets();
   const { isLowData } = useDataMode();
   const { user: currentUser } = useAuth();
+  const { isDesktop } = useIsDesktop();
   const [displayContent, setDisplayContent] = useState(item.content);
   const [isTranslated, setIsTranslated] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
@@ -110,8 +111,9 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
 
   const allImages = item.images.length > 0 ? item.images : item.image_url ? [item.image_url] : [];
   const effectiveW = colWidth ?? screenW;
-  const singleImgW = effectiveW - 48;
-  const multiImgW = (effectiveW - 56) / 2;
+  // 16px padding on each side so images never touch card edges
+  const singleImgW = effectiveW - 32;
+  const multiImgW = (effectiveW - 44) / 2;
   const imgW = allImages.length === 1 ? singleImgW : multiImgW;
 
   useEffect(() => {
@@ -192,7 +194,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
     <>
       <ViewShot ref={cardRef} options={{ format: "png", quality: 1, result: "tmpfile" }}>
         <TouchableOpacity
-          style={[styles.card, { backgroundColor: colors.background, borderBottomColor: colors.border }]}
+          style={[styles.card, { backgroundColor: colors.background }]}
           onPress={openPost}
           activeOpacity={0.97}
           {...(Platform.OS === "web" ? { dataSet: { postCard: item.id } } as any : {})}
@@ -203,16 +205,16 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
               onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}
               activeOpacity={0.8}
             >
-              <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={40} />
+              <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={isDesktop ? 44 : 40} />
             </TouchableOpacity>
             <View style={{ flex: 1, gap: 2 }}>
               <View style={styles.nameRow}>
-                <Text style={[styles.cardName, { color: colors.text }]} numberOfLines={1}>
+                <Text style={[styles.cardName, { color: colors.text, fontSize: isDesktop ? 17 : 15 }]} numberOfLines={1}>
                   {item.profile.display_name}
                 </Text>
-                <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={13} />
+                <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={isDesktop ? 15 : 13} />
               </View>
-              <Text style={[styles.cardMeta, { color: colors.textMuted }]} numberOfLines={1}>
+              <Text style={[styles.cardMeta, { color: colors.textMuted, fontSize: isDesktop ? 13 : 12 }]} numberOfLines={1}>
                 @{item.profile.handle} · {formatRelative(item.created_at)}
               </Text>
             </View>
@@ -261,7 +263,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
 
           {/* ── ARTICLE: distinctive card ── */}
           {item.post_type === "article" ? (
-            <View style={[styles.articleCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <View style={[styles.articleCard, { backgroundColor: colors.surface }]}>
               {allImages.length > 0 && (
                 <ExpoImage
                   source={{ uri: allImages[0] }}
@@ -300,7 +302,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
               {/* ── Content text ── */}
               {(displayContent || "").trim().length > 0 && (
                 <RichText
-                  style={[styles.cardContent, { color: colors.text }]}
+                  style={[styles.cardContent, { color: colors.text, fontSize: isDesktop ? 17 : 15, lineHeight: isDesktop ? 27 : 23 }]}
                   numberOfLines={undefined}
                 >
                   {displayContent}
@@ -321,27 +323,28 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
           {/* ── Images ── */}
           {allImages.length > 0 && item.post_type !== "video" && item.post_type !== "article" && (
             <View style={styles.images}>
-              {/* First image — full width */}
+              {/* First image — padded, rounded */}
               <TouchableOpacity
                 activeOpacity={0.9}
                 onPress={(e) => { e.stopPropagation(); onImagePress?.(allImages, 0); }}
+                style={{ marginHorizontal: 16 }}
               >
                 <ExpoImage
                   source={{ uri: allImages[0] }}
-                  style={{ width: effectiveW, height: Math.round(effectiveW * 0.56) }}
+                  style={{ width: singleImgW, height: Math.round(singleImgW * 0.62), borderRadius: 12 }}
                   contentFit="cover"
                   cachePolicy={isLowData ? "disk" : "memory-disk"}
                   priority={isLowData ? "low" : "high"}
                   transition={150}
                 />
               </TouchableOpacity>
-              {/* Remaining images — horizontal scroll */}
+              {/* Remaining images — horizontal scroll with consistent padding */}
               {allImages.length > 1 && (
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  style={{ marginTop: 3 }}
-                  contentContainerStyle={{ gap: 3 }}
+                  style={{ marginTop: 6 }}
+                  contentContainerStyle={{ gap: 6, paddingHorizontal: 16 }}
                 >
                   {allImages.slice(1).map((uri, i) => (
                     <TouchableOpacity
@@ -351,7 +354,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
                     >
                       <ExpoImage
                         source={{ uri }}
-                        style={{ width: 110, height: 90, borderRadius: 8 }}
+                        style={{ width: multiImgW, height: Math.round(multiImgW * 0.75), borderRadius: 10 }}
                         contentFit="cover"
                         cachePolicy={isLowData ? "disk" : "memory-disk"}
                         priority="low"
@@ -1277,7 +1280,6 @@ const styles = StyleSheet.create({
   tabPill: { paddingVertical: 12, paddingHorizontal: 16, alignItems: "center", borderBottomWidth: 3 },
   tabPillText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   card: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
   cardHeader: {
@@ -1302,7 +1304,7 @@ const styles = StyleSheet.create({
   },
   translatedBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 16, marginBottom: 8 },
   translatedText: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  images: { marginBottom: 0 },
+  images: { marginBottom: 8 },
   cardFooter: {
     flexDirection: "row",
     alignItems: "center",
@@ -1361,10 +1363,9 @@ const styles = StyleSheet.create({
   },
   videoBadgeText: { color: "#fff", fontSize: 11, fontFamily: "Inter_600SemiBold" },
   articleCard: {
-    marginHorizontal: 12,
+    marginHorizontal: 16,
     marginVertical: 4,
     borderRadius: 14,
-    borderWidth: 1,
     overflow: "hidden",
   },
   articleCover: {

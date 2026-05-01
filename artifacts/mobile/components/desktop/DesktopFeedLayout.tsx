@@ -34,15 +34,12 @@ export function DesktopFeedLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <View style={[styles.row, { backgroundColor: colors.background }]}>
-      {/* Center: feed column with a hairline divider on each side */}
+      {/* Center: feed column */}
       <View
         style={[
           styles.center,
           {
             maxWidth: FEED_COLUMN_MAX_WIDTH,
-            borderColor: colors.border,
-            borderLeftWidth: StyleSheet.hairlineWidth,
-            borderRightWidth: StyleSheet.hairlineWidth,
           },
         ]}
       >
