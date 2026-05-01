@@ -632,7 +632,7 @@ function ProfileDropdown({
 
           {/* Account / profile actions */}
           <Pressable
-            onPress={() => navigate("/linked-accounts")}
+            onPress={() => navigate("/linked-accounts?addNew=1")}
             style={({ hovered }: any) => [
               styles.profileItem,
               { backgroundColor: hovered ? theme.hoverBg : "transparent" },

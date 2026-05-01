@@ -334,6 +334,9 @@ HLS/DASH not implemented yet — architecture leaves the hooks open.
   (`/profile/edit`), Settings, and Sign out. Closes on outside click,
   scroll, escape, or resize. It replaces the previous direct
   `router.push("/me")` behaviour.
+- **Video pause/play fixed (web)** — in `/video/[id]` the outer `Pressable` and the inner `<video onClick>` were both firing on the same tap, toggling `paused` twice so it appeared to never pause. Fix: the `<video>` now owns the click handler (with a 220ms single-vs-double-click window) and stops propagation; the `Pressable.onPress` is disabled on web (`onPress={undefined}`). Double-clicking the video still triggers the like-burst animation via `onDoubleClick`. ShortsFeed's `WebShortsPlayer` got the same stopPropagation defensive guard.
+- **Keyboard controls (web)** — both the `/video/[id]` page and `ShortsFeed` now attach a `window.keydown` listener (web only, skipped when focus is in an input/textarea). `Space` prevents default browser scroll and toggles pause/play on the active video. `ArrowDown`/`PageDown` scrolls to the next video; `ArrowUp`/`PageUp` scrolls to the previous one. Active card registers its `setPaused` toggle in a shared `activeToggleRef` that the page-level handler reads.
+- **"Add another account" stays on current page** — clicking "Add another account" in the profile dropdown now navigates to `/linked-accounts?addNew=1`. The linked-accounts screen reads that param: it auto-opens the add form on mount, and after a successful link it calls `router.back()` (returning to the page the user was on) instead of just closing the form.
 - **No tab-switch refreshes** (`context/AuthContext.tsx`):
   `supabase.auth.onAuthStateChange` ignores `TOKEN_REFRESHED` (it patches
   the new tokens onto the existing session object in place rather than

@@ -623,6 +623,7 @@ function VideoItem({
   onRecordView,
   onOpenMenu,
   onOpenSound,
+  activeToggleRef,
 }: {
   item: VideoPost;
   isActive: boolean;

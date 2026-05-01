@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
@@ -25,13 +25,26 @@ export default function LinkedAccountsScreen() {
   const { colors } = useTheme();
   const { user, profile, linkedAccounts, addAccount, switchAccount, removeAccount } = useAuth();
   const insets = useSafeAreaInsets();
-  const [showAdd, setShowAdd] = useState(false);
+  // When opened via "Add another account" in the dropdown, the route carries
+  // ?addNew=1.  We auto-open the form and dismiss the screen after a
+  // successful link so the user lands back on the page they came from.
+  const { addNew } = useLocalSearchParams<{ addNew?: string }>();
+  const isQuickAdd = addNew === "1";
+  const [showAdd, setShowAdd] = useState(isQuickAdd);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [linking, setLinking] = useState(false);
   const [switching, setSwitching] = useState<string | null>(null);
-  const formAnim = useRef(new Animated.Value(0)).current;
+  const formAnim = useRef(new Animated.Value(isQuickAdd ? 1 : 0)).current;
+
+  // If opened via the quick-add shortcut, ensure the form animation runs to
+  // its open state on first mount.
+  useEffect(() => {
+    if (isQuickAdd) {
+      Animated.spring(formAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 10 }).start();
+    }
+  }, []);
 
   function openForm() {
     setShowAdd(true);
@@ -57,7 +70,12 @@ export default function LinkedAccountsScreen() {
     setLinking(false);
     if (result.success) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      closeForm();
+      if (isQuickAdd) {
+        // Return to the page the user was on before opening the dropdown.
+        router.back();
+      } else {
+        closeForm();
+      }
     } else {
       showAlert("Login Failed", result.error || "Could not authenticate. Check your credentials.");
     }

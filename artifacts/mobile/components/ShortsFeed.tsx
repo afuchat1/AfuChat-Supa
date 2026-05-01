@@ -235,6 +235,7 @@ function ShortCard({
   onBookmark,
   onFollow,
   currentUserId,
+  activeToggleRef,
 }: {
   item: ShortPost;
   active: boolean;
@@ -249,6 +250,7 @@ function ShortCard({
   onBookmark: (postId: string, bookmarked: boolean) => void;
   onFollow: (authorId: string) => void;
   currentUserId?: string;
+  activeToggleRef?: React.MutableRefObject<(() => void) | null>;
 }) {
   const { colors } = useTheme();
   const [paused, setPaused] = useState(false);
@@ -276,6 +278,15 @@ function ShortCard({
   useEffect(() => {
     if (active) setPaused(false);
   }, [active]);
+
+  // Register/unregister the pause toggle for the page-level keyboard handler.
+  useEffect(() => {
+    if (Platform.OS !== "web" || !activeToggleRef || !active) return;
+    activeToggleRef.current = () => setPaused((p) => !p);
+    return () => {
+      if (activeToggleRef.current) activeToggleRef.current = null;
+    };
+  }, [active, activeToggleRef]);
 
   const isOwnVideo = currentUserId === item.author_id;
   const showFollowBtn = !isOwnVideo && !item.following;
@@ -779,6 +790,7 @@ export default function ShortsFeed({
 
   return (
     <FlatList
+      ref={listRef}
       data={posts}
       keyExtractor={(item) => item.id}
       renderItem={({ item, index }) => {
@@ -802,6 +814,7 @@ export default function ShortsFeed({
             onBookmark={toggleBookmark}
             onFollow={toggleFollow}
             currentUserId={user?.id}
+            activeToggleRef={activeToggleRef}
           />
         );
       }}
