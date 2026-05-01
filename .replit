@@ -43,7 +43,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd artifacts/mobile && pnpm exec expo start --web --port 5000"
+args = "cd artifacts/mobile && node_modules/.bin/expo start --web --port 5000"
 waitForPort = 5000
 
 [[workflows.workflow]]
@@ -55,7 +55,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd artifacts/api-server && pnpm run build && PORT=3000 pnpm run start"
+args = "cd artifacts/api-server && node ./build.mjs && PORT=3000 node --enable-source-maps ./dist/index.mjs"
 waitForPort = 3000
 
 [[ports]]
