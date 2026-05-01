@@ -39,6 +39,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { useResolvedVideoSource } from "@/hooks/useResolvedVideoSource";
 import { sharePost } from "@/lib/share";
+import { encodeId } from "@/lib/shortId";
 
 type ShortPost = {
   id: string;
@@ -500,7 +501,7 @@ function ShortCard({
         </View>
         <View style={styles.actionItem}>
           <Pressable
-            onPress={() => router.push({ pathname: "/post/[id]", params: { id: item.id } } as any)}
+            onPress={() => router.push({ pathname: "/p/[id]", params: { id: encodeId(item.id) } } as any)}
             style={({ hovered }: any) => [
               styles.actionBubble,
               { backgroundColor: hovered ? colors.backgroundTertiary : colors.surface },
@@ -732,6 +733,20 @@ export default function ShortsFeed({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [activeIndex, posts.length]);
+
+  // Lock page body scroll + prevent pinch-zoom while this feed is mounted.
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+    return () => {
+      document.body.style.overflow = prev;
+      document.documentElement.style.overflow = "";
+      document.body.style.touchAction = "";
+    };
+  }, []);
 
   async function toggleLike(postId: string, currentlyLiked: boolean) {
     if (!user) { router.push("/(auth)/login" as any); return; }

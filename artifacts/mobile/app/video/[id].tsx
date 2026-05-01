@@ -42,6 +42,7 @@ import { BlurView } from "expo-blur";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { SIDEBAR_WIDTH } from "@/components/desktop/DesktopSidebar";
 import { TOPBAR_HEIGHT } from "@/components/desktop/DesktopTopBar";
+import { useTheme } from "@/hooks/useTheme";
 
 const USE_NATIVE = Platform.OS !== "web";
 
@@ -648,6 +649,7 @@ function VideoItem({
   activeToggleRef?: React.MutableRefObject<(() => void) | null>;
 }) {
   const { accent } = useAppAccent();
+  const { colors } = useTheme();
   const [paused, setPaused] = useState(false);
   const [buffering, setBuffering] = useState(true);
   const [progress, setProgress] = useState(0);
@@ -812,6 +814,227 @@ function VideoItem({
   const shouldMountVideo = isActive || isNearActive;
   const canPlay = isActive && !paused;
 
+  // ── Desktop: YouTube-Shorts-style layout ────────────────────────────────
+  if (isDesktop) {
+    return (
+      <View style={{
+        width: screenW,
+        height: screenH,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: colors.background,
+        gap: 20,
+      }}>
+        {/* Left: video card + below-card info */}
+        <View style={{ flexDirection: "column" }}>
+          {/* 9:16 video card */}
+          <View style={{
+            width: cardWidth,
+            height: cardHeight,
+            backgroundColor: "#000",
+            borderRadius: 14,
+            overflow: "hidden",
+            position: "relative",
+          }}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onLongPress={() => onOpenMenu(item)}
+              delayLongPress={380}
+            >
+              {shouldMountVideo ? (
+                Platform.OS === "web" ? (
+                  <WebVideoPlayer
+                    src={playbackUri}
+                    poster={item.image_url}
+                    active={isActive}
+                    paused={paused}
+                    preloadOnly={preloadOnly}
+                    onTogglePause={() => setPaused((p) => !p)}
+                    onDoubleTap={triggerLikeBurst}
+                    onProgress={(pos, dur) => {
+                      if (!dur) return;
+                      setDurationMs(dur);
+                      setProgress(pos / dur);
+                    }}
+                    onBuffering={setBuffering}
+                    externalRef={webVideoRef}
+                  />
+                ) : (
+                  <Video
+                    ref={videoRef}
+                    source={{ uri: playbackUri }}
+                    style={StyleSheet.absoluteFill}
+                    resizeMode={ResizeMode.CONTAIN}
+                    shouldPlay={canPlay && !preloadOnly}
+                    isLooping
+                    isMuted={false}
+                    posterSource={item.image_url ? { uri: item.image_url } : undefined}
+                    usePosterImage={!!item.image_url}
+                    onPlaybackStatusUpdate={onPlaybackStatus}
+                  />
+                )
+              ) : (
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />
+              )}
+            </Pressable>
+
+            {buffering && isActive && (
+              <View style={[vStyles.bufferOverlay, { pointerEvents: "none" as any }]}>
+                <ActivityIndicator color="rgba(255,255,255,0.7)" size="small" />
+              </View>
+            )}
+            {paused && !buffering && (
+              <View style={[vStyles.pauseOverlay, { pointerEvents: "none" as any }]}>
+                <View style={vStyles.pauseCircle}>
+                  <Ionicons name="play" size={32} color="#fff" style={{ marginLeft: 3 }} />
+                </View>
+              </View>
+            )}
+            <Animated.View style={[vStyles.doubleTapHeart, {
+              pointerEvents: "none" as any,
+              opacity: doubleTapHeart,
+              transform: [{ scale: doubleTapHeart.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.3, 1.3, 1] }) }],
+            }]}>
+              <Ionicons name="heart" size={90} color="#FF3B30" />
+            </Animated.View>
+            <GradientOverlay position="top" height={80} />
+            {/* Progress bar */}
+            <TouchableOpacity
+              activeOpacity={1}
+              style={[vStyles.progressBar, { bottom: 0 }]}
+              onLayout={(e) => setProgressBarWidth(e.nativeEvent.layout.width)}
+              onPress={(e) => handleProgressBarPress(e.nativeEvent.locationX)}
+              hitSlop={{ top: 10, bottom: 10 }}
+            >
+              <View style={[vStyles.progressFill, { width: `${progress * 100}%` as any }]} />
+              <View style={[vStyles.progressThumb, { left: `${progress * 100}%` as any }]} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Below card: author row + caption */}
+          <View style={{ width: cardWidth, paddingTop: 12, paddingHorizontal: 2, gap: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}>
+                <View style={[vStyles.avatarWrap, { borderColor: accent }]}>
+                  <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={34} />
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}>
+                <Text style={{ color: colors.text, fontSize: 14, fontFamily: "Inter_700Bold" }}>
+                  @{item.profile.handle}
+                </Text>
+              </TouchableOpacity>
+              {!isSelf && (
+                <Pressable
+                  onPress={() => onFollow(item.author_id, isFollowing)}
+                  style={({ hovered }: any) => ({
+                    paddingHorizontal: 16,
+                    paddingVertical: 7,
+                    borderRadius: 999,
+                    backgroundColor: isFollowing
+                      ? (hovered ? colors.backgroundTertiary : colors.surface)
+                      : (hovered ? "rgba(0,0,0,0.85)" : "#000"),
+                    borderWidth: 1,
+                    borderColor: isFollowing ? colors.border : "#000",
+                  })}
+                >
+                  <Text style={{
+                    color: isFollowing ? colors.text : "#fff",
+                    fontSize: 13,
+                    fontFamily: "Inter_600SemiBold",
+                  }}>
+                    {isFollowing ? "Following" : "Subscribe"}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+            {!!item.content && (
+              <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 }} numberOfLines={3}>
+                {item.content}
+              </Text>
+            )}
+          </View>
+        </View>
+
+        {/* Right: action rail (YouTube Shorts style) */}
+        <View style={{ flexDirection: "column", alignItems: "center", gap: 20, paddingBottom: 60 }}>
+          {/* Like */}
+          <View style={{ alignItems: "center", gap: 5 }}>
+            <Animated.View style={{ transform: [{ scale: heartScale }] }}>
+              <Pressable
+                onPress={handleLike}
+                style={({ hovered }: any) => ({
+                  width: 52, height: 52, borderRadius: 26,
+                  backgroundColor: hovered ? colors.backgroundTertiary : colors.surface,
+                  alignItems: "center", justifyContent: "center",
+                })}
+              >
+                <Ionicons name={item.liked ? "thumbs-up" : "thumbs-up-outline"} size={26} color={item.liked ? "#FF3B30" : colors.text} />
+              </Pressable>
+            </Animated.View>
+            <Text style={{ color: colors.text, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>
+              {formatCount(item.likeCount)}
+            </Text>
+          </View>
+
+          {/* Dislike */}
+          <View style={{ alignItems: "center", gap: 5 }}>
+            <Pressable style={({ hovered }: any) => ({
+              width: 52, height: 52, borderRadius: 26,
+              backgroundColor: hovered ? colors.backgroundTertiary : colors.surface,
+              alignItems: "center", justifyContent: "center",
+            })}>
+              <Ionicons name="thumbs-down-outline" size={26} color={colors.text} />
+            </Pressable>
+            <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Dislike</Text>
+          </View>
+
+          {/* Comment */}
+          <View style={{ alignItems: "center", gap: 5 }}>
+            <Pressable
+              onPress={() => onOpenComments(item.id)}
+              style={({ hovered }: any) => ({
+                width: 52, height: 52, borderRadius: 26,
+                backgroundColor: hovered ? colors.backgroundTertiary : colors.surface,
+                alignItems: "center", justifyContent: "center",
+              })}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={26} color={colors.text} />
+            </Pressable>
+            <Text style={{ color: colors.text, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>
+              {formatCount(item.replyCount)}
+            </Text>
+          </View>
+
+          {/* Share */}
+          <View style={{ alignItems: "center", gap: 5 }}>
+            <Pressable
+              onPress={() => onShare(item)}
+              style={({ hovered }: any) => ({
+                width: 52, height: 52, borderRadius: 26,
+                backgroundColor: hovered ? colors.backgroundTertiary : colors.surface,
+                alignItems: "center", justifyContent: "center",
+              })}
+            >
+              <Ionicons name="share-social-outline" size={26} color={colors.text} />
+            </Pressable>
+            <Text style={{ color: colors.text, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Share</Text>
+          </View>
+
+          {/* Author avatar at bottom */}
+          <Pressable
+            onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}
+            style={{ width: 52, height: 52, borderRadius: 26, overflow: "hidden", borderWidth: 2, borderColor: colors.border }}
+          >
+            <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={52} />
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  // ── Mobile: fullscreen TikTok-style layout ──────────────────────────────
   return (
     <View
       style={[
@@ -1542,6 +1765,7 @@ const cmStyles = StyleSheet.create({
 
 export default function VideoPlayerScreen() {
   const { accent } = useAppAccent();
+  const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
@@ -1612,6 +1836,27 @@ export default function VideoPlayerScreen() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [activeIndex, videos.length]);
+
+  // Prevent page body scroll and pinch-zoom when the video feed is mounted.
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+    // Update viewport to disable pinch zoom
+    const existingMeta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
+    const prevContent = existingMeta?.content || "";
+    if (existingMeta) {
+      existingMeta.content = "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no";
+    }
+    return () => {
+      document.body.style.overflow = prev;
+      document.documentElement.style.overflow = "";
+      document.body.style.touchAction = "";
+      if (existingMeta && prevContent) existingMeta.content = prevContent;
+    };
+  }, []);
 
   function switchTab(tab: "for_you" | "following") {
     if (tab === videoTab) return;
@@ -2032,15 +2277,15 @@ export default function VideoPlayerScreen() {
 
   if (loading) {
     return (
-      <View style={[mStyles.center, isDesktopShell && { position: "relative" as any, zIndex: 0, top: undefined, left: undefined, right: undefined, bottom: undefined }]}>
+      <View style={[mStyles.center, isDesktopShell && { position: "relative" as any, zIndex: 0, top: undefined, left: undefined, right: undefined, bottom: undefined, backgroundColor: colors.background }]}>
         {!isDesktopShell && <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />}
-        <ActivityIndicator color="#fff" size="large" />
+        <ActivityIndicator color={isDesktopShell ? colors.text : "#fff"} size="large" />
       </View>
     );
   }
 
   return (
-    <View style={[mStyles.root, isDesktopShell && { position: "relative" as any, zIndex: 0, top: undefined, left: undefined, right: undefined, bottom: undefined }]}>
+    <View style={[mStyles.root, isDesktopShell && { position: "relative" as any, zIndex: 0, top: undefined, left: undefined, right: undefined, bottom: undefined, backgroundColor: colors.background }]}>
       {!isDesktopShell && <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />}
 
       {/* Mobile-only floating header */}
@@ -2069,13 +2314,13 @@ export default function VideoPlayerScreen() {
 
       {/* Desktop tab switcher — sits above the video feed */}
       {isDesktopShell && (
-        <View style={mStyles.desktopTabRow}>
+        <View style={[mStyles.desktopTabRow, { backgroundColor: colors.background, borderBottomWidth: 1, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => switchTab("for_you")} style={mStyles.tabBtn}>
-            <Text style={[mStyles.desktopTabText, videoTab === "for_you" && mStyles.desktopTabTextActive]}>For You</Text>
+            <Text style={[mStyles.desktopTabText, { color: colors.textMuted }, videoTab === "for_you" && [mStyles.desktopTabTextActive, { color: colors.text }]]}>For You</Text>
           </TouchableOpacity>
-          <View style={mStyles.tabDivider} />
+          <View style={[mStyles.tabDivider, { backgroundColor: colors.border }]} />
           <TouchableOpacity onPress={() => switchTab("following")} style={mStyles.tabBtn}>
-            <Text style={[mStyles.desktopTabText, videoTab === "following" && mStyles.desktopTabTextActive]}>Following</Text>
+            <Text style={[mStyles.desktopTabText, { color: colors.textMuted }, videoTab === "following" && [mStyles.desktopTabTextActive, { color: colors.text }]]}>Following</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -2129,6 +2374,7 @@ export default function VideoPlayerScreen() {
           decelerationRate="fast"
           snapToAlignment="start"
           snapToInterval={EFF_H}
+          style={{ backgroundColor: isDesktopShell ? colors.background : "#000" }}
           windowSize={5}
           initialNumToRender={3}
           maxToRenderPerBatch={3}
