@@ -56,6 +56,7 @@ const USE_NATIVE = Platform.OS !== "web";
  */
 function WebVideoPlayer({
   src,
+  poster,
   active,
   paused,
   preloadOnly,
@@ -66,6 +67,7 @@ function WebVideoPlayer({
   externalRef,
 }: {
   src: string;
+  poster?: string | null;
   active: boolean;
   paused: boolean;
   preloadOnly: boolean;
@@ -145,6 +147,7 @@ function WebVideoPlayer({
     <video
       ref={setRef}
       src={src}
+      poster={poster || undefined}
       playsInline
       loop
       preload="auto"
@@ -173,6 +176,7 @@ type VideoPost = {
   author_id: string;
   content: string;
   video_url: string;
+  image_url: string | null;
   created_at: string;
   view_count: number;
   audio_name: string | null;
@@ -843,6 +847,7 @@ function VideoItem({
           Platform.OS === "web" ? (
             <WebVideoPlayer
               src={playbackUri}
+              poster={item.image_url}
               active={isActive}
               paused={paused || (isLowData && !cachedUri && !manualPlay)}
               preloadOnly={preloadOnly}
@@ -865,6 +870,8 @@ function VideoItem({
               shouldPlay={canPlay && !preloadOnly}
               isLooping
               isMuted={false}
+              posterSource={item.image_url ? { uri: item.image_url } : undefined}
+              usePosterImage={!!item.image_url}
               onPlaybackStatusUpdate={onPlaybackStatus}
             />
           )
@@ -1654,7 +1661,7 @@ export default function VideoPlayerScreen() {
     let query = supabase
       .from("posts")
       .select(`
-        id, author_id, content, video_url, created_at, audio_name,
+        id, author_id, content, video_url, image_url, created_at, audio_name,
         profiles!posts_author_id_fkey(display_name, handle, avatar_url)
       `)
       .eq("post_type", "video")
@@ -1740,6 +1747,7 @@ export default function VideoPlayerScreen() {
         author_id: p.author_id,
         content: p.content || "",
         video_url: p.video_url,
+        image_url: p.image_url || null,
         created_at: p.created_at,
         view_count: viewMap[p.id] || 0,
         audio_name: p.audio_name || null,
@@ -1797,10 +1805,12 @@ export default function VideoPlayerScreen() {
     if (!loading && videos.length > 0 && id && !initialScrollDone.current) {
       const idx = videos.findIndex((v) => v.id === id);
       if (idx > 0) {
-        setActiveIndex(idx);
-        setTimeout(() => {
-          listRef.current?.scrollToIndex({ index: idx, animated: false });
-        }, 50);
+        // Slice the list so the tapped video is always at index 0 — no
+        // "unplayed" videos appear above it.  Newer posts (idx 0..idx-1) are
+        // discarded; the user can load a fresh feed when they come back.
+        setVideos((prev) => prev.slice(idx));
+        setActiveIndex(0);
+        // No scrollToIndex needed — position 0 is the default.
       }
       initialScrollDone.current = true;
     }

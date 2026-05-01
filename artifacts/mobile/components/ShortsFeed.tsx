@@ -45,6 +45,7 @@ type ShortPost = {
   author_id: string;
   content: string;
   video_url: string;
+  image_url: string | null;
   created_at: string;
   view_count: number;
   profile: { display_name: string; handle: string; avatar_url: string | null };
@@ -70,6 +71,7 @@ function formatCount(n: number): string {
 
 function WebShortsPlayer({
   src,
+  poster,
   active,
   paused,
   muted,
@@ -78,6 +80,7 @@ function WebShortsPlayer({
   onEnded,
 }: {
   src: string;
+  poster?: string | null;
   active: boolean;
   paused: boolean;
   muted: boolean;
@@ -139,6 +142,7 @@ function WebShortsPlayer({
       <video
         ref={ref}
         src={src}
+        poster={poster || undefined}
         playsInline
         loop
         muted={muted}
@@ -177,6 +181,7 @@ function WebShortsPlayer({
 
 function NativeShortsPlayer({
   src,
+  poster,
   active,
   paused,
   muted,
@@ -184,6 +189,7 @@ function NativeShortsPlayer({
   onTogglePause,
 }: {
   src: string;
+  poster?: string | null;
   active: boolean;
   paused: boolean;
   muted: boolean;
@@ -205,6 +211,8 @@ function NativeShortsPlayer({
         shouldPlay={active && !paused && !preloadOnly}
         isLooping
         isMuted={muted}
+        posterSource={poster ? { uri: poster } : undefined}
+        usePosterImage={!!poster}
       />
       {!preloadOnly && paused && (
         <View style={styles.centerPlayBtn} pointerEvents="none">
@@ -298,6 +306,7 @@ function ShortCard({
         {Platform.OS === "web" ? (
           <WebShortsPlayer
             src={src}
+            poster={item.image_url}
             active={active}
             paused={paused}
             preloadOnly={preloadOnly}
@@ -308,6 +317,7 @@ function ShortCard({
         ) : (
           <NativeShortsPlayer
             src={src}
+            poster={item.image_url}
             active={active}
             paused={paused}
             preloadOnly={preloadOnly}
@@ -413,6 +423,7 @@ function ShortCard({
         {Platform.OS === "web" ? (
           <WebShortsPlayer
             src={src}
+            poster={item.image_url}
             active={active}
             paused={paused}
             preloadOnly={preloadOnly}
@@ -423,6 +434,7 @@ function ShortCard({
         ) : (
           <NativeShortsPlayer
             src={src}
+            poster={item.image_url}
             active={active}
             paused={paused}
             preloadOnly={preloadOnly}
@@ -593,7 +605,7 @@ export default function ShortsFeed({
     let query = supabase
       .from("posts")
       .select(`
-        id, author_id, content, video_url, created_at, view_count,
+        id, author_id, content, video_url, image_url, created_at, view_count,
         profiles!posts_author_id_fkey(display_name, handle, avatar_url)
       `)
       .eq("post_type", "video")
@@ -652,6 +664,7 @@ export default function ShortsFeed({
         author_id: p.author_id,
         content: p.content || "",
         video_url: p.video_url,
+        image_url: p.image_url || null,
         created_at: p.created_at,
         view_count: p.view_count || 0,
         profile: {
