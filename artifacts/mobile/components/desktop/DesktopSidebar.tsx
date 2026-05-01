@@ -91,6 +91,7 @@ const SECTIONS: NavSection[] = [
         iconActive: "sparkles",
         route: "/ai",
         match: (p) => p.startsWith("/ai"),
+        requiresAuth: true,
       },
       {
         key: "notifications",
