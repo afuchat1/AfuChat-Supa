@@ -44,7 +44,6 @@ const FULLSCREEN_PATTERNS: RegExp[] = [
   /^\/\(auth\)/,
   /^\/onboarding/,
   /^\/call(\/|$)/,
-  /^\/video\//,
   /^\/stories\/(view|camera)/,
 ];
 

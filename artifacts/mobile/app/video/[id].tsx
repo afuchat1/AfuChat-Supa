@@ -40,6 +40,9 @@ import * as FileSystem from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
 import { BlurView } from "expo-blur";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
+import { SIDEBAR_WIDTH } from "@/components/desktop/DesktopSidebar";
+import { TOPBAR_HEIGHT } from "@/components/desktop/DesktopTopBar";
 
 const USE_NATIVE = Platform.OS !== "web";
 
@@ -675,7 +678,7 @@ function VideoItem({
     ? Math.max(420, Math.min(screenH - 80, 880))
     : screenH;
   const cardWidth = isDesktop
-    ? Math.min(Math.round(cardHeight * (9 / 16)), screenW - 240)
+    ? Math.min(Math.round(cardHeight * (9 / 16)), screenW - 40)
     : screenW;
 
   const isOriginalAudio = !item.audio_name || item.audio_name.toLowerCase().startsWith("original audio");
@@ -1581,6 +1584,10 @@ export default function VideoPlayerScreen() {
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
+  const { isDesktop: isDesktopShell } = useIsDesktop();
+  // On desktop the shell reserves space for the sidebar and topbar.
+  const EFF_W = isDesktopShell ? SCREEN_W - SIDEBAR_WIDTH : SCREEN_W;
+  const EFF_H = isDesktopShell ? SCREEN_H - TOPBAR_HEIGHT : SCREEN_H;
   const { isLowData } = useDataMode();
 
   const [videoTab, setVideoTab] = useState<"for_you" | "following">("for_you");
@@ -2026,17 +2033,19 @@ export default function VideoPlayerScreen() {
 
   if (loading) {
     return (
-      <View style={mStyles.center}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <View style={[mStyles.center, isDesktopShell && { position: "relative" as any, zIndex: 0, top: undefined, left: undefined, right: undefined, bottom: undefined }]}>
+        {!isDesktopShell && <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />}
         <ActivityIndicator color="#fff" size="large" />
       </View>
     );
   }
 
   return (
-    <View style={mStyles.root}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+    <View style={[mStyles.root, isDesktopShell && { position: "relative" as any, zIndex: 0, top: undefined, left: undefined, right: undefined, bottom: undefined }]}>
+      {!isDesktopShell && <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />}
 
+      {/* Mobile-only floating header */}
+      {!isDesktopShell && (
       <View style={[mStyles.headerRow, { paddingTop: insets.top + 6 }]}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={mStyles.headerSide}>
           <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -2057,6 +2066,20 @@ export default function VideoPlayerScreen() {
           <Ionicons name="search-outline" size={20} color="#fff" />
         </TouchableOpacity>
       </View>
+      )}
+
+      {/* Desktop tab switcher — sits above the video feed */}
+      {isDesktopShell && (
+        <View style={mStyles.desktopTabRow}>
+          <TouchableOpacity onPress={() => switchTab("for_you")} style={mStyles.tabBtn}>
+            <Text style={[mStyles.desktopTabText, videoTab === "for_you" && mStyles.desktopTabTextActive]}>For You</Text>
+          </TouchableOpacity>
+          <View style={mStyles.tabDivider} />
+          <TouchableOpacity onPress={() => switchTab("following")} style={mStyles.tabBtn}>
+            <Text style={[mStyles.desktopTabText, videoTab === "following" && mStyles.desktopTabTextActive]}>Following</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {videos.length === 0 ? (
         <View style={mStyles.emptyState}>
@@ -2087,8 +2110,8 @@ export default function VideoPlayerScreen() {
                 isActive={isActive}
                 isNearActive={isNearActive}
                 isLowData={isLowData}
-                screenH={SCREEN_H}
-                screenW={SCREEN_W}
+                screenH={EFF_H}
+                screenW={EFF_W}
                 isFollowing={followingSet.has(item.author_id)}
                 isSelf={user?.id === item.author_id}
                 onLike={handleLike}
@@ -2107,10 +2130,10 @@ export default function VideoPlayerScreen() {
           showsVerticalScrollIndicator={false}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
-          getItemLayout={(_, index) => ({ length: SCREEN_H, offset: SCREEN_H * index, index })}
+          getItemLayout={(_, index) => ({ length: EFF_H, offset: EFF_H * index, index })}
           decelerationRate="fast"
           snapToAlignment="start"
-          snapToInterval={SCREEN_H}
+          snapToInterval={EFF_H}
           windowSize={5}
           initialNumToRender={3}
           maxToRenderPerBatch={3}
@@ -2220,6 +2243,16 @@ const mStyles = StyleSheet.create({
   },
   emptyTitle: { color: "rgba(255,255,255,0.6)", fontSize: 18, fontFamily: "Inter_700Bold" },
   emptySubtitle: { color: "rgba(255,255,255,0.3)", fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
+  desktopTabRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    backgroundColor: "#111",
+    borderBottomWidth: 0,
+  },
+  desktopTabText: { color: "rgba(255,255,255,0.5)", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  desktopTabTextActive: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
   downloadToast: {
     position: "absolute",
     bottom: 80,
