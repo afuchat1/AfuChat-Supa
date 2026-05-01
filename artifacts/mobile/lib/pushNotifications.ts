@@ -247,11 +247,11 @@ function routeNotificationResponse(response: any) {
       else router.push("/shop/my-orders" as any);
       break;
     case "payment":
-      router.push("/me" as any);
+      router.push("/(tabs)/me" as any);
       break;
     case "channel":
     case "live":
-      if (data.channelId) router.push(`/channel/${data.channelId}` as any);
+      router.push("/channel/intro" as any);
       break;
     case "follow":
       if (data.userId) router.push(`/contact/${data.userId}` as any);

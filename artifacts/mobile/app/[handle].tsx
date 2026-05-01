@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import NotFoundScreen from "@/app/+not-found";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -77,23 +78,23 @@ export default function HandleScreen() {
     if (!dataReady) return;
     if (authLoading) return;
     if (!navigationState?.key) return;
+    // Profile not found — stay on this screen and show the 404 UI.
+    if (profileNotFound || !cleanHandle || !isValidHandle) return;
 
     hasNavigated.current = true;
-
-    if (!cleanHandle || !isValidHandle) {
-      safeNavigate("/");
-      return;
-    }
 
     if (session) {
       if (profileId) {
         safeNavigate("/contact/[id]", { id: profileId });
-      } else {
-        safeNavigate("/(tabs)/discover");
       }
+      // profileId null but profileNotFound not set yet — wait
     } else {
-      AsyncStorage.setItem("referrer_handle", cleanHandle).catch(() => {});
-      safeNavigate("/(auth)/register");
+      if (profileId) {
+        // Valid profile + not logged in → invite flow: save handle, go to register
+        AsyncStorage.setItem("referrer_handle", cleanHandle).catch(() => {});
+        safeNavigate("/(auth)/register");
+      }
+      // profileNotFound handled above
     }
   }, [dataReady, authLoading, navigationState?.key, cleanHandle, isValidHandle, profileId, profileNotFound, session]);
 
@@ -103,13 +104,19 @@ export default function HandleScreen() {
     const timeout = setTimeout(() => {
       if (hasNavigated.current) return;
       if (!dataReady) return;
+      if (profileNotFound) return; // stay on 404 — don't force-navigate away
       hasNavigated.current = true;
       if (typeof window !== "undefined") {
         window.location.href = session ? "/" : "/register";
       }
     }, 8000);
     return () => clearTimeout(timeout);
-  }, [dataReady, session]);
+  }, [dataReady, session, profileNotFound]);
+
+  // Show designed 404 when the handle doesn't match any user
+  if (dataReady && (profileNotFound || !isValidHandle)) {
+    return <NotFoundScreen />;
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: accent, paddingTop: insets.top }]}>
