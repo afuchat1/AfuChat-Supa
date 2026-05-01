@@ -36,16 +36,39 @@ const SUGGESTIONS = [
   "Generate hashtags",
 ];
 
-const WELCOME: Message = {
+const WELCOME_AUTH: Message = {
   role: "ai",
   text: "Hi! I'm AfuAI, your personal assistant. Ask me anything or try a suggestion below.",
 };
 
+const WELCOME_GUEST: Message = {
+  role: "ai",
+  text: "Hi! I'm AfuAI 👋 I can tell you all about AfuChat and help you get started. Sign in to unlock the full AI experience!",
+};
+
+const SYSTEM_AUTH =
+  "You are AfuAI, a helpful assistant inside AfuChat — a social super-app. Keep responses short (under 120 words). Be friendly and concise.";
+
+const SYSTEM_GUEST =
+  `You are AfuAI, the friendly guide for AfuChat — Uganda's social super-app. You are speaking with a visitor who is not yet signed in. ` +
+  `Only help with: what AfuChat is, its features (feed, stories, wallet, marketplace, communities, mini-apps, AfuAI), how to sign up or log in, and public information about the app. ` +
+  `For anything else politely say: "I can help with that once you sign in! For now, let me help you get started with AfuChat." ` +
+  `Keep replies under 80 words. Be warm and encouraging.`;
+
+const GUEST_SUGGESTIONS = [
+  "What is AfuChat?",
+  "How do I sign up?",
+  "What features are free?",
+];
+
 export function SidebarAIWidget({ theme }: { theme: ThemePack }) {
   const { session } = useAuth();
+  const isGuest = !session;
   const [expanded, setExpanded] = useState(false);
   const [suggestionsOpen, setSuggestionsOpen] = useState(true);
-  const [messages, setMessages] = useState<Message[]>([WELCOME]);
+  const [messages, setMessages] = useState<Message[]>([
+    isGuest ? WELCOME_GUEST : WELCOME_AUTH,
+  ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
@@ -80,7 +103,7 @@ export function SidebarAIWidget({ theme }: { theme: ThemePack }) {
       try {
         const reply = await askAi(
           trimmed,
-          "You are AfuAI, a helpful assistant inside AfuChat — a social super-app. Keep responses short (under 120 words). Be friendly and concise.",
+          isGuest ? SYSTEM_GUEST : SYSTEM_AUTH,
           { fast: true, maxTokens: 200 }
         );
         setMessages((prev) => [...prev, { role: "ai", text: reply }]);
@@ -93,15 +116,13 @@ export function SidebarAIWidget({ theme }: { theme: ThemePack }) {
         setLoading(false);
       }
     },
-    [loading]
+    [loading, isGuest]
   );
 
   const openFull = () => {
     setExpanded(false);
     router.push("/ai" as any);
   };
-
-  if (!session) return null;
 
   return (
     <View style={styles.root}>
@@ -201,7 +222,7 @@ export function SidebarAIWidget({ theme }: { theme: ThemePack }) {
                 />
               </Pressable>
               <View style={styles.chips}>
-                {SUGGESTIONS.map((s) => (
+                {(isGuest ? GUEST_SUGGESTIONS : SUGGESTIONS).map((s) => (
                   <Pressable
                     key={s}
                     onPress={() => send(s)}
