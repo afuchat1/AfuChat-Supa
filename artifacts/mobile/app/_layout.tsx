@@ -38,7 +38,13 @@ import ProductTour from "@/components/ui/ProductTour";
 import { DesktopShell } from "@/components/desktop/DesktopShell";
 import { DevViewToolbar } from "@/components/dev/DevViewToolbar";
 
-try { setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`); } catch (_) {}
+try {
+  const apiBase =
+    Platform.OS === "web" && typeof window !== "undefined"
+      ? window.location.origin
+      : `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+  setBaseUrl(apiBase);
+} catch (_) {}
 
 SplashScreen.preventAutoHideAsync();
 

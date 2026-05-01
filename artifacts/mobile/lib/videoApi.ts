@@ -10,19 +10,22 @@ import { Platform } from "react-native";
 import { supabase, supabaseUrl } from "./supabase";
 
 // The API server base URL. _layout.tsx sets the api-client base URL via
-// `setBaseUrl(https://${EXPO_PUBLIC_DOMAIN})`, but this module fetches
-// directly so it can be used outside the generated react-query client.
+// `setBaseUrl(...)`, but this module fetches directly so it can be used
+// outside the generated react-query client.
 //
-// On the web the same origin is used because both Metro (dev) and the
-// production serve.js proxy `/api/*` to the Express API server.
+// On web we always use window.location.origin — both Metro (dev) and the
+// production serve.js proxy `/api/*` to the Express API server from the
+// same origin. EXPO_PUBLIC_DOMAIN is checked last for native only, because
+// it gets baked in as the dev domain at bundle time and would point
+// production web deployments at the wrong server.
 const API_BASE: string = (() => {
   const explicit = (process.env.EXPO_PUBLIC_API_URL || "").trim();
   if (explicit) return explicit.replace(/\/+$/, "");
-  const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
-  if (domain) return `https://${domain}`.replace(/\/+$/, "");
   if (Platform.OS === "web" && typeof window !== "undefined") {
     return window.location.origin.replace(/\/+$/, "");
   }
+  const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
+  if (domain) return `https://${domain}`.replace(/\/+$/, "");
   return "";
 })();
 

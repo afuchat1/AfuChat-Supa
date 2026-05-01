@@ -18,17 +18,19 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./supabase";
 
 // Resolve the API server base URL — used for sign requests and storage
-// usage stats. On the web we default to the same origin, which is then
-// proxied to the API server by `metro.config.js` (dev) and `serve.js`
-// (prod).
+// usage stats. On the web we always use window.location.origin so the
+// request goes to the same origin, which is then proxied to the API server
+// by `metro.config.js` (dev) and `serve.js` (prod). Using EXPO_PUBLIC_DOMAIN
+// on web is wrong because it gets baked in as the dev domain at build time,
+// causing production uploads to hit the wrong server.
 const API_BASE: string = (() => {
   const explicit = (process.env.EXPO_PUBLIC_API_URL || "").trim();
   if (explicit) return explicit.replace(/\/+$/, "");
-  const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
-  if (domain) return `https://${domain}`.replace(/\/+$/, "");
   if (Platform.OS === "web" && typeof window !== "undefined") {
     return window.location.origin.replace(/\/+$/, "");
   }
+  const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
+  if (domain) return `https://${domain}`.replace(/\/+$/, "");
   return "";
 })();
 
