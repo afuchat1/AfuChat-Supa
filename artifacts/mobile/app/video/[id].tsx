@@ -43,6 +43,7 @@ import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { SIDEBAR_WIDTH } from "@/components/desktop/DesktopSidebar";
 import { TOPBAR_HEIGHT } from "@/components/desktop/DesktopTopBar";
 import { useTheme } from "@/hooks/useTheme";
+import { encodeId, decodeId, isUuid } from "@/lib/shortId";
 
 const USE_NATIVE = Platform.OS !== "web";
 
@@ -1766,7 +1767,8 @@ const cmStyles = StyleSheet.create({
 export default function VideoPlayerScreen() {
   const { accent } = useAppAccent();
   const { colors } = useTheme();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: rawId } = useLocalSearchParams<{ id: string }>();
+  const id = rawId && !isUuid(rawId) ? decodeId(rawId) : rawId;
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
@@ -2126,9 +2128,10 @@ export default function VideoPlayerScreen() {
   }
 
   function getVideoUrl(item: VideoPost): string {
+    const shortId = encodeId(item.id);
     return Platform.OS === "web" && typeof window !== "undefined"
-      ? `${window.location.origin}/video/${item.id}`
-      : `https://afuchat.com/video/${item.id}`;
+      ? `${window.location.origin}/video/${shortId}`
+      : `https://afuchat.com/video/${shortId}`;
   }
 
   async function handleShare(item: VideoPost) {
