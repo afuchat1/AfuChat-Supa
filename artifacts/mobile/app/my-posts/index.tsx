@@ -22,6 +22,7 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { useAutoTranslate } from "@/context/LanguageContext";
+import { encodeId } from "@/lib/shortId";
 
 type PostItem = {
   id: string;
@@ -50,7 +51,7 @@ function MyPostCard({ item, profile, onDelete }: { item: PostItem; profile: any;
   return (
     <TouchableOpacity
       style={[styles.card, { backgroundColor: colors.surface }]}
-      onPress={() => router.push({ pathname: "/post/[id]", params: { id: item.id } })}
+      onPress={() => router.push({ pathname: "/p/[id]", params: { id: encodeId(item.id) } })}
       activeOpacity={0.85}
     >
       <View style={styles.cardHeader}>

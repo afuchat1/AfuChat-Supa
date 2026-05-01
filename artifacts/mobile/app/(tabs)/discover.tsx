@@ -41,6 +41,7 @@ import { translateText, LANG_LABELS } from "@/lib/translate";
 import { useTour } from "@/context/TourContext";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { DesktopFeedLayout, FEED_COLUMN_MAX_WIDTH } from "@/components/desktop/DesktopFeedLayout";
+import { encodeId } from "@/lib/shortId";
 
 type PostItem = {
   id: string;
@@ -138,7 +139,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
       router.push({ pathname: "/video/[id]", params: { id: item.id } });
       return;
     }
-    router.push({ pathname: "/post/[id]", params: { id: item.id } });
+    router.push({ pathname: "/p/[id]", params: { id: encodeId(item.id) } });
   }
 
   async function capturePostImage() {

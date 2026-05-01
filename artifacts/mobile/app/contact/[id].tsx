@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -25,6 +26,7 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { ProfileSkeleton, PostSkeleton } from "@/components/ui/Skeleton";
 import { PrestigeBadge } from "@/components/ui/PrestigeBadge";
 import { RichText } from "@/components/ui/RichText";
+import { encodeId } from "@/lib/shortId";
 
 type Profile = {
   id: string;
@@ -90,6 +92,13 @@ export default function ContactProfileScreen() {
   const [showBadgeInfo, setShowBadgeInfo] = useState(false);
   const [hasShop, setHasShop] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
+
+  useEffect(() => {
+    if (!profile?.handle) return;
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      window.history.replaceState(null, "", `/@${profile.handle}`);
+    }
+  }, [profile?.handle]);
 
   useEffect(() => {
     if (!id) return;
@@ -488,7 +497,7 @@ export default function ContactProfileScreen() {
                   onPress={() => {
                     if (isArticle) router.push({ pathname: "/article/[id]", params: { id: p.id } });
                     else if (isVideo) router.push({ pathname: "/video/[id]", params: { id: p.id } });
-                    else router.push({ pathname: "/post/[id]", params: { id: p.id } });
+                    else router.push({ pathname: "/p/[id]", params: { id: encodeId(p.id) } });
                   }}
                   activeOpacity={0.65}
                 >

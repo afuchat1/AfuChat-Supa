@@ -24,6 +24,7 @@ import { RichText } from "@/components/ui/RichText";
 import Colors from "@/constants/colors";
 import { useAutoTranslate } from "@/context/LanguageContext";
 import { LANG_LABELS } from "@/lib/translate";
+import { encodeId } from "@/lib/shortId";
 
 type SavedPost = {
   id: string;
@@ -61,7 +62,7 @@ function SavedPostCard({ item, onUnsave, index }: { item: SavedPost; onUnsave: (
     <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
       <TouchableOpacity
         style={[styles.card, { backgroundColor: colors.surface }]}
-        onPress={() => router.push({ pathname: "/post/[id]", params: { id: item.id } })}
+        onPress={() => router.push({ pathname: "/p/[id]", params: { id: encodeId(item.id) } })}
         activeOpacity={0.85}
       >
         <View style={styles.cardHeader}>

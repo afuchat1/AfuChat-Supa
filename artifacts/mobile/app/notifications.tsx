@@ -25,6 +25,7 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { NotificationSkeleton } from "@/components/ui/Skeleton";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { cacheNotifications, getCachedNotifications, isOnline } from "@/lib/offlineStore";
+import { encodeId } from "@/lib/shortId";
 
 const BRAND = "#00BCD4";
 const GOLD = "#D4A853";
@@ -67,10 +68,10 @@ type TypeConfig = {
 
 const TYPE_CONFIG: Record<string, TypeConfig> = {
   // Social
-  new_like:           { icon: "heart",          label: "liked your post",           color: "#FF3B30", category: "social",  getRoute: (n) => n.post_id ? `/post/${n.post_id}` : null },
+  new_like:           { icon: "heart",          label: "liked your post",           color: "#FF3B30", category: "social",  getRoute: (n) => n.post_id ? `/p/${encodeId(n.post_id)}` : null },
   new_follower:       { icon: "person-add",      label: "started following you",     color: BRAND,     category: "social",  getRoute: (n) => n.actor ? `/contact/${n.actor.id}` : null },
-  new_reply:          { icon: "chatbubble",      label: "replied to your post",      color: "#007AFF", category: "social",  getRoute: (n) => n.post_id ? `/post/${n.post_id}` : null },
-  new_mention:        { icon: "at",              label: "mentioned you",             color: "#FF9500", category: "social",  getRoute: (n) => n.post_id ? `/post/${n.post_id}` : null },
+  new_reply:          { icon: "chatbubble",      label: "replied to your post",      color: "#007AFF", category: "social",  getRoute: (n) => n.post_id ? `/p/${encodeId(n.post_id)}` : null },
+  new_mention:        { icon: "at",              label: "mentioned you",             color: "#FF9500", category: "social",  getRoute: (n) => n.post_id ? `/p/${encodeId(n.post_id)}` : null },
   gift:               { icon: "gift",            label: "sent you a gift",           color: "#AF52DE", category: "social",  getRoute: () => null },
   profile_view:       { icon: "eye",             label: "viewed your profile",       color: "#8E8E93", category: "social",  getRoute: (n) => n.actor ? `/contact/${n.actor.id}` : null },
   channel_post:       { icon: "megaphone",       label: "posted in a channel",       color: "#5856D6", category: "social",  getRoute: (n) => n.reference_id ? `/chat/${n.reference_id}` : null },
@@ -251,7 +252,7 @@ export default function NotificationsScreen() {
     if (route) {
       router.push(route as any);
     } else if (item.post_id) {
-      router.push({ pathname: "/post/[id]", params: { id: item.post_id } });
+      router.push({ pathname: "/p/[id]", params: { id: encodeId(item.post_id) } });
     } else if (item.actor?.id) {
       router.push({ pathname: "/contact/[id]", params: { id: item.actor.id } });
     }

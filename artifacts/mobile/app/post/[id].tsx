@@ -20,7 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { sharePost } from "@/lib/share";
-import { isUuid, isEncodedId, decodeId } from "@/lib/shortId";
+import { isUuid, isEncodedId, decodeId, encodeId } from "@/lib/shortId";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { RichText } from "@/components/ui/RichText";
@@ -271,11 +271,18 @@ function buildReplyTree(flatReplies: Reply[]): Reply[] {
 
 export default function PostDetailScreen() {
   const { id: rawId } = useLocalSearchParams<{ id: string }>();
+
   const id = useMemo(() => {
     if (!rawId) return rawId;
     if (isUuid(rawId)) return rawId;
     if (isEncodedId(rawId)) return decodeId(rawId);
     return rawId;
+  }, [rawId]);
+
+  useEffect(() => {
+    if (!rawId) return;
+    const shortCode = isUuid(rawId) ? encodeId(rawId) : rawId;
+    router.replace({ pathname: "/p/[id]", params: { id: shortCode } });
   }, [rawId]);
   const { user, profile: myProfile } = useAuth();
   const { colors, isDark } = useTheme();

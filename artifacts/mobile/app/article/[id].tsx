@@ -29,6 +29,7 @@ import { notifyPostLike, notifyPostReply } from "@/lib/notifyUser";
 import { setPageMeta, resetPageMeta } from "@/lib/webMeta";
 import { useAutoTranslate } from "@/context/LanguageContext";
 import { LANG_LABELS } from "@/lib/translate";
+import { encodeId } from "@/lib/shortId";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const COVER_H = SCREEN_W * 0.56;
@@ -287,7 +288,7 @@ export default function ArticleDetailScreen() {
       title,
       description,
       image: article.article_cover_url ?? undefined,
-      url: `https://afuchat.com/post/${article.id}`,
+      url: `https://afuchat.com/p/${encodeId(article.id)}`,
       type: "article",
       publishedAt: article.created_at,
       author: article.author.display_name,
