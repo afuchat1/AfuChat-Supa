@@ -1069,24 +1069,26 @@ export default function DiscoverScreen() {
               Following
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.tabPill}
-            onPress={() => router.push("/shorts" as any)}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <Ionicons
-                name="play-circle-outline"
-                size={15}
-                color={colors.textMuted}
-              />
-              <Text style={[
-                styles.tabPillText,
-                { color: colors.textMuted, fontFamily: "Inter_500Medium" },
-              ]}>
-                Shorts
-              </Text>
-            </View>
-          </TouchableOpacity>
+          {!isDesktop && (
+            <TouchableOpacity
+              style={styles.tabPill}
+              onPress={() => router.push("/shorts" as any)}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Ionicons
+                  name="play-circle-outline"
+                  size={15}
+                  color={colors.textMuted}
+                />
+                <Text style={[
+                  styles.tabPillText,
+                  { color: colors.textMuted, fontFamily: "Inter_500Medium" },
+                ]}>
+                  Shorts
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
         </View>
 
         {!user && (
