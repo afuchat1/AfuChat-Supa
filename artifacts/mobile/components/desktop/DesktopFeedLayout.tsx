@@ -78,6 +78,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     flexDirection: "column",
+    ...(Platform.OS === "web" ? { overflow: "hidden" as any } : {}),
   },
   right: {
     flexShrink: 0,

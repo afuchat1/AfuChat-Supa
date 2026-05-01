@@ -1158,6 +1158,7 @@ export default function DiscoverScreen() {
               onToggleBookmark={toggleBookmark}
               onToggleFollow={toggleFollow}
               onImagePress={imgViewer.openViewer}
+              colWidth={isDesktop ? FEED_COLUMN_MAX_WIDTH : undefined}
             />
           )}
           contentContainerStyle={{ gap: 8, paddingVertical: 8, paddingBottom: insets.bottom + 52 + 80 + 50 }}
