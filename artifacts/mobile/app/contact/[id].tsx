@@ -4,6 +4,7 @@ import {
   Dimensions,
   FlatList,
   Image,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -102,6 +103,8 @@ export default function ContactProfileScreen() {
   const [hasShop, setHasShop] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("photos");
+  const [lightboxPost, setLightboxPost] = useState<UserPost | null>(null);
+  const [lightboxImgIdx, setLightboxImgIdx] = useState(0);
 
   useEffect(() => {
     if (!profile?.handle) return;
@@ -477,7 +480,7 @@ export default function ContactProfileScreen() {
             return (
               <TouchableOpacity
                 style={{ width: THUMB, height: THUMB }}
-                onPress={() => router.push({ pathname: "/p/[id]", params: { id: encodeId(item.id) } })}
+                onPress={() => { setLightboxPost(item); setLightboxImgIdx(0); }}
                 activeOpacity={0.82}
               >
                 <Image source={{ uri: imgs[0] }} style={{ width: THUMB, height: THUMB }} resizeMode="cover" />
@@ -553,6 +556,88 @@ export default function ContactProfileScreen() {
       )}
 
       <AvatarViewer visible={avatarOpen} uri={profile?.avatar_url} name={profile?.display_name || undefined} onClose={() => setAvatarOpen(false)} />
+
+      {/* ── Image lightbox ── */}
+      <Modal
+        visible={!!lightboxPost}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setLightboxPost(null)}
+      >
+        {(() => {
+          if (!lightboxPost) return null;
+          const lbImgs = lightboxPost.post_images?.length > 0
+            ? lightboxPost.post_images.map((i: any) => i.image_url)
+            : lightboxPost.image_url ? [lightboxPost.image_url] : [];
+          const hasText = !!lightboxPost.content?.trim();
+          return (
+            <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.96)" }}>
+              {/* Top bar */}
+              <View style={[st.lbTopBar, { paddingTop: insets.top + 8 }]}>
+                {lbImgs.length > 1 ? (
+                  <Text style={st.lbCounter}>{lightboxImgIdx + 1} / {lbImgs.length}</Text>
+                ) : <View />}
+                <TouchableOpacity onPress={() => setLightboxPost(null)} style={st.lbCloseBtn} hitSlop={10}>
+                  <Ionicons name="close" size={22} color="#fff" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Image(s) */}
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                style={{ flex: 1 }}
+                onMomentumScrollEnd={(e) =>
+                  setLightboxImgIdx(Math.round(e.nativeEvent.contentOffset.x / SCREEN_W))
+                }
+                scrollEnabled={lbImgs.length > 1}
+              >
+                {lbImgs.map((uri: string, i: number) => (
+                  <View key={i} style={{ width: SCREEN_W, flex: 1, justifyContent: "center" }}>
+                    <Image
+                      source={{ uri }}
+                      style={{ width: SCREEN_W, height: SCREEN_W * 1.25 }}
+                      resizeMode="contain"
+                    />
+                  </View>
+                ))}
+              </ScrollView>
+
+              {/* Dot indicators */}
+              {lbImgs.length > 1 && (
+                <View style={st.lbDots}>
+                  {lbImgs.map((_: string, i: number) => (
+                    <View
+                      key={i}
+                      style={[st.lbDot, { backgroundColor: i === lightboxImgIdx ? "#fff" : "rgba(255,255,255,0.3)" }]}
+                    />
+                  ))}
+                </View>
+              )}
+
+              {/* Caption + actions */}
+              <View style={[st.lbFooter, { paddingBottom: insets.bottom + 16 }]}>
+                {hasText && (
+                  <Text style={st.lbCaption} numberOfLines={3}>{lightboxPost.content}</Text>
+                )}
+                <TouchableOpacity
+                  style={st.lbViewBtn}
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    setLightboxPost(null);
+                    router.push({ pathname: "/p/[id]", params: { id: encodeId(lightboxPost.id) } });
+                  }}
+                >
+                  <Ionicons name="expand-outline" size={14} color="rgba(255,255,255,0.6)" />
+                  <Text style={st.lbViewBtnText}>View full post</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          );
+        })()}
+      </Modal>
     </View>
   );
 }
@@ -727,4 +812,14 @@ const st = StyleSheet.create({
   emptyWrap: { alignItems: "center", paddingVertical: 52, paddingHorizontal: 32, gap: 10 },
   emptyTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
   emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
+
+  lbTopBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 8 },
+  lbCounter: { color: "rgba(255,255,255,0.75)", fontSize: 13, fontWeight: "500" },
+  lbCloseBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" },
+  lbDots: { flexDirection: "row", justifyContent: "center", gap: 5, paddingVertical: 10 },
+  lbDot: { width: 6, height: 6, borderRadius: 3 },
+  lbFooter: { paddingHorizontal: 20, paddingTop: 10, gap: 10 },
+  lbCaption: { color: "rgba(255,255,255,0.85)", fontSize: 14, lineHeight: 20 },
+  lbViewBtn: { flexDirection: "row", alignItems: "center", gap: 6 },
+  lbViewBtnText: { color: "rgba(255,255,255,0.45)", fontSize: 13 },
 });

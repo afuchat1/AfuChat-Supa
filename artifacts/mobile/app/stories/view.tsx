@@ -21,6 +21,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { shareStory } from "@/lib/share";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
 
 const STORY_DURATION = 5000;
 
@@ -58,14 +59,15 @@ export default function ViewStoryScreen() {
   const progressAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 
+  const { isDesktop } = useIsDesktop();
   const isOwner = user?.id === userId;
   const [commentText, setCommentText] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
 
   useEffect(() => {
-    if (Platform.OS === "web") router.replace("/");
-  }, []);
-  if (Platform.OS === "web") return null;
+    if (isDesktop) router.replace("/");
+  }, [isDesktop]);
+  if (isDesktop) return null;
 
   const sendComment = useCallback(async () => {
     const s = stories[index];

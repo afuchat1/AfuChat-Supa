@@ -30,6 +30,7 @@ import { showAlert } from "@/lib/alert";
 import { uploadToStorage } from "@/lib/mediaUpload";
 import { isOnline } from "@/lib/offlineStore";
 import { getDailyUsage, recordDailyUsage } from "@/lib/featureUsage";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
 
 const CAPTION_MAX = 200;
 
@@ -57,11 +58,12 @@ export default function CreateStoryScreen() {
   const [showPrivacy, setShowPrivacy] = useState(false);
 
   const shareScale = useRef(new Animated.Value(1)).current;
+  const { isDesktop } = useIsDesktop();
 
   useEffect(() => {
-    if (Platform.OS === "web") router.replace("/");
-  }, []);
-  if (Platform.OS === "web") return null;
+    if (isDesktop) router.replace("/");
+  }, [isDesktop]);
+  if (isDesktop) return null;
 
   const previewRadius = 24;
   const previewMargin = 8;

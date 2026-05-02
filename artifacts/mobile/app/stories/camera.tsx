@@ -406,17 +406,10 @@ function NativeCameraScreen() {
 export default function StoryCameraScreen() {
   const { isDesktop } = useIsDesktop();
   useEffect(() => {
-    if (Platform.OS === "web") router.replace("/");
-  }, []);
-  if (Platform.OS === "web") return null;
-  if (isDesktop) {
-    return (
-      <DesktopCameraFallback
-        title="Capture stories on your phone"
-        description="Stories use your phone's camera and microphone. Scan this code to open the camera on AfuChat mobile."
-      />
-    );
-  }
+    if (isDesktop) router.replace("/");
+  }, [isDesktop]);
+  if (isDesktop) return null;
+  if (Platform.OS === "web") return <WebCameraScreen />;
   return <NativeCameraScreen />;
 }
 
