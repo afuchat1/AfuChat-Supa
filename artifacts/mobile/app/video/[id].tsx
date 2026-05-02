@@ -2033,12 +2033,77 @@ export default function VideoPlayerScreen() {
       });
 
       scored.sort((a, b) => b.score - a.score);
-      const newVideos = scored.map((s) => s.video);
+      let newVideos = scored.map((s) => s.video);
       cursorRef.current = data[data.length - 1].created_at;
       setHasMore(data.length === VIDEO_PAGE_SIZE);
       if (isLoadMore) {
         setVideos((prev) => [...prev, ...newVideos]);
       } else {
+        // Ensure the tapped video is always the first item in the feed
+        if (id) {
+          const existingIdx = newVideos.findIndex((v) => v.id === id);
+          if (existingIdx > 0) {
+            // Already fetched — just move it to the front
+            const [target] = newVideos.splice(existingIdx, 1);
+            newVideos = [target, ...newVideos];
+          } else if (existingIdx === -1) {
+            // Not in the current page (old/low-ranked video) — fetch it specifically
+            const { data: tRow } = await supabase
+              .from("posts")
+              .select(`
+                id, author_id, content, video_url, image_url, created_at, audio_name,
+                profiles!posts_author_id_fkey(display_name, handle, avatar_url)
+              `)
+              .eq("id", id)
+              .eq("is_blocked", false)
+              .not("video_url", "is", null)
+              .maybeSingle();
+
+            if (tRow) {
+              const tId = tRow.id as string;
+              const [
+                { data: tLikesData },
+                { data: tRepliesData },
+                { data: tViewsData },
+                { data: tMyLike },
+                { data: tMyBookmark },
+              ] = await Promise.all([
+                supabase.from("post_acknowledgments").select("post_id").eq("post_id", tId),
+                supabase.from("post_replies").select("post_id").eq("post_id", tId),
+                supabase.from("post_views").select("post_id").eq("post_id", tId),
+                user
+                  ? supabase.from("post_acknowledgments").select("post_id").eq("post_id", tId).eq("user_id", user.id).maybeSingle()
+                  : Promise.resolve({ data: null }),
+                user
+                  ? supabase.from("post_bookmarks").select("post_id").eq("post_id", tId).eq("user_id", user.id).maybeSingle()
+                  : Promise.resolve({ data: null }),
+              ]);
+
+              const targetVideo: VideoPost = {
+                id: tRow.id,
+                author_id: tRow.author_id,
+                content: tRow.content || "",
+                video_url: tRow.video_url,
+                image_url: tRow.image_url || null,
+                created_at: tRow.created_at,
+                view_count: (tViewsData || []).length,
+                audio_name: tRow.audio_name || null,
+                profile: {
+                  display_name: (tRow.profiles as any)?.display_name || "User",
+                  handle: (tRow.profiles as any)?.handle || "user",
+                  avatar_url: (tRow.profiles as any)?.avatar_url || null,
+                },
+                liked: !!(tMyLike as any),
+                bookmarked: !!(tMyBookmark as any),
+                likeCount: (tLikesData || []).length,
+                replyCount: (tRepliesData || []).length,
+              };
+
+              newVideos = [targetVideo, ...newVideos];
+            }
+          }
+          // existingIdx === 0 means it is already first — nothing to do
+        }
         setVideos(newVideos);
       }
     } else {
@@ -2055,21 +2120,13 @@ export default function VideoPlayerScreen() {
   useEffect(() => { fetchVideos(videoTab); }, [fetchVideos, videoTab]);
 
   useEffect(() => {
-    if (!loading && videos.length > 0 && id && !initialScrollDone.current) {
+    // The target video is always placed at index 0 by fetchVideos, so no
+    // scrolling is needed.  We just mark the initial load as done so that
+    // tab switches (which clear `initialScrollDone`) don't re-trigger.
+    if (!loading && videos.length > 0 && !initialScrollDone.current) {
       initialScrollDone.current = true;
-      const idx = videos.findIndex((v) => v.id === id);
-      if (idx > 0) {
-        // Scroll to the requested video without slicing the list — this keeps
-        // all videos reachable so the user can swipe up and down freely.
-        // Previously we sliced at idx which discarded every video ranked above
-        // the entry point, making them permanently inaccessible.
-        setTimeout(() => {
-          listRef.current?.scrollToIndex({ index: idx, animated: false });
-          setActiveIndex(idx);
-        }, 50);
-      }
     }
-  }, [loading, videos, id]);
+  }, [loading, videos]);
 
   useEffect(() => {
     const channel = supabase
