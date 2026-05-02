@@ -36,6 +36,10 @@ import {
   getStoryUploadState,
   subscribeStoryUpload,
 } from "@/lib/storyUploadStore";
+import {
+  getViewedUserIds,
+  subscribeStoryViewed,
+} from "@/lib/storyViewedStore";
 
 type StoryUser = {
   userId: string;
@@ -271,6 +275,8 @@ const uploadBannerStyles = StyleSheet.create({
 
 function StoriesBar({ userId, colors, isDesktop }: { userId: string; colors: any; isDesktop: boolean }) {
   const [storyUsers, setStoryUsers] = useState<StoryUser[]>([]);
+  // Used to force re-render when storyViewedStore fires
+  const [_viewedTick, setViewedTick] = useState(0);
 
   const loadStories = useCallback(async () => {
     const now = new Date().toISOString();
@@ -306,11 +312,16 @@ function StoriesBar({ userId, colors, isDesktop }: { userId: string; colors: any
       .in("story_id", storyIds);
 
     const viewedSet = new Set((viewsData || []).map((v: any) => v.story_id));
+    const sessionViewed = getViewedUserIds();
 
     const userMap = new Map<string, StoryUser>();
     for (const s of filtered as any[]) {
       const existing = userMap.get(s.user_id);
-      const isSeen = viewedSet.has(s.id);
+      // Own stories are always "seen" — you created them
+      // Also mark as seen if the session store says this userId was visited
+      const isOwnStory = s.user_id === userId;
+      const sessionSeen = sessionViewed.has(s.user_id);
+      const isSeen = isOwnStory || sessionSeen || viewedSet.has(s.id);
       if (existing) {
         existing.storyCount += 1;
         if (isSeen) existing.seenCount += 1;
@@ -338,6 +349,21 @@ function StoriesBar({ userId, colors, isDesktop }: { userId: string; colors: any
 
     setStoryUsers(users);
   }, [userId]);
+
+  // Refresh ring immediately when the view screen marks stories as viewed
+  useEffect(() => {
+    return subscribeStoryViewed(() => {
+      setViewedTick((t) => t + 1);
+      setStoryUsers((prev) =>
+        prev.map((u) => {
+          if (getViewedUserIds().has(u.userId)) {
+            return { ...u, seenCount: u.storyCount, hasUnseen: false };
+          }
+          return u;
+        })
+      );
+    });
+  }, []);
 
   useFocusEffect(useCallback(() => { loadStories(); }, [loadStories]));
 

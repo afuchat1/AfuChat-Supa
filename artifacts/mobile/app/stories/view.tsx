@@ -5,6 +5,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -22,6 +23,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { shareStory } from "@/lib/share";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
+import { markStoriesViewed } from "@/lib/storyViewedStore";
 
 const STORY_DURATION = 5000;
 
@@ -63,6 +65,8 @@ export default function ViewStoryScreen() {
   const isOwner = user?.id === userId;
   const [commentText, setCommentText] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
+  const [showShareSheet, setShowShareSheet] = useState(false);
+  const [chatList, setChatList] = useState<{ id: string; name: string; avatar_url: string | null }[]>([]);
 
   useEffect(() => {
     if (isDesktop) router.replace("/");
@@ -167,8 +171,58 @@ export default function ViewStoryScreen() {
           });
         }
       });
+      // Notify StoriesBar to refresh the ring immediately
+      markStoriesViewed(s.user_id);
+    }
+    // Own stories: mark viewed so ring shows as read
+    if (s && user && s.user_id === user.id) {
+      markStoriesViewed(s.user_id);
     }
   }, [index, stories]);
+
+  const openShareSheet = useCallback(async () => {
+    if (!story) return;
+    setPaused(true);
+    setShowShareSheet(true);
+    // Load recent chats for "send to" list
+    const { data } = await supabase
+      .from("chats")
+      .select("id, is_group, is_channel, name, chat_members!inner(user_id, profiles!chat_members_user_id_fkey(display_name, avatar_url))")
+      .eq("is_channel", false)
+      .order("updated_at", { ascending: false })
+      .limit(20);
+    if (data) {
+      const items = (data as any[]).map((c) => {
+        if (c.is_group) {
+          return { id: c.id, name: c.name || "Group", avatar_url: null };
+        }
+        const other = (c.chat_members || []).find((m: any) => m.user_id !== user?.id);
+        return {
+          id: c.id,
+          name: other?.profiles?.display_name || c.name || "Chat",
+          avatar_url: other?.profiles?.avatar_url || null,
+        };
+      });
+      setChatList(items);
+    }
+  }, [story, user]);
+
+  const closeShareSheet = useCallback(() => {
+    setShowShareSheet(false);
+    setPaused(false);
+  }, []);
+
+  const sendStoryToChat = useCallback(async (chatId: string) => {
+    if (!story || !user) return;
+    closeShareSheet();
+    await supabase.from("messages").insert({
+      chat_id: chatId,
+      sender_id: user.id,
+      encrypted_content: story.caption ? `📖 Story: "${story.caption}"` : "📖 Shared a story",
+      attachment_url: story.media_url,
+      attachment_type: "story_reply",
+    });
+  }, [story, user, closeShareSheet]);
 
   const openViewers = useCallback(async () => {
     if (!story || !isOwner) return;
@@ -269,11 +323,11 @@ export default function ViewStoryScreen() {
           </View>
           <Text style={styles.storyTime}>{timeLabel}</Text>
         </View>
-        <TouchableOpacity onPress={() => { setPaused(true); shareStory({ userName: story.profile.display_name, userId: story.user_id }).finally(() => setPaused(false)); }}>
-          <Ionicons name="share-outline" size={24} color="#fff" />
+        <TouchableOpacity style={styles.topActionBtn} onPress={openShareSheet}>
+          <Ionicons name="share-social-outline" size={22} color="#fff" />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="close" size={28} color="#fff" />
+        <TouchableOpacity style={styles.topActionBtn} onPress={() => router.back()}>
+          <Ionicons name="close" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
 
@@ -314,7 +368,7 @@ export default function ViewStoryScreen() {
         </TouchableOpacity>
       ) : null}
 
-      {!showViewers && (
+      {!showViewers && !showShareSheet && (
         <KeyboardAvoidingView
           behavior="padding"
           keyboardVerticalOffset={0}
@@ -322,7 +376,7 @@ export default function ViewStoryScreen() {
         >
           <TextInput
             style={styles.commentInput}
-            placeholder="Send a comment..."
+            placeholder={isOwner ? "Your story…" : "Send a comment…"}
             placeholderTextColor="rgba(255,255,255,0.4)"
             value={commentText}
             onChangeText={setCommentText}
@@ -331,15 +385,80 @@ export default function ViewStoryScreen() {
             returnKeyType="send"
             onSubmitEditing={sendComment}
             maxLength={500}
+            editable={!isOwner}
           />
-          <TouchableOpacity
-            onPress={sendComment}
-            disabled={!commentText.trim() || sendingComment}
-            style={[styles.commentSendBtn, (!commentText.trim() || sendingComment) && { opacity: 0.4 }]}
-          >
-            <Ionicons name="send" size={18} color="#fff" />
+          {!isOwner && (
+            <TouchableOpacity
+              onPress={sendComment}
+              disabled={!commentText.trim() || sendingComment}
+              style={[styles.commentSendBtn, (!commentText.trim() || sendingComment) && { opacity: 0.4 }]}
+            >
+              <Ionicons name="send" size={18} color="#fff" />
+            </TouchableOpacity>
+          )}
+          {/* Share button always visible at bottom right */}
+          <TouchableOpacity style={styles.shareBtn} onPress={openShareSheet} activeOpacity={0.8}>
+            <Ionicons name="share-social" size={20} color="#fff" />
           </TouchableOpacity>
         </KeyboardAvoidingView>
+      )}
+
+      {showShareSheet && (
+        <>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeShareSheet} />
+          <View style={[styles.sharePanel, { paddingBottom: insets.bottom + 8 }]}>
+            <View style={styles.viewersPanelHandle} />
+            <View style={styles.viewersHeader}>
+              <Text style={styles.viewersTitle}>Share Story</Text>
+              <View style={{ flex: 1 }} />
+              <TouchableOpacity onPress={closeShareSheet}>
+                <Ionicons name="close-circle" size={26} color="rgba(255,255,255,0.5)" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Native share link row */}
+            <TouchableOpacity
+              style={styles.shareOptionRow}
+              activeOpacity={0.75}
+              onPress={() => {
+                closeShareSheet();
+                shareStory({ userName: story.profile.display_name, userId: story.user_id });
+              }}
+            >
+              <View style={[styles.shareOptionIcon, { backgroundColor: "#0088FF22" }]}>
+                <Ionicons name="link-outline" size={20} color="#0088FF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.shareOptionLabel}>Share Link</Text>
+                <Text style={styles.shareOptionSub}>Copy or send via any app</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.3)" />
+            </TouchableOpacity>
+
+            {/* Send to contact rows */}
+            {chatList.length > 0 && (
+              <>
+                <Text style={styles.shareContactsLabel}>Send to a contact</Text>
+                <ScrollView style={{ maxHeight: 240 }} showsVerticalScrollIndicator={false}>
+                  {chatList.map((c) => (
+                    <TouchableOpacity
+                      key={c.id}
+                      style={styles.shareContactRow}
+                      activeOpacity={0.75}
+                      onPress={() => sendStoryToChat(c.id)}
+                    >
+                      <Avatar uri={c.avatar_url} name={c.name} size={40} />
+                      <Text style={styles.shareContactName} numberOfLines={1}>{c.name}</Text>
+                      <View style={styles.shareContactSend}>
+                        <Ionicons name="send" size={14} color="#fff" />
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </>
+            )}
+          </View>
+        </>
       )}
 
       {showViewers && (
@@ -406,7 +525,8 @@ const styles = StyleSheet.create({
   progressSegment: { flex: 1, height: 3, borderRadius: 1.5, overflow: "hidden" },
   progressBg: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(255,255,255,0.3)", borderRadius: 1.5 },
   progressFill: { position: "absolute", top: 0, left: 0, bottom: 0, backgroundColor: "#fff", borderRadius: 1.5 },
-  topBar: { position: "absolute", left: 16, right: 16, flexDirection: "row", alignItems: "center", gap: 10 },
+  topBar: { position: "absolute", left: 16, right: 16, flexDirection: "row", alignItems: "center", gap: 8 },
+  topActionBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(0,0,0,0.35)", alignItems: "center", justifyContent: "center" },
   storyName: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
   storyTime: { color: "rgba(255,255,255,0.7)", fontSize: 11, fontFamily: "Inter_400Regular" },
   tapZones: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, flexDirection: "row" },
@@ -490,6 +610,72 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
+    backgroundColor: "#00BCD4",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  shareBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sharePanel: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(24,24,28,0.98)",
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+  },
+  shareOptionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(255,255,255,0.07)",
+  },
+  shareOptionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  shareOptionLabel: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  shareOptionSub: { color: "rgba(255,255,255,0.45)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  shareContactsLabel: {
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.5,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 6,
+    textTransform: "uppercase",
+  },
+  shareContactRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  shareContactName: {
+    flex: 1,
+    color: "#fff",
+    fontSize: 15,
+    fontFamily: "Inter_500Medium",
+  },
+  shareContactSend: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: "#00BCD4",
     alignItems: "center",
     justifyContent: "center",
