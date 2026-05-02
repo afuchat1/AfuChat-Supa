@@ -1929,13 +1929,16 @@ export default function VideoPlayerScreen() {
   // Pause toggle exposed by the *currently active* card so keyboard handlers
   // (Space) can drive it without prop-drilling through the card tree.
   const activeToggleRef = useRef<(() => void) | null>(null);
+  // Refs so event-handler closures always read the latest values without
+  // needing to be re-registered every time activeIndex or videos changes.
+  const activeIndexRef = useRef(activeIndex);
+  useEffect(() => { activeIndexRef.current = activeIndex; }, [activeIndex]);
+  const videosLenRef = useRef(videos.length);
+  useEffect(() => { videosLenRef.current = videos.length; }, [videos.length]);
 
   // Web-only keyboard controls:
-  //   • Space  → toggle pause/play on the active video (and prevent the
-  //              browser's default page-scroll behaviour).
-  //   • ArrowDown / ArrowUp / PageDown / PageUp / Home / End fall through to
-  //     the FlatList so the existing snap-scroll behaviour acts as the
-  //     "scroll" the user expects.
+  //   Space      → toggle pause/play
+  //   ArrowDown/Up, PageDown/Up → jump to next/prev video
   useEffect(() => {
     if (Platform.OS !== "web") return;
     function onKey(e: KeyboardEvent) {
@@ -1953,32 +1956,54 @@ export default function VideoPlayerScreen() {
         }
         return;
       }
+      const cur = activeIndexRef.current;
+      const len = videosLenRef.current;
       if (e.key === "ArrowDown" || e.key === "PageDown") {
         e.preventDefault();
-        const next = Math.min(activeIndex + 1, Math.max(videos.length - 1, 0));
-        if (next !== activeIndex) {
-          listRef.current?.scrollToIndex({ index: next, animated: true });
-        }
+        const next = Math.min(cur + 1, Math.max(len - 1, 0));
+        if (next !== cur) listRef.current?.scrollToIndex({ index: next, animated: true });
       } else if (e.key === "ArrowUp" || e.key === "PageUp") {
         e.preventDefault();
-        const prev = Math.max(activeIndex - 1, 0);
-        if (prev !== activeIndex) {
-          listRef.current?.scrollToIndex({ index: prev, animated: true });
-        }
+        const prev = Math.max(cur - 1, 0);
+        if (prev !== cur) listRef.current?.scrollToIndex({ index: prev, animated: true });
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [activeIndex, videos.length]);
+  }, []); // stable — uses refs internally
+
+  // Web-only mouse-wheel scroll: map wheel delta → scrollToIndex so the
+  // FlatList snap always fires correctly regardless of RN-Web's scroll container.
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    let wheelCooldown = false;
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      if (wheelCooldown) return;
+      wheelCooldown = true;
+      setTimeout(() => { wheelCooldown = false; }, 450);
+      const cur = activeIndexRef.current;
+      const len = videosLenRef.current;
+      if (e.deltaY > 0) {
+        const next = Math.min(cur + 1, Math.max(len - 1, 0));
+        if (next !== cur) listRef.current?.scrollToIndex({ index: next, animated: true });
+      } else if (e.deltaY < 0) {
+        const prev = Math.max(cur - 1, 0);
+        if (prev !== cur) listRef.current?.scrollToIndex({ index: prev, animated: true });
+      }
+    }
+    window.addEventListener("wheel", onWheel, { passive: false });
+    return () => window.removeEventListener("wheel", onWheel);
+  }, []);
 
   // Prevent page body scroll and pinch-zoom when the video feed is mounted.
+  // NOTE: do NOT set touchAction:"none" on the body — it would cascade to all
+  // descendants and block touch-swipe scroll on the FlatList.
   useEffect(() => {
     if (Platform.OS !== "web") return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     document.documentElement.style.overflow = "hidden";
-    document.body.style.touchAction = "none";
-    // Update viewport to disable pinch zoom
     const existingMeta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
     const prevContent = existingMeta?.content || "";
     if (existingMeta) {
@@ -1987,7 +2012,6 @@ export default function VideoPlayerScreen() {
     return () => {
       document.body.style.overflow = prev;
       document.documentElement.style.overflow = "";
-      document.body.style.touchAction = "";
       if (existingMeta && prevContent) existingMeta.content = prevContent;
     };
   }, []);
