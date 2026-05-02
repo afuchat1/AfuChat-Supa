@@ -156,7 +156,7 @@ export function RightRail() {
       .from("posts")
       .select("content")
       .eq("visibility", "public")
-      .eq("is_blocked", false)
+      .not("is_blocked", "is", true)
       .gte("created_at", sevenDaysAgo)
       .order("created_at", { ascending: false })
       .limit(200);

@@ -611,7 +611,7 @@ export default function ShortsFeed({
       `)
       .eq("post_type", "video")
       .eq("visibility", "public")
-      .eq("is_blocked", false)
+      .not("is_blocked", "is", true)
       .not("video_url", "is", null)
       .order("created_at", { ascending: false })
       .limit(30);

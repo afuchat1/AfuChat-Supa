@@ -22,7 +22,7 @@ export default function ShortsRedirect() {
           .select("id")
           .eq("post_type", "video")
           .eq("visibility", "public")
-          .eq("is_blocked", false)
+          .not("is_blocked", "is", true)
           .not("video_url", "is", null)
           .order("created_at", { ascending: false })
           .limit(1);

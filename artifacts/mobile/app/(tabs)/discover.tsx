@@ -568,7 +568,7 @@ export default function DiscoverScreen() {
           profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified),
           post_images(image_url, display_order)
         `)
-        .eq("is_blocked", false)
+        .not("is_blocked", "is", true)
         .in("author_id", followingIds)
         .in("visibility", ["public", "followers"])
         .order("created_at", { ascending: false });
@@ -636,7 +636,7 @@ export default function DiscoverScreen() {
         profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified, country, interests),
         post_images(image_url, display_order)
       `)
-      .eq("is_blocked", false)
+      .not("is_blocked", "is", true)
       .eq("visibility", "public")
       .order("created_at", { ascending: false });
     const { data } = await (fyOlderThan

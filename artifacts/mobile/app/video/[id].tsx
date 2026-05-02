@@ -2038,7 +2038,7 @@ export default function VideoPlayerScreen() {
         profiles!posts_author_id_fkey(display_name, handle, avatar_url)
       `)
       .in("post_type", ["video", "duet"])
-      .eq("is_blocked", false)
+      .not("is_blocked", "is", true)
       .not("video_url", "is", null)
       .order("created_at", { ascending: false })
       .limit(VIDEO_PAGE_SIZE);
@@ -2187,7 +2187,7 @@ export default function VideoPlayerScreen() {
                 profiles!posts_author_id_fkey(display_name, handle, avatar_url)
               `)
               .eq("id", id)
-              .eq("is_blocked", false)
+              .not("is_blocked", "is", true)
               .not("video_url", "is", null)
               .maybeSingle();
 
@@ -2269,7 +2269,7 @@ export default function VideoPlayerScreen() {
       .eq("author_id", authorId)
       .eq("post_type", "video")
       .eq("visibility", "public")
-      .eq("is_blocked", false)
+      .not("is_blocked", "is", true)
       .not("video_url", "is", null)
       .order("created_at", { ascending: false })
       .limit(20);
