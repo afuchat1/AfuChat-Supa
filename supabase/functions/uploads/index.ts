@@ -371,6 +371,89 @@ async function handleList(req: Request, userId: string, cfg: R2Config): Promise<
   }
 }
 
+/** POST /backfill — fetch a file from a legacy Supabase Storage URL and copy it to R2.
+ *
+ * Body: { key: string, legacyUrl?: string }
+ *   key        — target R2 key (must be owned by the calling user)
+ *   legacyUrl  — optional Supabase Storage URL to fetch from if the key is missing in R2
+ *
+ * Returns:
+ *   { ok, key, publicUrl, existed, migrated }
+ *   existed  = true  → file was already in R2; nothing was copied
+ *   migrated = true  → file was fetched from legacyUrl and written to R2
+ */
+async function handleBackfill(req: Request, userId: string, cfg: R2Config): Promise<Response> {
+  let body: any;
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  const key = String((body || {}).key || "").trim();
+  const legacyUrl = String((body || {}).legacyUrl || "").trim();
+
+  if (!key || key.length > MAX_PATH || key.includes("..") || key.startsWith("/"))
+    return json({ error: "Invalid or missing key" }, 400);
+
+  const slash = key.indexOf("/");
+  const bucket = slash > 0 ? key.slice(0, slash) : "";
+  if (!bucket || !ALLOWED_BUCKETS.has(bucket)) return json({ error: "Invalid bucket in key" }, 400);
+
+  const afterBucket = key.slice(slash + 1);
+  const ownerId = afterBucket.split("/")[0];
+  if (ownerId !== userId) return json({ error: "Cannot backfill other users' files" }, 403);
+
+  // Check if file already exists in R2
+  try {
+    const headResp = await s3Fetch(cfg, "HEAD", key, null);
+    if (headResp.ok || headResp.status === 200) {
+      return json({ ok: true, key, publicUrl: publicUrl(cfg, key), existed: true, migrated: false });
+    }
+  } catch { /* not in R2 — fall through */ }
+
+  // File not in R2 — need legacyUrl to back-fill
+  if (!legacyUrl) {
+    return json({ ok: false, key, existed: false, migrated: false, error: "File not in R2 and no legacyUrl provided" }, 404);
+  }
+
+  // Only allow fetching from trusted Supabase Storage domains
+  let parsedLegacy: URL;
+  try { parsedLegacy = new URL(legacyUrl); } catch { return json({ error: "Invalid legacyUrl" }, 400); }
+  if (!/\.supabase\.(co|in)$/.test(parsedLegacy.hostname)) {
+    return json({ error: "legacyUrl must be a Supabase Storage URL (*.supabase.co)" }, 400);
+  }
+
+  // Fetch from Supabase Storage
+  let fileResp: Response;
+  try {
+    fileResp = await fetch(legacyUrl, { signal: AbortSignal.timeout(30_000) });
+  } catch (e: any) {
+    return json({ ok: false, existed: false, migrated: false, error: `Failed to fetch legacy URL: ${e?.message}` }, 502);
+  }
+
+  if (!fileResp.ok) {
+    return json({
+      ok: false, existed: false, migrated: false,
+      error: `Legacy URL returned ${fileResp.status} — file no longer exists at Supabase Storage`,
+    }, 404);
+  }
+
+  const contentType = fileResp.headers.get("content-type") || "application/octet-stream";
+  const buf = await fileResp.arrayBuffer();
+  if (!buf.byteLength) return json({ error: "Empty file from legacy URL" }, 422);
+  if (buf.byteLength > MAX_UPLOAD) return json({ error: "File too large" }, 413);
+
+  // Write to R2
+  try {
+    const putResp = await s3Fetch(cfg, "PUT", key, buf, { "content-type": contentType });
+    if (!putResp.ok) {
+      const txt = await putResp.text().catch(() => "");
+      return json({ ok: false, existed: false, migrated: false, error: `R2 PUT failed (${putResp.status}): ${txt.slice(0, 200)}` }, 502);
+    }
+  } catch (e: any) {
+    return json({ ok: false, existed: false, migrated: false, error: `R2 write error: ${e?.message}` }, 500);
+  }
+
+  return json({ ok: true, key, publicUrl: publicUrl(cfg, key), existed: false, migrated: true, size: buf.byteLength });
+}
+
 async function handleDelete(req: Request, userId: string, cfg: R2Config): Promise<Response> {
   let body: any;
   try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
@@ -425,6 +508,7 @@ Deno.serve(async (req) => {
 
   if (action === "sign" && req.method === "POST") return handleSign(req, userId, cfg);
   if (action === "upload" && req.method === "POST") return handleUpload(req, userId, cfg);
+  if (action === "backfill" && req.method === "POST") return handleBackfill(req, userId, cfg);
   if (action === "usage" && req.method === "GET") return handleUsage(userId, cfg);
   if (action === "list" && req.method === "GET") return handleList(req, userId, cfg);
   if (action === "object" && req.method === "DELETE") return handleDelete(req, userId, cfg);

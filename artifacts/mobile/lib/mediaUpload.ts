@@ -261,7 +261,7 @@ export async function uploadToStorage(
       if (proxied.error || !proxied.publicUrl) {
         return { publicUrl: null, error: proxied.error || "Upload failed" };
       }
-      return { publicUrl: `${proxied.publicUrl}?t=${Date.now()}`, error: null };
+      return { publicUrl: proxied.publicUrl, error: null };
     }
 
     const sign = await getSignedUpload(realBucket, filePath, mime);
@@ -284,7 +284,7 @@ export async function uploadToStorage(
       return { publicUrl: null, error: `Upload rejected (${putResp.status}): ${text.slice(0, 120) || "no body"}` };
     }
 
-    return { publicUrl: `${sign.data.publicUrl}?t=${Date.now()}`, error: null };
+    return { publicUrl: sign.data.publicUrl, error: null };
   } catch (e: any) {
     return { publicUrl: null, error: e?.message || "Upload failed" };
   }
@@ -404,6 +404,59 @@ export async function listUserFiles(
       nextToken: json.next_token || null,
     };
   } catch { return null; }
+}
+
+/**
+ * Back-fill a missing R2 object from its old Supabase Storage URL.
+ *
+ * Call this when you detect that a CDN URL returns 404 but you still have the
+ * legacy `*.supabase.co/storage/v1/object/public/...` URL in hand.  The edge
+ * function will:
+ *   1. HEAD the R2 key — if the file already exists, return immediately.
+ *   2. Otherwise fetch from `legacyUrl` and PUT the bytes into R2.
+ *
+ * Returns the clean R2 CDN URL on success, or an error string on failure.
+ */
+export async function backfillLegacyUrl(
+  key: string,
+  legacyUrl: string,
+): Promise<{ publicUrl: string | null; migrated: boolean; existed: boolean; error: string | null }> {
+  try {
+    const token = await getAccessToken();
+    if (!token) return { publicUrl: null, migrated: false, existed: false, error: "Not authenticated" };
+
+    const r = await fetch(uploadsUrl("backfill"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(await edgeFnHeaders(token)),
+      },
+      body: JSON.stringify({ key, legacyUrl }),
+    });
+
+    const text = await r.text().catch(() => "");
+    if (!text || text.trimStart().startsWith("<")) {
+      return { publicUrl: null, migrated: false, existed: false, error: "Service unreachable" };
+    }
+
+    let parsed: any;
+    try { parsed = JSON.parse(text); } catch {
+      return { publicUrl: null, migrated: false, existed: false, error: `Parse error: ${text.slice(0, 100)}` };
+    }
+
+    if (!r.ok || !parsed?.ok) {
+      return { publicUrl: null, migrated: false, existed: false, error: parsed?.error || `Backfill failed (${r.status})` };
+    }
+
+    return {
+      publicUrl: parsed.publicUrl || null,
+      migrated: parsed.migrated === true,
+      existed: parsed.existed === true,
+      error: null,
+    };
+  } catch (e: any) {
+    return { publicUrl: null, migrated: false, existed: false, error: e?.message || "Backfill failed" };
+  }
 }
 
 export async function deleteUserFile(key: string): Promise<{ ok: boolean; error: string | null }> {

@@ -2056,16 +2056,18 @@ export default function VideoPlayerScreen() {
 
   useEffect(() => {
     if (!loading && videos.length > 0 && id && !initialScrollDone.current) {
+      initialScrollDone.current = true;
       const idx = videos.findIndex((v) => v.id === id);
       if (idx > 0) {
-        // Slice the list so the tapped video is always at index 0 — no
-        // "unplayed" videos appear above it.  Newer posts (idx 0..idx-1) are
-        // discarded; the user can load a fresh feed when they come back.
-        setVideos((prev) => prev.slice(idx));
-        setActiveIndex(0);
-        // No scrollToIndex needed — position 0 is the default.
+        // Scroll to the requested video without slicing the list — this keeps
+        // all videos reachable so the user can swipe up and down freely.
+        // Previously we sliced at idx which discarded every video ranked above
+        // the entry point, making them permanently inaccessible.
+        setTimeout(() => {
+          listRef.current?.scrollToIndex({ index: idx, animated: false });
+          setActiveIndex(idx);
+        }, 50);
       }
-      initialScrollDone.current = true;
     }
   }, [loading, videos, id]);
 
