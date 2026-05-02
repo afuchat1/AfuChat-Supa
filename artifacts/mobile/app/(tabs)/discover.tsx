@@ -34,7 +34,7 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { cacheMoments, getCachedMoments, cacheFeedTab, getCachedFeedTab, cacheFeedCursor, isOnline, onConnectivityChange } from "@/lib/offlineStore";
 import { notifyPostLike } from "@/lib/notifyUser";
-import { sharePost } from "@/lib/share";
+import { sharePost, shareVideo } from "@/lib/share";
 import { matchInterestsWeighted, recordInteraction, getLearnedInterestBoosts, computeFeedScore, diversifyFeed, type FeedSignals } from "@/lib/feedAlgorithm";
 import { useLanguage } from "@/context/LanguageContext";
 import { translateText, LANG_LABELS } from "@/lib/translate";
@@ -388,7 +388,9 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.action}
-              onPress={() => sharePost({ postId: item.id, authorName: item.profile.display_name, content: item.content })}
+              onPress={() => item.post_type === "video"
+                ? shareVideo({ postId: item.id, authorName: item.profile.display_name, caption: item.content })
+                : sharePost({ postId: item.id, authorName: item.profile.display_name, content: item.content })}
             >
               <Ionicons name="arrow-redo-outline" size={17} color={colors.textMuted} />
             </TouchableOpacity>
@@ -416,7 +418,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
             <View style={[styles.menuHandle, { backgroundColor: colors.border }]} />
             <TouchableOpacity
               style={styles.menuItem}
-              onPress={() => { setMenuVisible(false); sharePost({ postId: item.id, authorName: item.profile.display_name, content: item.content }); }}
+              onPress={() => { setMenuVisible(false); item.post_type === "video" ? shareVideo({ postId: item.id, authorName: item.profile.display_name, caption: item.content }) : sharePost({ postId: item.id, authorName: item.profile.display_name, content: item.content }); }}
             >
               <Ionicons name="share-outline" size={22} color={colors.accent} />
               <Text style={[styles.menuItemText, { color: colors.text }]}>Share Post</Text>

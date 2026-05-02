@@ -9,6 +9,10 @@ export function getPostUrl(postId: string): string {
   return `${APP_BASE_URL}/p/${encodeId(postId)}`;
 }
 
+export function getVideoUrl(postId: string): string {
+  return `${APP_BASE_URL}/video/${encodeId(postId)}`;
+}
+
 export function getProfileUrl(handle: string): string {
   return `${APP_BASE_URL}/@${handle}`;
 }
@@ -29,6 +33,30 @@ export async function sharePost(params: {
         ? { message: `${params.authorName} on AfuChat:\n"${preview}"\n\n${WATERMARK}`, url }
         : { message },
       { dialogTitle: "Share Post" }
+    );
+  } catch (e: any) {
+    if (e?.message !== "User did not share") showAlert("Share failed", "Could not open share menu. Please try again.");
+  }
+}
+
+export async function shareVideo(params: {
+  postId: string;
+  authorName: string;
+  caption?: string;
+}) {
+  const url = getVideoUrl(params.postId);
+  const preview = params.caption
+    ? (params.caption.length > 120 ? params.caption.slice(0, 117) + "..." : params.caption)
+    : "";
+  const body = preview ? `\n"${preview}"` : "";
+  const message = `${params.authorName} posted a video on AfuChat${body}\n\n${WATERMARK}\n${url}`;
+
+  try {
+    await Share.share(
+      Platform.OS === "ios"
+        ? { message: `${params.authorName} posted a video on AfuChat${body}\n\n${WATERMARK}`, url }
+        : { message },
+      { dialogTitle: "Share Video" }
     );
   } catch (e: any) {
     if (e?.message !== "User did not share") showAlert("Share failed", "Could not open share menu. Please try again.");

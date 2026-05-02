@@ -13,7 +13,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
-import { sharePost } from "@/lib/share";
+import { sharePost, shareVideo } from "@/lib/share";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
@@ -32,6 +32,7 @@ type PostItem = {
   created_at: string;
   view_count: number;
   visibility: string;
+  post_type: string;
   likeCount: number;
   replyCount: number;
 };
@@ -96,7 +97,7 @@ function MyPostCard({ item, profile, onDelete }: { item: PostItem; profile: any;
           <Ionicons name="eye-outline" size={16} color={colors.textMuted} />
           <Text style={[styles.statText, { color: colors.textMuted }]}>{item.view_count}</Text>
         </View>
-        <TouchableOpacity style={styles.stat} onPress={() => sharePost({ postId: item.id, authorName: profile?.display_name || "Me", content: item.content })}>
+        <TouchableOpacity style={styles.stat} onPress={() => item.post_type === "video" ? shareVideo({ postId: item.id, authorName: profile?.display_name || "Me", caption: item.content }) : sharePost({ postId: item.id, authorName: profile?.display_name || "Me", content: item.content })}>
           <Ionicons name="share-outline" size={16} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
@@ -116,7 +117,7 @@ export default function MyPostsScreen() {
     if (!user) { setLoading(false); return; }
     const { data } = await supabase
       .from("posts")
-      .select(`id, content, image_url, created_at, view_count, visibility, post_images(image_url, display_order)`)
+      .select(`id, content, image_url, post_type, created_at, view_count, visibility, post_images(image_url, display_order)`)
       .eq("author_id", user.id)
       .order("created_at", { ascending: false })
       .limit(50);
@@ -141,6 +142,7 @@ export default function MyPostsScreen() {
         created_at: p.created_at,
         view_count: p.view_count || 0,
         visibility: p.visibility || "public",
+        post_type: p.post_type || "post",
         likeCount: likeMap[p.id] || 0,
         replyCount: replyMap[p.id] || 0,
       })));

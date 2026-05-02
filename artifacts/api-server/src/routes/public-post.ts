@@ -262,12 +262,18 @@ async function handlePostPage(param: string, res: any) {
 
   const { data: post } = await supabase
     .from("posts")
-    .select("id, content, image_url, created_at, author_id, view_count")
+    .select("id, content, image_url, video_url, post_type, created_at, author_id, view_count")
     .eq("id", postId)
     .eq("is_blocked", false)
     .single();
 
   if (!post) return res.status(404).send(render404());
+
+  // Video posts get their own dedicated preview page
+  if ((post as any).post_type === "video" && (post as any).video_url) {
+    const shortId = encodeUuidToShort(post.id);
+    return res.redirect(301, `/video/${shortId}`);
+  }
 
   const [{ data: author }, { data: postImages }, { data: likes }, { data: replies }] = await Promise.all([
     supabase.from("profiles").select("display_name, handle, avatar_url, is_verified, is_organization_verified, is_private").eq("id", post.author_id).single(),
