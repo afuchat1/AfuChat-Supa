@@ -405,9 +405,10 @@ function NativeCameraScreen() {
 
 export default function StoryCameraScreen() {
   const { isDesktop } = useIsDesktop();
-  if (Platform.OS === "web") {
-    return <WebCameraScreen />;
-  }
+  useEffect(() => {
+    if (Platform.OS === "web") router.replace("/");
+  }, []);
+  if (Platform.OS === "web") return null;
   if (isDesktop) {
     return (
       <DesktopCameraFallback

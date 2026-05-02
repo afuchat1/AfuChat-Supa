@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -57,6 +57,11 @@ export default function CreateStoryScreen() {
   const [showPrivacy, setShowPrivacy] = useState(false);
 
   const shareScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (Platform.OS === "web") router.replace("/");
+  }, []);
+  if (Platform.OS === "web") return null;
 
   const previewRadius = 24;
   const previewMargin = 8;

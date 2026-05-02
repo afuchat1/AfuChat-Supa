@@ -4,6 +4,7 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -60,6 +61,11 @@ export default function ViewStoryScreen() {
   const isOwner = user?.id === userId;
   const [commentText, setCommentText] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS === "web") router.replace("/");
+  }, []);
+  if (Platform.OS === "web") return null;
 
   const sendComment = useCallback(async () => {
     const s = stories[index];

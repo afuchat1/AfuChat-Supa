@@ -937,42 +937,23 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
       </View>
 
       {user && panelMode && (
-        <>
-          <TouchableOpacity
-            style={[styles.fab, { backgroundColor: colors.accent, bottom: 24, right: 24 }]}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/contacts"); }}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="create-outline" size={24} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.cameraFab, { bottom: 24 + 54 + 12, right: 28 }]}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/stories/camera"); }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="camera" size={20} color={colors.accent} />
-          </TouchableOpacity>
-        </>
+        <TouchableOpacity
+          style={[styles.fab, { backgroundColor: colors.accent, bottom: 24, right: 24 }]}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/contacts"); }}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="create-outline" size={24} color="#fff" />
+        </TouchableOpacity>
       )}
 
       {user && !panelMode && (
-        <>
-          <TouchableOpacity
-            style={[styles.fab, { backgroundColor: colors.accent, bottom: insets.bottom + 52 + 16 }]}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/contacts"); }}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="create-outline" size={24} color="#fff" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.cameraFab, { bottom: insets.bottom + 52 + 16 + 54 + 12 }]}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/stories/camera"); }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="camera" size={20} color={colors.accent} />
-          </TouchableOpacity>
-        </>
+        <TouchableOpacity
+          style={[styles.fab, { backgroundColor: colors.accent, bottom: insets.bottom + 52 + 16 }]}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/contacts"); }}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="create-outline" size={24} color="#fff" />
+        </TouchableOpacity>
       )}
     </View>
   );
