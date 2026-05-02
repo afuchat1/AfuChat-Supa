@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -32,6 +32,10 @@ import { cacheConversations, getCachedConversations, isOnline } from "@/lib/offl
 import { addOnlineListener } from "@/lib/offlineSync";
 import { wasChatRecentlyVisited, clearChatVisited } from "@/lib/chatVisited";
 import { showAlert, confirmAlert } from "@/lib/alert";
+import {
+  getStoryUploadState,
+  subscribeStoryUpload,
+} from "@/lib/storyUploadStore";
 
 type StoryUser = {
   userId: string;
@@ -208,6 +212,62 @@ function ChatRow({
     </View>
   );
 }
+
+function useStoryUpload() {
+  return useSyncExternalStore(subscribeStoryUpload, getStoryUploadState, getStoryUploadState);
+}
+
+function StoryUploadBanner({ colors }: { colors: any }) {
+  const upload = useStoryUpload();
+  if (!upload) return null;
+
+  const isDone = upload.done;
+  const isFailed = upload.failed;
+  const pct = Math.round(upload.progress * 100);
+
+  return (
+    <View style={[uploadBannerStyles.wrap, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <View style={uploadBannerStyles.row}>
+        <View style={[uploadBannerStyles.iconCircle, { backgroundColor: isDone ? "#22C55E20" : isFailed ? "#EF444420" : colors.accent + "22" }]}>
+          <Ionicons
+            name={isDone ? "checkmark-circle" : isFailed ? "alert-circle" : "camera"}
+            size={16}
+            color={isDone ? "#22C55E" : isFailed ? "#EF4444" : colors.accent}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[uploadBannerStyles.label, { color: colors.text }]}>
+            {isDone ? "Story posted!" : isFailed ? "Story upload failed" : "Posting your story…"}
+          </Text>
+          {upload.caption ? (
+            <Text style={[uploadBannerStyles.caption, { color: colors.textMuted }]} numberOfLines={1}>
+              {upload.caption}
+            </Text>
+          ) : null}
+        </View>
+        {!isDone && !isFailed && (
+          <Text style={[uploadBannerStyles.pct, { color: colors.accent }]}>{pct}%</Text>
+        )}
+      </View>
+      {!isDone && !isFailed && (
+        <View style={[uploadBannerStyles.track, { backgroundColor: colors.border }]}>
+          <View style={[uploadBannerStyles.fill, { width: `${pct}%` as any, backgroundColor: colors.accent }]} />
+        </View>
+      )}
+    </View>
+  );
+}
+
+const uploadBannerStyles = StyleSheet.create({
+  wrap: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8, borderBottomWidth: StyleSheet.hairlineWidth },
+  row: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 },
+  iconCircle: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  label: { fontSize: 13, fontWeight: "600" },
+  caption: { fontSize: 11, marginTop: 1 },
+  pct: { fontSize: 12, fontWeight: "600", minWidth: 30, textAlign: "right" },
+  track: { height: 3, borderRadius: 2, overflow: "hidden" },
+  fill: { height: 3, borderRadius: 2 },
+});
 
 function StoriesBar({ userId, colors, isDesktop }: { userId: string; colors: any; isDesktop: boolean }) {
   const [storyUsers, setStoryUsers] = useState<StoryUser[]>([]);
@@ -933,7 +993,12 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                 />
               )}
               ItemSeparatorComponent={() => <Separator indent={74} />}
-              ListHeaderComponent={user && tabFilter === "all" && !search ? <StoriesBar userId={user.id} colors={colors} isDesktop={isDesktop} /> : null}
+              ListHeaderComponent={user && tabFilter === "all" && !search ? (
+                <>
+                  <StoryUploadBanner colors={colors} />
+                  <StoriesBar userId={user.id} colors={colors} isDesktop={isDesktop} />
+                </>
+              ) : null}
               refreshControl={
                 <RefreshControl
                   refreshing={refreshing}

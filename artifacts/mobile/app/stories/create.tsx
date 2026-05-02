@@ -5,6 +5,7 @@ import {
   Image,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -31,6 +32,12 @@ import { uploadToStorage } from "@/lib/mediaUpload";
 import { isOnline } from "@/lib/offlineStore";
 import { getDailyUsage, recordDailyUsage } from "@/lib/featureUsage";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
+import {
+  startStoryUpload,
+  updateStoryProgress,
+  finishStoryUpload,
+  failStoryUpload,
+} from "@/lib/storyUploadStore";
 
 const CAPTION_MAX = 200;
 
@@ -52,12 +59,15 @@ export default function CreateStoryScreen() {
     params.mediaType === "video" ? "video" : "image"
   );
   const [caption, setCaption] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [starting, setStarting] = useState(false);
   const [privacy, setPrivacy] = useState<Privacy>("everyone");
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showEmojis, setShowEmojis] = useState(false);
+  const [showColors, setShowColors] = useState(false);
+  const [tintColor, setTintColor] = useState<string | null>(null);
 
   const shareScale = useRef(new Animated.Value(1)).current;
+  const captionRef = useRef<TextInput>(null);
   const { isDesktop } = useIsDesktop();
 
   useEffect(() => {
@@ -87,17 +97,22 @@ export default function CreateStoryScreen() {
   }
 
   async function publish() {
+    if (starting || !mediaUri || !user) return;
+
     if (!isOnline()) {
       showAlert("No internet", "Publishing a story requires an internet connection.");
       return;
     }
+
+    setStarting(true);
     const tier = (subscription?.plan_tier as "free" | "silver" | "gold" | "platinum") || "free";
     const usage = await getDailyUsage("stories_create", tier);
     if (!usage.allowed) {
+      setStarting(false);
       const nextTier = tier === "free" ? "Silver" : tier === "silver" ? "Gold" : "Platinum";
       showAlert(
         "Daily story limit reached",
-        `You've shared all ${usage.limit} free stories for today. Come back tomorrow, or upgrade to ${nextTier} for more.`,
+        `You've shared all ${usage.limit} free stories for today. Upgrade to ${nextTier} for more.`,
         [
           { text: `Upgrade to ${nextTier}`, onPress: () => router.push("/premium") },
           { text: "OK" },
@@ -105,61 +120,74 @@ export default function CreateStoryScreen() {
       );
       return;
     }
-    if (!mediaUri || !user) return;
-    setLoading(true);
-    setUploadProgress(0.1);
 
-    try {
-      let ext: string;
-      let mime: string;
-      if (mediaUri.startsWith("data:")) {
-        const dataMime = mediaUri.match(/data:([^;]+)/)?.[1] || "";
-        ext = dataMime.includes("png") ? "png" : dataMime.includes("webp") ? "webp" : "jpg";
-        mime = dataMime || "image/jpeg";
-      } else {
-        ext = mediaUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
-        mime = mediaType === "video" ? `video/${ext === "mov" ? "quicktime" : "mp4"}` : `image/${ext === "jpg" ? "jpeg" : ext}`;
-      }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      setUploadProgress(0.3);
-      const fileName = `${user.id}/${Date.now()}.${ext}`;
-      const { publicUrl, error: uploadErr } = await uploadToStorage("stories", fileName, mediaUri, mime);
+    // Capture for background closure before navigation
+    const _mediaUri = mediaUri;
+    const _mediaType = mediaType;
+    const _caption = caption.trim();
+    const _privacy = privacy;
+    const _userId = user.id;
 
-      if (uploadErr || !publicUrl) {
-        showAlert("Upload failed", uploadErr || "Could not upload media.");
-        return;
-      }
-
-      setUploadProgress(0.7);
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-      const { error } = await supabase.from("stories").insert({
-        user_id: user.id,
-        media_url: publicUrl,
-        media_type: mediaType,
-        caption: caption.trim() || null,
-        expires_at: expiresAt,
-        privacy,
-      });
-
-      setUploadProgress(1);
-      if (error) {
-        showAlert("Error", "Could not post story.");
-      } else {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("story_created"); } catch (_) {}
-        await recordDailyUsage("stories_create");
-        if (router.canDismiss()) {
-          router.dismissAll();
-        } else {
-          router.back();
-        }
-      }
-    } catch (e: any) {
-      showAlert("Error", e?.message || "Something went wrong.");
-    } finally {
-      setLoading(false);
-      setUploadProgress(0);
+    // Navigate immediately — screen closes right away
+    if (router.canDismiss()) {
+      router.dismissAll();
+    } else {
+      router.replace("/(tabs)");
     }
+
+    // Start background upload — drives the progress bar in the chat UI
+    startStoryUpload(_caption);
+
+    (async () => {
+      try {
+        updateStoryProgress(0.15);
+
+        let ext: string;
+        let mime: string;
+        if (_mediaUri.startsWith("data:")) {
+          const dataMime = _mediaUri.match(/data:([^;]+)/)?.[1] || "";
+          ext = dataMime.includes("png") ? "png" : dataMime.includes("webp") ? "webp" : "jpg";
+          mime = dataMime || "image/jpeg";
+        } else {
+          ext = _mediaUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
+          mime = _mediaType === "video"
+            ? `video/${ext === "mov" ? "quicktime" : "mp4"}`
+            : `image/${ext === "jpg" ? "jpeg" : ext}`;
+        }
+
+        updateStoryProgress(0.3);
+        const fileName = `${_userId}/${Date.now()}.${ext}`;
+        const { publicUrl, error: uploadErr } = await uploadToStorage("stories", fileName, _mediaUri, mime);
+
+        if (uploadErr || !publicUrl) {
+          failStoryUpload();
+          return;
+        }
+
+        updateStoryProgress(0.75);
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        const { error } = await supabase.from("stories").insert({
+          user_id: _userId,
+          media_url: publicUrl,
+          media_type: _mediaType,
+          caption: _caption || null,
+          expires_at: expiresAt,
+          privacy: _privacy,
+        });
+
+        if (error) {
+          failStoryUpload();
+        } else {
+          try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("story_created"); } catch (_) {}
+          await recordDailyUsage("stories_create");
+          finishStoryUpload();
+        }
+      } catch {
+        failStoryUpload();
+      }
+    })();
   }
 
   function handleSharePressIn() {
@@ -175,13 +203,13 @@ export default function CreateStoryScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: "#000" }]}>
-      {loading && uploadProgress > 0 && (
+      {starting && (
         <View style={[styles.progressBar, { top: insets.top }]}>
           <LinearGradient
             colors={[accent, "#26C6DA"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
-            style={[styles.progressFill, { width: `${Math.round(uploadProgress * 100)}%` }]}
+            style={[styles.progressFill, { width: "40%" }]}
           />
         </View>
       )}
@@ -196,10 +224,10 @@ export default function CreateStoryScreen() {
         </TouchableOpacity>
 
         <View style={styles.topCenter}>
-          {loading && (
+          {starting && (
             <View style={styles.uploadingPill}>
               <ActivityIndicator size="small" color="#fff" />
-              <Text style={styles.uploadingText}>Sharing...</Text>
+              <Text style={styles.uploadingText}>Checking...</Text>
             </View>
           )}
         </View>
@@ -227,7 +255,7 @@ export default function CreateStoryScreen() {
                 <Video
                   source={{ uri: mediaUri }}
                   style={StyleSheet.absoluteFill}
-                  resizeMode={ResizeMode.COVER}
+                  resizeMode={ResizeMode.CONTAIN}
                   shouldPlay
                   isLooping
                   isMuted={false}
@@ -236,27 +264,74 @@ export default function CreateStoryScreen() {
                 <Image
                   source={{ uri: mediaUri }}
                   style={StyleSheet.absoluteFill}
-                  resizeMode="cover"
+                  resizeMode="contain"
                 />
               )}
 
+              {/* Tint colour overlay */}
+              {tintColor && (
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: tintColor, borderRadius: previewRadius }]} pointerEvents="none" />
+              )}
+
               <View style={styles.sideToolbar}>
-                <TouchableOpacity style={styles.sideBtn} onPress={pickMedia}>
+                {/* Retake → go back to camera */}
+                <TouchableOpacity style={styles.sideBtn} onPress={() => router.back()} activeOpacity={0.75}>
                   <Ionicons name="camera-reverse-outline" size={22} color="#fff" />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.sideBtn}>
+                {/* Text → focus caption */}
+                <TouchableOpacity style={styles.sideBtn} activeOpacity={0.75}
+                  onPress={() => { setShowEmojis(false); setShowColors(false); captionRef.current?.focus(); }}>
                   <Ionicons name="text-outline" size={22} color="#fff" />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.sideBtn}>
+                {/* Emoji picker toggle */}
+                <TouchableOpacity style={[styles.sideBtn, showEmojis && { backgroundColor: "rgba(255,255,255,0.35)" }]}
+                  activeOpacity={0.75}
+                  onPress={() => { setShowColors(false); setShowEmojis((v) => !v); }}>
                   <Ionicons name="happy-outline" size={22} color="#fff" />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.sideBtn}>
-                  <Ionicons name="brush-outline" size={22} color="#fff" />
+                {/* Colour tint toggle */}
+                <TouchableOpacity style={[styles.sideBtn, showColors && { backgroundColor: "rgba(255,255,255,0.35)" }]}
+                  activeOpacity={0.75}
+                  onPress={() => { setShowEmojis(false); setShowColors((v) => !v); }}>
+                  <Ionicons name="brush-outline" size={22} color={tintColor ? "#fff" : "#fff"} />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.sideBtn}>
+                {/* Music → coming soon */}
+                <TouchableOpacity style={styles.sideBtn} activeOpacity={0.75}
+                  onPress={() => showAlert("Music", "Adding music to stories is coming soon! 🎵")}>
                   <Ionicons name="musical-notes-outline" size={22} color="#fff" />
                 </TouchableOpacity>
               </View>
+
+              {/* Emoji quick-pick panel */}
+              {showEmojis && (
+                <View style={styles.emojiPanel}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.emojiScroll}>
+                    {["😊","😂","❤️","🔥","👍","😍","🎉","😎","🙏","💪","✨","🤩","💯","😭","👀","🫶","🥳","😅","🤣","🌟"].map((e) => (
+                      <TouchableOpacity key={e} style={styles.emojiItem}
+                        onPress={() => { setCaption((c) => (c + e).slice(0, CAPTION_MAX)); setShowEmojis(false); }}>
+                        <Text style={{ fontSize: 26 }}>{e}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Colour tint panel */}
+              {showColors && (
+                <View style={styles.colorPanel}>
+                  {[null, "#FF000055", "#FF660055", "#FFD70055", "#00CC4455", "#0088FF55", "#9900FF55", "#FF007755"].map((c, i) => (
+                    <TouchableOpacity
+                      key={i}
+                      style={[styles.colorDot,
+                        { backgroundColor: c ?? "transparent", borderWidth: c === null ? 1.5 : tintColor === c ? 3 : 0,
+                          borderColor: c === null ? "rgba(255,255,255,0.6)" : "#fff" }]}
+                      onPress={() => { setTintColor(tintColor === c ? null : c); setShowColors(false); }}
+                    >
+                      {c === null && <Ionicons name="close" size={14} color="rgba(255,255,255,0.7)" />}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
 
               <LinearGradient
                 colors={["transparent", "rgba(0,0,0,0.65)"]}
@@ -264,6 +339,7 @@ export default function CreateStoryScreen() {
               >
                 <View style={styles.captionRow}>
                   <TextInput
+                    ref={captionRef}
                     style={styles.captionInput}
                     placeholder="Add a caption..."
                     placeholderTextColor="rgba(255,255,255,0.6)"
@@ -332,10 +408,10 @@ export default function CreateStoryScreen() {
               onPress={publish}
               onPressIn={handleSharePressIn}
               onPressOut={handleSharePressOut}
-              disabled={!mediaUri || loading}
+              disabled={!mediaUri || starting}
               style={[
                 styles.shareBtn,
-                (!mediaUri || loading) && { opacity: 0.4 },
+                (!mediaUri || starting) && { opacity: 0.4 },
               ]}
             >
               <LinearGradient
@@ -344,7 +420,7 @@ export default function CreateStoryScreen() {
                 end={{ x: 1, y: 1 }}
                 style={styles.shareBtnGradient}
               >
-                {loading ? (
+                {starting ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <>
@@ -545,6 +621,43 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 11,
     fontFamily: "Inter_500Medium",
+  },
+  emojiPanel: {
+    position: "absolute",
+    bottom: 90,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    paddingVertical: 10,
+  },
+  emojiScroll: {
+    paddingHorizontal: 12,
+    gap: 4,
+  },
+  emojiItem: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  colorPanel: {
+    position: "absolute",
+    bottom: 90,
+    right: 8,
+    flexDirection: "column",
+    gap: 8,
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.45)",
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+  },
+  colorDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyPreview: {
     overflow: "hidden",
