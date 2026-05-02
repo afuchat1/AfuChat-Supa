@@ -1,5 +1,14 @@
 import { useState } from "react";
-import { Play, Heart, MessageCircle, Eye, MapPin, UserPlus, Check, MessageSquare, Gift, Shield, Star, Zap, LayoutGrid, FileText, Film } from "lucide-react";
+import { Play, Heart, MessageCircle, Eye, MapPin, UserPlus, Check, MessageSquare, Zap, LayoutGrid, FileText, Film } from "lucide-react";
+
+const BRAND = "#00BCD4";
+const GOLD = "#D4A853";
+const TEXT = "#0F0F0F";
+const TEXT_SEC = "#606060";
+const TEXT_MUTED = "#909090";
+const BG = "#FFFFFF";
+const BG_SEC = "#F2F2F2";
+const BORDER = "#E5E5E5";
 
 const AVATAR = "https://i.pravatar.cc/150?img=47";
 const PHOTOS = [
@@ -22,142 +31,178 @@ const VIDEOS = [
 
 type Tab = "posts" | "photos" | "videos";
 
+const TABS: { key: Tab; icon: React.ReactNode }[] = [
+  { key: "photos", icon: <LayoutGrid size={20} /> },
+  { key: "posts",  icon: <FileText size={20} /> },
+  { key: "videos", icon: <Film size={20} /> },
+];
+
 export function MinimalGrid() {
   const [tab, setTab] = useState<Tab>("photos");
   const [following, setFollowing] = useState(false);
 
   return (
-    <div className="min-h-screen bg-white font-['Inter']" style={{ fontFamily: "'Inter', sans-serif" }}>
-      {/* ── Sticky minimal header ─── */}
-      <div className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex justify-between items-center">
-        <button className="w-8 h-8 flex items-center justify-center">
-          <svg width="20" height="20" fill="none" stroke="#111" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+    <div style={{ minHeight: "100vh", backgroundColor: BG, fontFamily: "'Inter', system-ui, sans-serif", color: TEXT }}>
+
+      {/* ── Sticky nav bar ─── */}
+      <div style={{
+        position: "sticky", top: 0, zIndex: 30,
+        backgroundColor: "rgba(255,255,255,0.92)", backdropFilter: "blur(16px)",
+        borderBottom: `1px solid ${BORDER}`,
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        padding: "10px 16px",
+      }}>
+        <button style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer" }}>
+          <svg width="20" height="20" fill="none" stroke={TEXT} strokeWidth="2.2" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
         </button>
-        <span className="text-[13px] font-bold text-gray-900">amkaweesi</span>
-        <button className="w-8 h-8 flex items-center justify-center">
-          <svg width="18" height="18" fill="none" stroke="#555" strokeWidth="2" viewBox="0 0 24 24"><circle cx="8.5" cy="8.5" r="1.5" fill="#555"/><circle cx="15.5" cy="8.5" r="1.5" fill="#555"/><circle cx="12" cy="15.5" r="1.5" fill="#555"/></svg>
+        <span style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>amkaweesi</span>
+        <button style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer" }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TEXT_SEC} strokeWidth="2"><circle cx="5" cy="12" r="1.5" fill={TEXT_SEC}/><circle cx="12" cy="12" r="1.5" fill={TEXT_SEC}/><circle cx="19" cy="12" r="1.5" fill={TEXT_SEC}/></svg>
         </button>
       </div>
-      {/* ── Profile header ─── */}
-      <div className="px-5 pt-5 pb-4">
-        <div className="flex items-start gap-4 mb-4">
+
+      {/* ── Profile section ─── */}
+      <div style={{ padding: "20px 20px 16px" }}>
+
+        {/* Avatar + stats row */}
+        <div style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 14 }}>
           {/* Avatar */}
-          <div className="relative flex-shrink-0">
-            <div className="w-20 h-20 rounded-full overflow-hidden ring-2 ring-gray-900 ring-offset-2">
-              <img src={AVATAR} className="w-full h-full object-cover" />
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <div style={{ width: 80, height: 80, borderRadius: "50%", overflow: "hidden", outline: `2.5px solid ${BRAND}`, outlineOffset: 2 }}>
+              <img src={AVATAR} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             </div>
-            <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 bg-green-400 rounded-full border-2 border-white" />
+            <div style={{ position: "absolute", bottom: 2, right: 2, width: 14, height: 14, borderRadius: "50%", backgroundColor: BRAND, border: "2px solid white" }} />
           </div>
 
-          {/* Stats — inline horizontal */}
-          <div className="flex-1 pt-2">
-            <div className="flex justify-around">
-              {[{ n: "20", l: "Posts" }, { n: "85", l: "Followers" }, { n: "50", l: "Following" }].map((s) => (
-                <div key={s.l} className="text-center">
-                  <div className="text-[18px] font-black text-gray-900">{s.n}</div>
-                  <div className="text-[11px] text-gray-400">{s.l}</div>
-                </div>
-              ))}
-            </div>
+          {/* Stats */}
+          <div style={{ flex: 1, display: "flex", justifyContent: "space-around" }}>
+            {[{ n: "20", l: "Posts" }, { n: "85", l: "Followers" }, { n: "50", l: "Following" }].map((s) => (
+              <div key={s.l} style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 19, fontWeight: 900, color: TEXT }}>{s.n}</div>
+                <div style={{ fontSize: 11, color: TEXT_MUTED, marginTop: 1 }}>{s.l}</div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Name & bio */}
-        <div className="mb-3">
-          <div className="flex items-center gap-2 mb-0.5">
-            <span className="text-[15px] font-bold text-gray-900">AM Kaweesi</span>
-            <Shield size={13} className="text-blue-500" fill="#3b82f6" />
-            <span className="bg-amber-100 text-amber-700 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide">Legend</span>
-          </div>
-          <p className="text-gray-500 text-[12.5px] leading-relaxed">
-            🇺🇬 Ugandan tech enthusiast &amp; bookworm.<br />Exploring the world one mile at a time.
-          </p>
-          <div className="flex gap-3 mt-1.5">
-            <span className="flex items-center gap-1 text-gray-400 text-xs"><MapPin size={10} />Uganda</span>
-            <span className="text-blue-500 text-xs">amkaweesi.afuchat.com</span>
-          </div>
+        {/* Name + badges */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: TEXT }}>AM Kaweesi</span>
+          {/* Verified badge — brand color */}
+          <svg width="15" height="15" viewBox="0 0 24 24" fill={BRAND}><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          {/* Grade badge — gold */}
+          <span style={{ backgroundColor: GOLD + "22", color: GOLD, fontSize: 9, fontWeight: 800, padding: "2px 6px", borderRadius: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>Legend</span>
+        </div>
+
+        {/* Bio */}
+        <p style={{ color: TEXT_SEC, fontSize: 12.5, lineHeight: 1.6, margin: "0 0 8px" }}>
+          🇺🇬 Ugandan tech enthusiast &amp; bookworm.<br />Exploring the world one mile at a time.
+        </p>
+
+        {/* Meta */}
+        <div style={{ display: "flex", gap: 14, marginBottom: 14 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 3, color: TEXT_MUTED, fontSize: 12 }}>
+            <MapPin size={10} /> Uganda
+          </span>
+          <span style={{ color: BRAND, fontSize: 12 }}>amkaweesi.afuchat.com</span>
         </div>
 
         {/* CTA row */}
-        <div className="flex gap-2 mb-4">
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
           {following ? (
-            <button onClick={() => setFollowing(false)} className="flex-1 py-2 rounded-lg border border-gray-200 text-gray-600 text-[13px] font-semibold flex items-center justify-center gap-1.5">
+            <button
+              onClick={() => setFollowing(false)}
+              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 0", borderRadius: 80, border: `1.5px solid ${BRAND}`, background: "transparent", color: BRAND, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            >
               <Check size={13} /> Following
             </button>
           ) : (
-            <button onClick={() => setFollowing(true)} className="flex-1 py-2 rounded-lg bg-gray-900 text-white text-[13px] font-bold flex items-center justify-center gap-1.5 rounded-tl-[80px] rounded-tr-[80px] rounded-br-[80px] rounded-bl-[80px]">
+            <button
+              onClick={() => setFollowing(true)}
+              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 0", borderRadius: 80, border: "none", background: BRAND, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+            >
               <UserPlus size={13} /> Follow
             </button>
           )}
-          <button className="flex-1 py-2 rounded-lg border border-gray-200 text-gray-700 text-[13px] font-semibold flex items-center justify-center gap-1.5 rounded-tl-[80px] rounded-tr-[80px] rounded-br-[80px] rounded-bl-[80px]">
+          <button style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 0", borderRadius: 80, border: `1.5px solid ${BRAND}`, background: "transparent", color: BRAND, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             <MessageSquare size={13} /> Message
           </button>
         </div>
 
         {/* XP strip */}
-        <div className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-2.5 border border-gray-100">
-          <div className="flex items-center gap-2">
-            <Zap size={14} className="text-amber-500" fill="#f59e0b" />
-            <span className="text-[12px] font-semibold text-gray-700">Legend · 407 XP</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, backgroundColor: BG_SEC, borderRadius: 12, padding: "9px 14px", border: `1px solid ${BORDER}` }}>
+          <Zap size={13} color={GOLD} fill={GOLD} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: TEXT, whiteSpace: "nowrap" }}>Legend · 407 XP</span>
+          <div style={{ flex: 1, height: 5, backgroundColor: BORDER, borderRadius: 99, overflow: "hidden" }}>
+            <div style={{ width: "68%", height: "100%", backgroundColor: GOLD, borderRadius: 99 }} />
           </div>
-          <div className="flex-1 mx-3 bg-gray-200 rounded-full h-1.5 overflow-hidden">
-            <div className="bg-amber-400 h-full rounded-full" style={{ width: "68%" }} />
-          </div>
-          <span className="text-[10px] text-gray-400">68%</span>
+          <span style={{ fontSize: 10, color: TEXT_MUTED, minWidth: 28, textAlign: "right" }}>68%</span>
         </div>
       </div>
-      {/* ── Tab bar (icon-only, Instagram style) ─── */}
-      <div className="border-y border-gray-100">
-        <div className="flex">
-          {([
-            { key: "photos", icon: <LayoutGrid size={20} /> },
-            { key: "posts", icon: <FileText size={20} /> },
-            { key: "videos", icon: <Film size={20} /> },
-          ] as { key: Tab; icon: any }[]).map((t) => (
+
+      {/* ── Tab bar ─── */}
+      <div style={{ borderTop: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`, display: "flex" }}>
+        {TABS.map((t) => {
+          const active = tab === t.key;
+          return (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className="flex-1 py-3 flex items-center justify-center relative text-gray-300 bg-[#00c2cb] rounded-tr-[80px] rounded-bl-[80px] rounded-tl-[80px] rounded-br-[80px]"
+              style={{
+                flex: 1, padding: "12px 0",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                position: "relative", border: "none", cursor: "pointer",
+                backgroundColor: active ? BG : BRAND,
+                color: active ? BRAND : "rgba(255,255,255,0.9)",
+                borderTopLeftRadius: active ? 0 : 33,
+                borderBottomRightRadius: active ? 0 : 33,
+                transition: "all 0.15s ease",
+              }}
             >
               {t.icon}
-              {tab === t.key && <span className="absolute top-0 left-1/4 right-1/4 h-0.5 bg-gray-900 rounded-b-full" />}
+              {active && (
+                <span style={{ position: "absolute", top: 0, left: "25%", right: "25%", height: 2, backgroundColor: BRAND, borderRadius: "0 0 4px 4px" }} />
+              )}
             </button>
-          ))}
-        </div>
+          );
+        })}
       </div>
+
       {/* ── Content ─── */}
+
       {/* Photos — 3-col grid */}
       {tab === "photos" && (
-        <div className="grid grid-cols-3 gap-[1.5px] bg-gray-100">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1.5, backgroundColor: BG_SEC }}>
           {PHOTOS.map((img, i) => (
-            <div key={i} className="relative bg-gray-100" style={{ paddingBottom: "100%" }}>
-              <img src={img} className="absolute inset-0 w-full h-full object-cover rounded-tl-[20px] rounded-br-[20px] rounded-tr-[20px] rounded-bl-[20px] mb-[0px]" />
+            <div key={i} style={{ position: "relative", paddingBottom: "100%", backgroundColor: BG_SEC }}>
+              <img src={img} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
             </div>
           ))}
         </div>
       )}
+
       {/* Posts */}
       {tab === "posts" && (
-        <div className="divide-y divide-gray-50">
+        <div>
           {[
             { text: "Two People Speaking Two Different Languages. Persistence is everything.", likes: 24, replies: 8, time: "2h" },
             { text: "The most expensive thing you can do is nothing. Act while the window is open.", img: PHOTOS[0], likes: 47, replies: 12, time: "1d" },
             { text: "Finished Atomic Habits for the third time. Fresh insight every read.", likes: 31, replies: 5, time: "2d" },
             { text: "Uganda's tech scene is evolving faster than most realise. Watch this space. 🚀", likes: 89, replies: 22, time: "3d" },
           ].map((p, i) => (
-            <div key={i} className="px-5 py-4">
-              <div className="flex gap-3">
-                <img src={AVATAR} className="w-8 h-8 rounded-full flex-shrink-0 object-cover" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className="text-[13px] font-bold text-gray-900">AM Kaweesi</span>
-                    <span className="text-gray-400 text-[12px]">· {p.time}</span>
+            <div key={i} style={{ padding: "14px 20px", borderBottom: `1px solid ${BORDER}` }}>
+              <div style={{ display: "flex", gap: 10 }}>
+                <img src={AVATAR} style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>AM Kaweesi</span>
+                    <span style={{ fontSize: 12, color: TEXT_MUTED }}>· {p.time}</span>
                   </div>
-                  <p className="text-gray-700 text-[13px] leading-relaxed mb-2">{p.text}</p>
-                  {p.img && <img src={p.img} className="w-full h-36 object-cover rounded-xl mb-2" />}
-                  <div className="flex gap-5">
-                    <span className="flex items-center gap-1 text-gray-400 text-xs"><Heart size={13} />{p.likes}</span>
-                    <span className="flex items-center gap-1 text-gray-400 text-xs"><MessageCircle size={13} />{p.replies}</span>
+                  <p style={{ color: TEXT_SEC, fontSize: 13, lineHeight: 1.6, margin: "0 0 8px" }}>{p.text}</p>
+                  {p.img && <img src={p.img} style={{ width: "100%", height: 140, objectFit: "cover", borderRadius: 10, marginBottom: 8, display: "block" }} />}
+                  <div style={{ display: "flex", gap: 18 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 4, color: TEXT_MUTED, fontSize: 12 }}><Heart size={13} />{p.likes}</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 4, color: TEXT_MUTED, fontSize: 12 }}><MessageCircle size={13} />{p.replies}</span>
                   </div>
                 </div>
               </div>
@@ -165,25 +210,27 @@ export function MinimalGrid() {
           ))}
         </div>
       )}
+
       {/* Videos — 3-col portrait grid */}
       {tab === "videos" && (
-        <div className="grid grid-cols-3 gap-[1.5px] bg-gray-100">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1.5, backgroundColor: BG_SEC }}>
           {VIDEOS.map((v, i) => (
-            <div key={i} className="relative bg-gray-900" style={{ paddingBottom: "150%" }}>
-              <img src={v.thumb} className="absolute inset-0 w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Play size={20} fill="white" className="text-white opacity-80" />
+            <div key={i} style={{ position: "relative", paddingBottom: "150%", backgroundColor: "#111" }}>
+              <img src={v.thumb} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.6), transparent)" }} />
+              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Play size={18} fill="white" color="white" style={{ opacity: 0.85 }} />
               </div>
-              <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1">
-                <Eye size={9} className="text-white/70" />
-                <span className="text-white text-[9px] font-semibold">{v.views}</span>
+              <div style={{ position: "absolute", bottom: 6, left: 6, display: "flex", alignItems: "center", gap: 3 }}>
+                <Eye size={9} color="rgba(255,255,255,0.75)" />
+                <span style={{ color: "rgba(255,255,255,0.85)", fontSize: 9, fontWeight: 600 }}>{v.views}</span>
               </div>
             </div>
           ))}
         </div>
       )}
-      <div className="h-10" />
+
+      <div style={{ height: 40 }} />
     </div>
   );
 }
