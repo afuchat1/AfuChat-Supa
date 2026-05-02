@@ -190,7 +190,6 @@ type VideoPost = {
   bookmarked: boolean;
   likeCount: number;
   replyCount: number;
-  _separator?: { display_name: string; handle: string; avatar_url: string | null };
 };
 
 type Reply = {
@@ -1811,82 +1810,6 @@ const cmStyles = StyleSheet.create({
   cancelText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
 });
 
-function CreatorSeparatorCard({
-  item,
-  screenW,
-  screenH,
-  onProfilePress,
-}: {
-  item: VideoPost;
-  screenW: number;
-  screenH: number;
-  onProfilePress: () => void;
-}) {
-  const sep = item._separator!;
-  const { accent } = useAppAccent();
-  return (
-    <View
-      style={{
-        width: screenW,
-        height: screenH,
-        backgroundColor: "#000",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 0,
-      }}
-    >
-      <View
-        style={{
-          width: "70%",
-          height: 1,
-          backgroundColor: "rgba(255,255,255,0.12)",
-          marginBottom: 36,
-        }}
-      />
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={onProfilePress}
-        style={{ alignItems: "center", gap: 14 }}
-      >
-        <View
-          style={{
-            borderWidth: 2,
-            borderColor: accent,
-            borderRadius: 48,
-            padding: 3,
-          }}
-        >
-          <Avatar uri={sep.avatar_url} name={sep.display_name} size={80} />
-        </View>
-        <View style={{ alignItems: "center", gap: 4 }}>
-          <Text style={{ color: "rgba(255,255,255,0.45)", fontSize: 13, fontFamily: "Inter_400Regular" }}>
-            More videos from
-          </Text>
-          <Text style={{ color: "#fff", fontSize: 22, fontFamily: "Inter_700Bold" }}>
-            {sep.display_name}
-          </Text>
-          <Text style={{ color: accent, fontSize: 14, fontFamily: "Inter_500Medium" }}>
-            @{sep.handle}
-          </Text>
-        </View>
-      </TouchableOpacity>
-      <View
-        style={{
-          marginTop: 40,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 8,
-          opacity: 0.4,
-        }}
-      >
-        <Ionicons name="chevron-down" size={18} color="#fff" />
-        <Text style={{ color: "#fff", fontSize: 13, fontFamily: "Inter_400Regular" }}>
-          Swipe to watch
-        </Text>
-      </View>
-    </View>
-  );
-}
 
 export default function VideoPlayerScreen() {
   const { accent } = useAppAccent();
@@ -1918,8 +1841,6 @@ export default function VideoPlayerScreen() {
   const [soundSheetData, setSoundSheetData] = useState<{ item: VideoPost; albumArtUrl: string | null; trackArtist: string | null } | null>(null);
   const listRef = useRef<FlatList>(null);
   const initialScrollDone = useRef(false);
-  const creatorFetchedRef = useRef(false);
-  const [creatorFetching, setCreatorFetching] = useState(false);
   const tabAnim = useRef(new Animated.Value(0)).current;
   // Pause toggle exposed by the *currently active* card so keyboard handlers
   // (Space) can drive it without prop-drilling through the card tree.
@@ -1995,7 +1916,6 @@ export default function VideoPlayerScreen() {
     }
     Animated.timing(tabAnim, { toValue: tab === "following" ? 1 : 0, duration: 200, useNativeDriver: false }).start();
     initialScrollDone.current = false;
-    creatorFetchedRef.current = false;
     setActiveIndex(0);
     setVideoTab(tab);
   }
@@ -2130,39 +2050,60 @@ export default function VideoPlayerScreen() {
         replyCount: replyMap[p.id] || 0,
       }));
 
-      // ── Personalised ranking algorithm ──────────────────────────────────
+      // ── TikTok-style ranking algorithm ──────────────────────────────────
       const now = Date.now();
+      const creatorSeenCount: Record<string, number> = {};
+
       const scored = mapped.map((v) => {
         const ageHours = (now - new Date(v.created_at).getTime()) / 3600000;
         const engagement = v.likeCount * 3 + v.replyCount * 2 + v.view_count * 0.3;
 
-        // Engagement quality (log scale to avoid viral monopoly)
-        let score = Math.log1p(engagement) * 25;
+        // Engagement quality (log scale so viral videos don't monopolise)
+        let score = Math.log1p(engagement) * 20;
 
-        // Recency: content under 24h gets a big boost, decays over 7 days
-        const recency = Math.max(0, 1 - ageHours / 168);
-        score += recency * 45;
+        // Recency: videos under 48 h get a strong boost, decays over 14 days
+        const recency = Math.max(0, 1 - ageHours / 336);
+        score += recency * 40;
 
-        // Personalisation: author the user has liked before
-        if (likedAuthorIds.has(v.author_id)) score += 55;
+        // Personalisation: author whose content the user liked recently
+        if (likedAuthorIds.has(v.author_id)) score += 30;
 
-        // Following boost (strong signal)
-        if (followedSet.has(v.author_id)) score += 40;
+        // Following boost — present but not dominant, keeps discovery alive
+        if (followedSet.has(v.author_id)) score += 20;
 
-        // Already liked by user: slight de-rank (seen, engaged, move on)
-        if (v.liked) score -= 10;
+        // Already liked: de-rank so the user moves on to fresh content
+        if (v.liked) score -= 15;
 
-        // Bookmarked: user saved it, don't re-show as much
-        if (v.bookmarked) score -= 5;
+        // Bookmarked: user saved it, don't resurface aggressively
+        if (v.bookmarked) score -= 8;
 
-        // Add a tiny random factor so feed feels fresh on every load
-        score += Math.random() * 8;
+        // Large random factor → TikTok-feel serendipity on every scroll
+        score += Math.random() * 60;
 
         return { video: v, score };
       });
 
       scored.sort((a, b) => b.score - a.score);
-      let newVideos = scored.map((s) => s.video);
+
+      // ── Creator diversity pass ────────────────────────────────────────────
+      // Reorder so no creator appears more than twice in a row.
+      // We do a stable insertion keeping relative order for non-consecutive runs.
+      const diversified: typeof scored = [];
+      const deferred: typeof scored = [];
+      for (const entry of scored) {
+        const authorId = entry.video.author_id;
+        const seen = creatorSeenCount[authorId] || 0;
+        if (seen < 2) {
+          diversified.push(entry);
+          creatorSeenCount[authorId] = seen + 1;
+        } else {
+          deferred.push(entry);
+        }
+      }
+      // Append any creator-heavy remainder at the end
+      diversified.push(...deferred);
+
+      let newVideos = diversified.map((s) => s.video);
       cursorRef.current = data[data.length - 1].created_at;
       setHasMore(data.length === VIDEO_PAGE_SIZE);
       if (isLoadMore) {
@@ -2309,111 +2250,6 @@ export default function VideoPlayerScreen() {
 
   useEffect(() => { fetchVideos(videoTab); }, [fetchVideos, videoTab]);
 
-  const appendCreatorSection = useCallback(async (authorId: string, authorProfile: VideoPost["profile"]) => {
-    if (creatorFetchedRef.current) return;
-    creatorFetchedRef.current = true;
-    setCreatorFetching(true);
-
-    const existingIds = new Set(
-      videos.filter((v) => !v._separator).map((v) => v.id)
-    );
-
-    const { data } = await supabase
-      .from("posts")
-      .select(`
-        id, author_id, content, video_url, image_url, created_at, audio_name,
-        profiles!posts_author_id_fkey(display_name, handle, avatar_url)
-      `)
-      .eq("author_id", authorId)
-      .eq("post_type", "video")
-      .eq("visibility", "public")
-      .not("is_blocked", "is", true)
-      .not("video_url", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(20);
-
-    setCreatorFetching(false);
-
-    if (!data || data.length === 0) return;
-    const filtered = data.filter((p: any) => !existingIds.has(p.id));
-    if (filtered.length === 0) return;
-
-    const postIds = filtered.map((p: any) => p.id);
-    const [
-      { data: likesData },
-      { data: repliesData },
-      { data: viewsData },
-      { data: myLikes },
-      { data: myBookmarks },
-    ] = await Promise.all([
-      supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds),
-      supabase.from("post_replies").select("post_id").in("post_id", postIds),
-      supabase.from("post_views").select("post_id").in("post_id", postIds),
-      user
-        ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id)
-        : Promise.resolve({ data: [] }),
-      user
-        ? supabase.from("post_bookmarks").select("post_id").in("post_id", postIds).eq("user_id", user.id)
-        : Promise.resolve({ data: [] }),
-    ]);
-
-    const likeMap: Record<string, number> = {};
-    for (const l of (likesData || [])) likeMap[l.post_id] = (likeMap[l.post_id] || 0) + 1;
-    const replyMap: Record<string, number> = {};
-    for (const r of (repliesData || [])) replyMap[r.post_id] = (replyMap[r.post_id] || 0) + 1;
-    const viewMap: Record<string, number> = {};
-    for (const v of (viewsData || [])) viewMap[v.post_id] = (viewMap[v.post_id] || 0) + 1;
-    const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
-    const myBookmarkSet = new Set((myBookmarks || []).map((b: any) => b.post_id));
-
-    const enriched: VideoPost[] = filtered.map((p: any) => ({
-      id: p.id,
-      author_id: p.author_id,
-      content: p.content || "",
-      video_url: p.video_url,
-      image_url: p.image_url || null,
-      created_at: p.created_at,
-      view_count: viewMap[p.id] || 0,
-      audio_name: p.audio_name || null,
-      profile: {
-        display_name: p.profiles?.display_name || "User",
-        handle: p.profiles?.handle || "user",
-        avatar_url: p.profiles?.avatar_url || null,
-      },
-      liked: myLikeSet.has(p.id),
-      bookmarked: myBookmarkSet.has(p.id),
-      likeCount: likeMap[p.id] || 0,
-      replyCount: replyMap[p.id] || 0,
-    }));
-
-    const separatorItem: VideoPost = {
-      id: `separator-${authorId}`,
-      author_id: authorId,
-      content: "",
-      video_url: "",
-      image_url: null,
-      created_at: new Date().toISOString(),
-      view_count: 0,
-      audio_name: null,
-      duet_of_post_id: null,
-      profile: authorProfile,
-      liked: false,
-      bookmarked: false,
-      likeCount: 0,
-      replyCount: 0,
-      _separator: {
-        display_name: authorProfile.display_name,
-        handle: authorProfile.handle,
-        avatar_url: authorProfile.avatar_url,
-      },
-    };
-
-    setVideos((prev) => {
-      const seen = new Set(prev.map((v) => v.id));
-      const dedupedEnriched = enriched.filter((v) => !seen.has(v.id));
-      return [...prev, separatorItem, ...dedupedEnriched];
-    });
-  }, [videos, user]);
 
   useEffect(() => {
     // The target video is always placed at index 0 by fetchVideos, so no
@@ -2689,18 +2525,6 @@ export default function VideoPlayerScreen() {
           data={videos}
           keyExtractor={(v) => v.id}
           renderItem={({ item, index }) => {
-            if (item._separator) {
-              return (
-                <CreatorSeparatorCard
-                  item={item}
-                  screenW={EFF_W}
-                  screenH={EFF_H}
-                  onProfilePress={() =>
-                    router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })
-                  }
-                />
-              );
-            }
             const isActive = index === activeIndex;
             // Preload 2 neighbours (prev + next) so swipes feel instant.
             const distance = Math.abs(index - activeIndex);
@@ -2747,18 +2571,11 @@ export default function VideoPlayerScreen() {
           onEndReached={() => {
             if (!loadingMoreRef.current && hasMore && cursorRef.current) {
               fetchVideos(videoTab, cursorRef.current);
-            } else if (!hasMore && !creatorFetchedRef.current && videos.length > 0) {
-              // Regular feed exhausted — append "More from this creator" section
-              // using the currently-active video's author.
-              const activeVideo = videos[activeIndex];
-              if (activeVideo && !activeVideo._separator) {
-                appendCreatorSection(activeVideo.author_id, activeVideo.profile);
-              }
             }
           }}
           onEndReachedThreshold={0.5}
           ListFooterComponent={
-            loadingMore || creatorFetching ? (
+            loadingMore ? (
               <View style={{ width: EFF_W, height: EFF_H, alignItems: "center", justifyContent: "center", backgroundColor: "#000" }}>
                 <ActivityIndicator color="rgba(255,255,255,0.6)" size="small" />
               </View>
