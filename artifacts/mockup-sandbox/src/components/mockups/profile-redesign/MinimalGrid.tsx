@@ -121,7 +121,7 @@ export function MinimalGrid() {
               key={t.key}
               onClick={() => setTab(t.key)}
               className={`flex-1 py-3 flex items-center justify-center relative ${
-                tab === t.key ? "text-gray-900" : "text-gray-300"
+                tab === t.key ? "text-gray-900" : "text-gray-300 bg-[#00c2cb] rounded-br-[33px] rounded-tl-[33px]"
               }`}
             >
               {t.icon}
