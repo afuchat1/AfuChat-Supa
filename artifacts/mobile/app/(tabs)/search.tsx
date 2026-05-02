@@ -87,7 +87,7 @@ const TRENDING_TAGS = ["gaming","photography","music","travel","coding","fitness
 
 type PersonResult   = { id:string; handle:string; display_name:string; avatar_url:string|null; bio:string|null; is_verified:boolean; is_organization_verified:boolean; current_grade:string; country:string|null; xp?:number };
 type PostResult     = { id:string; content:string; image_url:string|null; author_id:string; author_handle:string; author_name:string; author_avatar:string|null; view_count:number; created_at:string; post_type:string; article_title:string|null };
-type VideoResult    = { id:string; content:string; video_url:string; image_url:string|null; author_id:string; author_handle:string; author_name:string; author_avatar:string|null; view_count:number; created_at:string; audio_name:string|null };
+type VideoResult    = { id:string; content:string; video_url:string; image_url:string|null; author_id:string; author_handle:string; author_name:string; author_avatar:string|null; view_count:number; created_at:string; audio_name:string|null; duration_seconds:number|null };
 type ChannelResult  = { id:string; name:string; description:string|null; avatar_url:string|null; subscriber_count:number };
 type EventResult    = { id:string; title:string; description:string|null; emoji:string; price:number; event_date:string; capacity:number; tickets_sold:number; category:string|null; creator_name:string; creator_handle:string };
 type GiftResult     = { id:string; name:string; emoji:string; base_xp_cost:number; rarity:string; description:string|null };
@@ -310,7 +310,7 @@ export default function SearchScreen() {
 
       if (all || currentTab === "videos") {
         let vq = supabase.from("posts")
-          .select("id, content, video_url, image_url, author_id, view_count, visibility, created_at, audio_name")
+          .select("id, content, video_url, image_url, author_id, view_count, visibility, created_at, audio_name, video_assets(duration_seconds)")
           .eq("post_type", "video")
           .eq("visibility", "public")
           .not("video_url", "is", null);
@@ -390,7 +390,9 @@ export default function SearchScreen() {
 
       const videos: VideoResult[] = (videosRes.data || []).map((v: any) => {
         const a = amap.get(v.author_id) || {} as any;
-        return { id: v.id, content: v.content || "", video_url: v.video_url, image_url: v.image_url || null, author_id: v.author_id, author_handle: a.handle || "", author_name: a.display_name || "", author_avatar: a.avatar_url || null, view_count: v.view_count || 0, created_at: v.created_at, audio_name: v.audio_name || null };
+        const assetArr = Array.isArray(v.video_assets) ? v.video_assets : (v.video_assets ? [v.video_assets] : []);
+        const durSecs = assetArr.length > 0 ? (assetArr[0].duration_seconds ?? null) : null;
+        return { id: v.id, content: v.content || "", video_url: v.video_url, image_url: v.image_url || null, author_id: v.author_id, author_handle: a.handle || "", author_name: a.display_name || "", author_avatar: a.avatar_url || null, view_count: v.view_count || 0, created_at: v.created_at, audio_name: v.audio_name || null, duration_seconds: durSecs };
       });
 
       const channels: ChannelResult[] = channelsRes.data || [];
@@ -909,6 +911,12 @@ export default function SearchScreen() {
                   <View style={{ position: "absolute", bottom: 6, left: 6, right: 6, flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(0,0,0,0.62)", borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3 }}>
                     <Ionicons name="musical-notes" size={10} color={BRAND} />
                     <Text style={{ color: "#fff", fontSize: 9, fontFamily: "Inter_500Medium", flex: 1 }} numberOfLines={1}>{v.audio_name}</Text>
+                  </View>
+                )}
+                {/* Duration badge */}
+                {v.duration_seconds != null && v.duration_seconds > 0 && (
+                  <View style={{ position: "absolute", bottom: v.audio_name ? 30 : 6, right: 6, backgroundColor: "rgba(0,0,0,0.75)", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 }}>
+                    <Text style={{ color: "#fff", fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.2 }}>{(function(s:number){ const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=Math.floor(s%60); return h>0?`${h}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`:`${m}:${String(sec).padStart(2,"0")}`; })(v.duration_seconds)}</Text>
                   </View>
                 )}
               </View>

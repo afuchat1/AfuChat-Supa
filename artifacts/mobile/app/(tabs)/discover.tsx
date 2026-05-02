@@ -64,6 +64,7 @@ type PostItem = {
   article_title: string | null;
   article_body: string | null;
   video_url: string | null;
+  duration_seconds: number | null;
   isFollowing: boolean;
 };
 
@@ -247,6 +248,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
                     fallbackImageUrl={item.image_url}
                     style={StyleSheet.absoluteFill}
                     lowData={false}
+                    durationSeconds={item.duration_seconds}
                   />
                   <View style={styles.playCircle}>
                     <Ionicons name="play" size={22} color="#fff" />
@@ -566,7 +568,8 @@ export default function DiscoverScreen() {
           id, author_id, content, image_url, created_at, view_count, visibility, language_code,
           post_type, article_title, article_body, video_url,
           profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified),
-          post_images(image_url, display_order)
+          post_images(image_url, display_order),
+          video_assets(duration_seconds)
         `)
         .not("is_blocked", "is", true)
         .in("author_id", followingIds)
@@ -605,6 +608,7 @@ export default function DiscoverScreen() {
           profile: { display_name: p.profiles?.display_name || "User", handle: p.profiles?.handle || "user", avatar_url: p.profiles?.avatar_url || null },
           liked: myLikeSet.has(p.id), likeCount: likeMap[p.id] || 0, replyCount: replyMap[p.id] || 0, score: 0, bookmarked: myBookmarkSet.has(p.id),
           post_type: p.post_type || "post", article_title: p.article_title || null, article_body: p.article_body || null, video_url: p.video_url || null,
+          duration_seconds: (() => { const arr = Array.isArray(p.video_assets) ? p.video_assets : (p.video_assets ? [p.video_assets] : []); return arr.length > 0 ? (arr[0].duration_seconds ?? null) : null; })(),
           isFollowing: true,
         }));
 
@@ -634,7 +638,8 @@ export default function DiscoverScreen() {
         id, author_id, content, image_url, created_at, view_count, visibility, language_code,
         post_type, article_title, article_body, video_url,
         profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified, country, interests),
-        post_images(image_url, display_order)
+        post_images(image_url, display_order),
+        video_assets(duration_seconds)
       `)
       .not("is_blocked", "is", true)
       .eq("visibility", "public")
@@ -771,6 +776,7 @@ export default function DiscoverScreen() {
           article_title: p.article_title || null,
           article_body: p.article_body || null,
           video_url: p.video_url || null,
+          duration_seconds: (() => { const arr = Array.isArray(p.video_assets) ? p.video_assets : (p.video_assets ? [p.video_assets] : []); return arr.length > 0 ? (arr[0].duration_seconds ?? null) : null; })(),
           isFollowing: followingSet.has(p.author_id),
         };
       });
