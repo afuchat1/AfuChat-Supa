@@ -182,20 +182,6 @@ function WebVideoPlayer({
     }
   }
 
-  // Forward wheel events that the <video> element would otherwise swallow,
-  // so the FlatList snap-scroll still works on desktop mouse-wheel.
-  function handleWheel(e: any) {
-    let el: HTMLElement | null = (e.currentTarget as HTMLElement).parentElement;
-    while (el) {
-      const cs = window.getComputedStyle(el);
-      if (cs.overflowY === "scroll" || cs.overflowY === "auto") {
-        el.scrollTop += e.deltaY;
-        break;
-      }
-      el = el.parentElement;
-    }
-  }
-
   return (
     // Fragment so we can layer the <video> (pointer-events:none) under a
     // transparent <div> that handles all interactions without blocking scroll.
@@ -239,7 +225,6 @@ function WebVideoPlayer({
         onPointerUp={cancelLongPress}
         onPointerLeave={cancelLongPress}
         onPointerCancel={cancelLongPress}
-        onWheel={handleWheel}
         style={{
           position: "absolute",
           top: 0, left: 0, right: 0, bottom: 0,
@@ -1935,10 +1920,38 @@ export default function VideoPlayerScreen() {
   useEffect(() => { activeIndexRef.current = activeIndex; }, [activeIndex]);
   const videosLenRef = useRef(videos.length);
   useEffect(() => { videosLenRef.current = videos.length; }, [videos.length]);
+  // Track EFF_H so keyboard handler always uses the latest value.
+  const effHRef = useRef(EFF_H);
+  useEffect(() => { effHRef.current = EFF_H; }, [EFF_H]);
+
+  // Find the real DOM scroll container inside the FlatList and drive scrollTop
+  // directly. This is more reliable on React Native Web than scrollToIndex /
+  // scrollToOffset, which may silently no-op when the RN-Web VirtualizedList
+  // hasn't fully initialised its internal node reference.
+  function scrollFeedTo(index: number) {
+    if (Platform.OS !== "web") {
+      listRef.current?.scrollToIndex({ index, animated: true });
+      return;
+    }
+    const root = document.getElementById("vf-scroll");
+    if (!root) return;
+    // Walk into first children to find the actual overflow:scroll div.
+    let el: HTMLElement | null = root;
+    for (let i = 0; i < 6 && el; i++) {
+      const oy = window.getComputedStyle(el).overflowY;
+      if (oy === "scroll" || oy === "auto") break;
+      el = el.firstElementChild as HTMLElement | null;
+    }
+    if (!el) return;
+    el.scrollTo({ top: index * effHRef.current, behavior: "smooth" });
+  }
 
   // Web-only keyboard controls:
-  //   Space      → toggle pause/play
+  //   Space          → toggle pause/play
   //   ArrowDown/Up, PageDown/Up → jump to next/prev video
+  // NOTE: We do NOT intercept wheel events at all — the FlatList's native
+  // CSS overflow-scroll + scroll-snap handles wheel and touch automatically
+  // once we stop calling preventDefault on wheel events globally.
   useEffect(() => {
     if (Platform.OS !== "web") return;
     function onKey(e: KeyboardEvent) {
@@ -1961,40 +1974,16 @@ export default function VideoPlayerScreen() {
       if (e.key === "ArrowDown" || e.key === "PageDown") {
         e.preventDefault();
         const next = Math.min(cur + 1, Math.max(len - 1, 0));
-        if (next !== cur) listRef.current?.scrollToIndex({ index: next, animated: true });
+        if (next !== cur) scrollFeedTo(next);
       } else if (e.key === "ArrowUp" || e.key === "PageUp") {
         e.preventDefault();
         const prev = Math.max(cur - 1, 0);
-        if (prev !== cur) listRef.current?.scrollToIndex({ index: prev, animated: true });
+        if (prev !== cur) scrollFeedTo(prev);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []); // stable — uses refs internally
-
-  // Web-only mouse-wheel scroll: map wheel delta → scrollToIndex so the
-  // FlatList snap always fires correctly regardless of RN-Web's scroll container.
-  useEffect(() => {
-    if (Platform.OS !== "web") return;
-    let wheelCooldown = false;
-    function onWheel(e: WheelEvent) {
-      e.preventDefault();
-      if (wheelCooldown) return;
-      wheelCooldown = true;
-      setTimeout(() => { wheelCooldown = false; }, 450);
-      const cur = activeIndexRef.current;
-      const len = videosLenRef.current;
-      if (e.deltaY > 0) {
-        const next = Math.min(cur + 1, Math.max(len - 1, 0));
-        if (next !== cur) listRef.current?.scrollToIndex({ index: next, animated: true });
-      } else if (e.deltaY < 0) {
-        const prev = Math.max(cur - 1, 0);
-        if (prev !== cur) listRef.current?.scrollToIndex({ index: prev, animated: true });
-      }
-    }
-    window.addEventListener("wheel", onWheel, { passive: false });
-    return () => window.removeEventListener("wheel", onWheel);
-  }, []);
 
   // Prevent page body scroll and pinch-zoom when the video feed is mounted.
   // NOTE: do NOT set touchAction:"none" on the body — it would cascade to all
@@ -2653,6 +2642,7 @@ export default function VideoPlayerScreen() {
               />
             );
           }}
+          nativeID="vf-scroll"
           pagingEnabled
           showsVerticalScrollIndicator={false}
           onViewableItemsChanged={onViewableItemsChanged}
