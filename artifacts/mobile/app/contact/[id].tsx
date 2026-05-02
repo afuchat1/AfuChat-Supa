@@ -1,12 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Animated,
   Dimensions,
   FlatList,
   Image,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -22,7 +20,6 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { AvatarViewer } from "@/components/ui/AvatarViewer";
-import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { notifyNewFollow } from "@/lib/notifyUser";
 import { shareProfile } from "@/lib/share";
@@ -33,7 +30,7 @@ import { RichText } from "@/components/ui/RichText";
 import { encodeId } from "@/lib/shortId";
 
 const { width: SCREEN_W } = Dimensions.get("window");
-const GRID_GAP = 2;
+const GRID_GAP = 1.5;
 const GRID_COLS = 3;
 const THUMB = (SCREEN_W - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
 
@@ -70,7 +67,7 @@ type UserPost = {
   replyCount: number;
 };
 
-type TabKey = "posts" | "photos" | "videos";
+type TabKey = "photos" | "posts" | "videos";
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -78,12 +75,6 @@ function timeAgo(iso: string): string {
   if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
   return `${Math.floor(diff / 86400000)}d`;
-}
-
-function formatJoinDate(iso: string | null): string {
-  if (!iso) return "Unknown";
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
 function fmtNum(n: number): string {
@@ -104,14 +95,13 @@ export default function ContactProfileScreen() {
   const [isBlocked, setIsBlocked] = useState(false);
   const [followerCount, setFollowerCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
+  const [postCount, setPostCount] = useState(0);
   const [mutualCount, setMutualCount] = useState(0);
   const [posts, setPosts] = useState<UserPost[]>([]);
   const [postsLoading, setPostsLoading] = useState(true);
   const [hasShop, setHasShop] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
-  const [showBadgeInfo, setShowBadgeInfo] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabKey>("posts");
-  const tabAnim = useRef(new Animated.Value(0)).current;
+  const [activeTab, setActiveTab] = useState<TabKey>("photos");
 
   useEffect(() => {
     if (!profile?.handle) return;
@@ -130,6 +120,8 @@ export default function ContactProfileScreen() {
       .then(({ data }) => { setProfile(data as Profile); setLoading(false); });
 
     supabase.from("shops").select("id, pin_to_profile").eq("seller_id", id).eq("is_active", true).eq("pin_to_profile", true).maybeSingle().then(({ data }) => setHasShop(!!data));
+
+    supabase.from("posts").select("id", { count: "exact", head: true }).eq("author_id", id).in("visibility", ["public", "followers"]).then(({ count }) => setPostCount(count || 0));
 
     if (user) {
       supabase.from("follows").select("id").eq("follower_id", user.id).eq("following_id", id).maybeSingle().then(({ data }) => setIsFollowing(!!data));
@@ -194,12 +186,6 @@ export default function ContactProfileScreen() {
     return () => { supabase.removeChannel(ch); };
   }, [id, loadPosts]);
 
-  function switchTab(tab: TabKey) {
-    const idx = (["posts", "photos", "videos"] as TabKey[]).indexOf(tab);
-    setActiveTab(tab);
-    Animated.spring(tabAnim, { toValue: idx, useNativeDriver: false, tension: 280, friction: 32 }).start();
-  }
-
   async function sendWave() {
     if (!user || !id) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -236,11 +222,10 @@ export default function ContactProfileScreen() {
     }
   }
 
-  async function toggleBlock() {
+  function toggleBlock() {
     if (!user || !id) return;
     if (isBlocked) {
-      await supabase.from("blocked_users").delete().eq("blocker_id", user.id).eq("blocked_id", id);
-      setIsBlocked(false);
+      supabase.from("blocked_users").delete().eq("blocker_id", user.id).eq("blocked_id", id).then(() => setIsBlocked(false));
     } else {
       showAlert("Block User", `Block ${profile?.display_name}?`, [
         { text: "Cancel", style: "cancel" },
@@ -272,22 +257,34 @@ export default function ContactProfileScreen() {
     else showAlert("Reported", "Thank you. Our team will review it.");
   }
 
+  function showOptionsMenu() {
+    const options: any[] = [];
+    if (profile?.handle) {
+      options.push({ text: "Share Profile", onPress: () => shareProfile({ handle: profile.handle, displayName: profile.display_name, bio: profile.bio }) });
+    }
+    if (!isOwnProfile) {
+      options.push({ text: isBlocked ? "Unblock" : "Block", style: isBlocked ? "default" : "destructive", onPress: toggleBlock });
+      options.push({ text: "Report", style: "destructive", onPress: reportUser });
+    }
+    if (hasShop) {
+      options.push({ text: "View Store", onPress: () => router.push({ pathname: "/shop/[userId]", params: { userId: profile?.id || "" } }) });
+    }
+    options.push({ text: "Cancel", style: "cancel" });
+    showAlert("Options", undefined, options);
+  }
+
   if (loading) {
     return <View style={[st.root, { backgroundColor: colors.background }]}><ProfileSkeleton /></View>;
   }
 
   const isOwnProfile = user?.id === id;
 
-  const onlineStatus = (() => {
-    if (!profile?.show_online_status || !profile?.last_seen) return null;
-    const diff = Date.now() - new Date(profile.last_seen).getTime();
-    const isOnline = diff < 2 * 60 * 1000;
-    const text = isOnline ? "Online" :
-      diff < 3600000 ? `Active ${Math.floor(diff / 60000)}m ago` :
-      diff < 86400000 ? `Active ${Math.floor(diff / 3600000)}h ago` :
-      `Last seen ${new Date(profile.last_seen).toLocaleDateString()}`;
-    return { isOnline, text };
+  const isOnline = (() => {
+    if (!profile?.show_online_status || !profile?.last_seen) return false;
+    return Date.now() - new Date(profile.last_seen).getTime() < 2 * 60 * 1000;
   })();
+
+  const xpPct = Math.min(0.96, ((profile?.xp || 0) % 1000) / 1000);
 
   const photoPosts = posts.filter((p) => {
     const imgs = p.post_images?.length > 0 ? p.post_images : p.image_url ? [{ image_url: p.image_url }] : [];
@@ -296,227 +293,169 @@ export default function ContactProfileScreen() {
   const videoPosts = posts.filter((p) => p.post_type === "video" && p.video_url);
   const textPosts = posts.filter((p) => p.post_type !== "video" || !p.video_url);
 
-  const TABS: { key: TabKey; label: string; icon: string; count: number }[] = [
-    { key: "posts", label: "Posts", icon: "grid-outline", count: textPosts.length },
-    { key: "photos", label: "Photos", icon: "images-outline", count: photoPosts.length },
-    { key: "videos", label: "Videos", icon: "videocam-outline", count: videoPosts.length },
+  const TABS: { key: TabKey; icon: string }[] = [
+    { key: "photos", icon: "grid-outline" },
+    { key: "posts", icon: "document-text-outline" },
+    { key: "videos", icon: "film-outline" },
   ];
 
-  const indicatorLeft = tabAnim.interpolate({
-    inputRange: [0, 1, 2],
-    outputRange: ["0%", "33.333%", "66.667%"],
-  });
-
-  const headerNode = (
-    <>
-      {/* ── Cover / Header bar ─────────────────────────────── */}
-      <View style={[st.coverArea, { paddingTop: insets.top, backgroundColor: colors.accent + "22" }]}>
-        <View style={[st.topBar, { paddingTop: 8 }]}>
-          <TouchableOpacity onPress={() => router.back()} style={[st.circleBtn, { backgroundColor: colors.surface + "CC" }]}>
-            <Ionicons name="arrow-back" size={20} color={colors.text} />
-          </TouchableOpacity>
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            {profile?.handle && (
-              <TouchableOpacity style={[st.circleBtn, { backgroundColor: colors.surface + "CC" }]} onPress={() => shareProfile({ handle: profile.handle, displayName: profile.display_name, bio: profile.bio })}>
-                <Ionicons name="share-outline" size={20} color={colors.text} />
-              </TouchableOpacity>
-            )}
-            {!isOwnProfile && (
-              <TouchableOpacity style={[st.circleBtn, { backgroundColor: colors.surface + "CC" }]} onPress={reportUser}>
-                <Ionicons name="ellipsis-horizontal" size={20} color={colors.text} />
-              </TouchableOpacity>
-            )}
+  const profileHeader = (
+    <View style={{ backgroundColor: colors.background }}>
+      {/* ── Avatar row + stats ─── */}
+      <View style={st.avatarStatsRow}>
+        <TouchableOpacity activeOpacity={0.85} onPress={() => setAvatarOpen(true)} style={st.avatarWrap}>
+          <View style={[st.avatarRing, { borderColor: colors.text }]}>
+            <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={78} />
           </View>
+          {isOnline && <View style={[st.onlineDot, { borderColor: colors.background }]} />}
+        </TouchableOpacity>
+
+        <View style={st.statsBlock}>
+          <TouchableOpacity style={st.statCell} activeOpacity={0.6}>
+            <Text style={[st.statNum, { color: colors.text }]}>{fmtNum(postCount)}</Text>
+            <Text style={[st.statLabel, { color: colors.textSecondary }]}>Posts</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={st.statCell} activeOpacity={0.6} onPress={() => router.push({ pathname: "/followers", params: { userId: id, type: "followers", ownerHandle: profile?.handle } })}>
+            <Text style={[st.statNum, { color: colors.text }]}>{fmtNum(followerCount)}</Text>
+            <Text style={[st.statLabel, { color: colors.textSecondary }]}>Followers</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={st.statCell} activeOpacity={0.6} onPress={() => router.push({ pathname: "/followers", params: { userId: id, type: "following", ownerHandle: profile?.handle } })}>
+            <Text style={[st.statNum, { color: colors.text }]}>{fmtNum(followingCount)}</Text>
+            <Text style={[st.statLabel, { color: colors.textSecondary }]}>Following</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* ── Identity card ──────────────────────────────────── */}
-      <View style={[st.identityCard, { backgroundColor: colors.surface }]}>
-        {/* Avatar — pulled up over cover */}
-        <View style={st.avatarFloat}>
-          <TouchableOpacity activeOpacity={0.85} onPress={() => setAvatarOpen(true)} style={[st.avatarRing, { borderColor: colors.accent }]}>
-            <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={86} />
-            {onlineStatus?.isOnline && <View style={st.onlineDot} />}
-          </TouchableOpacity>
-        </View>
-
-        <View style={st.identityBody}>
-          {/* Name + badges */}
-          <TouchableOpacity style={st.nameRow} activeOpacity={0.8} onPress={() => (profile?.is_verified || profile?.is_organization_verified) && setShowBadgeInfo(!showBadgeInfo)}>
-            <Text style={[st.displayName, { color: colors.text }]}>{profile?.display_name}</Text>
-            <VerifiedBadge isVerified={profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={20} />
-          </TouchableOpacity>
-
-          <View style={st.subRow}>
-            <Text style={[st.handle, { color: colors.textSecondary }]}>@{profile?.handle}</Text>
-            <PrestigeBadge acoin={profile?.acoin || 0} size="sm" showLabel />
-          </View>
-
-          {onlineStatus && !onlineStatus.isOnline && (
-            <Text style={[st.onlineLabel, { color: colors.textMuted }]}>{onlineStatus.text}</Text>
-          )}
-
-          {(profile?.is_organization_verified || profile?.is_verified) && (
-            <View style={[st.verifiedPill, { backgroundColor: profile?.is_organization_verified ? "#D4A853" : colors.accent }]}>
-              <Ionicons name={profile?.is_organization_verified ? "shield-checkmark" : "checkmark-circle"} size={12} color="#fff" />
-              <Text style={st.verifiedPillText}>{profile?.is_organization_verified ? "Verified Business" : "Verified"}</Text>
-            </View>
-          )}
-
-          {showBadgeInfo && (
-            <View style={[st.badgeCard, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
-              {profile?.is_organization_verified ? (
-                <>
-                  <View style={st.badgeRow}><Ionicons name="shield-checkmark" size={14} color={Colors.gold} /><Text style={[st.badgeText, { color: colors.textSecondary }]}>Verified Business Account</Text></View>
-                  <View style={st.badgeRow}><Ionicons name="briefcase" size={14} color={Colors.gold} /><Text style={[st.badgeText, { color: colors.textSecondary }]}>Official Business Profile</Text></View>
-                  <View style={st.badgeRow}><Ionicons name="checkmark-done" size={14} color={Colors.gold} /><Text style={[st.badgeText, { color: colors.textSecondary }]}>Identity Confirmed by AfuChat</Text></View>
-                </>
-              ) : (
-                <>
-                  <View style={st.badgeRow}><Ionicons name="checkmark-circle" size={14} color={colors.accent} /><Text style={[st.badgeText, { color: colors.textSecondary }]}>Verified Account</Text></View>
-                  <View style={st.badgeRow}><Ionicons name="diamond" size={14} color={colors.accent} /><Text style={[st.badgeText, { color: colors.textSecondary }]}>Premium Subscription</Text></View>
-                </>
-              )}
-            </View>
-          )}
-
-          {!!profile?.bio && (
-            <Text style={[st.bio, { color: colors.text }]}>{profile.bio}</Text>
-          )}
-
-          {/* Meta chips */}
-          <View style={st.metaRow}>
-            {profile?.country && (
-              <View style={[st.metaChip, { backgroundColor: colors.backgroundSecondary }]}>
-                <Ionicons name="location-outline" size={12} color={colors.textMuted} />
-                <Text style={[st.metaChipText, { color: colors.textSecondary }]}>{profile.country}</Text>
-              </View>
-            )}
-            <View style={[st.metaChip, { backgroundColor: colors.backgroundSecondary }]}>
-              <Ionicons name="calendar-outline" size={12} color={colors.textMuted} />
-              <Text style={[st.metaChipText, { color: colors.textSecondary }]}>Joined {formatJoinDate(profile?.created_at || null)}</Text>
-            </View>
-            {profile?.website_url && (
-              <View style={[st.metaChip, { backgroundColor: colors.accent + "12" }]}>
-                <Ionicons name="link-outline" size={12} color={colors.accent} />
-                <Text style={[st.metaChipText, { color: colors.accent }]} numberOfLines={1}>{profile.website_url.replace(/^https?:\/\//, "")}</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Stats */}
-          <View style={[st.statsRow, { backgroundColor: colors.backgroundSecondary }]}>
-            <TouchableOpacity style={st.statCell} activeOpacity={0.6} onPress={() => router.push({ pathname: "/followers", params: { userId: id, type: "followers", ownerHandle: profile?.handle } })}>
-              <Text style={[st.statNum, { color: colors.text }]}>{fmtNum(followerCount)}</Text>
-              <Text style={[st.statLabel, { color: colors.textMuted }]}>Followers</Text>
-            </TouchableOpacity>
-            <View style={[st.statSep, { backgroundColor: colors.border }]} />
-            <TouchableOpacity style={st.statCell} activeOpacity={0.6} onPress={() => router.push({ pathname: "/followers", params: { userId: id, type: "following", ownerHandle: profile?.handle } })}>
-              <Text style={[st.statNum, { color: colors.text }]}>{fmtNum(followingCount)}</Text>
-              <Text style={[st.statLabel, { color: colors.textMuted }]}>Following</Text>
-            </TouchableOpacity>
-            {mutualCount > 0 && (
-              <>
-                <View style={[st.statSep, { backgroundColor: colors.border }]} />
-                <View style={st.statCell}>
-                  <Text style={[st.statNum, { color: colors.text }]}>{mutualCount}</Text>
-                  <Text style={[st.statLabel, { color: colors.textMuted }]}>Mutual</Text>
-                </View>
-              </>
-            )}
-            <View style={[st.statSep, { backgroundColor: colors.border }]} />
-            <View style={st.statCell}>
-              <Text style={[st.statNum, { color: "#FFD60A" }]}>{fmtNum(profile?.xp || 0)}</Text>
-              <Text style={[st.statLabel, { color: colors.textMuted }]}>{profile?.current_grade || "Nexa"}</Text>
-            </View>
-          </View>
-
-          {/* CTA buttons */}
-          {!isOwnProfile && (
-            <View style={st.ctaRow}>
-              <TouchableOpacity
-                style={[st.ctaFollow, { backgroundColor: isFollowing ? "transparent" : colors.accent, borderColor: colors.accent, borderWidth: isFollowing ? 1.5 : 0 }]}
-                onPress={toggleFollow}
-                activeOpacity={0.75}
-              >
-                <Ionicons name={isFollowing ? "checkmark" : "person-add-outline"} size={15} color={isFollowing ? colors.accent : "#fff"} />
-                <Text style={[st.ctaFollowText, { color: isFollowing ? colors.accent : "#fff" }]}>
-                  {isFollowing ? "Following" : "Follow"}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[st.ctaMessage, { backgroundColor: colors.accent + "14", borderColor: colors.accent + "30", borderWidth: 1 }]} onPress={startChat} activeOpacity={0.75}>
-                <Ionicons name="chatbubble-outline" size={15} color={colors.accent} />
-                <Text style={[st.ctaMessageText, { color: colors.accent }]}>Message</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[st.ctaIcon, { backgroundColor: colors.backgroundSecondary }]} onPress={sendWave} activeOpacity={0.75}>
-                <Text style={{ fontSize: 20 }}>👋</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
+      {/* ── Name + badges ─── */}
+      <View style={st.nameBadgeRow}>
+        <Text style={[st.displayName, { color: colors.text }]}>{profile?.display_name}</Text>
+        <VerifiedBadge isVerified={profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={16} />
+        <PrestigeBadge acoin={profile?.acoin || 0} size="sm" showLabel />
       </View>
 
-      {/* ── Quick-action pills ─────────────────────────────── */}
+      {/* ── Bio ─── */}
+      {!!profile?.bio && (
+        <Text style={[st.bio, { color: colors.textSecondary }]} numberOfLines={3}>{profile.bio}</Text>
+      )}
+
+      {/* ── Meta chips ─── */}
+      <View style={st.metaRow}>
+        {profile?.country && (
+          <View style={st.metaChip}>
+            <Ionicons name="location-outline" size={11} color={colors.textMuted} />
+            <Text style={[st.metaChipText, { color: colors.textMuted }]}>{profile.country}</Text>
+          </View>
+        )}
+        {profile?.website_url && (
+          <View style={st.metaChip}>
+            <Ionicons name="link-outline" size={11} color={colors.accent} />
+            <Text style={[st.metaChipText, { color: colors.accent }]} numberOfLines={1}>
+              {profile.website_url.replace(/^https?:\/\//, "")}
+            </Text>
+          </View>
+        )}
+        {mutualCount > 0 && (
+          <View style={st.metaChip}>
+            <Ionicons name="people-outline" size={11} color={colors.textMuted} />
+            <Text style={[st.metaChipText, { color: colors.textMuted }]}>{mutualCount} mutual</Text>
+          </View>
+        )}
+      </View>
+
+      {/* ── CTA row ─── */}
       {!isOwnProfile && (
-        <View style={[st.pillBar, { backgroundColor: colors.surface }]}>
-          <TouchableOpacity style={[st.pill, { backgroundColor: colors.accent + "14" }]} onPress={startChat}>
-            <Ionicons name="chatbubble" size={17} color={colors.accent} />
-            <Text style={[st.pillLabel, { color: colors.accent }]}>Chat</Text>
+        <View style={st.ctaRow}>
+          <TouchableOpacity
+            style={[st.ctaFollow, { backgroundColor: isFollowing ? "transparent" : colors.text, borderColor: colors.text, borderWidth: isFollowing ? 1.5 : 0 }]}
+            onPress={toggleFollow}
+            activeOpacity={0.75}
+          >
+            <Ionicons name={isFollowing ? "checkmark" : "person-add-outline"} size={14} color={isFollowing ? colors.text : colors.background} />
+            <Text style={[st.ctaFollowText, { color: isFollowing ? colors.text : colors.background }]}>
+              {isFollowing ? "Following" : "Follow"}
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[st.pill, { backgroundColor: "#FF6B0014" }]} onPress={sendWave}>
-            <Text style={{ fontSize: 17 }}>👋</Text>
-            <Text style={[st.pillLabel, { color: "#FF6B00" }]}>Wave</Text>
+
+          <TouchableOpacity
+            style={[st.ctaMessage, { borderColor: colors.border }]}
+            onPress={startChat}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="chatbubble-outline" size={14} color={colors.text} />
+            <Text style={[st.ctaMessageText, { color: colors.text }]}>Message</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[st.pill, { backgroundColor: "#AF52DE14" }]} onPress={() => router.push({ pathname: "/gifts", params: { userId: profile?.id, userName: profile?.display_name } })}>
-            <Ionicons name="gift" size={17} color="#AF52DE" />
-            <Text style={[st.pillLabel, { color: "#AF52DE" }]}>Gift</Text>
+
+          <TouchableOpacity style={[st.ctaIcon, { borderColor: colors.border }]} onPress={sendWave} activeOpacity={0.75}>
+            <Text style={{ fontSize: 18 }}>👋</Text>
           </TouchableOpacity>
-          {hasShop && (
-            <TouchableOpacity style={[st.pill, { backgroundColor: "#FF950014" }]} onPress={() => router.push({ pathname: "/shop/[userId]", params: { userId: profile?.id || "" } })}>
-              <Ionicons name="storefront" size={17} color="#FF9500" />
-              <Text style={[st.pillLabel, { color: "#FF9500" }]}>Store</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity style={[st.pill, { backgroundColor: isBlocked ? "#FF3B3014" : colors.backgroundSecondary }]} onPress={toggleBlock}>
-            <Ionicons name={isBlocked ? "ban" : "ban-outline"} size={17} color="#FF3B30" />
-            <Text style={[st.pillLabel, { color: "#FF3B30" }]}>{isBlocked ? "Blocked" : "Block"}</Text>
+
+          <TouchableOpacity
+            style={[st.ctaIcon, { borderColor: colors.border }]}
+            onPress={() => router.push({ pathname: "/gifts", params: { userId: profile?.id, userName: profile?.display_name } })}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="gift-outline" size={17} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
       )}
 
-      {/* ── Tab bar ────────────────────────────────────────── */}
-      <View style={[st.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        {TABS.map((t, idx) => {
+      {/* ── XP strip ─── */}
+      <View style={[st.xpStrip, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+        <Ionicons name="flash" size={13} color="#F59E0B" />
+        <Text style={[st.xpLabel, { color: colors.text }]}>
+          {profile?.current_grade || "Nexa"} · {fmtNum(profile?.xp || 0)} XP
+        </Text>
+        <View style={[st.xpTrack, { backgroundColor: colors.border }]}>
+          <View style={[st.xpFill, { width: `${Math.round(xpPct * 100)}%` as any }]} />
+        </View>
+        <Text style={[st.xpPct, { color: colors.textMuted }]}>{Math.round(xpPct * 100)}%</Text>
+      </View>
+
+      {/* ── Tab bar ─── */}
+      <View style={[st.tabBar, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
+        {TABS.map((t) => {
           const active = activeTab === t.key;
           return (
-            <TouchableOpacity key={t.key} style={st.tabBtn} onPress={() => switchTab(t.key)} activeOpacity={0.7}>
-              <Ionicons name={t.icon as any} size={18} color={active ? colors.accent : colors.textMuted} />
-              <Text style={[st.tabBtnText, { color: active ? colors.accent : colors.textMuted }]}>{t.label}</Text>
-              {t.count > 0 && (
-                <View style={[st.tabBadge, { backgroundColor: active ? colors.accent : colors.backgroundSecondary }]}>
-                  <Text style={[st.tabBadgeText, { color: active ? "#fff" : colors.textMuted }]}>{t.count}</Text>
-                </View>
-              )}
+            <TouchableOpacity
+              key={t.key}
+              style={[st.tabBtn, active && { borderTopColor: colors.text, borderTopWidth: 1.5 }]}
+              onPress={() => setActiveTab(t.key)}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={t.icon as any}
+                size={21}
+                color={active ? colors.text : colors.textMuted}
+              />
             </TouchableOpacity>
           );
         })}
-        <Animated.View style={[st.tabIndicator, { backgroundColor: colors.accent, left: indicatorLeft }]} />
       </View>
-    </>
+    </View>
   );
 
   return (
-    <View style={[st.root, { backgroundColor: colors.backgroundSecondary }]}>
-      {activeTab === "posts" && (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
-          {headerNode}
-          <PostsTab posts={textPosts} loading={postsLoading} profile={profile} colors={colors} />
-        </ScrollView>
-      )}
+    <View style={[st.root, { backgroundColor: colors.background }]}>
 
+      {/* ── Fixed nav bar ─── */}
+      <View style={[st.navBar, { paddingTop: insets.top, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+        <TouchableOpacity style={st.navBtn} onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
+        </TouchableOpacity>
+
+        <Text style={[st.navTitle, { color: colors.text }]} numberOfLines={1}>
+          {profile?.handle ? `@${profile.handle}` : profile?.display_name || ""}
+        </Text>
+
+        <TouchableOpacity style={st.navBtn} onPress={showOptionsMenu} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Ionicons name="ellipsis-horizontal" size={22} color={colors.text} />
+        </TouchableOpacity>
+      </View>
+
+      {/* ── Photos tab (default) ─── */}
       {activeTab === "photos" && (
         <FlatList
-          ListHeaderComponent={<>{headerNode}</>}
+          ListHeaderComponent={profileHeader}
           data={photoPosts}
           keyExtractor={(p) => p.id}
           numColumns={GRID_COLS}
@@ -531,7 +470,9 @@ export default function ContactProfileScreen() {
               <View style={st.emptyWrap}>
                 <Ionicons name="images-outline" size={44} color={colors.textMuted} />
                 <Text style={[st.emptyTitle, { color: colors.text }]}>No photos yet</Text>
-                <Text style={[st.emptySub, { color: colors.textMuted }]}>{profile?.display_name} hasn't shared any photos.</Text>
+                <Text style={[st.emptySub, { color: colors.textMuted }]}>
+                  {profile?.display_name} hasn't shared any photos.
+                </Text>
               </View>
             )
           }
@@ -548,7 +489,7 @@ export default function ContactProfileScreen() {
                 <Image source={{ uri: imgs[0] }} style={{ width: THUMB, height: THUMB }} resizeMode="cover" />
                 {imgs.length > 1 && (
                   <View style={st.multiImgBadge}>
-                    <Ionicons name="copy-outline" size={12} color="#fff" />
+                    <Ionicons name="copy-outline" size={11} color="#fff" />
                   </View>
                 )}
               </TouchableOpacity>
@@ -557,9 +498,21 @@ export default function ContactProfileScreen() {
         />
       )}
 
+      {/* ── Posts tab ─── */}
+      {activeTab === "posts" && (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+        >
+          {profileHeader}
+          <PostsTab posts={textPosts} loading={postsLoading} profile={profile} colors={colors} />
+        </ScrollView>
+      )}
+
+      {/* ── Videos tab ─── */}
       {activeTab === "videos" && (
         <FlatList
-          ListHeaderComponent={<>{headerNode}</>}
+          ListHeaderComponent={profileHeader}
           data={videoPosts}
           keyExtractor={(p) => p.id}
           numColumns={GRID_COLS}
@@ -572,9 +525,11 @@ export default function ContactProfileScreen() {
               <View style={st.emptyWrap}><ActivityIndicator color={colors.accent} /></View>
             ) : (
               <View style={st.emptyWrap}>
-                <Ionicons name="videocam-outline" size={44} color={colors.textMuted} />
+                <Ionicons name="film-outline" size={44} color={colors.textMuted} />
                 <Text style={[st.emptyTitle, { color: colors.text }]}>No videos yet</Text>
-                <Text style={[st.emptySub, { color: colors.textMuted }]}>{profile?.display_name} hasn't shared any videos.</Text>
+                <Text style={[st.emptySub, { color: colors.textMuted }]}>
+                  {profile?.display_name} hasn't posted any videos.
+                </Text>
               </View>
             )
           }
@@ -584,20 +539,20 @@ export default function ContactProfileScreen() {
               onPress={() => router.push({ pathname: "/video/[id]", params: { id: item.id } })}
               activeOpacity={0.82}
             >
-              {item.image_url ? (
+              {item.image_url && (
                 <Image source={{ uri: item.image_url }} style={{ width: THUMB, height: THUMB * 1.35 }} resizeMode="cover" />
-              ) : null}
-              <View style={st.videoThumbOverlay}>
+              )}
+              <View style={st.videoOverlay}>
                 <View style={st.playCircle}>
-                  <Ionicons name="play" size={16} color="#fff" />
+                  <Ionicons name="play" size={14} color="#fff" />
                 </View>
-                {item.view_count > 0 && (
-                  <View style={st.viewCountBadge}>
-                    <Ionicons name="eye-outline" size={10} color="rgba(255,255,255,0.85)" />
-                    <Text style={st.viewCountText}>{fmtNum(item.view_count)}</Text>
-                  </View>
-                )}
               </View>
+              {item.view_count > 0 && (
+                <View style={st.viewBadge}>
+                  <Ionicons name="eye-outline" size={9} color="rgba(255,255,255,0.85)" />
+                  <Text style={st.viewBadgeText}>{fmtNum(item.view_count)}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           )}
         />
@@ -617,82 +572,63 @@ function PostsTab({ posts, loading, profile, colors }: { posts: UserPost[]; load
       <View style={st.emptyWrap}>
         <Ionicons name="document-text-outline" size={44} color={colors.textMuted} />
         <Text style={[st.emptyTitle, { color: colors.text }]}>No posts yet</Text>
-        <Text style={[st.emptySub, { color: colors.textMuted }]}>{profile?.display_name} hasn't shared anything yet.</Text>
+        <Text style={[st.emptySub, { color: colors.textMuted }]}>
+          {profile?.display_name} hasn't shared anything yet.
+        </Text>
       </View>
     );
   }
   return (
-    <View style={[st.postsList, { backgroundColor: colors.surface }]}>
+    <View>
       {posts.map((p, idx) => {
         const isArticle = p.post_type === "article";
         const isVideo = p.post_type === "video" && p.video_url;
-        const images = p.post_images?.length > 0 ? p.post_images.map((i: any) => i.image_url) : p.image_url ? [p.image_url] : [];
+        const images = p.post_images?.length > 0
+          ? p.post_images.map((i: any) => i.image_url)
+          : p.image_url ? [p.image_url] : [];
 
         return (
           <TouchableOpacity
             key={p.id}
-            style={[st.postCard, idx > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}
+            style={[
+              st.postCard,
+              { borderBottomColor: colors.border },
+              idx === 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+            ]}
             onPress={() => {
               if (isArticle) router.push({ pathname: "/article/[id]", params: { id: p.id } });
               else if (isVideo) router.push({ pathname: "/video/[id]", params: { id: p.id } });
               else router.push({ pathname: "/p/[id]", params: { id: encodeId(p.id) } });
             }}
-            activeOpacity={0.7}
+            activeOpacity={0.75}
           >
-            {isArticle ? (
-              <View style={[st.articleCard, { backgroundColor: colors.backgroundSecondary, borderColor: colors.accent + "20" }]}>
-                {images.length > 0 && <Image source={{ uri: images[0] }} style={st.articleCover} resizeMode="cover" />}
-                <View style={{ padding: 14, gap: 6 }}>
-                  <View style={[st.typeBadge, { backgroundColor: colors.accent + "15" }]}>
-                    <Ionicons name="document-text" size={11} color={colors.accent} />
-                    <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: colors.accent }}>Article</Text>
-                  </View>
-                  {p.article_title ? <Text style={[st.articleTitle, { color: colors.text }]} numberOfLines={2}>{p.article_title}</Text> : null}
-                  {!!p.content && <RichText style={{ color: colors.textSecondary, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 }} numberOfLines={2}>{p.content}</RichText>}
+            <View style={st.postInner}>
+              <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={34} />
+              <View style={st.postBody}>
+                <View style={st.postHeader}>
+                  <Text style={[st.postName, { color: colors.text }]}>{profile?.display_name}</Text>
+                  <Text style={[st.postTime, { color: colors.textMuted }]}>· {timeAgo(p.created_at)}</Text>
                 </View>
-              </View>
-            ) : (
-              <>
-                {isVideo && (
-                  <View style={[st.typeBadge, { backgroundColor: colors.backgroundSecondary, alignSelf: "flex-start", marginBottom: 8 }]}>
-                    <Ionicons name="videocam" size={11} color={colors.textMuted} />
-                    <Text style={{ fontSize: 11, fontFamily: "Inter_500Medium", color: colors.textMuted }}>Video</Text>
+                {isArticle && p.article_title && (
+                  <Text style={[st.articleTitle, { color: colors.text }]} numberOfLines={2}>{p.article_title}</Text>
+                )}
+                {!!p.content && (
+                  <RichText style={[st.postContent, { color: colors.textSecondary }]} numberOfLines={4}>{p.content}</RichText>
+                )}
+                {images.length > 0 && (
+                  <Image source={{ uri: images[0] }} style={[st.postThumb, { borderColor: colors.border }]} resizeMode="cover" />
+                )}
+                {isVideo && !images.length && (
+                  <View style={[st.postThumb, { backgroundColor: "#111", alignItems: "center", justifyContent: "center" }]}>
+                    <Ionicons name="play-circle" size={36} color="rgba(255,255,255,0.7)" />
                   </View>
                 )}
-                {!!p.content && <RichText style={[st.postContent, { color: colors.text }]} numberOfLines={4}>{p.content}</RichText>}
-                {isVideo ? (
-                  <View style={[st.postThumb, { backgroundColor: "#111", overflow: "hidden" }]}>
-                    {p.image_url && <Image source={{ uri: p.image_url }} style={StyleSheet.absoluteFill} resizeMode="cover" />}
-                    <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center", backgroundColor: p.image_url ? "rgba(0,0,0,0.3)" : "rgba(0,0,0,0.6)" }]}>
-                      <View style={st.playCircleLg}>
-                        <Ionicons name="play" size={26} color="#fff" />
-                      </View>
-                    </View>
-                  </View>
-                ) : images.length === 1 ? (
-                  <Image source={{ uri: images[0] }} style={st.postThumb} resizeMode="cover" />
-                ) : images.length > 1 ? (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
-                    {images.map((url: string, i: number) => (
-                      <Image key={i} source={{ uri: url }} style={st.postThumbSm} resizeMode="cover" />
-                    ))}
-                  </ScrollView>
-                ) : null}
-              </>
-            )}
-            <View style={st.postMeta}>
-              <Text style={[st.postTime, { color: colors.textMuted }]}>{timeAgo(p.created_at)}</Text>
-              <View style={st.postStats}>
-                <Ionicons name="heart-outline" size={13} color={colors.textMuted} />
-                <Text style={[st.postStatNum, { color: colors.textMuted }]}>{fmtNum(p.likeCount)}</Text>
-                <Ionicons name="chatbubble-outline" size={13} color={colors.textMuted} style={{ marginLeft: 10 }} />
-                <Text style={[st.postStatNum, { color: colors.textMuted }]}>{fmtNum(p.replyCount)}</Text>
-                {p.view_count > 0 && (
-                  <>
-                    <Ionicons name="eye-outline" size={13} color={colors.textMuted} style={{ marginLeft: 10 }} />
-                    <Text style={[st.postStatNum, { color: colors.textMuted }]}>{fmtNum(p.view_count)}</Text>
-                  </>
-                )}
+                <View style={st.postMeta}>
+                  <Ionicons name="heart-outline" size={13} color={colors.textMuted} />
+                  <Text style={[st.postStatNum, { color: colors.textMuted }]}>{fmtNum(p.likeCount)}</Text>
+                  <Ionicons name="chatbubble-outline" size={13} color={colors.textMuted} style={{ marginLeft: 12 }} />
+                  <Text style={[st.postStatNum, { color: colors.textMuted }]}>{fmtNum(p.replyCount)}</Text>
+                </View>
               </View>
             </View>
           </TouchableOpacity>
@@ -705,81 +641,91 @@ function PostsTab({ posts, loading, profile, colors }: { posts: UserPost[]; load
 const st = StyleSheet.create({
   root: { flex: 1 },
 
-  coverArea: { height: 100, justifyContent: "flex-start" },
-  topBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 14 },
-  circleBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  navBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 6,
+    paddingBottom: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  navBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  navTitle: { flex: 1, textAlign: "center", fontSize: 14, fontFamily: "Inter_700Bold", letterSpacing: -0.2 },
 
-  identityCard: { marginHorizontal: 14, marginTop: -36, borderRadius: 24, paddingBottom: 22, paddingHorizontal: 20, elevation: 3, shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
-  avatarFloat: { alignItems: "center", marginTop: -44, marginBottom: 12 },
-  avatarRing: { borderWidth: 3, borderRadius: 50, padding: 2 },
-  onlineDot: { position: "absolute", bottom: 5, right: 5, width: 15, height: 15, borderRadius: 8, backgroundColor: "#34C759", borderWidth: 2.5, borderColor: "#fff" },
+  avatarStatsRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12, gap: 16 },
+  avatarWrap: { position: "relative" },
+  avatarRing: { borderRadius: 50, borderWidth: 2, padding: 2 },
+  onlineDot: { position: "absolute", bottom: 4, right: 4, width: 14, height: 14, borderRadius: 7, backgroundColor: "#22C55E", borderWidth: 2 },
 
-  identityBody: { alignItems: "center", gap: 5 },
-  nameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  displayName: { fontSize: 22, fontFamily: "Inter_700Bold", letterSpacing: -0.3 },
-  subRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  handle: { fontSize: 14, fontFamily: "Inter_400Regular" },
-  onlineLabel: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  statsBlock: { flex: 1, flexDirection: "row", justifyContent: "space-around" },
+  statCell: { alignItems: "center", gap: 2 },
+  statNum: { fontSize: 19, fontFamily: "Inter_800ExtraBold" },
+  statLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
 
-  verifiedPill: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16 },
-  verifiedPillText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  nameBadgeRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, marginBottom: 3 },
+  displayName: { fontSize: 15, fontFamily: "Inter_700Bold" },
 
-  badgeCard: { width: "100%", borderRadius: 14, padding: 14, gap: 8, marginTop: 4, borderWidth: 1 },
-  badgeRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  badgeText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  bio: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19, paddingHorizontal: 16, marginBottom: 6 },
 
-  bio: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 21, paddingHorizontal: 6 },
-  metaRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 6, marginTop: 4 },
-  metaChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20 },
-  metaChipText: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 16, marginBottom: 10 },
+  metaChip: { flexDirection: "row", alignItems: "center", gap: 4 },
+  metaChipText: { fontSize: 12, fontFamily: "Inter_400Regular" },
 
-  statsRow: { flexDirection: "row", alignItems: "center", borderRadius: 16, paddingVertical: 12, width: "100%", marginTop: 12 },
-  statCell: { flex: 1, alignItems: "center" },
-  statNum: { fontSize: 17, fontFamily: "Inter_700Bold" },
-  statLabel: { fontSize: 10, fontFamily: "Inter_400Regular", marginTop: 2, textTransform: "uppercase", letterSpacing: 0.3 },
-  statSep: { width: StyleSheet.hairlineWidth, height: 26 },
+  ctaRow: { flexDirection: "row", gap: 7, paddingHorizontal: 16, marginBottom: 12 },
+  ctaFollow: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 5, paddingVertical: 9, borderRadius: 10,
+  },
+  ctaFollowText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  ctaMessage: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 5, paddingVertical: 9, borderRadius: 10, borderWidth: 1.5,
+  },
+  ctaMessageText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  ctaIcon: {
+    width: 42, height: 42, borderRadius: 10, alignItems: "center", justifyContent: "center", borderWidth: 1.5,
+  },
 
-  ctaRow: { flexDirection: "row", gap: 8, marginTop: 14, width: "100%" },
-  ctaFollow: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 11, borderRadius: 13 },
-  ctaFollowText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  ctaMessage: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 11, borderRadius: 13 },
-  ctaMessageText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  ctaIcon: { width: 46, height: 46, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+  xpStrip: {
+    flexDirection: "row", alignItems: "center", gap: 7,
+    marginHorizontal: 16, marginBottom: 4,
+    borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1,
+  },
+  xpLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  xpTrack: { flex: 1, height: 5, borderRadius: 99, overflow: "hidden" },
+  xpFill: { height: "100%", backgroundColor: "#F59E0B", borderRadius: 99 },
+  xpPct: { fontSize: 11, fontFamily: "Inter_500Medium", minWidth: 28, textAlign: "right" },
 
-  pillBar: { flexDirection: "row", justifyContent: "space-around", marginHorizontal: 14, marginTop: 10, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 8 },
-  pill: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 22 },
-  pillLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  tabBar: {
+    flexDirection: "row",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginTop: 8,
+  },
+  tabBtn: {
+    flex: 1, paddingVertical: 12, alignItems: "center", justifyContent: "center",
+    borderTopWidth: 0, borderTopColor: "transparent",
+  },
 
-  tabBar: { flexDirection: "row", marginHorizontal: 14, marginTop: 10, borderRadius: 16, borderBottomWidth: 0, overflow: "hidden", position: "relative" },
-  tabBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 13 },
-  tabBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  tabBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, minWidth: 20, alignItems: "center" },
-  tabBadgeText: { fontSize: 10, fontFamily: "Inter_700Bold" },
-  tabIndicator: { position: "absolute", bottom: 0, width: "33.333%", height: 2.5, borderTopLeftRadius: 2, borderTopRightRadius: 2 },
+  videoOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.3)" },
+  playCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" },
+  viewBadge: { position: "absolute", bottom: 5, left: 5, flexDirection: "row", alignItems: "center", gap: 2 },
+  viewBadgeText: { color: "rgba(255,255,255,0.85)", fontSize: 9, fontFamily: "Inter_600SemiBold" },
+  multiImgBadge: { position: "absolute", top: 5, right: 5, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 5, padding: 3 },
 
-  postsList: { marginHorizontal: 14, marginTop: 10, borderRadius: 20, overflow: "hidden", marginBottom: 4 },
-  postCard: { paddingVertical: 16, paddingHorizontal: 18 },
-  postContent: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22, marginBottom: 10 },
-  postThumb: { width: "100%", height: 190, borderRadius: 14, marginBottom: 10 },
-  postThumbSm: { width: 130, height: 130, borderRadius: 12, marginRight: 8 },
-  postMeta: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 },
+  postCard: { borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 14, paddingHorizontal: 16 },
+  postInner: { flexDirection: "row", gap: 10 },
+  postBody: { flex: 1, gap: 4 },
+  postHeader: { flexDirection: "row", alignItems: "center", gap: 3 },
+  postName: { fontSize: 13, fontFamily: "Inter_700Bold" },
   postTime: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  postStats: { flexDirection: "row", alignItems: "center", gap: 3 },
+  articleTitle: { fontSize: 14, fontFamily: "Inter_700Bold", lineHeight: 20 },
+  postContent: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 },
+  postThumb: { width: "100%", height: 160, borderRadius: 12, marginTop: 6, borderWidth: StyleSheet.hairlineWidth },
+  postMeta: { flexDirection: "row", alignItems: "center", marginTop: 6, gap: 3 },
   postStatNum: { fontSize: 12, fontFamily: "Inter_500Medium" },
 
-  articleCard: { borderRadius: 14, borderWidth: 1, overflow: "hidden", marginBottom: 8 },
-  articleCover: { width: "100%", height: 140 },
-  articleTitle: { fontSize: 16, fontFamily: "Inter_700Bold", lineHeight: 22 },
-  typeBadge: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-
-  multiImgBadge: { position: "absolute", top: 6, right: 6, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 6, padding: 3 },
-  videoThumbOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.38)" },
-  playCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" },
-  playCircleLg: { width: 54, height: 54, borderRadius: 27, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" },
-  viewCountBadge: { position: "absolute", bottom: 5, left: 5, flexDirection: "row", alignItems: "center", gap: 2 },
-  viewCountText: { color: "rgba(255,255,255,0.85)", fontSize: 10, fontFamily: "Inter_600SemiBold" },
-
-  emptyWrap: { alignItems: "center", paddingVertical: 48, paddingHorizontal: 32, gap: 10 },
+  emptyWrap: { alignItems: "center", paddingVertical: 52, paddingHorizontal: 32, gap: 10 },
   emptyTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
   emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
 });
