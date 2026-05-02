@@ -147,32 +147,66 @@ function WebVideoPlayer({
     onDoubleTap();
   }
 
+  // Forward wheel events that the <video> element would otherwise swallow,
+  // so the FlatList snap-scroll still works on desktop mouse-wheel.
+  function handleWheel(e: any) {
+    let el: HTMLElement | null = (e.currentTarget as HTMLElement).parentElement;
+    while (el) {
+      const cs = window.getComputedStyle(el);
+      if (cs.overflowY === "scroll" || cs.overflowY === "auto" || (el as any).scrollHeight > (el as any).clientHeight) {
+        el.scrollTop += e.deltaY;
+        break;
+      }
+      el = el.parentElement;
+    }
+  }
+
   return (
-    // @ts-expect-error react-native-web exposes raw HTML elements via createElement
-    <video
-      ref={setRef}
-      src={src}
-      poster={poster || undefined}
-      playsInline
-      loop
-      preload="auto"
-      onClick={handleClick}
-      onDoubleClick={handleDblClick}
-      onTimeUpdate={(e: any) => {
-        const v = e.currentTarget as HTMLVideoElement;
-        if (v.duration) onProgress(v.currentTime * 1000, v.duration * 1000);
-      }}
-      onWaiting={() => onBuffering(true)}
-      onPlaying={() => onBuffering(false)}
-      onCanPlay={() => onBuffering(false)}
-      style={{
-        width: "100%",
-        height: "100%",
-        objectFit: "contain",
-        backgroundColor: "#000",
-        cursor: preloadOnly ? "default" : "pointer",
-      }}
-    />
+    // Fragment so we can layer the <video> (pointer-events:none) under a
+    // transparent <div> that handles clicks and allows touch-pan-y scroll.
+    // @ts-expect-error JSX fragment + raw HTML elements
+    <>
+      {/* @ts-expect-error */}
+      <video
+        ref={setRef}
+        src={src}
+        poster={poster || undefined}
+        playsInline
+        loop
+        preload="auto"
+        onTimeUpdate={(e: any) => {
+          const v = e.currentTarget as HTMLVideoElement;
+          if (v.duration) onProgress(v.currentTime * 1000, v.duration * 1000);
+        }}
+        onWaiting={() => onBuffering(true)}
+        onPlaying={() => onBuffering(false)}
+        onCanPlay={() => onBuffering(false)}
+        style={{
+          position: "absolute",
+          top: 0, left: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          backgroundColor: "#000",
+          pointerEvents: "none",
+        }}
+      />
+      {/* transparent interaction overlay — touch-action:pan-y lets vertical
+          swipes reach the FlatList while still firing click/dblclick here */}
+      {/* @ts-expect-error */}
+      <div
+        onClick={handleClick}
+        onDoubleClick={handleDblClick}
+        onWheel={handleWheel}
+        style={{
+          position: "absolute",
+          top: 0, left: 0, right: 0, bottom: 0,
+          cursor: preloadOnly ? "default" : "pointer",
+          touchAction: "pan-y",
+          WebkitOverflowScrolling: "touch",
+        }}
+      />
+    </>
   );
 }
 
@@ -841,7 +875,7 @@ function VideoItem({
             position: "relative",
           }}>
             <Pressable
-              style={StyleSheet.absoluteFill}
+              style={[StyleSheet.absoluteFill, Platform.OS === "web" ? { touchAction: "pan-y" } as any : null]}
               onLongPress={() => onOpenMenu(item)}
               delayLongPress={380}
             >
@@ -1079,7 +1113,7 @@ function VideoItem({
         ]}
       >
       <Pressable
-        style={StyleSheet.absoluteFill}
+        style={[StyleSheet.absoluteFill, Platform.OS === "web" ? { touchAction: "pan-y" } as any : null]}
         onPress={Platform.OS === "web" ? undefined : handleTap}
         onLongPress={() => onOpenMenu(item)}
         delayLongPress={380}
