@@ -67,6 +67,7 @@ function WebVideoPlayer({
   preloadOnly,
   onTogglePause,
   onDoubleTap,
+  onLongPress,
   onProgress,
   onBuffering,
   externalRef,
@@ -78,12 +79,16 @@ function WebVideoPlayer({
   preloadOnly: boolean;
   onTogglePause: () => void;
   onDoubleTap?: () => void;
+  onLongPress?: () => void;
   onProgress: (positionMs: number, durationMs: number) => void;
   onBuffering: (buffering: boolean) => void;
   externalRef?: React.MutableRefObject<HTMLVideoElement | null>;
 }) {
   const innerRef = useRef<HTMLVideoElement | null>(null);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pointerMoved = useRef(false);
+  const pointerStart = useRef<{ x: number; y: number } | null>(null);
 
   function setRef(el: HTMLVideoElement | null) {
     innerRef.current = el;
@@ -147,13 +152,43 @@ function WebVideoPlayer({
     onDoubleTap();
   }
 
+  // Long-press via pointer events — does NOT call preventDefault so scroll
+  // gestures are never blocked on the parent FlatList.
+  function handlePointerDown(e: any) {
+    pointerMoved.current = false;
+    pointerStart.current = { x: e.clientX, y: e.clientY };
+    if (onLongPress) {
+      longPressTimer.current = setTimeout(() => {
+        longPressTimer.current = null;
+        if (!pointerMoved.current) onLongPress?.();
+      }, 380);
+    }
+  }
+  function cancelLongPress() {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    pointerStart.current = null;
+  }
+  function handlePointerMove(e: any) {
+    if (pointerStart.current) {
+      const dx = Math.abs(e.clientX - pointerStart.current.x);
+      const dy = Math.abs(e.clientY - pointerStart.current.y);
+      if (dx > 8 || dy > 8) {
+        pointerMoved.current = true;
+        cancelLongPress();
+      }
+    }
+  }
+
   // Forward wheel events that the <video> element would otherwise swallow,
   // so the FlatList snap-scroll still works on desktop mouse-wheel.
   function handleWheel(e: any) {
     let el: HTMLElement | null = (e.currentTarget as HTMLElement).parentElement;
     while (el) {
       const cs = window.getComputedStyle(el);
-      if (cs.overflowY === "scroll" || cs.overflowY === "auto" || (el as any).scrollHeight > (el as any).clientHeight) {
+      if (cs.overflowY === "scroll" || cs.overflowY === "auto") {
         el.scrollTop += e.deltaY;
         break;
       }
@@ -163,7 +198,7 @@ function WebVideoPlayer({
 
   return (
     // Fragment so we can layer the <video> (pointer-events:none) under a
-    // transparent <div> that handles clicks and allows touch-pan-y scroll.
+    // transparent <div> that handles all interactions without blocking scroll.
     // @ts-expect-error JSX fragment + raw HTML elements
     <>
       {/* @ts-expect-error */}
@@ -191,19 +226,25 @@ function WebVideoPlayer({
           pointerEvents: "none",
         }}
       />
-      {/* transparent interaction overlay — touch-action:pan-y lets vertical
-          swipes reach the FlatList while still firing click/dblclick here */}
+      {/* Transparent interaction overlay.
+          - touch-action:pan-y  → vertical swipes always reach the FlatList
+          - pointer events handle click, double-click, long-press and wheel
+          - NO preventDefault is called so the browser scroll is never blocked */}
       {/* @ts-expect-error */}
       <div
         onClick={handleClick}
         onDoubleClick={handleDblClick}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={cancelLongPress}
+        onPointerLeave={cancelLongPress}
+        onPointerCancel={cancelLongPress}
         onWheel={handleWheel}
         style={{
           position: "absolute",
           top: 0, left: 0, right: 0, bottom: 0,
           cursor: preloadOnly ? "default" : "pointer",
           touchAction: "pan-y",
-          WebkitOverflowScrolling: "touch",
         }}
       />
     </>
@@ -874,13 +915,12 @@ function VideoItem({
             overflow: "hidden",
             position: "relative",
           }}>
-            <Pressable
-              style={[StyleSheet.absoluteFill, Platform.OS === "web" ? { touchAction: "pan-y" } as any : null]}
-              onLongPress={() => onOpenMenu(item)}
-              delayLongPress={380}
-            >
-              {shouldMountVideo ? (
-                Platform.OS === "web" ? (
+            {Platform.OS === "web" ? (
+              // Web: plain View — no Pressable so RN-Web never calls
+              // preventDefault on touch events; long-press lives in the
+              // WebVideoPlayer overlay div via pointer events.
+              <View style={StyleSheet.absoluteFill}>
+                {shouldMountVideo ? (
                   <WebVideoPlayer
                     src={playbackUri}
                     poster={item.image_url}
@@ -889,6 +929,7 @@ function VideoItem({
                     preloadOnly={preloadOnly}
                     onTogglePause={() => setPaused((p) => !p)}
                     onDoubleTap={triggerLikeBurst}
+                    onLongPress={() => onOpenMenu(item)}
                     onProgress={(pos, dur) => {
                       if (!dur) return;
                       setDurationMs(dur);
@@ -901,6 +942,17 @@ function VideoItem({
                     externalRef={webVideoRef}
                   />
                 ) : (
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />
+                )}
+              </View>
+            ) : (
+              // Native: keep the Pressable for long-press and tap
+              <Pressable
+                style={StyleSheet.absoluteFill}
+                onLongPress={() => onOpenMenu(item)}
+                delayLongPress={380}
+              >
+                {shouldMountVideo ? (
                   <Video
                     ref={videoRef}
                     source={{ uri: playbackUri }}
@@ -913,11 +965,11 @@ function VideoItem({
                     usePosterImage={!!item.image_url}
                     onPlaybackStatusUpdate={onPlaybackStatus}
                   />
-                )
-              ) : (
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />
-              )}
-            </Pressable>
+                ) : (
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />
+                )}
+              </Pressable>
+            )}
 
             {buffering && isActive && (
               <View style={[vStyles.bufferOverlay, { pointerEvents: "none" as any }]}>
@@ -1112,14 +1164,12 @@ function VideoItem({
           },
         ]}
       >
-      <Pressable
-        style={[StyleSheet.absoluteFill, Platform.OS === "web" ? { touchAction: "pan-y" } as any : null]}
-        onPress={Platform.OS === "web" ? undefined : handleTap}
-        onLongPress={() => onOpenMenu(item)}
-        delayLongPress={380}
-      >
-        {shouldMountVideo ? (
-          Platform.OS === "web" ? (
+      {Platform.OS === "web" ? (
+        // Web: plain View — no Pressable so RN-Web never calls
+        // preventDefault on touch events; long-press lives in the
+        // WebVideoPlayer overlay div via pointer events.
+        <View style={StyleSheet.absoluteFill}>
+          {shouldMountVideo ? (
             <WebVideoPlayer
               src={playbackUri}
               poster={item.image_url}
@@ -1128,6 +1178,7 @@ function VideoItem({
               preloadOnly={preloadOnly}
               onTogglePause={() => setPaused((p) => !p)}
               onDoubleTap={triggerLikeBurst}
+              onLongPress={() => onOpenMenu(item)}
               onProgress={(pos, dur) => {
                 if (!dur) return;
                 setDurationMs(dur);
@@ -1140,6 +1191,18 @@ function VideoItem({
               externalRef={webVideoRef}
             />
           ) : (
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />
+          )}
+        </View>
+      ) : (
+        // Native: keep Pressable for onPress (tap to pause) + long-press
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={handleTap}
+          onLongPress={() => onOpenMenu(item)}
+          delayLongPress={380}
+        >
+          {shouldMountVideo ? (
             <Video
               ref={videoRef}
               source={{ uri: playbackUri }}
@@ -1152,11 +1215,11 @@ function VideoItem({
               usePosterImage={!!item.image_url}
               onPlaybackStatusUpdate={onPlaybackStatus}
             />
-          )
-        ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />
-        )}
-      </Pressable>
+          ) : (
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />
+          )}
+        </Pressable>
+      )}
 
       {buffering && isActive && (
         <View style={[vStyles.bufferOverlay, { pointerEvents: "none" as any }]}>
