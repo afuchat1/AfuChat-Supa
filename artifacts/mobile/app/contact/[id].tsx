@@ -385,13 +385,6 @@ export default function ContactProfileScreen() {
             <Text style={[st.ctaMessageText, { color: colors.text }]}>Message</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[st.ctaIcon, { borderColor: colors.border }]}
-            onPress={() => router.push({ pathname: "/gifts", params: { userId: profile?.id, userName: profile?.display_name } })}
-            activeOpacity={0.75}
-          >
-            <Ionicons name="gift-outline" size={17} color={colors.textSecondary} />
-          </TouchableOpacity>
         </View>
       )}
 
