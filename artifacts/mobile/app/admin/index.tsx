@@ -84,6 +84,7 @@ type CurrencySettings = {
 
 const TABS = [
   { id: "overview", label: "Overview", icon: "stats-chart" as const },
+  { id: "verifications", label: "Verifications", icon: "ribbon" as const },
   { id: "lookup", label: "ID Lookup", icon: "finger-print" as const },
   { id: "scanner", label: "ID Scanner", icon: "scan" as const },
   { id: "users", label: "Users", icon: "people" as const },
@@ -168,6 +169,14 @@ export default function AdminDashboard() {
   const [broadcastTarget, setBroadcastTarget] = useState<"all" | "premium">("all");
   const [broadcastSending, setBroadcastSending] = useState(false);
   const [broadcastResult, setBroadcastResult] = useState<{ sent: number; total: number; message: string } | null>(null);
+
+  const [verifApps, setVerifApps] = useState<any[]>([]);
+  const [verifAppFilter, setVerifAppFilter] = useState<"pending" | "approved" | "rejected" | "all">("pending");
+  const [reviewingVerifApp, setReviewingVerifApp] = useState<any | null>(null);
+  const [verifReviewNote, setVerifReviewNote] = useState("");
+  const [verifReviewSaving, setVerifReviewSaving] = useState(false);
+  const [verifExpandedId, setVerifExpandedId] = useState<string | null>(null);
+
   const isAdmin = !!profile?.is_admin;
 
   const loadStats = useCallback(async () => {
@@ -376,11 +385,21 @@ export default function AdminDashboard() {
     } catch {}
   }, []);
 
+  const loadVerifApps = useCallback(async () => {
+    if (!isAdmin) return;
+    const { data } = await supabase
+      .from("business_verification_requests")
+      .select("*, profiles!business_verification_requests_user_id_fkey(display_name, handle, avatar_url, is_organization_verified)")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    setVerifApps(data || []);
+  }, []);
+
   const loadAll = useCallback(async () => {
     setLoading(true);
     await Promise.all([
       loadStats(), loadUsers(), loadPosts(), loadPlans(), loadCurrency(),
-      loadReports(), loadSellerApplications(), loadReferrals(), loadMatchData(), loadChannelData(), loadSystemData(),
+      loadReports(), loadSellerApplications(), loadReferrals(), loadMatchData(), loadChannelData(), loadSystemData(), loadVerifApps(),
     ]);
     setLoading(false);
   }, []);
@@ -1522,6 +1541,301 @@ export default function AdminDashboard() {
     );
   }
 
+  async function handleVerifReview(appId: string, userId: string, decision: "approved" | "rejected") {
+    setVerifReviewSaving(true);
+    await supabase.from("business_verification_requests").update({
+      status: decision,
+      admin_note: verifReviewNote.trim() || null,
+      reviewed_by: profile?.id,
+      reviewed_at: new Date().toISOString(),
+    }).eq("id", appId);
+    if (decision === "approved") {
+      await supabase.from("profiles").update({ is_organization_verified: true, is_verified: true }).eq("id", userId);
+    }
+    setVerifReviewSaving(false);
+    setReviewingVerifApp(null);
+    setVerifReviewNote("");
+    loadVerifApps();
+    loadUsers();
+    loadStats();
+  }
+
+  function renderVerifications() {
+    const filtered = verifAppFilter === "all" ? verifApps : verifApps.filter((a) => a.status === verifAppFilter);
+    const pendingCount = verifApps.filter((a) => a.status === "pending").length;
+    const approvedCount = verifApps.filter((a) => a.status === "approved").length;
+    const rejectedCount = verifApps.filter((a) => a.status === "rejected").length;
+
+    return (
+      <View style={styles.section}>
+        {/* Header */}
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Business Verifications</Text>
+          {pendingCount > 0 && (
+            <View style={{ backgroundColor: GOLD, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10 }}>
+              <Text style={{ color: "#fff", fontSize: 12, fontFamily: "Inter_700Bold" }}>{pendingCount} pending</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Summary stats */}
+        <View style={styles.statsGrid}>
+          <StatCard title="Pending" value={pendingCount} icon="time-outline" color="#FF9500" colors={colors} />
+          <StatCard title="Approved" value={approvedCount} icon="checkmark-circle" color="#34C759" colors={colors} />
+          <StatCard title="Rejected" value={rejectedCount} icon="close-circle" color="#FF3B30" colors={colors} />
+          <StatCard title="Total" value={verifApps.length} icon="ribbon" color={GOLD} colors={colors} />
+        </View>
+
+        {/* Filter chips */}
+        <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+          {(["pending", "approved", "rejected", "all"] as const).map((f) => {
+            const count = f === "all" ? verifApps.length : verifApps.filter((a) => a.status === f).length;
+            const chipColor = f === "pending" ? "#FF9500" : f === "approved" ? "#34C759" : f === "rejected" ? "#FF3B30" : GOLD;
+            const isActive = verifAppFilter === f;
+            return (
+              <TouchableOpacity
+                key={f}
+                onPress={() => setVerifAppFilter(f)}
+                style={{
+                  paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1,
+                  backgroundColor: isActive ? chipColor + "20" : colors.surface,
+                  borderColor: isActive ? chipColor : colors.border,
+                  flexDirection: "row", alignItems: "center", gap: 6,
+                }}
+              >
+                <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: isActive ? chipColor : colors.textSecondary, textTransform: "capitalize" }}>{f}</Text>
+                <View style={{ backgroundColor: isActive ? chipColor : colors.backgroundSecondary, borderRadius: 10, minWidth: 18, alignItems: "center", paddingHorizontal: 5, paddingVertical: 1 }}>
+                  <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: isActive ? "#fff" : colors.textMuted }}>{count}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* App cards */}
+        {filtered.length === 0 ? (
+          <View style={{ alignItems: "center", paddingVertical: 40, gap: 10 }}>
+            <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: GOLD + "18", alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="ribbon-outline" size={26} color={GOLD} />
+            </View>
+            <Text style={[styles.emptyText, { color: colors.textMuted, paddingVertical: 0 }]}>No {verifAppFilter === "all" ? "" : verifAppFilter} applications</Text>
+          </View>
+        ) : (
+          filtered.map((app: any) => {
+            const statusColor = app.status === "approved" ? "#34C759" : app.status === "rejected" ? "#FF3B30" : "#FF9500";
+            const profile = app.profiles;
+            const isExpanded = verifExpandedId === app.id;
+            const socialLinks = app.social_links || {};
+
+            return (
+              <View key={app.id} style={[styles.reportCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: app.status === "pending" ? GOLD + "40" : colors.border }]}>
+                {/* Card header */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setVerifExpandedId(isExpanded ? null : app.id)}
+                  style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}
+                >
+                  <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: GOLD + "22", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Ionicons name="business-outline" size={20} color={GOLD} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <Text style={[styles.reportReason, { color: colors.text, fontSize: 15 }]} numberOfLines={1}>{app.org_name}</Text>
+                      <View style={[styles.statusBadge, { backgroundColor: statusColor + "18" }]}>
+                        <Text style={{ color: statusColor, fontSize: 10, fontFamily: "Inter_700Bold", textTransform: "uppercase" }}>{app.status}</Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.reportMeta, { color: colors.textSecondary, marginTop: 2 }]}>
+                      @{profile?.handle || "?"} · {app.org_type}
+                    </Text>
+                    {app.industry ? (
+                      <Text style={[styles.reportMeta, { color: colors.textMuted }]}>{app.industry}</Text>
+                    ) : null}
+                    <Text style={[styles.reportMeta, { color: colors.textMuted, marginTop: 1 }]}>{timeAgo(app.created_at)}</Text>
+                  </View>
+                  <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+
+                {/* Expanded details */}
+                {isExpanded && (
+                  <View style={{ marginTop: 12, gap: 10 }}>
+                    <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
+
+                    {/* Description */}
+                    {app.description ? (
+                      <View style={{ backgroundColor: colors.backgroundSecondary, borderRadius: 10, padding: 12 }}>
+                        <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.textMuted, letterSpacing: 0.6, marginBottom: 4 }}>DESCRIPTION</Text>
+                        <Text style={{ fontSize: 13, color: colors.text, lineHeight: 19 }}>{app.description}</Text>
+                      </View>
+                    ) : null}
+
+                    {/* Website + notable links */}
+                    {(app.website_url || app.notable_links) ? (
+                      <View style={{ backgroundColor: colors.backgroundSecondary, borderRadius: 10, padding: 12, gap: 6 }}>
+                        <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.textMuted, letterSpacing: 0.6 }}>LINKS</Text>
+                        {app.website_url ? (
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                            <Ionicons name="globe-outline" size={14} color={BRAND} />
+                            <Text style={{ fontSize: 13, color: BRAND, flex: 1 }} numberOfLines={1}>{app.website_url}</Text>
+                          </View>
+                        ) : null}
+                        {app.notable_links ? (
+                          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+                            <Ionicons name="link-outline" size={14} color={colors.textMuted} />
+                            <Text style={{ fontSize: 12, color: colors.textSecondary, flex: 1, lineHeight: 17 }}>{app.notable_links}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    ) : null}
+
+                    {/* Social links */}
+                    {(socialLinks.instagram || socialLinks.x_twitter || socialLinks.linkedin) ? (
+                      <View style={{ backgroundColor: colors.backgroundSecondary, borderRadius: 10, padding: 12, gap: 6 }}>
+                        <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.textMuted, letterSpacing: 0.6, marginBottom: 2 }}>SOCIAL MEDIA</Text>
+                        {socialLinks.instagram ? (
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                            <Ionicons name="logo-instagram" size={14} color="#E1306C" />
+                            <Text style={{ fontSize: 13, color: colors.text }}>{socialLinks.instagram}</Text>
+                          </View>
+                        ) : null}
+                        {socialLinks.x_twitter ? (
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                            <Ionicons name="logo-twitter" size={14} color="#1DA1F2" />
+                            <Text style={{ fontSize: 13, color: colors.text }}>{socialLinks.x_twitter}</Text>
+                          </View>
+                        ) : null}
+                        {socialLinks.linkedin ? (
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                            <Ionicons name="logo-linkedin" size={14} color="#0A66C2" />
+                            <Text style={{ fontSize: 13, color: colors.text }}>{socialLinks.linkedin}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    ) : null}
+
+                    {/* Existing admin note */}
+                    {app.admin_note ? (
+                      <View style={{ backgroundColor: GOLD + "12", borderRadius: 10, borderWidth: 1, borderColor: GOLD + "30", padding: 12 }}>
+                        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: GOLD, letterSpacing: 0.6, marginBottom: 4 }}>REVIEWER NOTE</Text>
+                        <Text style={{ fontSize: 13, color: colors.text, lineHeight: 18 }}>{app.admin_note}</Text>
+                        {app.reviewed_at ? (
+                          <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 6 }}>Reviewed {timeAgo(app.reviewed_at)}</Text>
+                        ) : null}
+                      </View>
+                    ) : null}
+
+                    {/* Action buttons */}
+                    {app.status === "pending" ? (
+                      <TouchableOpacity
+                        style={[styles.actionBtn, { backgroundColor: GOLD + "18", borderColor: GOLD, alignItems: "center", paddingVertical: 11 }]}
+                        onPress={() => { setReviewingVerifApp(app); setVerifReviewNote(""); }}
+                      >
+                        <Text style={{ color: GOLD, fontSize: 14, fontFamily: "Inter_700Bold" }}>Review This Application</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.actionBtn, { borderColor: colors.border, alignItems: "center", paddingVertical: 9 }]}
+                        onPress={() => { setReviewingVerifApp(app); setVerifReviewNote(app.admin_note || ""); }}
+                      >
+                        <Text style={{ color: colors.textSecondary, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>Edit Decision / Note</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+              </View>
+            );
+          })
+        )}
+
+        {/* Review Modal */}
+        <Modal visible={!!reviewingVerifApp} transparent animationType="slide" onRequestClose={() => setReviewingVerifApp(null)}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: colors.surface, maxHeight: "90%" }]}>
+              {/* Modal header */}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: GOLD + "22", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="ribbon-outline" size={18} color={GOLD} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.modalTitle, { color: colors.text }]}>Review Verification</Text>
+                  {reviewingVerifApp && (
+                    <Text style={[styles.modalSubtitle, { color: colors.textMuted }]}>
+                      {reviewingVerifApp.org_name} · @{reviewingVerifApp.profiles?.handle}
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              {/* App summary */}
+              {reviewingVerifApp && (
+                <View style={{ backgroundColor: colors.backgroundSecondary, borderRadius: 10, padding: 12, gap: 5 }}>
+                  <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.textMuted, letterSpacing: 0.6 }}>APPLICATION SUMMARY</Text>
+                  <Text style={{ fontSize: 13, color: colors.text, fontFamily: "Inter_600SemiBold" }}>{reviewingVerifApp.org_type}{reviewingVerifApp.industry ? ` · ${reviewingVerifApp.industry}` : ""}</Text>
+                  {reviewingVerifApp.website_url ? (
+                    <Text style={{ fontSize: 12, color: BRAND }} numberOfLines={1}>{reviewingVerifApp.website_url}</Text>
+                  ) : null}
+                  {reviewingVerifApp.description ? (
+                    <Text style={{ fontSize: 12, color: colors.textSecondary, lineHeight: 17 }} numberOfLines={4}>{reviewingVerifApp.description}</Text>
+                  ) : null}
+                </View>
+              )}
+
+              {/* Note input */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.textSecondary }}>Note to Applicant</Text>
+                <Text style={{ fontSize: 12, color: colors.textMuted }}>Shown to the user on their verification screen. Required for rejections.</Text>
+                <TextInput
+                  style={[styles.searchInput, { backgroundColor: colors.backgroundSecondary, color: colors.text, borderColor: colors.border, height: 90, textAlignVertical: "top", paddingTop: 10, fontSize: 13 }]}
+                  placeholder="e.g. We could not verify your notable presence. Please include links to press coverage or official registrations."
+                  placeholderTextColor={colors.textMuted}
+                  value={verifReviewNote}
+                  onChangeText={setVerifReviewNote}
+                  multiline
+                />
+                <Text style={{ fontSize: 11, color: colors.textMuted, alignSelf: "flex-end" }}>{verifReviewNote.length} chars</Text>
+              </View>
+
+              {/* Decision buttons */}
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <TouchableOpacity
+                  style={[styles.closeBtn, { flex: 1, backgroundColor: "#34C75912", borderColor: "#34C759" }]}
+                  onPress={() => reviewingVerifApp && handleVerifReview(reviewingVerifApp.id, reviewingVerifApp.user_id, "approved")}
+                  disabled={verifReviewSaving}
+                >
+                  {verifReviewSaving ? (
+                    <ActivityIndicator size="small" color="#34C759" />
+                  ) : (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Ionicons name="checkmark-circle-outline" size={16} color="#34C759" />
+                      <Text style={{ color: "#34C759", fontFamily: "Inter_700Bold" }}>Approve</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.closeBtn, { flex: 1, backgroundColor: "#FF3B3012", borderColor: "#FF3B30" }]}
+                  onPress={() => reviewingVerifApp && handleVerifReview(reviewingVerifApp.id, reviewingVerifApp.user_id, "rejected")}
+                  disabled={verifReviewSaving}
+                >
+                  {verifReviewSaving ? (
+                    <ActivityIndicator size="small" color="#FF3B30" />
+                  ) : (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Ionicons name="close-circle-outline" size={16} color="#FF3B30" />
+                      <Text style={{ color: "#FF3B30", fontFamily: "Inter_700Bold" }}>Reject</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity style={[styles.closeBtn, { borderColor: colors.border }]} onPress={() => setReviewingVerifApp(null)}>
+                <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold" }}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      </View>
+    );
+  }
+
   async function handleSellerReview(appId: string, userId: string, decision: "approved" | "rejected") {
     setReviewSaving(true);
     await supabase.from("seller_applications").update({
@@ -1697,6 +2011,7 @@ export default function AdminDashboard() {
 
   const tabContent: Record<string, () => React.ReactNode> = {
     overview: renderOverview,
+    verifications: renderVerifications,
     lookup: renderLookup,
     scanner: renderScanner,
     users: renderUsers,

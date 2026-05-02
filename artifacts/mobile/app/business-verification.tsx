@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -21,14 +22,37 @@ import { showAlert } from "@/lib/alert";
 const GOLD = "#D4A853";
 
 const ORG_TYPES = [
-  "Company / Corporation",
-  "Brand",
-  "Non-Profit / NGO",
-  "Government / Public Body",
-  "Media / Press",
-  "Educational Institution",
-  "Religious Organization",
-  "Sports / Entertainment",
+  { label: "Company / Corporation", icon: "business-outline" },
+  { label: "Brand", icon: "pricetag-outline" },
+  { label: "Non-Profit / NGO", icon: "heart-outline" },
+  { label: "Government / Public Body", icon: "flag-outline" },
+  { label: "Media / Press", icon: "newspaper-outline" },
+  { label: "Educational Institution", icon: "school-outline" },
+  { label: "Religious Organization", icon: "leaf-outline" },
+  { label: "Sports / Entertainment", icon: "trophy-outline" },
+  { label: "Other", icon: "ellipsis-horizontal-circle-outline" },
+];
+
+const INDUSTRIES = [
+  "Technology",
+  "Healthcare / Medical",
+  "Finance / Banking",
+  "Education",
+  "Retail / E-commerce",
+  "Media & Entertainment",
+  "Food & Beverage",
+  "Real Estate",
+  "Manufacturing",
+  "Transportation / Logistics",
+  "Travel & Hospitality",
+  "Legal / Professional Services",
+  "Energy & Utilities",
+  "Agriculture",
+  "Construction",
+  "Government / Public Sector",
+  "Non-Profit / Charity",
+  "Sports & Recreation",
+  "Fashion & Beauty",
   "Other",
 ];
 
@@ -50,6 +74,9 @@ export default function BusinessVerificationScreen() {
   const [pageStatus, setPageStatus] = useState<PageStatus>("loading");
   const [existingApp, setExistingApp] = useState<VerifApp | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const [showOrgTypePicker, setShowOrgTypePicker] = useState(false);
+  const [showIndustryPicker, setShowIndustryPicker] = useState(false);
 
   const [form, setForm] = useState({
     org_name: "",
@@ -124,6 +151,8 @@ export default function BusinessVerificationScreen() {
     await checkExisting();
   }
 
+  const selectedOrgType = ORG_TYPES.find((t) => t.label === form.org_type);
+
   const NavBar = () => (
     <View style={[st.navBar, { paddingTop: headerTopPad, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
       <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
@@ -149,13 +178,13 @@ export default function BusinessVerificationScreen() {
     return (
       <View style={[st.root, { backgroundColor: colors.background }]}>
         <NavBar />
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 16 }}>
-          <View style={[st.iconCircle, { backgroundColor: GOLD + "22" }]}>
-            <Ionicons name="checkmark-circle" size={48} color={GOLD} />
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 20 }}>
+          <View style={[st.iconCircle, { backgroundColor: GOLD + "22", width: 88, height: 88, borderRadius: 44 }]}>
+            <Ionicons name="ribbon" size={44} color={GOLD} />
           </View>
           <Text style={[st.bigTitle, { color: colors.text }]}>Already Verified!</Text>
           <Text style={[st.bigSub, { color: colors.textMuted }]}>
-            Your account has organization verification. Your gold badge is active across the platform.
+            Your account carries the Organization Verified badge. The gold checkmark is active across AfuChat.
           </Text>
         </View>
       </View>
@@ -166,17 +195,24 @@ export default function BusinessVerificationScreen() {
     return (
       <View style={[st.root, { backgroundColor: colors.background }]}>
         <NavBar />
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 16 }}>
-          <View style={[st.iconCircle, { backgroundColor: "#FF9500" + "22" }]}>
-            <Ionicons name="time-outline" size={48} color="#FF9500" />
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 20 }}>
+          <View style={[st.iconCircle, { backgroundColor: "#FF9500" + "22", width: 88, height: 88, borderRadius: 44 }]}>
+            <Ionicons name="time-outline" size={44} color="#FF9500" />
           </View>
           <Text style={[st.bigTitle, { color: colors.text }]}>Under Review</Text>
           <Text style={[st.bigSub, { color: colors.textMuted }]}>
-            Your application for <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.text }}>{existingApp?.org_name}</Text> is being reviewed by our team. We typically respond within 3–5 business days.
+            Your application for{" "}
+            <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.text }}>{existingApp?.org_name}</Text>{" "}
+            is being reviewed by our team. We typically respond within 3–5 business days.
           </Text>
-          <Text style={[st.bigSub, { color: colors.textMuted, marginTop: 4 }]}>
-            Submitted {existingApp?.created_at ? new Date(existingApp.created_at).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }) : ""}
-          </Text>
+          {existingApp?.created_at ? (
+            <View style={[st.dateBadge, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Ionicons name="calendar-outline" size={14} color={colors.textMuted} />
+              <Text style={[st.dateBadgeText, { color: colors.textMuted }]}>
+                Submitted {new Date(existingApp.created_at).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}
+              </Text>
+            </View>
+          ) : null}
         </View>
       </View>
     );
@@ -186,21 +222,32 @@ export default function BusinessVerificationScreen() {
     return (
       <View style={[st.root, { backgroundColor: colors.background }]}>
         <NavBar />
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 16 }}>
-          <View style={[st.iconCircle, { backgroundColor: "#FF3B30" + "22" }]}>
-            <Ionicons name="close-circle-outline" size={48} color="#FF3B30" />
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 20 }}>
+          <View style={[st.iconCircle, { backgroundColor: "#FF3B30" + "22", width: 88, height: 88, borderRadius: 44 }]}>
+            <Ionicons name="close-circle-outline" size={44} color="#FF3B30" />
           </View>
           <Text style={[st.bigTitle, { color: colors.text }]}>Not Approved</Text>
           {existingApp?.admin_note ? (
-            <View style={[st.noteBox, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
-              <Text style={[st.noteLabel, { color: colors.textMuted }]}>Reviewer note</Text>
-              <Text style={[st.noteText, { color: colors.textSecondary }]}>{existingApp.admin_note}</Text>
+            <View style={[st.noteBox, { backgroundColor: colors.surface, borderColor: GOLD + "40" }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                <Ionicons name="chatbox-outline" size={14} color={GOLD} />
+                <Text style={[st.noteLabel, { color: GOLD }]}>Reviewer Note</Text>
+              </View>
+              <Text style={[st.noteText, { color: colors.text }]}>{existingApp.admin_note}</Text>
             </View>
           ) : (
             <Text style={[st.bigSub, { color: colors.textMuted }]}>
               Your application did not meet our current verification criteria. You may reapply after addressing the requirements.
             </Text>
           )}
+          <TouchableOpacity
+            style={[st.submitBtn, { backgroundColor: GOLD }]}
+            onPress={() => { setExistingApp(null); setPageStatus("idle"); }}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="refresh-outline" size={18} color="#fff" />
+            <Text style={st.submitBtnText}>Reapply</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -211,40 +258,43 @@ export default function BusinessVerificationScreen() {
       <NavBar />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView
-          contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40, gap: 14 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 48, gap: 12 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
           {/* Hero */}
-          <View style={[st.heroCard, { backgroundColor: GOLD + "14", borderColor: GOLD + "40" }]}>
-            <View style={[st.iconCircle, { backgroundColor: GOLD + "22", alignSelf: "center" }]}>
-              <Ionicons name="business-outline" size={36} color={GOLD} />
+          <View style={[st.heroCard, { backgroundColor: GOLD + "12", borderColor: GOLD + "40" }]}>
+            <View style={[st.heroIcon, { backgroundColor: GOLD + "22" }]}>
+              <Ionicons name="ribbon" size={32} color={GOLD} />
             </View>
             <Text style={[st.heroTitle, { color: colors.text }]}>Organization Verification</Text>
             <Text style={[st.heroSub, { color: colors.textSecondary }]}>
-              Apply for the gold verified badge to show AfuChat has confirmed your organization is authentic and has notable presence in its field.
+              Apply for the gold badge to show AfuChat has confirmed your organization is authentic and has notable presence in its field.
             </Text>
           </View>
 
-          {/* Criteria reminder */}
+          {/* Eligibility criteria */}
           <View style={[st.criteriaCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[st.sectionLabel, { color: colors.textMuted }]}>ELIGIBILITY CRITERIA</Text>
+            <Text style={[st.sectionMicro, { color: colors.textMuted }]}>ELIGIBILITY CRITERIA</Text>
             {[
               { icon: "business-outline", text: "Confirmed authentic business, brand, or organization" },
               { icon: "shield-checkmark-outline", text: "Notable presence in your industry or community" },
               { icon: "document-text-outline", text: "Compliant with AfuChat's community guidelines" },
             ].map((c, i) => (
               <View key={i} style={st.criteriaRow}>
-                <Ionicons name={c.icon as any} size={15} color={GOLD} />
+                <View style={[st.criteriaIconWrap, { backgroundColor: GOLD + "18" }]}>
+                  <Ionicons name={c.icon as any} size={14} color={GOLD} />
+                </View>
                 <Text style={[st.criteriaText, { color: colors.textSecondary }]}>{c.text}</Text>
               </View>
             ))}
           </View>
 
-          {/* Form */}
+          {/* Section: Organization Details */}
           <Text style={[st.groupLabel, { color: colors.text }]}>Organization Details</Text>
 
-          <Field label="Organization Name *" colors={colors}>
+          {/* Org name */}
+          <Field label="Organization Name" required colors={colors}>
             <TextInput
               style={[st.input, { color: colors.text }]}
               placeholder="Your official organization name"
@@ -255,51 +305,78 @@ export default function BusinessVerificationScreen() {
             />
           </Field>
 
-          <Field label="Organization Type *" colors={colors}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }} contentContainerStyle={{ gap: 8 }}>
-              {ORG_TYPES.map((t) => (
-                <TouchableOpacity
-                  key={t}
-                  style={[st.typeChip, { borderColor: form.org_type === t ? GOLD : colors.border, backgroundColor: form.org_type === t ? GOLD + "18" : colors.backgroundSecondary }]}
-                  onPress={() => set("org_type", t)}
-                  activeOpacity={0.75}
-                >
-                  <Text style={[st.typeChipText, { color: form.org_type === t ? GOLD : colors.textSecondary }]}>{t}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+          {/* Org type — modal picker */}
+          <Field label="Organization Type" required colors={colors}>
+            <TouchableOpacity
+              style={[st.pickerRow, { borderColor: form.org_type ? GOLD + "60" : colors.border, backgroundColor: form.org_type ? GOLD + "08" : "transparent" }]}
+              activeOpacity={0.75}
+              onPress={() => setShowOrgTypePicker(true)}
+            >
+              {selectedOrgType ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+                  <View style={[st.pickerIconWrap, { backgroundColor: GOLD + "22" }]}>
+                    <Ionicons name={selectedOrgType.icon as any} size={16} color={GOLD} />
+                  </View>
+                  <Text style={[st.pickerValue, { color: colors.text }]}>{selectedOrgType.label}</Text>
+                </View>
+              ) : (
+                <Text style={[st.pickerPlaceholder, { color: colors.textMuted }]}>Select organization type…</Text>
+              )}
+              <Ionicons name="chevron-down" size={16} color={form.org_type ? GOLD : colors.textMuted} />
+            </TouchableOpacity>
           </Field>
 
+          {/* Industry — modal picker */}
           <Field label="Industry / Sector" colors={colors}>
-            <TextInput
-              style={[st.input, { color: colors.text }]}
-              placeholder="e.g. Technology, Healthcare, Finance"
-              placeholderTextColor={colors.textMuted}
-              value={form.industry}
-              onChangeText={(v) => set("industry", v)}
-              maxLength={80}
-            />
+            <TouchableOpacity
+              style={[st.pickerRow, { borderColor: form.industry ? colors.border : colors.border }]}
+              activeOpacity={0.75}
+              onPress={() => setShowIndustryPicker(true)}
+            >
+              {form.industry ? (
+                <Text style={[st.pickerValue, { color: colors.text, flex: 1 }]}>{form.industry}</Text>
+              ) : (
+                <Text style={[st.pickerPlaceholder, { color: colors.textMuted, flex: 1 }]}>Select or type your industry…</Text>
+              )}
+              <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+            {/* Allow free-text override */}
+            {form.industry && !INDUSTRIES.includes(form.industry) ? null : (
+              <TextInput
+                style={[st.input, { color: colors.text, marginTop: 6, fontSize: 13 }]}
+                placeholder="Or type a custom industry…"
+                placeholderTextColor={colors.textMuted}
+                value={INDUSTRIES.includes(form.industry) ? "" : form.industry}
+                onChangeText={(v) => set("industry", v)}
+                maxLength={80}
+              />
+            )}
           </Field>
 
+          {/* Website */}
           <Field label="Official Website" colors={colors}>
-            <TextInput
-              style={[st.input, { color: colors.text }]}
-              placeholder="https://yourorganization.com"
-              placeholderTextColor={colors.textMuted}
-              value={form.website_url}
-              onChangeText={(v) => set("website_url", v)}
-              autoCapitalize="none"
-              keyboardType="url"
-              maxLength={200}
-            />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Ionicons name="globe-outline" size={16} color={colors.textMuted} />
+              <TextInput
+                style={[st.input, { color: colors.text, flex: 1 }]}
+                placeholder="https://yourorganization.com"
+                placeholderTextColor={colors.textMuted}
+                value={form.website_url}
+                onChangeText={(v) => set("website_url", v)}
+                autoCapitalize="none"
+                keyboardType="url"
+                maxLength={200}
+              />
+            </View>
           </Field>
 
+          {/* Section: Notable Presence */}
           <Text style={[st.groupLabel, { color: colors.text, marginTop: 4 }]}>Notable Presence</Text>
 
-          <Field label="Describe your organization and its impact *" colors={colors}>
+          <Field label="Describe your organization and its impact" required colors={colors}>
             <TextInput
               style={[st.input, st.textarea, { color: colors.text }]}
-              placeholder="Tell us about your organization, what you do, your reach, and why you qualify for verification…"
+              placeholder="Tell us what your organization does, its reach, achievements, and why it qualifies for verification…"
               placeholderTextColor={colors.textMuted}
               value={form.description}
               onChangeText={(v) => set("description", v)}
@@ -307,13 +384,18 @@ export default function BusinessVerificationScreen() {
               numberOfLines={5}
               maxLength={1000}
             />
-            <Text style={[st.charCount, { color: colors.textMuted }]}>{form.description.length}/1000</Text>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
+              <Text style={[st.hint, { color: form.description.length < 40 ? "#FF9500" : colors.textMuted }]}>
+                {form.description.length < 40 ? `${40 - form.description.length} more chars needed` : "Looks good"}
+              </Text>
+              <Text style={[st.hint, { color: colors.textMuted }]}>{form.description.length}/1000</Text>
+            </View>
           </Field>
 
           <Field label="Links to press, articles, or proof of presence" colors={colors}>
             <TextInput
-              style={[st.input, st.textarea, { color: colors.text }]}
-              placeholder="Paste links to news articles, Wikipedia, industry directories, official registrations…"
+              style={[st.input, st.textarea, st.textareaSm, { color: colors.text }]}
+              placeholder="News articles, Wikipedia, industry directories, official registrations…"
               placeholderTextColor={colors.textMuted}
               value={form.notable_links}
               onChangeText={(v) => set("notable_links", v)}
@@ -324,41 +406,48 @@ export default function BusinessVerificationScreen() {
             />
           </Field>
 
-          <Text style={[st.groupLabel, { color: colors.text, marginTop: 4 }]}>Social Media (optional)</Text>
+          {/* Section: Social Media */}
+          <Text style={[st.groupLabel, { color: colors.text, marginTop: 4 }]}>Social Media <Text style={[st.optionalTag, { color: colors.textMuted }]}>optional</Text></Text>
 
           {[
-            { key: "ig", label: "Instagram", placeholder: "@yourorg" },
-            { key: "x_twitter", label: "X / Twitter", placeholder: "@yourorg" },
-            { key: "linkedin", label: "LinkedIn", placeholder: "linkedin.com/company/yourorg" },
+            { key: "ig", label: "Instagram", icon: "logo-instagram", placeholder: "@yourorg", color: "#E1306C" },
+            { key: "x_twitter", label: "X / Twitter", icon: "logo-twitter", placeholder: "@yourorg", color: "#1DA1F2" },
+            { key: "linkedin", label: "LinkedIn", icon: "logo-linkedin", placeholder: "linkedin.com/company/yourorg", color: "#0A66C2" },
           ].map((s) => (
             <Field key={s.key} label={s.label} colors={colors}>
-              <TextInput
-                style={[st.input, { color: colors.text }]}
-                placeholder={s.placeholder}
-                placeholderTextColor={colors.textMuted}
-                value={(form as any)[s.key]}
-                onChangeText={(v) => set(s.key, v)}
-                autoCapitalize="none"
-                maxLength={120}
-              />
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Ionicons name={s.icon as any} size={16} color={s.color} />
+                <TextInput
+                  style={[st.input, { color: colors.text, flex: 1 }]}
+                  placeholder={s.placeholder}
+                  placeholderTextColor={colors.textMuted}
+                  value={(form as any)[s.key]}
+                  onChangeText={(v) => set(s.key, v)}
+                  autoCapitalize="none"
+                  maxLength={120}
+                />
+              </View>
             </Field>
           ))}
 
-          {/* Notable presence note */}
+          {/* Premium banner */}
           <TouchableOpacity
-            style={[st.notableBanner, { backgroundColor: colors.surface, borderColor: GOLD + "44" }]}
+            style={[st.notableBanner, { backgroundColor: GOLD + "0E", borderColor: GOLD + "50" }]}
             onPress={() => router.push("/premium")}
             activeOpacity={0.8}
           >
-            <Ionicons name="star-outline" size={16} color={GOLD} />
+            <View style={[st.bannerIconWrap, { backgroundColor: GOLD + "22" }]}>
+              <Ionicons name="diamond-outline" size={14} color={GOLD} />
+            </View>
             <Text style={[st.notableBannerText, { color: colors.textSecondary }]}>
-              <Text style={{ fontFamily: "Inter_600SemiBold", color: GOLD }}>Notable presence</Text> is a key requirement. Premium members get priority review.
+              <Text style={{ fontFamily: "Inter_600SemiBold", color: GOLD }}>Premium members</Text> get priority review and dedicated support.
             </Text>
             <Ionicons name="chevron-forward" size={14} color={GOLD} />
           </TouchableOpacity>
 
+          {/* Submit */}
           <TouchableOpacity
-            style={[st.submitBtn, { backgroundColor: GOLD, opacity: submitting ? 0.7 : 1 }]}
+            style={[st.submitBtn, { backgroundColor: GOLD, opacity: submitting ? 0.7 : 1, marginTop: 4 }]}
             onPress={handleSubmit}
             disabled={submitting}
             activeOpacity={0.85}
@@ -374,18 +463,76 @@ export default function BusinessVerificationScreen() {
           </TouchableOpacity>
 
           <Text style={[st.disclaimer, { color: colors.textMuted }]}>
-            Submitting a request does not guarantee verification. Our team reviews all applications and will notify you of the outcome within 3–5 business days.
+            Submitting does not guarantee verification. Our team reviews all applications and will notify you within 3–5 business days.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Org Type Picker Modal */}
+      <Modal visible={showOrgTypePicker} transparent animationType="slide" onRequestClose={() => setShowOrgTypePicker(false)}>
+        <TouchableOpacity style={st.modalOverlay} activeOpacity={1} onPress={() => setShowOrgTypePicker(false)}>
+          <View style={[st.pickerSheet, { backgroundColor: colors.surface }]}>
+            <View style={[st.pickerSheetHandle, { backgroundColor: colors.border }]} />
+            <Text style={[st.pickerSheetTitle, { color: colors.text }]}>Organization Type</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {ORG_TYPES.map((t) => {
+                const selected = form.org_type === t.label;
+                return (
+                  <TouchableOpacity
+                    key={t.label}
+                    style={[st.pickerOption, { borderBottomColor: colors.border, backgroundColor: selected ? GOLD + "12" : "transparent" }]}
+                    onPress={() => { set("org_type", t.label); setShowOrgTypePicker(false); }}
+                    activeOpacity={0.75}
+                  >
+                    <View style={[st.pickerOptionIcon, { backgroundColor: selected ? GOLD + "28" : colors.backgroundSecondary }]}>
+                      <Ionicons name={t.icon as any} size={18} color={selected ? GOLD : colors.textSecondary} />
+                    </View>
+                    <Text style={[st.pickerOptionText, { color: selected ? GOLD : colors.text, fontFamily: selected ? "Inter_600SemiBold" : "Inter_400Regular" }]}>{t.label}</Text>
+                    {selected && <Ionicons name="checkmark" size={18} color={GOLD} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Industry Picker Modal */}
+      <Modal visible={showIndustryPicker} transparent animationType="slide" onRequestClose={() => setShowIndustryPicker(false)}>
+        <TouchableOpacity style={st.modalOverlay} activeOpacity={1} onPress={() => setShowIndustryPicker(false)}>
+          <View style={[st.pickerSheet, { backgroundColor: colors.surface }]}>
+            <View style={[st.pickerSheetHandle, { backgroundColor: colors.border }]} />
+            <Text style={[st.pickerSheetTitle, { color: colors.text }]}>Industry / Sector</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {INDUSTRIES.map((ind) => {
+                const selected = form.industry === ind;
+                return (
+                  <TouchableOpacity
+                    key={ind}
+                    style={[st.pickerOption, { borderBottomColor: colors.border, backgroundColor: selected ? colors.backgroundSecondary : "transparent" }]}
+                    onPress={() => { set("industry", ind); setShowIndustryPicker(false); }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[st.pickerOptionText, { color: selected ? colors.text : colors.textSecondary, fontFamily: selected ? "Inter_600SemiBold" : "Inter_400Regular", flex: 1 }]}>{ind}</Text>
+                    {selected && <Ionicons name="checkmark" size={18} color={GOLD} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
 
-function Field({ label, children, colors }: { label: string; children: React.ReactNode; colors: any }) {
+function Field({ label, required, children, colors }: { label: string; required?: boolean; children: React.ReactNode; colors: any }) {
   return (
     <View style={[st.fieldWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <Text style={[st.fieldLabel, { color: colors.textMuted }]}>{label}</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 6 }}>
+        <Text style={[st.fieldLabel, { color: colors.textMuted }]}>{label}</Text>
+        {required && <Text style={{ color: GOLD, fontSize: 11, fontFamily: "Inter_700Bold" }}>*</Text>}
+      </View>
       {children}
     </View>
   );
@@ -393,32 +540,69 @@ function Field({ label, children, colors }: { label: string; children: React.Rea
 
 const st = StyleSheet.create({
   root: { flex: 1 },
-  navBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  navBar: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth,
+  },
   navTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  iconCircle: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  iconCircle: { alignItems: "center", justifyContent: "center" },
   bigTitle: { fontSize: 22, fontFamily: "Inter_700Bold", textAlign: "center" },
   bigSub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 21 },
-  noteBox: { width: "100%", borderRadius: 12, borderWidth: 1, padding: 14, gap: 6 },
-  noteLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
+  dateBadge: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  dateBadgeText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  noteBox: { width: "100%", borderRadius: 14, borderWidth: 1, padding: 16, gap: 4 },
+  noteLabel: { fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.6 },
   noteText: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
-  heroCard: { borderRadius: 16, borderWidth: 1, padding: 20, alignItems: "center", gap: 10 },
+  heroCard: { borderRadius: 18, borderWidth: 1, padding: 22, alignItems: "center", gap: 10 },
+  heroIcon: { width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center", marginBottom: 4 },
   heroTitle: { fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center" },
   heroSub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 19 },
   criteriaCard: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14, gap: 10 },
-  sectionLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.8, marginBottom: 2 },
-  criteriaRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  criteriaText: { flex: 1, fontSize: 13, lineHeight: 18 },
-  groupLabel: { fontSize: 15, fontFamily: "Inter_600SemiBold", marginTop: 4 },
-  fieldWrap: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingVertical: 10 },
-  fieldLabel: { fontSize: 11, fontFamily: "Inter_500Medium", letterSpacing: 0.4, marginBottom: 4 },
-  input: { fontSize: 14, fontFamily: "Inter_400Regular", paddingVertical: 4, minHeight: 34 },
-  textarea: { minHeight: 90, textAlignVertical: "top" },
-  charCount: { fontSize: 11, textAlign: "right", marginTop: 4 },
-  typeChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
-  typeChipText: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  notableBanner: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 12, borderWidth: 1, padding: 14, marginTop: 4 },
+  sectionMicro: { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.9, marginBottom: 2 },
+  criteriaRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  criteriaIconWrap: { width: 26, height: 26, borderRadius: 7, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  criteriaText: { flex: 1, fontSize: 13, lineHeight: 18, fontFamily: "Inter_400Regular" },
+  groupLabel: { fontSize: 15, fontFamily: "Inter_700Bold", marginTop: 4 },
+  optionalTag: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  fieldWrap: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 14, paddingVertical: 12 },
+  fieldLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.4 },
+  input: { fontSize: 14, fontFamily: "Inter_400Regular", paddingVertical: 2, minHeight: 32 },
+  textarea: { minHeight: 96, textAlignVertical: "top" },
+  textareaSm: { minHeight: 66 },
+  hint: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  pickerRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingVertical: 10, paddingHorizontal: 12,
+    borderRadius: 10, borderWidth: 1,
+  },
+  pickerIconWrap: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  pickerValue: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  pickerPlaceholder: { fontSize: 14, fontFamily: "Inter_400Regular", flex: 1 },
+  notableBanner: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    borderRadius: 14, borderWidth: 1, padding: 14, marginTop: 4,
+  },
+  bannerIconWrap: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   notableBannerText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
-  submitBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: 14, marginTop: 8 },
+  submitBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 10, paddingVertical: 16, borderRadius: 14,
+  },
   submitBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
   disclaimer: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 17, marginTop: 4 },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  pickerSheet: {
+    borderTopLeftRadius: 22, borderTopRightRadius: 22,
+    paddingTop: 12, paddingBottom: 40, maxHeight: "80%",
+  },
+  pickerSheetHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 14 },
+  pickerSheetTitle: { fontSize: 16, fontFamily: "Inter_700Bold", paddingHorizontal: 20, marginBottom: 8 },
+  pickerOption: {
+    flexDirection: "row", alignItems: "center", gap: 14,
+    paddingHorizontal: 20, paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  pickerOptionIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  pickerOptionText: { fontSize: 14, flex: 1 },
+  charCount: { fontSize: 11, textAlign: "right", marginTop: 4 },
 });
