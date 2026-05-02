@@ -221,6 +221,10 @@ export default function CreateVideoScreen() {
   async function post() {
     if (!user) { router.push("/(auth)/login"); return; }
     if (!videoUri) { showAlert("No video", "Please pick a video first."); return; }
+    if (!caption.trim()) {
+      showAlert("Caption required", "Please add a caption for your video before posting.");
+      return;
+    }
 
     if (fileSize > WARN_SIZE_MB * 1024 * 1024) {
       showAlert(
@@ -310,7 +314,7 @@ export default function CreateVideoScreen() {
     }
   }
 
-  const canPost = !!videoUri && !loading;
+  const canPost = !!videoUri && !!caption.trim() && !loading;
   const durationLabel = duration > 0 ? `${Math.round(duration)}s / ${MAX_DURATION_SECONDS}s` : "";
   const sizeLabel = fileSize > 0 ? formatBytes(fileSize) : "";
   const isLargeFile = fileSize > WARN_SIZE_MB * 1024 * 1024;
@@ -448,7 +452,7 @@ export default function CreateVideoScreen() {
             <Ionicons name="pencil-outline" size={18} color={colors.textMuted} style={{ marginTop: 2 }} />
             <TextInput
               style={[styles.captionInput, { color: colors.text }]}
-              placeholder="Write a caption… #hashtags @mentions"
+              placeholder="Add a caption… (required) #hashtags @mentions"
               placeholderTextColor={colors.textMuted}
               value={caption}
               onChangeText={setCaption}
