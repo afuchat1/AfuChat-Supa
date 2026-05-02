@@ -44,6 +44,7 @@ import { SIDEBAR_WIDTH } from "@/components/desktop/DesktopSidebar";
 import { TOPBAR_HEIGHT } from "@/components/desktop/DesktopTopBar";
 import { useTheme } from "@/hooks/useTheme";
 import { encodeId, decodeId, isUuid } from "@/lib/shortId";
+import { saveVideoProgress, clearVideoProgress } from "@/lib/videoProgress";
 
 const USE_NATIVE = Platform.OS !== "web";
 
@@ -857,7 +858,10 @@ function VideoItem({
                     onProgress={(pos, dur) => {
                       if (!dur) return;
                       setDurationMs(dur);
-                      setProgress(pos / dur);
+                      const frac = pos / dur;
+                      setProgress(frac);
+                      if (frac >= 0.97) clearVideoProgress(item.id);
+                      else saveVideoProgress(item.id, frac);
                     }}
                     onBuffering={setBuffering}
                     externalRef={webVideoRef}
@@ -1093,7 +1097,10 @@ function VideoItem({
               onProgress={(pos, dur) => {
                 if (!dur) return;
                 setDurationMs(dur);
-                setProgress(pos / dur);
+                const frac = pos / dur;
+                setProgress(frac);
+                if (frac >= 0.97) clearVideoProgress(item.id);
+                else saveVideoProgress(item.id, frac);
               }}
               onBuffering={setBuffering}
               externalRef={webVideoRef}

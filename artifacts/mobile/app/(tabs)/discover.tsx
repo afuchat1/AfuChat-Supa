@@ -42,6 +42,7 @@ import { useTour } from "@/context/TourContext";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { DesktopFeedLayout, FEED_COLUMN_MAX_WIDTH } from "@/components/desktop/DesktopFeedLayout";
 import { encodeId } from "@/lib/shortId";
+import { useVideoProgress } from "@/hooks/useVideoProgress";
 
 type PostItem = {
   id: string;
@@ -101,6 +102,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
   const cardInsets = useCardInsets();
   const { user: currentUser } = useAuth();
   const { isDesktop } = useIsDesktop();
+  const watchedFraction = useVideoProgress(item.post_type === "video" ? item.id : "");
   const [displayContent, setDisplayContent] = useState(item.content);
   const [isTranslated, setIsTranslated] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
@@ -249,6 +251,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
                     style={StyleSheet.absoluteFill}
                     lowData={false}
                     durationSeconds={item.duration_seconds}
+                    watchedFraction={watchedFraction}
                   />
                   <View style={styles.playCircle}>
                     <Ionicons name="play" size={22} color="#fff" />

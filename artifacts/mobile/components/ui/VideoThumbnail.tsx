@@ -21,6 +21,7 @@ type Props = {
   lowData?: boolean;
   durationSeconds?: number | null;
   showDuration?: boolean;
+  watchedFraction?: number | null;
 };
 
 function DurationBadge({ label }: { label: string }) {
@@ -32,10 +33,34 @@ function DurationBadge({ label }: { label: string }) {
   );
 }
 
+function WatchProgressBar({ fraction }: { fraction: number }) {
+  if (fraction < 0.02 || fraction > 0.97) return null;
+  return (
+    <View style={progressStyles.track} pointerEvents="none">
+      <View style={[progressStyles.fill, { width: `${Math.round(fraction * 100)}%` as any }]} />
+    </View>
+  );
+}
+
+const progressStyles = StyleSheet.create({
+  track: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: "rgba(255,255,255,0.25)",
+  },
+  fill: {
+    height: 3,
+    backgroundColor: "#ff2d55",
+  },
+});
+
 const badgeStyles = StyleSheet.create({
   wrap: {
     position: "absolute",
-    bottom: 6,
+    bottom: 10,
     right: 6,
     backgroundColor: "rgba(0,0,0,0.75)",
     borderRadius: 4,
@@ -50,13 +75,15 @@ const badgeStyles = StyleSheet.create({
   },
 });
 
-function VideoThumbnailNative({ videoUrl, fallbackImageUrl, style, lowData, durationSeconds, showDuration = true }: Props) {
+function VideoThumbnailNative({
+  videoUrl, fallbackImageUrl, style, lowData,
+  durationSeconds, showDuration = true, watchedFraction,
+}: Props) {
   const [thumbUri, setThumbUri] = useState<string | null>(null);
 
   useEffect(() => {
     if (lowData) return;
     if (!videoUrl || videoUrl.startsWith("blob:")) return;
-
     let cancelled = false;
     (async () => {
       try {
@@ -69,12 +96,14 @@ function VideoThumbnailNative({ videoUrl, fallbackImageUrl, style, lowData, dura
         if (!cancelled) setThumbUri(null);
       }
     })();
-
     return () => { cancelled = true; };
   }, [videoUrl, lowData]);
 
   const source = thumbUri || fallbackImageUrl;
-  const durationLabel = showDuration && durationSeconds != null ? formatDuration(durationSeconds) : "";
+  const hasFraction = watchedFraction != null && watchedFraction >= 0.02 && watchedFraction <= 0.97;
+  const durationLabel = showDuration && durationSeconds != null
+    ? formatDuration(durationSeconds) : "";
+  const badgeBottom = hasFraction ? 10 : 6;
 
   return (
     <View style={style}>
@@ -89,12 +118,20 @@ function VideoThumbnailNative({ videoUrl, fallbackImageUrl, style, lowData, dura
       ) : (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: "#0a0a0a" }]} />
       )}
-      {!!durationLabel && <DurationBadge label={durationLabel} />}
+      {hasFraction && <WatchProgressBar fraction={watchedFraction!} />}
+      {!!durationLabel && (
+        <View style={[badgeStyles.wrap, { bottom: badgeBottom }]}>
+          <Text style={badgeStyles.text}>{durationLabel}</Text>
+        </View>
+      )}
     </View>
   );
 }
 
-function VideoThumbnailWeb({ videoUrl, fallbackImageUrl, style, lowData, durationSeconds, showDuration = true }: Props) {
+function VideoThumbnailWeb({
+  videoUrl, fallbackImageUrl, style, lowData,
+  durationSeconds, showDuration = true, watchedFraction,
+}: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [autoDuration, setAutoDuration] = useState<number | null>(null);
 
@@ -107,18 +144,25 @@ function VideoThumbnailWeb({ videoUrl, fallbackImageUrl, style, lowData, duratio
   }, []);
 
   const resolvedDuration = durationSeconds ?? autoDuration;
-  const durationLabel = showDuration && resolvedDuration != null ? formatDuration(resolvedDuration) : "";
+  const hasFraction = watchedFraction != null && watchedFraction >= 0.02 && watchedFraction <= 0.97;
+  const durationLabel = showDuration && resolvedDuration != null
+    ? formatDuration(resolvedDuration) : "";
+  const badgeBottom = hasFraction ? 10 : 6;
 
   if (lowData) {
-    const source = fallbackImageUrl;
     return (
       <View style={style}>
-        {source ? (
-          <Image source={{ uri: source }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
+        {fallbackImageUrl ? (
+          <Image source={{ uri: fallbackImageUrl }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: "#0a0a0a" }]} />
         )}
-        {!!durationLabel && <DurationBadge label={durationLabel} />}
+        {hasFraction && <WatchProgressBar fraction={watchedFraction!} />}
+        {!!durationLabel && (
+          <View style={[badgeStyles.wrap, { bottom: badgeBottom }]}>
+            <Text style={badgeStyles.text}>{durationLabel}</Text>
+          </View>
+        )}
       </View>
     );
   }
@@ -140,7 +184,12 @@ function VideoThumbnailWeb({ videoUrl, fallbackImageUrl, style, lowData, duratio
           objectFit: "cover",
         }}
       />
-      {!!durationLabel && <DurationBadge label={durationLabel} />}
+      {hasFraction && <WatchProgressBar fraction={watchedFraction!} />}
+      {!!durationLabel && (
+        <View style={[badgeStyles.wrap, { bottom: badgeBottom }]}>
+          <Text style={badgeStyles.text}>{durationLabel}</Text>
+        </View>
+      )}
     </View>
   );
 }

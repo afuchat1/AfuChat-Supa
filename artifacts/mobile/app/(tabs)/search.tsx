@@ -45,6 +45,7 @@ import {
   removeSavedSearch,
   type SavedSearch,
 } from "@/lib/searchStore";
+import { useVideoProgress } from "@/hooks/useVideoProgress";
 
 const BRAND = "#00BCD4";
 const MATCH = "#FF2D55";
@@ -871,6 +872,82 @@ export default function SearchScreen() {
     );
   }
 
+  function VideoCardItem({ v, i, cardW, cardH }: { v: VideoResult; i: number; cardW: number; cardH: number }) {
+    const { colors: c } = useTheme();
+    const watched = useVideoProgress(v.id);
+    const hasFraction = watched != null && watched >= 0.02 && watched <= 0.97;
+    const durationBottom = hasFraction ? 10 : 6;
+
+    function fmtDur(s: number) {
+      const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
+      return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}` : `${m}:${String(sec).padStart(2, "0")}`;
+    }
+
+    return (
+      <Animated.View entering={FadeIn.delay(i * 30).duration(220)}>
+        <TouchableOpacity
+          style={{ width: cardW, borderRadius: 14, overflow: "hidden", backgroundColor: "#1a1a1d" }}
+          onPress={() => { Haptics.selectionAsync(); router.push({ pathname: "/video/[id]", params: { id: v.id } } as any); }}
+          activeOpacity={0.82}
+        >
+          {/* Thumbnail */}
+          <View style={{ width: cardW, height: cardH }}>
+            {v.image_url ? (
+              <Image source={{ uri: v.image_url }} style={{ width: cardW, height: cardH }} resizeMode="cover" />
+            ) : (
+              <LinearGradient colors={["#1a2a35", "#0d1117"]} style={{ width: cardW, height: cardH, alignItems: "center", justifyContent: "center" }}>
+                <Ionicons name="videocam" size={28} color="#ffffff40" />
+              </LinearGradient>
+            )}
+            {/* Play button overlay */}
+            <View style={{ ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" }}>
+              <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.35)" }}>
+                <Ionicons name="play" size={18} color="#fff" style={{ marginLeft: 2 }} />
+              </View>
+            </View>
+            {/* View count badge */}
+            <View style={{ position: "absolute", top: 6, right: 6, flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "rgba(0,0,0,0.62)", borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
+              <Ionicons name="eye-outline" size={10} color="#fff" />
+              <Text style={{ color: "#fff", fontSize: 10, fontFamily: "Inter_500Medium" }}>{v.view_count > 999 ? `${(v.view_count / 1000).toFixed(1)}k` : v.view_count}</Text>
+            </View>
+            {/* Audio name badge */}
+            {v.audio_name && (
+              <View style={{ position: "absolute", bottom: 6, left: 6, right: 6, flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(0,0,0,0.62)", borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3 }}>
+                <Ionicons name="musical-notes" size={10} color={BRAND} />
+                <Text style={{ color: "#fff", fontSize: 9, fontFamily: "Inter_500Medium", flex: 1 }} numberOfLines={1}>{v.audio_name}</Text>
+              </View>
+            )}
+            {/* Duration badge */}
+            {v.duration_seconds != null && v.duration_seconds > 0 && (
+              <View style={{ position: "absolute", bottom: v.audio_name ? 30 : durationBottom, right: 6, backgroundColor: "rgba(0,0,0,0.75)", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 }}>
+                <Text style={{ color: "#fff", fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.2 }}>{fmtDur(v.duration_seconds)}</Text>
+              </View>
+            )}
+            {/* Watch progress bar */}
+            {hasFraction && (
+              <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, backgroundColor: "rgba(255,255,255,0.25)" }} pointerEvents="none">
+                <View style={{ height: 3, backgroundColor: "#ff2d55", width: `${Math.round(watched! * 100)}%` as any }} />
+              </View>
+            )}
+          </View>
+          {/* Meta row */}
+          <View style={{ padding: 8, gap: 4, backgroundColor: c.surface }}>
+            {v.content ? (
+              <Text style={{ color: c.text, fontSize: 12, fontFamily: "Inter_500Medium", lineHeight: 16 }} numberOfLines={2}>{v.content}</Text>
+            ) : null}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+              {v.author_avatar
+                ? <Image source={{ uri: v.author_avatar }} style={{ width: 16, height: 16, borderRadius: 8 }} />
+                : <AvatarPlaceholder name={v.author_name} size={16} color={BRAND} />}
+              <Text style={{ color: c.textMuted, fontSize: 10, fontFamily: "Inter_500Medium", flex: 1 }} numberOfLines={1}>{v.author_name}</Text>
+              <Text style={{ color: c.textMuted, fontSize: 10 }}>{timeAgo(v.created_at)}</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  }
+
   function VideoGrid({ videos, compact }: { videos: VideoResult[]; compact?: boolean }) {
     const COLS = 2;
     const GAP = 8;
@@ -880,61 +957,7 @@ export default function SearchScreen() {
     return (
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: GAP, paddingHorizontal: HPAD, paddingBottom: 8 }}>
         {videos.map((v, i) => (
-          <Animated.View key={v.id} entering={FadeIn.delay(i * 30).duration(220)}>
-            <TouchableOpacity
-              style={{ width: cardW, borderRadius: 14, overflow: "hidden", backgroundColor: "#1a1a1d" }}
-              onPress={() => { Haptics.selectionAsync(); router.push({ pathname: "/video/[id]", params: { id: v.id } } as any); }}
-              activeOpacity={0.82}
-            >
-              {/* Thumbnail */}
-              <View style={{ width: cardW, height: cardH }}>
-                {v.image_url ? (
-                  <Image source={{ uri: v.image_url }} style={{ width: cardW, height: cardH }} resizeMode="cover" />
-                ) : (
-                  <LinearGradient colors={["#1a2a35", "#0d1117"]} style={{ width: cardW, height: cardH, alignItems: "center", justifyContent: "center" }}>
-                    <Ionicons name="videocam" size={28} color="#ffffff40" />
-                  </LinearGradient>
-                )}
-                {/* Play button overlay */}
-                <View style={{ ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" }}>
-                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.35)" }}>
-                    <Ionicons name="play" size={18} color="#fff" style={{ marginLeft: 2 }} />
-                  </View>
-                </View>
-                {/* View count badge */}
-                <View style={{ position: "absolute", top: 6, right: 6, flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "rgba(0,0,0,0.62)", borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
-                  <Ionicons name="eye-outline" size={10} color="#fff" />
-                  <Text style={{ color: "#fff", fontSize: 10, fontFamily: "Inter_500Medium" }}>{v.view_count > 999 ? `${(v.view_count / 1000).toFixed(1)}k` : v.view_count}</Text>
-                </View>
-                {/* Audio name badge */}
-                {v.audio_name && (
-                  <View style={{ position: "absolute", bottom: 6, left: 6, right: 6, flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(0,0,0,0.62)", borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3 }}>
-                    <Ionicons name="musical-notes" size={10} color={BRAND} />
-                    <Text style={{ color: "#fff", fontSize: 9, fontFamily: "Inter_500Medium", flex: 1 }} numberOfLines={1}>{v.audio_name}</Text>
-                  </View>
-                )}
-                {/* Duration badge */}
-                {v.duration_seconds != null && v.duration_seconds > 0 && (
-                  <View style={{ position: "absolute", bottom: v.audio_name ? 30 : 6, right: 6, backgroundColor: "rgba(0,0,0,0.75)", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 }}>
-                    <Text style={{ color: "#fff", fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.2 }}>{(function(s:number){ const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=Math.floor(s%60); return h>0?`${h}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`:`${m}:${String(sec).padStart(2,"0")}`; })(v.duration_seconds)}</Text>
-                  </View>
-                )}
-              </View>
-              {/* Meta row */}
-              <View style={{ padding: 8, gap: 4, backgroundColor: colors.surface }}>
-                {v.content ? (
-                  <Text style={{ color: colors.text, fontSize: 12, fontFamily: "Inter_500Medium", lineHeight: 16 }} numberOfLines={2}>{v.content}</Text>
-                ) : null}
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-                  {v.author_avatar
-                    ? <Image source={{ uri: v.author_avatar }} style={{ width: 16, height: 16, borderRadius: 8 }} />
-                    : <AvatarPlaceholder name={v.author_name} size={16} color={BRAND} />}
-                  <Text style={{ color: colors.textMuted, fontSize: 10, fontFamily: "Inter_500Medium", flex: 1 }} numberOfLines={1}>{v.author_name}</Text>
-                  <Text style={{ color: colors.textMuted, fontSize: 10 }}>{timeAgo(v.created_at)}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          </Animated.View>
+          <VideoCardItem key={v.id} v={v} i={i} cardW={cardW} cardH={cardH} />
         ))}
       </View>
     );
