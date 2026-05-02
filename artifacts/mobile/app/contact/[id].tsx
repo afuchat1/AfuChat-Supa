@@ -407,14 +407,19 @@ export default function ContactProfileScreen() {
           return (
             <TouchableOpacity
               key={t.key}
-              style={[st.tabBtn, active && { borderTopColor: colors.text, borderTopWidth: 1.5 }]}
+              style={[
+                st.tabBtn,
+                active
+                  ? { borderTopColor: colors.text, borderTopWidth: 1.5 }
+                  : st.tabBtnInactive,
+              ]}
               onPress={() => setActiveTab(t.key)}
               activeOpacity={0.7}
             >
               <Ionicons
                 name={t.icon as any}
                 size={21}
-                color={active ? colors.text : colors.textMuted}
+                color={active ? colors.text : "rgba(255,255,255,0.9)"}
               />
             </TouchableOpacity>
           );
@@ -694,6 +699,11 @@ const st = StyleSheet.create({
   tabBtn: {
     flex: 1, paddingVertical: 12, alignItems: "center", justifyContent: "center",
     borderTopWidth: 0, borderTopColor: "transparent",
+  },
+  tabBtnInactive: {
+    backgroundColor: "#00c2cb",
+    borderBottomRightRadius: 33,
+    borderTopLeftRadius: 33,
   },
 
   videoOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.3)" },
