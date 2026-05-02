@@ -58,19 +58,6 @@ export default function CreateStoryScreen() {
 
   const shareScale = useRef(new Animated.Value(1)).current;
 
-  if (Platform.OS === "web") {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, backgroundColor: "#000" }}>
-        <Ionicons name="phone-portrait-outline" size={56} color="#fff" />
-        <Text style={{ color: "#fff", fontSize: 20, fontWeight: "700", marginTop: 16, textAlign: "center" }}>Stories are app only</Text>
-        <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 14, marginTop: 8, textAlign: "center" }}>Create and share stories using the AfuChat mobile app.</Text>
-        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 24, paddingHorizontal: 24, paddingVertical: 12, backgroundColor: accent, borderRadius: 20 }}>
-          <Text style={{ color: "#fff", fontSize: 15, fontWeight: "600" }}>Go Back</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   const previewRadius = 24;
   const previewMargin = 8;
   const previewW = screenW - previewMargin * 2;
