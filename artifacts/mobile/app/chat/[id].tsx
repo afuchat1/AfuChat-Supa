@@ -2339,10 +2339,7 @@ STRICT RULES:
     if (isRemoving) {
       await supabase.from("message_reactions").delete().eq("message_id", msg.id).eq("user_id", user.id).eq("reaction", emoji);
     } else {
-      await supabase.from("message_reactions").upsert(
-        { message_id: msg.id, user_id: user.id, reaction: emoji },
-        { onConflict: "message_id,user_id,reaction", ignoreDuplicates: true }
-      );
+      await supabase.from("message_reactions").insert({ message_id: msg.id, user_id: user.id, reaction: emoji });
     }
   }
 

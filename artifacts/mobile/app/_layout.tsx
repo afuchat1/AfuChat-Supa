@@ -3,8 +3,8 @@ import {
   Inter_500Medium,
   Inter_600SemiBold,
   Inter_700Bold,
-  useFonts,
 } from "@expo-google-fonts/inter";
+import * as Font from "expo-font";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -162,12 +162,34 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
-  });
+  const [fontsLoaded, setFontsLoaded] = useState(false);
+
+  useEffect(() => {
+    // Suppress fontfaceobserver timeout — expo-font creates an internal promise that
+    // rejects before the outer catch can attach, firing a spurious unhandledrejection.
+    const suppressFontTimeout = (e: PromiseRejectionEvent) => {
+      if (e?.reason?.message?.includes("timeout exceeded")) {
+        e.preventDefault();
+      }
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("unhandledrejection", suppressFontTimeout);
+    }
+
+    Font.loadAsync({
+      Inter_400Regular,
+      Inter_500Medium,
+      Inter_600SemiBold,
+      Inter_700Bold,
+    })
+      .catch(() => {})
+      .finally(() => {
+        setFontsLoaded(true);
+        if (typeof window !== "undefined") {
+          window.removeEventListener("unhandledrejection", suppressFontTimeout);
+        }
+      });
+  }, []);
 
   const [showSplash, setShowSplash] = useState(Platform.OS !== "web");
   const splashDismissed = useRef(false);
@@ -201,10 +223,10 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    if (fontsLoaded) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded]);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
@@ -233,7 +255,7 @@ export default function RootLayout() {
     return () => sub.remove();
   }, []);
 
-  if (!fontsLoaded && !fontError) return null;
+  if (!fontsLoaded) return null;
 
   return (
     <SafeAreaProvider>
