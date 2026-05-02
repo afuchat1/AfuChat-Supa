@@ -94,9 +94,6 @@ export function MinimalGrid() {
           <button className="flex-1 py-2 rounded-lg border border-gray-200 text-gray-700 text-[13px] font-semibold flex items-center justify-center gap-1.5">
             <MessageSquare size={13} /> Message
           </button>
-          <button className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-base">
-            👋
-          </button>
           <button className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center">
             <Gift size={14} className="text-gray-500" />
           </button>
