@@ -405,24 +405,15 @@ function NativeCameraScreen() {
 
 export default function StoryCameraScreen() {
   const { isDesktop } = useIsDesktop();
+  if (Platform.OS === "web") {
+    return <WebCameraScreen />;
+  }
   if (isDesktop) {
     return (
       <DesktopCameraFallback
         title="Capture stories on your phone"
         description="Stories use your phone's camera and microphone. Scan this code to open the camera on AfuChat mobile."
       />
-    );
-  }
-  if (Platform.OS === "web") {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, backgroundColor: "#000" }}>
-        <Ionicons name="phone-portrait-outline" size={56} color="#fff" />
-        <Text style={{ color: "#fff", fontSize: 20, fontWeight: "700", marginTop: 16, textAlign: "center" }}>Stories are app only</Text>
-        <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 14, marginTop: 8, textAlign: "center" }}>Create stories using the AfuChat mobile app.</Text>
-        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 24, paddingHorizontal: 24, paddingVertical: 12, backgroundColor: "#00BCD4", borderRadius: 20 }}>
-          <Text style={{ color: "#fff", fontSize: 15, fontWeight: "600" }}>Go Back</Text>
-        </TouchableOpacity>
-      </View>
     );
   }
   return <NativeCameraScreen />;
