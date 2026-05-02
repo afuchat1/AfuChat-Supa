@@ -291,7 +291,7 @@ async function handleVideoPage(param: string, res: any, embedOnly = false) {
     .from("posts")
     .select("id, content, video_url, image_url, created_at, author_id, view_count, post_type")
     .eq("id", postId)
-    .eq("is_blocked", false)
+    .not("is_blocked", "is", true)
     .single();
 
   if (!post || !post.video_url) return res.status(404).send(render404());

@@ -2240,6 +2240,64 @@ export default function VideoPlayerScreen() {
       }
     } else {
       setHasMore(false);
+      // Main feed query returned nothing (RLS, empty DB, etc.) but we still
+      // need to display the specific video the user navigated to.
+      if (!isLoadMore && id) {
+        const { data: tRow } = await supabase
+          .from("posts")
+          .select(`
+            id, author_id, content, video_url, image_url, created_at, audio_name,
+            profiles!posts_author_id_fkey(display_name, handle, avatar_url)
+          `)
+          .eq("id", id)
+          .not("is_blocked", "is", true)
+          .not("video_url", "is", null)
+          .maybeSingle();
+
+        if (tRow) {
+          const tId = tRow.id as string;
+          const [
+            { data: tLikesData },
+            { data: tRepliesData },
+            { data: tViewsData },
+            { data: tMyLike },
+            { data: tMyBookmark },
+          ] = await Promise.all([
+            supabase.from("post_acknowledgments").select("post_id").eq("post_id", tId),
+            supabase.from("post_replies").select("post_id").eq("post_id", tId),
+            supabase.from("post_views").select("post_id").eq("post_id", tId),
+            user
+              ? supabase.from("post_acknowledgments").select("post_id").eq("post_id", tId).eq("user_id", user.id).maybeSingle()
+              : Promise.resolve({ data: null }),
+            user
+              ? supabase.from("post_bookmarks").select("post_id").eq("post_id", tId).eq("user_id", user.id).maybeSingle()
+              : Promise.resolve({ data: null }),
+          ]);
+
+          const targetVideo: VideoPost = {
+            id: tRow.id,
+            author_id: tRow.author_id,
+            content: tRow.content || "",
+            video_url: tRow.video_url,
+            image_url: tRow.image_url || null,
+            created_at: tRow.created_at,
+            view_count: (tViewsData || []).length,
+            audio_name: tRow.audio_name || null,
+            duet_of_post_id: null,
+            profile: {
+              display_name: (tRow.profiles as any)?.display_name || "User",
+              handle: (tRow.profiles as any)?.handle || "user",
+              avatar_url: (tRow.profiles as any)?.avatar_url || null,
+            },
+            liked: !!(tMyLike as any),
+            bookmarked: !!(tMyBookmark as any),
+            likeCount: (tLikesData || []).length,
+            replyCount: (tRepliesData || []).length,
+          };
+
+          setVideos([targetVideo]);
+        }
+      }
     }
     if (isLoadMore) {
       loadingMoreRef.current = false;
