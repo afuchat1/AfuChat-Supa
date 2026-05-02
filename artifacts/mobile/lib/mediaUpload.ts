@@ -1,31 +1,50 @@
 /**
- * Media upload helpers — Cloudflare R2 backed via Supabase Edge Function.
+ * Media upload helpers — Cloudflare R2 backed via the Express API server
+ * (web) or Supabase Edge Function (native fallback).
  *
  * Uploads flow:
+ *   Web:
+ *     1. POST bytes to /api/uploads/upload on the Express API server.
+ *     2. Express streams them to R2 server-side (avoids R2 CORS issues).
+ *     3. Write the returned CDN URL into Supabase DB.
+ *     Metro dev-server and serve.js both proxy /api/* → Express port 3000.
+ *
  *   Native (iOS/Android):
- *     1. Call POST /sign on the `uploads` edge function → get presigned PUT URL.
+ *     1. Call POST /api/uploads/sign → get presigned PUT URL (Express server
+ *        if EXPO_PUBLIC_API_URL or EXPO_PUBLIC_DOMAIN is set, otherwise falls
+ *        back to Supabase Edge Function).
  *     2. PUT bytes directly to Cloudflare R2 using the presigned URL.
  *     3. Write the returned CDN URL into Supabase DB.
- *
- *   Web (Vercel/browser):
- *     1. POST bytes to /upload on the edge function.
- *     2. The edge function streams them to R2 server-side (avoids R2 CORS issues).
- *     3. Write the returned CDN URL into Supabase DB.
- *
- * No separate API server deployment required — everything goes through
- * the Supabase Edge Function at:
- *   https://<project>.supabase.co/functions/v1/uploads/<action>
  */
 
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase, supabaseUrl, supabaseAnonKey } from "./supabase";
 
-/** Base URL of the uploads edge function */
-const UPLOADS_FN = `${supabaseUrl}/functions/v1/uploads`;
+/**
+ * Returns the base URL for the uploads API.
+ *
+ * On web: use the Express API server (/api/uploads) which has confirmed
+ * working R2 credentials loaded from Supabase app_settings at boot.
+ * The serve.js production proxy and Metro dev server both forward /api/*
+ * to the Express server, so this works in both dev and production.
+ *
+ * On native: prefer EXPO_PUBLIC_API_URL, then construct from
+ * EXPO_PUBLIC_DOMAIN, then fall back to the Supabase Edge Function.
+ */
+function getUploadsBase(): string {
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    return `${window.location.origin}/api/uploads`;
+  }
+  const explicit = (process.env.EXPO_PUBLIC_API_URL || "").trim();
+  if (explicit) return `${explicit.replace(/\/+$/, "")}/api/uploads`;
+  const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
+  if (domain) return `https://${domain}/api/uploads`;
+  return `${supabaseUrl}/functions/v1/uploads`;
+}
 
 function uploadsUrl(action: string): string {
-  return `${UPLOADS_FN}/${action}`;
+  return `${getUploadsBase()}/${action}`;
 }
 
 const MIME_MAP: Record<string, string> = {
