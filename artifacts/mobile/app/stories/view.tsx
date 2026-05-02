@@ -95,7 +95,7 @@ export default function ViewStoryScreen() {
         await supabase.from("messages").insert({
           chat_id: chatId,
           sender_id: user.id,
-          encrypted_content: trimmed,
+          encrypted_content: `storyUserId:${s.user_id}|${trimmed}`,
           attachment_url: s.media_url,
           attachment_type: "story_reply",
         });
@@ -215,10 +215,11 @@ export default function ViewStoryScreen() {
   const sendStoryToChat = useCallback(async (chatId: string) => {
     if (!story || !user) return;
     closeShareSheet();
+    const displayCaption = story.caption ? `"${story.caption}"` : "Shared a story";
     await supabase.from("messages").insert({
       chat_id: chatId,
       sender_id: user.id,
-      encrypted_content: story.caption ? `📖 Story: "${story.caption}"` : "📖 Shared a story",
+      encrypted_content: `storyUserId:${story.user_id}|${displayCaption}`,
       attachment_url: story.media_url,
       attachment_type: "story_reply",
     });

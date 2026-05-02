@@ -817,26 +817,47 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
               </View>
             </TouchableOpacity>
           ) : hasStoryReply ? (
-            <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
-              <View style={[st.storyReplyCard, { borderColor: isMe ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.12)" }]}>
-                <Image
-                  source={{ uri: msg.attachment_url! }}
-                  style={st.storyReplyThumb}
-                  resizeMode="cover"
-                />
-                <View style={[st.storyReplyOverlay, { backgroundColor: isMe ? "rgba(0,0,0,0.35)" : "rgba(0,0,0,0.28)" }]}>
-                  <Ionicons name="camera" size={11} color="rgba(255,255,255,0.9)" />
-                  <Text style={st.storyReplyLabel}>
-                    {isMe ? "You replied to a story" : "Replied to your story"}
-                  </Text>
-                </View>
-              </View>
-              {msg.encrypted_content ? (
-                <Text style={[st.bubbleText, { color: textColor, marginTop: 6, fontSize: chatPrefsLocal?.font_size ?? 15, lineHeight: (chatPrefsLocal?.font_size ?? 15) + 5 }]}>
-                  {msg.encrypted_content}
-                </Text>
-              ) : null}
-            </TouchableOpacity>
+            (() => {
+              // Parse encoded storyUserId prefix: "storyUserId:{uid}|{display text}"
+              const raw = msg.encrypted_content ?? "";
+              const isEncoded = raw.startsWith("storyUserId:");
+              const storyUserId = isEncoded ? raw.slice("storyUserId:".length).split("|")[0] : null;
+              const storyDisplayText = isEncoded ? raw.slice("storyUserId:".length + (storyUserId?.length ?? 0) + 1) : raw;
+              const isShared = isEncoded && (storyDisplayText === "Shared a story" || storyDisplayText.startsWith('"'));
+
+              return (
+                <TouchableOpacity
+                  onPress={() => storyUserId && router.push({ pathname: "/stories/view", params: { userId: storyUserId } })}
+                  onLongPress={() => onLongPress(msg)}
+                  delayLongPress={300}
+                  activeOpacity={0.85}
+                >
+                  <View style={[st.storyReplyCard, { borderColor: isMe ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.12)" }]}>
+                    <Image
+                      source={{ uri: msg.attachment_url! }}
+                      style={st.storyReplyThumb}
+                      resizeMode="cover"
+                    />
+                    <View style={[st.storyReplyOverlay, { backgroundColor: isMe ? "rgba(0,0,0,0.45)" : "rgba(0,0,0,0.38)" }]}>
+                      <Ionicons name={isShared ? "share-social" : "camera"} size={11} color="rgba(255,255,255,0.9)" />
+                      <Text style={st.storyReplyLabel} numberOfLines={1}>
+                        {isShared
+                          ? (isMe ? "You shared a story" : "Shared a story")
+                          : (isMe ? "You replied to a story" : "Replied to your story")}
+                      </Text>
+                      {storyUserId && (
+                        <Ionicons name="chevron-forward" size={11} color="rgba(255,255,255,0.6)" />
+                      )}
+                    </View>
+                  </View>
+                  {storyDisplayText && !isShared ? (
+                    <Text style={[st.bubbleText, { color: textColor, marginTop: 6, fontSize: chatPrefsLocal?.font_size ?? 15, lineHeight: (chatPrefsLocal?.font_size ?? 15) + 5 }]}>
+                      {storyDisplayText}
+                    </Text>
+                  ) : null}
+                </TouchableOpacity>
+              );
+            })()
           ) : (
             <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
               {msg._isAi
