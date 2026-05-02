@@ -59,6 +59,7 @@ export default function CreateStoryScreen() {
     params.mediaType === "video" ? "video" : "image"
   );
   const [caption, setCaption] = useState("");
+  const [mediaMimeType, setMediaMimeType] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [privacy, setPrivacy] = useState<Privacy>("everyone");
   const [showPrivacy, setShowPrivacy] = useState(false);
@@ -90,6 +91,7 @@ export default function CreateStoryScreen() {
         const asset = result.assets[0];
         setMediaUri(asset.uri);
         setMediaType(asset.type === "video" ? "video" : "image");
+        setMediaMimeType(asset.mimeType || null);
       }
     } catch (e: any) {
       showAlert("Error", e?.message || "Could not open media picker.");
@@ -126,6 +128,7 @@ export default function CreateStoryScreen() {
     // Capture for background closure before navigation
     const _mediaUri = mediaUri;
     const _mediaType = mediaType;
+    const _mediaMimeType = mediaMimeType;
     const _caption = caption.trim();
     const _privacy = privacy;
     const _userId = user.id;
@@ -146,7 +149,16 @@ export default function CreateStoryScreen() {
 
         let ext: string;
         let mime: string;
-        if (_mediaUri.startsWith("data:")) {
+        if (_mediaMimeType) {
+          mime = _mediaMimeType;
+          const mimeToExtMap: Record<string, string> = {
+            "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png",
+            "image/gif": "gif", "image/webp": "webp", "image/heic": "jpg",
+            "image/heif": "jpg", "video/mp4": "mp4", "video/quicktime": "mov",
+            "video/webm": "webm", "video/x-mkvideo": "mkv",
+          };
+          ext = mimeToExtMap[_mediaMimeType] || _mediaUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
+        } else if (_mediaUri.startsWith("data:")) {
           const dataMime = _mediaUri.match(/data:([^;]+)/)?.[1] || "";
           ext = dataMime.includes("png") ? "png" : dataMime.includes("webp") ? "webp" : "jpg";
           mime = dataMime || "image/jpeg";
@@ -162,7 +174,8 @@ export default function CreateStoryScreen() {
         const { publicUrl, error: uploadErr } = await uploadToStorage("stories", fileName, _mediaUri, mime);
 
         if (uploadErr || !publicUrl) {
-          failStoryUpload();
+          console.error("[Story Upload] Upload failed:", uploadErr);
+          failStoryUpload(uploadErr || "Upload failed");
           return;
         }
 
@@ -178,7 +191,8 @@ export default function CreateStoryScreen() {
         });
 
         if (error) {
-          failStoryUpload();
+          console.error("[Story Upload] DB insert failed:", error.message);
+          failStoryUpload(error.message || "Failed to save story");
         } else {
           try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("story_created"); } catch (_) {}
           await recordDailyUsage("stories_create");

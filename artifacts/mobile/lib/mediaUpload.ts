@@ -283,27 +283,33 @@ export async function uploadToStorage(
       return { publicUrl: proxied.publicUrl, error: null };
     }
 
+    // Attempt presigned PUT directly to R2. If it fails for any reason
+    // (R2 not configured, network error, R2 rejects the PUT), fall back
+    // to the server-side proxy path which works even without direct R2 access.
     const sign = await getSignedUpload(realBucket, filePath, mime);
-    if (sign.error || !sign.data) {
-      return { publicUrl: null, error: sign.error || "Sign failed" };
+    if (sign.data) {
+      try {
+        const putResp = await fetch(sign.data.uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": mime },
+          body: body as any,
+        });
+        if (putResp.ok) {
+          return { publicUrl: sign.data.publicUrl, error: null };
+        }
+        const errText = await putResp.text().catch(() => "");
+        console.warn(
+          `[Upload] Presigned PUT failed (${putResp.status}), falling back to proxy: ${errText.slice(0, 120)}`,
+        );
+      } catch (e: any) {
+        console.warn(`[Upload] Presigned PUT threw, falling back to proxy: ${e?.message || e}`);
+      }
+    } else {
+      console.warn(`[Upload] Sign failed (${sign.error}), falling back to proxy`);
     }
 
-    let putResp: Response;
-    try {
-      putResp = await fetch(sign.data.uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": mime },
-        body: body as any,
-      });
-    } catch (e: any) {
-      return { publicUrl: null, error: `Upload failed: ${e?.message || e}` };
-    }
-    if (!putResp.ok) {
-      const text = await putResp.text().catch(() => "");
-      return { publicUrl: null, error: `Upload rejected (${putResp.status}): ${text.slice(0, 120) || "no body"}` };
-    }
-
-    return { publicUrl: sign.data.publicUrl, error: null };
+    // Proxy fallback: send bytes through the API server
+    return proxyUpload(realBucket, filePath, body, mime);
   } catch (e: any) {
     return { publicUrl: null, error: e?.message || "Upload failed" };
   }

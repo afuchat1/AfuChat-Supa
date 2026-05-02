@@ -3,6 +3,7 @@ export type StoryUploadState = {
   caption: string;
   done: boolean;
   failed: boolean;
+  errorMessage?: string;
 };
 
 let _state: StoryUploadState | null = null;
@@ -44,12 +45,12 @@ export function finishStoryUpload(): void {
   }, 4000);
 }
 
-export function failStoryUpload(): void {
+export function failStoryUpload(errorMessage?: string): void {
   if (!_state) return;
-  _state = { ..._state, failed: true };
+  _state = { ..._state, failed: true, errorMessage };
   notify();
   setTimeout(() => {
     _state = null;
     notify();
-  }, 6000);
+  }, 8000);
 }

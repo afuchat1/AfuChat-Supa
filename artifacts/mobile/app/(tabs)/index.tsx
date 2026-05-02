@@ -253,7 +253,11 @@ function StoryUploadBanner({ colors }: { colors: any }) {
           <Text style={[uploadBannerStyles.label, { color: colors.text }]}>
             {isDone ? "Story posted!" : isFailed ? "Story upload failed" : "Posting your story…"}
           </Text>
-          {upload.caption ? (
+          {isFailed && upload.errorMessage ? (
+            <Text style={[uploadBannerStyles.caption, { color: "#EF4444" }]} numberOfLines={2}>
+              {upload.errorMessage}
+            </Text>
+          ) : upload.caption ? (
             <Text style={[uploadBannerStyles.caption, { color: colors.textMuted }]} numberOfLines={1}>
               {upload.caption}
             </Text>
