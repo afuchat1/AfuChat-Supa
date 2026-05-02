@@ -209,7 +209,7 @@ function ChatRow({
   );
 }
 
-function StoriesBar({ userId, colors }: { userId: string; colors: any }) {
+function StoriesBar({ userId, colors, isDesktop }: { userId: string; colors: any; isDesktop: boolean }) {
   const [storyUsers, setStoryUsers] = useState<StoryUser[]>([]);
 
   const loadStories = useCallback(async () => {
@@ -291,10 +291,22 @@ function StoriesBar({ userId, colors }: { userId: string; colors: any }) {
     return () => { supabase.removeChannel(channel); };
   }, [loadStories]);
 
-  if (storyUsers.length === 0) return null;
+  if (storyUsers.length === 0 && isDesktop) return null;
 
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={storyBarStyles.list}>
+      {!isDesktop && (
+        <TouchableOpacity
+          style={storyBarStyles.item}
+          onPress={() => router.push("/stories/camera")}
+          activeOpacity={0.75}
+        >
+          <View style={[storyBarStyles.addCircle, { borderColor: colors.accent }]}>
+            <Ionicons name="add" size={26} color={colors.accent} />
+          </View>
+          <Text style={[storyBarStyles.name, { color: colors.textSecondary }]}>Your Story</Text>
+        </TouchableOpacity>
+      )}
       {storyUsers.map((u) => (
         <TouchableOpacity
           key={u.userId}
@@ -921,7 +933,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                 />
               )}
               ItemSeparatorComponent={() => <Separator indent={74} />}
-              ListHeaderComponent={user && tabFilter === "all" && !search ? <StoriesBar userId={user.id} colors={colors} /> : null}
+              ListHeaderComponent={user && tabFilter === "all" && !search ? <StoriesBar userId={user.id} colors={colors} isDesktop={isDesktop} /> : null}
               refreshControl={
                 <RefreshControl
                   refreshing={refreshing}
