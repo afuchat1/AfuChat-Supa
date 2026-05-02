@@ -28,7 +28,6 @@ export function MinimalGrid() {
 
   return (
     <div className="min-h-screen bg-white font-['Inter']" style={{ fontFamily: "'Inter', sans-serif" }}>
-
       {/* ── Sticky minimal header ─── */}
       <div className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl border-b border-gray-100 px-4 py-3 flex justify-between items-center">
         <button className="w-8 h-8 flex items-center justify-center">
@@ -39,7 +38,6 @@ export function MinimalGrid() {
           <svg width="18" height="18" fill="none" stroke="#555" strokeWidth="2" viewBox="0 0 24 24"><circle cx="8.5" cy="8.5" r="1.5" fill="#555"/><circle cx="15.5" cy="8.5" r="1.5" fill="#555"/><circle cx="12" cy="15.5" r="1.5" fill="#555"/></svg>
         </button>
       </div>
-
       {/* ── Profile header ─── */}
       <div className="px-5 pt-5 pb-4">
         <div className="flex items-start gap-4 mb-4">
@@ -108,7 +106,6 @@ export function MinimalGrid() {
           <span className="text-[10px] text-gray-400">68%</span>
         </div>
       </div>
-
       {/* ── Tab bar (icon-only, Instagram style) ─── */}
       <div className="border-y border-gray-100">
         <div className="flex">
@@ -130,19 +127,17 @@ export function MinimalGrid() {
           ))}
         </div>
       </div>
-
       {/* ── Content ─── */}
       {/* Photos — 3-col grid */}
       {tab === "photos" && (
         <div className="grid grid-cols-3 gap-[1.5px] bg-gray-100">
           {PHOTOS.map((img, i) => (
             <div key={i} className="relative bg-gray-100" style={{ paddingBottom: "100%" }}>
-              <img src={img} className="absolute inset-0 w-full h-full object-cover" />
+              <img src={img} className="absolute inset-0 w-full h-full object-cover rounded-tl-[20px] rounded-br-[20px] rounded-tr-[20px] rounded-bl-[20px] mb-[0px]" />
             </div>
           ))}
         </div>
       )}
-
       {/* Posts */}
       {tab === "posts" && (
         <div className="divide-y divide-gray-50">
@@ -172,7 +167,6 @@ export function MinimalGrid() {
           ))}
         </div>
       )}
-
       {/* Videos — 3-col portrait grid */}
       {tab === "videos" && (
         <div className="grid grid-cols-3 gap-[1.5px] bg-gray-100">
@@ -191,7 +185,6 @@ export function MinimalGrid() {
           ))}
         </div>
       )}
-
       <div className="h-10" />
     </div>
   );
