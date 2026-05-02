@@ -1331,10 +1331,11 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     letterSpacing: 0.5,
   },
-  videoCard: { marginBottom: 2 },
+  videoCard: { marginHorizontal: 16, marginBottom: 2 },
   videoThumb: {
     height: 220,
     backgroundColor: "#0a0a0a",
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
