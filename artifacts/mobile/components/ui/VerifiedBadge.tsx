@@ -32,16 +32,16 @@ export default function VerifiedBadge({ isVerified, isOrganizationVerified, size
 
   const badgeColor = isOrg ? "#D4A853" : accent;
 
-  const REASONS = isOrg
+  const REASONS: { icon: Parameters<typeof Ionicons>[0]["name"]; label: string; premiumLink?: boolean }[] = isOrg
     ? [
-        { icon: "business-outline" as const, label: "Confirmed authentic business, brand, or organization" },
-        { icon: "shield-checkmark-outline" as const, label: "Notable presence in its industry or community" },
-        { icon: "document-text-outline" as const, label: "Compliant with AfuChat's community guidelines" },
+        { icon: "business-outline", label: "Confirmed authentic business, brand, or organization" },
+        { icon: "shield-checkmark-outline", label: "Notable presence in its industry or community", premiumLink: true },
+        { icon: "document-text-outline", label: "Compliant with AfuChat's community guidelines" },
       ]
     : [
-        { icon: "person-circle-outline" as const, label: "Confirmed authentic identity as a real person" },
-        { icon: "star-outline" as const, label: "Notable creator, public figure, or professional" },
-        { icon: "checkmark-done-outline" as const, label: "Compliant with AfuChat's community guidelines" },
+        { icon: "person-circle-outline", label: "Confirmed authentic identity as a real person" },
+        { icon: "star-outline", label: "Notable creator, public figure, or professional", premiumLink: true },
+        { icon: "checkmark-done-outline", label: "Compliant with AfuChat's community guidelines" },
       ];
 
   return (
@@ -92,12 +92,30 @@ export default function VerifiedBadge({ isVerified, isOrganizationVerified, size
               VERIFICATION CRITERIA
             </Text>
             {REASONS.map((r, i) => (
-              <View key={i} style={s.bulletRow}>
-                <View style={[s.bulletIcon, { backgroundColor: badgeColor + "18" }]}>
-                  <Ionicons name={r.icon} size={15} color={badgeColor} />
+              r.premiumLink ? (
+                <TouchableOpacity
+                  key={i}
+                  style={[s.bulletRow, s.bulletRowTappable, { borderColor: badgeColor + "30", backgroundColor: badgeColor + "0C" }]}
+                  activeOpacity={0.75}
+                  onPress={() => { setVisible(false); router.push("/premium"); }}
+                >
+                  <View style={[s.bulletIcon, { backgroundColor: badgeColor + "28" }]}>
+                    <Ionicons name={r.icon} size={15} color={badgeColor} />
+                  </View>
+                  <Text style={[s.bulletText, { color: colors.textSecondary, flex: 1 }]}>{r.label}</Text>
+                  <View style={[s.premiumPill, { backgroundColor: badgeColor + "22" }]}>
+                    <Ionicons name="diamond-outline" size={10} color={badgeColor} />
+                    <Text style={[s.premiumPillText, { color: badgeColor }]}>Premium</Text>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                <View key={i} style={s.bulletRow}>
+                  <View style={[s.bulletIcon, { backgroundColor: badgeColor + "18" }]}>
+                    <Ionicons name={r.icon} size={15} color={badgeColor} />
+                  </View>
+                  <Text style={[s.bulletText, { color: colors.textSecondary }]}>{r.label}</Text>
                 </View>
-                <Text style={[s.bulletText, { color: colors.textSecondary }]}>{r.label}</Text>
-              </View>
+              )
             ))}
 
             {/* Divider */}
@@ -109,11 +127,11 @@ export default function VerifiedBadge({ isVerified, isOrganizationVerified, size
               activeOpacity={0.85}
               onPress={() => {
                 setVisible(false);
-                router.push("/premium");
+                router.push(isOrg ? "/business-verification" : "/premium");
               }}
             >
-              <Ionicons name="ribbon-outline" size={16} color="#fff" />
-              <Text style={s.ctaBtnText}>Get Verified</Text>
+              <Ionicons name={isOrg ? "business-outline" : "ribbon-outline"} size={16} color="#fff" />
+              <Text style={s.ctaBtnText}>{isOrg ? "Apply for Verification" : "Get Verified"}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -200,6 +218,13 @@ const s = StyleSheet.create({
     gap: 12,
     marginBottom: 10,
   },
+  bulletRowTappable: {
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    marginHorizontal: -4,
+  },
   bulletIcon: {
     width: 30,
     height: 30,
@@ -211,6 +236,18 @@ const s = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     lineHeight: 18,
+  },
+  premiumPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 20,
+  },
+  premiumPillText: {
+    fontSize: 10,
+    fontWeight: "600",
   },
   ctaBtn: {
     flexDirection: "row",
