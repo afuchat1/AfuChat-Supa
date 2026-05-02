@@ -1897,9 +1897,10 @@ export default function VideoPlayerScreen() {
   const insets = useSafeAreaInsets();
   const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
   const { isDesktop: isDesktopShell } = useIsDesktop();
-  // On desktop the shell reserves space for the sidebar and topbar.
-  const EFF_W = isDesktopShell ? SCREEN_W - SIDEBAR_WIDTH : SCREEN_W;
-  const EFF_H = isDesktopShell ? SCREEN_H - TOPBAR_HEIGHT : SCREEN_H;
+  // Video player is now fullscreen on desktop (shell bypassed), so always
+  // use the full viewport dimensions regardless of sidebar/topbar.
+  const EFF_W = SCREEN_W;
+  const EFF_H = SCREEN_H;
   const [videoTab, setVideoTab] = useState<"for_you" | "following">("for_you");
   const [videos, setVideos] = useState<VideoPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2581,19 +2582,18 @@ export default function VideoPlayerScreen() {
 
   if (loading) {
     return (
-      <View style={[mStyles.center, isDesktopShell && { position: "relative" as any, zIndex: 0, top: undefined, left: undefined, right: undefined, bottom: undefined, backgroundColor: colors.background }]}>
-        {!isDesktopShell && <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />}
-        <ActivityIndicator color={isDesktopShell ? colors.text : "#fff"} size="large" />
+      <View style={mStyles.center}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <ActivityIndicator color="#fff" size="large" />
       </View>
     );
   }
 
   return (
-    <View style={[mStyles.root, isDesktopShell && { position: "relative" as any, zIndex: 0, top: undefined, left: undefined, right: undefined, bottom: undefined, backgroundColor: colors.background }]}>
-      {!isDesktopShell && <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />}
+    <View style={mStyles.root}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Mobile-only floating header */}
-      {!isDesktopShell && (
+      {/* Floating header — back button + For You/Following tabs + search */}
       <View style={[mStyles.headerRow, { paddingTop: insets.top + 6 }]}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={mStyles.headerSide}>
           <Ionicons name="arrow-back" size={22} color="#fff" />
@@ -2614,20 +2614,6 @@ export default function VideoPlayerScreen() {
           <Ionicons name="search-outline" size={20} color="#fff" />
         </TouchableOpacity>
       </View>
-      )}
-
-      {/* Desktop tab switcher — sits above the video feed */}
-      {isDesktopShell && (
-        <View style={[mStyles.desktopTabRow, { backgroundColor: colors.background, borderBottomWidth: 1, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => switchTab("for_you")} style={mStyles.tabBtn}>
-            <Text style={[mStyles.desktopTabText, { color: colors.textMuted }, videoTab === "for_you" && [mStyles.desktopTabTextActive, { color: colors.text }]]}>For You</Text>
-          </TouchableOpacity>
-          <View style={[mStyles.tabDivider, { backgroundColor: colors.border }]} />
-          <TouchableOpacity onPress={() => switchTab("following")} style={mStyles.tabBtn}>
-            <Text style={[mStyles.desktopTabText, { color: colors.textMuted }, videoTab === "following" && [mStyles.desktopTabTextActive, { color: colors.text }]]}>Following</Text>
-          </TouchableOpacity>
-        </View>
-      )}
 
       {videos.length === 0 ? (
         <View style={mStyles.emptyState}>

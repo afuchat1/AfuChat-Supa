@@ -135,7 +135,6 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
       return;
     }
     if (item.post_type === "video") {
-      if (Platform.OS === "web") return;
       router.push({ pathname: "/video/[id]", params: { id: item.id } });
       return;
     }

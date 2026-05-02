@@ -45,6 +45,8 @@ const FULLSCREEN_PATTERNS: RegExp[] = [
   /^\/onboarding/,
   /^\/call(\/|$)/,
   /^\/stories\/(view|camera)/,
+  /^\/video\//,
+  /^\/shorts(\/|$)/,
 ];
 
 // Routes where the chats list panel (master-detail layout) is shown.
