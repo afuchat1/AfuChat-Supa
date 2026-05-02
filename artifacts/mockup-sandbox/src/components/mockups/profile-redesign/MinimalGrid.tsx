@@ -117,9 +117,7 @@ export function MinimalGrid() {
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`flex-1 py-3 flex items-center justify-center relative ${
-                tab === t.key ? "text-gray-900" : "text-gray-300 bg-[#00c2cb] rounded-br-[33px] rounded-tl-[33px]"
-              }`}
+              className="flex-1 py-3 flex items-center justify-center relative text-gray-300 bg-[#00c2cb] rounded-tr-[80px] rounded-bl-[80px] rounded-tl-[80px] rounded-br-[80px]"
             >
               {t.icon}
               {tab === t.key && <span className="absolute top-0 left-1/4 right-1/4 h-0.5 bg-gray-900 rounded-b-full" />}
