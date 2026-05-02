@@ -184,6 +184,7 @@ type VideoPost = {
   created_at: string;
   view_count: number;
   audio_name: string | null;
+  duet_of_post_id: string | null;
   profile: { display_name: string; handle: string; avatar_url: string | null };
   liked: boolean;
   bookmarked: boolean;
@@ -631,6 +632,7 @@ function VideoItem({
   onRecordView,
   onOpenMenu,
   onOpenSound,
+  onDuet,
   activeToggleRef,
 }: {
   item: VideoPost;
@@ -648,6 +650,7 @@ function VideoItem({
   onRecordView: (postId: string) => void;
   onOpenMenu: (item: VideoPost) => void;
   onOpenSound: (item: VideoPost, albumArtUrl: string | null, trackArtist: string | null) => void;
+  onDuet: (item: VideoPost) => void;
   activeToggleRef?: React.MutableRefObject<(() => void) | null>;
 }) {
   const { accent } = useAppAccent();
@@ -1009,6 +1012,21 @@ function VideoItem({
             </Text>
           </View>
 
+          {/* Duet */}
+          <View style={{ alignItems: "center", gap: 5 }}>
+            <Pressable
+              onPress={() => onDuet(item)}
+              style={({ hovered }: any) => ({
+                width: 52, height: 52, borderRadius: 26,
+                backgroundColor: hovered ? colors.backgroundTertiary : colors.surface,
+                alignItems: "center", justifyContent: "center",
+              })}
+            >
+              <Ionicons name="git-branch-outline" size={26} color={colors.text} />
+            </Pressable>
+            <Text style={{ color: colors.text, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Duet</Text>
+          </View>
+
           {/* Share */}
           <View style={{ alignItems: "center", gap: 5 }}>
             <Pressable
@@ -1134,6 +1152,12 @@ function VideoItem({
       <GradientOverlay position="top" height={120} />
 
       <View style={[vStyles.bottomArea, { bottom: insets.bottom + 52 }]}>
+        {item.duet_of_post_id && (
+          <View style={vStyles.duetBadge}>
+            <Ionicons name="git-branch-outline" size={12} color="#00BCD4" />
+            <Text style={vStyles.duetBadgeText}>Duet</Text>
+          </View>
+        )}
         <TouchableOpacity
           onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}
           style={vStyles.authorRow}
@@ -1225,6 +1249,13 @@ function VideoItem({
               color={item.bookmarked ? accent : "#fff"}
             />
           </TouchableOpacity>
+        </View>
+
+        <View style={vStyles.actionItem}>
+          <TouchableOpacity onPress={() => onDuet(item)} hitSlop={10} style={vStyles.actionBtn}>
+            <Ionicons name="git-branch-outline" size={26} color="#fff" />
+          </TouchableOpacity>
+          <Text style={vStyles.actionLabel}>Duet</Text>
         </View>
 
         <View style={vStyles.actionItem}>
@@ -1354,6 +1385,18 @@ const vStyles = StyleSheet.create({
   },
   viewRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
   viewText: { color: "rgba(255,255,255,0.4)", fontSize: 11, fontFamily: "Inter_400Regular" },
+  duetBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(0,188,212,0.2)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: "flex-start",
+    marginBottom: 4,
+  },
+  duetBadgeText: { color: "#00BCD4", fontSize: 11, fontFamily: "Inter_600SemiBold" },
 
   rightCol: { position: "absolute", right: 10, gap: 18, alignItems: "center" },
   rightAvatarContainer: { alignItems: "center", marginBottom: 6 },
@@ -1664,6 +1707,7 @@ function VideoContextMenu({
   item,
   onClose,
   onShare,
+  onDuet,
   onRepost,
   onDownload,
   onCopyLink,
@@ -1674,6 +1718,7 @@ function VideoContextMenu({
   item: VideoPost | null;
   onClose: () => void;
   onShare: () => void;
+  onDuet: () => void;
   onRepost: () => void;
   onDownload: () => void;
   onCopyLink: () => void;
@@ -1685,6 +1730,7 @@ function VideoContextMenu({
   const OPTIONS = [
     { id: "download",       label: "Save to device",   icon: "download-outline",        action: onDownload,       color: "#fff" },
     { id: "share",          label: "Share to...",      icon: "share-social-outline",    action: onShare,          color: "#fff" },
+    { id: "duet",           label: "Duet",             icon: "git-branch-outline",      action: onDuet,           color: "#00BCD4" },
     { id: "repost",         label: "Repost",           icon: "repeat-outline",          action: onRepost,         color: "#fff" },
     { id: "copylink",       label: "Copy link",        icon: "link-outline",            action: onCopyLink,       color: "#fff" },
     { id: "notinterested",  label: "Not interested",   icon: "eye-off-outline",         action: onNotInterested,  color: "rgba(255,255,255,0.65)" },
@@ -1987,10 +2033,10 @@ export default function VideoPlayerScreen() {
     let query = supabase
       .from("posts")
       .select(`
-        id, author_id, content, video_url, image_url, created_at, audio_name,
+        id, author_id, content, video_url, image_url, created_at, audio_name, duet_of_post_id,
         profiles!posts_author_id_fkey(display_name, handle, avatar_url)
       `)
-      .eq("post_type", "video")
+      .in("post_type", ["video", "duet"])
       .eq("is_blocked", false)
       .not("video_url", "is", null)
       .order("created_at", { ascending: false })
@@ -2071,6 +2117,7 @@ export default function VideoPlayerScreen() {
         created_at: p.created_at,
         view_count: viewMap[p.id] || 0,
         audio_name: p.audio_name || null,
+        duet_of_post_id: p.duet_of_post_id || null,
         profile: {
           display_name: p.profiles?.display_name || "User",
           handle: p.profiles?.handle || "user",
@@ -2289,6 +2336,7 @@ export default function VideoPlayerScreen() {
       created_at: new Date().toISOString(),
       view_count: 0,
       audio_name: null,
+      duet_of_post_id: null,
       profile: authorProfile,
       liked: false,
       bookmarked: false,
@@ -2476,6 +2524,11 @@ export default function VideoPlayerScreen() {
     );
   }
 
+  function handleDuet(item: VideoPost) {
+    if (!user) { router.push("/(auth)/login"); return; }
+    router.push({ pathname: "/moments/create-duet", params: { postId: item.id } });
+  }
+
   function handleOpenMenu(item: VideoPost) {
     setMenuItem(item);
   }
@@ -2625,6 +2678,7 @@ export default function VideoPlayerScreen() {
                 onRecordView={handleRecordView}
                 onOpenMenu={handleOpenMenu}
                 onOpenSound={handleOpenSound}
+                onDuet={handleDuet}
                 activeToggleRef={activeToggleRef}
               />
             );
@@ -2681,6 +2735,7 @@ export default function VideoPlayerScreen() {
         item={menuItem}
         onClose={() => setMenuItem(null)}
         onShare={() => menuItem && setShareSheetItem(menuItem)}
+        onDuet={() => menuItem && handleDuet(menuItem)}
         onRepost={() => menuItem && handleRepost(menuItem)}
         onDownload={() => menuItem && handleDownload(menuItem)}
         onCopyLink={() => menuItem && handleCopyLink(menuItem)}

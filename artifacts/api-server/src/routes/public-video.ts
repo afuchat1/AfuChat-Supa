@@ -136,7 +136,7 @@ function renderVideoPage(
     ? `<span style="color:${BRAND_COLOR};font-size:16px;" title="Verified">&#10004;</span>`
     : "";
 
-  const ogImageFinal = posterUrl || avatarUrl || `${SITE_URL}/og-default.png`;
+  const ogImageFinal = posterUrl || avatarUrl || `${SITE_URL}/logo.png`;
 
   return `<!DOCTYPE html>
 <html lang="en" prefix="og: https://ogp.me/ns# video: https://ogp.me/ns/video#">
