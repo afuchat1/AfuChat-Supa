@@ -231,6 +231,5 @@ export function pickBestSource(
   return { url: manifest.fallback_url, codec: "source", height: null };
 }
 
-// Re-export the raw supabase URL so callers can resolve storage paths if
-// they ever need to bypass the manifest.
+// Re-export the Supabase project URL for callers that need it directly.
 export const SUPABASE_PUBLIC_URL: string = supabaseUrl;
