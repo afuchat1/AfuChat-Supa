@@ -653,8 +653,8 @@ const st = StyleSheet.create({
 
   statsBlock: { flex: 1, flexDirection: "row", justifyContent: "space-around" },
   statCell: { alignItems: "center", gap: 2 },
-  statNum: { fontSize: 19, fontFamily: "Inter_800ExtraBold" },
-  statLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  statNum: { fontSize: 19, fontWeight: "800" },
+  statLabel: { fontSize: 11 },
 
   nameBadgeRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, marginBottom: 3 },
   displayName: { fontSize: 15, fontFamily: "Inter_700Bold" },
