@@ -85,7 +85,7 @@ export function MinimalGrid() {
               <Check size={13} /> Following
             </button>
           ) : (
-            <button onClick={() => setFollowing(true)} className="flex-1 py-2 rounded-lg bg-gray-900 text-white text-[13px] font-bold flex items-center justify-center gap-1.5">
+            <button onClick={() => setFollowing(true)} className="flex-1 py-2 rounded-lg bg-gray-900 text-white text-[13px] font-bold flex items-center justify-center gap-1.5 rounded-tl-[80px] rounded-tr-[80px] rounded-br-[80px] rounded-bl-[80px]">
               <UserPlus size={13} /> Follow
             </button>
           )}
