@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Play, Heart, MessageCircle, Eye, MapPin, UserPlus, Check, MessageSquare, Zap, LayoutGrid, FileText, Film } from "lucide-react";
 
-const BRAND = "#00BCD4";
 const GOLD = "#D4A853";
 const TEXT = "#0F0F0F";
 const TEXT_SEC = "#606060";
@@ -9,6 +8,15 @@ const TEXT_MUTED = "#909090";
 const BG = "#FFFFFF";
 const BG_SEC = "#F2F2F2";
 const BORDER = "#E5E5E5";
+
+const THEMES: { name: string; accent: string }[] = [
+  { name: "Teal",    accent: "#00BCD4" },
+  { name: "Blue",    accent: "#007AFF" },
+  { name: "Purple",  accent: "#AF52DE" },
+  { name: "Rose",    accent: "#FF2D55" },
+  { name: "Amber",   accent: "#FF9500" },
+  { name: "Emerald", accent: "#34C759" },
+];
 
 const AVATAR = "https://i.pravatar.cc/150?img=47";
 const PHOTOS = [
@@ -19,18 +27,16 @@ const PHOTOS = [
   "https://images.unsplash.com/photo-1704387744073-4f5843f60513?w=400&q=80",
   "https://images.unsplash.com/photo-1682687220063-4742bd7fd538?w=400&q=80",
 ];
-
 const VIDEOS = [
-  { thumb: "https://images.unsplash.com/photo-1611162616305-c69b3fa7fbe0?w=400&q=80", views: "12.4K", dur: "0:45" },
-  { thumb: "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=400&q=80", views: "8.1K", dur: "1:20" },
-  { thumb: "https://images.unsplash.com/photo-1611162618071-b39a2ec055fb?w=400&q=80", views: "34K", dur: "2:05" },
-  { thumb: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&q=80", views: "5.2K", dur: "0:58" },
-  { thumb: "https://images.unsplash.com/photo-1618641986557-1ecd230959aa?w=400&q=80", views: "21K", dur: "1:33" },
-  { thumb: "https://images.unsplash.com/photo-1619983081563-430f63602796?w=400&q=80", views: "9.7K", dur: "0:32" },
+  { thumb: "https://images.unsplash.com/photo-1611162616305-c69b3fa7fbe0?w=400&q=80", views: "12.4K" },
+  { thumb: "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=400&q=80", views: "8.1K" },
+  { thumb: "https://images.unsplash.com/photo-1611162618071-b39a2ec055fb?w=400&q=80", views: "34K" },
+  { thumb: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&q=80", views: "5.2K" },
+  { thumb: "https://images.unsplash.com/photo-1618641986557-1ecd230959aa?w=400&q=80", views: "21K" },
+  { thumb: "https://images.unsplash.com/photo-1619983081563-430f63602796?w=400&q=80", views: "9.7K" },
 ];
 
 type Tab = "posts" | "photos" | "videos";
-
 const TABS: { key: Tab; icon: React.ReactNode }[] = [
   { key: "photos", icon: <LayoutGrid size={20} /> },
   { key: "posts",  icon: <FileText size={20} /> },
@@ -40,9 +46,34 @@ const TABS: { key: Tab; icon: React.ReactNode }[] = [
 export function MinimalGrid() {
   const [tab, setTab] = useState<Tab>("photos");
   const [following, setFollowing] = useState(false);
+  const [themeIdx, setThemeIdx] = useState(2); // Purple — matches user's current setting
+
+  const BRAND = THEMES[themeIdx].accent;
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: BG, fontFamily: "'Inter', system-ui, sans-serif", color: TEXT }}>
+
+      {/* ── Theme switcher (mockup-only) ─── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "10px 16px 8px", backgroundColor: BG_SEC, borderBottom: `1px solid ${BORDER}` }}>
+        <span style={{ fontSize: 10, fontWeight: 600, color: TEXT_MUTED, textTransform: "uppercase", letterSpacing: "0.06em" }}>App Colour</span>
+        <div style={{ display: "flex", gap: 8 }}>
+          {THEMES.map((t, i) => (
+            <button
+              key={t.name}
+              onClick={() => setThemeIdx(i)}
+              title={t.name}
+              style={{
+                width: 22, height: 22, borderRadius: "50%", backgroundColor: t.accent, border: "none", cursor: "pointer",
+                outline: i === themeIdx ? `2.5px solid ${t.accent}` : "none",
+                outlineOffset: 2,
+                boxShadow: i === themeIdx ? `0 0 0 1px white, 0 0 0 3px ${t.accent}` : "none",
+                transform: i === themeIdx ? "scale(1.15)" : "scale(1)",
+                transition: "all 0.15s ease",
+              }}
+            />
+          ))}
+        </div>
+      </div>
 
       {/* ── Sticky nav bar ─── */}
       <div style={{
@@ -57,7 +88,7 @@ export function MinimalGrid() {
         </button>
         <span style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>amkaweesi</span>
         <button style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer" }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TEXT_SEC} strokeWidth="2"><circle cx="5" cy="12" r="1.5" fill={TEXT_SEC}/><circle cx="12" cy="12" r="1.5" fill={TEXT_SEC}/><circle cx="19" cy="12" r="1.5" fill={TEXT_SEC}/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="1.5" fill={TEXT_SEC}/><circle cx="12" cy="12" r="1.5" fill={TEXT_SEC}/><circle cx="19" cy="12" r="1.5" fill={TEXT_SEC}/></svg>
         </button>
       </div>
 
@@ -66,7 +97,6 @@ export function MinimalGrid() {
 
         {/* Avatar + stats row */}
         <div style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 14 }}>
-          {/* Avatar */}
           <div style={{ position: "relative", flexShrink: 0 }}>
             <div style={{ width: 80, height: 80, borderRadius: "50%", overflow: "hidden", outline: `2.5px solid ${BRAND}`, outlineOffset: 2 }}>
               <img src={AVATAR} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -74,7 +104,6 @@ export function MinimalGrid() {
             <div style={{ position: "absolute", bottom: 2, right: 2, width: 14, height: 14, borderRadius: "50%", backgroundColor: BRAND, border: "2px solid white" }} />
           </div>
 
-          {/* Stats */}
           <div style={{ flex: 1, display: "flex", justifyContent: "space-around" }}>
             {[{ n: "20", l: "Posts" }, { n: "85", l: "Followers" }, { n: "50", l: "Following" }].map((s) => (
               <div key={s.l} style={{ textAlign: "center" }}>
@@ -88,9 +117,7 @@ export function MinimalGrid() {
         {/* Name + badges */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: TEXT }}>AM Kaweesi</span>
-          {/* Verified badge — brand color */}
           <svg width="15" height="15" viewBox="0 0 24 24" fill={BRAND}><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          {/* Grade badge — gold */}
           <span style={{ backgroundColor: GOLD + "22", color: GOLD, fontSize: 9, fontWeight: 800, padding: "2px 6px", borderRadius: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>Legend</span>
         </div>
 
@@ -110,17 +137,11 @@ export function MinimalGrid() {
         {/* CTA row */}
         <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
           {following ? (
-            <button
-              onClick={() => setFollowing(false)}
-              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 0", borderRadius: 80, border: `1.5px solid ${BRAND}`, background: "transparent", color: BRAND, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-            >
+            <button onClick={() => setFollowing(false)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 0", borderRadius: 80, border: `1.5px solid ${BRAND}`, background: "transparent", color: BRAND, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               <Check size={13} /> Following
             </button>
           ) : (
-            <button
-              onClick={() => setFollowing(true)}
-              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 0", borderRadius: 80, border: "none", background: BRAND, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
-            >
+            <button onClick={() => setFollowing(true)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 0", borderRadius: 80, border: "none", background: BRAND, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
               <UserPlus size={13} /> Follow
             </button>
           )}
@@ -169,8 +190,6 @@ export function MinimalGrid() {
       </div>
 
       {/* ── Content ─── */}
-
-      {/* Photos — 3-col grid */}
       {tab === "photos" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1.5, backgroundColor: BG_SEC }}>
           {PHOTOS.map((img, i) => (
@@ -181,7 +200,6 @@ export function MinimalGrid() {
         </div>
       )}
 
-      {/* Posts */}
       {tab === "posts" && (
         <div>
           {[
@@ -211,7 +229,6 @@ export function MinimalGrid() {
         </div>
       )}
 
-      {/* Videos — 3-col portrait grid */}
       {tab === "videos" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1.5, backgroundColor: BG_SEC }}>
           {VIDEOS.map((v, i) => (

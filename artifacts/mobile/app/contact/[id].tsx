@@ -366,23 +366,23 @@ export default function ContactProfileScreen() {
       {!isOwnProfile && (
         <View style={st.ctaRow}>
           <TouchableOpacity
-            style={[st.ctaFollow, { backgroundColor: isFollowing ? "transparent" : colors.text, borderColor: colors.text, borderWidth: isFollowing ? 1.5 : 0 }]}
+            style={[st.ctaFollow, { backgroundColor: isFollowing ? "transparent" : colors.accent, borderColor: colors.accent, borderWidth: isFollowing ? 1.5 : 0 }]}
             onPress={toggleFollow}
             activeOpacity={0.75}
           >
-            <Ionicons name={isFollowing ? "checkmark" : "person-add-outline"} size={14} color={isFollowing ? colors.text : colors.background} />
-            <Text style={[st.ctaFollowText, { color: isFollowing ? colors.text : colors.background }]}>
+            <Ionicons name={isFollowing ? "checkmark" : "person-add-outline"} size={14} color={isFollowing ? colors.accent : "#fff"} />
+            <Text style={[st.ctaFollowText, { color: isFollowing ? colors.accent : "#fff" }]}>
               {isFollowing ? "Following" : "Follow"}
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[st.ctaMessage, { borderColor: colors.border }]}
+            style={[st.ctaMessage, { borderColor: colors.accent }]}
             onPress={startChat}
             activeOpacity={0.75}
           >
-            <Ionicons name="chatbubble-outline" size={14} color={colors.text} />
-            <Text style={[st.ctaMessageText, { color: colors.text }]}>Message</Text>
+            <Ionicons name="chatbubble-outline" size={14} color={colors.accent} />
+            <Text style={[st.ctaMessageText, { color: colors.accent }]}>Message</Text>
           </TouchableOpacity>
 
         </View>
@@ -410,8 +410,8 @@ export default function ContactProfileScreen() {
               style={[
                 st.tabBtn,
                 active
-                  ? { borderTopColor: colors.text, borderTopWidth: 1.5 }
-                  : st.tabBtnInactive,
+                  ? { borderTopColor: colors.accent, borderTopWidth: 1.5 }
+                  : { backgroundColor: colors.accent, borderTopLeftRadius: 33, borderBottomRightRadius: 33 },
               ]}
               onPress={() => setActiveTab(t.key)}
               activeOpacity={0.7}
@@ -419,7 +419,7 @@ export default function ContactProfileScreen() {
               <Ionicons
                 name={t.icon as any}
                 size={21}
-                color={active ? colors.text : "rgba(255,255,255,0.9)"}
+                color={active ? colors.accent : "rgba(255,255,255,0.9)"}
               />
             </TouchableOpacity>
           );
