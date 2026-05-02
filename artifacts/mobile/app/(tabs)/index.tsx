@@ -61,6 +61,8 @@ type ChatItem = {
   other_id: string;
   last_message: string;
   last_message_at: string;
+  last_message_is_mine: boolean;
+  last_message_status: "sent" | "delivered" | "read";
   is_pinned: boolean;
   is_archived: boolean;
   avatar_url: string | null;
@@ -191,6 +193,14 @@ function ChatRow({
             )}
           </View>
           <View style={styles.rowTopRight}>
+            {item.last_message_is_mine && !hasUnread && (
+              <Ionicons
+                name={item.last_message_status === "read" ? "checkmark-done" : item.last_message_status === "delivered" ? "checkmark-done" : "checkmark"}
+                size={14}
+                color={item.last_message_status === "read" ? "#53BDEB" : colors.textMuted}
+                style={{ marginRight: 2 }}
+              />
+            )}
             <Text style={[styles.time, { color: hasUnread ? colors.accent : colors.textMuted }]}>
               {item.last_message_at ? formatTime(item.last_message_at) : ""}
             </Text>
@@ -517,7 +527,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
         .order("updated_at", { ascending: false }),
       supabase
         .from("messages")
-        .select("chat_id, encrypted_content, sent_at, attachment_type")
+        .select("id, chat_id, encrypted_content, sent_at, attachment_type, sender_id")
         .in("chat_id", chatIds)
         .order("sent_at", { ascending: false })
         .limit(chatIds.length * 3),
@@ -533,14 +543,30 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
     const chatRows = chatResult.data;
     if (!chatRows) { setLoading(false); setRefreshing(false); return; }
 
-    const lastMsgMap: Record<string, { lastMessage: string; lastMessageAt: string }> = {};
+    const lastMsgMap: Record<string, { lastMessage: string; lastMessageAt: string; isFromMe: boolean; lastMsgId: string }> = {};
     for (const m of (lastMsgsResult.data || [])) {
       if (!lastMsgMap[m.chat_id]) {
         let preview = m.encrypted_content || "";
         if (m.attachment_type === "story_reply") {
-          preview = preview ? `📸 ${preview}` : "📸 Replied to a story";
+          if (preview.startsWith("storyUserId:")) {
+            const pipeIdx = preview.indexOf("|");
+            preview = pipeIdx >= 0 ? preview.slice(pipeIdx + 1) : "Shared a story";
+          }
+          preview = `📸 ${preview || "Story"}`;
         }
-        lastMsgMap[m.chat_id] = { lastMessage: preview, lastMessageAt: m.sent_at };
+        lastMsgMap[m.chat_id] = { lastMessage: preview, lastMessageAt: m.sent_at, isFromMe: m.sender_id === user.id, lastMsgId: m.id };
+      }
+    }
+
+    const myLastMsgIds = Object.values(lastMsgMap).filter(v => v.isFromMe).map(v => v.lastMsgId);
+    const lastMsgStatusMap: Record<string, "read" | "delivered" | "sent"> = {};
+    if (myLastMsgIds.length > 0) {
+      const { data: statusRows } = await supabase
+        .from("message_status")
+        .select("message_id, read_at, delivered_at")
+        .in("message_id", myLastMsgIds);
+      for (const s of (statusRows || []) as any[]) {
+        lastMsgStatusMap[s.message_id] = s.read_at ? "read" : s.delivered_at ? "delivered" : "sent";
       }
     }
 
@@ -589,6 +615,8 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
         other_id: other?.id || "",
         last_message: lm?.lastMessage || "",
         last_message_at: lm?.lastMessageAt || c.updated_at || "",
+        last_message_is_mine: lm?.isFromMe ?? false,
+        last_message_status: lm?.isFromMe ? (lastMsgStatusMap[lm.lastMsgId] || "sent") : "sent",
         is_pinned: !!c.is_pinned,
         is_archived: !!c.is_archived,
         avatar_url: c.avatar_url,
@@ -1210,7 +1238,7 @@ const styles = StyleSheet.create({
   },
   nameRow: { flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 },
   name: { fontSize: 16, fontFamily: "Inter_600SemiBold", flexShrink: 1 },
-  rowTopRight: { alignItems: "flex-end" },
+  rowTopRight: { flexDirection: "row", alignItems: "center", gap: 2 },
   time: { fontSize: 12, fontFamily: "Inter_400Regular" },
   rowBottom: { flexDirection: "row", alignItems: "center", gap: 6 },
   preview: { fontSize: 14, fontFamily: "Inter_400Regular" },
