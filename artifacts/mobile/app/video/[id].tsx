@@ -631,7 +631,6 @@ function VideoItem({
   onRecordView,
   onOpenMenu,
   onOpenSound,
-  onDuet,
   activeToggleRef,
 }: {
   item: VideoPost;
@@ -649,7 +648,6 @@ function VideoItem({
   onRecordView: (postId: string) => void;
   onOpenMenu: (item: VideoPost) => void;
   onOpenSound: (item: VideoPost, albumArtUrl: string | null, trackArtist: string | null) => void;
-  onDuet: (item: VideoPost) => void;
   activeToggleRef?: React.MutableRefObject<(() => void) | null>;
 }) {
   const { accent } = useAppAccent();
@@ -827,8 +825,8 @@ function VideoItem({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: colors.background,
-        gap: 20,
+        backgroundColor: "#000",
+        gap: 24,
       }}>
         {/* Left: video card + below-card info */}
         <View style={{ flexDirection: "column" }}>
@@ -925,7 +923,7 @@ function VideoItem({
                 </View>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}>
-                <Text style={{ color: colors.text, fontSize: 14, fontFamily: "Inter_700Bold" }}>
+                <Text style={{ color: "#fff", fontSize: 14, fontFamily: "Inter_700Bold" }}>
                   @{item.profile.handle}
                 </Text>
               </TouchableOpacity>
@@ -937,117 +935,115 @@ function VideoItem({
                     paddingVertical: 7,
                     borderRadius: 999,
                     backgroundColor: isFollowing
-                      ? (hovered ? colors.backgroundTertiary : colors.surface)
-                      : (hovered ? "rgba(0,0,0,0.85)" : "#000"),
+                      ? (hovered ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.1)")
+                      : (hovered ? accent + "dd" : accent),
                     borderWidth: 1,
-                    borderColor: isFollowing ? colors.border : "#000",
+                    borderColor: isFollowing ? "rgba(255,255,255,0.2)" : accent,
                   })}
                 >
-                  <Text style={{
-                    color: isFollowing ? colors.text : "#fff",
-                    fontSize: 13,
-                    fontFamily: "Inter_600SemiBold",
-                  }}>
-                    {isFollowing ? "Following" : "Subscribe"}
+                  <Text style={{ color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" }}>
+                    {isFollowing ? "Following" : "Follow"}
                   </Text>
                 </Pressable>
               )}
             </View>
             {!!item.content && (
-              <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 }} numberOfLines={3}>
+              <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 }} numberOfLines={3}>
                 {item.content}
               </Text>
             )}
           </View>
         </View>
 
-        {/* Right: action rail (YouTube Shorts style) */}
-        <View style={{ flexDirection: "column", alignItems: "center", gap: 20, paddingBottom: 60 }}>
+        {/* Right: action rail — matches mobile style */}
+        <View style={{ flexDirection: "column", alignItems: "center", gap: 22, paddingBottom: 16 }}>
+          {/* Author avatar */}
+          <View style={{ alignItems: "center" }}>
+            <Pressable
+              onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}
+              style={{ width: 50, height: 50, borderRadius: 25, overflow: "hidden", borderWidth: 2, borderColor: accent }}
+            >
+              <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={50} />
+            </Pressable>
+            {!isSelf && (
+              <Pressable
+                onPress={() => onFollow(item.author_id, isFollowing)}
+                style={({ hovered }: any) => ({
+                  marginTop: -10,
+                  width: 22, height: 22, borderRadius: 11,
+                  backgroundColor: isFollowing ? (hovered ? colors.backgroundTertiary : colors.surface) : accent,
+                  alignItems: "center", justifyContent: "center",
+                  borderWidth: 1.5, borderColor: colors.background,
+                })}
+              >
+                <Ionicons name={isFollowing ? "checkmark" : "add"} size={13} color="#fff" />
+              </Pressable>
+            )}
+          </View>
+
           {/* Like */}
-          <View style={{ alignItems: "center", gap: 5 }}>
+          <View style={{ alignItems: "center", gap: 4 }}>
             <Animated.View style={{ transform: [{ scale: heartScale }] }}>
               <Pressable
                 onPress={handleLike}
                 style={({ hovered }: any) => ({
-                  width: 52, height: 52, borderRadius: 26,
-                  backgroundColor: hovered ? colors.backgroundTertiary : colors.surface,
+                  width: 50, height: 50, borderRadius: 25,
+                  backgroundColor: hovered ? "rgba(255,59,48,0.15)" : "rgba(255,255,255,0.1)",
                   alignItems: "center", justifyContent: "center",
                 })}
               >
-                <Ionicons name={item.liked ? "thumbs-up" : "thumbs-up-outline"} size={26} color={item.liked ? "#FF3B30" : colors.text} />
+                <Ionicons name={item.liked ? "heart" : "heart-outline"} size={28} color={item.liked ? "#FF3B30" : "#fff"} />
               </Pressable>
             </Animated.View>
-            <Text style={{ color: colors.text, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>
+            <Text style={{ color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" }}>
               {formatCount(item.likeCount)}
             </Text>
           </View>
 
-          {/* Dislike */}
-          <View style={{ alignItems: "center", gap: 5 }}>
-            <Pressable style={({ hovered }: any) => ({
-              width: 52, height: 52, borderRadius: 26,
-              backgroundColor: hovered ? colors.backgroundTertiary : colors.surface,
-              alignItems: "center", justifyContent: "center",
-            })}>
-              <Ionicons name="thumbs-down-outline" size={26} color={colors.text} />
-            </Pressable>
-            <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Dislike</Text>
-          </View>
-
           {/* Comment */}
-          <View style={{ alignItems: "center", gap: 5 }}>
+          <View style={{ alignItems: "center", gap: 4 }}>
             <Pressable
               onPress={() => onOpenComments(item.id)}
               style={({ hovered }: any) => ({
-                width: 52, height: 52, borderRadius: 26,
-                backgroundColor: hovered ? colors.backgroundTertiary : colors.surface,
+                width: 50, height: 50, borderRadius: 25,
+                backgroundColor: hovered ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.1)",
                 alignItems: "center", justifyContent: "center",
               })}
             >
-              <Ionicons name="chatbubble-ellipses-outline" size={26} color={colors.text} />
+              <Ionicons name="chatbubble-ellipses" size={26} color="#fff" />
             </Pressable>
-            <Text style={{ color: colors.text, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>
+            <Text style={{ color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" }}>
               {formatCount(item.replyCount)}
             </Text>
           </View>
 
-          {/* Duet */}
-          <View style={{ alignItems: "center", gap: 5 }}>
+          {/* Bookmark */}
+          <View style={{ alignItems: "center", gap: 4 }}>
             <Pressable
-              onPress={() => onDuet(item)}
+              onPress={() => onBookmark(item.id, item.bookmarked)}
               style={({ hovered }: any) => ({
-                width: 52, height: 52, borderRadius: 26,
-                backgroundColor: hovered ? colors.backgroundTertiary : colors.surface,
+                width: 50, height: 50, borderRadius: 25,
+                backgroundColor: hovered ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.1)",
                 alignItems: "center", justifyContent: "center",
               })}
             >
-              <Ionicons name="git-branch-outline" size={26} color={colors.text} />
+              <Ionicons name={item.bookmarked ? "bookmark" : "bookmark-outline"} size={26} color={item.bookmarked ? accent : "#fff"} />
             </Pressable>
-            <Text style={{ color: colors.text, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Duet</Text>
           </View>
 
           {/* Share */}
-          <View style={{ alignItems: "center", gap: 5 }}>
+          <View style={{ alignItems: "center", gap: 4 }}>
             <Pressable
               onPress={() => onShare(item)}
               style={({ hovered }: any) => ({
-                width: 52, height: 52, borderRadius: 26,
-                backgroundColor: hovered ? colors.backgroundTertiary : colors.surface,
+                width: 50, height: 50, borderRadius: 25,
+                backgroundColor: hovered ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.1)",
                 alignItems: "center", justifyContent: "center",
               })}
             >
-              <Ionicons name="share-social-outline" size={26} color={colors.text} />
+              <Ionicons name="share-social-outline" size={26} color="#fff" />
             </Pressable>
-            <Text style={{ color: colors.text, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Share</Text>
           </View>
-
-          {/* Author avatar at bottom */}
-          <Pressable
-            onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}
-            style={{ width: 52, height: 52, borderRadius: 26, overflow: "hidden", borderWidth: 2, borderColor: colors.border }}
-          >
-            <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={52} />
-          </Pressable>
         </View>
       </View>
     );
@@ -1151,12 +1147,6 @@ function VideoItem({
       <GradientOverlay position="top" height={120} />
 
       <View style={[vStyles.bottomArea, { bottom: insets.bottom + 52 }]}>
-        {item.duet_of_post_id && (
-          <View style={vStyles.duetBadge}>
-            <Ionicons name="git-branch-outline" size={12} color="#00BCD4" />
-            <Text style={vStyles.duetBadgeText}>Duet</Text>
-          </View>
-        )}
         <TouchableOpacity
           onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}
           style={vStyles.authorRow}
@@ -1248,13 +1238,6 @@ function VideoItem({
               color={item.bookmarked ? accent : "#fff"}
             />
           </TouchableOpacity>
-        </View>
-
-        <View style={vStyles.actionItem}>
-          <TouchableOpacity onPress={() => onDuet(item)} hitSlop={10} style={vStyles.actionBtn}>
-            <Ionicons name="git-branch-outline" size={26} color="#fff" />
-          </TouchableOpacity>
-          <Text style={vStyles.actionLabel}>Duet</Text>
         </View>
 
         <View style={vStyles.actionItem}>
@@ -1706,7 +1689,6 @@ function VideoContextMenu({
   item,
   onClose,
   onShare,
-  onDuet,
   onRepost,
   onDownload,
   onCopyLink,
@@ -1717,7 +1699,6 @@ function VideoContextMenu({
   item: VideoPost | null;
   onClose: () => void;
   onShare: () => void;
-  onDuet: () => void;
   onRepost: () => void;
   onDownload: () => void;
   onCopyLink: () => void;
@@ -1729,7 +1710,6 @@ function VideoContextMenu({
   const OPTIONS = [
     { id: "download",       label: "Save to device",   icon: "download-outline",        action: onDownload,       color: "#fff" },
     { id: "share",          label: "Share to...",      icon: "share-social-outline",    action: onShare,          color: "#fff" },
-    { id: "duet",           label: "Duet",             icon: "git-branch-outline",      action: onDuet,           color: "#00BCD4" },
     { id: "repost",         label: "Repost",           icon: "repeat-outline",          action: onRepost,         color: "#fff" },
     { id: "copylink",       label: "Copy link",        icon: "link-outline",            action: onCopyLink,       color: "#fff" },
     { id: "notinterested",  label: "Not interested",   icon: "eye-off-outline",         action: onNotInterested,  color: "rgba(255,255,255,0.65)" },
@@ -1820,10 +1800,10 @@ export default function VideoPlayerScreen() {
   const insets = useSafeAreaInsets();
   const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
   const { isDesktop: isDesktopShell } = useIsDesktop();
-  // Video player is now fullscreen on desktop (shell bypassed), so always
-  // use the full viewport dimensions regardless of sidebar/topbar.
-  const EFF_W = SCREEN_W;
-  const EFF_H = SCREEN_H;
+  // On desktop the sidebar (240px) and topbar (56px) are visible, so the
+  // feed lives within the remaining content area — not the full viewport.
+  const EFF_W = isDesktopShell ? SCREEN_W - SIDEBAR_WIDTH : SCREEN_W;
+  const EFF_H = isDesktopShell ? SCREEN_H - TOPBAR_HEIGHT : SCREEN_H;
   const [videoTab, setVideoTab] = useState<"for_you" | "following">("for_you");
   const [videos, setVideos] = useState<VideoPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1957,7 +1937,7 @@ export default function VideoPlayerScreen() {
         id, author_id, content, video_url, image_url, created_at, audio_name, duet_of_post_id,
         profiles!posts_author_id_fkey(display_name, handle, avatar_url)
       `)
-      .in("post_type", ["video", "duet"])
+      .eq("post_type", "video")
       .not("is_blocked", "is", true)
       .not("video_url", "is", null)
       .order("created_at", { ascending: false })
@@ -2419,11 +2399,6 @@ export default function VideoPlayerScreen() {
     );
   }
 
-  function handleDuet(item: VideoPost) {
-    if (!user) { router.push("/(auth)/login"); return; }
-    router.push({ pathname: "/moments/create-duet", params: { postId: item.id } });
-  }
-
   function handleOpenMenu(item: VideoPost) {
     setMenuItem(item);
   }
@@ -2546,7 +2521,6 @@ export default function VideoPlayerScreen() {
                 onRecordView={handleRecordView}
                 onOpenMenu={handleOpenMenu}
                 onOpenSound={handleOpenSound}
-                onDuet={handleDuet}
                 activeToggleRef={activeToggleRef}
               />
             );
@@ -2559,7 +2533,7 @@ export default function VideoPlayerScreen() {
           decelerationRate="fast"
           snapToAlignment="start"
           snapToInterval={EFF_H}
-          style={{ flex: 1, backgroundColor: isDesktopShell ? colors.background : "#000" }}
+          style={{ flex: 1, backgroundColor: "#000" }}
           windowSize={5}
           initialNumToRender={3}
           maxToRenderPerBatch={3}
@@ -2596,7 +2570,6 @@ export default function VideoPlayerScreen() {
         item={menuItem}
         onClose={() => setMenuItem(null)}
         onShare={() => menuItem && setShareSheetItem(menuItem)}
-        onDuet={() => menuItem && handleDuet(menuItem)}
         onRepost={() => menuItem && handleRepost(menuItem)}
         onDownload={() => menuItem && handleDownload(menuItem)}
         onCopyLink={() => menuItem && handleCopyLink(menuItem)}
