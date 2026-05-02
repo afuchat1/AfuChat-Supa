@@ -89,15 +89,55 @@ export function PostSkeleton() {
 }
 
 export function ProfileSkeleton() {
+  const { colors } = useTheme();
   return (
-    <View style={sk.profile}>
-      <Skeleton width={80} height={80} borderRadius={40} />
-      <Skeleton width={140} height={18} style={{ marginTop: 12 }} />
-      <Skeleton width={100} height={14} style={{ marginTop: 6 }} />
-      <View style={sk.statsRow}>
-        <Skeleton width={60} height={40} borderRadius={8} />
-        <Skeleton width={60} height={40} borderRadius={8} />
-        <Skeleton width={60} height={40} borderRadius={8} />
+    <View style={{ backgroundColor: colors.background }}>
+      {/* Avatar (left) + Posts/Followers/Following stats (right) */}
+      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 16, paddingBottom: 14 }}>
+        <Skeleton width={78} height={78} borderRadius={39} />
+        <View style={{ flex: 1, flexDirection: "row", justifyContent: "space-around", marginLeft: 18 }}>
+          {[["32", "48", "Posts"], ["44", "64", "Followers"], ["36", "56", "Following"]].map(([nw, lw, _], i) => (
+            <View key={i} style={{ alignItems: "center", gap: 5 }}>
+              <Skeleton width={Number(nw)} height={18} borderRadius={5} />
+              <Skeleton width={Number(lw)} height={11} borderRadius={4} />
+            </View>
+          ))}
+        </View>
+      </View>
+      {/* Display name + badge placeholder */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 16, marginBottom: 7 }}>
+        <Skeleton width={150} height={16} borderRadius={5} />
+        <Skeleton width={40} height={16} borderRadius={8} />
+      </View>
+      {/* Bio */}
+      <Skeleton width="88%" height={13} borderRadius={4} style={{ marginHorizontal: 16, marginBottom: 5 }} />
+      <Skeleton width="65%" height={13} borderRadius={4} style={{ marginHorizontal: 16, marginBottom: 14 }} />
+      {/* Handle chip */}
+      <Skeleton width={90} height={18} borderRadius={9} style={{ marginHorizontal: 16, marginBottom: 14 }} />
+      {/* CTA: Follow + Message */}
+      <View style={{ flexDirection: "row", gap: 10, marginHorizontal: 16, marginBottom: 14 }}>
+        <Skeleton width="48%" height={38} borderRadius={20} />
+        <Skeleton width="48%" height={38} borderRadius={20} />
+      </View>
+      {/* XP strip */}
+      <View style={{ height: 36, backgroundColor: colors.backgroundSecondary, justifyContent: "center", paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <Skeleton width={80} height={12} borderRadius={4} />
+        <Skeleton width="40%" height={8} borderRadius={4} />
+        <Skeleton width={28} height={12} borderRadius={4} />
+      </View>
+      {/* Tab bar: 3 equal tabs */}
+      <View style={{ flexDirection: "row", height: 46, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
+        {[0, 1, 2].map((i) => (
+          <View key={i} style={{ flex: 1, justifyContent: "center", alignItems: "center", borderTopWidth: i === 0 ? 2 : 0, borderTopColor: colors.accent }}>
+            <Skeleton width={22} height={22} borderRadius={4} />
+          </View>
+        ))}
+      </View>
+      {/* Grid photo placeholders (2 rows × 3 cols) */}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 2, paddingHorizontal: 0, marginTop: 2 }}>
+        {[0,1,2,3,4,5].map((i) => (
+          <Skeleton key={i} width="32.5%" height={110} borderRadius={0} />
+        ))}
       </View>
     </View>
   );
@@ -267,12 +307,19 @@ export function MarketplaceCardSkeleton() {
   );
 }
 
-export function ChatBubbleSkeleton({ align }: { align: "left" | "right" }) {
+const BUBBLE_WIDTHS: [number, "left" | "right"][] = [
+  [160, "left"], [120, "right"], [200, "left"], [140, "right"], [180, "left"],
+];
+
+export function ChatBubbleSkeleton({ align, width = 160 }: { align: "left" | "right"; width?: number }) {
   return (
-    <View style={{ flexDirection: "row", justifyContent: align === "right" ? "flex-end" : "flex-start", paddingHorizontal: 12, marginVertical: 4 }}>
-      {align === "left" && <Skeleton width={32} height={32} borderRadius={16} style={{ marginRight: 8 }} />}
-      <View style={{ gap: 4 }}>
-        <Skeleton width={Math.random() * 100 + 100} height={36} borderRadius={16} />
+    <View style={{ flexDirection: "row", justifyContent: align === "right" ? "flex-end" : "flex-start", paddingHorizontal: 12, marginVertical: 3 }}>
+      {align === "left" && <Skeleton width={32} height={32} borderRadius={16} style={{ marginRight: 8, alignSelf: "flex-end" }} />}
+      <View style={{ gap: 4, maxWidth: "75%" }}>
+        <Skeleton width={width} height={38} borderRadius={18} />
+        <View style={{ flexDirection: "row", justifyContent: align === "right" ? "flex-end" : "flex-start" }}>
+          <Skeleton width={40} height={10} borderRadius={4} />
+        </View>
       </View>
     </View>
   );
@@ -280,12 +327,10 @@ export function ChatBubbleSkeleton({ align }: { align: "left" | "right" }) {
 
 export function ChatLoadingSkeleton() {
   return (
-    <View style={{ flex: 1, padding: 8, justifyContent: "flex-end", gap: 6 }}>
-      <ChatBubbleSkeleton align="left" />
-      <ChatBubbleSkeleton align="right" />
-      <ChatBubbleSkeleton align="left" />
-      <ChatBubbleSkeleton align="right" />
-      <ChatBubbleSkeleton align="left" />
+    <View style={{ flex: 1, padding: 8, justifyContent: "flex-end", gap: 2 }}>
+      {BUBBLE_WIDTHS.map(([w, side], i) => (
+        <ChatBubbleSkeleton key={i} align={side} width={w} />
+      ))}
     </View>
   );
 }
@@ -328,23 +373,45 @@ export function MeTabSkeleton() {
   const { colors } = useTheme();
   return (
     <View style={{ flex: 1, backgroundColor: colors.backgroundSecondary, padding: 16, gap: 12 }}>
+      {/* Profile card: avatar left + name/handle/bio right + chevron */}
       <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 16, flexDirection: "row", alignItems: "center", gap: 14 }}>
         <Skeleton width={68} height={68} borderRadius={34} />
-        <View style={{ flex: 1, gap: 8 }}>
-          <Skeleton width={140} height={18} />
-          <Skeleton width={90} height={13} />
-          <Skeleton width={110} height={12} />
+        <View style={{ flex: 1, gap: 7 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Skeleton width={130} height={17} borderRadius={5} />
+            <Skeleton width={18} height={18} borderRadius={9} />
+          </View>
+          <Skeleton width={80} height={13} borderRadius={4} />
+          <Skeleton width={100} height={12} borderRadius={4} />
         </View>
+        <Skeleton width={16} height={16} borderRadius={4} />
       </View>
-      <View style={{ flexDirection: "row", gap: 8 }}>
-        <Skeleton width="48%" height={72} borderRadius={14} />
-        <Skeleton width="48%" height={72} borderRadius={14} />
+      {/* Stats row: 3 items (Nexa / ACoin / Grade) with vertical dividers */}
+      <View style={{ backgroundColor: colors.surface, borderRadius: 16, flexDirection: "row", alignItems: "center", paddingVertical: 14 }}>
+        {[["20", "36", "32"], ["20", "36", "44"], ["20", "56", "40"]].map(([iconH, valW, labelW], i) => (
+          <React.Fragment key={i}>
+            {i > 0 && <View style={{ width: 1, height: 40, backgroundColor: colors.border }} />}
+            <View style={{ flex: 1, alignItems: "center", gap: 5 }}>
+              <Skeleton width={Number(iconH)} height={Number(iconH)} borderRadius={5} />
+              <Skeleton width={Number(valW)} height={14} borderRadius={4} />
+              <Skeleton width={Number(labelW)} height={11} borderRadius={4} />
+            </View>
+          </React.Fragment>
+        ))}
       </View>
+      {/* XP level bar (slim) */}
+      <Skeleton width="100%" height={34} borderRadius={12} />
+      {/* Profile completion bar (slim) */}
+      <Skeleton width="100%" height={34} borderRadius={12} />
+      {/* Premium banner */}
       <Skeleton width="100%" height={56} borderRadius={14} />
-      {[1, 2, 3, 4, 5].map((i) => (
+      {/* Menu items: icon circle + label + spacer + chevron */}
+      {[140, 110, 130, 120, 150].map((labelW, i) => (
         <View key={i} style={{ backgroundColor: colors.surface, borderRadius: 14, flexDirection: "row", alignItems: "center", gap: 12, padding: 14 }}>
           <Skeleton width={36} height={36} borderRadius={10} />
-          <Skeleton width={150} height={14} />
+          <Skeleton width={labelW} height={14} borderRadius={4} />
+          <View style={{ flex: 1 }} />
+          <Skeleton width={16} height={16} borderRadius={4} />
         </View>
       ))}
     </View>
