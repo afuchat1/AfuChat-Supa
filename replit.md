@@ -31,7 +31,8 @@ These are load-bearing infrastructure decisions. Every developer (and every AI a
 
 - ❌ Do NOT replace Supabase Auth with Replit Auth, Clerk, NextAuth, Firebase, Auth0, or anything else.
 - ❌ Do NOT migrate the database to Neon, Replit Postgres, PlanetScale, or any other Postgres host. The `DATABASE_URL` env var that points to the Replit dev DB is **not used** by the app — leave it alone.
-- ❌ Do NOT rewrite Supabase Edge Functions as Express routes in `artifacts/api-server`. The API server is for things that need long-running workers (video encoding) or cross-service orchestration (R2 presigned URLs). Auth-tied user actions stay in edge functions.
+- ❌ Do NOT rewrite Supabase Edge Functions as Express routes in `artifacts/api-server`. The API server is for things that need long-running workers (video encoding) or cross-service orchestration. Upload signing/proxying and auth-tied user actions stay in edge functions.
+- ❌ Do NOT add a Vercel serverless proxy (`artifacts/mobile/api/[...path].js`) — uploads go directly to the Supabase Edge Function; the proxy was removed intentionally.
 - ❌ Do NOT change RLS policies, RPC function signatures, or table column names without coordinating a matching client-side change AND a backwards-compatible migration.
 - ❌ Do NOT hard-delete Supabase migration files. New migrations only — additive and idempotent (`ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`, `DROP POLICY IF EXISTS` before `CREATE POLICY`).
 - ❌ Do NOT remove `@supabase/supabase-js` from `package.json` in either `artifacts/mobile` or `artifacts/api-server`.
@@ -48,11 +49,19 @@ These are load-bearing infrastructure decisions. Every developer (and every AI a
 
 ### How it works (do not change this flow)
 
-1. Mobile client (`artifacts/mobile/lib/mediaUpload.ts`) calls `POST /api/uploads/sign` with `{ bucket, contentType }`.
-2. API server (`artifacts/api-server/src/routes/uploads.ts`) returns a short-lived presigned PUT URL using the AWS S3 SDK pointed at the R2 S3 endpoint.
-3. Client PUTs bytes directly to R2.
-4. Client writes the resulting `https://cdn.afuchat.com/<bucket>/<userId>/<filename>` URL into the relevant Supabase row.
-5. Supabase only stores the URL string. The bytes never touch Supabase Storage.
+**Upload backend: Supabase Edge Function `uploads`** (`supabase/functions/uploads/index.ts`)
+
+- Native (iOS/Android): client calls `POST /functions/v1/uploads/sign` → edge function returns a short-lived AWS Sig V4 presigned PUT URL → client PUTs bytes directly to R2.
+- Web (Vercel): client POSTs bytes to `POST /functions/v1/uploads/upload` → edge function streams them to R2 server-side (avoids R2 CORS restrictions on browsers).
+
+All routes require a valid Supabase Bearer token. The edge function verifies JWTs by calling `GET /auth/v1/user` with the service role key. No external npm CDN packages — AWS Signature V4 is implemented using the native Deno Web Crypto API.
+
+1. Client (`artifacts/mobile/lib/mediaUpload.ts`) uses `UPLOADS_FN = ${supabaseUrl}/functions/v1/uploads`.
+2. Edge function loads R2 credentials lazily from `app_settings` (same table the Express API server uses).
+3. Client writes the `https://cdn.afuchat.com/<bucket>/<userId>/<filename>` CDN URL into the relevant Supabase row.
+4. Supabase only stores the URL string. Bytes never touch Supabase Storage.
+
+The Express API server (`artifacts/api-server`) still handles video encoding jobs and HLS manifest serving — it is NOT used for uploads on the web deployment.
 
 ### R2 secrets live in Supabase, not in env files
 
