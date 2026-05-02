@@ -89,7 +89,7 @@ export function MinimalGrid() {
               <UserPlus size={13} /> Follow
             </button>
           )}
-          <button className="flex-1 py-2 rounded-lg border border-gray-200 text-gray-700 text-[13px] font-semibold flex items-center justify-center gap-1.5">
+          <button className="flex-1 py-2 rounded-lg border border-gray-200 text-gray-700 text-[13px] font-semibold flex items-center justify-center gap-1.5 rounded-tl-[80px] rounded-tr-[80px] rounded-br-[80px] rounded-bl-[80px]">
             <MessageSquare size={13} /> Message
           </button>
         </div>
