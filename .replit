@@ -35,6 +35,10 @@ args = "Start application"
 task = "workflow.run"
 args = "API Server"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Mockup Preview Server"
+
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -59,6 +63,19 @@ task = "shell.exec"
 args = "cd artifacts/api-server && node ./build.mjs && PORT=3000 node --enable-source-maps ./dist/index.mjs"
 waitForPort = 3000
 
+[[workflows.workflow]]
+name = "Mockup Preview Server"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd artifacts/mockup-sandbox && PORT=8000 BASE_PATH=/__mockup/ npx vite"
+waitForPort = 8000
+
+[workflows.workflow.metadata]
+outputType = "console"
+isCanvasWorkflow = true
+
 [[ports]]
 localPort = 3000
 externalPort = 3000
@@ -70,6 +87,10 @@ externalPort = 80
 [[ports]]
 localPort = 5001
 externalPort = 3001
+
+[[ports]]
+localPort = 8000
+externalPort = 8000
 
 [deployment]
 deploymentTarget = "autoscale"
