@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { loadAppSettings } from "./lib/bootstrap";
 import { startRealtimeWatcher } from "./services/realtimeWatcher";
 import { startVideoEncoder } from "./services/videoEncoder";
+import { startStoriesCleanup } from "./services/storiesCleanup";
 
 const rawPort = process.env["PORT"];
 
@@ -38,4 +39,7 @@ app.listen(port, (err) => {
   startVideoEncoder().catch((err) =>
     logger.error({ err }, "failed to start video encoder"),
   );
+
+  // Purge expired stories at startup then every hour
+  startStoriesCleanup();
 });
