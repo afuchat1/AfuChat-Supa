@@ -1,38 +1,15 @@
 /**
- * Media upload helpers — Cloudflare R2 backed.
+ * Media upload helpers — Supabase Storage backed.
  *
- * Uploads flow:
- *   1. Client requests a short-lived presigned PUT URL from the API server
- *      (`POST /api/uploads/sign`) using the user's Supabase access token.
- *   2. Client PUTs the file bytes directly to Cloudflare R2.
- *   3. The CDN URL (`https://cdn.afuchat.com/<bucket>/<path>`) is returned
- *      to the caller, who writes it into whichever Supabase table needs it.
+ * All file uploads go directly from the client to Supabase Storage via the
+ * Supabase JS SDK. No API server is involved — works on web, iOS, and Android
+ * without any proxy or presigned URL dance.
  *
- * Supabase therefore only stores the *reference* (the CDN URL) inside the
- * relevant row — the actual file bytes live on R2 / cdn.afuchat.com and
- * are served from there.
+ * Public URLs are returned by supabase.storage.from(bucket).getPublicUrl(path).
  */
 
-import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./supabase";
-
-// Resolve the API server base URL — used for sign requests and storage
-// usage stats. On the web we always use window.location.origin so the
-// request goes to the same origin, which is then proxied to the API server
-// by `metro.config.js` (dev) and `serve.js` (prod). Using EXPO_PUBLIC_DOMAIN
-// on web is wrong because it gets baked in as the dev domain at build time,
-// causing production uploads to hit the wrong server.
-const API_BASE: string = (() => {
-  const explicit = (process.env.EXPO_PUBLIC_API_URL || "").trim();
-  if (explicit) return explicit.replace(/\/+$/, "");
-  if (Platform.OS === "web" && typeof window !== "undefined") {
-    return window.location.origin.replace(/\/+$/, "");
-  }
-  const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
-  if (domain) return `https://${domain}`.replace(/\/+$/, "");
-  return "";
-})();
 
 const MIME_MAP: Record<string, string> = {
   jpg: "image/jpeg",
@@ -55,25 +32,37 @@ const MIME_MAP: Record<string, string> = {
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 };
 
+const MIME_TO_EXT: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/png": "png",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "video/mp4": "mp4",
+  "video/quicktime": "mov",
+  "video/webm": "webm",
+  "audio/mp4": "m4a",
+  "audio/aac": "aac",
+  "audio/mpeg": "mp3",
+  "audio/wav": "wav",
+  "audio/ogg": "ogg",
+  "audio/x-caf": "caf",
+  "application/pdf": "pdf",
+  "application/msword": "doc",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+};
+
 function getMime(ext: string): string {
   return MIME_MAP[ext.toLowerCase()] || "application/octet-stream";
 }
 
-function apiUrl(path: string): string {
-  return `${API_BASE}/api${path}`;
-}
-
 /**
- * Map "logical" bucket names used throughout the app to the R2 key prefix.
- * The R2 bucket is a single `afuchat-media` and these names become folders
- * inside it. Two historical Supabase bucket names are aliased so older
- * call sites keep working.
+ * Map legacy/logical bucket names to the actual Supabase Storage bucket ids.
  */
 const BUCKET_ALIAS: Record<string, string> = {
-  "chat-media": "chat-media",
-  "chat-attachments": "chat-media",
-  banners: "banners",
-  "profile-banners": "banners",
+  "chat-media": "chat-attachments",
+  banners: "profile-banners",
+  "match-media": "match-photos",
 };
 
 function resolveBucket(bucket: string): string {
@@ -110,169 +99,11 @@ async function fileUriToBlob(fileUri: string, mime: string): Promise<Blob> {
   }
 }
 
-interface SignedUpload {
-  uploadUrl: string;
-  publicUrl: string;
-  key: string;
-}
-
-async function getSignedUpload(
-  bucket: string,
-  filePath: string,
-  contentType: string,
-): Promise<{ data: SignedUpload | null; error: string | null }> {
-  if (!API_BASE) {
-    return { data: null, error: "API base URL not configured" };
-  }
-  const session = (await supabase.auth.getSession()).data.session;
-  if (!session) {
-    return { data: null, error: "Not authenticated" };
-  }
-  let resp: Response;
-  try {
-    resp = await fetch(apiUrl("/uploads/sign"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ bucket, path: filePath, contentType }),
-    });
-  } catch (e: any) {
-    return { data: null, error: `Network error: ${e?.message || e}` };
-  }
-  const text = await resp.text().catch(() => "");
-  if (!text) {
-    return {
-      data: null,
-      error: `Upload service returned an empty response (HTTP ${resp.status}). Please try again.`,
-    };
-  }
-  if (text.trimStart().startsWith("<")) {
-    return {
-      data: null,
-      error:
-        "Upload service unreachable (received HTML instead of JSON). Try again in a moment.",
-    };
-  }
-  let json: any;
-  try {
-    json = JSON.parse(text);
-  } catch {
-    return {
-      data: null,
-      error: `Upload service responded with HTTP ${resp.status}: ${text.slice(0, 120)}`,
-    };
-  }
-  if (!resp.ok) {
-    return { data: null, error: json?.error || `Sign failed (HTTP ${resp.status})` };
-  }
-  if (!json?.uploadUrl || !json?.publicUrl) {
-    return { data: null, error: "Sign endpoint returned no URL" };
-  }
-  return {
-    data: { uploadUrl: json.uploadUrl, publicUrl: json.publicUrl, key: json.key },
-    error: null,
-  };
-}
-
-async function proxyUpload(
-  bucket: string,
-  filePath: string,
-  body: Blob | ArrayBuffer,
-  contentType: string,
-): Promise<{ publicUrl: string | null; error: string | null }> {
-  if (!API_BASE) {
-    return { publicUrl: null, error: "API base URL not configured" };
-  }
-  const session = (await supabase.auth.getSession()).data.session;
-  if (!session) {
-    return { publicUrl: null, error: "Not authenticated" };
-  }
-
-  // Reject empty payloads early so the user gets a clear message instead
-  // of a confusing "Invalid response from upload service" later on.
-  const bodySize =
-    body instanceof Blob
-      ? body.size
-      : body instanceof ArrayBuffer
-        ? body.byteLength
-        : 0;
-  if (!bodySize) {
-    return {
-      publicUrl: null,
-      error: "Selected file is empty or could not be read.",
-    };
-  }
-
-  const qs = new URLSearchParams({ bucket, path: filePath }).toString();
-  let resp: Response;
-  try {
-    resp = await fetch(`${apiUrl("/uploads/upload")}?${qs}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": contentType,
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: body as any,
-    });
-  } catch (e: any) {
-    return { publicUrl: null, error: `Upload failed: ${e?.message || e}` };
-  }
-
-  const text = await resp.text().catch(() => "");
-
-  // Empty body → server returned a status with no payload (proxy timeout,
-  // load balancer interruption, browser-side abort, etc.). Surface the
-  // status code so the user (and we) know what actually happened.
-  if (!text) {
-    if (resp.ok) {
-      return {
-        publicUrl: null,
-        error: `Upload service returned an empty response (HTTP ${resp.status}). Please try again.`,
-      };
-    }
-    return {
-      publicUrl: null,
-      error: `Upload failed (HTTP ${resp.status}). Please try again in a moment.`,
-    };
-  }
-
-  if (text.trimStart().startsWith("<")) {
-    return {
-      publicUrl: null,
-      error:
-        "Upload service unreachable (received HTML instead of JSON). Try again in a moment.",
-    };
-  }
-
-  let json: any;
-  try {
-    json = JSON.parse(text);
-  } catch {
-    return {
-      publicUrl: null,
-      error: `Upload failed (HTTP ${resp.status}): ${text.slice(0, 120)}`,
-    };
-  }
-  if (!resp.ok) {
-    return {
-      publicUrl: null,
-      error: json?.error || `Upload failed (HTTP ${resp.status})`,
-    };
-  }
-  if (!json?.publicUrl) {
-    return { publicUrl: null, error: "Upload service returned no URL" };
-  }
-  return { publicUrl: json.publicUrl, error: null };
-}
-
 /**
- * Upload a file to Cloudflare R2 via the presigned-PUT flow.
+ * Upload a file directly to Supabase Storage.
  *
- * `bucket` is the *logical* bucket name (avatars, post-images, videos, …)
- * and is used as the key prefix inside the single R2 bucket.
- * Returns the CDN URL of the uploaded object on success.
+ * `bucket` is the logical bucket name (avatars, post-images, videos, …).
+ * Returns the public URL of the uploaded object on success.
  */
 export async function uploadToStorage(
   bucket: string,
@@ -290,71 +121,36 @@ export async function uploadToStorage(
       : fileUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "bin";
     const mime = resolvedMime || getMime(ext);
 
-    let body: Blob | ArrayBuffer;
-    if (
-      Platform.OS !== "web" &&
-      !fileUri.startsWith("data:") &&
-      !fileUri.startsWith("blob:")
-    ) {
-      try {
-        const r = await fetch(fileUri);
-        body = await r.arrayBuffer();
-      } catch (e: any) {
-        return {
-          publicUrl: null,
-          error: `Could not read file: ${e?.message || e}`,
-        };
-      }
-    } else {
-      try {
-        body = await fileUriToBlob(fileUri, mime);
-      } catch {
-        return {
-          publicUrl: null,
-          error: "Could not read selected file. Please try again.",
-        };
-      }
+    let body: Blob;
+    try {
+      body = await fileUriToBlob(fileUri, mime);
+    } catch (e: any) {
+      return { publicUrl: null, error: `Could not read file: ${e?.message || e}` };
+    }
+
+    if (body.size === 0) {
+      return { publicUrl: null, error: "Selected file is empty or could not be read." };
     }
 
     const realBucket = resolveBucket(bucket);
 
-    // On the web, browser PUT directly to *.r2.cloudflarestorage.com is
-    // blocked by CORS unless the bucket is explicitly configured. Route
-    // the upload through our API server instead, which streams the bytes
-    // to R2 server-side. Native clients keep using the presigned PUT
-    // path (no CORS, saves API server bandwidth on big videos).
-    if (Platform.OS === "web") {
-      const proxied = await proxyUpload(realBucket, filePath, body, mime);
-      if (proxied.error || !proxied.publicUrl) {
-        return { publicUrl: null, error: proxied.error || "Upload failed" };
-      }
-      return { publicUrl: `${proxied.publicUrl}?t=${Date.now()}`, error: null };
+    const { error: uploadError } = await supabase.storage
+      .from(realBucket)
+      .upload(filePath, body, { contentType: mime, upsert: true });
+
+    if (uploadError) {
+      return { publicUrl: null, error: uploadError.message };
     }
 
-    const sign = await getSignedUpload(realBucket, filePath, mime);
-    if (sign.error || !sign.data) {
-      return { publicUrl: null, error: sign.error || "Sign failed" };
+    const { data: urlData } = supabase.storage
+      .from(realBucket)
+      .getPublicUrl(filePath);
+
+    if (!urlData?.publicUrl) {
+      return { publicUrl: null, error: "Could not get public URL after upload" };
     }
 
-    let putResp: Response;
-    try {
-      putResp = await fetch(sign.data.uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": mime },
-        body: body as any,
-      });
-    } catch (e: any) {
-      return { publicUrl: null, error: `Upload failed: ${e?.message || e}` };
-    }
-    if (!putResp.ok) {
-      const text = await putResp.text().catch(() => "");
-      return {
-        publicUrl: null,
-        error: `Upload rejected (${putResp.status}): ${text.slice(0, 120) || "no body"}`,
-      };
-    }
-
-    return { publicUrl: `${sign.data.publicUrl}?t=${Date.now()}`, error: null };
+    return { publicUrl: `${urlData.publicUrl}?t=${Date.now()}`, error: null };
   } catch (e: any) {
     return { publicUrl: null, error: e?.message || "Upload failed" };
   }
@@ -373,8 +169,7 @@ export async function uploadAvatar(
 
 /**
  * Same as `uploadAvatar` but returns the error string so callers can
- * surface a specific message to the user instead of a generic
- * "Could not upload avatar".
+ * surface a specific message to the user instead of a generic failure.
  */
 export async function uploadAvatarWithError(
   userId: string,
@@ -388,159 +183,6 @@ export async function uploadAvatarWithError(
   const contentType = `image/${safeExt === "jpg" ? "jpeg" : safeExt}`;
 
   return uploadToStorage("avatars", fileName, imageUri, contentType);
-}
-
-const MIME_TO_EXT: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/jpg": "jpg",
-  "image/png": "png",
-  "image/gif": "gif",
-  "image/webp": "webp",
-  "video/mp4": "mp4",
-  "video/quicktime": "mov",
-  "video/webm": "webm",
-  "audio/mp4": "m4a",
-  "audio/aac": "aac",
-  "audio/mpeg": "mp3",
-  "audio/wav": "wav",
-  "audio/ogg": "ogg",
-  "audio/x-caf": "caf",
-  "application/pdf": "pdf",
-  "application/msword": "doc",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-    "docx",
-};
-
-/**
- * Per-bucket usage breakdown for the calling user.
- * Backed by GET /api/uploads/usage on the API server. If the API server
- * isn't reachable (or R2 isn't configured), returns null silently.
- */
-export interface StorageUsage {
-  user_id: string;
-  used_bytes: number;
-  used_count: number;
-  quota_bytes: number;
-  remaining_bytes: number;
-  percent_used: number;
-  per_bucket: Record<string, { bytes: number; count: number }>;
-}
-
-const USAGE_CACHE_KEY = "@afuchat:storage_usage_v1";
-
-/** Read the last-known usage from disk for instant first paint. */
-export async function getCachedStorageUsage(): Promise<StorageUsage | null> {
-  try {
-    const raw = await AsyncStorage.getItem(USAGE_CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed.used_bytes !== "number") return null;
-    return parsed as StorageUsage;
-  } catch {
-    return null;
-  }
-}
-
-export async function getStorageUsage(): Promise<StorageUsage | null> {
-  try {
-    if (!API_BASE) return null;
-    const session = (await supabase.auth.getSession()).data.session;
-    if (!session) return null;
-    const r = await fetch(apiUrl("/uploads/usage"), {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-    if (!r.ok) return null;
-    const text = await r.text();
-    if (!text || text.trimStart().startsWith("<")) return null;
-    const parsed = JSON.parse(text) as StorageUsage;
-    AsyncStorage.setItem(USAGE_CACHE_KEY, JSON.stringify(parsed)).catch(() => {});
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-export interface StoredFile {
-  key: string;
-  size: number;
-  last_modified: string | null;
-  url: string | null;
-}
-
-/** List the user's files inside one logical bucket. Paginated. */
-export async function listUserFiles(
-  bucket: string,
-  token?: string,
-): Promise<{ items: StoredFile[]; nextToken: string | null } | null> {
-  try {
-    if (!API_BASE) return null;
-    const session = (await supabase.auth.getSession()).data.session;
-    if (!session) return null;
-    const url = new URL(apiUrl("/uploads/list"), "http://x");
-    url.searchParams.set("bucket", bucket);
-    if (token) url.searchParams.set("token", token);
-    const path = url.pathname + url.search;
-    const r = await fetch(`${API_BASE}${path}`, {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-    if (!r.ok) return null;
-    const text = await r.text();
-    if (!text || text.trimStart().startsWith("<")) return null;
-    const json = JSON.parse(text);
-    return {
-      items: Array.isArray(json.items) ? json.items : [],
-      nextToken: json.next_token || null,
-    };
-  } catch {
-    return null;
-  }
-}
-
-/** Delete one file from the user's CDN storage. */
-export async function deleteUserFile(
-  key: string,
-): Promise<{ ok: boolean; error: string | null }> {
-  try {
-    if (!API_BASE) return { ok: false, error: "API not configured" };
-    const session = (await supabase.auth.getSession()).data.session;
-    if (!session) return { ok: false, error: "Not signed in" };
-    const r = await fetch(apiUrl("/uploads/object"), {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ key }),
-    });
-    const text = await r.text();
-    if (text.trimStart().startsWith("<")) {
-      return { ok: false, error: "Service unreachable" };
-    }
-    let json: any = {};
-    try {
-      json = text ? JSON.parse(text) : {};
-    } catch {
-      /* ignore */
-    }
-    if (!r.ok) return { ok: false, error: json?.error || `Failed (${r.status})` };
-    AsyncStorage.removeItem(USAGE_CACHE_KEY).catch(() => {});
-    return { ok: true, error: null };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || "Delete failed" };
-  }
-}
-
-/** Format a byte count like 1234567 → "1.18 MB" with sensible units. */
-export function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes < 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let i = 0;
-  let n = bytes;
-  while (n >= 1024 && i < units.length - 1) {
-    n /= 1024;
-    i++;
-  }
-  return `${n.toFixed(n >= 100 || i === 0 ? 0 : n >= 10 ? 1 : 2)} ${units[i]}`;
 }
 
 export async function uploadChatMedia(
@@ -566,4 +208,206 @@ export async function uploadChatMedia(
 
   const resolvedContentType = contentType || getMime(ext);
   return uploadToStorage(bucket, filePath, fileUri, resolvedContentType);
+}
+
+/** Format a byte count like 1234567 → "1.18 MB" with sensible units. */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  let n = bytes;
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024;
+    i++;
+  }
+  return `${n.toFixed(n >= 100 || i === 0 ? 0 : n >= 10 ? 1 : 2)} ${units[i]}`;
+}
+
+export interface StorageUsage {
+  user_id: string;
+  used_bytes: number;
+  used_count: number;
+  quota_bytes: number;
+  remaining_bytes: number;
+  percent_used: number;
+  per_bucket: Record<string, { bytes: number; count: number }>;
+}
+
+export interface StoredFile {
+  key: string;
+  size: number;
+  last_modified: string | null;
+  url: string | null;
+}
+
+const USAGE_CACHE_KEY = "@afuchat:storage_usage_v1";
+
+const USER_BUCKETS = [
+  "avatars",
+  "chat-attachments",
+  "post-images",
+  "stories",
+  "videos",
+  "group-avatars",
+  "voice-messages",
+  "profile-banners",
+  "match-photos",
+  "shop-media",
+  "ai-chat-attachments",
+  "ai-generated-images",
+];
+
+const QUOTA_BYTES = 5 * 1024 * 1024 * 1024;
+
+/** Read the last-known usage from disk for instant first paint. */
+export async function getCachedStorageUsage(): Promise<StorageUsage | null> {
+  try {
+    const raw = await AsyncStorage.getItem(USAGE_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.used_bytes !== "number") return null;
+    return parsed as StorageUsage;
+  } catch {
+    return null;
+  }
+}
+
+async function listAllInBucket(
+  bucket: string,
+  prefix: string,
+): Promise<{ size: number; lastModified: string | null }[]> {
+  const results: { size: number; lastModified: string | null }[] = [];
+  let offset = 0;
+  const limit = 100;
+  while (true) {
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .list(prefix, { limit, offset, sortBy: { column: "name", order: "asc" } });
+    if (error || !data || data.length === 0) break;
+    for (const f of data) {
+      if (f.id) {
+        results.push({
+          size: (f.metadata as any)?.size ?? 0,
+          lastModified: (f.metadata as any)?.lastModified ?? f.updated_at ?? null,
+        });
+      }
+    }
+    if (data.length < limit) break;
+    offset += limit;
+  }
+  return results;
+}
+
+export async function getStorageUsage(): Promise<StorageUsage | null> {
+  try {
+    const session = (await supabase.auth.getSession()).data.session;
+    if (!session) return null;
+    const uid = session.user.id;
+
+    const per_bucket: Record<string, { bytes: number; count: number }> = {};
+    let total_bytes = 0;
+    let total_count = 0;
+
+    await Promise.all(
+      USER_BUCKETS.map(async (bucket) => {
+        try {
+          const files = await listAllInBucket(bucket, uid);
+          const bytes = files.reduce((sum, f) => sum + (f.size || 0), 0);
+          per_bucket[bucket] = { bytes, count: files.length };
+          total_bytes += bytes;
+          total_count += files.length;
+        } catch {
+          per_bucket[bucket] = { bytes: 0, count: 0 };
+        }
+      }),
+    );
+
+    const usage: StorageUsage = {
+      user_id: uid,
+      used_bytes: total_bytes,
+      used_count: total_count,
+      quota_bytes: QUOTA_BYTES,
+      remaining_bytes: Math.max(0, QUOTA_BYTES - total_bytes),
+      percent_used: Math.min(100, (total_bytes / QUOTA_BYTES) * 100),
+      per_bucket,
+    };
+
+    AsyncStorage.setItem(USAGE_CACHE_KEY, JSON.stringify(usage)).catch(() => {});
+    return usage;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * List the user's files inside one logical bucket. Paginated via numeric offset token.
+ * `key` format: "<bucket>/<userId>/<filename>" — used by deleteUserFile.
+ */
+export async function listUserFiles(
+  bucket: string,
+  token?: string,
+): Promise<{ items: StoredFile[]; nextToken: string | null } | null> {
+  try {
+    const session = (await supabase.auth.getSession()).data.session;
+    if (!session) return null;
+
+    const realBucket = resolveBucket(bucket);
+    const limit = 50;
+    const offset = token ? parseInt(token, 10) : 0;
+
+    const { data, error } = await supabase.storage
+      .from(realBucket)
+      .list(session.user.id, {
+        limit,
+        offset,
+        sortBy: { column: "updated_at", order: "desc" },
+      });
+
+    if (error || !data) return null;
+
+    const items: StoredFile[] = data
+      .filter((f) => f.id)
+      .map((f) => {
+        const filePath = `${session.user.id}/${f.name}`;
+        const { data: urlData } = supabase.storage
+          .from(realBucket)
+          .getPublicUrl(filePath);
+        return {
+          key: `${realBucket}/${filePath}`,
+          size: (f.metadata as any)?.size ?? 0,
+          last_modified: (f.metadata as any)?.lastModified ?? f.updated_at ?? null,
+          url: urlData?.publicUrl ?? null,
+        };
+      });
+
+    const nextToken = data.length === limit ? String(offset + limit) : null;
+    return { items, nextToken };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Delete one file from the user's storage.
+ * `key` format: "<bucket>/<path>" as returned by listUserFiles.
+ */
+export async function deleteUserFile(
+  key: string,
+): Promise<{ ok: boolean; error: string | null }> {
+  try {
+    const slashIdx = key.indexOf("/");
+    if (slashIdx === -1) return { ok: false, error: "Invalid file key" };
+
+    const bucket = key.slice(0, slashIdx);
+    const path = key.slice(slashIdx + 1);
+
+    const { error } = await supabase.storage.from(bucket).remove([path]);
+
+    if (error) return { ok: false, error: error.message };
+
+    AsyncStorage.removeItem(USAGE_CACHE_KEY).catch(() => {});
+    return { ok: true, error: null };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "Delete failed" };
+  }
 }
