@@ -930,10 +930,15 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
         {msg.reactions && msg.reactions.length > 0 && (
           <View style={[st.reactionsRow, isMe ? st.reactionsMe : st.reactionsOther]}>
             {msg.reactions.map((r, i) => (
-              <View key={i} style={[st.reactionPill, r.myReaction && { borderColor: BRAND, borderWidth: 1.5 }]}>
+              <TouchableOpacity
+                key={i}
+                style={[st.reactionPill, r.myReaction && { borderColor: BRAND, borderWidth: 1.5 }]}
+                onPress={() => addReaction(msg, r.emoji)}
+                activeOpacity={0.7}
+              >
                 <Text style={st.reactionEmoji}>{r.emoji}</Text>
                 {r.count > 1 && <Text style={[st.reactionCount, { color: colors.text }]}>{r.count}</Text>}
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
         )}
@@ -1610,6 +1615,42 @@ function ChatScreen() {
           }
         }
       )
+      // Real-time reaction sync — someone added a reaction
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "message_reactions" },
+        (payload) => {
+          const r = payload.new as any;
+          if (r.user_id === user?.id) return; // already handled optimistically
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m.id !== r.message_id) return m;
+              const reactions = [...(m.reactions || [])];
+              const idx = reactions.findIndex((x) => x.emoji === r.reaction);
+              if (idx >= 0) {
+                reactions[idx] = { ...reactions[idx], count: reactions[idx].count + 1 };
+              } else {
+                reactions.push({ emoji: r.reaction, count: 1, myReaction: false });
+              }
+              return { ...m, reactions };
+            })
+          );
+        }
+      )
+      // Real-time reaction sync — someone removed a reaction
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "message_reactions" },
+        (payload) => {
+          const r = payload.old as any;
+          if (r.user_id === user?.id) return; // already handled optimistically
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m.id !== r.message_id) return m;
+              const reactions = (m.reactions || [])
+                .map((x) => x.emoji === r.reaction ? { ...x, count: Math.max(0, x.count - 1) } : x)
+                .filter((x) => x.count > 0);
+              return { ...m, reactions };
+            })
+          );
+        }
+      )
       .subscribe();
 
     const typingChannel = supabase.channel(`typing:${id}`, { config: { broadcast: { self: false } } });
@@ -2271,13 +2312,38 @@ STRICT RULES:
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setShowReactions(null);
 
-    const existing = msg.reactions?.find((r) => r.emoji === emoji && r.myReaction);
-    if (existing) {
+    const isRemoving = !!(msg.reactions?.find((r) => r.emoji === emoji && r.myReaction));
+
+    // Optimistic update — update local state immediately so the UI responds instantly
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== msg.id) return m;
+        let reactions = [...(m.reactions || [])];
+        if (isRemoving) {
+          reactions = reactions
+            .map((r) => r.emoji === emoji ? { ...r, count: r.count - 1, myReaction: false } : r)
+            .filter((r) => r.count > 0);
+        } else {
+          const idx = reactions.findIndex((r) => r.emoji === emoji);
+          if (idx >= 0) {
+            reactions = reactions.map((r, i) => i === idx ? { ...r, count: r.count + 1, myReaction: true } : r);
+          } else {
+            reactions = [...reactions, { emoji, count: 1, myReaction: true }];
+          }
+        }
+        return { ...m, reactions };
+      })
+    );
+
+    // Persist to database
+    if (isRemoving) {
       await supabase.from("message_reactions").delete().eq("message_id", msg.id).eq("user_id", user.id).eq("reaction", emoji);
     } else {
-      await supabase.from("message_reactions").insert({ message_id: msg.id, user_id: user.id, reaction: emoji });
+      await supabase.from("message_reactions").upsert(
+        { message_id: msg.id, user_id: user.id, reaction: emoji },
+        { onConflict: "message_id,user_id,reaction", ignoreDuplicates: true }
+      );
     }
-    loadMessages();
   }
 
   async function getOrCreateChatId(): Promise<string | null> {
