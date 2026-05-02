@@ -1,0 +1,50 @@
+2026-05-02 20:21:08.07
+Running application "main" with appParams:
+{rootTag: "#root"}
+Development-level warnings: ON. Performance optimizations: OFF.
+2026-05-02 20:21:08.26
+"shadow*" style props are deprecated. Use "boxShadow".
+2026-05-02 20:21:08.26
+[expo-av]: Expo AV has been deprecated and will be removed in SDK 54. Use the `expo-audio` and `expo-video` packages to replace the required functionality.
+2026-05-02 20:21:08.26
+"textShadow*" style props are deprecated. Use "textShadow".
+2026-05-02 20:21:11.36
+props.pointerEvents is deprecated. Use style.pointerEvents
+2026-05-02 20:21:11.36
+Image: style.tintColor is deprecated. Please use props.tintColor.
+2026-05-02 20:21:11.36
+Animated: `useNativeDriver` is not supported because the native animated module is missing. Falling back to JS-based animation. To resolve this, add `RCTAnimation` module to this app, or remove `useNativeDriver`. Make sure to run `bundle exec pod install` first. Read more about autolinking: https://github.com/react-native-community/cli/blob/master/docs/autolinking.md
+2026-05-02 20:21:12.28
+Invalid DOM property `%s`. Did you mean `%s`?
+transform-origin
+transformOrigin
+2026-05-02 20:21:12.28
+Invalid DOM property `%s`. Did you mean `%s`?
+transform-origin
+transformOrigin
+2026-05-02 20:22:03.26
+Running application "main" with appParams:
+{rootTag: "#root"}
+Development-level warnings: ON. Performance optimizations: OFF.
+2026-05-02 20:22:03.43
+"shadow*" style props are deprecated. Use "boxShadow".
+2026-05-02 20:22:03.43
+[expo-av]: Expo AV has been deprecated and will be removed in SDK 54. Use the `expo-audio` and `expo-video` packages to replace the required functionality.
+2026-05-02 20:22:03.43
+"textShadow*" style props are deprecated. Use "textShadow".
+2026-05-02 20:22:32.03
+The action 'GO_BACK' was not handled by any navigator. Is there any screen to go back to? This is a development-only warning and won't be shown in production.
+2026-05-02 20:22:32.03
+The action 'GO_BACK' was not handled by any navigator. Is there any screen to go back to? This is a development-only warning and won't be shown in production.
+2026-05-02 20:22:32.83
+The action 'GO_BACK' was not handled by any navigator. Is there any screen to go back to? This is a development-only warning and won't be shown in production.
+2026-05-02 20:22:32.83
+The action 'GO_BACK' was not handled by any navigator. Is there any screen to go back to? This is a development-only warning and won't be shown in production.
+2026-05-02 20:22:33.28
+The action 'GO_BACK' was not handled by any navigator. Is there any screen to go back to? This is a development-only warning and won't be shown in production.
+2026-05-02 20:22:33.28
+The action 'GO_BACK' was not handled by any navigator. Is there any screen to go back to? This is a development-only warning and won't be shown in production.
+2026-05-02 20:22:33.43
+The action 'GO_BACK' was not handled by any navigator. Is there any screen to go back to? This is a development-only warning and won't be shown in production.
+2026-05-02 20:22:33.43
+The action 'GO_BACK' was not handled by any navigator. Is there any screen to go back to? This is a development-only warning
