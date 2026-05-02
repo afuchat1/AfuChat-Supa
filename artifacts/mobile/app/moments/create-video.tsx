@@ -33,6 +33,77 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/**
+ * Extract a thumbnail from a video using the HTML Canvas API (web only).
+ * Seeks to 1 second and draws the frame into an offscreen canvas,
+ * then converts it to a blob URL.
+ */
+async function generateWebThumbnail(videoObjectUrl: string): Promise<string | null> {
+  if (typeof document === "undefined") return null;
+  try {
+    const video = document.createElement("video");
+    video.crossOrigin = "anonymous";
+    video.muted = true;
+    video.preload = "metadata";
+    video.src = videoObjectUrl;
+    await new Promise<void>((resolve, reject) => {
+      const onLoaded = () => {
+        video.removeEventListener("loadedmetadata", onLoaded);
+        video.removeEventListener("error", onError);
+        video.currentTime = Math.min(1, video.duration || 1);
+      };
+      const onSeeked = () => {
+        video.removeEventListener("seeked", onSeeked);
+        video.removeEventListener("error", onError);
+        resolve();
+      };
+      const onError = () => {
+        video.removeEventListener("loadedmetadata", onLoaded);
+        video.removeEventListener("seeked", onSeeked);
+        video.removeEventListener("error", onError);
+        reject(new Error("Video seek failed"));
+      };
+      video.addEventListener("loadedmetadata", onLoaded);
+      video.addEventListener("seeked", onSeeked);
+      video.addEventListener("error", onError);
+      video.load();
+    });
+    const w = video.videoWidth || 640;
+    const h = video.videoHeight || 360;
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(video, 0, 0, w, h);
+    return await new Promise<string | null>((resolve) => {
+      canvas.toBlob(
+        (blob) => resolve(blob ? URL.createObjectURL(blob) : null),
+        "image/jpeg",
+        0.8,
+      );
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extract a thumbnail on native using expo-video-thumbnails.
+ * Returns the local file URI of the generated JPEG or null on failure.
+ */
+async function generateNativeThumbnail(videoUri: string): Promise<string | null> {
+  try {
+    const thumbMod = await import("expo-video-thumbnails");
+    const fn = thumbMod.getThumbnailAsync ?? (thumbMod as any).default?.getThumbnailAsync;
+    if (!fn) return null;
+    const result = await fn(videoUri, { time: 1000, quality: 0.7 });
+    return result?.uri ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export default function CreateVideoScreen() {
   const { colors } = useTheme();
   const { user, profile } = useAuth();
@@ -49,10 +120,10 @@ export default function CreateVideoScreen() {
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
   const [soundDismissed, setSoundDismissed] = useState(false);
+  const [thumbnailUri, setThumbnailUri] = useState<string | null>(null);
+  const [thumbGenerating, setThumbGenerating] = useState(false);
   const videoRef = useRef<Video>(null);
 
-  // Web doesn't expose the native media library API; we fall back to a
-  // hidden <input type="file"> picker.
   const webFileInputRef = useRef<HTMLInputElement | null>(null);
 
   function pickVideoWeb() {
@@ -71,9 +142,8 @@ export default function CreateVideoScreen() {
     setVideoUri(objectUrl);
     setVideoMime(file.type || undefined);
     setFileSize(file.size || 0);
+    setThumbnailUri(null);
 
-    // Probe duration + dimensions from a hidden <video> element so we can
-    // validate length and pass them to the encoder pipeline.
     try {
       const probe = document.createElement("video");
       probe.preload = "metadata";
@@ -93,8 +163,15 @@ export default function CreateVideoScreen() {
       setVideoWidth(probe.videoWidth || null);
       setVideoHeight(probe.videoHeight || null);
     } catch {
-      // Non-fatal — we'll just upload without metadata.
+      // Non-fatal — upload without metadata.
     }
+
+    // Auto-generate thumbnail immediately after pick (web).
+    setThumbGenerating(true);
+    generateWebThumbnail(objectUrl)
+      .then((uri) => setThumbnailUri(uri))
+      .catch(() => setThumbnailUri(null))
+      .finally(() => setThumbGenerating(false));
   }
 
   async function pickVideo() {
@@ -126,10 +203,18 @@ export default function CreateVideoScreen() {
       setFileSize(0);
       setVideoWidth((asset as any).width ?? null);
       setVideoHeight((asset as any).height ?? null);
+      setThumbnailUri(null);
       try {
         const info = await FileSystem.getInfoAsync(asset.uri);
         if (info.exists) setFileSize((info as any).size ?? 0);
       } catch (_) {}
+
+      // Auto-generate thumbnail immediately after pick (native).
+      setThumbGenerating(true);
+      generateNativeThumbnail(asset.uri)
+        .then((uri) => setThumbnailUri(uri))
+        .catch(() => setThumbnailUri(null))
+        .finally(() => setThumbGenerating(false));
     }
   }
 
@@ -164,18 +249,26 @@ export default function CreateVideoScreen() {
       const { publicUrl, error: uploadError } = await uploadToStorage("videos", filePath, videoUri!, resolvedMime);
       if (uploadError || !publicUrl) throw new Error(uploadError || "Upload failed");
 
-      setUploadProgress("Generating thumbnail…");
+      // Upload the thumbnail that was already generated at pick-time.
+      // If it wasn't generated yet, attempt a fresh one now.
+      setUploadProgress("Uploading thumbnail…");
       let thumbnailPublicUrl: string | null = null;
       try {
-        const thumbMod = await import("expo-video-thumbnails");
-        const fn = thumbMod.getThumbnailAsync ?? thumbMod.default?.getThumbnailAsync;
-        if (fn && videoUri && !videoUri.startsWith("blob:")) {
-          const thumbResult2 = await fn(videoUri, { time: 1000, quality: 0.7 });
-          if (thumbResult2?.uri) {
-            const thumbPath = `${user!.id}/${Date.now()}_thumb.jpg`;
-            const uploaded = await uploadToStorage("videos", thumbPath, thumbResult2.uri, "image/jpeg");
-            if (uploaded.publicUrl) thumbnailPublicUrl = uploaded.publicUrl;
+        let thumbLocalUri = thumbnailUri;
+
+        // Fall back to on-demand generation if auto-generation failed or hasn't finished.
+        if (!thumbLocalUri) {
+          if (Platform.OS === "web") {
+            thumbLocalUri = await generateWebThumbnail(videoUri!);
+          } else if (!videoUri!.startsWith("blob:")) {
+            thumbLocalUri = await generateNativeThumbnail(videoUri!);
           }
+        }
+
+        if (thumbLocalUri) {
+          const thumbPath = `${user!.id}/${Date.now()}_thumb.jpg`;
+          const uploaded = await uploadToStorage("videos", thumbPath, thumbLocalUri, "image/jpeg");
+          if (uploaded.publicUrl) thumbnailPublicUrl = uploaded.publicUrl;
         }
       } catch (_) {}
 
@@ -196,9 +289,6 @@ export default function CreateVideoScreen() {
         .single();
       if (error) throw error;
 
-      // Kick off server-side encoding (H.264 baseline first, AV1 in
-      // background). Failure here is non-fatal — the original source URL
-      // remains playable until renditions finish.
       const newPostId = (insertedPost as { id?: string } | null)?.id ?? null;
       registerVideoAsset({
         source_path: filePath,
@@ -238,7 +328,6 @@ export default function CreateVideoScreen() {
           onChange={(e: any) => {
             const f = e.target?.files?.[0] ?? null;
             handleWebFileChange(f);
-            // Reset so the same file can be picked again.
             if (e.target) e.target.value = "";
           }}
         />
@@ -288,6 +377,31 @@ export default function CreateVideoScreen() {
                 isLooping
                 useNativeControls
               />
+
+              {/* Thumbnail preview badge — shown once thumbnail is ready */}
+              {(thumbnailUri || thumbGenerating) ? (
+                <View style={styles.thumbBadge}>
+                  {thumbGenerating ? (
+                    <View style={styles.thumbGenerating}>
+                      <ActivityIndicator size="small" color="#fff" />
+                      <Text style={styles.thumbGeneratingText}>Generating thumbnail…</Text>
+                    </View>
+                  ) : thumbnailUri ? (
+                    <View style={styles.thumbReady}>
+                      <ExpoImage
+                        source={{ uri: thumbnailUri }}
+                        style={styles.thumbPreviewImg}
+                        contentFit="cover"
+                      />
+                      <View style={styles.thumbLabel}>
+                        <Ionicons name="checkmark-circle" size={12} color="#4caf50" />
+                        <Text style={styles.thumbLabelText}>Thumbnail ready</Text>
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
               <View style={styles.previewOverlay}>
                 {durationLabel ? (
                   <View style={styles.durationBadge}>
@@ -405,4 +519,11 @@ const styles = StyleSheet.create({
   soundInfo: { flex: 1, gap: 2 },
   soundLabel: { fontSize: 11, fontFamily: "Inter_500Medium" },
   soundName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  thumbBadge: { position: "absolute", bottom: 52, left: 12, right: 12 },
+  thumbGenerating: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(0,0,0,0.65)", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  thumbGeneratingText: { fontSize: 12, fontFamily: "Inter_500Medium", color: "#fff" },
+  thumbReady: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "rgba(0,0,0,0.65)", paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10 },
+  thumbPreviewImg: { width: 40, height: 40, borderRadius: 6 },
+  thumbLabel: { flexDirection: "row", alignItems: "center", gap: 4 },
+  thumbLabelText: { fontSize: 12, fontFamily: "Inter_500Medium", color: "#fff" },
 });
