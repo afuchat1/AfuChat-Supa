@@ -30,6 +30,7 @@ import { PrestigeBadge } from "@/components/ui/PrestigeBadge";
 import { RichText } from "@/components/ui/RichText";
 import { encodeId } from "@/lib/shortId";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
+import { VideoThumbnail } from "@/components/ui/VideoThumbnail";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const GRID_GAP = 1.5;
@@ -535,12 +536,15 @@ export default function ContactProfileScreen() {
           renderItem={({ item }) => (
             <TouchableOpacity
               style={{ width: THUMB, height: THUMB * 1.35, backgroundColor: "#111" }}
-              onPress={() => { if (!isDesktop) router.push({ pathname: "/video/[id]", params: { id: item.id } }); }}
+              onPress={() => router.push({ pathname: "/video/[id]", params: { id: item.id } })}
               activeOpacity={0.82}
             >
-              {item.image_url && (
-                <Image source={{ uri: item.image_url }} style={{ width: THUMB, height: THUMB * 1.35 }} resizeMode="cover" />
-              )}
+              <VideoThumbnail
+                videoUrl={item.video_url!}
+                fallbackImageUrl={item.image_url}
+                style={{ width: THUMB, height: THUMB * 1.35 }}
+                showDuration={false}
+              />
               <View style={st.videoOverlay}>
                 <View style={st.playCircle}>
                   <Ionicons name="play" size={14} color="#fff" />
