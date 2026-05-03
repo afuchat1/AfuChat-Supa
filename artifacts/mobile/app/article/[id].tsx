@@ -59,6 +59,53 @@ type Reply = {
 
 const ART_THREAD_COLORS = ["#00BCD4", "#5C6BC0", "#26A69A", "#EF6C00", "#8E24AA"];
 
+type ArticleBlock = { type: "text"; content: string } | { type: "image"; url: string };
+
+function parseArticleBlocks(body: string): ArticleBlock[] {
+  const IMG_REGEX = /\[img:(https?:\/\/[^\]]+)\]/g;
+  const blocks: ArticleBlock[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  IMG_REGEX.lastIndex = 0;
+  while ((match = IMG_REGEX.exec(body)) !== null) {
+    if (match.index > lastIndex) {
+      const text = body.slice(lastIndex, match.index).trim();
+      if (text) blocks.push({ type: "text", content: text });
+    }
+    blocks.push({ type: "image", url: match[1] });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < body.length) {
+    const text = body.slice(lastIndex).trim();
+    if (text) blocks.push({ type: "text", content: text });
+  }
+  if (blocks.length === 0) blocks.push({ type: "text", content: body });
+  return blocks;
+}
+
+function ArticleBody({ body, bodyStyle }: { body: string; bodyStyle: any }) {
+  const blocks = parseArticleBlocks(body);
+  return (
+    <View style={{ gap: 20 }}>
+      {blocks.map((block, i) => {
+        if (block.type === "image") {
+          return (
+            <View key={i} style={articleBodyStyles.inlineImgWrap}>
+              <Image source={{ uri: block.url }} style={articleBodyStyles.inlineImg} resizeMode="cover" />
+            </View>
+          );
+        }
+        return <RichText key={i} style={bodyStyle}>{block.content}</RichText>;
+      })}
+    </View>
+  );
+}
+
+const articleBodyStyles = StyleSheet.create({
+  inlineImgWrap: { borderRadius: 12, overflow: "hidden", width: "100%" },
+  inlineImg: { width: "100%", aspectRatio: 16 / 9 },
+});
+
 function buildArticleReplyTree(flat: Reply[]): Reply[] {
   const map = new Map<string, Reply>();
   const roots: Reply[] = [];
@@ -458,7 +505,7 @@ export default function ArticleDetailScreen() {
           </View>
         )}
 
-        <RichText style={[styles.body, { color: colors.text }]}>{displayBody || bodyText}</RichText>
+        <ArticleBody body={displayBody || bodyText || ""} bodyStyle={[styles.body, { color: colors.text }]} />
 
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
 

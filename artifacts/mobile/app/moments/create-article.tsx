@@ -1,6 +1,8 @@
 import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -15,12 +17,15 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
-import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { uploadToStorage } from "@/lib/mediaUpload";
+
+const { width: SCREEN_W } = Dimensions.get("window");
 
 type Audience = "public" | "followers" | "private";
 
@@ -44,12 +49,68 @@ export default function CreateArticleScreen() {
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadingInline, setUploadingInline] = useState(false);
   const [audience, setAudience] = useState<Audience>("public");
   const [showAudienceModal, setShowAudienceModal] = useState(false);
 
   const wordCount = body.trim().split(/\s+/).filter(Boolean).length;
   const canPublish = title.trim().length >= 3 && body.trim().length >= 20;
+
+  async function pickAndUpload(
+    purpose: "cover" | "inline",
+  ): Promise<string | null> {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.85,
+      allowsEditing: purpose === "cover",
+      aspect: purpose === "cover" ? [16, 9] : undefined,
+    });
+    if (result.canceled || !result.assets?.length) return null;
+    const asset = result.assets[0];
+    if (!user) { showAlert("Error", "You must be signed in."); return null; }
+    const ext = (asset.uri.split(".").pop() || "jpg").toLowerCase();
+    const safeExt = ["png", "webp"].includes(ext) ? ext : "jpg";
+    const fileName = `${user.id}/articles/${Date.now()}_${purpose}.${safeExt}`;
+    const { publicUrl, error } = await uploadToStorage(
+      "post-images",
+      fileName,
+      asset.uri,
+      `image/${safeExt === "jpg" ? "jpeg" : safeExt}`,
+    );
+    if (error || !publicUrl) {
+      showAlert("Upload failed", error || "Could not upload image.");
+      return null;
+    }
+    return publicUrl;
+  }
+
+  async function handlePickCover() {
+    setUploadingCover(true);
+    try {
+      const url = await pickAndUpload("cover");
+      if (url) setCoverUrl(url);
+    } finally {
+      setUploadingCover(false);
+    }
+  }
+
+  async function handleInsertImage() {
+    setUploadingInline(true);
+    try {
+      const url = await pickAndUpload("inline");
+      if (url) {
+        setBody((prev) => {
+          const trimmed = prev.trimEnd();
+          return trimmed + (trimmed ? "\n\n" : "") + `[img:${url}]` + "\n\n";
+        });
+      }
+    } finally {
+      setUploadingInline(false);
+    }
+  }
 
   async function publish() {
     if (!user) { router.push("/(auth)/login"); return; }
@@ -63,6 +124,8 @@ export default function CreateArticleScreen() {
         author_id: user.id,
         content: body.trim(),
         article_title: title.trim(),
+        article_body: body.trim(),
+        article_cover_url: coverUrl || null,
         post_type: "article",
         visibility: audience,
         view_count: 0,
@@ -102,10 +165,36 @@ export default function CreateArticleScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 80 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {/* Cover image */}
+          <TouchableOpacity
+            onPress={handlePickCover}
+            activeOpacity={0.85}
+            style={[styles.coverPicker, { borderColor: colors.border, backgroundColor: colors.backgroundTertiary }]}
+          >
+            {uploadingCover ? (
+              <ActivityIndicator color={colors.accent} />
+            ) : coverUrl ? (
+              <>
+                <Image source={{ uri: coverUrl }} style={styles.coverPreview} resizeMode="cover" />
+                <View style={styles.coverEditBadge}>
+                  <Ionicons name="pencil" size={13} color="#fff" />
+                  <Text style={styles.coverEditText}>Change cover</Text>
+                </View>
+              </>
+            ) : (
+              <View style={styles.coverPlaceholder}>
+                <Ionicons name="image-outline" size={28} color={colors.textMuted} />
+                <Text style={[styles.coverPlaceholderText, { color: colors.textMuted }]}>
+                  Add cover image
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
           {/* Author row */}
           <View style={styles.authorRow}>
             <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={38} />
@@ -142,30 +231,57 @@ export default function CreateArticleScreen() {
             autoFocus
           />
 
-          {/* Divider */}
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
           {/* Body input */}
           <TextInput
             ref={bodyRef}
             style={[styles.bodyInput, { color: colors.text }]}
-            placeholder={"Tell your story…\n\nUse hashtags #like #this, @mention people, or paste links."}
+            placeholder={"Tell your story…\n\nTip: tap 📷 in the toolbar below to insert images inline."}
             placeholderTextColor={colors.textMuted}
             value={body}
             onChangeText={setBody}
             multiline
             textAlignVertical="top"
           />
+
+          {/* Inline image previews */}
+          {body.match(/\[img:(https?:\/\/[^\]]+)\]/g)?.map((match, i) => {
+            const url = match.slice(5, -1);
+            return (
+              <View key={i} style={[styles.inlinePreviewWrap, { borderColor: colors.border }]}>
+                <Image source={{ uri: url }} style={styles.inlinePreview} resizeMode="cover" />
+                <TouchableOpacity
+                  style={styles.inlineRemoveBtn}
+                  onPress={() => setBody((prev) => prev.replace(`[img:${url}]`, "").replace(/\n{3,}/g, "\n\n"))}
+                >
+                  <Ionicons name="close-circle" size={22} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            );
+          })}
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Footer stats */}
+      {/* Footer toolbar */}
       <View style={[styles.footer, { borderTopColor: colors.border, backgroundColor: colors.surface, paddingBottom: insets.bottom + 8 }]}>
         <Text style={[styles.footerStat, { color: colors.textMuted }]}>{wordCount} words</Text>
         <View style={[styles.footerDot, { backgroundColor: colors.textMuted }]} />
         <Text style={[styles.footerStat, { color: colors.textMuted }]}>{estimateReadTime(body)}</Text>
-        <View style={[styles.footerDot, { backgroundColor: colors.textMuted }]} />
-        <Text style={[styles.footerStat, { color: colors.textMuted }]}>{body.length} chars</Text>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity
+          onPress={handleInsertImage}
+          disabled={uploadingInline}
+          style={[styles.insertImgBtn, { backgroundColor: colors.accent + "18", borderColor: colors.accent + "40" }]}
+        >
+          {uploadingInline
+            ? <ActivityIndicator size="small" color={colors.accent} />
+            : <>
+                <Ionicons name="image-outline" size={16} color={colors.accent} />
+                <Text style={[styles.insertImgText, { color: colors.accent }]}>Insert photo</Text>
+              </>
+          }
+        </TouchableOpacity>
       </View>
 
       {/* Audience Modal */}
@@ -203,7 +319,13 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
   publishBtn: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20 },
   publishText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  content: { paddingHorizontal: 20, paddingTop: 20, gap: 0 },
+  content: { paddingHorizontal: 20, paddingTop: 16, gap: 0 },
+  coverPicker: { width: "100%", height: 180, borderRadius: 14, borderWidth: 1.5, borderStyle: "dashed", marginBottom: 20, overflow: "hidden", alignItems: "center", justifyContent: "center" },
+  coverPreview: { width: "100%", height: "100%" },
+  coverEditBadge: { position: "absolute", bottom: 10, right: 10, flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5 },
+  coverEditText: { color: "#fff", fontSize: 12, fontFamily: "Inter_500Medium" },
+  coverPlaceholder: { alignItems: "center", gap: 8 },
+  coverPlaceholderText: { fontSize: 13, fontFamily: "Inter_400Regular" },
   authorRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 20 },
   authorName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   audienceBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, alignSelf: "flex-start" },
@@ -211,9 +333,14 @@ const styles = StyleSheet.create({
   titleInput: { fontSize: 26, fontFamily: "Inter_700Bold", lineHeight: 34, marginBottom: 16, minHeight: 60 },
   divider: { height: 1, marginBottom: 20 },
   bodyInput: { fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 26, minHeight: 300 },
+  inlinePreviewWrap: { width: "100%", height: 200, borderRadius: 12, marginTop: 12, marginBottom: 4, overflow: "hidden", borderWidth: StyleSheet.hairlineWidth },
+  inlinePreview: { width: "100%", height: "100%" },
+  inlineRemoveBtn: { position: "absolute", top: 8, right: 8, backgroundColor: "rgba(0,0,0,0.45)", borderRadius: 12 },
   footer: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
   footerStat: { fontSize: 12, fontFamily: "Inter_400Regular" },
   footerDot: { width: 3, height: 3, borderRadius: 1.5 },
+  insertImgBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
+  insertImgText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
   modalSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 12 },
   modalHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 8 },
