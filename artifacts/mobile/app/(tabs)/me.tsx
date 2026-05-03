@@ -219,7 +219,7 @@ export default function MeScreen() {
           activeOpacity={0.85}
           onPress={() => setAvatarOpen(true)}
         >
-          <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={68} premium={isPremium} />
+          <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={68} premium={isPremium} square={!!(profile?.is_organization_verified || profile?.is_business_mode)} />
         </TouchableOpacity>
         <View style={styles.profileInfo}>
           <View style={styles.nameRow}>

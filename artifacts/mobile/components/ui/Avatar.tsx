@@ -11,6 +11,7 @@ type Props = {
   style?: ViewStyle;
   online?: boolean;
   premium?: boolean;
+  square?: boolean;
 };
 
 function getInitials(name?: string): string {
@@ -31,17 +32,18 @@ function hashColor(name?: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
-export function Avatar({ uri, name, size = 44, style, online, premium }: Props) {
+export function Avatar({ uri, name, size = 44, style, online, premium, square }: Props) {
   const { accent } = useAppAccent();
   const initials = getInitials(name);
   const bgColor = hashColor(name);
+  const radius = square ? size * 0.2 : size / 2;
 
   const innerNode = (
     <View style={{ width: size, height: size }}>
       {uri ? (
         <Image
           source={{ uri }}
-          style={{ width: size, height: size, borderRadius: size / 2 }}
+          style={{ width: size, height: size, borderRadius: radius }}
           contentFit="cover"
           cachePolicy="memory-disk"
           transition={120}
@@ -50,7 +52,7 @@ export function Avatar({ uri, name, size = 44, style, online, premium }: Props) 
         <View
           style={[
             styles.fallback,
-            { width: size, height: size, borderRadius: size / 2, backgroundColor: bgColor },
+            { width: size, height: size, borderRadius: radius, backgroundColor: bgColor },
           ]}
         >
           <Text style={[styles.initials, { fontSize: size * 0.38 }]}>{initials}</Text>

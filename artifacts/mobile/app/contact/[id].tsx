@@ -319,8 +319,8 @@ export default function ContactProfileScreen() {
       {/* ── Avatar row + stats ─── */}
       <View style={st.avatarStatsRow}>
         <TouchableOpacity activeOpacity={0.85} onPress={() => setAvatarOpen(true)} style={st.avatarWrap}>
-          <View style={[st.avatarRing, { borderColor: colors.text }]}>
-            <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={78} />
+          <View style={[st.avatarRing, { borderColor: colors.text, borderRadius: (profile?.is_organization_verified || profile?.is_business_mode) ? 20 : 50 }]}>
+            <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={78} square={!!(profile?.is_organization_verified || profile?.is_business_mode)} />
           </View>
           {isOnline && <View style={[st.onlineDot, { borderColor: colors.background }]} />}
         </TouchableOpacity>
