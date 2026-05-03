@@ -83,8 +83,16 @@ function parseArticleBlocks(body: string): ArticleBlock[] {
   return blocks;
 }
 
-function ArticleBody({ body, bodyStyle }: { body: string; bodyStyle: any }) {
+function ArticleBody({ body, displayBody, bodyStyle }: { body: string; displayBody?: string; bodyStyle: any }) {
+  // Always parse the RAW body so [img:URL] markers are never mangled by translation
   const blocks = parseArticleBlocks(body);
+
+  // Pure text article with no inline images → honour the translated version
+  if (blocks.length === 1 && blocks[0].type === "text") {
+    return <RichText style={bodyStyle}>{displayBody || body}</RichText>;
+  }
+
+  // Multi-block (text + images) → render each block; skip translation to preserve markers
   return (
     <View style={{ gap: 20 }}>
       {blocks.map((block, i) => {
@@ -505,7 +513,7 @@ export default function ArticleDetailScreen() {
           </View>
         )}
 
-        <ArticleBody body={displayBody || bodyText || ""} bodyStyle={[styles.body, { color: colors.text }]} />
+        <ArticleBody body={bodyText || ""} displayBody={displayBody} bodyStyle={[styles.body, { color: colors.text }]} />
 
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
