@@ -240,54 +240,6 @@ async function authedUserId(req: Request, supabaseUrl: string, serviceKey: strin
   } catch { return null; }
 }
 
-// ── Supabase Storage fallback ─────────────────────────────────────────────────
-
-/**
- * Upload to Supabase Storage when R2 is unavailable (e.g. bucket missing).
- * Attempts to create the bucket as public (idempotent — 409 = already exists).
- * Returns { publicUrl } on success, null on failure.
- */
-async function supabaseStorageUpload(
-  supabaseUrl: string,
-  serviceKey: string,
-  bucket: string,
-  path: string,
-  body: ArrayBuffer,
-  contentType: string,
-): Promise<{ publicUrl: string } | null> {
-  const authHdrs = {
-    Authorization: `Bearer ${serviceKey}`,
-    apikey: serviceKey,
-  };
-
-  // Create bucket as public (409 = already exists, that's fine)
-  try {
-    await fetch(`${supabaseUrl}/storage/v1/bucket`, {
-      method: "POST",
-      headers: { ...authHdrs, "Content-Type": "application/json" },
-      body: JSON.stringify({ id: bucket, name: bucket, public: true }),
-    });
-  } catch (_) { /* ignore — bucket likely already exists */ }
-
-  // Upload object
-  const objPath = path.split("/").map((s) => encodeURIComponent(s)).join("/");
-  const resp = await fetch(`${supabaseUrl}/storage/v1/object/${encodeURIComponent(bucket)}/${objPath}`, {
-    method: "POST",
-    headers: { ...authHdrs, "Content-Type": contentType, "x-upsert": "true" },
-    body,
-  });
-
-  if (!resp.ok) {
-    const txt = await resp.text().catch(() => "");
-    console.error(`[uploads] Supabase Storage fallback failed (${resp.status}): ${txt.slice(0, 200)}`);
-    return null;
-  }
-
-  return {
-    publicUrl: `${supabaseUrl}/storage/v1/object/public/${bucket}/${path}`,
-  };
-}
-
 // ── Route handlers ────────────────────────────────────────────────────────────
 
 async function handleSign(req: Request, userId: string, cfg: R2Config): Promise<Response> {
@@ -316,8 +268,6 @@ async function handleUpload(
   req: Request,
   userId: string,
   cfg: R2Config,
-  supabaseUrl: string,
-  serviceKey: string,
 ): Promise<Response> {
   const url = new URL(req.url);
   const bucket = url.searchParams.get("bucket") || "";
@@ -340,21 +290,13 @@ async function handleUpload(
     const resp = await s3Fetch(cfg, "PUT", key, bodyBuf, { "content-type": contentType });
     if (!resp.ok) {
       const txt = await resp.text().catch(() => "");
-      console.warn(`[uploads] R2 PUT failed (${resp.status}): ${txt.slice(0, 120)} — trying Supabase Storage fallback`);
-      const fallback = await supabaseStorageUpload(supabaseUrl, serviceKey, bucket, path, bodyBuf, contentType);
-      if (fallback) {
-        return json({ ok: true, key, publicUrl: fallback.publicUrl, size: bodyBuf.byteLength });
-      }
-      return json({ error: "Upload failed: R2 unavailable and Supabase Storage fallback also failed." }, 502);
+      console.error(`[uploads] R2 PUT failed (${resp.status}): ${txt.slice(0, 200)}`);
+      return json({ error: `Upload to Cloudflare R2 failed (${resp.status})` }, 502);
     }
     return json({ ok: true, key, publicUrl: publicUrl(cfg, key), size: bodyBuf.byteLength });
   } catch (e: any) {
-    console.warn(`[uploads] R2 threw (${e?.message}) — trying Supabase Storage fallback`);
-    const fallback = await supabaseStorageUpload(supabaseUrl, serviceKey, bucket, path, bodyBuf, contentType);
-    if (fallback) {
-      return json({ ok: true, key, publicUrl: fallback.publicUrl, size: bodyBuf.byteLength });
-    }
-    return json({ error: e?.message || "Upload failed" }, 500);
+    console.error(`[uploads] R2 threw: ${e?.message}`);
+    return json({ error: e?.message || "Upload to Cloudflare R2 failed" }, 500);
   }
 }
 
@@ -570,7 +512,7 @@ Deno.serve(async (req) => {
   if (!cfg) return json({ error: "R2 storage not configured" }, 503);
 
   if (action === "sign" && req.method === "POST") return handleSign(req, userId, cfg);
-  if (action === "upload" && req.method === "POST") return handleUpload(req, userId, cfg, supabaseUrl, serviceKey);
+  if (action === "upload" && req.method === "POST") return handleUpload(req, userId, cfg);
   if (action === "backfill" && req.method === "POST") return handleBackfill(req, userId, cfg);
   if (action === "usage" && req.method === "GET") return handleUsage(userId, cfg);
   if (action === "list" && req.method === "GET") return handleList(req, userId, cfg);
