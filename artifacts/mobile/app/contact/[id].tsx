@@ -4,6 +4,7 @@ import {
   Dimensions,
   FlatList,
   Image,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -33,9 +34,11 @@ import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { VideoThumbnail } from "@/components/ui/VideoThumbnail";
 
 const { width: SCREEN_W } = Dimensions.get("window");
-const GRID_GAP = 1.5;
+const GRID_GAP = 6;
+const GRID_PADDING = 12;
 const GRID_COLS = 3;
-const THUMB = (SCREEN_W - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
+const THUMB = (SCREEN_W - GRID_GAP * (GRID_COLS - 1) - GRID_PADDING * 2) / GRID_COLS;
+const THUMB_RADIUS = 10;
 
 type Profile = {
   id: string;
@@ -353,12 +356,21 @@ export default function ContactProfileScreen() {
           </View>
         )}
         {profile?.website_url && (
-          <View style={st.metaChip}>
+          <TouchableOpacity
+            style={st.metaChip}
+            activeOpacity={0.65}
+            onPress={() => {
+              const url = profile.website_url!.startsWith("http")
+                ? profile.website_url!
+                : `https://${profile.website_url}`;
+              Linking.openURL(url).catch(() => {});
+            }}
+          >
             <Ionicons name="link-outline" size={11} color={colors.accent} />
-            <Text style={[st.metaChipText, { color: colors.accent }]} numberOfLines={1}>
+            <Text style={[st.metaChipText, { color: colors.accent, textDecorationLine: "underline" }]} numberOfLines={1}>
               {profile.website_url.replace(/^https?:\/\//, "")}
             </Text>
-          </View>
+          </TouchableOpacity>
         )}
         {mutualCount > 0 && (
           <View style={st.metaChip}>
@@ -459,9 +471,9 @@ export default function ContactProfileScreen() {
           data={photoPosts}
           keyExtractor={(p) => p.id}
           numColumns={GRID_COLS}
-          columnWrapperStyle={{ gap: GRID_GAP }}
+          columnWrapperStyle={{ gap: GRID_GAP, paddingHorizontal: GRID_PADDING }}
           ItemSeparatorComponent={() => <View style={{ height: GRID_GAP }} />}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 32, paddingTop: GRID_GAP }}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             postsLoading ? (
@@ -482,7 +494,7 @@ export default function ContactProfileScreen() {
               : item.image_url ? [item.image_url] : [];
             return (
               <TouchableOpacity
-                style={{ width: THUMB, height: THUMB }}
+                style={{ width: THUMB, height: THUMB, borderRadius: THUMB_RADIUS, overflow: "hidden" }}
                 onPress={() => { setLightboxPost(item); setLightboxImgIdx(0); }}
                 activeOpacity={0.82}
               >
@@ -516,9 +528,9 @@ export default function ContactProfileScreen() {
           data={videoPosts}
           keyExtractor={(p) => p.id}
           numColumns={GRID_COLS}
-          columnWrapperStyle={{ gap: GRID_GAP }}
+          columnWrapperStyle={{ gap: GRID_GAP, paddingHorizontal: GRID_PADDING }}
           ItemSeparatorComponent={() => <View style={{ height: GRID_GAP }} />}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 32, paddingTop: GRID_GAP }}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             postsLoading ? (
@@ -535,7 +547,7 @@ export default function ContactProfileScreen() {
           }
           renderItem={({ item }) => (
             <TouchableOpacity
-              style={{ width: THUMB, height: THUMB * 1.35, backgroundColor: "#111" }}
+              style={{ width: THUMB, height: THUMB * 1.35, backgroundColor: "#111", borderRadius: THUMB_RADIUS, overflow: "hidden" }}
               onPress={() => router.push({ pathname: "/video/[id]", params: { id: item.id } })}
               activeOpacity={0.82}
             >
