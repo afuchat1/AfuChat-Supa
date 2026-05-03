@@ -89,6 +89,11 @@ function fmtNum(n: number): string {
   return String(n);
 }
 
+function fmtJoinDate(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
 export default function ContactProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
@@ -337,7 +342,7 @@ export default function ContactProfileScreen() {
 
       {/* ── Name + badges ─── */}
       <View style={st.nameBadgeRow}>
-        <Text style={[st.displayName, { color: colors.text }]}>{profile?.display_name}</Text>
+        <Text style={[st.displayName, { color: colors.text, flexShrink: 1 }]} numberOfLines={1} ellipsizeMode="tail">{profile?.display_name}</Text>
         <VerifiedBadge isVerified={profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={16} />
         <PrestigeBadge acoin={profile?.acoin || 0} size="sm" showLabel />
       </View>
@@ -349,6 +354,12 @@ export default function ContactProfileScreen() {
 
       {/* ── Meta chips ─── */}
       <View style={st.metaRow}>
+        {profile?.created_at && (
+          <View style={st.metaChip}>
+            <Ionicons name="calendar-outline" size={11} color={colors.textMuted} />
+            <Text style={[st.metaChipText, { color: colors.textMuted }]}>Joined {fmtJoinDate(profile.created_at)}</Text>
+          </View>
+        )}
         {profile?.country && (
           <View style={st.metaChip}>
             <Ionicons name="location-outline" size={11} color={colors.textMuted} />

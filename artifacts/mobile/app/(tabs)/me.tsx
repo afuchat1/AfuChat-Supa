@@ -223,7 +223,7 @@ export default function MeScreen() {
         </TouchableOpacity>
         <View style={styles.profileInfo}>
           <View style={styles.nameRow}>
-            <Text style={[styles.profileName, { color: colors.text }]}>
+            <Text style={[styles.profileName, { color: colors.text, flexShrink: 1 }]} numberOfLines={1} ellipsizeMode="tail">
               {profile?.display_name || "User"}
             </Text>
             <VerifiedBadge isVerified={profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={18} />
