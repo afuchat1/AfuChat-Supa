@@ -83,18 +83,38 @@ function parseArticleBlocks(body: string): ArticleBlock[] {
   return blocks;
 }
 
+const EMOJI_HEADING_RE = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic})/u;
+
+function ArticleTextBlock({ content, bodyStyle }: { content: string; bodyStyle: any }) {
+  const paragraphs = content.split(/\n{2,}/).filter((p) => p.trim());
+  if (paragraphs.length === 0) return null;
+  return (
+    <View style={{ gap: 16 }}>
+      {paragraphs.map((para, i) => {
+        const trimmed = para.trim();
+        const isHeading = EMOJI_HEADING_RE.test(trimmed) && trimmed.length < 90 && !trimmed.includes("\n");
+        if (isHeading) {
+          return (
+            <Text key={i} style={[bodyStyle, articleBodyStyles.sectionHeading]}>
+              {trimmed}
+            </Text>
+          );
+        }
+        return <RichText key={i} style={bodyStyle}>{trimmed}</RichText>;
+      })}
+    </View>
+  );
+}
+
 function ArticleBody({ body, displayBody, bodyStyle }: { body: string; displayBody?: string; bodyStyle: any }) {
-  // Always parse the RAW body so [img:URL] markers are never mangled by translation
   const blocks = parseArticleBlocks(body);
 
-  // Pure text article with no inline images → honour the translated version
   if (blocks.length === 1 && blocks[0].type === "text") {
-    return <RichText style={bodyStyle}>{displayBody || body}</RichText>;
+    return <ArticleTextBlock content={displayBody || body} bodyStyle={bodyStyle} />;
   }
 
-  // Multi-block (text + images) → render each block; skip translation to preserve markers
   return (
-    <View style={{ gap: 20 }}>
+    <View style={{ gap: 28 }}>
       {blocks.map((block, i) => {
         if (block.type === "image") {
           return (
@@ -103,15 +123,16 @@ function ArticleBody({ body, displayBody, bodyStyle }: { body: string; displayBo
             </View>
           );
         }
-        return <RichText key={i} style={bodyStyle}>{block.content}</RichText>;
+        return <ArticleTextBlock key={i} content={block.content} bodyStyle={bodyStyle} />;
       })}
     </View>
   );
 }
 
 const articleBodyStyles = StyleSheet.create({
-  inlineImgWrap: { borderRadius: 12, overflow: "hidden", width: "100%" },
+  inlineImgWrap: { borderRadius: 14, overflow: "hidden", width: "100%", elevation: 2 },
   inlineImg: { width: "100%", aspectRatio: 16 / 9 },
+  sectionHeading: { fontSize: 20, fontFamily: "Inter_700Bold", lineHeight: 28 },
 });
 
 function buildArticleReplyTree(flat: Reply[]): Reply[] {
@@ -432,27 +453,70 @@ export default function ArticleDetailScreen() {
   const bodyText = article.article_body || article.content;
   const readTime = estimateReadTime(bodyText);
 
+  const hasCover = !!article.article_cover_url;
+
   const ListHeader = (
     <View>
-      {article.article_cover_url ? (
-        <View>
-          <Image source={{ uri: article.article_cover_url }} style={styles.coverImage} resizeMode="cover" />
-          <LinearGradient
-            colors={["transparent", isDark ? "rgba(0,0,0,0.85)" : "rgba(0,0,0,0.55)"]}
-            style={styles.coverGradient}
+      {hasCover ? (
+        /* ── Magazine hero: blurred cover + title overlay ── */
+        <View style={styles.magazineHero}>
+          <Image
+            source={{ uri: article.article_cover_url! }}
+            style={[StyleSheet.absoluteFill, { width: SCREEN_W }]}
+            resizeMode="cover"
+            blurRadius={22}
           />
-          <View style={[styles.headerOverlay, { paddingTop: insets.top + 4 }]}>
+          <LinearGradient
+            colors={["rgba(0,0,0,0.18)", "rgba(0,0,0,0.55)", "rgba(0,0,0,0.82)"]}
+            locations={[0, 0.45, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+          {/* Nav row */}
+          <View style={[styles.headerOverlay, { paddingTop: insets.top + 6 }]}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backBtnOverlay} hitSlop={8}>
               <Ionicons name="arrow-back" size={20} color="#fff" />
             </TouchableOpacity>
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              <TouchableOpacity onPress={handleShare} style={styles.backBtnOverlay} hitSlop={8}>
-                <Ionicons name="share-outline" size={20} color="#fff" />
-              </TouchableOpacity>
+            <TouchableOpacity onPress={handleShare} style={styles.backBtnOverlay} hitSlop={8}>
+              <Ionicons name="share-outline" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          {/* Title + author overlaid at bottom */}
+          <View style={styles.magazineContent}>
+            <View style={styles.topMeta}>
+              <View style={[styles.articleBadge, { backgroundColor: "rgba(0,188,212,0.22)", borderColor: "rgba(0,188,212,0.5)", borderWidth: 1 }]}>
+                <Ionicons name="document-text" size={12} color="#00BCD4" />
+                <Text style={[styles.articleBadgeText, { color: "#00BCD4" }]}>Article</Text>
+              </View>
+              <View style={styles.readTimeBadge}>
+                <Ionicons name="time-outline" size={12} color="rgba(255,255,255,0.6)" />
+                <Text style={[styles.readTimeText, { color: "rgba(255,255,255,0.6)" }]}>{readTime}</Text>
+              </View>
             </View>
+            <Text style={styles.magazineTitle}>{article.article_title}</Text>
+            {article.content && article.article_body && article.content !== article.article_body && (
+              <Text style={styles.magazineSubtitle}>{article.content}</Text>
+            )}
+            <TouchableOpacity
+              style={styles.magazineAuthorRow}
+              onPress={() => router.push({ pathname: "/contact/[id]", params: { id: article.author.id } })}
+              activeOpacity={0.8}
+            >
+              <Avatar uri={article.author.avatar_url} name={article.author.display_name} size={32} />
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Text style={styles.magazineAuthorName}>{article.author.display_name}</Text>
+                  {article.author.is_organization_verified && <Ionicons name="checkmark-circle" size={13} color={Colors.gold} />}
+                  {!article.author.is_organization_verified && article.author.is_verified && <Ionicons name="checkmark-circle" size={13} color={colors.accent} />}
+                </View>
+                <Text style={styles.magazineAuthorMeta}>
+                  {formatDate(article.created_at)} · {article.view_count.toLocaleString()} views
+                </Text>
+              </View>
+            </TouchableOpacity>
           </View>
         </View>
       ) : (
+        /* ── No cover: plain nav ── */
         <View style={[styles.headerNoCover, { paddingTop: insets.top + 4 }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtnPlain} hitSlop={8}>
             <Ionicons name="arrow-back" size={22} color={colors.text} />
@@ -464,43 +528,45 @@ export default function ArticleDetailScreen() {
       )}
 
       <View style={styles.articleContent}>
-        <View style={styles.topMeta}>
-          <View style={[styles.articleBadge, { backgroundColor: colors.accent + "15" }]}>
-            <Ionicons name="document-text" size={12} color={colors.accent} />
-            <Text style={[styles.articleBadgeText, { color: colors.accent }]}>Article</Text>
-          </View>
-          <View style={styles.readTimeBadge}>
-            <Ionicons name="time-outline" size={12} color={colors.textMuted} />
-            <Text style={[styles.readTimeText, { color: colors.textMuted }]}>{readTime}</Text>
-          </View>
-        </View>
-
-        <Text style={[styles.title, { color: colors.text }]}>{article.article_title}</Text>
-
-        {article.content && article.article_body && article.content !== article.article_body && (
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{article.content}</Text>
-        )}
-
-        <View style={[styles.authorSection, { borderColor: colors.border }]}>
-          <TouchableOpacity
-            style={styles.authorRow}
-            onPress={() => router.push({ pathname: "/contact/[id]", params: { id: article.author.id } })}
-            activeOpacity={0.7}
-          >
-            <Avatar uri={article.author.avatar_url} name={article.author.display_name} size={40} />
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <Text style={[styles.authorName, { color: colors.text }]}>{article.author.display_name}</Text>
-                {article.author.is_organization_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.gold} />}
-                {!article.author.is_organization_verified && article.author.is_verified && <Ionicons name="checkmark-circle" size={14} color={colors.accent} />}
+        {/* Title / author section only shown when there is NO cover (cover articles show it in the hero) */}
+        {!hasCover && (
+          <>
+            <View style={styles.topMeta}>
+              <View style={[styles.articleBadge, { backgroundColor: colors.accent + "15" }]}>
+                <Ionicons name="document-text" size={12} color={colors.accent} />
+                <Text style={[styles.articleBadgeText, { color: colors.accent }]}>Article</Text>
               </View>
-              <Text style={[styles.authorHandle, { color: colors.textMuted }]}>@{article.author.handle}</Text>
+              <View style={styles.readTimeBadge}>
+                <Ionicons name="time-outline" size={12} color={colors.textMuted} />
+                <Text style={[styles.readTimeText, { color: colors.textMuted }]}>{readTime}</Text>
+              </View>
             </View>
-          </TouchableOpacity>
-          <View style={styles.dateMeta}>
-            <Text style={[styles.dateText, { color: colors.textMuted }]}>{formatDate(article.created_at)}</Text>
-          </View>
-        </View>
+            <Text style={[styles.title, { color: colors.text }]}>{article.article_title}</Text>
+            {article.content && article.article_body && article.content !== article.article_body && (
+              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{article.content}</Text>
+            )}
+            <View style={[styles.authorSection, { borderColor: colors.border }]}>
+              <TouchableOpacity
+                style={styles.authorRow}
+                onPress={() => router.push({ pathname: "/contact/[id]", params: { id: article.author.id } })}
+                activeOpacity={0.7}
+              >
+                <Avatar uri={article.author.avatar_url} name={article.author.display_name} size={40} />
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <Text style={[styles.authorName, { color: colors.text }]}>{article.author.display_name}</Text>
+                    {article.author.is_organization_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.gold} />}
+                    {!article.author.is_organization_verified && article.author.is_verified && <Ionicons name="checkmark-circle" size={14} color={colors.accent} />}
+                  </View>
+                  <Text style={[styles.authorHandle, { color: colors.textMuted }]}>@{article.author.handle}</Text>
+                </View>
+              </TouchableOpacity>
+              <View style={styles.dateMeta}>
+                <Text style={[styles.dateText, { color: colors.textMuted }]}>{formatDate(article.created_at)}</Text>
+              </View>
+            </View>
+          </>
+        )}
 
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
@@ -633,14 +699,23 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   notFound: { fontSize: 16, fontFamily: "Inter_400Regular" },
+  /* ── Magazine hero ── */
+  magazineHero: { width: SCREEN_W, minHeight: COVER_H + 160, overflow: "hidden", justifyContent: "flex-end" },
+  magazineContent: { paddingHorizontal: 20, paddingBottom: 28, paddingTop: 80 },
+  magazineTitle: { fontSize: 26, fontFamily: "Inter_700Bold", lineHeight: 33, color: "#fff", letterSpacing: -0.3, marginBottom: 10 },
+  magazineSubtitle: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22, color: "rgba(255,255,255,0.78)", marginBottom: 12, fontStyle: "italic" },
+  magazineAuthorRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 2 },
+  magazineAuthorName: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#fff" },
+  magazineAuthorMeta: { fontSize: 11, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.62)", marginTop: 2 },
+  /* ── Legacy / no-cover header ── */
   coverImage: { width: SCREEN_W, height: COVER_H },
   coverGradient: { position: "absolute", bottom: 0, left: 0, right: 0, height: COVER_H * 0.5 },
   headerOverlay: { position: "absolute", top: 0, left: 0, right: 0, flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16 },
-  backBtnOverlay: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(0,0,0,0.35)", alignItems: "center", justifyContent: "center" },
+  backBtnOverlay: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(0,0,0,0.38)", alignItems: "center", justifyContent: "center" },
   headerNoCover: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingBottom: 8 },
   backBtnPlain: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  articleContent: { paddingHorizontal: 20, paddingTop: 20 },
-  topMeta: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 },
+  articleContent: { paddingHorizontal: 20, paddingTop: 24 },
+  topMeta: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },
   articleBadge: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
   articleBadgeText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   readTimeBadge: { flexDirection: "row", alignItems: "center", gap: 4 },
