@@ -252,6 +252,18 @@ export default function MeScreen() {
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       </TouchableOpacity>
 
+      {profile?.id && (
+        <TouchableOpacity
+          style={[styles.viewProfileBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          activeOpacity={0.75}
+          onPress={() => router.push({ pathname: "/contact/[id]", params: { id: profile.id } })}
+        >
+          <Ionicons name="person-circle-outline" size={17} color={colors.accent} />
+          <Text style={[styles.viewProfileText, { color: colors.accent }]}>View public profile</Text>
+          <Ionicons name="chevron-forward" size={14} color={colors.accent} style={{ marginLeft: "auto" }} />
+        </TouchableOpacity>
+      )}
+
       <View style={[styles.statsRow, { backgroundColor: colors.surface }]}>
         <View style={styles.statItem}>
           <Ionicons name="flash" size={20} color="#FFD60A" />
@@ -427,6 +439,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginLeft: 4,
   },
+  viewProfileBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  viewProfileText: { fontSize: 14, fontFamily: "Inter_500Medium" },
   statsRow: {
     flexDirection: "row",
     borderRadius: 14,
