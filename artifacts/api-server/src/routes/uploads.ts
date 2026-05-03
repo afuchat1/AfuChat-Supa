@@ -393,7 +393,29 @@ router.post(
       const publicUrl = publicUrlForKey(key);
       res.json({ ok: true, key, publicUrl, size: body.length });
     } catch (e: any) {
-      logger.error({ err: e, key }, "proxy upload failed");
+      logger.warn({ err: e?.message, key }, "R2 upload failed — trying Supabase Storage fallback");
+
+      // Fallback: upload to Supabase Storage when R2 is unavailable
+      const admin = getSupabaseAdmin();
+      if (admin) {
+        try {
+          // Ensure bucket exists as public (idempotent)
+          await admin.storage.createBucket(bucket, { public: true }).catch(() => {});
+
+          const { data, error: storageErr } = await admin.storage
+            .from(bucket)
+            .upload(path, body, { contentType, upsert: true });
+
+          if (!storageErr && data) {
+            const { data: urlData } = admin.storage.from(bucket).getPublicUrl(path);
+            return res.json({ ok: true, key, publicUrl: urlData.publicUrl, size: body.length });
+          }
+          logger.error({ err: storageErr?.message, key }, "Supabase Storage fallback also failed");
+        } catch (fbErr: any) {
+          logger.error({ err: fbErr?.message, key }, "Supabase Storage fallback threw");
+        }
+      }
+
       res.status(500).json({ error: e?.message || "Upload failed" });
     }
   },
