@@ -1,0 +1,20 @@
+name: Storage Ban Check
+
+on:
+  pull_request:
+    branches: ["*"]
+  push:
+    branches: [main]
+
+jobs:
+  storage-ban:
+    name: No Supabase Storage allowed
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run storage ban check
+        run: |
+          chmod +x scripts/check-storage-ban.sh
+          ./scripts/check-storage-ban.sh
