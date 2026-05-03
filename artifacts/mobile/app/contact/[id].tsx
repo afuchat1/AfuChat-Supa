@@ -29,6 +29,7 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { ProfileSkeleton } from "@/components/ui/Skeleton";
 import { PrestigeBadge } from "@/components/ui/PrestigeBadge";
 import { RichText } from "@/components/ui/RichText";
+import { ExpandableText } from "@/components/ui/ExpandableText";
 import { encodeId } from "@/lib/shortId";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { VideoThumbnail } from "@/components/ui/VideoThumbnail";
@@ -349,7 +350,14 @@ export default function ContactProfileScreen() {
 
       {/* ── Bio ─── */}
       {!!profile?.bio && (
-        <Text style={[st.bio, { color: colors.textSecondary }]} numberOfLines={3}>{profile.bio}</Text>
+        <View style={{ paddingHorizontal: 16, marginBottom: 6 }}>
+          <ExpandableText
+            text={profile.bio}
+            translate
+            maxLines={3}
+            style={{ fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19, color: colors.textSecondary }}
+          />
+        </View>
       )}
 
       {/* ── Meta chips ─── */}

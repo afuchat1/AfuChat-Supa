@@ -27,6 +27,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { RichText } from "@/components/ui/RichText";
+import { ExpandableText } from "@/components/ui/ExpandableText";
 import Colors from "@/constants/colors";
 import { PostSkeleton } from "@/components/ui/Skeleton";
 import { VideoThumbnail } from "@/components/ui/VideoThumbnail";
@@ -327,12 +328,12 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
             <>
               {/* ── Content text ── */}
               {(displayContent || "").trim().length > 0 && (
-                <RichText
+                <ExpandableText
+                  text={displayContent}
+                  maxLines={4}
+                  richText
                   style={[styles.cardContent, { color: colors.text, fontSize: isDesktop ? 17 : 15, lineHeight: isDesktop ? 27 : 23 }]}
-                  numberOfLines={undefined}
-                >
-                  {displayContent}
-                </RichText>
+                />
               )}
             </>
           )}
