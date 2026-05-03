@@ -193,7 +193,7 @@ export default function FollowersScreen() {
           }
         }}
       >
-        <Avatar uri={item.avatar_url} name={item.display_name} size={48} />
+        <Avatar uri={item.avatar_url} name={item.display_name} size={48} square={!!(item.is_organization_verified)} />
         <View style={styles.userInfo}>
           <View style={styles.nameRow}>
             <Text style={[styles.displayName, { color: colors.text }]} numberOfLines={1}>

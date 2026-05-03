@@ -719,7 +719,7 @@ function PostsTab({ posts, loading, profile, colors }: { posts: UserPost[]; load
             activeOpacity={0.75}
           >
             <View style={st.postInner}>
-              <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={34} />
+              <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={34} square={!!(profile?.is_organization_verified || profile?.is_business_mode)} />
               <View style={st.postBody}>
                 <View style={st.postHeader}>
                   <Text style={[st.postName, { color: colors.text }]}>{profile?.display_name}</Text>

@@ -101,7 +101,7 @@ function StoreChip({ store, onPress }: { store: FeaturedStore; onPress: () => vo
   const { colors } = useTheme();
   return (
     <TouchableOpacity style={[st.storeChip, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={onPress} activeOpacity={0.85}>
-      <Avatar uri={store.profiles?.avatar_url} name={store.name} size={40} />
+      <Avatar uri={store.profiles?.avatar_url} name={store.name} size={40} square={true} />
       <View style={st.storeChipInfo}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
           <Text style={[st.storeChipName, { color: colors.text }]} numberOfLines={1}>{store.name}</Text>

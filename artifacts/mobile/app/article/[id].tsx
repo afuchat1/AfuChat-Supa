@@ -191,7 +191,7 @@ function ArticleReplyCard({
           }} />
         )}
         <TouchableOpacity onPress={() => router.push(`/contact/${item.author.id}` as any)} activeOpacity={0.8} style={{ marginRight: 10, marginTop: 2 }}>
-          <Avatar uri={item.author.avatar_url} name={item.author.display_name} size={avatarSize} />
+          <Avatar uri={item.author.avatar_url} name={item.author.display_name} size={avatarSize} square={!!(item.author.is_organization_verified)} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flexWrap: "wrap", marginBottom: 3 }}>
@@ -501,7 +501,7 @@ export default function ArticleDetailScreen() {
               onPress={() => router.push({ pathname: "/contact/[id]", params: { id: article.author.id } })}
               activeOpacity={0.8}
             >
-              <Avatar uri={article.author.avatar_url} name={article.author.display_name} size={32} />
+              <Avatar uri={article.author.avatar_url} name={article.author.display_name} size={32} square={!!(article.author.is_organization_verified)} />
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <Text style={styles.magazineAuthorName}>{article.author.display_name}</Text>
@@ -551,7 +551,7 @@ export default function ArticleDetailScreen() {
                 onPress={() => router.push({ pathname: "/contact/[id]", params: { id: article.author.id } })}
                 activeOpacity={0.7}
               >
-                <Avatar uri={article.author.avatar_url} name={article.author.display_name} size={40} />
+                <Avatar uri={article.author.avatar_url} name={article.author.display_name} size={40} square={!!(article.author.is_organization_verified)} />
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                     <Text style={[styles.authorName, { color: colors.text }]}>{article.author.display_name}</Text>

@@ -74,7 +74,7 @@ function ContactRow({ item }: { item: Contact }) {
       onPress={startChat}
       activeOpacity={0.7}
     >
-      <Avatar uri={item.avatar_url} name={item.display_name} size={46} />
+      <Avatar uri={item.avatar_url} name={item.display_name} size={46} square={!!(item.is_organization_verified)} />
       <View style={styles.rowContent}>
         <View style={styles.nameRow}>
           <Text style={[styles.name, { color: colors.text }]}>{item.display_name}</Text>

@@ -168,7 +168,7 @@ function ChatRow({
       activeOpacity={0.7}
     >
       <View style={{ position: "relative" }}>
-        <Avatar uri={avatar} name={displayName || "Chat"} size={50} />
+        <Avatar uri={avatar} name={displayName || "Chat"} size={50} square={!!(item.is_organization_verified)} />
         {isOnlineDot && (
           <View style={[styles.onlineDot, { borderColor: colors.surface }]} />
         )}

@@ -154,7 +154,7 @@ function ReplyCard({
 
         {/* Avatar */}
         <TouchableOpacity onPress={() => router.push(`/contact/${item.author.id}` as any)} activeOpacity={0.8} style={{ marginRight: 10, marginTop: 2 }}>
-          <Avatar uri={item.author.avatar_url} name={item.author.display_name} size={avatarSize} />
+          <Avatar uri={item.author.avatar_url} name={item.author.display_name} size={avatarSize} square={!!(item.author.is_organization_verified)} />
           {isTopLevel && (
             <View style={{
               position: "absolute", bottom: -2, right: -2,
@@ -709,7 +709,7 @@ export default function PostDetailScreen() {
                     {/* Author byline */}
                     <View style={[styles.authorByline, { borderColor: colors.border }]}>
                       <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: post.author.id } })}>
-                        <Avatar uri={post.author.avatar_url} name={post.author.display_name} size={38} />
+                        <Avatar uri={post.author.avatar_url} name={post.author.display_name} size={38} square={!!(post.author.is_organization_verified)} />
                       </TouchableOpacity>
                       <View style={{ flex: 1 }}>
                         <View style={styles.nameRow}>
@@ -766,7 +766,7 @@ export default function PostDetailScreen() {
                   {/* Author row */}
                   <View style={styles.postHeader}>
                     <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: post.author.id } })}>
-                      <Avatar uri={post.author.avatar_url} name={post.author.display_name} size={46} />
+                      <Avatar uri={post.author.avatar_url} name={post.author.display_name} size={46} square={!!(post.author.is_organization_verified)} />
                     </TouchableOpacity>
                     <View style={{ flex: 1 }}>
                       <View style={styles.nameRow}>

@@ -210,7 +210,7 @@ export function RightRail() {
                   { backgroundColor: hovered ? colors.backgroundTertiary : "transparent" },
                 ]}
               >
-                <Avatar uri={p.avatar_url} name={p.display_name} size={40} />
+                <Avatar uri={p.avatar_url} name={p.display_name} size={40} square={!!(p.is_organization_verified)} />
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <View style={styles.nameRow}>
                     <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>

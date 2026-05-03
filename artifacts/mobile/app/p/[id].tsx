@@ -125,7 +125,7 @@ function ReplyCard({ item, colors, depth, onReplyTo }: { item: Reply; colors: an
       <View style={{ flexDirection: "row", paddingLeft: 16 + indent, paddingRight: 16, paddingTop: isTopLevel ? 14 : 8, paddingBottom: 2 }}>
         {depth > 0 && <View style={{ width: 2, borderRadius: 1, backgroundColor: threadColor + "50", position: "absolute", left: 16 + indent - 10, top: 0, bottom: 0 }} />}
         <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author.id } })} activeOpacity={0.8} style={{ marginRight: 10, marginTop: 2 }}>
-          <Avatar uri={item.author.avatar_url} name={item.author.display_name} size={avatarSize} />
+          <Avatar uri={item.author.avatar_url} name={item.author.display_name} size={avatarSize} square={!!(item.author.is_organization_verified)} />
           {isTopLevel && (
             <View style={{ position: "absolute", bottom: -2, right: -2, width: 12, height: 12, borderRadius: 6, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#34C759" }} />

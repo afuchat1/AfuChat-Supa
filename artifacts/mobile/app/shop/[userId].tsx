@@ -192,7 +192,7 @@ export default function StoreStorefront() {
               <View style={[st.infoCard, { backgroundColor: colors.surface }]}>
                 <View style={st.infoRow}>
                   <View style={[st.logoWrap, { borderColor: colors.background }]}>
-                    <Avatar uri={shop.logo_url || seller?.avatar_url} name={shop.name} size={64} />
+                    <Avatar uri={shop.logo_url || seller?.avatar_url} name={shop.name} size={64} square={true} />
                   </View>
                   <View style={{ flex: 1, paddingTop: 8 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>

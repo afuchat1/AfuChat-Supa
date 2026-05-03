@@ -207,7 +207,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
               onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}
               activeOpacity={0.8}
             >
-              <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={isDesktop ? 44 : 40} />
+              <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={isDesktop ? 44 : 40} square={!!(item.is_organization_verified)} />
             </TouchableOpacity>
             <View style={{ flex: 1, gap: 2 }}>
               <View style={styles.nameRow}>

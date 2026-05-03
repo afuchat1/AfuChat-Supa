@@ -3343,7 +3343,7 @@ STRICT RULES:
             }
           }}
         >
-          <Avatar uri={headerAvatar} name={headerTitle} size={38} />
+          <Avatar uri={headerAvatar} name={headerTitle} size={38} square={!!(chatInfo?.is_organization_verified)} />
           <View style={st.headerInfo}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
               <Text style={[st.headerName, { color: colors.text }]} numberOfLines={1}>{headerTitle}</Text>
