@@ -2566,6 +2566,19 @@ export default function VideoPlayerScreen() {
     }
   }, [user]);
 
+  if (isDesktopShell) {
+    return (
+      <View style={mStyles.mobileOnlyRoot}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <Ionicons name="phone-portrait-outline" size={56} color="rgba(255,255,255,0.35)" />
+        <Text style={mStyles.mobileOnlyTitle}>Videos are mobile-only</Text>
+        <Text style={mStyles.mobileOnlySubtitle}>
+          Open AfuChat on your phone to watch videos.
+        </Text>
+      </View>
+    );
+  }
+
   if (loading) {
     return (
       <View style={mStyles.center}>
@@ -2735,6 +2748,27 @@ const mStyles = StyleSheet.create({
     justifyContent: "center",
     ...(Platform.OS === "web" ? { position: "absolute" as any, top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 } : {}),
   } as any,
+  mobileOnlyRoot: {
+    flex: 1,
+    backgroundColor: "#000",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 40,
+    gap: 16,
+  },
+  mobileOnlyTitle: {
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 22,
+    fontFamily: "Inter_700Bold",
+    textAlign: "center",
+  },
+  mobileOnlySubtitle: {
+    color: "rgba(255,255,255,0.4)",
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    lineHeight: 22,
+  },
 
   headerRow: {
     position: "absolute",

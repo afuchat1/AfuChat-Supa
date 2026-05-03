@@ -138,6 +138,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
       return;
     }
     if (item.post_type === "video") {
+      if (isDesktop) return;
       router.push({ pathname: "/video/[id]", params: { id: item.id } });
       return;
     }
@@ -239,6 +240,27 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
 
           {/* ── VIDEO: thumbnail preview card ── */}
           {item.post_type === "video" && item.video_url && (
+            isDesktop ? (
+              <View style={styles.videoCard}>
+                <View style={styles.videoThumb}>
+                  <VideoThumbnail
+                    videoUrl={item.video_url!}
+                    fallbackImageUrl={item.image_url}
+                    style={StyleSheet.absoluteFill}
+                    lowData={true}
+                    durationSeconds={item.duration_seconds}
+                    watchedFraction={null}
+                  />
+                  <View style={styles.videoBadge}>
+                    <Ionicons name="videocam" size={11} color="#fff" />
+                    <Text style={styles.videoBadgeText}>Video</Text>
+                  </View>
+                  <View style={[styles.playCircle, { backgroundColor: "rgba(0,0,0,0.55)" }]}>
+                    <Ionicons name="phone-portrait-outline" size={18} color="rgba(255,255,255,0.7)" />
+                  </View>
+                </View>
+              </View>
+            ) : (
               <TouchableOpacity
                 activeOpacity={0.88}
                 onPress={() => router.push({ pathname: "/video/[id]", params: { id: item.id } })}
@@ -262,6 +284,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
                   </View>
                 </View>
               </TouchableOpacity>
+            )
           )}
 
           {/* ── ARTICLE: distinctive card ── */}

@@ -33,6 +33,7 @@ import { useAutoTranslate } from "@/context/LanguageContext";
 import { LANG_LABELS } from "@/lib/translate";
 import { aiSummarizeThread } from "@/lib/aiHelper";
 import { setPageMeta, resetPageMeta } from "@/lib/webMeta";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
 
 type Reply = {
   id: string;
@@ -192,6 +193,7 @@ export default function PostShortLinkScreen() {
   const { user, profile: myProfile } = useAuth();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const { isDesktop } = useIsDesktop();
   const [post, setPost] = useState<PostData | null>(null);
   const [replies, setReplies] = useState<Reply[]>([]);
   const [loading, setLoading] = useState(true);
@@ -226,7 +228,7 @@ export default function PostShortLinkScreen() {
     ]);
     const data = postRes.data;
     if (!data) { setLoading(false); return; }
-    if ((data as any).post_type === "video" && (data as any).video_url) { router.replace({ pathname: "/video/[id]", params: { id: data.id } }); return; }
+    if ((data as any).post_type === "video" && (data as any).video_url && !isDesktop) { router.replace({ pathname: "/video/[id]", params: { id: data.id } }); return; }
     const viewCount = data.view_count || 0;
     setPost({ id: data.id, content: data.content, image_url: data.image_url, images: ((data as any).post_images || []).sort((a: any, b: any) => a.display_order - b.display_order).map((i: any) => i.image_url), post_type: (data as any).post_type || null, article_title: (data as any).article_title || null, created_at: data.created_at, view_count: viewCount, visibility: (data as any).visibility || "public", author: (data as any).profiles, liked: !!(myLikeRes as any).data, likeCount: likeCountRes.count || 0, replyCount: replyCountRes.count || 0 });
     setLoading(false);

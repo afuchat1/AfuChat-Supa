@@ -565,6 +565,7 @@ export default function ShortsFeed({
   const { user } = useAuth();
   const { colors } = useTheme();
   const { width: winW, height: winH } = useWindowDimensions();
+
   const [posts, setPosts] = useState<ShortPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -785,6 +786,20 @@ export default function ShortsFeed({
       .from("follows")
       .upsert({ follower_id: user.id, following_id: authorId }, { onConflict: "follower_id,following_id" });
     setPosts((prev) => prev.map((p) => p.author_id === authorId ? { ...p, following: true } : p));
+  }
+
+  if (Platform.OS === "web" && typeof window !== "undefined" && window.innerWidth >= 1024) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#000", alignItems: "center", justifyContent: "center", paddingHorizontal: 40, gap: 16 }}>
+        <Ionicons name="phone-portrait-outline" size={56} color="rgba(255,255,255,0.35)" />
+        <Text style={{ color: "rgba(255,255,255,0.75)", fontSize: 22, fontFamily: "Inter_700Bold", textAlign: "center" }}>
+          Videos are mobile-only
+        </Text>
+        <Text style={{ color: "rgba(255,255,255,0.4)", fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22 }}>
+          Open AfuChat on your phone to watch videos.
+        </Text>
+      </View>
+    );
   }
 
   if (loading) {

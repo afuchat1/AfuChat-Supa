@@ -29,6 +29,7 @@ import { ProfileSkeleton } from "@/components/ui/Skeleton";
 import { PrestigeBadge } from "@/components/ui/PrestigeBadge";
 import { RichText } from "@/components/ui/RichText";
 import { encodeId } from "@/lib/shortId";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const GRID_GAP = 1.5;
@@ -89,6 +90,7 @@ export default function ContactProfileScreen() {
   const { colors } = useTheme();
   const { user, profile: myProfile } = useAuth();
   const insets = useSafeAreaInsets();
+  const { isDesktop } = useIsDesktop();
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -533,7 +535,7 @@ export default function ContactProfileScreen() {
           renderItem={({ item }) => (
             <TouchableOpacity
               style={{ width: THUMB, height: THUMB * 1.35, backgroundColor: "#111" }}
-              onPress={() => router.push({ pathname: "/video/[id]", params: { id: item.id } })}
+              onPress={() => { if (!isDesktop) router.push({ pathname: "/video/[id]", params: { id: item.id } }); }}
               activeOpacity={0.82}
             >
               {item.image_url && (
@@ -676,7 +678,7 @@ function PostsTab({ posts, loading, profile, colors }: { posts: UserPost[]; load
             ]}
             onPress={() => {
               if (isArticle) router.push({ pathname: "/article/[id]", params: { id: p.id } });
-              else if (isVideo) router.push({ pathname: "/video/[id]", params: { id: p.id } });
+              else if (isVideo) { if (!isDesktop) router.push({ pathname: "/video/[id]", params: { id: p.id } }); }
               else router.push({ pathname: "/p/[id]", params: { id: encodeId(p.id) } });
             }}
             activeOpacity={0.75}

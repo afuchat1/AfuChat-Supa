@@ -175,6 +175,7 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
 
   const [posts, setPosts] = useState<VideoPost[]>([]);
   const [loading, setLoading] = useState(true);
+
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -313,6 +314,20 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
       const { rewardXp } = await import("../lib/rewardXp");
       rewardXp("follow_user");
     } catch (_) {}
+  }
+
+  if (Platform.OS === "web" && typeof window !== "undefined" && window.innerWidth >= 1024) {
+    return (
+      <View style={[styles.center, { height: SCREEN_H, backgroundColor: "#000", gap: 16 }]}>
+        <Ionicons name="phone-portrait-outline" size={56} color="rgba(255,255,255,0.35)" />
+        <Text style={{ color: "rgba(255,255,255,0.75)", fontSize: 20, fontFamily: "Inter_700Bold", textAlign: "center" }}>
+          Videos are mobile-only
+        </Text>
+        <Text style={{ color: "rgba(255,255,255,0.4)", fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22 }}>
+          Open AfuChat on your phone{"\n"}to watch videos.
+        </Text>
+      </View>
+    );
   }
 
   if (loading) {
