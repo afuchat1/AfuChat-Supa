@@ -597,7 +597,6 @@ export default function DiscoverScreen() {
           post_images(image_url, display_order),
           video_assets!posts_video_asset_id_fkey(duration_seconds)
         `)
-        .not("is_blocked", "is", true)
         .in("author_id", followingIds)
         .in("visibility", ["public", "followers"])
         .order("created_at", { ascending: false });
@@ -667,7 +666,6 @@ export default function DiscoverScreen() {
         post_images(image_url, display_order),
         video_assets!posts_video_asset_id_fkey(duration_seconds)
       `)
-      .not("is_blocked", "is", true)
       .eq("visibility", "public")
       .order("created_at", { ascending: false });
     const { data } = await (fyOlderThan

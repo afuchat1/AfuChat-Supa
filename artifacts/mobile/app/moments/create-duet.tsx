@@ -126,7 +126,6 @@ export default function CreateDuetScreen() {
       .from("posts")
       .select("id, content, video_url, image_url, author_id, profiles!posts_author_id_fkey(display_name, handle, avatar_url)")
       .eq("id", postId)
-      .not("is_blocked", "is", true)
       .single()
       .then(({ data }) => {
         if (data) {

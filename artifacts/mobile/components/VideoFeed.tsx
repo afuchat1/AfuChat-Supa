@@ -238,7 +238,6 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
       `)
       .eq("post_type", "video")
       .eq("visibility", "public")
-      .not("is_blocked", "is", true)
       .not("video_url", "is", null)
       .order("created_at", { ascending: false })
       .limit(PAGE_SIZE);

@@ -2017,7 +2017,7 @@ export default function VideoPlayerScreen() {
     setVideoTab(tab);
   }
 
-  const VIDEO_PAGE_SIZE = 30;
+  const VIDEO_PAGE_SIZE = 50;
 
   const fetchVideos = useCallback(async (tab: "for_you" | "following", cursor?: string | null) => {
     const isLoadMore = !!cursor;
@@ -2055,7 +2055,6 @@ export default function VideoPlayerScreen() {
         profiles!posts_author_id_fkey(display_name, handle, avatar_url)
       `)
       .eq("post_type", "video")
-      .not("is_blocked", "is", true)
       .not("video_url", "is", null)
       .order("created_at", { ascending: false })
       .limit(VIDEO_PAGE_SIZE);
@@ -2225,7 +2224,6 @@ export default function VideoPlayerScreen() {
                 profiles!posts_author_id_fkey(display_name, handle, avatar_url)
               `)
               .eq("id", id)
-              .not("is_blocked", "is", true)
               .not("video_url", "is", null)
               .maybeSingle();
 
@@ -2288,7 +2286,6 @@ export default function VideoPlayerScreen() {
             profiles!posts_author_id_fkey(display_name, handle, avatar_url)
           `)
           .eq("id", id)
-          .not("is_blocked", "is", true)
           .not("video_url", "is", null)
           .maybeSingle();
 
@@ -2558,8 +2555,9 @@ export default function VideoPlayerScreen() {
   const handleRecordView = useCallback(async (postId: string) => {
     if (!user || recordedViews.current.has(postId)) return;
     recordedViews.current.add(postId);
-    const { error } = await supabase.from("post_views").insert(
-      { post_id: postId, viewer_id: user.id }
+    const { error } = await supabase.from("post_views").upsert(
+      { post_id: postId, viewer_id: user.id },
+      { onConflict: "post_id,viewer_id" }
     );
     if (!error) {
       setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, view_count: v.view_count + 1 } : v));

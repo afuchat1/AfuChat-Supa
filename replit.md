@@ -171,7 +171,8 @@ The project is structured as a pnpm monorepo using TypeScript, with distinct pac
 - **Threaded Replies (Video Comments)**: Recursive threaded replies with indentation, "Reply" button, and `@handle` banner.
 - **Music Marquee (Video Player)**: Displays audio name at the bottom of the video player.
 - **Video Web Not Supported**: Video features are app-only; web shows "Videos are only available in the app" message.
-- **Unique Per-User Video Views**: Views recorded in `post_views` table with unique constraint per user.
+- **Unique Per-User Video Views**: Views recorded in `post_views` table (created by `20260503_video_feed_fixes.sql`) with unique constraint per user. Insert uses `upsert` to handle cross-session duplicates.
+- **Video Feed Bug Fix (2026-05-03)**: The `is_blocked` column was missing from the `posts` table in all migrations, causing every video feed query that used `.not("is_blocked", "is", true)` to fail silently. This made the For You/Following feed show only the single tapped video (the per-ID fallback) and appear non-scrollable. Fix: (1) Created `supabase/migrations/20260503_video_feed_fixes.sql` which adds `is_blocked BOOLEAN DEFAULT FALSE` to `posts` and creates the `post_views` table + RLS; (2) Removed `.not("is_blocked", "is", true)` filters from all 8 feed query locations (`video/[id].tsx`, `ShortsFeed.tsx`, `VideoFeed.tsx`, `discover.tsx` ×2, `shorts/index.tsx`, `create-duet.tsx`, `desktop/RightRail.tsx`) so feeds work immediately even before the migration is applied. The admin screen (`admin/index.tsx`) still reads/writes `is_blocked` for moderation — it will work once the migration runs. Video page size increased from 30 → 50 for more algorithm variety.
 - **Cross-Platform Adaptations**: Platform-specific guards for various features.
 - **Premium Tiering**: Features gated by subscription tiers (Silver, Gold) using `LockedToggle`/`LockedLink` components.
 - **Onboarding**: A forced 5-step onboarding flow for new users.
