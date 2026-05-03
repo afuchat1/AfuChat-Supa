@@ -33,8 +33,6 @@ import { AppAccentProvider } from "@/context/AppAccentContext";
 import { AdvancedFeaturesProvider } from "@/context/AdvancedFeaturesContext";
 import { DataModeProvider } from "@/context/DataModeContext";
 import GoogleOneTap from "@/components/ui/GoogleOneTap";
-import { TourProvider } from "@/context/TourContext";
-import ProductTour from "@/components/ui/ProductTour";
 import { DesktopShell } from "@/components/desktop/DesktopShell";
 import { DevViewToolbar } from "@/components/dev/DevViewToolbar";
 
@@ -273,7 +271,6 @@ export default function RootLayout() {
                     <ChatPreferencesProvider>
                     <AdvancedFeaturesProvider>
                     <DataModeProvider>
-                    <TourProvider>
                     <PushNotificationManager />
                     <CallManager />
                     <AppLockGate>
@@ -282,7 +279,6 @@ export default function RootLayout() {
                       </DesktopShell>
                     </AppLockGate>
                     <DevViewToolbar />
-                    <ProductTour />
                     <IOSAlert
                       visible={alertState.visible}
                       title={alertState.title}
@@ -290,7 +286,6 @@ export default function RootLayout() {
                       buttons={alertState.buttons}
                       onDismiss={dismissAlert}
                     />
-                    </TourProvider>
                     </DataModeProvider>
                     </AdvancedFeaturesProvider>
                     </ChatPreferencesProvider>

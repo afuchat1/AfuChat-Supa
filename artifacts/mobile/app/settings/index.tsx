@@ -11,14 +11,12 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "@/lib/haptics";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
 import { Separator } from "@/components/ui/Separator";
-import { useTour, TOUR_KEY } from "@/context/TourContext";
 
 const THEME_LABELS: Record<string, string> = { dark: "Dark", light: "Light", system: "System" };
 const THEME_ICONS: Record<string, React.ComponentProps<typeof Ionicons>["name"]> = {
@@ -105,7 +103,6 @@ export default function SettingsScreen() {
   const { colors, themeMode, setThemeMode } = useTheme();
   const { langLabel } = useLanguage();
   const { signOut } = useAuth();
-  const { startTour } = useTour();
   const insets = useSafeAreaInsets();
 
   function cycleTheme() {
@@ -123,24 +120,6 @@ export default function SettingsScreen() {
         onPress: () => signOut(),
       },
     ]);
-  }
-
-  function handleResetTour() {
-    showAlert(
-      "Replay App Tour",
-      "This will restart the guide tour from the beginning. You'll be taken back to the main screen.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Replay Tour",
-          onPress: async () => {
-            await AsyncStorage.removeItem(TOUR_KEY);
-            router.replace("/(tabs)" as any);
-            setTimeout(() => startTour(), 600);
-          },
-        },
-      ]
-    );
   }
 
   return (
@@ -240,13 +219,6 @@ export default function SettingsScreen() {
             iconBg="#5856D6"
             label="Support Center"
             onPress={() => router.push("/support" as any)}
-          />
-          <Separator indent={54} />
-          <MenuItem
-            icon="map-outline"
-            iconBg="#00BCD4"
-            label="Replay App Tour"
-            onPress={handleResetTour}
           />
           <Separator indent={54} />
           <MenuItem

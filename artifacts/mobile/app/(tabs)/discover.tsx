@@ -38,7 +38,6 @@ import { sharePost, shareVideo } from "@/lib/share";
 import { matchInterestsWeighted, recordInteraction, getLearnedInterestBoosts, computeFeedScore, diversifyFeed, type FeedSignals } from "@/lib/feedAlgorithm";
 import { useLanguage } from "@/context/LanguageContext";
 import { translateText, LANG_LABELS } from "@/lib/translate";
-import { useTour } from "@/context/TourContext";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { DesktopFeedLayout, FEED_COLUMN_MAX_WIDTH } from "@/components/desktop/DesktopFeedLayout";
 import { encodeId } from "@/lib/shortId";
@@ -502,7 +501,6 @@ export default function DiscoverScreen() {
   const PAGE_SIZE = 30;
   const imgViewer = useImageViewer();
 
-  const { step: tourStep, registerLayout: registerTourLayout, advance: advanceTour } = useTour();
   const fabRef = useRef<TouchableOpacity>(null);
 
   const tabPostsCache = useRef<Record<"for_you" | "following", PostItem[]>>({ for_you: [], following: [] });
@@ -1230,15 +1228,9 @@ export default function DiscoverScreen() {
         <TouchableOpacity
           ref={fabRef}
           style={[styles.fab, { backgroundColor: colors.accent, bottom: insets.bottom + 52 + 16 }]}
-          onLayout={() => {
-            fabRef.current?.measureInWindow((x, y, w, h) => {
-              if (w > 0 && h > 0) registerTourLayout("fab-create", { x, y, w, h });
-            });
-          }}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setShowCreatePicker(true);
-            if (tourStep?.id === "create") advanceTour();
           }}
           activeOpacity={0.85}
         >

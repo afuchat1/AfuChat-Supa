@@ -8,13 +8,10 @@ import React, { useEffect, useRef } from "react";
 import { Dimensions, Image, Platform, StyleSheet, useColorScheme } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import CommunityBanner from "@/components/ui/CommunityBanner";
-import { useTour, TOUR_KEY } from "@/context/TourContext";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
@@ -184,18 +181,10 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
 
 export default function TabLayout() {
   const { session, profile, loading } = useAuth();
-  const { startTour } = useTour();
-
   useEffect(() => {
     if (loading) return;
     if (session && profile && !profile.onboarding_completed) {
       router.replace({ pathname: "/onboarding", params: { userId: session.user.id } });
-      return;
-    }
-    if (session && profile?.onboarding_completed) {
-      AsyncStorage.getItem(TOUR_KEY).then((seen) => {
-        if (!seen) startTour();
-      });
     }
   }, [session, profile, loading]);
 

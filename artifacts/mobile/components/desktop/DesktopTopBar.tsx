@@ -428,14 +428,12 @@ function ProfileDropdown({
   currentUserId,
   linkedAccounts,
   onSwitchAccount,
-  onSignOut,
 }: {
   theme: ThemePack;
   profile: { display_name: string | null; handle: string | null; avatar_url: string | null } | null;
   currentUserId: string | null;
   linkedAccounts: StoredAccount[];
   onSwitchAccount: (userId: string) => Promise<void>;
-  onSignOut: () => Promise<void>;
 }) {
   const { themeMode, setThemeMode } = useTheme();
   const triggerRef = useRef<View | null>(null);
@@ -502,11 +500,6 @@ function ProfileDropdown({
       setBusy(null);
       setOpen(false);
     }
-  }
-
-  async function handleSignOut() {
-    setOpen(false);
-    await onSignOut();
   }
 
   const displayName = profile?.display_name || "You";
@@ -725,18 +718,6 @@ function ProfileDropdown({
             </View>
           </View>
 
-          <View style={[styles.profileDivider, { backgroundColor: theme.border }]} />
-
-          <Pressable
-            onPress={handleSignOut}
-            style={({ hovered }: any) => [
-              styles.profileItem,
-              { backgroundColor: hovered ? theme.hoverBg : "transparent" },
-            ]}
-          >
-            <Ionicons name="log-out-outline" size={16} color="#FF3B30" />
-            <Text style={[styles.profileItemText, { color: "#FF3B30" }]}>Sign out</Text>
-          </Pressable>
         </View>
       ) : null}
     </>
@@ -753,7 +734,7 @@ function formatACoins(n: number): string {
 export function DesktopTopBar() {
   const theme = useThemePack();
   const pathname = usePathname() || "/";
-  const { session, profile, linkedAccounts, switchAccount, signOut } = useAuth();
+  const { session, profile, linkedAccounts, switchAccount } = useAuth();
   const isLoggedIn = !!session;
   const userId = session?.user?.id;
 
@@ -938,9 +919,6 @@ export function DesktopTopBar() {
             linkedAccounts={linkedAccounts}
             onSwitchAccount={async (id) => {
               await switchAccount(id);
-            }}
-            onSignOut={async () => {
-              await signOut();
             }}
           />
         ) : (

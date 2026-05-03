@@ -233,30 +233,6 @@ export default function SecuritySettingsScreen() {
 
         <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>DANGER ZONE</Text>
         <View style={[styles.section, { backgroundColor: colors.surface }]}>
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => {
-              showAlert("Sign Out", "Are you sure you want to sign out?", [
-                { text: "Cancel", style: "cancel" },
-                {
-                  text: "Sign Out",
-                  style: "destructive",
-                  onPress: async () => {
-                    await signOut();
-                    router.replace("/(auth)/login");
-                  },
-                },
-              ]);
-            }}
-          >
-            <View style={[styles.menuIcon, { backgroundColor: "#FF9500" }]}>
-              <Ionicons name="log-out-outline" size={18} color="#fff" />
-            </View>
-            <Text style={[styles.menuLabel, { color: "#FF9500" }]}>Sign Out</Text>
-          </TouchableOpacity>
-
-          <View style={[styles.sep, { backgroundColor: colors.border, marginLeft: 54 }]} />
-
           <TouchableOpacity style={styles.menuItem} onPress={() => setShowDeleteAccount(true)}>
             <View style={[styles.menuIcon, { backgroundColor: "#FF3B30" }]}>
               <Ionicons name="trash-outline" size={18} color="#fff" />
