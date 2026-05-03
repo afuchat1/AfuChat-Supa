@@ -35,7 +35,11 @@ function initNetInfo() {
   _netInfoInitialized = true;
 
   if (Platform.OS === "web") {
-    _isOnline = navigator.onLine;
+    // navigator.onLine is unreliable at startup — it reports false in sandboxed
+    // iframes (Replit canvas/workspace), headless browsers, and other restricted
+    // contexts even when the network is reachable. We keep the optimistic `true`
+    // default and only update via the browser online/offline events, which are
+    // consistently reliable across all environments.
     window.addEventListener("online", () => {
       _isOnline = true;
       _listeners.forEach((fn) => fn(true));

@@ -257,6 +257,7 @@ All surfaces now pick the best available thumbnail using priority: `post_images[
 
 ## Offline Improvements
 
+- `lib/offlineStore.ts` — `initNetInfo()` on web now **never reads `navigator.onLine` at startup**. That property returns `false` in sandboxed iframes (Replit canvas/workspace preview) and headless browsers even when the network is fully reachable, causing `isOnline()` to return `false` and `fetchPosts` to bail out immediately, leaving the Discover feed blank. The fix keeps `_isOnline = true` (the module-level default) and only ever flips it via the browser `online`/`offline` events, which are reliable across all contexts. This resolves the "blank Discover feed in mobile canvas view" bug.
 - `lib/offlineStore.ts` — added `cacheWallet` / `getCachedWallet` (key `offline_wallet`)
 - `app/wallet/index.tsx` — loads cached transactions when offline; caches on successful load; shows `OfflineBanner`
 - `app/group/create.tsx`, `app/channel/create.tsx`, `app/stories/create.tsx`, `app/monetize.tsx` — `isOnline()` guard before any mutation
