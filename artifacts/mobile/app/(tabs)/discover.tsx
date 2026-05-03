@@ -572,7 +572,7 @@ export default function DiscoverScreen() {
           post_type, article_title, article_body, video_url,
           profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified),
           post_images(image_url, display_order),
-          video_assets(duration_seconds)
+          video_assets!posts_video_asset_id_fkey(duration_seconds)
         `)
         .not("is_blocked", "is", true)
         .in("author_id", followingIds)
@@ -642,7 +642,7 @@ export default function DiscoverScreen() {
         post_type, article_title, article_body, video_url,
         profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified, country, interests),
         post_images(image_url, display_order),
-        video_assets(duration_seconds)
+        video_assets!posts_video_asset_id_fkey(duration_seconds)
       `)
       .not("is_blocked", "is", true)
       .eq("visibility", "public")
