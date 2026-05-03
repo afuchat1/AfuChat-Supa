@@ -398,13 +398,31 @@ export default function ArticleDetailScreen() {
           </View>
         </View>
       ) : (
-        <View style={[styles.headerNoCover, { paddingTop: insets.top + 4 }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtnPlain} hitSlop={8}>
-            <Ionicons name="arrow-back" size={22} color={colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleShare} style={styles.backBtnPlain} hitSlop={8}>
-            <Ionicons name="share-outline" size={20} color={colors.text} />
-          </TouchableOpacity>
+        <View style={styles.noCoverBanner}>
+          <LinearGradient
+            colors={["#0097A7", "#00BCD4", "#4DD0E1"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={[styles.headerOverlay, { paddingTop: insets.top + 4 }]}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtnOverlay} hitSlop={8}>
+              <Ionicons name="arrow-back" size={20} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleShare} style={styles.backBtnOverlay} hitSlop={8}>
+              <Ionicons name="share-outline" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.noCoverContent}>
+            <View style={styles.noCoverIconWrap}>
+              <Image
+                source={require("../../assets/images/afu-symbol.png")}
+                style={styles.noCoverIcon}
+                resizeMode="contain"
+              />
+            </View>
+            <Text style={styles.noCoverAppName}>AfuChat</Text>
+          </View>
         </View>
       )}
 
@@ -584,6 +602,11 @@ const styles = StyleSheet.create({
   backBtnOverlay: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(0,0,0,0.35)", alignItems: "center", justifyContent: "center" },
   headerNoCover: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingBottom: 8 },
   backBtnPlain: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  noCoverBanner: { width: SCREEN_W, height: COVER_H, overflow: "hidden", alignItems: "center", justifyContent: "center" },
+  noCoverContent: { alignItems: "center", justifyContent: "center", gap: 10 },
+  noCoverIconWrap: { width: 72, height: 72, borderRadius: 36, backgroundColor: "rgba(255,255,255,0.22)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.35)" },
+  noCoverIcon: { width: 44, height: 44, opacity: 0.95 },
+  noCoverAppName: { color: "rgba(255,255,255,0.9)", fontSize: 15, fontFamily: "Inter_600SemiBold", letterSpacing: 0.3 },
   articleContent: { paddingHorizontal: 20, paddingTop: 20 },
   topMeta: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 },
   articleBadge: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
