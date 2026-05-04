@@ -108,6 +108,37 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function deduplicateNotifs(items: NotifItem[]): NotifItem[] {
+  const seen = new Map<string, NotifItem>();
+  for (const item of items) {
+    const key = [
+      item.type,
+      item.actor?.id ?? "",
+      item.post_id ?? "",
+      item.reference_id ?? "",
+    ].join("|");
+    const existing = seen.get(key);
+    if (!existing) {
+      seen.set(key, item);
+    } else {
+      const existingDiff = Math.abs(
+        new Date(item.created_at).getTime() - new Date(existing.created_at).getTime()
+      );
+      if (existingDiff < 5 * 60 * 1000) {
+        if (new Date(item.created_at) > new Date(existing.created_at)) {
+          seen.set(key, item);
+        }
+      } else {
+        const uniqueKey = key + "|" + item.created_at;
+        seen.set(uniqueKey, item);
+      }
+    }
+  }
+  return Array.from(seen.values()).sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+}
+
 function groupByDate(items: NotifItem[]): { date: string; items: NotifItem[] }[] {
   const groups: Map<string, NotifItem[]> = new Map();
   for (const item of items) {
@@ -207,8 +238,9 @@ export default function NotificationsScreen() {
 
     if (data) {
       const mapped = data.map((n: any) => ({ ...n, actor: n.profiles }));
-      setItems(mapped);
-      cacheNotifications(mapped as any);
+      const deduped = deduplicateNotifs(mapped);
+      setItems(deduped);
+      cacheNotifications(deduped as any);
     }
     setLoading(false);
     setRefreshing(false);

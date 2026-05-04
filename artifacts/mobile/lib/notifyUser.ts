@@ -25,6 +25,26 @@ async function callNotify(params: NotifyParams) {
   // Insert in-app notification record (client-side, works independently of push)
   if (notificationType) {
     try {
+      // ── Deduplication: skip insert if an identical notification was created
+      // within the last 3 minutes (same user, type, actor, post/reference).
+      const windowStart = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+      let dupQuery = supabase
+        .from("notifications")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("type", notificationType)
+        .gte("created_at", windowStart)
+        .limit(1);
+      if (actorId)      dupQuery = dupQuery.eq("actor_id", actorId);
+      else              dupQuery = dupQuery.is("actor_id", null);
+      if (postId)       dupQuery = dupQuery.eq("post_id", postId);
+      else              dupQuery = dupQuery.is("post_id", null);
+      if (referenceId)  dupQuery = dupQuery.eq("reference_id", referenceId);
+      else              dupQuery = dupQuery.is("reference_id", null);
+
+      const { data: existing } = await dupQuery;
+      if (existing && existing.length > 0) return; // duplicate — skip
+
       const record: any = {
         user_id: userId,
         actor_id: actorId || null,
