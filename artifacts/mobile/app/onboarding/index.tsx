@@ -99,6 +99,8 @@ export default function OnboardingScreen() {
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [phoneAvailStatus, setPhoneAvailStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
   const phoneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [takenHandleProfile, setTakenHandleProfile] = useState<{ display_name: string; avatar_url: string | null; handle: string } | null>(null);
+  const [takenPhoneProfile, setTakenPhoneProfile] = useState<{ display_name: string; avatar_url: string | null; handle: string } | null>(null);
 
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -136,14 +138,21 @@ export default function OnboardingScreen() {
     }
 
     setHandleStatus("checking");
+    setTakenHandleProfile(null);
     handleTimerRef.current = setTimeout(async () => {
       const { data } = await supabase
         .from("profiles")
-        .select("id")
+        .select("id, display_name, avatar_url, handle")
         .eq("handle", clean)
         .neq("id", userId || "")
         .maybeSingle();
-      setHandleStatus(data ? "taken" : "available");
+      if (data) {
+        setHandleStatus("taken");
+        setTakenHandleProfile({ display_name: data.display_name, avatar_url: data.avatar_url, handle: data.handle });
+      } else {
+        setHandleStatus("available");
+        setTakenHandleProfile(null);
+      }
     }, 600);
 
     return () => { if (handleTimerRef.current) clearTimeout(handleTimerRef.current); };
@@ -159,14 +168,21 @@ export default function OnboardingScreen() {
 
     const fullPhone = `${selectedCountry.dial}${phoneNumber.replace(/\D/g, "")}`;
     setPhoneAvailStatus("checking");
+    setTakenPhoneProfile(null);
     phoneTimerRef.current = setTimeout(async () => {
       const { data } = await supabase
         .from("profiles")
-        .select("id")
+        .select("id, display_name, avatar_url, handle")
         .eq("phone_number", fullPhone)
         .neq("id", userId || "")
         .maybeSingle();
-      setPhoneAvailStatus(data ? "taken" : "available");
+      if (data) {
+        setPhoneAvailStatus("taken");
+        setTakenPhoneProfile({ display_name: data.display_name, avatar_url: data.avatar_url, handle: data.handle });
+      } else {
+        setPhoneAvailStatus("available");
+        setTakenPhoneProfile(null);
+      }
     }, 700);
 
     return () => { if (phoneTimerRef.current) clearTimeout(phoneTimerRef.current); };
@@ -650,8 +666,32 @@ export default function OnboardingScreen() {
             {handleStatus === "available" && (
               <Text style={[styles.fieldHint, { color: "#34C759" }]}>Username is available</Text>
             )}
-            {handleStatus === "taken" && (
-              <Text style={[styles.fieldHint, { color: "#FF3B30" }]}>Username is already taken. Try another.</Text>
+            {handleStatus === "taken" && takenHandleProfile && (
+              <View style={[styles.takenCard, { backgroundColor: colors.surface, borderColor: "#FF3B3030" }]}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  {takenHandleProfile.avatar_url ? (
+                    <Image source={{ uri: takenHandleProfile.avatar_url }} style={styles.takenAvatar} />
+                  ) : (
+                    <View style={[styles.takenAvatar, { backgroundColor: colors.inputBg, alignItems: "center", justifyContent: "center" }]}>
+                      <Ionicons name="person" size={16} color={colors.textMuted} />
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.text }} numberOfLines={1}>{takenHandleProfile.display_name}</Text>
+                    <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.textMuted }}>@{takenHandleProfile.handle}</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={async () => { await supabase.auth.signOut(); router.replace("/(auth)/login"); }}
+                    style={[styles.takenLoginBtn, { backgroundColor: colors.accent }]}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#fff" }}>Log in instead</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: "#FF3B30", marginTop: 6 }}>
+                  This username already belongs to an existing account.
+                </Text>
+              </View>
             )}
             {handleStatus === "invalid_format" && (
               <Text style={[styles.fieldHint, { color: "#FF3B30" }]}>Only letters, numbers, and underscores. Min 3 characters.</Text>
@@ -786,8 +826,34 @@ export default function OnboardingScreen() {
                   </View>
                 );
               }
-              if (phoneAvailStatus === "taken") {
-                return <Text style={styles.errorHint}>✗ This number is already linked to another account.</Text>;
+              if (phoneAvailStatus === "taken" && takenPhoneProfile) {
+                return (
+                  <View style={[styles.takenCard, { backgroundColor: colors.surface, borderColor: "#FF3B3030" }]}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      {takenPhoneProfile.avatar_url ? (
+                        <Image source={{ uri: takenPhoneProfile.avatar_url }} style={styles.takenAvatar} />
+                      ) : (
+                        <View style={[styles.takenAvatar, { backgroundColor: colors.inputBg, alignItems: "center", justifyContent: "center" }]}>
+                          <Ionicons name="person" size={16} color={colors.textMuted} />
+                        </View>
+                      )}
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.text }} numberOfLines={1}>{takenPhoneProfile.display_name}</Text>
+                        <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.textMuted }}>@{takenPhoneProfile.handle}</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={async () => { await supabase.auth.signOut(); router.replace("/(auth)/login"); }}
+                        style={[styles.takenLoginBtn, { backgroundColor: colors.accent }]}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#fff" }}>Log in instead</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: "#FF3B30", marginTop: 6 }}>
+                      This phone number is already linked to an existing account.
+                    </Text>
+                  </View>
+                );
               }
               if (phoneAvailStatus === "available") {
                 return <Text style={styles.successHint}>✓ Valid {selectedCountry.name} number and available</Text>;
@@ -1210,6 +1276,9 @@ const styles = StyleSheet.create({
   fieldHint: { fontSize: 12, fontFamily: "Inter_400Regular", paddingLeft: 2 },
   errorHint: { fontSize: 12, fontFamily: "Inter_500Medium", paddingLeft: 2, color: "#FF3B30" },
   successHint: { fontSize: 12, fontFamily: "Inter_500Medium", paddingLeft: 2, color: "#34C759" },
+  takenCard: { borderRadius: 12, borderWidth: 1, padding: 12, marginTop: 4 },
+  takenAvatar: { width: 36, height: 36, borderRadius: 18 },
+  takenLoginBtn: { borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
   countryFlag: { fontSize: 22, marginRight: 10 },
   countryName: { fontSize: 16, fontFamily: "Inter_400Regular", flex: 1 },
   placeholderText: { fontSize: 16, fontFamily: "Inter_400Regular", flex: 1 },
