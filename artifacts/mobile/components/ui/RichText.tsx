@@ -2,6 +2,7 @@ import React from "react";
 import { Text, StyleSheet, Linking } from "react-native";
 import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
+import { useAppAccent } from "@/context/AppAccentContext";
 
 type RichTextProps = {
   children: string;
@@ -115,7 +116,10 @@ function handlePress(segment: Segment) {
   }
 }
 
-export function RichText({ children, style, linkColor = "#00BCD4", numberOfLines, selectable }: RichTextProps) {
+export function RichText({ children, style, linkColor, numberOfLines, selectable }: RichTextProps) {
+  const { accent } = useAppAccent();
+  const effectiveLinkColor = linkColor ?? accent;
+
   if (!children) return <Text style={style} selectable={selectable}>{""}</Text>;
   const segments = parseText(children);
 
@@ -130,7 +134,7 @@ export function RichText({ children, style, linkColor = "#00BCD4", numberOfLines
             key={i}
             style={[
               styles.link,
-              { color: linkColor },
+              { color: effectiveLinkColor },
               seg.type === "mention" && styles.mention,
             ]}
             onPress={() => handlePress(seg)}

@@ -27,7 +27,7 @@ import OfflineBanner from "@/components/ui/OfflineBanner";
 import { cacheNotifications, getCachedNotifications, isOnline } from "@/lib/offlineStore";
 import { encodeId } from "@/lib/shortId";
 
-const BRAND = "#00BCD4";
+const BRAND_FALLBACK = "#00BCD4";
 const GOLD = "#D4A853";
 
 type NotifItem = {
@@ -69,7 +69,7 @@ type TypeConfig = {
 const TYPE_CONFIG: Record<string, TypeConfig> = {
   // Social
   new_like:           { icon: "heart",          label: "liked your post",           color: "#FF3B30", category: "social",  getRoute: (n) => n.post_id ? `/p/${encodeId(n.post_id)}` : null },
-  new_follower:       { icon: "person-add",      label: "started following you",     color: BRAND,     category: "social",  getRoute: (n) => n.actor ? `/contact/${n.actor.id}` : null },
+  new_follower:       { icon: "person-add",      label: "started following you",     color: BRAND_FALLBACK, category: "social",  getRoute: (n) => n.actor ? `/contact/${n.actor.id}` : null },
   new_reply:          { icon: "chatbubble",      label: "replied to your post",      color: "#007AFF", category: "social",  getRoute: (n) => n.post_id ? `/p/${encodeId(n.post_id)}` : null },
   new_mention:        { icon: "at",              label: "mentioned you",             color: "#FF9500", category: "social",  getRoute: (n) => n.post_id ? `/p/${encodeId(n.post_id)}` : null },
   gift:               { icon: "gift",            label: "sent you a gift",           color: "#AF52DE", category: "social",  getRoute: () => null },
@@ -90,13 +90,13 @@ const TYPE_CONFIG: Record<string, TypeConfig> = {
   acoin_sent:         { icon: "wallet-outline",  label: "ACoins sent",               color: "#8E8E93", category: "payments", getRoute: () => "/me" },
   subscription_activated: { icon: "star",        label: "subscription activated",    color: "#FFD700", category: "payments", getRoute: () => "/monetize" },
   // System
-  system:             { icon: "shield-checkmark","label": "system notification",     color: BRAND,     category: "system",  getRoute: () => null },
+  system:             { icon: "shield-checkmark","label": "system notification",     color: BRAND_FALLBACK, category: "system",  getRoute: () => null },
   verification_approved: { icon: "checkmark-circle", label: "verification approved", color: "#34C759", category: "system", getRoute: () => "/me" },
   verification_update: { icon: "information-circle", label: "verification update",   color: "#FF9500", category: "system", getRoute: () => "/me" },
 };
 
-function getFallbackConfig(type: string): TypeConfig {
-  return { icon: "notifications", label: "notification", color: BRAND, category: "system", getRoute: () => null };
+function getFallbackConfig(_type: string): TypeConfig {
+  return { icon: "notifications", label: "notification", color: BRAND_FALLBACK, category: "system", getRoute: () => null };
 }
 
 function timeAgo(iso: string): string {
@@ -158,7 +158,7 @@ function groupByDate(items: NotifItem[]): { date: string; items: NotifItem[] }[]
 }
 
 function NotifRow({ item, onPress }: { item: NotifItem; onPress: () => void }) {
-  const { colors } = useTheme();
+  const { colors, accent } = useTheme();
   const cfg = TYPE_CONFIG[item.type] || getFallbackConfig(item.type);
 
   return (
@@ -170,7 +170,7 @@ function NotifRow({ item, onPress }: { item: NotifItem; onPress: () => void }) {
       onPress={onPress}
       activeOpacity={0.75}
     >
-      {!item.is_read && <View style={[st.unreadStripe, { backgroundColor: BRAND }]} />}
+      {!item.is_read && <View style={[st.unreadStripe, { backgroundColor: accent }]} />}
       <View style={st.iconCol}>
         {item.actor
           ? <Avatar uri={item.actor.avatar_url} name={item.actor.display_name} size={46} />
@@ -203,13 +203,13 @@ function NotifRow({ item, onPress }: { item: NotifItem; onPress: () => void }) {
         <Text style={[st.notifTime, { color: colors.textMuted }]}>{timeAgo(item.created_at)}</Text>
       </View>
 
-      {!item.is_read && <View style={[st.unreadDot, { backgroundColor: BRAND }]} />}
+      {!item.is_read && <View style={[st.unreadDot, { backgroundColor: accent }]} />}
     </TouchableOpacity>
   );
 }
 
 export default function NotificationsScreen() {
-  const { colors } = useTheme();
+  const { colors, accent } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
 
@@ -307,8 +307,8 @@ export default function NotificationsScreen() {
     if (filtered.length === 0) {
       return (
         <View style={st.emptyWrap}>
-          <LinearGradient colors={[BRAND + "20", BRAND + "05"]} style={st.emptyIcon}>
-            <Ionicons name="notifications-off-outline" size={40} color={BRAND} />
+          <LinearGradient colors={[accent + "20", accent + "05"]} style={st.emptyIcon}>
+            <Ionicons name="notifications-off-outline" size={40} color={accent} />
           </LinearGradient>
           <Text style={[st.emptyTitle, { color: colors.text }]}>
             {category === "all" ? "No notifications yet" : `No ${category} notifications`}
@@ -331,7 +331,7 @@ export default function NotificationsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => { setRefreshing(true); load(); }}
-            tintColor={BRAND}
+            tintColor={accent}
           />
         }
         renderItem={({ item: group }) => (
@@ -360,12 +360,12 @@ export default function NotificationsScreen() {
         <View style={{ flex: 1 }}>
           <Text style={[st.headerTitle, { color: colors.text }]}>Notifications</Text>
           {unreadCount > 0 && (
-            <Text style={[st.unreadSub, { color: BRAND }]}>{unreadCount} unread</Text>
+            <Text style={[st.unreadSub, { color: accent }]}>{unreadCount} unread</Text>
           )}
         </View>
         {unreadCount > 0 && (
           <TouchableOpacity onPress={markAllRead} style={st.readAllBtn}>
-            <Text style={[st.readAllText, { color: BRAND }]}>Read All</Text>
+            <Text style={[st.readAllText, { color: accent }]}>Read All</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -381,14 +381,14 @@ export default function NotificationsScreen() {
             return (
               <TouchableOpacity
                 key={cat.id}
-                style={[st.catTab, active && { backgroundColor: BRAND }]}
+                style={[st.catTab, active && { backgroundColor: accent }]}
                 onPress={() => { setCategory(cat.id); Haptics.selectionAsync(); }}
                 activeOpacity={0.8}
               >
                 <Ionicons name={cat.icon as any} size={14} color={active ? "#fff" : colors.textSecondary} />
                 <Text style={[st.catLabel, { color: active ? "#fff" : colors.textSecondary }]}>{cat.label}</Text>
                 {count > 0 && (
-                  <View style={[st.catBadge, { backgroundColor: active ? "rgba(255,255,255,0.3)" : BRAND }]}>
+                  <View style={[st.catBadge, { backgroundColor: active ? "rgba(255,255,255,0.3)" : accent }]}>
                     <Text style={st.catBadgeText}>{count > 9 ? "9+" : count}</Text>
                   </View>
                 )}

@@ -24,6 +24,7 @@ import { WebView } from "react-native-webview";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { useAppAccent } from "@/context/AppAccentContext";
 import { showAlert } from "@/lib/alert";
 import { GoogleLogo, GitHubLogo, XLogo, GitLabLogo } from "@/components/ui/OAuthLogos";
 
@@ -59,6 +60,7 @@ function AuthInput({
   inputRef,
 }: any) {
   const [focused, setFocused] = useState(false);
+  const { accent } = useAppAccent();
   return (
     <View
       style={[
@@ -71,7 +73,7 @@ function AuthInput({
       <Ionicons
         name={icon}
         size={17}
-        color={focused ? "#00BCD4" : colors.textMuted}
+        color={focused ? accent : colors.textMuted}
         style={inputSt.icon}
       />
       <TextInput
@@ -159,6 +161,7 @@ const oauthSt = StyleSheet.create({
 function ForgotPasswordModal({
   visible, onClose, colors, isDark,
 }: { visible: boolean; onClose: () => void; colors: any; isDark: boolean }) {
+  const { accent } = useAppAccent();
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -231,7 +234,7 @@ function ForgotPasswordModal({
             {step === "email" ? (
               <>
                 <AuthInput icon="mail-outline" placeholder="Email address" value={email} onChangeText={setEmail} keyboardType="email-address" autoComplete="email" colors={colors} isDark={isDark} returnKeyType="go" onSubmitEditing={sendCode} />
-                <TouchableOpacity style={[fgSt.btn, { backgroundColor: "#00BCD4" }, loading && { opacity: 0.6 }]} onPress={sendCode} disabled={loading} activeOpacity={0.85}>
+                <TouchableOpacity style={[fgSt.btn, { backgroundColor: accent }, loading && { opacity: 0.6 }]} onPress={sendCode} disabled={loading} activeOpacity={0.85}>
                   {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={fgSt.btnText}>Send reset code</Text>}
                 </TouchableOpacity>
               </>
@@ -246,11 +249,11 @@ function ForgotPasswordModal({
                   }
                 />
                 <AuthInput icon="lock-closed-outline" placeholder="Confirm new password" value={confirmPwd} onChangeText={setConfirmPwd} secureTextEntry={!showPwd} colors={colors} isDark={isDark} returnKeyType="go" onSubmitEditing={doReset} />
-                <TouchableOpacity style={[fgSt.btn, { backgroundColor: "#00BCD4" }, loading && { opacity: 0.6 }]} onPress={doReset} disabled={loading} activeOpacity={0.85}>
+                <TouchableOpacity style={[fgSt.btn, { backgroundColor: accent }, loading && { opacity: 0.6 }]} onPress={doReset} disabled={loading} activeOpacity={0.85}>
                   {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={fgSt.btnText}>Update password</Text>}
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setStep("email")} style={{ alignSelf: "center", paddingVertical: 4 }}>
-                  <Text style={{ fontSize: 13, fontFamily: "Inter_500Medium", color: "#00BCD4" }}>← Resend code</Text>
+                  <Text style={{ fontSize: 13, fontFamily: "Inter_500Medium", color: accent }}>← Resend code</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -298,7 +301,7 @@ function OAuthWebModal({
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function LoginScreen() {
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, accent } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
 
@@ -427,9 +430,9 @@ export default function LoginScreen() {
         />
       </View>
       <TouchableOpacity onPress={() => setForgotVisible(true)} style={{ alignSelf: "flex-end" }}>
-        <Text style={{ fontSize: 13, fontFamily: "Inter_500Medium", color: "#00BCD4" }}>Forgot password?</Text>
+        <Text style={{ fontSize: 13, fontFamily: "Inter_500Medium", color: accent }}>Forgot password?</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={[formSt.primaryBtn, loading && { opacity: 0.6 }]} onPress={handleLogin} disabled={loading} activeOpacity={0.85}>
+      <TouchableOpacity style={[formSt.primaryBtn, { backgroundColor: accent }, loading && { opacity: 0.6 }]} onPress={handleLogin} disabled={loading} activeOpacity={0.85}>
         {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={formSt.primaryBtnText}>Sign in</Text>}
       </TouchableOpacity>
       <OrDivider colors={colors} />
@@ -443,7 +446,7 @@ export default function LoginScreen() {
       <View style={formSt.switchRow}>
         <Text style={[formSt.switchText, { color: colors.textSecondary }]}>Don't have an account?</Text>
         <TouchableOpacity onPress={() => router.push("/(auth)/register")}>
-          <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#00BCD4" }}>{" "}Create account</Text>
+          <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: accent }}>{" "}Create account</Text>
         </TouchableOpacity>
       </View>
     </>
@@ -461,7 +464,7 @@ export default function LoginScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={[mobSt.scroll, { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={mobSt.logoArea}>
-            <Image source={afuSymbol} style={[mobSt.logo, { tintColor: "#00BCD4" }]} resizeMode="contain" />
+            <Image source={afuSymbol} style={[mobSt.logo, { tintColor: accent }]} resizeMode="contain" />
             <Text style={[mobSt.appName, { color: colors.text }]}>AfuChat</Text>
             <Text style={[mobSt.tagline, { color: colors.textSecondary }]}>Sign in to your account</Text>
           </View>
@@ -476,7 +479,7 @@ export default function LoginScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const formSt = StyleSheet.create({
-  primaryBtn: { height: 50, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: "#00BCD4" },
+  primaryBtn: { height: 50, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   primaryBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold", letterSpacing: 0.1 },
   switchRow: { flexDirection: "row", justifyContent: "center", flexWrap: "wrap" },
   switchText: { fontSize: 14, fontFamily: "Inter_400Regular" },

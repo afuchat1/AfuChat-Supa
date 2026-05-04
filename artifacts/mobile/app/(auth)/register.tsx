@@ -25,6 +25,7 @@ import { WebView } from "react-native-webview";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { useAppAccent } from "@/context/AppAccentContext";
 import { showAlert } from "@/lib/alert";
 import { GoogleLogo, GitHubLogo, XLogo, GitLabLogo } from "@/components/ui/OAuthLogos";
 
@@ -45,9 +46,10 @@ WebBrowser.maybeCompleteAuthSession();
 // ─── Focused input ────────────────────────────────────────────────────────────
 function AuthInput({ icon, placeholder, value, onChangeText, secureTextEntry, keyboardType, autoCapitalize, autoComplete, colors, isDark, rightElement, onSubmitEditing, returnKeyType, inputRef }: any) {
   const [focused, setFocused] = useState(false);
+  const { accent } = useAppAccent();
   return (
     <View style={[inputSt.wrap, { backgroundColor: isDark ? "#111113" : "#F5F5F7" }]}>
-      <Ionicons name={icon} size={17} color={focused ? "#00BCD4" : colors.textMuted} style={inputSt.icon} />
+      <Ionicons name={icon} size={17} color={focused ? accent : colors.textMuted} style={inputSt.icon} />
       <TextInput ref={inputRef} style={[inputSt.text, { color: colors.text }]} placeholder={placeholder} placeholderTextColor={colors.textMuted} value={value} onChangeText={onChangeText} secureTextEntry={secureTextEntry} keyboardType={keyboardType} autoCapitalize={autoCapitalize ?? "none"} autoComplete={autoComplete} autoCorrect={false} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} onSubmitEditing={onSubmitEditing} returnKeyType={returnKeyType ?? "next"} />
       {rightElement}
     </View>
@@ -93,6 +95,7 @@ const oauthSt = StyleSheet.create({
 function VerifyEmailModal({
   visible, onClose, email, onVerified, colors, isDark,
 }: { visible: boolean; onClose: () => void; email: string; onVerified: (uid: string) => void; colors: any; isDark: boolean }) {
+  const { accent } = useAppAccent();
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const opacity = useRef(new Animated.Value(0)).current;
@@ -138,11 +141,11 @@ function VerifyEmailModal({
           </View>
           <View style={vmSt.body}>
             <AuthInput icon="keypad-outline" placeholder="6-digit verification code" value={code} onChangeText={setCode} keyboardType="number-pad" colors={colors} isDark={isDark} returnKeyType="go" onSubmitEditing={verify} />
-            <TouchableOpacity style={[vmSt.btn, loading && { opacity: 0.6 }]} onPress={verify} disabled={loading} activeOpacity={0.85}>
+            <TouchableOpacity style={[vmSt.btn, { backgroundColor: accent }, loading && { opacity: 0.6 }]} onPress={verify} disabled={loading} activeOpacity={0.85}>
               {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={vmSt.btnText}>Verify email</Text>}
             </TouchableOpacity>
             <TouchableOpacity onPress={resend} style={{ alignSelf: "center", paddingVertical: 4 }}>
-              <Text style={{ fontSize: 13, fontFamily: "Inter_500Medium", color: "#00BCD4" }}>Didn't receive it? Resend code</Text>
+              <Text style={{ fontSize: 13, fontFamily: "Inter_500Medium", color: accent }}>Didn't receive it? Resend code</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -160,7 +163,7 @@ const vmSt = StyleSheet.create({
   subtitle: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 22 },
   closeBtn: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", marginTop: 2 },
   body: { paddingHorizontal: 28, paddingBottom: 28, gap: 12 },
-  btn: { height: 48, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: "#00BCD4", marginTop: 4 },
+  btn: { height: 48, borderRadius: 10, alignItems: "center", justifyContent: "center", marginTop: 4 },
   btnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
 });
 
@@ -182,16 +185,17 @@ function OAuthWebModal({ url, onClose, onNav, onShouldLoad, colors }: any) {
 
 // ─── Terms checkbox ───────────────────────────────────────────────────────────
 function TermsRow({ agreed, onToggle, colors, isDark }: any) {
+  const { accent } = useAppAccent();
   return (
     <TouchableOpacity style={termsSt.row} onPress={onToggle} activeOpacity={0.7}>
-      <View style={[termsSt.box, { borderColor: agreed ? "#00BCD4" : isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)", backgroundColor: agreed ? "#00BCD4" : "transparent" }]}>
+      <View style={[termsSt.box, { borderColor: agreed ? accent : isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)", backgroundColor: agreed ? accent : "transparent" }]}>
         {agreed && <Ionicons name="checkmark" size={13} color="#fff" />}
       </View>
       <Text style={[termsSt.text, { color: colors.textSecondary }]}>
         I agree to the{" "}
-        <Text style={{ color: "#00BCD4" }} onPress={() => Linking.openURL("https://afuchat.com/terms")}>Terms of Service</Text>
+        <Text style={{ color: accent }} onPress={() => Linking.openURL("https://afuchat.com/terms")}>Terms of Service</Text>
         {" "}and{" "}
-        <Text style={{ color: "#00BCD4" }} onPress={() => Linking.openURL("https://afuchat.com/privacy")}>Privacy Policy</Text>
+        <Text style={{ color: accent }} onPress={() => Linking.openURL("https://afuchat.com/privacy")}>Privacy Policy</Text>
       </Text>
     </TouchableOpacity>
   );
@@ -204,7 +208,7 @@ const termsSt = StyleSheet.create({
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function RegisterScreen() {
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, accent } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
 
@@ -340,7 +344,7 @@ export default function RegisterScreen() {
         />
       </View>
       <TermsRow agreed={agreed} onToggle={() => setAgreed(p => !p)} colors={colors} isDark={isDark} />
-      <TouchableOpacity style={[formSt.primaryBtn, loading && { opacity: 0.6 }]} onPress={handleRegister} disabled={loading} activeOpacity={0.85}>
+      <TouchableOpacity style={[formSt.primaryBtn, { backgroundColor: accent }, loading && { opacity: 0.6 }]} onPress={handleRegister} disabled={loading} activeOpacity={0.85}>
         {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={formSt.primaryBtnText}>Create account</Text>}
       </TouchableOpacity>
       <OrDivider colors={colors} />
@@ -354,7 +358,7 @@ export default function RegisterScreen() {
       <View style={formSt.switchRow}>
         <Text style={[{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.textSecondary }]}>Already have an account?</Text>
         <TouchableOpacity onPress={() => router.push("/(auth)/login")}>
-          <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#00BCD4" }}>{" "}Sign in</Text>
+          <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: accent }}>{" "}Sign in</Text>
         </TouchableOpacity>
       </View>
     </>
@@ -372,7 +376,7 @@ export default function RegisterScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={[mobSt.scroll, { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={mobSt.logoArea}>
-            <Image source={afuSymbol} style={[mobSt.logo, { tintColor: "#00BCD4" }]} resizeMode="contain" />
+            <Image source={afuSymbol} style={[mobSt.logo, { tintColor: accent }]} resizeMode="contain" />
             <Text style={[mobSt.appName, { color: colors.text }]}>AfuChat</Text>
             <Text style={[mobSt.tagline, { color: colors.textSecondary }]}>Create your free account</Text>
           </View>
@@ -386,7 +390,7 @@ export default function RegisterScreen() {
 }
 
 const formSt = StyleSheet.create({
-  primaryBtn: { height: 50, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: "#00BCD4" },
+  primaryBtn: { height: 50, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   primaryBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold", letterSpacing: 0.1 },
   switchRow: { flexDirection: "row", justifyContent: "center", flexWrap: "wrap" },
   switchText: { fontSize: 14, fontFamily: "Inter_400Regular" },
