@@ -279,6 +279,96 @@ const fgSt = StyleSheet.create({
   btnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
 });
 
+// ─── Email verification modal (shown when email is unconfirmed) ───────────────
+function EmailVerifyModal({
+  visible, email, onClose, onVerified, colors, isDark,
+}: { visible: boolean; email: string; onClose: () => void; onVerified: () => void; colors: any; isDark: boolean }) {
+  const { accent } = useAppAccent();
+  const [code, setCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(opacity, { toValue: visible ? 1 : 0, duration: 200, useNativeDriver: true }).start();
+    if (visible && !sent) sendCode();
+  }, [visible]);
+
+  async function sendCode() {
+    setSending(true);
+    await supabase.auth.resend({ type: "signup", email });
+    setSending(false);
+    setSent(true);
+  }
+
+  async function verify() {
+    if (!code.trim()) return showAlert("Enter code", "Please enter the 6-digit code from your email.");
+    setLoading(true);
+    const { error } = await supabase.auth.verifyOtp({ email, token: code.trim(), type: "signup" });
+    setLoading(false);
+    if (error) {
+      showAlert("Invalid code", "The code is incorrect or expired. Try resending.");
+    } else {
+      onVerified();
+    }
+  }
+
+  async function resend() {
+    setCode("");
+    setSent(false);
+    await sendCode();
+  }
+
+  const bg = isDark ? "#18181B" : "#FFFFFF";
+  return (
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      <Animated.View style={[fgSt.overlay, { opacity, backgroundColor: isDark ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.45)" }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[fgSt.card, { backgroundColor: bg }]}>
+          <View style={fgSt.header}>
+            <View style={{ flex: 1 }}>
+              <Text style={[fgSt.title, { color: colors.text }]}>Verify your email</Text>
+              <Text style={[fgSt.subtitle, { color: colors.textSecondary }]}>
+                {sending ? "Sending verification code…" : `A 6-digit code was sent to ${email}`}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={fgSt.closeBtn}>
+              <Ionicons name="close" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+          <View style={fgSt.body}>
+            <AuthInput
+              icon="keypad-outline"
+              placeholder="6-digit verification code"
+              value={code}
+              onChangeText={setCode}
+              keyboardType="number-pad"
+              colors={colors}
+              isDark={isDark}
+              returnKeyType="go"
+              onSubmitEditing={verify}
+            />
+            <TouchableOpacity
+              style={[fgSt.btn, { backgroundColor: accent }, (loading || sending) && { opacity: 0.6 }]}
+              onPress={verify}
+              disabled={loading || sending}
+              activeOpacity={0.85}
+            >
+              {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={fgSt.btnText}>Verify email</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity onPress={resend} disabled={sending} style={{ alignSelf: "center", paddingVertical: 4 }}>
+              <Text style={{ fontSize: 13, fontFamily: "Inter_500Medium", color: accent }}>
+                {sending ? "Sending…" : "Resend code"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Animated.View>
+    </Modal>
+  );
+}
+
 // ─── OAuth WebView modal ──────────────────────────────────────────────────────
 function OAuthWebModal({
   url, onClose, onNav, onShouldLoad, colors,
@@ -313,6 +403,8 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
   const [forgotVisible, setForgotVisible] = useState(false);
+  const [verifyVisible, setVerifyVisible] = useState(false);
+  const [verifyEmail, setVerifyEmail] = useState("");
   const [oauthModalUrl, setOauthModalUrl] = useState<string | null>(null);
   const oauthHandledRef = useRef(false);
   const pwdRef = useRef<TextInput>(null);
@@ -370,6 +462,13 @@ export default function LoginScreen() {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setLoading(false); showAlert("Sign in failed", error.message); return; }
     if (data.user) {
+      if (!data.user.email_confirmed_at) {
+        await supabase.auth.signOut();
+        setLoading(false);
+        setVerifyEmail(email);
+        setVerifyVisible(true);
+        return;
+      }
       const { data: prof } = await supabase.from("profiles").select("scheduled_deletion_at, account_deleted").eq("id", data.user.id).single();
       if (prof?.account_deleted) {
         setLoading(false); await supabase.auth.signOut();
@@ -536,6 +635,14 @@ export default function LoginScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
       <ForgotPasswordModal visible={forgotVisible} onClose={() => setForgotVisible(false)} colors={colors} isDark={isDark} />
+      <EmailVerifyModal
+        visible={verifyVisible}
+        email={verifyEmail}
+        onClose={() => setVerifyVisible(false)}
+        onVerified={() => { setVerifyVisible(false); router.replace("/(tabs)"); }}
+        colors={colors}
+        isDark={isDark}
+      />
       {oauthModalUrl && <OAuthWebModal url={oauthModalUrl} onClose={() => { setOauthModalUrl(null); setOauthLoading(null); }} onNav={(s) => { if (s.url && isOAuthRedirect(s.url)) handleOAuthRedirect(s.url); }} onShouldLoad={(r) => { if (r.url && isOAuthRedirect(r.url)) { handleOAuthRedirect(r.url); return false; } return true; }} colors={colors} />}
     </View>
   );

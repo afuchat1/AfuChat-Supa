@@ -94,6 +94,8 @@ export default function OnboardingScreen() {
 
   const [displayName, setDisplayName] = useState("");
   const [handle, setHandle] = useState("");
+  const [handleStatus, setHandleStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid_format">("idle");
+  const handleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -117,6 +119,32 @@ export default function OnboardingScreen() {
   useEffect(() => {
     detectCountry();
   }, []);
+
+  useEffect(() => {
+    if (handleTimerRef.current) clearTimeout(handleTimerRef.current);
+
+    const raw = handle.trim();
+    if (!raw) { setHandleStatus("idle"); return; }
+
+    const clean = raw.replace(/[^a-zA-Z0-9_]/g, "").toLowerCase();
+    if (raw !== raw.replace(/[^a-zA-Z0-9_@]/g, "") || clean.length < 3) {
+      setHandleStatus("invalid_format");
+      return;
+    }
+
+    setHandleStatus("checking");
+    handleTimerRef.current = setTimeout(async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("handle", clean)
+        .neq("id", userId || "")
+        .maybeSingle();
+      setHandleStatus(data ? "taken" : "available");
+    }, 600);
+
+    return () => { if (handleTimerRef.current) clearTimeout(handleTimerRef.current); };
+  }, [handle]);
 
   async function detectCountry() {
     if (selectedCountry) return;
@@ -293,7 +321,7 @@ export default function OnboardingScreen() {
   function canProceed(): boolean {
     switch (step) {
       case 1:
-        return displayName.trim().length >= 2 && handle.trim().length >= 3;
+        return displayName.trim().length >= 2 && handle.trim().length >= 3 && handleStatus === "available";
       case 2:
         return selectedCountry !== null && validatePhone();
       case 3: {
@@ -561,20 +589,53 @@ export default function OnboardingScreen() {
 
           <View style={styles.fieldWrap}>
             <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Username</Text>
-            <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
-              <Ionicons name="at-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
+            <View style={[
+              styles.field,
+              { backgroundColor: colors.inputBg },
+              handleStatus === "available" && { borderWidth: 1, borderColor: "#34C759" },
+              (handleStatus === "taken" || handleStatus === "invalid_format") && { borderWidth: 1, borderColor: "#FF3B30" },
+            ]}>
+              <Ionicons name="at-outline" size={18} color={
+                handleStatus === "available" ? "#34C759"
+                  : (handleStatus === "taken" || handleStatus === "invalid_format") ? "#FF3B30"
+                    : colors.textMuted
+              } style={styles.fieldIcon} />
               <TextInput
                 style={[styles.input, { color: colors.text }]}
                 placeholder="e.g. john_doe"
                 placeholderTextColor={colors.textMuted}
                 value={handle}
-                onChangeText={setHandle}
+                onChangeText={(t) => setHandle(t.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
                 autoCapitalize="none"
+                autoCorrect={false}
               />
+              {handleStatus === "checking" && (
+                <ActivityIndicator size="small" color={colors.textMuted} style={{ marginLeft: 6 }} />
+              )}
+              {handleStatus === "available" && (
+                <Ionicons name="checkmark-circle" size={18} color="#34C759" style={{ marginLeft: 6 }} />
+              )}
+              {(handleStatus === "taken" || handleStatus === "invalid_format") && (
+                <Ionicons name="close-circle" size={18} color="#FF3B30" style={{ marginLeft: 6 }} />
+              )}
             </View>
-            <Text style={[styles.fieldHint, { color: colors.textMuted }]}>
-              Letters, numbers, and underscores only. Min 3 characters.
-            </Text>
+            {handleStatus === "idle" && (
+              <Text style={[styles.fieldHint, { color: colors.textMuted }]}>
+                Letters, numbers, and underscores only. Min 3 characters.
+              </Text>
+            )}
+            {handleStatus === "checking" && (
+              <Text style={[styles.fieldHint, { color: colors.textMuted }]}>Checking availability…</Text>
+            )}
+            {handleStatus === "available" && (
+              <Text style={[styles.fieldHint, { color: "#34C759" }]}>Username is available</Text>
+            )}
+            {handleStatus === "taken" && (
+              <Text style={[styles.fieldHint, { color: "#FF3B30" }]}>Username is already taken. Try another.</Text>
+            )}
+            {handleStatus === "invalid_format" && (
+              <Text style={[styles.fieldHint, { color: "#FF3B30" }]}>Only letters, numbers, and underscores. Min 3 characters.</Text>
+            )}
           </View>
 
           <View style={styles.fieldWrap}>
