@@ -31,8 +31,15 @@ import { AppAccentProvider } from "@/context/AppAccentContext";
 import { AdvancedFeaturesProvider } from "@/context/AdvancedFeaturesContext";
 import { DataModeProvider } from "@/context/DataModeContext";
 import GoogleOneTap from "@/components/ui/GoogleOneTap";
+import CommunityBanner from "@/components/ui/CommunityBanner";
 import { DesktopShell } from "@/components/desktop/DesktopShell";
 import { DevViewToolbar } from "@/components/dev/DevViewToolbar";
+
+function CommunityBannerManager() {
+  const { session } = useAuth();
+  if (!session?.user?.id) return null;
+  return <CommunityBanner userId={session.user.id} />;
+}
 
 let KeyboardProvider: React.ComponentType<{ children: React.ReactNode }> = ({ children }) => <>{children}</>;
 try {
@@ -270,6 +277,7 @@ export default function RootLayout() {
                 <AuthProvider>
                   <ThemeSyncManager />
                   <GoogleOneTap />
+                  <CommunityBannerManager />
                   <LanguageProvider>
                     <ChatPreferencesProvider>
                     <AdvancedFeaturesProvider>

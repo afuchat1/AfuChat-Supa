@@ -11,7 +11,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
-import CommunityBanner from "@/components/ui/CommunityBanner";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 
 let isLiquidGlassAvailable: () => boolean = () => false;
@@ -177,7 +176,6 @@ export default function TabLayout() {
   return (
     <>
       {layout}
-      {session?.user?.id ? <CommunityBanner userId={session.user.id} /> : null}
     </>
   );
 }
