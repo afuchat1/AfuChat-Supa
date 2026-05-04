@@ -33,6 +33,7 @@ import { ExpandableText } from "@/components/ui/ExpandableText";
 import { encodeId } from "@/lib/shortId";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { VideoThumbnail } from "@/components/ui/VideoThumbnail";
+import * as Clipboard from "expo-clipboard";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const GRID_GAP = 6;
@@ -117,6 +118,8 @@ export default function ContactProfileScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>("photos");
   const [lightboxPost, setLightboxPost] = useState<UserPost | null>(null);
   const [lightboxImgIdx, setLightboxImgIdx] = useState(0);
+  const [optionsVisible, setOptionsVisible] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
 
   useEffect(() => {
     if (!profile?.handle) return;
@@ -273,19 +276,22 @@ export default function ContactProfileScreen() {
   }
 
   function showOptionsMenu() {
-    const options: any[] = [];
-    if (profile?.handle) {
-      options.push({ text: "Share Profile", onPress: () => shareProfile({ handle: profile.handle, displayName: profile.display_name, bio: profile.bio }) });
-    }
-    if (!isOwnProfile) {
-      options.push({ text: isBlocked ? "Unblock" : "Block", style: isBlocked ? "default" : "destructive", onPress: toggleBlock });
-      options.push({ text: "Report", style: "destructive", onPress: reportUser });
-    }
-    if (hasShop) {
-      options.push({ text: "View Store", onPress: () => router.push({ pathname: "/shop/[userId]", params: { userId: profile?.id || "" } }) });
-    }
-    options.push({ text: "Cancel", style: "cancel" });
-    showAlert("Options", undefined, options);
+    setOptionsVisible(true);
+  }
+
+  function copyProfileLink() {
+    const url = profile?.handle
+      ? `https://afuchat.com/@${profile.handle}`
+      : `https://afuchat.com/contact/${id}`;
+    Clipboard.setStringAsync(url).then(() => {
+      showAlert("Copied", "Profile link copied to clipboard.");
+    }).catch(() => {});
+    setOptionsVisible(false);
+  }
+
+  function toggleMute() {
+    setIsMuted((prev) => !prev);
+    setOptionsVisible(false);
   }
 
   if (loading) {
@@ -594,6 +600,160 @@ export default function ContactProfileScreen() {
 
       <AvatarViewer visible={avatarOpen} uri={profile?.avatar_url} name={profile?.display_name || undefined} onClose={() => setAvatarOpen(false)} />
 
+      {/* ── Options bottom sheet ── */}
+      <Modal
+        visible={optionsVisible}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setOptionsVisible(false)}
+      >
+        <TouchableOpacity
+          style={st.optionsBackdrop}
+          activeOpacity={1}
+          onPress={() => setOptionsVisible(false)}
+        />
+        <View style={[st.optionsSheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + 8 }]}>
+          {/* Handle bar */}
+          <View style={[st.optionsHandle, { backgroundColor: colors.border }]} />
+
+          {/* Profile pill at top */}
+          <View style={[st.optionsProfilePill, { borderBottomColor: colors.border }]}>
+            <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={36} />
+            <View style={{ flex: 1 }}>
+              <Text style={[st.optionsPillName, { color: colors.text }]} numberOfLines={1}>{profile?.display_name}</Text>
+              {profile?.handle ? <Text style={[st.optionsPillHandle, { color: colors.textMuted }]} numberOfLines={1}>@{profile.handle}</Text> : null}
+            </View>
+          </View>
+
+          {/* Option rows */}
+          {profile?.handle ? (
+            <TouchableOpacity
+              style={[st.optionRow, { borderBottomColor: colors.border }]}
+              onPress={() => {
+                setOptionsVisible(false);
+                shareProfile({ handle: profile.handle, displayName: profile.display_name, bio: profile.bio });
+              }}
+              activeOpacity={0.65}
+            >
+              <View style={[st.optionIconWrap, { backgroundColor: colors.backgroundSecondary }]}>
+                <Ionicons name="share-social-outline" size={19} color={colors.text} />
+              </View>
+              <Text style={[st.optionLabel, { color: colors.text }]}>Share Profile</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          ) : null}
+
+          <TouchableOpacity
+            style={[st.optionRow, { borderBottomColor: colors.border }]}
+            onPress={copyProfileLink}
+            activeOpacity={0.65}
+          >
+            <View style={[st.optionIconWrap, { backgroundColor: colors.backgroundSecondary }]}>
+              <Ionicons name="link-outline" size={19} color={colors.text} />
+            </View>
+            <Text style={[st.optionLabel, { color: colors.text }]}>Copy Profile Link</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </TouchableOpacity>
+
+          {!isOwnProfile && (
+            <TouchableOpacity
+              style={[st.optionRow, { borderBottomColor: colors.border }]}
+              onPress={() => { setOptionsVisible(false); startChat(); }}
+              activeOpacity={0.65}
+            >
+              <View style={[st.optionIconWrap, { backgroundColor: colors.backgroundSecondary }]}>
+                <Ionicons name="chatbubble-outline" size={19} color={colors.text} />
+              </View>
+              <Text style={[st.optionLabel, { color: colors.text }]}>Message</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+
+          {hasShop && (
+            <TouchableOpacity
+              style={[st.optionRow, { borderBottomColor: colors.border }]}
+              onPress={() => { setOptionsVisible(false); router.push({ pathname: "/shop/[userId]", params: { userId: profile?.id || "" } }); }}
+              activeOpacity={0.65}
+            >
+              <View style={[st.optionIconWrap, { backgroundColor: colors.backgroundSecondary }]}>
+                <Ionicons name="storefront-outline" size={19} color={colors.text} />
+              </View>
+              <Text style={[st.optionLabel, { color: colors.text }]}>View Store</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+
+          {!isOwnProfile && (
+            <TouchableOpacity
+              style={[st.optionRow, { borderBottomColor: colors.border }]}
+              onPress={toggleMute}
+              activeOpacity={0.65}
+            >
+              <View style={[st.optionIconWrap, { backgroundColor: colors.backgroundSecondary }]}>
+                <Ionicons name={isMuted ? "notifications-outline" : "notifications-off-outline"} size={19} color={colors.text} />
+              </View>
+              <Text style={[st.optionLabel, { color: colors.text }]}>{isMuted ? "Unmute Notifications" : "Mute Notifications"}</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+
+          {!isOwnProfile && isFollowing && (
+            <TouchableOpacity
+              style={[st.optionRow, { borderBottomColor: colors.border }]}
+              onPress={() => {
+                setOptionsVisible(false);
+                router.push({ pathname: "/contact/[id]", params: { id } });
+              }}
+              activeOpacity={0.65}
+            >
+              <View style={[st.optionIconWrap, { backgroundColor: colors.backgroundSecondary }]}>
+                <Ionicons name="people-outline" size={19} color={colors.text} />
+              </View>
+              <Text style={[st.optionLabel, { color: colors.text }]}>View Mutual Followers</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+
+          {!isOwnProfile && (
+            <TouchableOpacity
+              style={[st.optionRow, { borderBottomColor: colors.border }]}
+              onPress={() => { setOptionsVisible(false); toggleBlock(); }}
+              activeOpacity={0.65}
+            >
+              <View style={[st.optionIconWrap, { backgroundColor: isBlocked ? "#FEE2E2" : colors.backgroundSecondary }]}>
+                <Ionicons name={isBlocked ? "checkmark-circle-outline" : "ban-outline"} size={19} color={isBlocked ? "#EF4444" : "#EF4444"} />
+              </View>
+              <Text style={[st.optionLabel, { color: "#EF4444" }]}>{isBlocked ? "Unblock" : "Block"}</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+
+          {!isOwnProfile && (
+            <TouchableOpacity
+              style={[st.optionRow, { borderBottomColor: colors.border }]}
+              onPress={() => { setOptionsVisible(false); reportUser(); }}
+              activeOpacity={0.65}
+            >
+              <View style={[st.optionIconWrap, { backgroundColor: "#FEF3C7" }]}>
+                <Ionicons name="flag-outline" size={19} color="#F59E0B" />
+              </View>
+              <Text style={[st.optionLabel, { color: "#F59E0B" }]}>Report</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+
+          {/* Cancel pill */}
+          <TouchableOpacity
+            style={[st.optionsCancelBtn, { backgroundColor: colors.backgroundSecondary }]}
+            onPress={() => setOptionsVisible(false)}
+            activeOpacity={0.7}
+          >
+            <Text style={[st.optionsCancelText, { color: colors.text }]}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
       {/* ── Image lightbox ── */}
       <Modal
         visible={!!lightboxPost}
@@ -859,4 +1019,67 @@ const st = StyleSheet.create({
   lbCaption: { color: "rgba(255,255,255,0.85)", fontSize: 14, lineHeight: 20 },
   lbViewBtn: { flexDirection: "row", alignItems: "center", gap: 6 },
   lbViewBtnText: { color: "rgba(255,255,255,0.45)", fontSize: 13 },
+
+  optionsBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.45)",
+  },
+  optionsSheet: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 16,
+  },
+  optionsHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 14,
+  },
+  optionsProfilePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 18,
+    paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: 6,
+  },
+  optionsPillName: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  optionsPillHandle: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
+
+  optionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 13,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  optionIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  optionLabel: { flex: 1, fontSize: 14, fontFamily: "Inter_500Medium" },
+
+  optionsCancelBtn: {
+    marginHorizontal: 18,
+    marginTop: 10,
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: "center",
+  },
+  optionsCancelText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
 });
