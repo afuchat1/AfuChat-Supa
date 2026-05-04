@@ -201,3 +201,41 @@ DROP TRIGGER IF EXISTS trg_org_page_updated_at ON organization_pages;
 CREATE TRIGGER trg_org_page_updated_at
   BEFORE UPDATE ON organization_pages
   FOR EACH ROW EXECUTE FUNCTION set_org_page_updated_at();
+
+-- ── Page-to-page connections (a company page follows another company page) ───
+
+CREATE TABLE IF NOT EXISTS organization_page_connections (
+  id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  follower_page_id  UUID        NOT NULL REFERENCES organization_pages(id) ON DELETE CASCADE,
+  following_page_id UUID        NOT NULL REFERENCES organization_pages(id) ON DELETE CASCADE,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(follower_page_id, following_page_id),
+  CHECK (follower_page_id <> following_page_id)
+);
+
+CREATE INDEX IF NOT EXISTS org_page_conn_follower_idx  ON organization_page_connections(follower_page_id);
+CREATE INDEX IF NOT EXISTS org_page_conn_following_idx ON organization_page_connections(following_page_id);
+
+ALTER TABLE organization_page_connections ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "org_connections_select" ON organization_page_connections;
+DROP POLICY IF EXISTS "org_connections_insert" ON organization_page_connections;
+DROP POLICY IF EXISTS "org_connections_delete" ON organization_page_connections;
+
+CREATE POLICY "org_connections_select" ON organization_page_connections FOR SELECT USING (true);
+
+CREATE POLICY "org_connections_insert" ON organization_page_connections FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM organization_pages
+      WHERE id = follower_page_id AND admin_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "org_connections_delete" ON organization_page_connections FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM organization_pages
+      WHERE id = follower_page_id AND admin_id = auth.uid()
+    )
+  );

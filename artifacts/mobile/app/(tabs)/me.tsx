@@ -184,10 +184,22 @@ function XpLevelBar({ xp }: { xp: number }) {
 
 export default function MeScreen() {
   const { colors, accent } = useTheme();
-  const { profile, isPremium, subscription, loading } = useAuth();
+  const { profile, isPremium, subscription, loading, user } = useAuth();
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [hasCompanyPage, setHasCompanyPage] = useState(false);
   const isAdmin = !!profile?.is_admin;
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    if (!user) return;
+    import("@/lib/supabase").then(({ supabase }) => {
+      supabase
+        .from("organization_pages")
+        .select("id", { count: "exact", head: true })
+        .eq("admin_id", user.id)
+        .then(({ count }) => setHasCompanyPage((count ?? 0) > 0));
+    });
+  }, [user?.id]);
 
   const gradeIcon = profile?.current_grade === "Newcomer" ? "leaf-outline" : "star-outline";
 
@@ -311,8 +323,18 @@ export default function MeScreen() {
 
       <MenuGroup>
         <MenuItem icon="business-outline" iconBg="#00BCD4" label="Company Pages" onPress={() => router.push("/company" as any)} />
-        <Separator indent={54} />
-        <MenuItem icon="ribbon-outline" iconBg="#D4A853" label="Business Verification" onPress={() => router.push("/business-verification")} value={profile?.is_organization_verified ? "Verified" : ""} />
+        {hasCompanyPage && (
+          <>
+            <Separator indent={54} />
+            <MenuItem
+              icon="ribbon-outline"
+              iconBg="#D4A853"
+              label="Business Verification"
+              onPress={() => router.push("/business-verification")}
+              value={profile?.is_organization_verified ? "Verified" : ""}
+            />
+          </>
+        )}
       </MenuGroup>
 
       <MenuGroup>
