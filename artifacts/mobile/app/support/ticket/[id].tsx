@@ -152,7 +152,7 @@ export default function TicketDetail() {
           </TouchableOpacity>
           <Text style={st.headerTitle}>Support Ticket</Text>
         </View>
-        <View style={{ padding: 12, gap: 10 }}>{[1,2,3,4,5].map(i => <ChatBubbleSkeleton key={i} />)}</View>
+        <View style={{ padding: 12, gap: 10 }}>{[1,2,3,4,5].map((i) => <ChatBubbleSkeleton key={i} align={i % 2 === 0 ? "right" : "left"} />)}</View>
       </View>
     );
   }

@@ -21,6 +21,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
+import { ContactRowSkeleton, ListRowSkeleton } from "@/components/ui/Skeleton";
 
 type SuggestedProfile = {
   id: string;
@@ -195,7 +196,7 @@ export function RightRail() {
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.text }]}>Who to follow</Text>
         {loading ? (
-          <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>
+          <View style={{ gap: 10, paddingVertical: 8 }}>{[1,2,3].map(i => <ContactRowSkeleton key={i} />)}</View>
         ) : suggested.length === 0 ? (
           <Text style={[styles.empty, { color: colors.textMuted }]}>No suggestions right now</Text>
         ) : (
@@ -259,7 +260,7 @@ export function RightRail() {
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.text }]}>Communities for you</Text>
         {loading ? (
-          <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>
+          <View style={{ gap: 10, paddingVertical: 8 }}>{[1,2,3].map(i => <ListRowSkeleton key={i} />)}</View>
         ) : communities.length === 0 ? (
           <Text style={[styles.empty, { color: colors.textMuted }]}>No suggestions yet</Text>
         ) : (
@@ -311,7 +312,7 @@ export function RightRail() {
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.text }]}>Trending</Text>
         {loading ? (
-          <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>
+          <View style={{ gap: 8, paddingVertical: 8 }}>{[1,2,3,4,5].map(i => <ListRowSkeleton key={i} />)}</View>
         ) : trending.length === 0 ? (
           <Text style={[styles.empty, { color: colors.textMuted }]}>Nothing trending yet</Text>
         ) : (

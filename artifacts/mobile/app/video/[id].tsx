@@ -526,7 +526,7 @@ function CommentsSheet({
 
             <View style={cStyles.middle}>
               {loading ? (
-                <View style={{ padding: 8, gap: 6 }}>{[1,2,3].map(i => <ChatBubbleSkeleton key={i} />)}</View>
+                <View style={{ padding: 8, gap: 6 }}>{[1,2,3].map((i) => <ChatBubbleSkeleton key={i} align={i % 2 === 0 ? "right" : "left"} />)}</View>
               ) : replies.length === 0 ? (
                 <View style={cStyles.center}>
                   <Ionicons name="chatbubble-outline" size={36} color="rgba(255,255,255,0.15)" />

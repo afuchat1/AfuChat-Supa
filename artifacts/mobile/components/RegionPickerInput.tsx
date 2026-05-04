@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
+import { ListRowSkeleton } from "@/components/ui/Skeleton";
 
 const BRAND = "#FF2D55";
 const CITIES_API = "https://countriesnow.space/api/v0.1/countries/cities";
@@ -194,12 +195,7 @@ export default function RegionPickerInput({ value, onChange, country, placeholde
 
           {/* City list */}
           {loading ? (
-            <View style={styles.centeredWrap}>
-              <ActivityIndicator size="large" color={BRAND} />
-              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                Loading cities in {country}…
-              </Text>
-            </View>
+            <View style={{ padding: 12, gap: 8 }}>{[1,2,3,4,5,6].map(i => <ListRowSkeleton key={i} />)}</View>
           ) : filtered.length === 0 ? (
             <View style={styles.centeredWrap}>
               <Ionicons name="location-outline" size={48} color={colors.textMuted} />

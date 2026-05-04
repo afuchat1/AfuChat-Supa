@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
+import { ListRowSkeleton } from "@/components/ui/Skeleton";
 
 const BRAND = "#FF2D55";
 const API_BASE = "https://universities.hipolabs.com/search";
@@ -187,12 +188,7 @@ export default function SchoolPickerInput({ value, onChange, country, placeholde
 
           {/* School list */}
           {loading ? (
-            <View style={styles.loadingWrap}>
-              <ActivityIndicator size="large" color={BRAND} />
-              <Text style={[styles.loadingText, { color: colors.textMuted }]}>
-                Loading schools{country ? ` in ${country}` : ""}…
-              </Text>
-            </View>
+            <View style={{ padding: 12, gap: 8 }}>{[1,2,3,4,5,6].map(i => <ListRowSkeleton key={i} />)}</View>
           ) : filtered.length === 0 ? (
             <View style={styles.loadingWrap}>
               <Ionicons name="school-outline" size={48} color={colors.textMuted} />

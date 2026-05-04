@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import { useGiftPrices } from "@/hooks/useGiftPrices";
+import { GiftCardSkeleton } from "@/components/ui/Skeleton";
 import Colors from "@/constants/colors";
 
 export type DbGift = {
@@ -363,10 +364,7 @@ export default function GiftPickerSheet({
             </ScrollView>
 
             {loading ? (
-              <View style={styles.loadingWrap}>
-                <ActivityIndicator color={colors.accent} size="large" />
-                <Text style={[styles.loadingText, { color: colors.textMuted }]}>Loading gifts…</Text>
-              </View>
+              <View style={{ padding: 12, gap: 12 }}>{[1,2,3,4].map(i => <GiftCardSkeleton key={i} />)}</View>
             ) : filtered.length === 0 ? (
               <View style={styles.loadingWrap}>
                 <Text style={{ fontSize: 40 }}>🎁</Text>
