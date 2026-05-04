@@ -511,6 +511,51 @@ export default function DiscoverScreen() {
   const feedTabRef = useRef<"for_you" | "following">("for_you");
   const flatListRef = useRef<FlatList>(null);
   const recordedViewsRef = useRef<Set<string>>(new Set());
+
+  // ── Scroll-aware header ──────────────────────────────────────────────────
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const headerOffset = useRef(new Animated.Value(0)).current;
+  const lastScrollYRef = useRef(0);
+  const headerVisibleRef = useRef(true);
+
+  function revealHeader() {
+    if (headerVisibleRef.current) return;
+    headerVisibleRef.current = true;
+    Animated.spring(headerOffset, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 220,
+      friction: 28,
+    }).start();
+  }
+
+  function hideHeader(height: number) {
+    if (!headerVisibleRef.current) return;
+    headerVisibleRef.current = false;
+    Animated.spring(headerOffset, {
+      toValue: -height,
+      useNativeDriver: true,
+      tension: 220,
+      friction: 28,
+    }).start();
+  }
+
+  function handleFeedScroll(e: any) {
+    const y: number = e.nativeEvent.contentOffset.y;
+    const dy = y - lastScrollYRef.current;
+    lastScrollYRef.current = y;
+
+    if (y <= 20) {
+      revealHeader();
+      return;
+    }
+    if (dy > 4) {
+      hideHeader(headerHeight);
+    } else if (dy < -4) {
+      revealHeader();
+    }
+  }
+  // ────────────────────────────────────────────────────────────────────────
   const viewabilityConfig = useRef({ minimumViewTime: 800, itemVisiblePercentThreshold: 50 }).current;
   const onViewableItemsChangedRef = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {});
   onViewableItemsChangedRef.current = ({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -878,6 +923,10 @@ export default function DiscoverScreen() {
     const cached = tabPostsCache.current[dataTab];
     const cacheAge = Date.now() - tabCacheTimestamp.current[dataTab];
 
+    // Always reveal the header when switching tabs
+    revealHeader();
+    lastScrollYRef.current = 0;
+
     setHasMore(true);
     setFollowingEmpty(false);
     setNewPostAuthors([]);
@@ -1089,103 +1138,110 @@ export default function DiscoverScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <OfflineBanner />
       <DesktopFeedLayout>
-      <View
+
+      {/* ── Scroll-aware header (absolutely positioned so it can slide away) ── */}
+      <Animated.View
+        onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
         style={[
-          styles.header,
-          { paddingTop: insets.top + 8, backgroundColor: colors.background },
+          styles.headerBlock,
+          {
+            backgroundColor: colors.background,
+            transform: [{ translateY: headerOffset }],
+          },
         ]}
       >
         {/* Tab switcher — YouTube-style underline tabs */}
-        <View style={styles.tabRow}>
-          <TouchableOpacity
-            style={[styles.tabPill, { borderBottomColor: feedTab === "for_you" ? colors.text : "transparent" }]}
-            onPress={() => setFeedTab("for_you")}
-          >
-            <Text style={[
-              styles.tabPillText,
-              { color: feedTab === "for_you" ? colors.text : colors.textMuted,
-                fontFamily: feedTab === "for_you" ? "Inter_700Bold" : "Inter_500Medium" },
-            ]}>
-              For You
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tabPill, { borderBottomColor: feedTab === "following" ? colors.text : "transparent" }]}
-            onPress={() => {
-              if (!user) { router.push("/(auth)/login"); return; }
-              setFeedTab("following");
-            }}
-          >
-            <Text style={[
-              styles.tabPillText,
-              { color: feedTab === "following" ? colors.text : colors.textMuted,
-                fontFamily: feedTab === "following" ? "Inter_700Bold" : "Inter_500Medium" },
-            ]}>
-              Following
-            </Text>
-          </TouchableOpacity>
-          {!isDesktop && (
+        <View
+          style={[
+            styles.header,
+            { paddingTop: insets.top + 8 },
+          ]}
+        >
+          <View style={styles.tabRow}>
             <TouchableOpacity
-              style={styles.tabPill}
-              onPress={() => router.push("/shorts" as any)}
+              style={[styles.tabPill, { borderBottomColor: feedTab === "for_you" ? colors.text : "transparent" }]}
+              onPress={() => setFeedTab("for_you")}
             >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <Ionicons
-                  name="play-circle-outline"
-                  size={15}
-                  color={colors.textMuted}
-                />
-                <Text style={[
-                  styles.tabPillText,
-                  { color: colors.textMuted, fontFamily: "Inter_500Medium" },
-                ]}>
-                  Shorts
-                </Text>
-              </View>
+              <Text style={[
+                styles.tabPillText,
+                { color: feedTab === "for_you" ? colors.text : colors.textMuted,
+                  fontFamily: feedTab === "for_you" ? "Inter_700Bold" : "Inter_500Medium" },
+              ]}>
+                For You
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tabPill, { borderBottomColor: feedTab === "following" ? colors.text : "transparent" }]}
+              onPress={() => {
+                if (!user) { router.push("/(auth)/login"); return; }
+                setFeedTab("following");
+              }}
+            >
+              <Text style={[
+                styles.tabPillText,
+                { color: feedTab === "following" ? colors.text : colors.textMuted,
+                  fontFamily: feedTab === "following" ? "Inter_700Bold" : "Inter_500Medium" },
+              ]}>
+                Following
+              </Text>
+            </TouchableOpacity>
+            {!isDesktop && (
+              <TouchableOpacity
+                style={styles.tabPill}
+                onPress={() => router.push("/shorts" as any)}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Ionicons name="play-circle-outline" size={15} color={colors.textMuted} />
+                  <Text style={[styles.tabPillText, { color: colors.textMuted, fontFamily: "Inter_500Medium" }]}>
+                    Shorts
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {!user && (
+            <TouchableOpacity
+              onPress={() => router.push("/(auth)/login")}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6 }}
+            >
+              <Ionicons name="log-in-outline" size={16} color={colors.text} />
+              <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>Sign in</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        {!user && (
+        {/* New posts indicator — lives inside the animated block */}
+        {newPostAuthors.length > 0 && (
           <TouchableOpacity
-            onPress={() => router.push("/(auth)/login")}
-            style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6 }}
+            style={[styles.newPostsPill, { backgroundColor: colors.accent }]}
+            onPress={handleShowNewPosts}
+            activeOpacity={0.85}
           >
-            <Ionicons name="log-in-outline" size={16} color={colors.text} />
-            <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>Sign in</Text>
+            <View style={styles.newPostsAvatars}>
+              {newPostAuthors.slice(0, 3).map((a, i) => (
+                <View key={a.id} style={[styles.newPostsAvatarWrap, { marginLeft: i > 0 ? -8 : 0, zIndex: 3 - i }]}>
+                  <Avatar uri={a.avatar_url} name={a.display_name} size={22} />
+                </View>
+              ))}
+            </View>
+            <Ionicons name="arrow-up" size={14} color="#fff" style={{ marginLeft: 2 }} />
+            <Text style={styles.newPostsPillText}>New posts</Text>
           </TouchableOpacity>
         )}
-      </View>
 
-      {/* New posts indicator */}
-      {newPostAuthors.length > 0 && (
-        <TouchableOpacity
-          style={[styles.newPostsPill, { backgroundColor: colors.accent }]}
-          onPress={handleShowNewPosts}
-          activeOpacity={0.85}
-        >
-          <View style={styles.newPostsAvatars}>
-            {newPostAuthors.slice(0, 3).map((a, i) => (
-              <View key={a.id} style={[styles.newPostsAvatarWrap, { marginLeft: i > 0 ? -8 : 0, zIndex: 3 - i }]}>
-                <Avatar uri={a.avatar_url} name={a.display_name} size={22} />
-              </View>
-            ))}
+        {/* Background refresh indicator */}
+        {bgRefreshing && newPostAuthors.length === 0 && (
+          <View style={[styles.bgRefreshBar, { backgroundColor: colors.accent + "18" }]}>
+            <ActivityIndicator size={10} color={colors.accent} />
+            <Text style={[styles.bgRefreshText, { color: colors.accent }]}>Updating feed…</Text>
           </View>
-          <Ionicons name="arrow-up" size={14} color="#fff" style={{ marginLeft: 2 }} />
-          <Text style={styles.newPostsPillText}>New posts</Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Background refresh indicator */}
-      {bgRefreshing && newPostAuthors.length === 0 && (
-        <View style={[styles.bgRefreshBar, { backgroundColor: colors.accent + "18" }]}>
-          <ActivityIndicator size={10} color={colors.accent} />
-          <Text style={[styles.bgRefreshText, { color: colors.accent }]}>Updating feed…</Text>
-        </View>
-      )}
+        )}
+      </Animated.View>
+      {/* ────────────────────────────────────────────────────────────────── */}
 
       {feedTab === "following" && !user ? (
-        <View style={styles.center}>
+        <View style={[styles.center, { paddingTop: headerHeight + 80 }]}>
           <Ionicons name="lock-closed-outline" size={56} color={colors.textMuted} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>Sign in to see Following</Text>
           <Text style={[styles.emptySub, { color: colors.textSecondary }]}>Follow people to see their posts here</Text>
@@ -1194,7 +1250,7 @@ export default function DiscoverScreen() {
           </TouchableOpacity>
         </View>
       ) : feedTab === "following" && followingEmpty ? (
-        <View style={styles.center}>
+        <View style={[styles.center, { paddingTop: headerHeight + 80 }]}>
           <Ionicons name="people-outline" size={56} color={colors.textMuted} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>No one followed yet</Text>
           <Text style={[styles.emptySub, { color: colors.textSecondary }]}>Follow people to see their posts here</Text>
@@ -1203,7 +1259,7 @@ export default function DiscoverScreen() {
           </TouchableOpacity>
         </View>
       ) : loading ? (
-        <View style={{ padding: 8, gap: 8 }}>{[1,2,3].map(i => <PostSkeleton key={i} />)}</View>
+        <View style={{ padding: 8, paddingTop: headerHeight + 8, gap: 8 }}>{[1,2,3].map(i => <PostSkeleton key={i} />)}</View>
       ) : (
         <FlatList
           ref={flatListRef}
@@ -1220,8 +1276,14 @@ export default function DiscoverScreen() {
               colWidth={isDesktop ? FEED_COLUMN_MAX_WIDTH : undefined}
             />
           )}
-          contentContainerStyle={{ gap: 8, paddingVertical: 8, paddingBottom: insets.bottom + 52 + 80 + 50 }}
+          contentContainerStyle={{
+            gap: 8,
+            paddingTop: headerHeight + 8,
+            paddingBottom: insets.bottom + 52 + 80 + 50,
+          }}
           showsVerticalScrollIndicator={false}
+          onScroll={handleFeedScroll}
+          scrollEventThrottle={16}
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}
           onViewableItemsChanged={onViewableItemsChanged}
@@ -1234,7 +1296,9 @@ export default function DiscoverScreen() {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
+              progressViewOffset={headerHeight}
               onRefresh={() => {
+                revealHeader();
                 setRefreshing(true);
                 setHasMore(true);
                 setNewPostAuthors([]);
@@ -1364,6 +1428,13 @@ export default function DiscoverScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  headerBlock: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
