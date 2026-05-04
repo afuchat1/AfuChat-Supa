@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
+import { MarketplaceCardSkeleton } from "@/components/ui/Skeleton";
 import { Platform } from "react-native";
 import Colors from "@/constants/colors";
 import { transferAcoin } from "@/lib/monetize";
@@ -252,7 +253,7 @@ export default function UsernameMarketScreen() {
           </TouchableOpacity>
         </ScrollView>
       ) : loading ? (
-        <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
+        <View style={{ padding: 12, gap: 12 }}>{[1,2,3].map(i => <MarketplaceCardSkeleton key={i} />)}</View>
       ) : (
         <FlatList
           data={tab === "mine" ? myListings : listings}

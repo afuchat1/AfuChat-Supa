@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   FlatList,
   Image,
@@ -25,6 +24,7 @@ import Colors from "@/constants/colors";
 import { useAutoTranslate } from "@/context/LanguageContext";
 import { LANG_LABELS } from "@/lib/translate";
 import { encodeId } from "@/lib/shortId";
+import { PostSkeleton } from "@/components/ui/Skeleton";
 
 type SavedPost = {
   id: string;
@@ -178,8 +178,8 @@ export default function SavedPostsScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.accent} size="large" />
+        <View style={{ padding: 8, gap: 8 }}>
+          {[1, 2, 3, 4].map(i => <PostSkeleton key={i} />)}
         </View>
       ) : (
         <FlatList

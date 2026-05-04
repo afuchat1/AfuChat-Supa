@@ -14,6 +14,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ProfileSkeleton } from "@/components/ui/Skeleton";
 import Animated, {
   Easing,
   interpolate,
@@ -256,11 +257,7 @@ export default function DigitalIdScreen() {
   }
 
   if(loading){
-    return(
-      <View style={[s.center,{backgroundColor:colors.background}]}>
-        <ActivityIndicator size="large" color={BRAND}/>
-      </View>
-    );
+    return <ProfileSkeleton />;
   }
 
   const cp = { cardWidth:CARD_W, cardHeight:CARD_H, theme, profile, role, roleConf,

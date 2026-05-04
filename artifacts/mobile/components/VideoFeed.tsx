@@ -1,6 +1,5 @@
 import React, { useCallback, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   Dimensions,
   FlatList,
@@ -20,6 +19,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { notifyPostLike, notifyNewFollow } from "@/lib/notifyUser";
 import { useResolvedVideoSource } from "@/hooks/useResolvedVideoSource";
+import { VideoFeedSkeleton } from "@/components/ui/Skeleton";
 
 const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get("window");
 const PAGE_SIZE = 20;
@@ -330,11 +330,7 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
   }
 
   if (loading) {
-    return (
-      <View style={[styles.center, { height: SCREEN_H }]}>
-        <ActivityIndicator color={accent} size="large" />
-      </View>
-    );
+    return <VideoFeedSkeleton />;
   }
 
   if (posts.length === 0) {
@@ -380,7 +376,7 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
       ListFooterComponent={
         loadingMore ? (
           <View style={[styles.center, { height: SCREEN_H, backgroundColor: "#000" }]}>
-            <ActivityIndicator color="#fff" size="small" />
+            <VideoFeedSkeleton />
           </View>
         ) : null
       }

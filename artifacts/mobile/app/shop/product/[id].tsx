@@ -22,6 +22,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import { ShopProduct, Shop, addToCart, getOrCreateCart, placeOrder, formatShopAcoin, PLATFORM_FEE_PCT } from "@/lib/shop";
 import Colors from "@/constants/colors";
+import { MarketplaceCardSkeleton } from "@/components/ui/Skeleton";
 import { showAlert } from "@/lib/alert";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
@@ -127,7 +128,9 @@ export default function ProductDetailScreen() {
   if (loading) {
     return (
       <View style={[st.loadingWrap, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-        <ActivityIndicator color={colors.accent} size="large" />
+        <View style={{ padding: 12, gap: 12 }}>
+          {[1,2,3].map(i => <MarketplaceCardSkeleton key={i} />)}
+        </View>
       </View>
     );
   }

@@ -22,6 +22,7 @@ import {
   type StoredFile,
 } from "@/lib/mediaUpload";
 import { bucketMeta } from "./index";
+import { ListRowSkeleton } from "@/components/ui/Skeleton";
 
 const VIDEO_BUCKETS = new Set(["videos", "stories"]);
 const IMAGE_BUCKETS = new Set([
@@ -386,9 +387,7 @@ export default function StorageBucketScreen() {
       {loading && files.length === 0 && !error ? (
         <>
           {headerEl}
-          <View style={styles.loadingWrap}>
-            <ActivityIndicator color={colors.accent} />
-          </View>
+          <View style={{ padding: 12, gap: 10 }}>{[1,2,3,4,5].map(i => <ListRowSkeleton key={i} />)}</View>
         </>
       ) : (
         <FlatList
@@ -427,8 +426,8 @@ export default function StorageBucketScreen() {
           }}
           ListFooterComponent={
             loadingMore ? (
-              <View style={{ paddingVertical: 18 }}>
-                <ActivityIndicator color={colors.accent} />
+              <View style={{ paddingVertical: 16, alignItems: "center" }}>
+                <View style={{ width: 56, height: 4, borderRadius: 2, backgroundColor: "#E5E5EA" }} />
               </View>
             ) : null
           }

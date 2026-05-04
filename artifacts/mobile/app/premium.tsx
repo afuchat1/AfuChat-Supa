@@ -17,6 +17,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { PremiumSkeleton } from "@/components/ui/Skeleton";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -377,7 +378,7 @@ export default function PremiumScreen() {
           <Text style={[styles.headerTitle, { color: colors.text }]}>Premium</Text>
           <View style={{ width: 24 }} />
         </View>
-        <ActivityIndicator color={colors.accent} style={{ flex: 1 }} />
+        <View style={{ padding: 16, gap: 12, marginTop: 8 }}>{[1,2,3,4,5].map(i => <PremiumSkeleton key={i} />)}</View>
       </View>
     );
   }

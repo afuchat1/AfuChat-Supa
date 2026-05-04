@@ -19,6 +19,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+import { ChatLoadingSkeleton } from "@/components/ui/Skeleton";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { showAlert } from "@/lib/alert";
@@ -251,11 +252,7 @@ export default function MatchConversationScreen() {
     return new Date().getFullYear() - new Date(dob).getFullYear();
   }
 
-  if (loading) return (
-    <View style={[styles.root, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }]}>
-      <ActivityIndicator color={BRAND} size="large" />
-    </View>
-  );
+  if (loading) return <ChatLoadingSkeleton />;
 
   const isFirstMessage = messages.length === 0;
 

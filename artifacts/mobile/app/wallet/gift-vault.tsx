@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
+import { GiftCardSkeleton } from "@/components/ui/Skeleton";
 import { showAlert } from "@/lib/alert";
 import {
   MATCH_PRICES,
@@ -104,9 +105,7 @@ export default function GiftVaultScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.centeredWrap}>
-          <ActivityIndicator size="large" color={BRAND} />
-        </View>
+        <View style={{ padding: 12, gap: 12 }}>{[1,2,3,4].map(i => <GiftCardSkeleton key={i} />)}</View>
       ) : (
         <FlatList
           data={[]}

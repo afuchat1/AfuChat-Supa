@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import { showAlert } from "@/lib/alert";
 import {
   useChatPreferences,
@@ -159,8 +160,8 @@ export default function ChatSettingsScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, justifyContent: "center", alignItems: "center" }]}>
-        <ActivityIndicator color={colors.accent} />
+      <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
+        <View style={{ padding: 16, gap: 10 }}>{[1,2,3,4,5,6].map(i => <ListRowSkeleton key={i} />)}</View>
       </View>
     );
   }

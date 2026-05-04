@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Dimensions,
   Image,
   Modal,
@@ -17,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { ProfileSkeleton } from "@/components/ui/Skeleton";
 import { showAlert } from "@/lib/alert";
 import { getPublicProfileGifts, getGiftItem } from "@/lib/matchTransactions";
 
@@ -79,11 +79,7 @@ export default function ViewProfileScreen() {
     showAlert("Report Submitted", "Thank you for keeping AfuMatch safe. We'll review this profile.");
   }
 
-  if (loading) return (
-    <View style={[styles.root, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }]}>
-      <ActivityIndicator color={BRAND} size="large" />
-    </View>
-  );
+  if (loading) return <ProfileSkeleton />;
 
   if (!profile) return (
     <View style={[styles.root, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }]}>

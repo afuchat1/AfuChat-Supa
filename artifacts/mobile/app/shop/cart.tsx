@@ -16,6 +16,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import { CartItem, getOrCreateCart, removeFromCart, updateCartQty, placeOrder, formatShopAcoin, formatShopUGX, PLATFORM_FEE_PCT } from "@/lib/shop";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
@@ -128,7 +129,7 @@ export default function CartScreen() {
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>My Cart</Text>
         </View>
-        <ActivityIndicator color={colors.accent} style={{ marginTop: 60 }} size="large" />
+        <View style={{ padding: 12, gap: 10, marginTop: 8 }}>{[1,2,3,4].map(i => <ListRowSkeleton key={i} />)}</View>
       </View>
     );
   }

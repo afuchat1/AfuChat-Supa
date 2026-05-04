@@ -365,7 +365,9 @@ export default function MarketplaceScreen() {
         }
         ListFooterComponent={
           loadingMore ? (
-            <ActivityIndicator color={colors.accent} style={{ margin: 20 }} />
+            <View style={{ paddingVertical: 16, alignItems: "center" }}>
+              <View style={{ width: 56, height: 4, borderRadius: 2, backgroundColor: "#E5E5EA" }} />
+            </View>
           ) : !hasMore && products.length > 0 ? (
             <Text style={[st.endText, { color: colors.textMuted }]}>You've seen everything ✨</Text>
           ) : null

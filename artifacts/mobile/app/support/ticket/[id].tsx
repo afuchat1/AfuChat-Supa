@@ -17,6 +17,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
+import { ChatBubbleSkeleton } from "@/components/ui/Skeleton";
 import { showAlert } from "@/lib/alert";
 
 const BRAND_FALLBACK = Colors.brand;
@@ -151,7 +152,7 @@ export default function TicketDetail() {
           </TouchableOpacity>
           <Text style={st.headerTitle}>Support Ticket</Text>
         </View>
-        <View style={st.centered}><ActivityIndicator color={BRAND} size="large" /></View>
+        <View style={{ padding: 12, gap: 10 }}>{[1,2,3,4,5].map(i => <ChatBubbleSkeleton key={i} />)}</View>
       </View>
     );
   }

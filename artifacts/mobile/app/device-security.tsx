@@ -27,6 +27,7 @@ import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { MobileOnlyView } from "@/components/ui/MobileOnlyView";
+import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import {
   clearPIN,
   hasPIN,
@@ -445,7 +446,7 @@ export default function DeviceSecurityScreen() {
 
       {activeTab === "devices" ? (
         loading ? (
-          <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
+          <View style={{ padding: 12, gap: 10, marginTop: 8 }}>{[1,2,3,4].map(i => <ListRowSkeleton key={i} />)}</View>
         ) : (
           <FlatList
             data={sessions}

@@ -18,6 +18,7 @@ import * as Location from "expo-location";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
+import { ContactRowSkeleton } from "@/components/ui/Skeleton";
 import Colors from "@/constants/colors";
 
 type DiscoverUser = {
@@ -543,8 +544,8 @@ export default function UserDiscoveryScreen() {
 
       {loading && !refreshing ? (
         tab === "nearby" && locating ? null : (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-            <ActivityIndicator color={colors.accent} size="large" />
+          <View style={{ padding: 12, gap: 8 }}>
+            {[1, 2, 3, 4, 5].map(i => <ContactRowSkeleton key={i} />)}
           </View>
         )
       ) : (

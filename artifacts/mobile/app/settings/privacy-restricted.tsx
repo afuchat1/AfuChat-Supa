@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { ContactRowSkeleton } from "@/components/ui/Skeleton";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
@@ -95,7 +96,7 @@ export default function PrivacyRestrictedScreen() {
       </View>
 
       {loading ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={colors.accent} /></View>
+        <View style={{ padding: 8, gap: 2 }}>{[1,2,3,4,5].map(i => <ContactRowSkeleton key={i} />)}</View>
       ) : (
         <FlatList
           data={filtered}

@@ -45,6 +45,7 @@ import { TOPBAR_HEIGHT } from "@/components/desktop/DesktopTopBar";
 import { useTheme } from "@/hooks/useTheme";
 import { encodeId, decodeId, isUuid } from "@/lib/shortId";
 import { saveVideoProgress, clearVideoProgress } from "@/lib/videoProgress";
+import { ChatBubbleSkeleton } from "@/components/ui/Skeleton";
 
 const USE_NATIVE = Platform.OS !== "web";
 
@@ -525,7 +526,7 @@ function CommentsSheet({
 
             <View style={cStyles.middle}>
               {loading ? (
-                <View style={cStyles.center}><ActivityIndicator color={accent} /></View>
+                <View style={{ padding: 8, gap: 6 }}>{[1,2,3].map(i => <ChatBubbleSkeleton key={i} />)}</View>
               ) : replies.length === 0 ? (
                 <View style={cStyles.center}>
                   <Ionicons name="chatbubble-outline" size={36} color="rgba(255,255,255,0.15)" />

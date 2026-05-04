@@ -21,6 +21,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { PostDetailSkeleton } from "@/components/ui/Skeleton";
 import { Avatar } from "@/components/ui/Avatar";
 import { RichText } from "@/components/ui/RichText";
 import Colors from "@/constants/colors";
@@ -432,11 +433,7 @@ export default function ArticleDetailScreen() {
   }
 
   if (loading) {
-    return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={colors.accent} size="large" />
-      </View>
-    );
+    return <PostDetailSkeleton />;
   }
 
   if (!article) {

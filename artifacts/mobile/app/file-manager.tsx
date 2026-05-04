@@ -21,6 +21,7 @@ import * as FileSystem from "expo-file-system";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
+import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import { ImageViewer, useImageViewer } from "@/components/ImageViewer";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
@@ -460,8 +461,8 @@ export default function FileManagerScreen() {
       </ScrollView>
 
       {loading ? (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator color={colors.accent} size="large" />
+        <View style={{ padding: 12, gap: 10 }}>
+          {[1,2,3,4,5,6,7].map(i => <ListRowSkeleton key={i} />)}
         </View>
       ) : filtered.length === 0 ? (
         <View style={styles.empty}>

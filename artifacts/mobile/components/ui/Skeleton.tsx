@@ -418,6 +418,72 @@ export function MeTabSkeleton() {
   );
 }
 
+export function VideoFeedSkeleton() {
+  return (
+    <View style={{ flex: 1, backgroundColor: "#000" }}>
+      {[0, 1].map((i) => (
+        <View
+          key={i}
+          style={{
+            position: "absolute",
+            top: 0, left: 0, right: 0, bottom: 0,
+            justifyContent: "flex-end",
+            padding: 16,
+            opacity: i === 0 ? 1 : 0,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <Skeleton width={40} height={40} borderRadius={20} />
+            <View style={{ gap: 5 }}>
+              <Skeleton width={120} height={14} />
+              <Skeleton width={80} height={11} />
+            </View>
+          </View>
+          <Skeleton width="85%" height={14} style={{ marginBottom: 6 }} />
+          <Skeleton width="65%" height={14} style={{ marginBottom: 20 }} />
+          <View style={{ position: "absolute", right: 14, bottom: 110, gap: 20, alignItems: "center" }}>
+            {[48, 48, 48, 48].map((s, j) => (
+              <View key={j} style={{ alignItems: "center", gap: 4 }}>
+                <Skeleton width={s} height={s} borderRadius={24} />
+                <Skeleton width={30} height={11} />
+              </View>
+            ))}
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export function ShortsFeedSkeleton({ dark = true }: { dark?: boolean }) {
+  const { colors } = useTheme();
+  const bg = dark ? "#000" : colors.background;
+  const cardH = 520;
+  return (
+    <View style={{ flex: 1, backgroundColor: bg }}>
+      <View style={{ flex: 1, justifyContent: "flex-end", padding: 16, gap: 8 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <Skeleton width={44} height={44} borderRadius={22} />
+          <View style={{ gap: 5 }}>
+            <Skeleton width={110} height={14} />
+            <Skeleton width={70} height={11} />
+          </View>
+        </View>
+        <Skeleton width="75%" height={13} />
+        <Skeleton width="55%" height={13} />
+        <View style={{ position: "absolute", right: 14, bottom: 100, gap: 20, alignItems: "center" }}>
+          {[44, 44, 44, 44].map((s, i) => (
+            <View key={i} style={{ alignItems: "center", gap: 3 }}>
+              <Skeleton width={s} height={s} borderRadius={22} />
+              <Skeleton width={26} height={10} />
+            </View>
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export function AiRedirectSkeleton() {
   const { colors } = useTheme();
   return (

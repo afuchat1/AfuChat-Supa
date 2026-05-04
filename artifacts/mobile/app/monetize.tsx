@@ -27,6 +27,7 @@ import { showAlert } from "@/lib/alert";
 import { MONETIZE_FEATURES, formatAcoin, transferAcoin } from "@/lib/monetize";
 import { PremiumGate } from "@/components/ui/PremiumGate";
 import { isOnline } from "@/lib/offlineStore";
+import { ListRowSkeleton } from "@/components/ui/Skeleton";
 
 const ACOIN_TO_UGX = 100;
 const GOLD = "#D4A853";
@@ -359,7 +360,7 @@ export default function MonetizeScreen() {
   }
 
   function renderFeatures() {
-    if (loadingSettings) return <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />;
+    if (loadingSettings) return <View style={{ padding: 12, gap: 10, marginTop: 8 }}>{[1,2,3,4,5].map(i => <ListRowSkeleton key={i} />)}</View>;
     return (
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -439,7 +440,7 @@ export default function MonetizeScreen() {
   }
 
   function renderMarket() {
-    if (loadingMarket) return <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />;
+    if (loadingMarket) return <View style={{ padding: 12, gap: 10, marginTop: 8 }}>{[1,2,3,4].map(i => <ListRowSkeleton key={i} />)}</View>;
     if (marketListings.length === 0) {
       return (
         <View style={styles.emptyFull}>

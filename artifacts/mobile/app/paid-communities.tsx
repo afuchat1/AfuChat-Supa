@@ -20,6 +20,7 @@ import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { transferAcoin } from "@/lib/monetize";
 import { showAlert } from "@/lib/alert";
+import { ListRowSkeleton } from "@/components/ui/Skeleton";
 
 type Community = {
   id: string;
@@ -239,7 +240,7 @@ export default function PaidCommunitiesScreen() {
           </TouchableOpacity>
         </ScrollView>
       ) : loading ? (
-        <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
+        <View style={{ padding: 12, gap: 12, marginTop: 8 }}>{[1,2,3,4].map(i => <ListRowSkeleton key={i} />)}</View>
       ) : (
         <FlatList
           data={tab === "mine" ? myCommunities : communities}

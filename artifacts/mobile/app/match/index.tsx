@@ -28,6 +28,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
+import { ProfileSkeleton } from "@/components/ui/Skeleton";
 import { chargeMatchSuperLike, chargeProfileBoost, getAcoinBalance, MATCH_PRICES } from "@/lib/matchTransactions";
 
 const { width: SW, height: SH } = Dimensions.get("window");
@@ -491,7 +492,7 @@ function MatchesTab() {
     setLoading(false);
   }
 
-  if (loading) return <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={BRAND} /></View>;
+  if (loading) return <View style={{ padding: 12, gap: 10 }}>{[1,2,3,4].map(i => <ProfileSkeleton key={i} />)}</View>;
 
   if (matches.length === 0) return (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 40 }}>
@@ -717,8 +718,8 @@ export default function MatchScreen() {
 
   // ── Guard: no profile ──
   if (profileLoading) return (
-    <View style={[styles.root, { backgroundColor: isDark ? "#0D0D0D" : "#F2F2F7", alignItems: "center", justifyContent: "center" }]}>
-      <ActivityIndicator color={BRAND} size="large" />
+    <View style={[styles.root, { backgroundColor: isDark ? "#0D0D0D" : "#F2F2F7" }]}>
+      <View style={{ padding: 16, gap: 12 }}>{[1,2,3].map(i => <ProfileSkeleton key={i} />)}</View>
     </View>
   );
 

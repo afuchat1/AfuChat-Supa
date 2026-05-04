@@ -22,6 +22,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
 import { uploadToStorage } from "@/lib/mediaUpload";
+import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import { registerVideoAsset } from "@/lib/videoApi";
 
 const MAX_DURATION_SECONDS = 90;
@@ -324,8 +325,8 @@ export default function CreateDuetScreen() {
           <Text style={[s.headerTitle, { color: colors.text }]}>Duet</Text>
           <View style={s.headerBtn} />
         </View>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator color={colors.accent} />
+        <View style={{ padding: 16, gap: 10 }}>
+          {[1,2,3,4].map(i => <ListRowSkeleton key={i} />)}
         </View>
       </View>
     );

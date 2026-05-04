@@ -21,6 +21,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import { supabase } from "@/lib/supabase";
 import { uploadToStorage } from "@/lib/mediaUpload";
 import { Shop, ShopProduct, ShopOrder, SHOP_CATEGORIES, PRODUCT_CATEGORIES, ORDER_STATUS_LABELS, ESCROW_STATUS_LABELS, formatShopAcoin, formatShopUGX, PLATFORM_FEE_PCT } from "@/lib/shop";
@@ -604,7 +605,7 @@ export default function ShopManage() {
         ))}
       </View>
 
-      {loading ? <ActivityIndicator color={colors.accent} style={{ marginTop: 60 }} size="large" /> : (
+      {loading ? <View style={{ padding: 12, gap: 10, marginTop: 8 }}>{[1,2,3,4,5].map(i => <ListRowSkeleton key={i} />)}</View> : (
         <View style={{ flex: 1 }}>
           {tab === "overview" && renderOverview()}
           {tab === "products" && renderProducts()}

@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Switch,
@@ -14,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
@@ -78,7 +78,7 @@ export default function PrivacyVisibilityScreen() {
         <Text style={[styles.headerTitle, { color: colors.text }]}>Visibility</Text>
         <View style={{ width: 24 }} />
       </View>
-      {loading ? <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={colors.accent} /></View> : (
+      {loading ? <View style={{ padding: 16, gap: 10 }}>{[1,2,3,4,5].map(i => <ListRowSkeleton key={i} />)}</View> : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>CONNECTIONS</Text>
           <View style={styles.group}>

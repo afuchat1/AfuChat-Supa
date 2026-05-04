@@ -17,7 +17,6 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   FlatList,
   Platform,
@@ -29,6 +28,7 @@ import {
   ViewToken,
   useWindowDimensions,
 } from "react-native";
+import { ShortsFeedSkeleton } from "@/components/ui/Skeleton";
 import { Video, ResizeMode } from "expo-av";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -859,11 +859,7 @@ export default function ShortsFeed({
   }
 
   if (loading) {
-    return (
-      <View style={[styles.loading, { backgroundColor: isFullscreen ? "#000" : colors.background }]}>
-        <ActivityIndicator color={isFullscreen ? "#fff" : colors.accent} />
-      </View>
-    );
+    return <ShortsFeedSkeleton dark={isFullscreen} />;
   }
 
   if (posts.length === 0) {
@@ -930,7 +926,11 @@ export default function ShortsFeed({
       maxToRenderPerBatch={3}
       onEndReached={loadMore}
       onEndReachedThreshold={0.4}
-      ListFooterComponent={loadingMore ? <ActivityIndicator color={isFullscreen ? "#fff" : colors.accent} style={{ marginVertical: 16 }} /> : null}
+      ListFooterComponent={loadingMore ? (
+        <View style={{ paddingVertical: 12, alignItems: "center" }}>
+          <View style={{ width: 48, height: 6, borderRadius: 3, backgroundColor: isFullscreen ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.1)" }} />
+        </View>
+      ) : null}
       style={{ backgroundColor: isFullscreen ? "#000" : colors.background }}
     />
   );

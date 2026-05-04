@@ -6,8 +6,9 @@
  * instead of two competing scrolls.
  */
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, View, Text, StyleSheet, Platform } from "react-native";
+import { View, Text, StyleSheet, Platform } from "react-native";
 import { Stack, router } from "expo-router";
+import { ShortsFeedSkeleton } from "@/components/ui/Skeleton";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
@@ -69,7 +70,7 @@ export default function ShortsRedirect() {
       {error ? (
         <Text style={styles.errorText}>{error}</Text>
       ) : (
-        <ActivityIndicator color="#fff" size="large" />
+        <ShortsFeedSkeleton dark />
       )}
     </View>
   );

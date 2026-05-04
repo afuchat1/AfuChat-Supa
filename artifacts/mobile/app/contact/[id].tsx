@@ -26,7 +26,7 @@ import { showAlert } from "@/lib/alert";
 import { notifyNewFollow } from "@/lib/notifyUser";
 import { shareProfile } from "@/lib/share";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
-import { ProfileSkeleton } from "@/components/ui/Skeleton";
+import { ProfileSkeleton, PostSkeleton } from "@/components/ui/Skeleton";
 import { PrestigeBadge } from "@/components/ui/PrestigeBadge";
 import { RichText } from "@/components/ui/RichText";
 import { ExpandableText } from "@/components/ui/ExpandableText";
@@ -496,7 +496,7 @@ export default function ContactProfileScreen() {
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             postsLoading ? (
-              <View style={st.emptyWrap}><ActivityIndicator color={colors.accent} /></View>
+              <View style={{ padding: 12, gap: 10 }}>{[1,2,3].map(i => <PostSkeleton key={i} />)}</View>
             ) : (
               <View style={st.emptyWrap}>
                 <Ionicons name="images-outline" size={44} color={colors.textMuted} />
@@ -553,7 +553,7 @@ export default function ContactProfileScreen() {
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             postsLoading ? (
-              <View style={st.emptyWrap}><ActivityIndicator color={colors.accent} /></View>
+              <View style={{ padding: 12, gap: 10 }}>{[1,2,3].map(i => <PostSkeleton key={i} />)}</View>
             ) : (
               <View style={st.emptyWrap}>
                 <Ionicons name="film-outline" size={44} color={colors.textMuted} />
@@ -681,7 +681,7 @@ export default function ContactProfileScreen() {
 
 function PostsTab({ posts, loading, profile, colors }: { posts: UserPost[]; loading: boolean; profile: Profile | null; colors: any }) {
   if (loading) {
-    return <View style={{ padding: 32, alignItems: "center" }}><ActivityIndicator color={colors.accent} /></View>;
+    return <View style={{ padding: 12, gap: 10 }}>{[1,2,3,4].map(i => <PostSkeleton key={i} />)}</View>;
   }
   if (posts.length === 0) {
     return (

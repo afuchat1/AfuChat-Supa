@@ -20,6 +20,7 @@ import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { PRESTIGE_TIERS, getPrestigeTier, getNextPrestigeTier, prestigeProgress } from "@/lib/prestige";
+import { ListRowSkeleton } from "@/components/ui/Skeleton";
 
 type RichUser = { id: string; display_name: string; handle: string; acoin: number; avatar_url: string | null };
 
@@ -413,7 +414,7 @@ export default function PrestigeScreen() {
             {activeSection === "rich" && (
               <View style={{ paddingHorizontal: 16 }}>
                 {loadingList ? (
-                  <ActivityIndicator color={colors.accent} style={{ marginVertical: 20 }} />
+                  <View style={{ padding: 8, gap: 8 }}>{[1,2,3,4,5].map(i => <ListRowSkeleton key={i} />)}</View>
                 ) : (
                   <View style={[s.richListCard, { backgroundColor: colors.surface }]}>
                     {richList.map((u, idx) => {

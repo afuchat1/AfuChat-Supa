@@ -17,6 +17,7 @@ import { useAdvancedFeatures, type ActivityStatus } from "@/context/AdvancedFeat
 import { useChatPreferences, CHAT_THEME_COLORS, type ChatTheme } from "@/context/ChatPreferencesContext";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { useTier, TIER_COLORS, TIER_LABELS, type Tier } from "@/hooks/useTier";
+import { ListRowSkeleton } from "@/components/ui/Skeleton";
 
 const THEMES: { name: ChatTheme; hex: string }[] = [
   { name: "Teal",    hex: "#00BCD4" },
@@ -203,8 +204,8 @@ export default function AdvancedFeaturesScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, justifyContent: "center", alignItems: "center" }]}>
-        <ActivityIndicator color={accent} />
+      <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
+        <View style={{ padding: 16, gap: 10 }}>{[1,2,3,4,5].map(i => <ListRowSkeleton key={i} />)}</View>
       </View>
     );
   }

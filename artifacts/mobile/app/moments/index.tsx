@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   Platform,
   StyleSheet,
@@ -16,6 +15,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { StoryRing } from "@/components/ui/StoryRing";
+import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import Colors from "@/constants/colors";
 
 type StoryUser = {
@@ -253,8 +253,8 @@ export default function MomentsScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.brand} />
+        <View style={{ padding: 12, gap: 10 }}>
+          {[1,2,3,4,5,6].map(i => <ListRowSkeleton key={i} />)}
         </View>
       ) : storyUsers.length === 0 ? (
         <View style={styles.centered}>

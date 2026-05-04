@@ -1016,18 +1016,7 @@ export default function ChatScreenRoute() {
   const { colors } = useTheme();
 
   if (loading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: colors.background,
-        }}
-      >
-        <ActivityIndicator size="large" color={colors.accent} />
-      </View>
-    );
+    return <ChatLoadingSkeleton />;
   }
 
   if (!user) {

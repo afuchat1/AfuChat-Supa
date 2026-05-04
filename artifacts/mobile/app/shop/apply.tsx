@@ -18,6 +18,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { ListRowSkeleton } from "@/components/ui/Skeleton";
 
 const BUSINESS_TYPES = ["Retailer", "Wholesaler", "Service Provider", "Digital Goods", "Food & Restaurant", "Arts & Crafts", "Education", "Other"];
 const CATEGORIES = ["Fashion", "Electronics", "Beauty", "Home & Garden", "Food & Drink", "Digital Goods", "Sports", "Art & Crafts", "Books", "Services", "Other"];
@@ -126,8 +127,8 @@ export default function SellerApplyScreen() {
           <Text style={[st.headerTitle, { color: colors.text }]}>Seller Application</Text>
           <View style={{ width: 24 }} />
         </View>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator color={colors.accent} />
+        <View style={{ padding: 16, gap: 10 }}>
+          {[1,2,3,4,5].map(i => <ListRowSkeleton key={i} />)}
         </View>
       </View>
     );

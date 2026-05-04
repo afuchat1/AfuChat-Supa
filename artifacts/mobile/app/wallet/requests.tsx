@@ -19,6 +19,7 @@ import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { hasPIN, isBiometricEnabled, verifyPIN } from "@/lib/appLock";
@@ -464,9 +465,7 @@ export default function RequestsScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.accent} />
-        </View>
+        <View style={{ padding: 12, gap: 10 }}>{[1,2,3,4,5].map(i => <ListRowSkeleton key={i} />)}</View>
       ) : (
         <FlatList
           data={requests}

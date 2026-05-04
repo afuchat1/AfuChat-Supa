@@ -1334,8 +1334,8 @@ export default function DiscoverScreen() {
           }
           ListFooterComponent={
             loadingMore ? (
-              <View style={{ paddingVertical: 20, alignItems: "center" }}>
-                <ActivityIndicator color={colors.accent} />
+              <View style={{ paddingVertical: 16, alignItems: "center" }}>
+                <View style={{ width: 56, height: 4, borderRadius: 2, backgroundColor: colors.border }} />
               </View>
             ) : null
           }

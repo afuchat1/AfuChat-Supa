@@ -18,6 +18,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { MarketplaceCardSkeleton } from "@/components/ui/Skeleton";
 import { supabase } from "@/lib/supabase";
 import { Shop, ShopProduct, ShopReview, PRODUCT_CATEGORIES, addToCart, getOrCreateCart, formatShopAcoin, getShopReviews } from "@/lib/shop";
 import Colors from "@/constants/colors";
@@ -150,7 +151,7 @@ export default function StoreStorefront() {
       </View>
 
       {loading ? (
-        <View style={st.loadingWrap}><ActivityIndicator color={colors.accent} size="large" /></View>
+        <View style={{ padding: 12, gap: 12 }}>{[1,2,3].map(i => <MarketplaceCardSkeleton key={i} />)}</View>
       ) : !shop ? (
         <View style={st.loadingWrap}>
           <Text style={[st.notFoundText, { color: colors.textMuted }]}>Store not found.</Text>

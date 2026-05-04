@@ -23,6 +23,7 @@ import { supabase } from "@/lib/supabase";
 import { uploadToStorage } from "@/lib/mediaUpload";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { ProfileSkeleton } from "@/components/ui/Skeleton";
 import { showAlert } from "@/lib/alert";
 import SchoolPickerInput from "@/components/SchoolPickerInput";
 import RegionPickerInput from "@/components/RegionPickerInput";
@@ -240,11 +241,7 @@ export default function MatchProfileEditScreen() {
     setSaving(false);
   }
 
-  if (loading) return (
-    <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, alignItems: "center", justifyContent: "center" }]}>
-      <ActivityIndicator color={BRAND} size="large" />
-    </View>
-  );
+  if (loading) return <ProfileSkeleton />;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>

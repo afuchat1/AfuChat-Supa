@@ -18,6 +18,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
+import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import { showAlert } from "@/lib/alert";
 
 const BRAND_FALLBACK = Colors.brand;
@@ -318,7 +319,7 @@ export default function SupportCenter() {
       {tab === "tickets" && (
         <View style={{ flex: 1 }}>
           {loading ? (
-            <View style={st.centered}><ActivityIndicator color={BRAND} size="large" /></View>
+            <View style={{ padding: 12, gap: 10 }}>{[1,2,3,4].map(i => <ListRowSkeleton key={i} />)}</View>
           ) : tickets.length === 0 ? (
             <View style={st.empty}>
               <View style={[st.emptyIconWrap, { backgroundColor: BRAND + "12" }]}>
