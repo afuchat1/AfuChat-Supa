@@ -513,48 +513,57 @@ export default function DiscoverScreen() {
   const recordedViewsRef = useRef<Set<string>>(new Set());
 
   // ── Scroll-aware header ──────────────────────────────────────────────────
+  // Uses Animated.event (not a plain onScroll function) so FlatList's internal
+  // scroll tracking for onEndReached is never overridden.
   const [headerHeight, setHeaderHeight] = useState(0);
   const headerOffset = useRef(new Animated.Value(0)).current;
-  const lastScrollYRef = useRef(0);
+  const scrollYAnim = useRef(new Animated.Value(0)).current;
+  const prevScrollYRef = useRef(0);
   const headerVisibleRef = useRef(true);
+  // useNativeDriver:false because headerOffset target changes dynamically
+  // and web doesn't support native driver for transforms driven this way.
+  const DRIVER = false;
 
   function revealHeader() {
     if (headerVisibleRef.current) return;
     headerVisibleRef.current = true;
     Animated.spring(headerOffset, {
       toValue: 0,
-      useNativeDriver: true,
+      useNativeDriver: DRIVER,
       tension: 220,
       friction: 28,
     }).start();
   }
 
   function hideHeader(height: number) {
-    if (!headerVisibleRef.current) return;
+    if (!headerVisibleRef.current || height === 0) return;
     headerVisibleRef.current = false;
     Animated.spring(headerOffset, {
       toValue: -height,
-      useNativeDriver: true,
+      useNativeDriver: DRIVER,
       tension: 220,
       friction: 28,
     }).start();
   }
 
-  function handleFeedScroll(e: any) {
-    const y: number = e.nativeEvent.contentOffset.y;
-    const dy = y - lastScrollYRef.current;
-    lastScrollYRef.current = y;
+  // Attach a JS listener to the animated scroll value so we can decide
+  // when to show/hide the header without touching FlatList's onScroll.
+  useEffect(() => {
+    const id = scrollYAnim.addListener(({ value }) => {
+      const dy = value - prevScrollYRef.current;
+      prevScrollYRef.current = value;
+      if (value <= 20) { revealHeader(); return; }
+      if (dy > 4)  hideHeader(headerHeight);
+      else if (dy < -4) revealHeader();
+    });
+    return () => scrollYAnim.removeListener(id);
+  }, [headerHeight]);   // re-subscribe when headerHeight is known
 
-    if (y <= 20) {
-      revealHeader();
-      return;
-    }
-    if (dy > 4) {
-      hideHeader(headerHeight);
-    } else if (dy < -4) {
-      revealHeader();
-    }
-  }
+  // The Animated.event passed to FlatList — compatible with onEndReached.
+  const onFeedScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollYAnim } } }],
+    { useNativeDriver: DRIVER }
+  );
   // ────────────────────────────────────────────────────────────────────────
   const viewabilityConfig = useRef({ minimumViewTime: 800, itemVisiblePercentThreshold: 50 }).current;
   const onViewableItemsChangedRef = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {});
@@ -925,7 +934,7 @@ export default function DiscoverScreen() {
 
     // Always reveal the header when switching tabs
     revealHeader();
-    lastScrollYRef.current = 0;
+    prevScrollYRef.current = 0;
 
     setHasMore(true);
     setFollowingEmpty(false);
@@ -1282,7 +1291,7 @@ export default function DiscoverScreen() {
             paddingBottom: insets.bottom + 52 + 80 + 50,
           }}
           showsVerticalScrollIndicator={false}
-          onScroll={handleFeedScroll}
+          onScroll={onFeedScroll}
           scrollEventThrottle={16}
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}
