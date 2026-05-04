@@ -24,7 +24,7 @@ import { ShopProduct, Shop, formatShopAcoin, getOrCreateCart, PRODUCT_CATEGORIES
 import Colors from "@/constants/colors";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { Avatar } from "@/components/ui/Avatar";
-import { PostSkeleton } from "@/components/ui/Skeleton";
+import { PostSkeleton, MarketplaceCardSkeleton } from "@/components/ui/Skeleton";
 import { ComingSoonView } from "@/components/ui/ComingSoonView";
 
 type ProductWithShop = ShopProduct & {
@@ -365,8 +365,8 @@ export default function MarketplaceScreen() {
         }
         ListFooterComponent={
           loadingMore ? (
-            <View style={{ paddingVertical: 16, alignItems: "center" }}>
-              <View style={{ width: 56, height: 4, borderRadius: 2, backgroundColor: "#E5E5EA" }} />
+            <View style={{ padding: 8, gap: 8 }}>
+              {[1, 2].map(i => <MarketplaceCardSkeleton key={i} />)}
             </View>
           ) : !hasMore && products.length > 0 ? (
             <Text style={[st.endText, { color: colors.textMuted }]}>You've seen everything ✨</Text>

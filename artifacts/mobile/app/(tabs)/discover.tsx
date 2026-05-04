@@ -1334,8 +1334,8 @@ export default function DiscoverScreen() {
           }
           ListFooterComponent={
             loadingMore ? (
-              <View style={{ paddingVertical: 16, alignItems: "center" }}>
-                <View style={{ width: 56, height: 4, borderRadius: 2, backgroundColor: colors.border }} />
+              <View style={{ padding: 8, gap: 8 }}>
+                {[1, 2, 3].map(i => <PostSkeleton key={i} />)}
               </View>
             ) : null
           }
