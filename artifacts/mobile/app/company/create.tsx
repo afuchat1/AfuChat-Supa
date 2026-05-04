@@ -91,7 +91,7 @@ export default function CreateCompanyPageScreen() {
     });
   }
 
-  if (!profile?.is_organization_verified) {
+  if (!profile?.is_verified) {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <View style={[styles.navBar, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
@@ -102,22 +102,22 @@ export default function CreateCompanyPageScreen() {
           <View style={{ width: 24 }} />
         </View>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 20 }}>
-          <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: GOLD + "22", alignItems: "center", justifyContent: "center" }}>
-            <Ionicons name="ribbon" size={44} color={GOLD} />
+          <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: colors.accent + "22", alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name="checkmark-circle" size={44} color={colors.accent} />
           </View>
           <Text style={{ fontSize: 22, fontFamily: "Inter_700Bold", color: colors.text, textAlign: "center" }}>
-            Verification Required
+            Verified Account Required
           </Text>
           <Text style={{ fontSize: 15, fontFamily: "Inter_400Regular", color: colors.textMuted, textAlign: "center", lineHeight: 22 }}>
-            Only verified organizations can create company pages. Apply for the gold badge first — it's free and usually reviewed within 3–5 days.
+            You need a verified account (blue checkmark) to create a company page. Once your page is live, you can separately apply for a verified page badge.
           </Text>
           <TouchableOpacity
-            style={[styles.submitBtn, { backgroundColor: GOLD }]}
-            onPress={() => router.push("/business-verification")}
+            style={[styles.submitBtn, { backgroundColor: colors.accent }]}
+            onPress={() => router.push("/premium")}
             activeOpacity={0.85}
           >
-            <Ionicons name="ribbon-outline" size={18} color="#fff" />
-            <Text style={styles.submitBtnText}>Apply for Verification</Text>
+            <Ionicons name="diamond-outline" size={18} color="#fff" />
+            <Text style={styles.submitBtnText}>Get Verified</Text>
           </TouchableOpacity>
         </View>
       </View>

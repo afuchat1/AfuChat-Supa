@@ -84,7 +84,7 @@ CREATE POLICY "org_pages_insert" ON organization_pages FOR INSERT
   WITH CHECK (
     auth.uid() = admin_id
     AND (
-      SELECT is_organization_verified FROM public.profiles WHERE id = auth.uid()
+      SELECT is_verified FROM public.profiles WHERE id = auth.uid()
     ) = true
   );
 

@@ -78,7 +78,7 @@ export default function CompanyIndexScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.navTitle, { color: colors.text }]}>Company Pages</Text>
-        {profile?.is_organization_verified ? (
+        {profile?.is_verified ? (
           <TouchableOpacity onPress={() => router.push("/company/create")} hitSlop={12}>
             <Ionicons name="add" size={26} color={BRAND} />
           </TouchableOpacity>
@@ -115,7 +115,7 @@ export default function CompanyIndexScreen() {
               {tab === "mine" ? (
                 <>
                   <Text style={[styles.emptyTitle, { color: colors.text }]}>No pages yet</Text>
-                  {profile?.is_organization_verified ? (
+                  {profile?.is_verified ? (
                     <>
                       <Text style={[styles.emptySub, { color: colors.textMuted }]}>Create your first organization page.</Text>
                       <TouchableOpacity style={[styles.emptyBtn, { backgroundColor: BRAND }]} onPress={() => router.push("/company/create")} activeOpacity={0.8}>
@@ -124,9 +124,9 @@ export default function CompanyIndexScreen() {
                     </>
                   ) : (
                     <>
-                      <Text style={[styles.emptySub, { color: colors.textMuted }]}>Only verified organizations can create pages.</Text>
-                      <TouchableOpacity style={[styles.emptyBtn, { backgroundColor: GOLD }]} onPress={() => router.push("/business-verification")} activeOpacity={0.8}>
-                        <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Apply for Verification</Text>
+                      <Text style={[styles.emptySub, { color: colors.textMuted }]}>Get a verified account to create organization pages.</Text>
+                      <TouchableOpacity style={[styles.emptyBtn, { backgroundColor: colors.accent }]} onPress={() => router.push("/premium")} activeOpacity={0.8}>
+                        <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Get Verified</Text>
                       </TouchableOpacity>
                     </>
                   )}
@@ -137,22 +137,7 @@ export default function CompanyIndexScreen() {
             </View>
           }
           ListHeaderComponent={
-            tab === "discover" && !profile?.is_organization_verified ? (
-              <TouchableOpacity
-                style={[styles.verifyBanner, { backgroundColor: GOLD + "10", borderColor: GOLD + "40" }]}
-                onPress={() => router.push("/business-verification")}
-                activeOpacity={0.85}
-              >
-                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: GOLD + "22", alignItems: "center", justifyContent: "center" }}>
-                  <Ionicons name="ribbon-outline" size={18} color={GOLD} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: GOLD, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Create a company page</Text>
-                  <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_400Regular" }}>Apply for organization verification first</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={GOLD} />
-              </TouchableOpacity>
-            ) : tab === "discover" ? (
+            tab === "discover" && profile?.is_verified ? (
               <TouchableOpacity
                 style={[styles.verifyBanner, { backgroundColor: BRAND + "10", borderColor: BRAND + "40" }]}
                 onPress={() => router.push("/company/create")}
@@ -162,10 +147,25 @@ export default function CompanyIndexScreen() {
                   <Ionicons name="add" size={20} color={BRAND} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: BRAND, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Create a new page</Text>
-                  <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_400Regular" }}>You're verified — build your page now</Text>
+                  <Text style={{ color: BRAND, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Create a company page</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_400Regular" }}>Build your organization's presence on AfuChat</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={BRAND} />
+              </TouchableOpacity>
+            ) : tab === "discover" && !profile?.is_verified ? (
+              <TouchableOpacity
+                style={[styles.verifyBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                onPress={() => router.push("/premium")}
+                activeOpacity={0.85}
+              >
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accent + "22", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="checkmark-circle-outline" size={18} color={colors.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Get verified to create a page</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_400Regular" }}>Verified accounts can create organization pages</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
               </TouchableOpacity>
             ) : null
           }
