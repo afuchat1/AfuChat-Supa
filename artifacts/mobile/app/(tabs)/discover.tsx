@@ -646,30 +646,58 @@ export default function DiscoverScreen() {
       return;
     }
 
-    // --- For You tab (existing logic) ---
+    // --- For You tab ---
     const userInterests: string[] = profile?.interests || [];
     const userCountry: string = profile?.country || "";
+    const isGuest = !user;
 
-    const fyOlderThan = !isRefresh && postsRef.current.length > 0
-      ? postsRef.current[postsRef.current.length - 1]?.created_at
-      : null;
-    const fyBaseQ = supabase
-      .from("posts")
-      .select(`
-        id, author_id, content, image_url, created_at, view_count, visibility, language_code,
-        post_type, article_title, article_body, video_url,
-        profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified, country, interests),
-        post_images(image_url, display_order),
-        video_assets!posts_video_asset_id_fkey(duration_seconds)
-      `)
-      .eq("visibility", "public")
-      .order("created_at", { ascending: false });
-    const { data } = await (fyOlderThan
-      ? fyBaseQ.lt("created_at", fyOlderThan).limit(PAGE_SIZE)
-      : fyBaseQ.limit(PAGE_SIZE));
+    // Guest feed: pull a wide pool (last 14 days, ordered by popularity) so
+    // the scoring algorithm has real signal to rank by, rather than purely
+    // showing the newest posts. Each "load more" slides the 14-day window back.
+    const GUEST_POOL = 90;
+    const guestWindowEnd =
+      isGuest && !isRefresh && postsRef.current.length > 0
+        ? postsRef.current.reduce(
+            (min, p) => (p.created_at < min ? p.created_at : min),
+            postsRef.current[0].created_at,
+          )
+        : null;
+    const guestWindowStart = new Date(
+      guestWindowEnd
+        ? new Date(guestWindowEnd).getTime() - 14 * 24 * 3600000
+        : Date.now() - 14 * 24 * 3600000,
+    ).toISOString();
+
+    // Logged-in feed: cursor-based pagination newest-first (existing behaviour)
+    const fyOlderThan =
+      !isGuest && !isRefresh && postsRef.current.length > 0
+        ? postsRef.current[postsRef.current.length - 1]?.created_at
+        : null;
+
+    const fySelect = `
+      id, author_id, content, image_url, created_at, view_count, visibility, language_code,
+      post_type, article_title, article_body, video_url,
+      profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified, country, interests),
+      post_images(image_url, display_order),
+      video_assets!posts_video_asset_id_fkey(duration_seconds)
+    `;
+
+    // Build query differently for guests vs. logged-in users
+    let fyQ: any = supabase.from("posts").select(fySelect).eq("visibility", "public");
+    if (isGuest) {
+      fyQ = fyQ.gte("created_at", guestWindowStart);
+      if (guestWindowEnd) fyQ = fyQ.lt("created_at", guestWindowEnd);
+      fyQ = fyQ.order("view_count", { ascending: false }).limit(GUEST_POOL);
+    } else {
+      fyQ = fyQ.order("created_at", { ascending: false });
+      if (fyOlderThan) fyQ = fyQ.lt("created_at", fyOlderThan);
+      fyQ = fyQ.limit(PAGE_SIZE);
+    }
+
+    const { data } = await fyQ;
 
     if (data) {
-      if (data.length < PAGE_SIZE) setHasMore(false);
+      if (data.length < (isGuest ? GUEST_POOL : PAGE_SIZE)) setHasMore(false);
       else setHasMore(true);
 
       const postIds = data.map((p: any) => p.id);
