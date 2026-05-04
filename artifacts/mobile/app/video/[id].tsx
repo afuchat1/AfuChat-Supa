@@ -46,6 +46,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { encodeId, decodeId, isUuid } from "@/lib/shortId";
 import { saveVideoProgress, clearVideoProgress } from "@/lib/videoProgress";
 import { ChatBubbleSkeleton, ShortsFeedSkeleton } from "@/components/ui/Skeleton";
+import SignInPromptModal from "@/components/ui/SignInPromptModal";
 
 const USE_NATIVE = Platform.OS !== "web";
 
@@ -1909,6 +1910,7 @@ export default function VideoPlayerScreen() {
   const [downloading, setDownloading] = useState(false);
   const [downloadToast, setDownloadToast] = useState<string | null>(null);
   const [soundSheetData, setSoundSheetData] = useState<{ item: VideoPost; albumArtUrl: string | null; trackArtist: string | null } | null>(null);
+  const [showSignInPrompt, setShowSignInPrompt] = useState(false);
   const listRef = useRef<FlatList>(null);
   const webScrollRef = useRef<HTMLDivElement | null>(null);
   const initialScrollDone = useRef(false);
@@ -2398,7 +2400,7 @@ export default function VideoPlayerScreen() {
   }, []);
 
   async function handleLike(postId: string, currentlyLiked: boolean) {
-    if (!user) { router.push("/(auth)/login"); return; }
+    if (!user) { setShowSignInPrompt(true); return; }
     const post = videos.find((v) => v.id === postId);
     if (!post) return;
     if (currentlyLiked) {
@@ -2414,7 +2416,7 @@ export default function VideoPlayerScreen() {
   }
 
   async function handleBookmark(postId: string, currentlyBookmarked: boolean) {
-    if (!user) { router.push("/(auth)/login"); return; }
+    if (!user) { setShowSignInPrompt(true); return; }
     if (currentlyBookmarked) {
       await supabase.from("post_bookmarks").delete().eq("post_id", postId).eq("user_id", user.id);
       setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, bookmarked: false } : v));
@@ -2542,7 +2544,7 @@ export default function VideoPlayerScreen() {
   }
 
   async function handleFollow(authorId: string, isFollowing: boolean) {
-    if (!user) { router.push("/(auth)/login"); return; }
+    if (!user) { setShowSignInPrompt(true); return; }
     if (isFollowing) {
       await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", authorId);
     } else {
@@ -2807,6 +2809,8 @@ export default function VideoPlayerScreen() {
           <Text style={mStyles.downloadToastText}>{downloadToast}</Text>
         </View>
       )}
+
+      <SignInPromptModal visible={showSignInPrompt} onDismiss={() => setShowSignInPrompt(false)} />
     </View>
   );
 }
