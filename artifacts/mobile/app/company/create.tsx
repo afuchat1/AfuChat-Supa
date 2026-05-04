@@ -19,8 +19,6 @@ import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import { showAlert } from "@/lib/alert";
 
-const BRAND = "#00BCD4";
-
 const ORG_TYPES = [
   { label: "Company", icon: "business-outline" },
   { label: "Brand", icon: "pricetag-outline" },
@@ -73,7 +71,7 @@ export default function CreateCompanyPageScreen() {
   const [form, setForm] = useState({
     name: "", slug: "", org_type: "",
     tagline: "", description: "", website: "",
-    industry: "", size: "", location: "",
+    industry: "", size: "", location: "", physical_address: "",
     founded_year: "", email: "", ig: "", x_twitter: "", linkedin: "",
   });
 
@@ -140,6 +138,7 @@ export default function CreateCompanyPageScreen() {
     if (form.industry.trim()) payload.industry = form.industry.trim();
     if (form.size) payload.size = form.size;
     if (form.location.trim()) payload.location = form.location.trim();
+    if (form.physical_address.trim()) payload.physical_address = form.physical_address.trim();
     if (form.email.trim()) payload.email = form.email.trim();
     if (form.founded_year.trim() && !isNaN(Number(form.founded_year)))
       payload.founded_year = Number(form.founded_year);
@@ -186,7 +185,7 @@ export default function CreateCompanyPageScreen() {
               style={[
                 styles.progressSegment,
                 {
-                  backgroundColor: i < step ? BRAND : (isDark ? "#333" : "#e0e0e0"),
+                  backgroundColor: i < step ? colors.accent : (isDark ? "#333" : "#e0e0e0"),
                   flex: 1,
                 },
               ]}
@@ -195,7 +194,7 @@ export default function CreateCompanyPageScreen() {
         </View>
         <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
           {stepLabels.map((l, i) => (
-            <Text key={l} style={[styles.progressLabel, { color: i + 1 === step ? BRAND : colors.textMuted }]}>{l}</Text>
+            <Text key={l} style={[styles.progressLabel, { color: i + 1 === step ? colors.accent : colors.textMuted }]}>{l}</Text>
           ))}
         </View>
       </View>
@@ -257,16 +256,16 @@ export default function CreateCompanyPageScreen() {
                       <TouchableOpacity
                         key={t.label}
                         style={[styles.typeCard, {
-                          backgroundColor: sel ? BRAND + "14" : colors.surface,
-                          borderColor: sel ? BRAND : colors.border,
+                          backgroundColor: sel ? colors.accent + "14" : colors.surface,
+                          borderColor: sel ? colors.accent : colors.border,
                         }]}
                         onPress={() => set("org_type", t.label)}
                         activeOpacity={0.75}
                       >
-                        <Ionicons name={t.icon as any} size={20} color={sel ? BRAND : colors.textMuted} />
-                        <Text style={[styles.typeLabel, { color: sel ? BRAND : colors.text }]} numberOfLines={2}>{t.label}</Text>
+                        <Ionicons name={t.icon as any} size={20} color={sel ? colors.accent : colors.textMuted} />
+                        <Text style={[styles.typeLabel, { color: sel ? colors.accent : colors.text }]} numberOfLines={2}>{t.label}</Text>
                         {sel && (
-                          <View style={[styles.typeCheck, { backgroundColor: BRAND }]}>
+                          <View style={[styles.typeCheck, { backgroundColor: colors.accent }]}>
                             <Ionicons name="checkmark" size={10} color="#fff" />
                           </View>
                         )}
@@ -355,8 +354,8 @@ export default function CreateCompanyPageScreen() {
                       <TouchableOpacity
                         key={s.label}
                         style={[styles.sizeChip, {
-                          backgroundColor: sel ? BRAND : colors.surface,
-                          borderColor: sel ? BRAND : colors.border,
+                          backgroundColor: sel ? colors.accent : colors.surface,
+                          borderColor: sel ? colors.accent : colors.border,
                         }]}
                         onPress={() => set("size", s.label)}
                         activeOpacity={0.75}
@@ -380,7 +379,7 @@ export default function CreateCompanyPageScreen() {
               </View>
 
               <View style={[styles.inputGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Text style={[styles.inputLabel, { color: colors.textMuted }]}>LOCATION</Text>
+                <Text style={[styles.inputLabel, { color: colors.textMuted }]}>CITY / REGION</Text>
                 <TextInput
                   style={[styles.inputField, { color: colors.text }]}
                   placeholder="e.g. Nairobi, Kenya"
@@ -389,6 +388,23 @@ export default function CreateCompanyPageScreen() {
                   onChangeText={(v) => set("location", v)}
                   maxLength={100}
                 />
+              </View>
+
+              <View style={[styles.inputGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.inputLabel, { color: colors.textMuted }]}>PHYSICAL ADDRESS</Text>
+                <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+                  <Ionicons name="location-outline" size={16} color={colors.textMuted} style={{ marginTop: 4 }} />
+                  <TextInput
+                    style={[styles.inputField, { color: colors.text, flex: 1, minHeight: 54, textAlignVertical: "top" }]}
+                    placeholder={"Street address, building, floor…"}
+                    placeholderTextColor={colors.textMuted}
+                    value={form.physical_address}
+                    onChangeText={(v) => set("physical_address", v)}
+                    multiline
+                    numberOfLines={2}
+                    maxLength={300}
+                  />
+                </View>
               </View>
 
               <View style={[styles.inputGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -443,10 +459,10 @@ export default function CreateCompanyPageScreen() {
               ))}
 
               {/* Preview card */}
-              <View style={[styles.previewCard, { backgroundColor: BRAND + "0C", borderColor: BRAND + "30" }]}>
-                <Ionicons name="eye-outline" size={16} color={BRAND} />
+              <View style={[styles.previewCard, { backgroundColor: colors.accent + "0C", borderColor: colors.accent + "30" }]}>
+                <Ionicons name="eye-outline" size={16} color={colors.accent} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: BRAND }]}>Page Preview</Text>
+                  <Text style={[{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.accent }]}>Page Preview</Text>
                   <Text style={[{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.textMuted, lineHeight: 17, marginTop: 2 }]}>
                     {form.name || "Your Organization"} · {form.org_type || "Organization"}{form.location ? ` · ${form.location}` : ""}
                   </Text>
@@ -470,7 +486,7 @@ export default function CreateCompanyPageScreen() {
           </TouchableOpacity>
         )}
         <TouchableOpacity
-          style={[styles.nextBtn, { backgroundColor: BRAND, opacity: submitting ? 0.7 : 1, flex: step === 1 ? 1 : undefined }]}
+          style={[styles.nextBtn, { backgroundColor: colors.accent, opacity: submitting ? 0.7 : 1, flex: step === 1 ? 1 : undefined }]}
           onPress={goNext}
           disabled={submitting}
           activeOpacity={0.85}
@@ -503,12 +519,12 @@ export default function CreateCompanyPageScreen() {
                 return (
                   <TouchableOpacity
                     key={ind}
-                    style={[styles.pickerOption, { borderBottomColor: colors.border, backgroundColor: sel ? BRAND + "10" : "transparent" }]}
+                    style={[styles.pickerOption, { borderBottomColor: colors.border, backgroundColor: sel ? colors.accent + "10" : "transparent" }]}
                     onPress={() => { set("industry", ind); setShowIndustryPicker(false); }}
                     activeOpacity={0.75}
                   >
-                    <Text style={[styles.pickerOptionText, { color: sel ? BRAND : colors.text, fontFamily: sel ? "Inter_600SemiBold" : "Inter_400Regular", flex: 1 }]}>{ind}</Text>
-                    {sel && <Ionicons name="checkmark" size={18} color={BRAND} />}
+                    <Text style={[styles.pickerOptionText, { color: sel ? colors.accent : colors.text, fontFamily: sel ? "Inter_600SemiBold" : "Inter_400Regular", flex: 1 }]}>{ind}</Text>
+                    {sel && <Ionicons name="checkmark" size={18} color={colors.accent} />}
                   </TouchableOpacity>
                 );
               })}

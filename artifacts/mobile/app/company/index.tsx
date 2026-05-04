@@ -17,7 +17,6 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 
-const BRAND = "#00BCD4";
 const GOLD = "#D4A853";
 
 type PageRow = {
@@ -80,7 +79,7 @@ export default function CompanyIndexScreen() {
         <Text style={[styles.navTitle, { color: colors.text }]}>Company Pages</Text>
         {(profile?.is_verified || profile?.is_organization_verified) ? (
           <TouchableOpacity onPress={() => router.push("/company/create")} hitSlop={12}>
-            <Ionicons name="add" size={26} color={BRAND} />
+            <Ionicons name="add" size={26} color={colors.accent} />
           </TouchableOpacity>
         ) : (
           <View style={{ width: 24 }} />
@@ -90,8 +89,8 @@ export default function CompanyIndexScreen() {
       {/* Tabs */}
       <View style={[styles.tabs, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         {(["discover", "mine"] as const).map((t) => (
-          <TouchableOpacity key={t} style={[styles.tab, { borderBottomColor: tab === t ? BRAND : "transparent" }]} onPress={() => setTab(t)}>
-            <Text style={[styles.tabText, { color: tab === t ? BRAND : colors.textMuted, fontFamily: tab === t ? "Inter_600SemiBold" : "Inter_400Regular" }]}>
+          <TouchableOpacity key={t} style={[styles.tab, { borderBottomColor: tab === t ? colors.accent : "transparent" }]} onPress={() => setTab(t)}>
+            <Text style={[styles.tabText, { color: tab === t ? colors.accent : colors.textMuted, fontFamily: tab === t ? "Inter_600SemiBold" : "Inter_400Regular" }]}>
               {t === "discover" ? "Discover" : "My Pages"}
             </Text>
           </TouchableOpacity>
@@ -100,13 +99,13 @@ export default function CompanyIndexScreen() {
 
       {loading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator color={BRAND} />
+          <ActivityIndicator color={colors.accent} />
         </View>
       ) : (
         <FlatList
           data={displayedPages}
           keyExtractor={(item) => item.id}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BRAND} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ padding: 12, paddingBottom: insets.bottom + 24, gap: 10 }}
           ListEmptyComponent={
@@ -118,7 +117,7 @@ export default function CompanyIndexScreen() {
                   {(profile?.is_verified || profile?.is_organization_verified) ? (
                     <>
                       <Text style={[styles.emptySub, { color: colors.textMuted }]}>Create your first organization page.</Text>
-                      <TouchableOpacity style={[styles.emptyBtn, { backgroundColor: BRAND }]} onPress={() => router.push("/company/create")} activeOpacity={0.8}>
+                      <TouchableOpacity style={[styles.emptyBtn, { backgroundColor: colors.accent }]} onPress={() => router.push("/company/create")} activeOpacity={0.8}>
                         <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Create a Page</Text>
                       </TouchableOpacity>
                     </>
@@ -139,18 +138,18 @@ export default function CompanyIndexScreen() {
           ListHeaderComponent={
             tab === "discover" && (profile?.is_verified || profile?.is_organization_verified) ? (
               <TouchableOpacity
-                style={[styles.verifyBanner, { backgroundColor: BRAND + "10", borderColor: BRAND + "40" }]}
+                style={[styles.verifyBanner, { backgroundColor: colors.accent + "10", borderColor: colors.accent + "40" }]}
                 onPress={() => router.push("/company/create")}
                 activeOpacity={0.85}
               >
-                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: BRAND + "22", alignItems: "center", justifyContent: "center" }}>
-                  <Ionicons name="add" size={20} color={BRAND} />
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accent + "22", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="add" size={20} color={colors.accent} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: BRAND, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Create a company page</Text>
+                  <Text style={{ color: colors.accent, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Create a company page</Text>
                   <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_400Regular" }}>Build your organization's presence on AfuChat</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={BRAND} />
+                <Ionicons name="chevron-forward" size={16} color={colors.accent} />
               </TouchableOpacity>
             ) : tab === "discover" && !profile?.is_verified ? (
               <TouchableOpacity
@@ -175,7 +174,7 @@ export default function CompanyIndexScreen() {
               onPress={() => router.push(`/company/${item.slug}` as any)}
               activeOpacity={0.8}
             >
-              <View style={[styles.cardLogo, { backgroundColor: BRAND }]}>
+              <View style={[styles.cardLogo, { backgroundColor: colors.accent }]}>
                 {item.logo_url
                   ? <Image source={{ uri: item.logo_url }} style={{ width: "100%", height: "100%", borderRadius: 12 }} resizeMode="cover" />
                   : <Text style={styles.cardLogoText}>{item.name.slice(0, 1).toUpperCase()}</Text>
@@ -186,8 +185,8 @@ export default function CompanyIndexScreen() {
                   <Text style={[styles.cardName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
                   {item.is_verified && <Ionicons name="checkmark-circle" size={14} color={GOLD} />}
                   {item.admin_id === user?.id && (
-                    <View style={[styles.adminBadge, { backgroundColor: BRAND + "20" }]}>
-                      <Text style={[styles.adminBadgeText, { color: BRAND }]}>Admin</Text>
+                    <View style={[styles.adminBadge, { backgroundColor: colors.accent + "20" }]}>
+                      <Text style={[styles.adminBadgeText, { color: colors.accent }]}>Admin</Text>
                     </View>
                   )}
                 </View>

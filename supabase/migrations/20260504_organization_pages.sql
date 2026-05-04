@@ -16,8 +16,9 @@ CREATE TABLE IF NOT EXISTS organization_pages (
   org_type      TEXT,
   size          TEXT,        -- "1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"
   founded_year  INTEGER,
-  location      TEXT,
-  social_links  JSONB       NOT NULL DEFAULT '{}',
+  location         TEXT,
+  physical_address TEXT,
+  social_links     JSONB       NOT NULL DEFAULT '{}',
   admin_id      UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   is_verified   BOOLEAN     NOT NULL DEFAULT FALSE,
   followers_count INTEGER   NOT NULL DEFAULT 0,

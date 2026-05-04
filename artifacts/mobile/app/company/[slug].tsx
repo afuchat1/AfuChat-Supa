@@ -24,7 +24,6 @@ import { supabase } from "@/lib/supabase";
 import { showAlert } from "@/lib/alert";
 
 const GOLD = "#D4A853";
-const BRAND = "#00BCD4";
 
 type OrgPage = {
   id: string;
@@ -41,6 +40,7 @@ type OrgPage = {
   size: string | null;
   founded_year: number | null;
   location: string | null;
+  physical_address: string | null;
   social_links: Record<string, string>;
   admin_id: string;
   is_verified: boolean;
@@ -285,7 +285,7 @@ export default function CompanyPageScreen() {
           <View style={{ width: 24 }} />
         </View>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator color={BRAND} />
+          <ActivityIndicator color={colors.accent} />
         </View>
       </View>
     );
@@ -328,7 +328,7 @@ export default function CompanyPageScreen() {
           {page.logo_url ? (
             <Image source={{ uri: page.logo_url }} style={styles.logoImg} resizeMode="cover" />
           ) : (
-            <View style={[styles.logoFallback, { backgroundColor: BRAND }]}>
+            <View style={[styles.logoFallback, { backgroundColor: colors.accent }]}>
               <Text style={styles.logoFallbackText}>{page.name.slice(0, 1).toUpperCase()}</Text>
             </View>
           )}
@@ -364,7 +364,7 @@ export default function CompanyPageScreen() {
           onPress={() => setActiveTab("followers")}
           activeOpacity={0.7}
         >
-          <Text style={[styles.statValue, { color: BRAND }]}>{page.followers_count.toLocaleString()}</Text>
+          <Text style={[styles.statValue, { color: colors.accent }]}>{page.followers_count.toLocaleString()}</Text>
           <Text style={[styles.statLabel, { color: colors.textMuted }]}>Followers</Text>
         </TouchableOpacity>
 
@@ -373,8 +373,8 @@ export default function CompanyPageScreen() {
           {!isAdmin && (
             <TouchableOpacity
               style={[styles.followBtn, {
-                backgroundColor: following ? colors.surface : BRAND,
-                borderColor: following ? colors.border : BRAND,
+                backgroundColor: following ? colors.surface : colors.accent,
+                borderColor: following ? colors.border : colors.accent,
                 borderWidth: 1,
               }]}
               onPress={toggleFollow}
@@ -408,7 +408,7 @@ export default function CompanyPageScreen() {
 
           {isAdmin && (
             <TouchableOpacity
-              style={[styles.followBtn, { backgroundColor: BRAND }]}
+              style={[styles.followBtn, { backgroundColor: colors.accent }]}
               onPress={() => setShowPostModal(true)}
               activeOpacity={0.8}
             >
@@ -437,11 +437,12 @@ export default function CompanyPageScreen() {
           </View>
         ) : null}
 
-        {/* Contact details */}
-        {(page.email || page.org_type) ? (
+        {/* Contact & location details */}
+        {(page.email || page.org_type || page.physical_address) ? (
           <View style={[styles.detailsBox, { borderTopColor: colors.border }]}>
             {page.org_type && <DetailRow icon="business-outline" text={page.org_type} colors={colors} />}
             {page.email && <DetailRow icon="mail-outline" text={page.email} colors={colors} />}
+            {page.physical_address && <DetailRow icon="location-outline" text={page.physical_address} colors={colors} />}
           </View>
         ) : null}
       </View>
@@ -451,11 +452,11 @@ export default function CompanyPageScreen() {
         {(["updates", "followers", "jobs"] as const).map((t) => (
           <TouchableOpacity
             key={t}
-            style={[styles.tab, activeTab === t && { borderBottomColor: BRAND, borderBottomWidth: 2 }]}
+            style={[styles.tab, activeTab === t && { borderBottomColor: colors.accent, borderBottomWidth: 2 }]}
             onPress={() => setActiveTab(t)}
             activeOpacity={0.8}
           >
-            <Text style={[styles.tabText, { color: activeTab === t ? BRAND : colors.textMuted }]} numberOfLines={1}>
+            <Text style={[styles.tabText, { color: activeTab === t ? colors.accent : colors.textMuted }]} numberOfLines={1}>
               {t === "updates" ? `Updates` : t === "followers" ? `Followers` : `Jobs (${jobs.length})`}
             </Text>
           </TouchableOpacity>
@@ -466,7 +467,7 @@ export default function CompanyPageScreen() {
             onPress={() => setShowPostModal(true)}
             hitSlop={8}
           >
-            <Ionicons name="add-circle-outline" size={22} color={BRAND} />
+            <Ionicons name="add-circle-outline" size={22} color={colors.accent} />
           </TouchableOpacity>
         )}
         {isAdmin && activeTab === "jobs" && (
@@ -475,7 +476,7 @@ export default function CompanyPageScreen() {
             onPress={() => setShowJobModal(true)}
             hitSlop={8}
           >
-            <Ionicons name="add-circle-outline" size={22} color={BRAND} />
+            <Ionicons name="add-circle-outline" size={22} color={colors.accent} />
           </TouchableOpacity>
         )}
       </View>
@@ -503,7 +504,7 @@ export default function CompanyPageScreen() {
         <FlatList
           data={posts}
           keyExtractor={(item) => item.id}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BRAND} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={Header}
           ListEmptyComponent={
@@ -513,7 +514,7 @@ export default function CompanyPageScreen() {
               {isAdmin && (
                 <TouchableOpacity
                   onPress={() => setShowPostModal(true)}
-                  style={[styles.emptyBtn, { backgroundColor: BRAND }]}
+                  style={[styles.emptyBtn, { backgroundColor: colors.accent }]}
                   activeOpacity={0.8}
                 >
                   <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Post your first update</Text>
@@ -524,7 +525,7 @@ export default function CompanyPageScreen() {
           renderItem={({ item }) => (
             <View style={[styles.postCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.postHeader}>
-                <View style={[styles.postLogo, { backgroundColor: BRAND }]}>
+                <View style={[styles.postLogo, { backgroundColor: colors.accent }]}>
                   {page.logo_url
                     ? <Image source={{ uri: page.logo_url }} style={{ width: "100%", height: "100%", borderRadius: 4 }} />
                     : <Text style={{ color: "#fff", fontFamily: "Inter_700Bold", fontSize: 11 }}>{page.name.slice(0, 1)}</Text>
@@ -555,7 +556,7 @@ export default function CompanyPageScreen() {
         <FlatList
           data={followers}
           keyExtractor={(item) => item.user_id}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BRAND} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={Header}
           ListEmptyComponent={
@@ -577,7 +578,7 @@ export default function CompanyPageScreen() {
                   {p.avatar_url ? (
                     <Image source={{ uri: p.avatar_url }} style={styles.followerAvatarImg} />
                   ) : (
-                    <View style={[styles.followerAvatarImg, { backgroundColor: BRAND, alignItems: "center", justifyContent: "center" }]}>
+                    <View style={[styles.followerAvatarImg, { backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" }]}>
                       <Text style={{ color: "#fff", fontFamily: "Inter_700Bold", fontSize: 14 }}>
                         {(p.display_name || p.handle || "?").slice(0, 1).toUpperCase()}
                       </Text>
@@ -590,7 +591,7 @@ export default function CompanyPageScreen() {
                       {p.display_name || p.handle || "User"}
                     </Text>
                     {p.is_verified && (
-                      <Ionicons name="checkmark-circle" size={13} color={BRAND} />
+                      <Ionicons name="checkmark-circle" size={13} color={colors.accent} />
                     )}
                   </View>
                   {p.handle ? (
@@ -608,7 +609,7 @@ export default function CompanyPageScreen() {
         <FlatList
           data={jobs}
           keyExtractor={(item) => item.id}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BRAND} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={<View>{Header}</View>}
           ListEmptyComponent={
@@ -618,7 +619,7 @@ export default function CompanyPageScreen() {
               {isAdmin && (
                 <TouchableOpacity
                   onPress={() => setShowJobModal(true)}
-                  style={[styles.emptyBtn, { backgroundColor: BRAND }]}
+                  style={[styles.emptyBtn, { backgroundColor: colors.accent }]}
                   activeOpacity={0.8}
                 >
                   <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Post a Job</Text>
@@ -632,8 +633,8 @@ export default function CompanyPageScreen() {
                 <View style={{ flex: 1, gap: 4 }}>
                   <Text style={[styles.jobTitle, { color: colors.text }]}>{job.title}</Text>
                   <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
-                    <View style={[styles.jobTypeBadge, { backgroundColor: BRAND + "18" }]}>
-                      <Text style={[styles.jobTypeBadgeText, { color: BRAND }]}>{job.job_type}</Text>
+                    <View style={[styles.jobTypeBadge, { backgroundColor: colors.accent + "18" }]}>
+                      <Text style={[styles.jobTypeBadgeText, { color: colors.accent }]}>{job.job_type}</Text>
                     </View>
                     {job.location ? (
                       <View style={[styles.jobLocBadge, { backgroundColor: colors.backgroundSecondary ?? colors.background }]}>
@@ -650,7 +651,7 @@ export default function CompanyPageScreen() {
               <Text style={[styles.jobDesc, { color: colors.textSecondary }]} numberOfLines={3}>{job.description}</Text>
               {job.apply_url ? (
                 <TouchableOpacity
-                  style={[styles.applyBtn, { backgroundColor: BRAND }]}
+                  style={[styles.applyBtn, { backgroundColor: colors.accent }]}
                   onPress={() => Linking.openURL(job.apply_url!.startsWith("http") ? job.apply_url! : `https://${job.apply_url}`)}
                   activeOpacity={0.8}
                 >
@@ -686,7 +687,7 @@ export default function CompanyPageScreen() {
                 <Text style={{ color: colors.textMuted, fontSize: 12 }}>{postText.length}/3000</Text>
               </View>
               <TouchableOpacity
-                style={[styles.submitBtn, { backgroundColor: BRAND, opacity: posting || !postText.trim() ? 0.6 : 1 }]}
+                style={[styles.submitBtn, { backgroundColor: colors.accent, opacity: posting || !postText.trim() ? 0.6 : 1 }]}
                 onPress={submitPost}
                 disabled={posting || !postText.trim()}
                 activeOpacity={0.85}
@@ -721,7 +722,7 @@ export default function CompanyPageScreen() {
                 {["Full-time","Part-time","Contract","Internship","Volunteer","Remote"].map((jt) => (
                   <TouchableOpacity
                     key={jt}
-                    style={[styles.jobTypeChip, { backgroundColor: jobForm.job_type === jt ? BRAND : colors.background, borderColor: jobForm.job_type === jt ? BRAND : colors.border }]}
+                    style={[styles.jobTypeChip, { backgroundColor: jobForm.job_type === jt ? colors.accent : colors.background, borderColor: jobForm.job_type === jt ? colors.accent : colors.border }]}
                     onPress={() => setJobForm((f) => ({ ...f, job_type: jt }))}
                     activeOpacity={0.75}
                   >
@@ -758,7 +759,7 @@ export default function CompanyPageScreen() {
                 maxLength={300}
               />
               <TouchableOpacity
-                style={[styles.submitBtn, { backgroundColor: BRAND, opacity: postingJob || !jobForm.title.trim() || !jobForm.description.trim() ? 0.6 : 1, marginBottom: 20 }]}
+                style={[styles.submitBtn, { backgroundColor: colors.accent, opacity: postingJob || !jobForm.title.trim() || !jobForm.description.trim() ? 0.6 : 1, marginBottom: 20 }]}
                 onPress={submitJob}
                 disabled={postingJob || !jobForm.title.trim() || !jobForm.description.trim()}
                 activeOpacity={0.85}
@@ -791,7 +792,7 @@ export default function CompanyPageScreen() {
                   onPress={() => togglePageFollow(mp.id)}
                   activeOpacity={0.8}
                 >
-                  <View style={[styles.pageFollowLogo, { backgroundColor: BRAND }]}>
+                  <View style={[styles.pageFollowLogo, { backgroundColor: colors.accent }]}>
                     {mp.logo_url
                       ? <Image source={{ uri: mp.logo_url }} style={{ width: "100%", height: "100%", borderRadius: 4 }} />
                       : <Text style={{ color: "#fff", fontFamily: "Inter_700Bold", fontSize: 12 }}>{mp.name.slice(0, 1)}</Text>
@@ -800,7 +801,7 @@ export default function CompanyPageScreen() {
                   <Text style={[{ flex: 1, color: colors.text, fontFamily: "Inter_500Medium", fontSize: 15 }]} numberOfLines={1}>
                     {mp.name}
                   </Text>
-                  <View style={[styles.pageFollowChip, { backgroundColor: isFollowing ? BRAND : colors.surface, borderColor: isFollowing ? BRAND : colors.border }]}>
+                  <View style={[styles.pageFollowChip, { backgroundColor: isFollowing ? colors.accent : colors.surface, borderColor: isFollowing ? colors.accent : colors.border }]}>
                     <Ionicons name={isFollowing ? "checkmark" : "add"} size={14} color={isFollowing ? "#fff" : colors.text} />
                     <Text style={[{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: isFollowing ? "#fff" : colors.text }]}>
                       {isFollowing ? "Following" : "Follow"}

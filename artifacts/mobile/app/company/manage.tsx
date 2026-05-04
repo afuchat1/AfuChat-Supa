@@ -18,8 +18,6 @@ import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import { showAlert } from "@/lib/alert";
 
-const BRAND = "#00BCD4";
-
 type OrgPage = {
   id: string;
   slug: string;
@@ -33,6 +31,7 @@ type OrgPage = {
   size: string | null;
   founded_year: number | null;
   location: string | null;
+  physical_address: string | null;
   social_links: Record<string, string>;
   admin_id: string;
   followers_count: number;
@@ -52,7 +51,7 @@ export default function ManageCompanyPageScreen() {
 
   const [form, setForm] = useState({
     name: "", tagline: "", description: "", website: "", email: "",
-    industry: "", org_type: "", size: "", founded_year: "", location: "",
+    industry: "", org_type: "", size: "", founded_year: "", location: "", physical_address: "",
     ig: "", x_twitter: "", linkedin: "",
   });
 
@@ -72,6 +71,7 @@ export default function ManageCompanyPageScreen() {
         size: data.size || "",
         founded_year: data.founded_year ? String(data.founded_year) : "",
         location: data.location || "",
+        physical_address: data.physical_address || "",
         ig: data.social_links?.instagram || "",
         x_twitter: data.social_links?.x_twitter || "",
         linkedin: data.social_links?.linkedin || "",
@@ -107,6 +107,7 @@ export default function ManageCompanyPageScreen() {
       org_type: form.org_type.trim() || null,
       size: form.size || null,
       location: form.location.trim() || null,
+      physical_address: form.physical_address.trim() || null,
       social_links,
     };
     if (form.founded_year.trim() && !isNaN(Number(form.founded_year))) {
@@ -139,7 +140,7 @@ export default function ManageCompanyPageScreen() {
           <View style={{ width: 24 }} />
         </View>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator color={BRAND} />
+          <ActivityIndicator color={colors.accent} />
         </View>
       </View>
     );
@@ -171,7 +172,7 @@ export default function ManageCompanyPageScreen() {
         </TouchableOpacity>
         <Text style={[styles.navTitle, { color: colors.text }]}>Manage Page</Text>
         <TouchableOpacity onPress={() => router.push(`/company/${page.slug}` as any)} hitSlop={12}>
-          <Ionicons name="eye-outline" size={22} color={BRAND} />
+          <Ionicons name="eye-outline" size={22} color={colors.accent} />
         </TouchableOpacity>
       </View>
 
@@ -182,14 +183,14 @@ export default function ManageCompanyPageScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* Stats banner */}
-          <View style={[styles.statsBanner, { backgroundColor: BRAND + "10", borderColor: BRAND + "30" }]}>
-            <StatItem icon="people" value={page.followers_count} label="Followers" />
-            <View style={[styles.statDivider, { backgroundColor: BRAND + "30" }]} />
-            <StatItem icon="newspaper" value={page.posts_count} label="Updates" />
-            <View style={[styles.statDivider, { backgroundColor: BRAND + "30" }]} />
+          <View style={[styles.statsBanner, { backgroundColor: colors.accent + "10", borderColor: colors.accent + "30" }]}>
+            <StatItem icon="people" value={page.followers_count} label="Followers" accent={colors.accent} />
+            <View style={[styles.statDivider, { backgroundColor: colors.accent + "30" }]} />
+            <StatItem icon="newspaper" value={page.posts_count} label="Updates" accent={colors.accent} />
+            <View style={[styles.statDivider, { backgroundColor: colors.accent + "30" }]} />
             <TouchableOpacity style={styles.statCta} onPress={() => router.push(`/company/${page.slug}` as any)}>
-              <Ionicons name="open-outline" size={14} color={BRAND} />
-              <Text style={[styles.statCtaText, { color: BRAND }]}>View live</Text>
+              <Ionicons name="open-outline" size={14} color={colors.accent} />
+              <Text style={[styles.statCtaText, { color: colors.accent }]}>View live</Text>
             </TouchableOpacity>
           </View>
 
@@ -214,8 +215,23 @@ export default function ManageCompanyPageScreen() {
           </Field>
 
           <Text style={[styles.groupLabel, { color: colors.text }, { marginTop: 4 }]}>Details</Text>
-          <Field label="Location" colors={colors}>
+          <Field label="City / Region" colors={colors}>
             <TextInput style={[styles.input, { color: colors.text }]} value={form.location} onChangeText={(v) => set("location", v)} maxLength={100} placeholder="e.g. Nairobi, Kenya" placeholderTextColor={colors.textMuted} />
+          </Field>
+          <Field label="Physical Address" colors={colors}>
+            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+              <Ionicons name="location-outline" size={15} color={colors.textMuted} style={{ marginTop: 6 }} />
+              <TextInput
+                style={[styles.input, styles.textarea, { color: colors.text, flex: 1, minHeight: 54 }]}
+                value={form.physical_address}
+                onChangeText={(v) => set("physical_address", v)}
+                multiline
+                numberOfLines={2}
+                maxLength={300}
+                placeholder={"Street address, building, floor…"}
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
           </Field>
           <Field label="Founded Year" colors={colors}>
             <TextInput style={[styles.input, { color: colors.text }]} value={form.founded_year} onChangeText={(v) => set("founded_year", v)} keyboardType="numeric" maxLength={4} placeholder="e.g. 2018" placeholderTextColor={colors.textMuted} />
@@ -248,7 +264,7 @@ export default function ManageCompanyPageScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.saveBtn, { backgroundColor: BRAND, opacity: saving ? 0.7 : 1 }]}
+            style={[styles.saveBtn, { backgroundColor: colors.accent, opacity: saving ? 0.7 : 1 }]}
             onPress={handleSave} disabled={saving} activeOpacity={0.85}
           >
             {saving ? <ActivityIndicator color="#fff" size="small" /> : (
@@ -264,11 +280,11 @@ export default function ManageCompanyPageScreen() {
   );
 }
 
-function StatItem({ icon, value, label }: { icon: any; value: number; label: string }) {
+function StatItem({ icon, value, label, accent }: { icon: any; value: number; label: string; accent: string }) {
   return (
     <View style={styles.statItem}>
-      <Ionicons name={icon} size={16} color={BRAND} />
-      <Text style={styles.statValue}>{value.toLocaleString()}</Text>
+      <Ionicons name={icon} size={16} color={accent} />
+      <Text style={[styles.statValue, { color: accent }]}>{value.toLocaleString()}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
@@ -296,7 +312,7 @@ const styles = StyleSheet.create({
   navTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", flex: 1, textAlign: "center" },
   statsBanner: { borderRadius: 14, borderWidth: 1, padding: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-around" },
   statItem: { alignItems: "center", gap: 2 },
-  statValue: { fontSize: 18, fontFamily: "Inter_700Bold", color: BRAND },
+  statValue: { fontSize: 18, fontFamily: "Inter_700Bold" },
   statLabel: { fontSize: 11, fontFamily: "Inter_400Regular", color: "#888" },
   statDivider: { width: 1, height: 32 },
   statCta: { flexDirection: "row", alignItems: "center", gap: 4 },
