@@ -305,10 +305,10 @@ export function DesktopSidebar() {
             </Pressable>
           </>
         )}
-
-        {/* AI quick-chat widget */}
-        <SidebarAIWidget theme={theme} />
       </ScrollView>
+
+      {/* AI quick-chat widget — pinned to bottom, always visible */}
+      <SidebarAIWidget theme={theme} />
     </View>
   );
 }

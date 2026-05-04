@@ -101,8 +101,6 @@ export function SidebarAIWidget({ theme }: { theme: ThemePack }) {
     router.push("/ai" as any);
   };
 
-  if (!session) return null;
-
   return (
     <View style={styles.root}>
       <View style={[styles.divider, { backgroundColor: theme.divider }]} />
