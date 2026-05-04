@@ -163,6 +163,10 @@ function RootLayoutNav() {
       <Stack.Screen name="terms" options={bottomSheetAnim} />
       <Stack.Screen name="privacy" options={bottomSheetAnim} />
       <Stack.Screen name="video/[id]" options={{ headerShown: false, animation: "fade", contentStyle: { backgroundColor: "#000" } }} />
+      <Stack.Screen name="company/index" />
+      <Stack.Screen name="company/[slug]" />
+      <Stack.Screen name="company/create" options={bottomSheetAnim} />
+      <Stack.Screen name="company/manage" />
       <Stack.Screen name="[handle]" options={{ animation: "fade" }} />
       <Stack.Screen name="call/[id]" options={{ headerShown: false, animation: "fade", gestureEnabled: false, contentStyle: { backgroundColor: "#1a1a2e" } }} />
     </Stack>

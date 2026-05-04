@@ -310,6 +310,12 @@ export default function MeScreen() {
       )}
 
       <MenuGroup>
+        <MenuItem icon="business-outline" iconBg="#00BCD4" label="Company Pages" onPress={() => router.push("/company" as any)} />
+        <Separator indent={54} />
+        <MenuItem icon="ribbon-outline" iconBg="#D4A853" label="Business Verification" onPress={() => router.push("/business-verification")} value={profile?.is_organization_verified ? "Verified" : ""} />
+      </MenuGroup>
+
+      <MenuGroup>
         <MenuItem icon="trophy" iconBg="#D4A853" label="Prestige Status" onPress={() => router.push("/prestige")} badge="NEW" />
         {isAdmin && (
           <>

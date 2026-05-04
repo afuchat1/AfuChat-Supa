@@ -159,6 +159,18 @@ const TOP_NAV: TopNavItem[] = [
     ],
   },
   {
+    key: "pages",
+    label: "Pages",
+    icon: "business-outline",
+    match: (p) => p.startsWith("/company"),
+    subItems: [
+      { key: "discover", label: "Discover Pages", icon: "search-outline", route: "/company", description: "Browse organization pages" },
+      { key: "my-pages", label: "My Pages", icon: "briefcase-outline", route: "/company?tab=mine", description: "Pages you manage" },
+      { key: "create", label: "Create a Page", icon: "add-circle-outline", route: "/company/create", description: "Build your organization's presence" },
+      { key: "verify", label: "Get Verified", icon: "ribbon-outline", route: "/business-verification", description: "Apply for the gold badge" },
+    ],
+  },
+  {
     key: "more",
     label: "More",
     icon: "ellipsis-horizontal",

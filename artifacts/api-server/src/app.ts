@@ -12,6 +12,7 @@ import publicPostRouter from "./routes/public-post";
 import publicVideoRouter from "./routes/public-video";
 import landingRouter from "./routes/landing";
 import seoRouter from "./routes/seo";
+import companyPageRouter from "./routes/company-page";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
@@ -40,6 +41,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use(seoRouter);
+app.use(companyPageRouter);
 app.use(publicPostRouter);
 app.use(publicVideoRouter);
 app.use(publicProfileRouter);
