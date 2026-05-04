@@ -83,17 +83,37 @@ export function RightRail() {
         .filter(Boolean);
     }
 
+    // Fetch a broad pool ordered by activity (XP) — not by creation date
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, display_name, handle, avatar_url, is_verified, is_organization_verified, bio")
+      .select("id, display_name, handle, avatar_url, is_verified, is_organization_verified, bio, interests, xp")
       .neq("id", user?.id || "00000000-0000-0000-0000-000000000000")
-      .order("created_at", { ascending: false })
-      .limit(40);
+      .order("xp", { ascending: false })
+      .limit(200);
 
-    const filtered = (profiles || [])
+    // Score each candidate by interest overlap + activity + verification
+    const myInterestSet = new Set(myInterests);
+    const scored = (profiles || [])
       .filter((p: any) => !myFollowing.has(p.id))
+      .map((p: any) => {
+        const profileInterests: string[] = Array.isArray(p.interests)
+          ? p.interests.map((s: string) => String(s).toLowerCase().trim()).filter(Boolean)
+          : [];
+        const bioTags = extractHashtags(p.bio);
+        const allTags = new Set([...profileInterests, ...bioTags]);
+        const overlap = myInterestSet.size > 0
+          ? [...allTags].filter((t) => myInterestSet.has(t)).length
+          : 0;
+        const score =
+          overlap * 150 +
+          Math.log1p(p.xp || 0) * 10 +
+          (p.is_verified || p.is_organization_verified ? 40 : 0);
+        return { ...p, _score: score };
+      })
+      .sort((a: any, b: any) => b._score - a._score)
       .slice(0, 5);
-    setSuggested(filtered as SuggestedProfile[]);
+
+    setSuggested(scored as SuggestedProfile[]);
 
     // ── Suggested communities (interest + follow-based ranking) ──
     let myCommunityIds = new Set<string>();
