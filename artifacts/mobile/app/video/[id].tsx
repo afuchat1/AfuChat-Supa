@@ -1909,6 +1909,7 @@ export default function VideoPlayerScreen() {
   const [downloadToast, setDownloadToast] = useState<string | null>(null);
   const [soundSheetData, setSoundSheetData] = useState<{ item: VideoPost; albumArtUrl: string | null; trackArtist: string | null } | null>(null);
   const listRef = useRef<FlatList>(null);
+  const webScrollRef = useRef<HTMLDivElement | null>(null);
   const initialScrollDone = useRef(false);
   const tabAnim = useRef(new Animated.Value(0)).current;
   // Pause toggle exposed by the *currently active* card so keyboard handlers
@@ -1924,26 +1925,12 @@ export default function VideoPlayerScreen() {
   const effHRef = useRef(EFF_H);
   useEffect(() => { effHRef.current = EFF_H; }, [EFF_H]);
 
-  // Find the real DOM scroll container inside the FlatList and drive scrollTop
-  // directly. This is more reliable on React Native Web than scrollToIndex /
-  // scrollToOffset, which may silently no-op when the RN-Web VirtualizedList
-  // hasn't fully initialised its internal node reference.
   function scrollFeedTo(index: number) {
     if (Platform.OS !== "web") {
       listRef.current?.scrollToIndex({ index, animated: true });
       return;
     }
-    const root = document.getElementById("vf-scroll");
-    if (!root) return;
-    // Walk into first children to find the actual overflow:scroll div.
-    let el: HTMLElement | null = root;
-    for (let i = 0; i < 6 && el; i++) {
-      const oy = window.getComputedStyle(el).overflowY;
-      if (oy === "scroll" || oy === "auto") break;
-      el = el.firstElementChild as HTMLElement | null;
-    }
-    if (!el) return;
-    el.scrollTo({ top: index * effHRef.current, behavior: "smooth" });
+    webScrollRef.current?.scrollTo({ top: index * effHRef.current, behavior: "smooth" });
   }
 
   // Web-only keyboard controls:
@@ -1985,99 +1972,49 @@ export default function VideoPlayerScreen() {
     return () => window.removeEventListener("keydown", onKey);
   }, []); // stable — uses refs internally
 
-  // Prevent page body scroll and pinch-zoom when the video feed is mounted.
-  // Also inject scroll-snap CSS so touch/wheel swipes snap per-video, and set
-  // touch-action:pan-y on all FlatList descendants so vertical swipe gestures
-  // are never blocked by React Native Web's default touch-action:none on Views.
+  // Lock page-level scroll while the video feed is open so the browser never
+  // hijacks the feed's own scroll container.
   useEffect(() => {
     if (Platform.OS !== "web") return;
-    const prev = document.body.style.overflow;
+    const prevBody = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
     document.body.style.overflow = "hidden";
     document.documentElement.style.overflow = "hidden";
-    const existingMeta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
-    const prevContent = existingMeta?.content || "";
-    if (existingMeta) {
-      existingMeta.content = "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no";
-    }
-
-    // ── Touch swipe handler ─────────────────────────────────────────────────
-    // RN-Web's gesture system handles all pointer/touch events internally and
-    // does not expose native browser scroll to the FlatList on mobile.
-    // CSS scroll-snap approaches are unreliable because the exact DOM depth of
-    // RN-Web's VirtualizedList varies. Instead we:
-    //   1. Attach native DOM touchstart/touchend listeners to #vf-scroll.
-    //   2. Detect vertical swipe direction and call scrollFeedTo() directly —
-    //      the same function already used by the keyboard (ArrowUp/Down) handler.
-    //   3. Handle mouse wheel (desktop) the same way.
-    // This guarantees correct per-item scrolling regardless of RN-Web internals.
-    let swipeStartY = 0;
-    let swipeStartTime = 0;
-
-    function handleTouchStart(e: TouchEvent) {
-      swipeStartY = e.touches[0].clientY;
-      swipeStartTime = Date.now();
-    }
-
-    function handleTouchEnd(e: TouchEvent) {
-      const dy = e.changedTouches[0].clientY - swipeStartY;
-      const dt = Date.now() - swipeStartTime;
-      const velocity = Math.abs(dy) / Math.max(dt, 1); // px/ms
-      // Require either a 50 px swipe OR a fast flick (≥ 0.3 px/ms).
-      if (Math.abs(dy) < 50 && velocity < 0.3) return;
-      const cur = activeIndexRef.current;
-      const len = videosLenRef.current;
-      if (dy < 0) {
-        // Swipe up → advance to next video
-        const next = Math.min(cur + 1, Math.max(len - 1, 0));
-        if (next !== cur) { scrollFeedTo(next); setActiveIndex(next); }
-      } else {
-        // Swipe down → go back to previous video
-        const prev2 = Math.max(cur - 1, 0);
-        if (prev2 !== cur) { scrollFeedTo(prev2); setActiveIndex(prev2); }
-      }
-    }
-
-    // Mouse-wheel handler for desktop browsers (throttled to one video per tick).
-    let wheelLocked = false;
-    function handleWheel(e: WheelEvent) {
-      e.preventDefault();
-      if (wheelLocked) return;
-      wheelLocked = true;
-      setTimeout(() => { wheelLocked = false; }, 700);
-      const cur = activeIndexRef.current;
-      const len = videosLenRef.current;
-      if (e.deltaY > 0) {
-        const next = Math.min(cur + 1, Math.max(len - 1, 0));
-        if (next !== cur) { scrollFeedTo(next); setActiveIndex(next); }
-      } else if (e.deltaY < 0) {
-        const prev2 = Math.max(cur - 1, 0);
-        if (prev2 !== cur) { scrollFeedTo(prev2); setActiveIndex(prev2); }
-      }
-    }
-
-    // Attach as soon as the FlatList container is in the DOM.
-    const attachInterval = setInterval(() => {
-      const root = document.getElementById("vf-scroll");
-      if (!root) return;
-      clearInterval(attachInterval);
-      root.addEventListener("touchstart", handleTouchStart, { passive: true });
-      root.addEventListener("touchend", handleTouchEnd, { passive: true });
-      root.addEventListener("wheel", handleWheel, { passive: false });
-    }, 80);
-
+    const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
+    const prevMeta = meta?.content ?? "";
+    if (meta) meta.content = "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no";
+    // Hide the webkit scrollbar globally for this page while the feed is open.
+    const style = document.createElement("style");
+    style.id = "vf-no-scrollbar";
+    style.textContent = `#vf-web-scroll::-webkit-scrollbar { display: none; }`;
+    document.head.appendChild(style);
     return () => {
-      clearInterval(attachInterval);
-      document.body.style.overflow = prev;
-      document.documentElement.style.overflow = "";
-      if (existingMeta && prevContent) existingMeta.content = prevContent;
-      const root = document.getElementById("vf-scroll");
-      if (root) {
-        root.removeEventListener("touchstart", handleTouchStart);
-        root.removeEventListener("touchend", handleTouchEnd);
-        root.removeEventListener("wheel", handleWheel);
-      }
+      document.body.style.overflow = prevBody;
+      document.documentElement.style.overflow = prevHtml;
+      if (meta && prevMeta) meta.content = prevMeta;
+      style.remove();
     };
   }, []);
+
+  // Called by the native <div> scroll container on web when the user scrolls.
+  // Calculates which video is now centred and updates activeIndex.
+  function handleWebScroll(e: React.UIEvent<HTMLDivElement>) {
+    const scrollTop = (e.target as HTMLDivElement).scrollTop;
+    const h = effHRef.current;
+    if (!h) return;
+    const newIndex = Math.round(scrollTop / h);
+    if (newIndex !== activeIndexRef.current) {
+      setActiveIndex(newIndex);
+      activeIndexRef.current = newIndex;
+    }
+    // Trigger load-more when approaching the end of the list.
+    const scrollHeight = (e.target as HTMLDivElement).scrollHeight;
+    if (scrollHeight - scrollTop - h < h * 3) {
+      if (!loadingMoreRef.current && hasMore && cursorRef.current) {
+        fetchVideos(videoTab, cursorRef.current);
+      }
+    }
+  }
 
   function switchTab(tab: "for_you" | "following") {
     if (tab === videoTab) return;
@@ -2696,14 +2633,80 @@ export default function VideoPlayerScreen() {
             {videoTab === "following" ? "Follow creators to see their videos here" : "Videos will appear here soon"}
           </Text>
         </View>
+      ) : Platform.OS === "web" ? (
+        // ── Web: native browser scroll container with CSS scroll-snap ──────
+        // Using a raw <div> bypasses React Native Web's FlatList/VirtualizedList
+        // which sets touch-action:none on its containers and blocks all browser-
+        // native scroll gestures. A plain <div> with overflow-y:scroll and
+        // scroll-snap-type:y mandatory gives us real, working touch scroll + snap
+        // out of the box — exactly what browsers are built for.
+        <div
+          ref={webScrollRef}
+          id="vf-web-scroll"
+          onScroll={handleWebScroll}
+          style={{
+            height: EFF_H,
+            width: EFF_W,
+            overflowY: "scroll",
+            overflowX: "hidden",
+            scrollSnapType: "y mandatory",
+            WebkitOverflowScrolling: "touch",
+            backgroundColor: "#000",
+            // Hide the scrollbar visually while keeping scroll behaviour.
+            scrollbarWidth: "none",
+          } as React.CSSProperties}
+        >
+          {videos.map((item, index) => {
+            const isActive = index === activeIndex;
+            const isNearActive = Math.abs(index - activeIndex) <= 2;
+            return (
+              <div
+                key={item.id}
+                style={{
+                  height: EFF_H,
+                  width: EFF_W,
+                  flexShrink: 0,
+                  scrollSnapAlign: "start",
+                  scrollSnapStop: "always",
+                  overflow: "hidden",
+                  position: "relative",
+                } as React.CSSProperties}
+              >
+                <VideoItem
+                  item={item}
+                  isActive={isActive}
+                  isNearActive={isNearActive}
+                  screenH={EFF_H}
+                  screenW={EFF_W}
+                  isFollowing={followingSet.has(item.author_id)}
+                  isSelf={user?.id === item.author_id}
+                  onLike={handleLike}
+                  onBookmark={handleBookmark}
+                  onOpenComments={setCommentPostId}
+                  onShare={handleShare}
+                  onFollow={handleFollow}
+                  onRecordView={handleRecordView}
+                  onOpenMenu={handleOpenMenu}
+                  onOpenSound={handleOpenSound}
+                  activeToggleRef={activeToggleRef}
+                />
+              </div>
+            );
+          })}
+          {loadingMore && (
+            <div style={{ height: EFF_H, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#000" } as React.CSSProperties}>
+              <ActivityIndicator color="rgba(255,255,255,0.6)" size="small" />
+            </div>
+          )}
+        </div>
       ) : (
+        // ── Native: FlatList with paging ────────────────────────────────────
         <FlatList
           ref={listRef}
           data={videos}
           keyExtractor={(v) => v.id}
           renderItem={({ item, index }) => {
             const isActive = index === activeIndex;
-            // Preload 2 neighbours (prev + next) so swipes feel instant.
             const distance = Math.abs(index - activeIndex);
             const isNearActive = distance <= 2;
             return (
@@ -2727,17 +2730,13 @@ export default function VideoPlayerScreen() {
               />
             );
           }}
-          nativeID="vf-scroll"
           showsVerticalScrollIndicator={false}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
           getItemLayout={(_, index) => ({ length: EFF_H, offset: EFF_H * index, index })}
           pagingEnabled
           decelerationRate="fast"
-          style={Platform.OS === "web"
-            ? { height: EFF_H, backgroundColor: "#000" }
-            : { flex: 1, backgroundColor: "#000" }
-          }
+          style={{ flex: 1, backgroundColor: "#000" }}
           windowSize={5}
           initialNumToRender={3}
           maxToRenderPerBatch={3}
