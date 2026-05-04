@@ -97,6 +97,8 @@ export default function OnboardingScreen() {
   const [handleStatus, setHandleStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid_format">("idle");
   const handleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [phoneAvailStatus, setPhoneAvailStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
+  const phoneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -146,6 +148,29 @@ export default function OnboardingScreen() {
 
     return () => { if (handleTimerRef.current) clearTimeout(handleTimerRef.current); };
   }, [handle]);
+
+  useEffect(() => {
+    if (phoneTimerRef.current) clearTimeout(phoneTimerRef.current);
+
+    if (!selectedCountry || !phoneNumber) { setPhoneAvailStatus("idle"); return; }
+
+    const v = getPhoneValidation();
+    if (!v.valid) { setPhoneAvailStatus("idle"); return; }
+
+    const fullPhone = `${selectedCountry.dial}${phoneNumber.replace(/\D/g, "")}`;
+    setPhoneAvailStatus("checking");
+    phoneTimerRef.current = setTimeout(async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("phone_number", fullPhone)
+        .neq("id", userId || "")
+        .maybeSingle();
+      setPhoneAvailStatus(data ? "taken" : "available");
+    }, 700);
+
+    return () => { if (phoneTimerRef.current) clearTimeout(phoneTimerRef.current); };
+  }, [phoneNumber, selectedCountry]);
 
   async function detectCountry() {
     if (selectedCountry) return;
@@ -229,20 +254,6 @@ export default function OnboardingScreen() {
   }
 
   async function goNext() {
-    if (step === 2 && selectedCountry && validatePhone()) {
-      const fullPhone = `${selectedCountry.dial}${phoneNumber.replace(/\D/g, "")}`;
-      const { data: existingPhone } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("phone_number", fullPhone)
-        .neq("id", userId || "")
-        .limit(1)
-        .maybeSingle();
-      if (existingPhone) {
-        showAlert("Phone number taken", "This phone number is already linked to another account. Please use a different number.");
-        return;
-      }
-    }
     if (step < TOTAL_STEPS) {
       const next = step + 1;
       setStep(next);
@@ -324,7 +335,7 @@ export default function OnboardingScreen() {
       case 1:
         return displayName.trim().length >= 2 && handle.trim().length >= 3 && handleStatus === "available";
       case 2:
-        return selectedCountry !== null && validatePhone();
+        return selectedCountry !== null && validatePhone() && phoneAvailStatus === "available";
       case 3: {
         const currentYear = new Date().getFullYear();
         return dobDay > 0 && dobMonth > 0 && dobYear > 0 && dobYear <= currentYear - 13 && gender !== "";
@@ -759,23 +770,29 @@ export default function OnboardingScreen() {
             {(() => {
               if (!selectedCountry || phoneNumber.length === 0) return null;
               const v = getPhoneValidation();
-              if (v.valid) {
+              if (!v.valid) {
+                const expected = selectedCountry.phoneLength.join(" or ");
+                let msg = `Enter a valid ${selectedCountry.name} mobile number.`;
+                if (v.reason === "tooShort") msg = `Too short — ${selectedCountry.name} numbers are ${expected} digits.`;
+                else if (v.reason === "tooLong") msg = `Too long — ${selectedCountry.name} numbers are ${expected} digits.`;
+                else if (v.reason === "invalid") msg = `Doesn't look like a valid ${selectedCountry.name} number.`;
+                return <Text style={styles.errorHint}>{msg}</Text>;
+              }
+              if (phoneAvailStatus === "checking") {
                 return (
-                  <Text style={styles.successHint}>
-                    ✓ Valid {selectedCountry.name} phone number
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <ActivityIndicator size="small" color={colors.textMuted} />
+                    <Text style={[styles.fieldHint, { color: colors.textMuted }]}>Checking availability…</Text>
+                  </View>
                 );
               }
-              const expected = selectedCountry.phoneLength.join(" or ");
-              let msg = `Enter a valid ${selectedCountry.name} mobile number.`;
-              if (v.reason === "tooShort") {
-                msg = `Number is too short — ${selectedCountry.name} numbers are ${expected} digits.`;
-              } else if (v.reason === "tooLong") {
-                msg = `Number is too long — ${selectedCountry.name} numbers are ${expected} digits.`;
-              } else if (v.reason === "invalid") {
-                msg = `That doesn't look like a valid ${selectedCountry.name} number. Check the format and try again.`;
+              if (phoneAvailStatus === "taken") {
+                return <Text style={styles.errorHint}>✗ This number is already linked to another account.</Text>;
               }
-              return <Text style={styles.errorHint}>{msg}</Text>;
+              if (phoneAvailStatus === "available") {
+                return <Text style={styles.successHint}>✓ Valid {selectedCountry.name} number and available</Text>;
+              }
+              return null;
             })()}
           </View>
         </View>
@@ -1189,7 +1206,7 @@ const styles = StyleSheet.create({
     height: 52,
   },
   fieldIcon: { marginRight: 10 },
-  input: { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular", height: 52 },
+  input: { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular", height: 52, outlineStyle: "none" } as any,
   fieldHint: { fontSize: 12, fontFamily: "Inter_400Regular", paddingLeft: 2 },
   errorHint: { fontSize: 12, fontFamily: "Inter_500Medium", paddingLeft: 2, color: "#FF3B30" },
   successHint: { fontSize: 12, fontFamily: "Inter_500Medium", paddingLeft: 2, color: "#34C759" },

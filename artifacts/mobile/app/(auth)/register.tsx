@@ -58,7 +58,7 @@ function AuthInput({ icon, placeholder, value, onChangeText, secureTextEntry, ke
 const inputSt = StyleSheet.create({
   wrap: { flexDirection: "row", alignItems: "center", borderRadius: 10, paddingHorizontal: 14, height: 50 },
   icon: { marginRight: 10 },
-  text: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 50 },
+  text: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 50, outlineStyle: "none" } as any,
 });
 
 // ─── Or divider ───────────────────────────────────────────────────────────────

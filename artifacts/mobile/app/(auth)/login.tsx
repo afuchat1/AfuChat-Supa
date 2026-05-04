@@ -106,7 +106,7 @@ const inputSt = StyleSheet.create({
     height: 50,
   },
   icon: { marginRight: 10 },
-  text: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 50 },
+  text: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 50, outlineStyle: "none" } as any,
 });
 
 // ─── Or divider ───────────────────────────────────────────────────────────────
