@@ -1974,11 +1974,11 @@ export default function VideoPlayerScreen() {
       if (e.key === "ArrowDown" || e.key === "PageDown") {
         e.preventDefault();
         const next = Math.min(cur + 1, Math.max(len - 1, 0));
-        if (next !== cur) scrollFeedTo(next);
+        if (next !== cur) { scrollFeedTo(next); setActiveIndex(next); }
       } else if (e.key === "ArrowUp" || e.key === "PageUp") {
         e.preventDefault();
         const prev = Math.max(cur - 1, 0);
-        if (prev !== cur) scrollFeedTo(prev);
+        if (prev !== cur) { scrollFeedTo(prev); setActiveIndex(prev); }
       }
     }
     window.addEventListener("keydown", onKey);
@@ -2000,31 +2000,82 @@ export default function VideoPlayerScreen() {
       existingMeta.content = "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no";
     }
 
-    // touch-action fix for React Native Web.
-    // RN-Web sets touch-action:none on all Views by default, which prevents
-    // vertical swipe gestures from reaching the FlatList scroll container.
-    // Setting touch-action:pan-y on all descendants restores swipe-to-scroll
-    // while still allowing tap interactions on buttons.
-    //
-    // NOTE: Scroll-snap is handled by the FlatList's pagingEnabled prop, which
-    // React Native Web translates to CSS scroll-snap-type/align at the correct
-    // DOM depth internally. Do NOT inject manual scroll-snap CSS here — the
-    // selectors are fragile and conflict with the library's own implementation.
-    const style = document.createElement("style");
-    style.id = "vf-scroll-fix";
-    style.textContent = `
-      [id="vf-scroll"],
-      [id="vf-scroll"] * {
-        touch-action: pan-y !important;
+    // ── Touch swipe handler ─────────────────────────────────────────────────
+    // RN-Web's gesture system handles all pointer/touch events internally and
+    // does not expose native browser scroll to the FlatList on mobile.
+    // CSS scroll-snap approaches are unreliable because the exact DOM depth of
+    // RN-Web's VirtualizedList varies. Instead we:
+    //   1. Attach native DOM touchstart/touchend listeners to #vf-scroll.
+    //   2. Detect vertical swipe direction and call scrollFeedTo() directly —
+    //      the same function already used by the keyboard (ArrowUp/Down) handler.
+    //   3. Handle mouse wheel (desktop) the same way.
+    // This guarantees correct per-item scrolling regardless of RN-Web internals.
+    let swipeStartY = 0;
+    let swipeStartTime = 0;
+
+    function handleTouchStart(e: TouchEvent) {
+      swipeStartY = e.touches[0].clientY;
+      swipeStartTime = Date.now();
+    }
+
+    function handleTouchEnd(e: TouchEvent) {
+      const dy = e.changedTouches[0].clientY - swipeStartY;
+      const dt = Date.now() - swipeStartTime;
+      const velocity = Math.abs(dy) / Math.max(dt, 1); // px/ms
+      // Require either a 50 px swipe OR a fast flick (≥ 0.3 px/ms).
+      if (Math.abs(dy) < 50 && velocity < 0.3) return;
+      const cur = activeIndexRef.current;
+      const len = videosLenRef.current;
+      if (dy < 0) {
+        // Swipe up → advance to next video
+        const next = Math.min(cur + 1, Math.max(len - 1, 0));
+        if (next !== cur) { scrollFeedTo(next); setActiveIndex(next); }
+      } else {
+        // Swipe down → go back to previous video
+        const prev2 = Math.max(cur - 1, 0);
+        if (prev2 !== cur) { scrollFeedTo(prev2); setActiveIndex(prev2); }
       }
-    `;
-    document.head.appendChild(style);
+    }
+
+    // Mouse-wheel handler for desktop browsers (throttled to one video per tick).
+    let wheelLocked = false;
+    function handleWheel(e: WheelEvent) {
+      e.preventDefault();
+      if (wheelLocked) return;
+      wheelLocked = true;
+      setTimeout(() => { wheelLocked = false; }, 700);
+      const cur = activeIndexRef.current;
+      const len = videosLenRef.current;
+      if (e.deltaY > 0) {
+        const next = Math.min(cur + 1, Math.max(len - 1, 0));
+        if (next !== cur) { scrollFeedTo(next); setActiveIndex(next); }
+      } else if (e.deltaY < 0) {
+        const prev2 = Math.max(cur - 1, 0);
+        if (prev2 !== cur) { scrollFeedTo(prev2); setActiveIndex(prev2); }
+      }
+    }
+
+    // Attach as soon as the FlatList container is in the DOM.
+    const attachInterval = setInterval(() => {
+      const root = document.getElementById("vf-scroll");
+      if (!root) return;
+      clearInterval(attachInterval);
+      root.addEventListener("touchstart", handleTouchStart, { passive: true });
+      root.addEventListener("touchend", handleTouchEnd, { passive: true });
+      root.addEventListener("wheel", handleWheel, { passive: false });
+    }, 80);
 
     return () => {
+      clearInterval(attachInterval);
       document.body.style.overflow = prev;
       document.documentElement.style.overflow = "";
       if (existingMeta && prevContent) existingMeta.content = prevContent;
-      style.remove();
+      const root = document.getElementById("vf-scroll");
+      if (root) {
+        root.removeEventListener("touchstart", handleTouchStart);
+        root.removeEventListener("touchend", handleTouchEnd);
+        root.removeEventListener("wheel", handleWheel);
+      }
     };
   }, []);
 
@@ -2683,7 +2734,10 @@ export default function VideoPlayerScreen() {
           getItemLayout={(_, index) => ({ length: EFF_H, offset: EFF_H * index, index })}
           pagingEnabled
           decelerationRate="fast"
-          style={{ flex: 1, backgroundColor: "#000" }}
+          style={Platform.OS === "web"
+            ? { height: EFF_H, backgroundColor: "#000" }
+            : { flex: 1, backgroundColor: "#000" }
+          }
           windowSize={5}
           initialNumToRender={3}
           maxToRenderPerBatch={3}
