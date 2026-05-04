@@ -76,15 +76,6 @@ const SECTIONS: NavSection[] = [
           p.startsWith("/video"),
       },
       {
-        key: "moments",
-        label: "Moments",
-        icon: "images-outline",
-        iconActive: "images",
-        route: "/moments",
-        match: (p) => p.startsWith("/moments"),
-        requiresAuth: true,
-      },
-      {
         key: "ai",
         label: "AfuAI",
         icon: "sparkles-outline",
