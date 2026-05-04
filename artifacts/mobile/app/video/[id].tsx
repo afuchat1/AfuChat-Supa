@@ -45,7 +45,7 @@ import { TOPBAR_HEIGHT } from "@/components/desktop/DesktopTopBar";
 import { useTheme } from "@/hooks/useTheme";
 import { encodeId, decodeId, isUuid } from "@/lib/shortId";
 import { saveVideoProgress, clearVideoProgress } from "@/lib/videoProgress";
-import { ChatBubbleSkeleton } from "@/components/ui/Skeleton";
+import { ChatBubbleSkeleton, ShortsFeedSkeleton } from "@/components/ui/Skeleton";
 
 const USE_NATIVE = Platform.OS !== "web";
 
@@ -1883,7 +1883,7 @@ const cmStyles = StyleSheet.create({
 
 export default function VideoPlayerScreen() {
   const { accent } = useAppAccent();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { id: rawId } = useLocalSearchParams<{ id: string }>();
   const id = rawId && !isUuid(rawId) ? decodeId(rawId) : rawId;
   const { user, profile } = useAuth();
@@ -2591,9 +2591,9 @@ export default function VideoPlayerScreen() {
 
   if (loading) {
     return (
-      <View style={mStyles.center}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-        <ActivityIndicator color="#fff" size="large" />
+      <View style={{ flex: 1, ...(Platform.OS === "web" ? { position: "absolute" as any, top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 } : {}) }}>
+        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
+        <ShortsFeedSkeleton dark={isDark} />
       </View>
     );
   }
