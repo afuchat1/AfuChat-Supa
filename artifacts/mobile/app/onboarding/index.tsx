@@ -36,6 +36,8 @@ import {
 } from "libphonenumber-js";
 import { Avatar } from "@/components/ui/Avatar";
 import { ensureAfuAiChat } from "@/lib/afuAiBot";
+import { useAppAccent } from "@/context/AppAccentContext";
+import { CHAT_THEME_COLORS, type ChatTheme } from "@/context/ChatPreferencesContext";
 
 const TOTAL_STEPS = 5;
 
@@ -70,14 +72,25 @@ function getDaysInMonth(month: number, year: number) {
   return new Date(year, month, 0).getDate();
 }
 
+const ACCENT_THEMES: { name: ChatTheme; hex: string }[] = [
+  { name: "Teal",    hex: "#00BCD4" },
+  { name: "Blue",    hex: "#007AFF" },
+  { name: "Purple",  hex: "#AF52DE" },
+  { name: "Rose",    hex: "#FF2D55" },
+  { name: "Amber",   hex: "#FF9500" },
+  { name: "Emerald", hex: "#34C759" },
+];
+
 export default function OnboardingScreen() {
   const { colors } = useTheme();
   const { user, refreshProfile } = useAuth();
+  const { appTheme, setAppTheme } = useAppAccent();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ userId?: string }>();
 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [selectedTheme, setSelectedTheme] = useState<ChatTheme>(appTheme);
 
   const [displayName, setDisplayName] = useState("");
   const [handle, setHandle] = useState("");
@@ -296,6 +309,12 @@ export default function OnboardingScreen() {
     }
   }
 
+  function handleAccentTheme(theme: ChatTheme) {
+    setSelectedTheme(theme);
+    setAppTheme(theme);
+    Haptics.selectionAsync();
+  }
+
   function toggleInterest(id: string) {
     setSelectedInterests((prev) => {
       const next = new Set(prev);
@@ -481,6 +500,13 @@ export default function OnboardingScreen() {
       await rewardXp("profile_completed");
     } catch (_) {}
 
+    try {
+      await supabase.from("chat_preferences").upsert(
+        { user_id: userId, chat_theme: selectedTheme },
+        { onConflict: "user_id" },
+      );
+    } catch (_) {}
+
     await refreshProfile();
     ensureAfuAiChat(userId, displayName.trim()).catch(() => {});
     setLoading(false);
@@ -549,6 +575,42 @@ export default function OnboardingScreen() {
             <Text style={[styles.fieldHint, { color: colors.textMuted }]}>
               Letters, numbers, and underscores only. Min 3 characters.
             </Text>
+          </View>
+
+          <View style={styles.fieldWrap}>
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>App Colour</Text>
+            <View style={[styles.accentCard, { backgroundColor: colors.inputBg }]}>
+              <View style={styles.accentCardTop}>
+                <View style={[styles.accentIconWrap, { backgroundColor: colors.accent }]}>
+                  <Ionicons name="color-palette" size={16} color="#fff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.accentCardLabel, { color: colors.text }]}>Pick your accent colour</Text>
+                  <Text style={[styles.accentCardDesc, { color: colors.textMuted }]}>
+                    Applies to tabs, buttons, and chat bubbles
+                  </Text>
+                </View>
+                <Text style={[styles.accentChipLabel, { color: colors.accent }]}>{selectedTheme}</Text>
+              </View>
+              <View style={styles.accentSwatches}>
+                {ACCENT_THEMES.map((t) => (
+                  <TouchableOpacity
+                    key={t.name}
+                    onPress={() => handleAccentTheme(t.name)}
+                    style={[
+                      styles.accentSwatch,
+                      { backgroundColor: t.hex },
+                      selectedTheme === t.name && styles.accentSwatchActive,
+                    ]}
+                    activeOpacity={0.8}
+                  >
+                    {selectedTheme === t.name && (
+                      <Ionicons name="checkmark" size={16} color="#fff" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
           </View>
         </View>
       </View>
@@ -1208,4 +1270,44 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   pickerItemText: { fontSize: 16, fontFamily: "Inter_400Regular" },
+  accentCard: {
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 14,
+  },
+  accentCardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  accentIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  accentCardLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  accentCardDesc: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
+  accentChipLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  accentSwatches: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  accentSwatch: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  accentSwatchActive: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+    transform: [{ scale: 1.15 }],
+  },
 });
