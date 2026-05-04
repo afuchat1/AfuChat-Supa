@@ -347,26 +347,16 @@ router.get("/@:handle", async (req, res) => {
   return res.send(renderProfilePage({ ...profile, followers, following }, enrichedPosts));
 });
 
-router.get("/:handle", async (req, res, next) => {
+router.get("/:handle", (req, res, next) => {
   const handle = req.params.handle?.toLowerCase();
   if (!handle || handle.includes(".") || handle === "api" || handle === "admin") {
     return next();
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, handle")
-    .eq("handle", handle)
-    .single();
-
-  if (profile) {
-    if (req.query.join === "1" || req.headers.referer?.includes("share")) {
-      return res.redirect(302, `/@${handle}?ref=${handle}`);
-    }
-    return res.redirect(301, `/@${handle}`);
+  if (req.query.join === "1" || req.headers.referer?.includes("share")) {
+    return res.redirect(302, `/@${handle}?ref=${handle}`);
   }
-
-  return next();
+  return res.redirect(301, `/@${handle}`);
 });
 
 export default router;
