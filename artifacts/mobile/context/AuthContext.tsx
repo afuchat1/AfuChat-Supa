@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { router } from "expo-router";
 import { AppState } from "react-native";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
@@ -383,6 +384,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await clearPushToken(user.id);
     }
     await supabase.auth.signOut();
+    router.replace("/discover");
   }, [user]);
 
   const isPremium = !!subscription && subscription.is_active && new Date(subscription.expires_at) > new Date();

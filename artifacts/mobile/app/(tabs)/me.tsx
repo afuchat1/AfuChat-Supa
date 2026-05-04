@@ -17,7 +17,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 
-import { router } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
@@ -190,6 +190,10 @@ export default function MeScreen() {
   const insets = useSafeAreaInsets();
 
   const gradeIcon = profile?.current_grade === "Newcomer" ? "leaf-outline" : "star-outline";
+
+  if (!loading && !profile) {
+    return <Redirect href="/discover" />;
+  }
 
   if (loading || !profile) {
     return (

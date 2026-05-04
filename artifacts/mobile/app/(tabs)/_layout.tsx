@@ -4,9 +4,10 @@ import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { Image, Platform, StyleSheet, useColorScheme } from "react-native";
 import { router } from "expo-router";
+import type { Session } from "@supabase/supabase-js";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
@@ -55,6 +56,8 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.tabIconDefault,
         headerShown: false,
+        lazy: false,
+        contentStyle: { backgroundColor: colors.background },
         tabBarStyle: hideTabs
           ? { display: "none" }
           : {
@@ -144,6 +147,18 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
 
 export default function TabLayout() {
   const { session, profile, loading } = useAuth();
+  const prevSessionRef = useRef<Session | null>(null);
+
+  useEffect(() => {
+    if (loading) return;
+    const hadSession = prevSessionRef.current !== null;
+    const hasSession = session !== null;
+    if (hadSession && !hasSession) {
+      router.replace("/discover");
+    }
+    prevSessionRef.current = session;
+  }, [session, loading]);
+
   useEffect(() => {
     if (loading) return;
     if (session && profile && !profile.onboarding_completed) {

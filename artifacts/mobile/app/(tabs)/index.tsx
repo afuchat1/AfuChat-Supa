@@ -834,9 +834,8 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
         </View>
       );
     }
-    // Chats are private — gate behind auth. Send anyone hitting the chats
-    // tab without a session straight to the login screen.
-    return <Redirect href="/(auth)/login" />;
+    // Chats are private — gate behind auth. Send anyone without a session to discover.
+    return <Redirect href="/discover" />;
   }
 
   return (
