@@ -78,7 +78,7 @@ export default function CompanyIndexScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.navTitle, { color: colors.text }]}>Company Pages</Text>
-        {profile?.is_verified ? (
+        {(profile?.is_verified || profile?.is_organization_verified) ? (
           <TouchableOpacity onPress={() => router.push("/company/create")} hitSlop={12}>
             <Ionicons name="add" size={26} color={BRAND} />
           </TouchableOpacity>
@@ -115,7 +115,7 @@ export default function CompanyIndexScreen() {
               {tab === "mine" ? (
                 <>
                   <Text style={[styles.emptyTitle, { color: colors.text }]}>No pages yet</Text>
-                  {profile?.is_verified ? (
+                  {(profile?.is_verified || profile?.is_organization_verified) ? (
                     <>
                       <Text style={[styles.emptySub, { color: colors.textMuted }]}>Create your first organization page.</Text>
                       <TouchableOpacity style={[styles.emptyBtn, { backgroundColor: BRAND }]} onPress={() => router.push("/company/create")} activeOpacity={0.8}>
@@ -137,7 +137,7 @@ export default function CompanyIndexScreen() {
             </View>
           }
           ListHeaderComponent={
-            tab === "discover" && profile?.is_verified ? (
+            tab === "discover" && (profile?.is_verified || profile?.is_organization_verified) ? (
               <TouchableOpacity
                 style={[styles.verifyBanner, { backgroundColor: BRAND + "10", borderColor: BRAND + "40" }]}
                 onPress={() => router.push("/company/create")}

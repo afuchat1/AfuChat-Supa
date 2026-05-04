@@ -84,7 +84,11 @@ export default function CompanyPageScreen() {
   const [showPostModal, setShowPostModal] = useState(false);
   const [postText, setPostText] = useState("");
   const [posting, setPosting] = useState(false);
-  const [activeTab, setActiveTab] = useState<"updates" | "followers">("updates");
+  const [activeTab, setActiveTab] = useState<"updates" | "followers" | "jobs">("updates");
+  const [jobs, setJobs] = useState<{ id: string; title: string; job_type: string; location: string | null; description: string; apply_url: string | null; created_at: string }[]>([]);
+  const [showJobModal, setShowJobModal] = useState(false);
+  const [jobForm, setJobForm] = useState({ title: "", job_type: "Full-time", location: "", description: "", apply_url: "" });
+  const [postingJob, setPostingJob] = useState(false);
 
   // My own company pages (for page-to-page follow)
   const [myPages, setMyPages] = useState<{ id: string; name: string; slug: string; logo_url: string | null }[]>([]);
@@ -105,7 +109,7 @@ export default function CompanyPageScreen() {
     if (!pageData) { setLoading(false); return; }
     setPage(pageData as OrgPage);
 
-    const [{ data: postsData }, followCheck, { data: followersData }, { data: myPagesData }] = await Promise.all([
+    const [{ data: postsData }, followCheck, { data: followersData }, { data: myPagesData }, { data: jobsData }] = await Promise.all([
       supabase
         .from("organization_page_posts")
         .select("id, content, image_url, created_at, author_id, likes")
@@ -133,12 +137,20 @@ export default function CompanyPageScreen() {
             .eq("admin_id", user.id)
             .neq("slug", slug)
         : Promise.resolve({ data: [] }),
+      supabase
+        .from("org_page_jobs")
+        .select("id, title, job_type, location, description, apply_url, created_at")
+        .eq("page_id", pageData.id)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(50),
     ]);
 
     setPosts((postsData ?? []) as PagePost[]);
     setFollowers((followersData ?? []) as Follower[]);
     setFollowing(!!followCheck.data);
     setMyPages((myPagesData ?? []) as any[]);
+    setJobs((jobsData ?? []) as any[]);
 
     // Check which of my pages follow this page
     if (myPagesData && myPagesData.length > 0 && pageData.id) {
@@ -227,6 +239,26 @@ export default function CompanyPageScreen() {
     if (error) { showAlert("Error", "Could not publish update."); return; }
     setPostText("");
     setShowPostModal(false);
+    load();
+  }
+
+  async function submitJob() {
+    if (!jobForm.title.trim() || !jobForm.description.trim() || !page || !user) return;
+    if (jobForm.description.trim().length < 20) { showAlert("Too short", "Job description must be at least 20 characters."); return; }
+    setPostingJob(true);
+    const { error } = await supabase.from("org_page_jobs").insert({
+      page_id: page.id,
+      title: jobForm.title.trim(),
+      job_type: jobForm.job_type,
+      location: jobForm.location.trim() || null,
+      description: jobForm.description.trim(),
+      apply_url: jobForm.apply_url.trim() || null,
+      is_active: true,
+    });
+    setPostingJob(false);
+    if (error) { showAlert("Error", "Could not post job listing."); return; }
+    setJobForm({ title: "", job_type: "Full-time", location: "", description: "", apply_url: "" });
+    setShowJobModal(false);
     load();
   }
 
@@ -416,15 +448,15 @@ export default function CompanyPageScreen() {
 
       {/* Tabs */}
       <View style={[styles.tabs, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        {(["updates", "followers"] as const).map((t) => (
+        {(["updates", "followers", "jobs"] as const).map((t) => (
           <TouchableOpacity
             key={t}
             style={[styles.tab, activeTab === t && { borderBottomColor: BRAND, borderBottomWidth: 2 }]}
             onPress={() => setActiveTab(t)}
             activeOpacity={0.8}
           >
-            <Text style={[styles.tabText, { color: activeTab === t ? BRAND : colors.textMuted }]}>
-              {t === "updates" ? `Updates (${page.posts_count})` : `Followers (${page.followers_count})`}
+            <Text style={[styles.tabText, { color: activeTab === t ? BRAND : colors.textMuted }]} numberOfLines={1}>
+              {t === "updates" ? `Updates` : t === "followers" ? `Followers` : `Jobs (${jobs.length})`}
             </Text>
           </TouchableOpacity>
         ))}
@@ -432,6 +464,15 @@ export default function CompanyPageScreen() {
           <TouchableOpacity
             style={styles.tabAction}
             onPress={() => setShowPostModal(true)}
+            hitSlop={8}
+          >
+            <Ionicons name="add-circle-outline" size={22} color={BRAND} />
+          </TouchableOpacity>
+        )}
+        {isAdmin && activeTab === "jobs" && (
+          <TouchableOpacity
+            style={styles.tabAction}
+            onPress={() => setShowJobModal(true)}
             hitSlop={8}
           >
             <Ionicons name="add-circle-outline" size={22} color={BRAND} />
@@ -509,7 +550,7 @@ export default function CompanyPageScreen() {
           )}
           contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         />
-      ) : (
+      ) : activeTab === "followers" ? (
         /* Followers Tab */
         <FlatList
           data={followers}
@@ -562,6 +603,65 @@ export default function CompanyPageScreen() {
           }}
           contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         />
+      ) : (
+        /* Jobs Tab — exclusive to company pages */
+        <FlatList
+          data={jobs}
+          keyExtractor={(item) => item.id}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BRAND} />}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={<View>{Header}</View>}
+          ListEmptyComponent={
+            <View style={styles.emptyPosts}>
+              <Ionicons name="briefcase-outline" size={36} color={colors.textMuted} />
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>No open positions yet.</Text>
+              {isAdmin && (
+                <TouchableOpacity
+                  onPress={() => setShowJobModal(true)}
+                  style={[styles.emptyBtn, { backgroundColor: BRAND }]}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Post a Job</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          }
+          renderItem={({ item: job }) => (
+            <View style={[styles.jobCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.jobCardHeader}>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={[styles.jobTitle, { color: colors.text }]}>{job.title}</Text>
+                  <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+                    <View style={[styles.jobTypeBadge, { backgroundColor: BRAND + "18" }]}>
+                      <Text style={[styles.jobTypeBadgeText, { color: BRAND }]}>{job.job_type}</Text>
+                    </View>
+                    {job.location ? (
+                      <View style={[styles.jobLocBadge, { backgroundColor: colors.backgroundSecondary ?? colors.background }]}>
+                        <Ionicons name="location-outline" size={11} color={colors.textMuted} />
+                        <Text style={[styles.jobLocText, { color: colors.textMuted }]}>{job.location}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+                <Text style={[styles.jobDate, { color: colors.textMuted }]}>
+                  {new Date(job.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                </Text>
+              </View>
+              <Text style={[styles.jobDesc, { color: colors.textSecondary }]} numberOfLines={3}>{job.description}</Text>
+              {job.apply_url ? (
+                <TouchableOpacity
+                  style={[styles.applyBtn, { backgroundColor: BRAND }]}
+                  onPress={() => Linking.openURL(job.apply_url!.startsWith("http") ? job.apply_url! : `https://${job.apply_url}`)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.applyBtnText}>Apply Now</Text>
+                  <Ionicons name="arrow-forward" size={14} color="#fff" />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          )}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+        />
       )}
 
       {/* Post update modal */}
@@ -597,6 +697,78 @@ export default function CompanyPageScreen() {
                 }
               </TouchableOpacity>
             </View>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Post Job modal — exclusive to company page admins */}
+      <Modal visible={showJobModal} transparent animationType="slide" onRequestClose={() => setShowJobModal(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowJobModal(false)}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ width: "100%" }}>
+            <ScrollView style={[styles.modalSheet, { backgroundColor: colors.surface }]} keyboardShouldPersistTaps="handled">
+              <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Post a Job</Text>
+              <TextInput
+                style={[styles.postInput, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border, minHeight: 44 }]}
+                placeholder="Job title"
+                placeholderTextColor={colors.textMuted}
+                value={jobForm.title}
+                onChangeText={(v) => setJobForm((f) => ({ ...f, title: v }))}
+                maxLength={120}
+              />
+              {/* Job type chips */}
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                {["Full-time","Part-time","Contract","Internship","Volunteer","Remote"].map((jt) => (
+                  <TouchableOpacity
+                    key={jt}
+                    style={[styles.jobTypeChip, { backgroundColor: jobForm.job_type === jt ? BRAND : colors.background, borderColor: jobForm.job_type === jt ? BRAND : colors.border }]}
+                    onPress={() => setJobForm((f) => ({ ...f, job_type: jt }))}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={{ fontSize: 12, fontFamily: "Inter_500Medium", color: jobForm.job_type === jt ? "#fff" : colors.text }}>{jt}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TextInput
+                style={[styles.postInput, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border, minHeight: 44, marginBottom: 8 }]}
+                placeholder="Location (e.g. Nairobi, Kenya or Remote)"
+                placeholderTextColor={colors.textMuted}
+                value={jobForm.location}
+                onChangeText={(v) => setJobForm((f) => ({ ...f, location: v }))}
+                maxLength={100}
+              />
+              <TextInput
+                style={[styles.postInput, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border, minHeight: 110, textAlignVertical: "top", marginBottom: 8 }]}
+                placeholder="Job description — responsibilities, requirements, benefits…"
+                placeholderTextColor={colors.textMuted}
+                value={jobForm.description}
+                onChangeText={(v) => setJobForm((f) => ({ ...f, description: v }))}
+                multiline
+                numberOfLines={5}
+                maxLength={3000}
+              />
+              <TextInput
+                style={[styles.postInput, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border, minHeight: 44, marginBottom: 12 }]}
+                placeholder="Application URL (optional)"
+                placeholderTextColor={colors.textMuted}
+                value={jobForm.apply_url}
+                onChangeText={(v) => setJobForm((f) => ({ ...f, apply_url: v }))}
+                autoCapitalize="none"
+                keyboardType="url"
+                maxLength={300}
+              />
+              <TouchableOpacity
+                style={[styles.submitBtn, { backgroundColor: BRAND, opacity: postingJob || !jobForm.title.trim() || !jobForm.description.trim() ? 0.6 : 1, marginBottom: 20 }]}
+                onPress={submitJob}
+                disabled={postingJob || !jobForm.title.trim() || !jobForm.description.trim()}
+                activeOpacity={0.85}
+              >
+                {postingJob
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={styles.submitBtnText}>Post Job Listing</Text>
+                }
+              </TouchableOpacity>
+            </ScrollView>
           </KeyboardAvoidingView>
         </TouchableOpacity>
       </Modal>
@@ -731,4 +903,17 @@ const styles = StyleSheet.create({
   pageFollowRow: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: 12 },
   pageFollowLogo: { width: 38, height: 38, borderRadius: 4, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   pageFollowChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+
+  jobCard: { marginHorizontal: 12, marginTop: 12, borderRadius: 14, padding: 14, borderWidth: StyleSheet.hairlineWidth, gap: 10 },
+  jobCardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  jobTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold", marginBottom: 4 },
+  jobTypeBadge: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
+  jobTypeBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  jobLocBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 20 },
+  jobLocText: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  jobDate: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
+  jobDesc: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
+  applyBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10 },
+  applyBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  jobTypeChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
 });

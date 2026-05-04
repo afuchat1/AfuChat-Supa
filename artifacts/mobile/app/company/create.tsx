@@ -20,21 +20,27 @@ import { supabase } from "@/lib/supabase";
 import { showAlert } from "@/lib/alert";
 
 const BRAND = "#00BCD4";
-const GOLD = "#D4A853";
 
 const ORG_TYPES = [
-  { label: "Company / Corporation", icon: "business-outline" },
+  { label: "Company", icon: "business-outline" },
   { label: "Brand", icon: "pricetag-outline" },
   { label: "Non-Profit / NGO", icon: "heart-outline" },
-  { label: "Government / Public Body", icon: "flag-outline" },
+  { label: "Government", icon: "flag-outline" },
   { label: "Media / Press", icon: "newspaper-outline" },
-  { label: "Educational Institution", icon: "school-outline" },
-  { label: "Religious Organization", icon: "leaf-outline" },
+  { label: "Education", icon: "school-outline" },
+  { label: "Religious Org", icon: "leaf-outline" },
   { label: "Sports / Entertainment", icon: "trophy-outline" },
   { label: "Other", icon: "ellipsis-horizontal-circle-outline" },
 ];
 
-const SIZE_OPTIONS = ["1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"];
+const SIZE_OPTIONS = [
+  { label: "1–10", sub: "Micro" },
+  { label: "11–50", sub: "Small" },
+  { label: "51–200", sub: "Mid-size" },
+  { label: "201–500", sub: "Growth" },
+  { label: "501–1000", sub: "Large" },
+  { label: "1000+", sub: "Enterprise" },
+];
 
 const INDUSTRIES = [
   "Technology", "Healthcare / Medical", "Finance / Banking", "Education",
@@ -45,56 +51,46 @@ const INDUSTRIES = [
   "Sports & Recreation", "Fashion & Beauty", "Other",
 ];
 
+const TOTAL_STEPS = 3;
+
 function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/[\s_-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
+  return text.toLowerCase().trim()
+    .replace(/[^\w\s-]/g, "").replace(/[\s_]+/g, "-")
+    .replace(/^-+|-+$/g, "").slice(0, 60);
 }
 
 export default function CreateCompanyPageScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
   const headerTop = Platform.OS === "ios" ? insets.top : Math.max(insets.top, 16);
 
-  const [form, setForm] = useState({
-    name: "",
-    slug: "",
-    tagline: "",
-    description: "",
-    website: "",
-    email: "",
-    industry: "",
-    org_type: "",
-    size: "",
-    founded_year: "",
-    location: "",
-    ig: "", x_twitter: "", linkedin: "",
-  });
+  const [step, setStep] = useState(1);
   const [slugEdited, setSlugEdited] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [showOrgTypePicker, setShowOrgTypePicker] = useState(false);
   const [showIndustryPicker, setShowIndustryPicker] = useState(false);
-  const [showSizePicker, setShowSizePicker] = useState(false);
+
+  const [form, setForm] = useState({
+    name: "", slug: "", org_type: "",
+    tagline: "", description: "", website: "",
+    industry: "", size: "", location: "",
+    founded_year: "", email: "", ig: "", x_twitter: "", linkedin: "",
+  });
 
   function set(field: string, val: string) {
     setForm((prev) => {
       const next = { ...prev, [field]: val };
-      if (field === "name" && !slugEdited) {
-        next.slug = slugify(val);
-      }
+      if (field === "name" && !slugEdited) next.slug = slugify(val);
       return next;
     });
   }
 
-  if (!profile?.is_verified) {
+  const canCreate = profile?.is_verified || profile?.is_organization_verified;
+
+  if (!canCreate) {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
-        <View style={[styles.navBar, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <View style={[styles.nav, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
@@ -102,14 +98,12 @@ export default function CreateCompanyPageScreen() {
           <View style={{ width: 24 }} />
         </View>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 20 }}>
-          <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: colors.accent + "22", alignItems: "center", justifyContent: "center" }}>
+          <View style={{ width: 88, height: 88, borderRadius: 22, backgroundColor: colors.accent + "18", alignItems: "center", justifyContent: "center" }}>
             <Ionicons name="checkmark-circle" size={44} color={colors.accent} />
           </View>
-          <Text style={{ fontSize: 22, fontFamily: "Inter_700Bold", color: colors.text, textAlign: "center" }}>
-            Verified Account Required
-          </Text>
+          <Text style={{ fontSize: 22, fontFamily: "Inter_700Bold", color: colors.text, textAlign: "center" }}>Verified Account Required</Text>
           <Text style={{ fontSize: 15, fontFamily: "Inter_400Regular", color: colors.textMuted, textAlign: "center", lineHeight: 22 }}>
-            You need a verified account (blue checkmark) to create a company page. Once your page is live, you can separately apply for a verified page badge.
+            You need a verified account (blue checkmark) to create a company page. Once live, your page can separately apply for a verified page badge.
           </Text>
           <TouchableOpacity
             style={[styles.submitBtn, { backgroundColor: colors.accent }]}
@@ -126,283 +120,394 @@ export default function CreateCompanyPageScreen() {
 
   async function handleCreate() {
     if (!form.name.trim()) { showAlert("Required", "Page name is required."); return; }
-    if (!form.slug.trim()) { showAlert("Required", "Page URL slug is required."); return; }
-    if (!/^[a-z0-9-]+$/.test(form.slug)) { showAlert("Invalid slug", "Slug can only contain lowercase letters, numbers, and dashes."); return; }
+    if (!form.slug.trim() || !/^[a-z0-9-]+$/.test(form.slug)) {
+      showAlert("Invalid slug", "Slug can only contain lowercase letters, numbers and dashes."); return;
+    }
     if (!form.org_type) { showAlert("Required", "Please select an organization type."); return; }
     if (!user) return;
-
     setSubmitting(true);
-
     const social_links: Record<string, string> = {};
     if (form.ig.trim()) social_links.instagram = form.ig.trim();
     if (form.x_twitter.trim()) social_links.x_twitter = form.x_twitter.trim();
     if (form.linkedin.trim()) social_links.linkedin = form.linkedin.trim();
-
     const payload: any = {
-      admin_id: user.id,
-      name: form.name.trim(),
-      slug: form.slug.trim(),
-      org_type: form.org_type,
-      social_links,
+      admin_id: user.id, name: form.name.trim(), slug: form.slug.trim(),
+      org_type: form.org_type, social_links,
     };
     if (form.tagline.trim()) payload.tagline = form.tagline.trim();
     if (form.description.trim()) payload.description = form.description.trim();
     if (form.website.trim()) payload.website = form.website.trim();
-    if (form.email.trim()) payload.email = form.email.trim();
     if (form.industry.trim()) payload.industry = form.industry.trim();
     if (form.size) payload.size = form.size;
     if (form.location.trim()) payload.location = form.location.trim();
-    if (form.founded_year.trim() && !isNaN(Number(form.founded_year))) {
+    if (form.email.trim()) payload.email = form.email.trim();
+    if (form.founded_year.trim() && !isNaN(Number(form.founded_year)))
       payload.founded_year = Number(form.founded_year);
-    }
-
-    const { data, error } = await supabase
-      .from("organization_pages")
-      .insert(payload)
-      .select("slug")
-      .single();
-
+    const { data, error } = await supabase.from("organization_pages").insert(payload).select("slug").single();
     setSubmitting(false);
-
     if (error) {
-      if (error.code === "23505") {
-        showAlert("Slug taken", "That page URL is already in use. Try a different one.");
-      } else {
-        showAlert("Error", error.message || "Could not create page.");
-      }
+      showAlert(error.code === "23505" ? "Slug taken" : "Error",
+        error.code === "23505" ? "That page URL is already in use. Try a different one." : error.message || "Could not create page.");
       return;
     }
-
-    showAlert("Page Created!", `Your page "${form.name}" is live at /company/${data.slug}`, [
+    showAlert("Page Created!", `"${form.name}" is live!`, [
       { text: "View Page", onPress: () => router.replace(`/company/${data.slug}` as any) },
     ]);
   }
 
-  const selectedOrgType = ORG_TYPES.find((t) => t.label === form.org_type);
+  function goNext() {
+    if (step === 1) {
+      if (!form.name.trim()) { showAlert("Required", "Please enter a page name."); return; }
+      if (!form.org_type) { showAlert("Required", "Please select an organization type."); return; }
+    }
+    if (step < TOTAL_STEPS) setStep((s) => s + 1);
+    else handleCreate();
+  }
+
+  const stepLabels = ["Identity", "Story", "Details"];
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <View style={[styles.navBar, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+      {/* Nav */}
+      <View style={[styles.nav, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={step === 1 ? () => router.back() : () => setStep((s) => s - 1)} hitSlop={12}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.navTitle, { color: colors.text }]}>Create Company Page</Text>
-        <View style={{ width: 24 }} />
+        <Text style={[styles.navTitle, { color: colors.text }]}>Create Page</Text>
+        <Text style={[styles.stepCounter, { color: colors.textMuted }]}>{step}/{TOTAL_STEPS}</Text>
+      </View>
+
+      {/* Progress */}
+      <View style={[styles.progressBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+          {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.progressSegment,
+                {
+                  backgroundColor: i < step ? BRAND : (isDark ? "#333" : "#e0e0e0"),
+                  flex: 1,
+                },
+              ]}
+            />
+          ))}
+        </View>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
+          {stepLabels.map((l, i) => (
+            <Text key={l} style={[styles.progressLabel, { color: i + 1 === step ? BRAND : colors.textMuted }]}>{l}</Text>
+          ))}
+        </View>
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView
-          contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 48, gap: 12 }}
+          contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 100, gap: 16 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Hero */}
-          <View style={[styles.heroCard, { backgroundColor: BRAND + "10", borderColor: BRAND + "40" }]}>
-            <Ionicons name="business" size={28} color={BRAND} />
-            <Text style={[styles.heroTitle, { color: colors.text }]}>Create an Organization Page</Text>
-            <Text style={[styles.heroSub, { color: colors.textSecondary }]}>
-              Build a professional presence for your brand, company, or organization — just like LinkedIn Pages.
-            </Text>
-          </View>
 
-          {/* Basic Info */}
-          <Text style={[styles.groupLabel, { color: colors.text }]}>Page Identity</Text>
-
-          <Field label="Page Name" required colors={colors}>
-            <TextInput style={[styles.input, { color: colors.text }]} placeholder="Your organization name" placeholderTextColor={colors.textMuted}
-              value={form.name} onChangeText={(v) => set("name", v)} maxLength={100} />
-          </Field>
-
-          <Field label="Page URL" required hint={`afuchat.com/company/${form.slug || "your-slug"}`} colors={colors}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Text style={{ color: colors.textMuted, fontSize: 14 }}>/company/</Text>
-              <TextInput
-                style={[styles.input, { color: colors.text, flex: 1 }]}
-                placeholder="your-company"
-                placeholderTextColor={colors.textMuted}
-                value={form.slug}
-                onChangeText={(v) => { setSlugEdited(true); set("slug", slugify(v)); }}
-                autoCapitalize="none"
-                maxLength={60}
-              />
-            </View>
-          </Field>
-
-          <Field label="Tagline" colors={colors}>
-            <TextInput style={[styles.input, { color: colors.text }]} placeholder="Short description shown under the name"
-              placeholderTextColor={colors.textMuted} value={form.tagline} onChangeText={(v) => set("tagline", v)} maxLength={160} />
-          </Field>
-
-          {/* Org Type */}
-          <Field label="Organization Type" required colors={colors}>
-            <TouchableOpacity
-              style={[styles.pickerRow, { borderColor: form.org_type ? BRAND + "60" : colors.border, backgroundColor: form.org_type ? BRAND + "08" : "transparent" }]}
-              onPress={() => setShowOrgTypePicker(true)} activeOpacity={0.75}
-            >
-              {selectedOrgType ? (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
-                  <Ionicons name={selectedOrgType.icon as any} size={16} color={BRAND} />
-                  <Text style={[styles.pickerValue, { color: colors.text }]}>{selectedOrgType.label}</Text>
-                </View>
-              ) : (
-                <Text style={[styles.pickerPlaceholder, { color: colors.textMuted }]}>Select type…</Text>
-              )}
-              <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
-            </TouchableOpacity>
-          </Field>
-
-          {/* Industry */}
-          <Field label="Industry" colors={colors}>
-            <TouchableOpacity style={[styles.pickerRow, { borderColor: colors.border }]} onPress={() => setShowIndustryPicker(true)} activeOpacity={0.75}>
-              {form.industry
-                ? <Text style={[styles.pickerValue, { color: colors.text, flex: 1 }]}>{form.industry}</Text>
-                : <Text style={[styles.pickerPlaceholder, { color: colors.textMuted, flex: 1 }]}>Select industry…</Text>
-              }
-              <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
-            </TouchableOpacity>
-          </Field>
-
-          {/* About */}
-          <Text style={[styles.groupLabel, { color: colors.text, marginTop: 4 }]}>About</Text>
-
-          <Field label="Description" colors={colors}>
-            <TextInput style={[styles.input, styles.textarea, { color: colors.text }]}
-              placeholder="Describe what your organization does, its mission, and impact…"
-              placeholderTextColor={colors.textMuted} value={form.description}
-              onChangeText={(v) => set("description", v)} multiline numberOfLines={4} maxLength={2000} />
-          </Field>
-
-          <Field label="Website" colors={colors}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Ionicons name="globe-outline" size={16} color={colors.textMuted} />
-              <TextInput style={[styles.input, { color: colors.text, flex: 1 }]} placeholder="https://yourcompany.com"
-                placeholderTextColor={colors.textMuted} value={form.website} onChangeText={(v) => set("website", v)}
-                autoCapitalize="none" keyboardType="url" maxLength={200} />
-            </View>
-          </Field>
-
-          {/* Details */}
-          <Text style={[styles.groupLabel, { color: colors.text, marginTop: 4 }]}>Details <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.textMuted }}>optional</Text></Text>
-
-          <Field label="Location" colors={colors}>
-            <TextInput style={[styles.input, { color: colors.text }]} placeholder="e.g. Nairobi, Kenya"
-              placeholderTextColor={colors.textMuted} value={form.location} onChangeText={(v) => set("location", v)} maxLength={100} />
-          </Field>
-
-          <Field label="Company Size" colors={colors}>
-            <TouchableOpacity style={[styles.pickerRow, { borderColor: colors.border }]} onPress={() => setShowSizePicker(true)} activeOpacity={0.75}>
-              {form.size
-                ? <Text style={[styles.pickerValue, { color: colors.text, flex: 1 }]}>{form.size} employees</Text>
-                : <Text style={[styles.pickerPlaceholder, { color: colors.textMuted, flex: 1 }]}>Select size…</Text>
-              }
-              <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
-            </TouchableOpacity>
-          </Field>
-
-          <Field label="Founded Year" colors={colors}>
-            <TextInput style={[styles.input, { color: colors.text }]} placeholder="e.g. 2020"
-              placeholderTextColor={colors.textMuted} value={form.founded_year} onChangeText={(v) => set("founded_year", v)}
-              keyboardType="numeric" maxLength={4} />
-          </Field>
-
-          <Field label="Contact Email" colors={colors}>
-            <TextInput style={[styles.input, { color: colors.text }]} placeholder="contact@yourcompany.com"
-              placeholderTextColor={colors.textMuted} value={form.email} onChangeText={(v) => set("email", v)}
-              keyboardType="email-address" autoCapitalize="none" maxLength={120} />
-          </Field>
-
-          {/* Social */}
-          <Text style={[styles.groupLabel, { color: colors.text, marginTop: 4 }]}>Social Links <Text style={{ fontSize: 12, color: colors.textMuted, fontFamily: "Inter_400Regular" }}>optional</Text></Text>
-          {[
-            { key: "ig", label: "Instagram", icon: "logo-instagram", color: "#E1306C" },
-            { key: "x_twitter", label: "X / Twitter", icon: "logo-twitter", color: "#1DA1F2" },
-            { key: "linkedin", label: "LinkedIn", icon: "logo-linkedin", color: "#0A66C2" },
-          ].map((s) => (
-            <Field key={s.key} label={s.label} colors={colors}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <Ionicons name={s.icon as any} size={16} color={s.color} />
-                <TextInput style={[styles.input, { color: colors.text, flex: 1 }]} placeholder={`@yourorg`}
-                  placeholderTextColor={colors.textMuted} value={(form as any)[s.key]}
-                  onChangeText={(v) => set(s.key, v)} autoCapitalize="none" maxLength={120} />
+          {/* ── STEP 1: Identity ── */}
+          {step === 1 && (
+            <>
+              <View style={{ gap: 4, marginBottom: 4 }}>
+                <Text style={[styles.stepTitle, { color: colors.text }]}>Who are you?</Text>
+                <Text style={[styles.stepSub, { color: colors.textMuted }]}>Give your organization page an identity.</Text>
               </View>
-            </Field>
-          ))}
 
-          <TouchableOpacity
-            style={[styles.submitBtn, { backgroundColor: BRAND, opacity: submitting ? 0.7 : 1, marginTop: 8 }]}
-            onPress={handleCreate} disabled={submitting} activeOpacity={0.85}
-          >
-            {submitting ? <ActivityIndicator color="#fff" size="small" /> : (
-              <>
-                <Ionicons name="business-outline" size={18} color="#fff" />
-                <Text style={styles.submitBtnText}>Create Page</Text>
-              </>
-            )}
-          </TouchableOpacity>
+              {/* Page Name */}
+              <View style={[styles.inputGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.inputLabel, { color: colors.textMuted }]}>PAGE NAME <Text style={{ color: "#FF3B30" }}>*</Text></Text>
+                <TextInput
+                  style={[styles.inputField, { color: colors.text }]}
+                  placeholder="Your organization name"
+                  placeholderTextColor={colors.textMuted}
+                  value={form.name}
+                  onChangeText={(v) => set("name", v)}
+                  maxLength={100}
+                  returnKeyType="next"
+                />
+              </View>
+
+              {/* Slug */}
+              <View style={[styles.inputGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.inputLabel, { color: colors.textMuted }]}>PAGE URL <Text style={{ color: "#FF3B30" }}>*</Text></Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Text style={[styles.slugPrefix, { color: colors.textMuted }]}>@</Text>
+                  <TextInput
+                    style={[styles.inputField, { color: colors.text, flex: 1 }]}
+                    placeholder="your-page"
+                    placeholderTextColor={colors.textMuted}
+                    value={form.slug}
+                    onChangeText={(v) => { setSlugEdited(true); set("slug", slugify(v)); }}
+                    autoCapitalize="none"
+                    maxLength={60}
+                  />
+                </View>
+                <Text style={[styles.inputHint, { color: colors.textMuted }]}>afuchat.com/company/{form.slug || "your-page"}</Text>
+              </View>
+
+              {/* Org Type — card grid */}
+              <View>
+                <Text style={[styles.sectionLabel, { color: colors.text }]}>Organization Type <Text style={{ color: "#FF3B30" }}>*</Text></Text>
+                <View style={styles.typeGrid}>
+                  {ORG_TYPES.map((t) => {
+                    const sel = form.org_type === t.label;
+                    return (
+                      <TouchableOpacity
+                        key={t.label}
+                        style={[styles.typeCard, {
+                          backgroundColor: sel ? BRAND + "14" : colors.surface,
+                          borderColor: sel ? BRAND : colors.border,
+                        }]}
+                        onPress={() => set("org_type", t.label)}
+                        activeOpacity={0.75}
+                      >
+                        <Ionicons name={t.icon as any} size={20} color={sel ? BRAND : colors.textMuted} />
+                        <Text style={[styles.typeLabel, { color: sel ? BRAND : colors.text }]} numberOfLines={2}>{t.label}</Text>
+                        {sel && (
+                          <View style={[styles.typeCheck, { backgroundColor: BRAND }]}>
+                            <Ionicons name="checkmark" size={10} color="#fff" />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </>
+          )}
+
+          {/* ── STEP 2: Story ── */}
+          {step === 2 && (
+            <>
+              <View style={{ gap: 4, marginBottom: 4 }}>
+                <Text style={[styles.stepTitle, { color: colors.text }]}>Tell your story</Text>
+                <Text style={[styles.stepSub, { color: colors.textMuted }]}>Help people understand what you stand for.</Text>
+              </View>
+
+              <View style={[styles.inputGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.inputLabel, { color: colors.textMuted }]}>TAGLINE</Text>
+                <TextInput
+                  style={[styles.inputField, { color: colors.text }]}
+                  placeholder="One line that captures your organization"
+                  placeholderTextColor={colors.textMuted}
+                  value={form.tagline}
+                  onChangeText={(v) => set("tagline", v)}
+                  maxLength={160}
+                />
+              </View>
+
+              <View style={[styles.inputGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.inputLabel, { color: colors.textMuted }]}>DESCRIPTION</Text>
+                <TextInput
+                  style={[styles.inputField, styles.textarea, { color: colors.text }]}
+                  placeholder="What does your organization do? What's your mission?"
+                  placeholderTextColor={colors.textMuted}
+                  value={form.description}
+                  onChangeText={(v) => set("description", v)}
+                  multiline
+                  numberOfLines={5}
+                  maxLength={2000}
+                />
+                <Text style={[styles.charCount, { color: colors.textMuted }]}>{form.description.length}/2000</Text>
+              </View>
+
+              <View style={[styles.inputGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.inputLabel, { color: colors.textMuted }]}>WEBSITE</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Ionicons name="globe-outline" size={16} color={colors.textMuted} />
+                  <TextInput
+                    style={[styles.inputField, { color: colors.text, flex: 1 }]}
+                    placeholder="https://yourcompany.com"
+                    placeholderTextColor={colors.textMuted}
+                    value={form.website}
+                    onChangeText={(v) => set("website", v)}
+                    autoCapitalize="none"
+                    keyboardType="url"
+                    maxLength={200}
+                  />
+                </View>
+              </View>
+
+              {/* Industry picker */}
+              <View style={[styles.inputGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.inputLabel, { color: colors.textMuted }]}>INDUSTRY</Text>
+                <TouchableOpacity
+                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 }}
+                  onPress={() => setShowIndustryPicker(true)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.inputField, { color: form.industry ? colors.text : colors.textMuted, flex: 1 }]}>
+                    {form.industry || "Select industry…"}
+                  </Text>
+                  <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Company size */}
+              <View>
+                <Text style={[styles.sectionLabel, { color: colors.text }]}>Company Size</Text>
+                <View style={styles.sizeRow}>
+                  {SIZE_OPTIONS.map((s) => {
+                    const sel = form.size === s.label;
+                    return (
+                      <TouchableOpacity
+                        key={s.label}
+                        style={[styles.sizeChip, {
+                          backgroundColor: sel ? BRAND : colors.surface,
+                          borderColor: sel ? BRAND : colors.border,
+                        }]}
+                        onPress={() => set("size", s.label)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[styles.sizeChipLabel, { color: sel ? "#fff" : colors.text }]}>{s.label}</Text>
+                        <Text style={[styles.sizeChipSub, { color: sel ? "rgba(255,255,255,0.75)" : colors.textMuted }]}>{s.sub}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </>
+          )}
+
+          {/* ── STEP 3: Details ── */}
+          {step === 3 && (
+            <>
+              <View style={{ gap: 4, marginBottom: 4 }}>
+                <Text style={[styles.stepTitle, { color: colors.text }]}>The details</Text>
+                <Text style={[styles.stepSub, { color: colors.textMuted }]}>Optional info that makes your page stand out.</Text>
+              </View>
+
+              <View style={[styles.inputGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.inputLabel, { color: colors.textMuted }]}>LOCATION</Text>
+                <TextInput
+                  style={[styles.inputField, { color: colors.text }]}
+                  placeholder="e.g. Nairobi, Kenya"
+                  placeholderTextColor={colors.textMuted}
+                  value={form.location}
+                  onChangeText={(v) => set("location", v)}
+                  maxLength={100}
+                />
+              </View>
+
+              <View style={[styles.inputGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.inputLabel, { color: colors.textMuted }]}>FOUNDED YEAR</Text>
+                <TextInput
+                  style={[styles.inputField, { color: colors.text }]}
+                  placeholder="e.g. 2018"
+                  placeholderTextColor={colors.textMuted}
+                  value={form.founded_year}
+                  onChangeText={(v) => set("founded_year", v)}
+                  keyboardType="numeric"
+                  maxLength={4}
+                />
+              </View>
+
+              <View style={[styles.inputGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.inputLabel, { color: colors.textMuted }]}>CONTACT EMAIL</Text>
+                <TextInput
+                  style={[styles.inputField, { color: colors.text }]}
+                  placeholder="contact@yourcompany.com"
+                  placeholderTextColor={colors.textMuted}
+                  value={form.email}
+                  onChangeText={(v) => set("email", v)}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  maxLength={120}
+                />
+              </View>
+
+              {/* Social Links */}
+              <Text style={[styles.sectionLabel, { color: colors.text }]}>Social Links <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.textMuted }}>optional</Text></Text>
+              {[
+                { key: "ig", label: "Instagram", icon: "logo-instagram", color: "#E1306C", placeholder: "@yourorg" },
+                { key: "x_twitter", label: "X / Twitter", icon: "logo-twitter", color: "#1DA1F2", placeholder: "@yourorg" },
+                { key: "linkedin", label: "LinkedIn", icon: "logo-linkedin", color: "#0A66C2", placeholder: "linkedin.com/company/yourorg" },
+              ].map((s) => (
+                <View key={s.key} style={[styles.inputGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <Text style={[styles.inputLabel, { color: colors.textMuted }]}>{s.label.toUpperCase()}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <Ionicons name={s.icon as any} size={16} color={s.color} />
+                    <TextInput
+                      style={[styles.inputField, { color: colors.text, flex: 1 }]}
+                      placeholder={s.placeholder}
+                      placeholderTextColor={colors.textMuted}
+                      value={(form as any)[s.key]}
+                      onChangeText={(v) => set(s.key, v)}
+                      autoCapitalize="none"
+                      maxLength={120}
+                    />
+                  </View>
+                </View>
+              ))}
+
+              {/* Preview card */}
+              <View style={[styles.previewCard, { backgroundColor: BRAND + "0C", borderColor: BRAND + "30" }]}>
+                <Ionicons name="eye-outline" size={16} color={BRAND} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: BRAND }]}>Page Preview</Text>
+                  <Text style={[{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.textMuted, lineHeight: 17, marginTop: 2 }]}>
+                    {form.name || "Your Organization"} · {form.org_type || "Organization"}{form.location ? ` · ${form.location}` : ""}
+                  </Text>
+                </View>
+              </View>
+            </>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Org Type picker */}
-      <Modal visible={showOrgTypePicker} transparent animationType="slide" onRequestClose={() => setShowOrgTypePicker(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowOrgTypePicker(false)}>
-          <View style={[styles.pickerSheet, { backgroundColor: colors.surface }]}>
-            <View style={[styles.pickerHandle, { backgroundColor: colors.border }]} />
-            <Text style={[styles.pickerTitle, { color: colors.text }]}>Organization Type</Text>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {ORG_TYPES.map((t) => {
-                const sel = form.org_type === t.label;
-                return (
-                  <TouchableOpacity key={t.label} style={[styles.pickerOption, { borderBottomColor: colors.border, backgroundColor: sel ? BRAND + "12" : "transparent" }]}
-                    onPress={() => { set("org_type", t.label); setShowOrgTypePicker(false); }} activeOpacity={0.75}>
-                    <View style={[styles.pickerOptionIcon, { backgroundColor: sel ? BRAND + "28" : colors.backgroundSecondary }]}>
-                      <Ionicons name={t.icon as any} size={18} color={sel ? BRAND : colors.textSecondary} />
-                    </View>
-                    <Text style={[styles.pickerOptionText, { color: sel ? BRAND : colors.text, fontFamily: sel ? "Inter_600SemiBold" : "Inter_400Regular" }]}>{t.label}</Text>
-                    {sel && <Ionicons name="checkmark" size={18} color={BRAND} />}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
+      {/* Bottom action bar */}
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12, backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+        {step > 1 && (
+          <TouchableOpacity
+            style={[styles.backBtn, { borderColor: colors.border }]}
+            onPress={() => setStep((s) => s - 1)}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="arrow-back" size={18} color={colors.text} />
+            <Text style={[styles.backBtnText, { color: colors.text }]}>Back</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          style={[styles.nextBtn, { backgroundColor: BRAND, opacity: submitting ? 0.7 : 1, flex: step === 1 ? 1 : undefined }]}
+          onPress={goNext}
+          disabled={submitting}
+          activeOpacity={0.85}
+        >
+          {submitting ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : step < TOTAL_STEPS ? (
+            <>
+              <Text style={styles.nextBtnText}>Continue</Text>
+              <Ionicons name="arrow-forward" size={18} color="#fff" />
+            </>
+          ) : (
+            <>
+              <Ionicons name="business-outline" size={18} color="#fff" />
+              <Text style={styles.nextBtnText}>Create Page</Text>
+            </>
+          )}
         </TouchableOpacity>
-      </Modal>
+      </View>
 
-      {/* Industry picker */}
+      {/* Industry picker modal */}
       <Modal visible={showIndustryPicker} transparent animationType="slide" onRequestClose={() => setShowIndustryPicker(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowIndustryPicker(false)}>
           <View style={[styles.pickerSheet, { backgroundColor: colors.surface }]}>
             <View style={[styles.pickerHandle, { backgroundColor: colors.border }]} />
             <Text style={[styles.pickerTitle, { color: colors.text }]}>Industry</Text>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               {INDUSTRIES.map((ind) => {
                 const sel = form.industry === ind;
                 return (
-                  <TouchableOpacity key={ind} style={[styles.pickerOption, { borderBottomColor: colors.border, backgroundColor: sel ? colors.backgroundSecondary : "transparent" }]}
-                    onPress={() => { set("industry", ind); setShowIndustryPicker(false); }} activeOpacity={0.75}>
-                    <Text style={[styles.pickerOptionText, { color: sel ? colors.text : colors.textSecondary, fontFamily: sel ? "Inter_600SemiBold" : "Inter_400Regular", flex: 1 }]}>{ind}</Text>
-                    {sel && <Ionicons name="checkmark" size={18} color={BRAND} />}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Size picker */}
-      <Modal visible={showSizePicker} transparent animationType="slide" onRequestClose={() => setShowSizePicker(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowSizePicker(false)}>
-          <View style={[styles.pickerSheet, { backgroundColor: colors.surface }]}>
-            <View style={[styles.pickerHandle, { backgroundColor: colors.border }]} />
-            <Text style={[styles.pickerTitle, { color: colors.text }]}>Company Size</Text>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {SIZE_OPTIONS.map((s) => {
-                const sel = form.size === s;
-                return (
-                  <TouchableOpacity key={s} style={[styles.pickerOption, { borderBottomColor: colors.border, backgroundColor: sel ? BRAND + "12" : "transparent" }]}
-                    onPress={() => { set("size", s); setShowSizePicker(false); }} activeOpacity={0.75}>
-                    <Ionicons name="people-outline" size={18} color={sel ? BRAND : colors.textSecondary} />
-                    <Text style={[styles.pickerOptionText, { color: sel ? BRAND : colors.text, fontFamily: sel ? "Inter_600SemiBold" : "Inter_400Regular", flex: 1 }]}>{s} employees</Text>
+                  <TouchableOpacity
+                    key={ind}
+                    style={[styles.pickerOption, { borderBottomColor: colors.border, backgroundColor: sel ? BRAND + "10" : "transparent" }]}
+                    onPress={() => { set("industry", ind); setShowIndustryPicker(false); }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.pickerOptionText, { color: sel ? BRAND : colors.text, fontFamily: sel ? "Inter_600SemiBold" : "Inter_400Regular", flex: 1 }]}>{ind}</Text>
                     {sel && <Ionicons name="checkmark" size={18} color={BRAND} />}
                   </TouchableOpacity>
                 );
@@ -414,45 +519,45 @@ export default function CreateCompanyPageScreen() {
     </View>
   );
 }
-
-function Field({ label, children, required, hint, colors }: { label: string; children: React.ReactNode; required?: boolean; hint?: string; colors: any }) {
-  return (
-    <View style={[fieldSt.wrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <Text style={[fieldSt.label, { color: colors.textMuted }]}>
-        {label}{required ? <Text style={{ color: "#FF3B30" }}> *</Text> : ""}
-      </Text>
-      {children}
-      {hint ? <Text style={[fieldSt.hint, { color: colors.textMuted }]}>{hint}</Text> : null}
-    </View>
-  );
-}
-
-const fieldSt = StyleSheet.create({
-  wrap: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: 12, gap: 6 },
-  label: { fontSize: 12, fontFamily: "Inter_500Medium", letterSpacing: 0.2 },
-  hint: { fontSize: 11, fontFamily: "Inter_400Regular" },
-});
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  navBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  nav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   navTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", flex: 1, textAlign: "center" },
-  heroCard: { borderRadius: 14, borderWidth: 1, padding: 16, alignItems: "center", gap: 8 },
-  heroTitle: { fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center" },
-  heroSub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
-  groupLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold", marginTop: 4 },
-  input: { fontSize: 15, fontFamily: "Inter_400Regular", paddingVertical: 4 },
-  textarea: { minHeight: 100, textAlignVertical: "top" },
-  pickerRow: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
-  pickerValue: { fontSize: 15, fontFamily: "Inter_400Regular", flex: 1 },
-  pickerPlaceholder: { fontSize: 15, fontFamily: "Inter_400Regular", flex: 1 },
+  stepCounter: { fontSize: 13, fontFamily: "Inter_500Medium", width: 32, textAlign: "right" },
+  progressBar: { paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  progressSegment: { height: 3, borderRadius: 2 },
+  progressLabel: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  stepTitle: { fontSize: 24, fontFamily: "Inter_700Bold", letterSpacing: -0.3 },
+  stepSub: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  sectionLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold", marginBottom: 8 },
+  inputGroup: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 16, paddingVertical: 13, gap: 6 },
+  inputLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.6 },
+  inputField: { fontSize: 16, fontFamily: "Inter_400Regular", paddingVertical: 2 },
+  inputHint: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  slugPrefix: { fontSize: 16, fontFamily: "Inter_400Regular" },
+  textarea: { minHeight: 110, textAlignVertical: "top" },
+  charCount: { fontSize: 11, fontFamily: "Inter_400Regular", textAlign: "right" },
+  typeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  typeCard: { width: "30%", flexGrow: 1, borderRadius: 14, borderWidth: 1.5, padding: 12, alignItems: "center", gap: 6, position: "relative", minHeight: 80, justifyContent: "center" },
+  typeLabel: { fontSize: 12, fontFamily: "Inter_500Medium", textAlign: "center" },
+  typeCheck: { position: "absolute", top: 7, right: 7, width: 16, height: 16, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  sizeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  sizeChip: { borderRadius: 12, borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 10, alignItems: "center", minWidth: "30%", flexGrow: 1 },
+  sizeChipLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  sizeChipSub: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  previewCard: { flexDirection: "row", alignItems: "flex-start", gap: 10, borderRadius: 12, borderWidth: 1, padding: 14 },
+  bottomBar: { paddingHorizontal: 16, paddingTop: 12, flexDirection: "row", gap: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  backBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 14, borderWidth: 1 },
+  backBtnText: { fontSize: 15, fontFamily: "Inter_500Medium" },
+  nextBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 15, borderRadius: 14 },
+  nextBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
   submitBtn: { borderRadius: 14, paddingVertical: 14, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 },
   submitBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
   modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" },
-  pickerSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: "70%" },
-  pickerHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 12 },
-  pickerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", marginBottom: 8 },
+  pickerSheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, paddingBottom: 40, maxHeight: "70%" },
+  pickerHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 14 },
+  pickerTitle: { fontSize: 17, fontFamily: "Inter_700Bold", marginBottom: 8 },
   pickerOption: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
-  pickerOptionIcon: { width: 36, height: 36, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   pickerOptionText: { fontSize: 15 },
 });
