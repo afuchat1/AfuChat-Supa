@@ -307,7 +307,7 @@ export default function LoginScreen() {
 
   useEffect(() => { if (user) router.replace("/(tabs)"); }, [user]);
 
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -317,10 +317,57 @@ export default function LoginScreen() {
   const oauthHandledRef = useRef(false);
   const pwdRef = useRef<TextInput>(null);
 
+  function detectIdentifierType(raw: string): "email" | "handle" | "phone" {
+    const s = raw.trim();
+    if (s.includes("@") && /\.\w+$/.test(s.split("@")[1] ?? "")) return "email";
+    const digits = s.replace(/[\s\-()+]/g, "");
+    if (s.startsWith("+") || /^\d{7,15}$/.test(digits)) return "phone";
+    return "handle";
+  }
+
+  function getApiBase(): string {
+    if (Platform.OS === "web" && typeof window !== "undefined") return "";
+    const domain = process.env.EXPO_PUBLIC_DOMAIN || "";
+    if (domain) return `https://${domain}`;
+    return "http://localhost:3000";
+  }
+
+  async function resolveIdentifierToEmail(raw: string): Promise<string | null> {
+    try {
+      const res = await fetch(`${getApiBase()}/api/auth/resolve-identifier`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier: raw.trim() }),
+      });
+      if (!res.ok) return null;
+      const json = await res.json();
+      return json.email ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   async function handleLogin() {
-    if (!email || !password) return showAlert("Missing fields", "Please enter your email and password.");
+    const raw = identifier.trim();
+    if (!raw || !password) return showAlert("Missing fields", "Please enter your credentials and password.");
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+
+    let email = raw;
+    const type = detectIdentifierType(raw);
+
+    if (type !== "email") {
+      const resolved = await resolveIdentifierToEmail(raw);
+      if (!resolved) {
+        setLoading(false);
+        showAlert("Account not found", type === "handle"
+          ? "No account found with that username."
+          : "No account found with that phone number.");
+        return;
+      }
+      email = resolved;
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setLoading(false); showAlert("Sign in failed", error.message); return; }
     if (data.user) {
       const { data: prof } = await supabase.from("profiles").select("scheduled_deletion_at, account_deleted").eq("id", data.user.id).single();
@@ -416,11 +463,28 @@ export default function LoginScreen() {
     } catch { setOauthLoading(null); showAlert("Error", "Could not complete sign in."); }
   }
 
+  const identifierType = detectIdentifierType(identifier);
+  const identifierIcon =
+    identifierType === "email" ? "mail-outline" :
+    identifierType === "phone" ? "call-outline" :
+    "at-outline";
+
   const FormContent = (
     <>
       {/* Fields */}
       <View style={{ gap: 10 }}>
-        <AuthInput icon="mail-outline" placeholder="Email address" value={email} onChangeText={setEmail} keyboardType="email-address" autoComplete="email" colors={colors} isDark={isDark} returnKeyType="next" onSubmitEditing={() => pwdRef.current?.focus()} />
+        <AuthInput
+          icon={identifierIcon}
+          placeholder="Email, @username, or phone number"
+          value={identifier}
+          onChangeText={setIdentifier}
+          keyboardType={identifierType === "phone" ? "phone-pad" : "email-address"}
+          autoComplete="username"
+          colors={colors}
+          isDark={isDark}
+          returnKeyType="next"
+          onSubmitEditing={() => pwdRef.current?.focus()}
+        />
         <AuthInput inputRef={pwdRef} icon="lock-closed-outline" placeholder="Password" value={password} onChangeText={setPassword} secureTextEntry={!showPwd} autoComplete="current-password" colors={colors} isDark={isDark} returnKeyType="go" onSubmitEditing={handleLogin}
           rightElement={
             <TouchableOpacity onPress={() => setShowPwd(p => !p)} style={{ padding: 4 }}>
