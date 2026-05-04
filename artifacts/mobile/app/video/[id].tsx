@@ -2000,22 +2000,20 @@ export default function VideoPlayerScreen() {
       existingMeta.content = "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no";
     }
 
-    // CSS scroll-snap + touch-action fix for React Native Web.
+    // touch-action fix for React Native Web.
     // RN-Web sets touch-action:none on all Views by default, which prevents
     // vertical swipe gestures from reaching the FlatList scroll container.
     // Setting touch-action:pan-y on all descendants restores swipe-to-scroll
     // while still allowing tap interactions on buttons.
+    //
+    // NOTE: Scroll-snap is handled by the FlatList's pagingEnabled prop, which
+    // React Native Web translates to CSS scroll-snap-type/align at the correct
+    // DOM depth internally. Do NOT inject manual scroll-snap CSS here — the
+    // selectors are fragile and conflict with the library's own implementation.
     const style = document.createElement("style");
     style.id = "vf-scroll-fix";
     style.textContent = `
-      [id="vf-scroll"] > div {
-        scroll-snap-type: y mandatory !important;
-        -webkit-overflow-scrolling: touch;
-      }
-      [id="vf-scroll"] > div > div > div {
-        scroll-snap-align: start !important;
-        scroll-snap-stop: always !important;
-      }
+      [id="vf-scroll"],
       [id="vf-scroll"] * {
         touch-action: pan-y !important;
       }
@@ -2683,9 +2681,8 @@ export default function VideoPlayerScreen() {
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
           getItemLayout={(_, index) => ({ length: EFF_H, offset: EFF_H * index, index })}
+          pagingEnabled
           decelerationRate="fast"
-          snapToAlignment="start"
-          snapToInterval={EFF_H}
           style={{ flex: 1, backgroundColor: "#000" }}
           windowSize={5}
           initialNumToRender={3}
