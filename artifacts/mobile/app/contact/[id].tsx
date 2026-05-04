@@ -770,7 +770,7 @@ const st = StyleSheet.create({
 
   avatarStatsRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12, gap: 16 },
   avatarWrap: { position: "relative" },
-  avatarRing: { borderRadius: 50, borderWidth: 2, padding: 2 },
+  avatarRing: { borderRadius: 50 },
   onlineDot: { position: "absolute", bottom: 4, right: 4, width: 14, height: 14, borderRadius: 7, backgroundColor: "#22C55E", borderWidth: 2 },
 
   statsBlock: { flex: 1, flexDirection: "row", justifyContent: "space-around" },

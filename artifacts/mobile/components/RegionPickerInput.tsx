@@ -101,7 +101,7 @@ export default function RegionPickerInput({ value, onChange, country, placeholde
       <Pressable
         style={[
           styles.trigger,
-          { backgroundColor: colors.surface, borderColor: hasValue ? BRAND : colors.border },
+          { backgroundColor: colors.surface },
         ]}
         onPress={openModal}
         disabled={noCountry && !loading}
@@ -251,7 +251,6 @@ const styles = StyleSheet.create({
   trigger: {
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1.5,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 13,

@@ -1016,7 +1016,6 @@ const styles = StyleSheet.create({
     maxWidth: 480,
     paddingHorizontal: 12,
     borderRadius: 10,
-    borderWidth: 1,
   },
   searchInput: {
     flex: 1,
@@ -1070,7 +1069,6 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     overflow: "hidden",
-    borderWidth: 1,
     marginLeft: 4,
   },
   avatarImg: {
