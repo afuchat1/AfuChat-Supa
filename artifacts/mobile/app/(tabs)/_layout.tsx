@@ -1,5 +1,4 @@
 import { BlurView } from "expo-blur";
-import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
@@ -14,6 +13,11 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import CommunityBanner from "@/components/ui/CommunityBanner";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
+
+let isLiquidGlassAvailable: () => boolean = () => false;
+try {
+  isLiquidGlassAvailable = require("expo-glass-effect").isLiquidGlassAvailable;
+} catch (_) {}
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 

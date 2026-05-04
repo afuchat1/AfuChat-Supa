@@ -16,7 +16,6 @@ import {
 } from "react-native";
 import { Image as ExpoImage } from "expo-image";
 import { showAlert } from "@/lib/alert";
-import ViewShot from "react-native-view-shot";
 import { useSafeAreaInsets, useSafeAreaInsets as useCardInsets } from "react-native-safe-area-context";
 import { router, useNavigation } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -42,6 +41,11 @@ import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { DesktopFeedLayout, FEED_COLUMN_MAX_WIDTH } from "@/components/desktop/DesktopFeedLayout";
 import { encodeId } from "@/lib/shortId";
 import { useVideoProgress } from "@/hooks/useVideoProgress";
+
+let ViewShot: any = ({ children, style, ...rest }: any) => <View style={style} {...rest}>{children}</View>;
+try {
+  ViewShot = require("react-native-view-shot").default;
+} catch (_) {}
 
 type PostItem = {
   id: string;
@@ -106,7 +110,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
   const [isTranslated, setIsTranslated] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [capturing, setCapturing] = useState(false);
-  const cardRef = useRef<ViewShot>(null);
+  const cardRef = useRef<any>(null);
   const isOwnPost = currentUser?.id === item.author_id;
   const showFollowBtn = !isOwnPost && !item.isFollowing;
 

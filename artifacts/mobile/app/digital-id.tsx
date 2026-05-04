@@ -21,13 +21,17 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import ViewShot from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
 import QRCode from "react-native-qrcode-svg";
 import { useAuth } from "@/context/AuthContext";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
+
+let ViewShot: any = ({ children, style, ...rest }: any) => <View style={style} {...rest}>{children}</View>;
+try {
+  ViewShot = require("react-native-view-shot").default;
+} catch (_) {}
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 

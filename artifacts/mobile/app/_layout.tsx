@@ -13,9 +13,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Linking, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { CallManager } from "@/components/CallManager";
 import { LanguageProvider } from "@/context/LanguageContext";
@@ -35,6 +33,11 @@ import { DataModeProvider } from "@/context/DataModeContext";
 import GoogleOneTap from "@/components/ui/GoogleOneTap";
 import { DesktopShell } from "@/components/desktop/DesktopShell";
 import { DevViewToolbar } from "@/components/dev/DevViewToolbar";
+
+let KeyboardProvider: React.ComponentType<{ children: React.ReactNode }> = ({ children }) => <>{children}</>;
+try {
+  KeyboardProvider = require("react-native-keyboard-controller").KeyboardProvider;
+} catch (_) {}
 
 try {
   const apiBase =
