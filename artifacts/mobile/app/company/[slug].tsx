@@ -41,6 +41,8 @@ type OrgPage = {
   founded_year: number | null;
   location: string | null;
   physical_address: string | null;
+  registration_number: string | null;
+  jurisdiction_code: string | null;
   social_links: Record<string, string>;
   admin_id: string;
   is_verified: boolean;
@@ -438,9 +440,16 @@ export default function CompanyPageScreen() {
         ) : null}
 
         {/* Contact & location details */}
-        {(page.email || page.org_type || page.physical_address) ? (
+        {(page.email || page.org_type || page.physical_address || page.registration_number) ? (
           <View style={[styles.detailsBox, { borderTopColor: colors.border }]}>
             {page.org_type && <DetailRow icon="business-outline" text={page.org_type} colors={colors} />}
+            {page.registration_number && (
+              <DetailRow
+                icon="document-text-outline"
+                text={`Reg. No. ${page.registration_number}${page.jurisdiction_code ? ` (${page.jurisdiction_code.toUpperCase()})` : ""}`}
+                colors={colors}
+              />
+            )}
             {page.email && <DetailRow icon="mail-outline" text={page.email} colors={colors} />}
             {page.physical_address && <DetailRow icon="location-outline" text={page.physical_address} colors={colors} />}
           </View>

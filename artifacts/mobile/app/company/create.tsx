@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -51,6 +51,43 @@ const INDUSTRIES = [
 
 const TOTAL_STEPS = 3;
 
+const COUNTRY_TO_JURISDICTION: Record<string, string> = {
+  "Afghanistan": "af", "Albania": "al", "Algeria": "dz", "Angola": "ao",
+  "Argentina": "ar", "Australia": "au", "Austria": "at", "Bangladesh": "bd",
+  "Belgium": "be", "Bolivia": "bo", "Botswana": "bw", "Brazil": "br",
+  "Bulgaria": "bg", "Cameroon": "cm", "Canada": "ca", "Chile": "cl",
+  "China": "cn", "Colombia": "co", "Croatia": "hr", "Czech Republic": "cz",
+  "Denmark": "dk", "Ecuador": "ec", "Egypt": "eg", "Estonia": "ee",
+  "Ethiopia": "et", "Finland": "fi", "France": "fr", "Germany": "de",
+  "Ghana": "gh", "Greece": "gr", "Guatemala": "gt", "Honduras": "hn",
+  "Hungary": "hu", "India": "in", "Indonesia": "id", "Ireland": "ie",
+  "Israel": "il", "Italy": "it", "Jamaica": "jm", "Japan": "jp",
+  "Jordan": "jo", "Kazakhstan": "kz", "Kenya": "ke", "Latvia": "lv",
+  "Lebanon": "lb", "Lithuania": "lt", "Luxembourg": "lu", "Malawi": "mw",
+  "Malaysia": "my", "Mexico": "mx", "Moldova": "md", "Morocco": "ma",
+  "Mozambique": "mz", "Namibia": "na", "Netherlands": "nl", "New Zealand": "nz",
+  "Nicaragua": "ni", "Nigeria": "ng", "Norway": "no", "Pakistan": "pk",
+  "Panama": "pa", "Paraguay": "py", "Peru": "pe", "Philippines": "ph",
+  "Poland": "pl", "Portugal": "pt", "Romania": "ro", "Russia": "ru",
+  "Rwanda": "rw", "Saudi Arabia": "sa", "Senegal": "sn", "Serbia": "rs",
+  "Sierra Leone": "sl", "Singapore": "sg", "Slovakia": "sk", "Slovenia": "si",
+  "South Africa": "za", "South Korea": "kr", "Spain": "es", "Sri Lanka": "lk",
+  "Sweden": "se", "Switzerland": "ch", "Tanzania": "tz", "Thailand": "th",
+  "Tunisia": "tn", "Turkey": "tr", "Uganda": "ug", "Ukraine": "ua",
+  "United Arab Emirates": "ae", "United Kingdom": "gb", "United States": "us",
+  "Uruguay": "uy", "Venezuela": "ve", "Vietnam": "vn", "Zambia": "zm",
+  "Zimbabwe": "zw",
+};
+
+type RegResult = {
+  name: string;
+  company_number: string;
+  incorporation_date: string | null;
+  registered_address_in_full: string | null;
+  current_status: string | null;
+  jurisdiction_code: string;
+};
+
 function slugify(text: string): string {
   return text.toLowerCase().trim()
     .replace(/[^\w\s-]/g, "").replace(/[\s_]+/g, "-")
@@ -73,7 +110,24 @@ export default function CreateCompanyPageScreen() {
     tagline: "", description: "", website: "",
     industry: "", size: "", location: "", physical_address: "",
     founded_year: "", email: "", ig: "", x_twitter: "", linkedin: "",
+    registration_number: "", jurisdiction_code: "",
   });
+
+  const [regSearch, setRegSearch] = useState("");
+  const [regResults, setRegResults] = useState<RegResult[]>([]);
+  const [regSearching, setRegSearching] = useState(false);
+  const [regSelected, setRegSelected] = useState<RegResult | null>(null);
+  const [regError, setRegError] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const userCountry = profile?.country || null;
+  const jurisdictionCode = userCountry ? (COUNTRY_TO_JURISDICTION[userCountry] || "") : "";
+
+  useEffect(() => {
+    if (userCountry && !form.location) {
+      setForm((prev) => ({ ...prev, location: userCountry, jurisdiction_code: jurisdictionCode }));
+    }
+  }, [userCountry]);
 
   function set(field: string, val: string) {
     setForm((prev) => {
@@ -81,6 +135,59 @@ export default function CreateCompanyPageScreen() {
       if (field === "name" && !slugEdited) next.slug = slugify(val);
       return next;
     });
+  }
+
+  async function searchRegisteredCompany(query: string) {
+    if (!query.trim() || query.trim().length < 2) { setRegResults([]); return; }
+    setRegSearching(true);
+    setRegError("");
+    try {
+      const jcode = jurisdictionCode || "gb";
+      const url = `https://api.opencorporates.com/v0.4/companies/search?q=${encodeURIComponent(query.trim())}&jurisdiction_code=${jcode}&per_page=10&format=json`;
+      const res = await fetch(url, { headers: { "Accept": "application/json" } });
+      if (!res.ok) throw new Error("Registry unavailable");
+      const json = await res.json();
+      const companies: RegResult[] = (json?.results?.companies || []).map((c: any) => ({
+        name: c.company?.name || "",
+        company_number: c.company?.company_number || "",
+        incorporation_date: c.company?.incorporation_date || null,
+        registered_address_in_full: c.company?.registered_address_in_full || null,
+        current_status: c.company?.current_status || null,
+        jurisdiction_code: c.company?.jurisdiction_code || jcode,
+      }));
+      setRegResults(companies);
+      if (companies.length === 0) setRegError("No registered companies found. Try a different name.");
+    } catch {
+      setRegError("Could not reach the registry. Check your connection and try again.");
+      setRegResults([]);
+    } finally {
+      setRegSearching(false);
+    }
+  }
+
+  function onRegSearchChange(text: string) {
+    setRegSearch(text);
+    setRegSelected(null);
+    setRegError("");
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => searchRegisteredCompany(text), 600);
+  }
+
+  function selectRegisteredCompany(company: RegResult) {
+    setRegSelected(company);
+    setRegResults([]);
+    setRegSearch(company.name);
+    const year = company.incorporation_date ? company.incorporation_date.slice(0, 4) : "";
+    setSlugEdited(false);
+    setForm((prev) => ({
+      ...prev,
+      name: company.name,
+      slug: slugify(company.name),
+      registration_number: company.company_number,
+      jurisdiction_code: company.jurisdiction_code,
+      founded_year: year,
+      physical_address: company.registered_address_in_full || prev.physical_address,
+    }));
   }
 
   const canCreate = profile?.is_verified || profile?.is_organization_verified;
@@ -140,6 +247,8 @@ export default function CreateCompanyPageScreen() {
     if (form.location.trim()) payload.location = form.location.trim();
     if (form.physical_address.trim()) payload.physical_address = form.physical_address.trim();
     if (form.email.trim()) payload.email = form.email.trim();
+    if (form.registration_number.trim()) payload.registration_number = form.registration_number.trim();
+    if (form.jurisdiction_code.trim()) payload.jurisdiction_code = form.jurisdiction_code.trim();
     if (form.founded_year.trim() && !isNaN(Number(form.founded_year)))
       payload.founded_year = Number(form.founded_year);
     const { data, error } = await supabase.from("organization_pages").insert(payload).select("slug").single();
@@ -214,6 +323,101 @@ export default function CreateCompanyPageScreen() {
                 <Text style={[styles.stepSub, { color: colors.textMuted }]}>Give your organization page an identity.</Text>
               </View>
 
+              {/* ── Registry Search ── */}
+              <View style={[styles.registryCard, { backgroundColor: colors.surface, borderColor: colors.accent + "40" }]}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <View style={[styles.registryIconWrap, { backgroundColor: colors.accent + "14" }]}>
+                    <Ionicons name="shield-checkmark-outline" size={18} color={colors.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.registryTitle, { color: colors.text }]}>Find Your Registered Company</Text>
+                    <Text style={[styles.registrySub, { color: colors.textMuted }]}>
+                      {userCountry
+                        ? `Searching ${userCountry} government registry`
+                        : "Search the government business registry"}
+                      {!jurisdictionCode && userCountry ? " (not yet supported — fill manually below)" : ""}
+                    </Text>
+                  </View>
+                  {userCountry ? (
+                    <View style={[styles.countryBadge, { backgroundColor: colors.accent + "14" }]}>
+                      <Text style={[styles.countryBadgeText, { color: colors.accent }]}>{userCountry}</Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                {/* Search input */}
+                <View style={[styles.regSearchRow, { backgroundColor: isDark ? colors.background : "#f5f5f7", borderColor: colors.border }]}>
+                  <Ionicons name="search-outline" size={16} color={colors.textMuted} />
+                  <TextInput
+                    style={[styles.regSearchInput, { color: colors.text }]}
+                    placeholder="Type registered company name…"
+                    placeholderTextColor={colors.textMuted}
+                    value={regSearch}
+                    onChangeText={onRegSearchChange}
+                    returnKeyType="search"
+                    onSubmitEditing={() => searchRegisteredCompany(regSearch)}
+                    editable={!!jurisdictionCode}
+                  />
+                  {regSearching && <ActivityIndicator size="small" color={colors.accent} />}
+                  {regSearch.length > 0 && !regSearching && (
+                    <TouchableOpacity onPress={() => { setRegSearch(""); setRegResults([]); setRegSelected(null); setRegError(""); }} hitSlop={8}>
+                      <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Selected company badge */}
+                {regSelected && (
+                  <View style={[styles.regSelectedBadge, { backgroundColor: colors.accent + "12", borderColor: colors.accent + "30" }]}>
+                    <Ionicons name="checkmark-circle" size={15} color={colors.accent} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.regSelectedName, { color: colors.accent }]} numberOfLines={1}>{regSelected.name}</Text>
+                      <Text style={[styles.regSelectedSub, { color: colors.textMuted }]}>
+                        Reg. {regSelected.company_number}{regSelected.current_status ? ` · ${regSelected.current_status}` : ""}
+                      </Text>
+                    </View>
+                    <TouchableOpacity onPress={() => { setRegSelected(null); setRegSearch(""); setForm((p) => ({ ...p, registration_number: "", jurisdiction_code: jurisdictionCode })); }} hitSlop={8}>
+                      <Ionicons name="close" size={14} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Results */}
+                {regResults.length > 0 && (
+                  <View style={[styles.regResultsList, { borderColor: colors.border }]}>
+                    {regResults.map((r, idx) => (
+                      <TouchableOpacity
+                        key={`${r.company_number}-${idx}`}
+                        style={[styles.regResultRow, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}
+                        onPress={() => selectRegisteredCompany(r)}
+                        activeOpacity={0.75}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.regResultName, { color: colors.text }]} numberOfLines={2}>{r.name}</Text>
+                          <Text style={[styles.regResultSub, { color: colors.textMuted }]}>
+                            #{r.company_number}
+                            {r.incorporation_date ? ` · Inc. ${r.incorporation_date.slice(0, 4)}` : ""}
+                            {r.current_status ? ` · ${r.current_status}` : ""}
+                          </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* Error */}
+                {regError.length > 0 && (
+                  <Text style={[styles.regError, { color: colors.textMuted }]}>{regError}</Text>
+                )}
+
+                {!jurisdictionCode && (
+                  <Text style={[styles.regError, { color: colors.textMuted }]}>
+                    Registry lookup not available for your country yet. Please fill the form below manually.
+                  </Text>
+                )}
+              </View>
+
               {/* Page Name */}
               <View style={[styles.inputGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <Text style={[styles.inputLabel, { color: colors.textMuted }]}>PAGE NAME <Text style={{ color: "#FF3B30" }}>*</Text></Text>
@@ -245,6 +449,25 @@ export default function CreateCompanyPageScreen() {
                 </View>
                 <Text style={[styles.inputHint, { color: colors.textMuted }]}>afuchat.com/company/{form.slug || "your-page"}</Text>
               </View>
+
+              {/* Registration number — shown once user has one selected or types manually */}
+              {(form.registration_number || regSelected) && (
+                <View style={[styles.inputGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <Text style={[styles.inputLabel, { color: colors.textMuted }]}>REGISTRATION NUMBER</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Ionicons name="document-text-outline" size={15} color={colors.textMuted} />
+                    <TextInput
+                      style={[styles.inputField, { color: colors.text, flex: 1 }]}
+                      placeholder="Government registration number"
+                      placeholderTextColor={colors.textMuted}
+                      value={form.registration_number}
+                      onChangeText={(v) => set("registration_number", v)}
+                      autoCapitalize="characters"
+                      maxLength={50}
+                    />
+                  </View>
+                </View>
+              )}
 
               {/* Org Type — card grid */}
               <View>
@@ -466,6 +689,11 @@ export default function CreateCompanyPageScreen() {
                   <Text style={[{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.textMuted, lineHeight: 17, marginTop: 2 }]}>
                     {form.name || "Your Organization"} · {form.org_type || "Organization"}{form.location ? ` · ${form.location}` : ""}
                   </Text>
+                  {form.registration_number ? (
+                    <Text style={[{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.accent, marginTop: 3 }]}>
+                      Reg. {form.registration_number}
+                    </Text>
+                  ) : null}
                 </View>
               </View>
             </>
@@ -576,4 +804,20 @@ const styles = StyleSheet.create({
   pickerTitle: { fontSize: 17, fontFamily: "Inter_700Bold", marginBottom: 8 },
   pickerOption: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   pickerOptionText: { fontSize: 15 },
+  registryCard: { borderRadius: 16, borderWidth: 1.5, padding: 16, gap: 10 },
+  registryIconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  registryTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  registrySub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
+  countryBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  countryBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  regSearchRow: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 10 },
+  regSearchInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", paddingVertical: 0 },
+  regResultsList: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden", marginTop: 2 },
+  regResultRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  regResultName: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  regResultSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
+  regSelectedBadge: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 10, borderWidth: 1, padding: 10, marginTop: 2 },
+  regSelectedName: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  regSelectedSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
+  regError: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", paddingVertical: 4 },
 });

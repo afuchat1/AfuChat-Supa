@@ -32,6 +32,8 @@ type OrgPage = {
   founded_year: number | null;
   location: string | null;
   physical_address: string | null;
+  registration_number: string | null;
+  jurisdiction_code: string | null;
   social_links: Record<string, string>;
   admin_id: string;
   followers_count: number;
@@ -52,6 +54,7 @@ export default function ManageCompanyPageScreen() {
   const [form, setForm] = useState({
     name: "", tagline: "", description: "", website: "", email: "",
     industry: "", org_type: "", size: "", founded_year: "", location: "", physical_address: "",
+    registration_number: "",
     ig: "", x_twitter: "", linkedin: "",
   });
 
@@ -72,6 +75,7 @@ export default function ManageCompanyPageScreen() {
         founded_year: data.founded_year ? String(data.founded_year) : "",
         location: data.location || "",
         physical_address: data.physical_address || "",
+        registration_number: data.registration_number || "",
         ig: data.social_links?.instagram || "",
         x_twitter: data.social_links?.x_twitter || "",
         linkedin: data.social_links?.linkedin || "",
@@ -108,6 +112,7 @@ export default function ManageCompanyPageScreen() {
       size: form.size || null,
       location: form.location.trim() || null,
       physical_address: form.physical_address.trim() || null,
+      registration_number: form.registration_number.trim() || null,
       social_links,
     };
     if (form.founded_year.trim() && !isNaN(Number(form.founded_year))) {
@@ -217,6 +222,12 @@ export default function ManageCompanyPageScreen() {
           <Text style={[styles.groupLabel, { color: colors.text }, { marginTop: 4 }]}>Details</Text>
           <Field label="City / Region" colors={colors}>
             <TextInput style={[styles.input, { color: colors.text }]} value={form.location} onChangeText={(v) => set("location", v)} maxLength={100} placeholder="e.g. Nairobi, Kenya" placeholderTextColor={colors.textMuted} />
+          </Field>
+          <Field label="Registration Number" colors={colors}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Ionicons name="document-text-outline" size={15} color={colors.textMuted} />
+              <TextInput style={[styles.input, { color: colors.text, flex: 1 }]} value={form.registration_number} onChangeText={(v) => set("registration_number", v)} autoCapitalize="characters" maxLength={50} placeholder="Government registration number" placeholderTextColor={colors.textMuted} />
+            </View>
           </Field>
           <Field label="Physical Address" colors={colors}>
             <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
