@@ -2654,6 +2654,9 @@ export default function VideoPlayerScreen() {
             backgroundColor: "#000",
             // Hide the scrollbar visually while keeping scroll behaviour.
             scrollbarWidth: "none",
+            // Override body's touch-action:none so vertical swipes
+            // reach this container and the CSS scroll-snap can drive them.
+            touchAction: "pan-y",
           } as React.CSSProperties}
         >
           {videos.map((item, index) => {

@@ -734,17 +734,18 @@ export default function ShortsFeed({
     return () => window.removeEventListener("keydown", onKey);
   }, [activeIndex, posts.length]);
 
-  // Lock page body scroll + prevent pinch-zoom while this feed is mounted.
+  // Lock page body scroll while this feed is mounted so the browser
+  // doesn't scroll the page instead of the feed list.
+  // NOTE: do NOT set touchAction:none on the body — that blocks swipe gestures
+  // inside the FlatList and makes the feed un-scrollable on touch devices.
   useEffect(() => {
     if (Platform.OS !== "web") return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     document.documentElement.style.overflow = "hidden";
-    document.body.style.touchAction = "none";
     return () => {
       document.body.style.overflow = prev;
       document.documentElement.style.overflow = "";
-      document.body.style.touchAction = "";
     };
   }, []);
 
