@@ -68,6 +68,7 @@ function AuthInput({
         {
           backgroundColor: isDark ? "#111113" : "#F5F5F7",
         },
+        focused && { borderWidth: 1.5, borderColor: accent },
       ]}
     >
       <Ionicons

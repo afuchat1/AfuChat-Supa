@@ -96,6 +96,7 @@ export default function OnboardingScreen() {
   const [handle, setHandle] = useState("");
   const [handleStatus, setHandleStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid_format">("idle");
   const handleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -573,8 +574,17 @@ export default function OnboardingScreen() {
         <View style={styles.fieldsGroup}>
           <View style={styles.fieldWrap}>
             <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Display Name</Text>
-            <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
-              <Ionicons name="person-outline" size={18} color={colors.textMuted} style={styles.fieldIcon} />
+            <View style={[
+              styles.field,
+              { backgroundColor: colors.inputBg },
+              focusedField === "displayName" && { borderWidth: 1.5, borderColor: colors.accent },
+            ]}>
+              <Ionicons
+                name="person-outline"
+                size={18}
+                color={focusedField === "displayName" ? colors.accent : colors.textMuted}
+                style={styles.fieldIcon}
+              />
               <TextInput
                 style={[styles.input, { color: colors.text }]}
                 placeholder="e.g. John Doe"
@@ -583,6 +593,8 @@ export default function OnboardingScreen() {
                 onChangeText={setDisplayName}
                 autoCapitalize="words"
                 autoFocus
+                onFocus={() => setFocusedField("displayName")}
+                onBlur={() => setFocusedField(null)}
               />
             </View>
           </View>
@@ -592,13 +604,16 @@ export default function OnboardingScreen() {
             <View style={[
               styles.field,
               { backgroundColor: colors.inputBg },
-              handleStatus === "available" && { borderWidth: 1, borderColor: "#34C759" },
-              (handleStatus === "taken" || handleStatus === "invalid_format") && { borderWidth: 1, borderColor: "#FF3B30" },
+              focusedField === "handle" && handleStatus === "idle" && { borderWidth: 1.5, borderColor: colors.accent },
+              focusedField === "handle" && handleStatus === "checking" && { borderWidth: 1.5, borderColor: colors.accent },
+              handleStatus === "available" && { borderWidth: 1.5, borderColor: "#34C759" },
+              (handleStatus === "taken" || handleStatus === "invalid_format") && { borderWidth: 1.5, borderColor: "#FF3B30" },
             ]}>
               <Ionicons name="at-outline" size={18} color={
                 handleStatus === "available" ? "#34C759"
                   : (handleStatus === "taken" || handleStatus === "invalid_format") ? "#FF3B30"
-                    : colors.textMuted
+                    : focusedField === "handle" ? colors.accent
+                      : colors.textMuted
               } style={styles.fieldIcon} />
               <TextInput
                 style={[styles.input, { color: colors.text }]}
@@ -608,6 +623,8 @@ export default function OnboardingScreen() {
                 onChangeText={(t) => setHandle(t.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
                 autoCapitalize="none"
                 autoCorrect={false}
+                onFocus={() => setFocusedField("handle")}
+                onBlur={() => setFocusedField(null)}
               />
               {handleStatus === "checking" && (
                 <ActivityIndicator size="small" color={colors.textMuted} style={{ marginLeft: 6 }} />
@@ -724,7 +741,11 @@ export default function OnboardingScreen() {
                   {selectedCountry ? `${selectedCountry.flag} ${selectedCountry.dial}` : "+--"}
                 </Text>
               </TouchableOpacity>
-              <View style={[styles.phoneField, { backgroundColor: colors.inputBg }]}>
+              <View style={[
+                styles.phoneField,
+                { backgroundColor: colors.inputBg },
+                focusedField === "phone" && { borderWidth: 1.5, borderColor: colors.accent },
+              ]}>
                 <TextInput
                   style={[styles.input, { color: colors.text }]}
                   placeholder={selectedCountry ? `${"0".repeat(selectedCountry.phoneLength[0])}` : "Phone number"}
@@ -735,8 +756,6 @@ export default function OnboardingScreen() {
                       : phoneNumber
                   }
                   onChangeText={(v) => {
-                    // Strip non-digits, drop leading 0s, cap at the country's
-                    // longest accepted length so the user can't overshoot.
                     const cleaned = normalizeLocalNumber(v);
                     const max = selectedCountry
                       ? Math.max(...selectedCountry.phoneLength)
@@ -744,6 +763,8 @@ export default function OnboardingScreen() {
                     setPhoneNumber(cleaned.slice(0, max));
                   }}
                   keyboardType="phone-pad"
+                  onFocus={() => setFocusedField("phone")}
+                  onBlur={() => setFocusedField(null)}
                 />
               </View>
             </View>

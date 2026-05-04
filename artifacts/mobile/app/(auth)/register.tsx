@@ -48,7 +48,7 @@ function AuthInput({ icon, placeholder, value, onChangeText, secureTextEntry, ke
   const [focused, setFocused] = useState(false);
   const { accent } = useAppAccent();
   return (
-    <View style={[inputSt.wrap, { backgroundColor: isDark ? "#111113" : "#F5F5F7" }]}>
+    <View style={[inputSt.wrap, { backgroundColor: isDark ? "#111113" : "#F5F5F7" }, focused && { borderWidth: 1.5, borderColor: accent }]}>
       <Ionicons name={icon} size={17} color={focused ? accent : colors.textMuted} style={inputSt.icon} />
       <TextInput ref={inputRef} style={[inputSt.text, { color: colors.text }]} placeholder={placeholder} placeholderTextColor={colors.textMuted} value={value} onChangeText={onChangeText} secureTextEntry={secureTextEntry} keyboardType={keyboardType} autoCapitalize={autoCapitalize ?? "none"} autoComplete={autoComplete} autoCorrect={false} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} onSubmitEditing={onSubmitEditing} returnKeyType={returnKeyType ?? "next"} />
       {rightElement}
