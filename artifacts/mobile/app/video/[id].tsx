@@ -1986,8 +1986,9 @@ export default function VideoPlayerScreen() {
   }, []); // stable — uses refs internally
 
   // Prevent page body scroll and pinch-zoom when the video feed is mounted.
-  // NOTE: do NOT set touchAction:"none" on the body — it would cascade to all
-  // descendants and block touch-swipe scroll on the FlatList.
+  // Also inject scroll-snap CSS so touch/wheel swipes snap per-video, and set
+  // touch-action:pan-y on all FlatList descendants so vertical swipe gestures
+  // are never blocked by React Native Web's default touch-action:none on Views.
   useEffect(() => {
     if (Platform.OS !== "web") return;
     const prev = document.body.style.overflow;
@@ -1998,10 +1999,34 @@ export default function VideoPlayerScreen() {
     if (existingMeta) {
       existingMeta.content = "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no";
     }
+
+    // CSS scroll-snap + touch-action fix for React Native Web.
+    // RN-Web sets touch-action:none on all Views by default, which prevents
+    // vertical swipe gestures from reaching the FlatList scroll container.
+    // Setting touch-action:pan-y on all descendants restores swipe-to-scroll
+    // while still allowing tap interactions on buttons.
+    const style = document.createElement("style");
+    style.id = "vf-scroll-fix";
+    style.textContent = `
+      [id="vf-scroll"] > div {
+        scroll-snap-type: y mandatory !important;
+        -webkit-overflow-scrolling: touch;
+      }
+      [id="vf-scroll"] > div > div > div {
+        scroll-snap-align: start !important;
+        scroll-snap-stop: always !important;
+      }
+      [id="vf-scroll"] * {
+        touch-action: pan-y !important;
+      }
+    `;
+    document.head.appendChild(style);
+
     return () => {
       document.body.style.overflow = prev;
       document.documentElement.style.overflow = "";
       if (existingMeta && prevContent) existingMeta.content = prevContent;
+      style.remove();
     };
   }, []);
 
@@ -2654,7 +2679,6 @@ export default function VideoPlayerScreen() {
             );
           }}
           nativeID="vf-scroll"
-          pagingEnabled
           showsVerticalScrollIndicator={false}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
