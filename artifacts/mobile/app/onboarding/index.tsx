@@ -359,7 +359,7 @@ export default function OnboardingScreen() {
       case 4:
         return selectedInterests.size >= 3;
       case 5:
-        return true;
+        return avatarUri !== null;
       default:
         return false;
     }
