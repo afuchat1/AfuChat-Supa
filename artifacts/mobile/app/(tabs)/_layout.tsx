@@ -1,11 +1,11 @@
 import { BlurView } from "expo-blur";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
-import { Tabs, usePathname } from "expo-router";
+import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useRef } from "react";
-import { Dimensions, Image, Platform, StyleSheet, useColorScheme } from "react-native";
+import React, { useEffect } from "react";
+import { Image, Platform, StyleSheet, useColorScheme } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
@@ -45,46 +45,9 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   const isIOS = Platform.OS === "ios";
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const { registerLayout, step, advance } = useTour();
-  const pathname = usePathname();
   const { isDesktop } = useIsDesktop();
-  const prevPathnameRef = useRef(pathname);
 
   const hideTabs = isDesktop || (!isLoggedIn && Platform.OS === "web");
-
-  useEffect(() => {
-    if (hideTabs) return;
-
-    const { width: SW, height: SH } = Dimensions.get("window");
-    const tabBarH = 52 + (insets.bottom > 0 ? insets.bottom : 8);
-    const tabBarTop = SH - tabBarH;
-    const tabW = SW / 4;
-
-    const tabDefs = [
-      { id: "tab-chat", index: 0 },
-      { id: "tab-discover", index: 1 },
-      { id: "tab-apps", index: 2 },
-      { id: "tab-me", index: 3 },
-    ];
-    tabDefs.forEach(({ id, index }) => {
-      registerLayout(id, {
-        x: tabW * index,
-        y: tabBarTop,
-        w: tabW,
-        h: tabBarH,
-      });
-    });
-  }, [hideTabs, insets.bottom, registerLayout]);
-
-  useEffect(() => {
-    if (!step) return;
-    // Only advance when the user actually navigates to a tab, not on step changes
-    if (prevPathnameRef.current === pathname) return;
-    prevPathnameRef.current = pathname;
-    if (step.id === "discover" && pathname === "/discover") advance();
-    if (step.id === "chat" && (pathname === "/" || pathname === "/index")) advance();
-    if (step.id === "apps" && pathname === "/apps") advance();
-  }, [pathname, step?.id]);
 
   return (
     <Tabs
