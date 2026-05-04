@@ -568,8 +568,12 @@ export default function ShortsFeed({
 
   const [posts, setPosts] = useState<ShortPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
   const [globalMuted, setGlobalMuted] = useState(true);
+  const cursorRef = useRef<string | null>(null);
+  const loadMoreInFlight = useRef(false);
 
   const isFullscreen = layout === "fullscreen";
 
@@ -586,51 +590,11 @@ export default function ShortsFeed({
     return Math.min(maxByCol, Math.max(280, target));
   }, [cardHeight, winW, isFullscreen]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const PAGE_SIZE = 30;
 
-    // For Following filter we narrow to the user's follow set.
-    let followingAuthorIds: string[] | null = null;
-    if (filter === "following" && user) {
-      const { data: follows } = await supabase
-        .from("follows")
-        .select("following_id")
-        .eq("follower_id", user.id);
-      followingAuthorIds = (follows || []).map((r: any) => r.following_id as string);
-      if (followingAuthorIds.length === 0) {
-        setPosts([]);
-        setLoading(false);
-        return;
-      }
-    }
-
-    let query = supabase
-      .from("posts")
-      .select(`
-        id, author_id, content, video_url, image_url, created_at, view_count,
-        profiles!posts_author_id_fkey(display_name, handle, avatar_url)
-      `)
-      .eq("post_type", "video")
-      .eq("visibility", "public")
-      .not("video_url", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(30);
-
-    if (followingAuthorIds) {
-      query = query.in("author_id", followingAuthorIds);
-    }
-
-    const { data } = await query;
-
-    if (!data || data.length === 0) {
-      setPosts([]);
-      setLoading(false);
-      return;
-    }
-
+  const buildShortPosts = useCallback(async (data: any[], user: any) => {
     const postIds = data.map((p: any) => p.id);
     const authorIds = [...new Set(data.map((p: any) => p.author_id as string))];
-
     const [
       { data: likesData },
       { data: repliesData },
@@ -650,7 +614,6 @@ export default function ShortsFeed({
         ? supabase.from("post_bookmarks").select("post_id").in("post_id", postIds).eq("user_id", user.id)
         : Promise.resolve({ data: [] as any[] }),
     ]);
-
     const likeMap: Record<string, number> = {};
     for (const l of likesData || []) likeMap[(l as any).post_id] = (likeMap[(l as any).post_id] || 0) + 1;
     const replyMap: Record<string, number> = {};
@@ -658,30 +621,123 @@ export default function ShortsFeed({
     const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
     const followingSet = new Set((myFollows || []).map((f: any) => f.following_id as string));
     const myBookmarkSet = new Set((myBookmarks || []).map((b: any) => b.post_id));
+    return data.map((p: any) => ({
+      id: p.id,
+      author_id: p.author_id,
+      content: p.content || "",
+      video_url: p.video_url,
+      image_url: p.image_url || null,
+      created_at: p.created_at,
+      view_count: p.view_count || 0,
+      profile: {
+        display_name: p.profiles?.display_name || "User",
+        handle: p.profiles?.handle || "user",
+        avatar_url: p.profiles?.avatar_url || null,
+      },
+      liked: myLikeSet.has(p.id),
+      likeCount: likeMap[p.id] || 0,
+      replyCount: replyMap[p.id] || 0,
+      bookmarked: myBookmarkSet.has(p.id),
+      following: followingSet.has(p.author_id),
+    }));
+  }, []);
 
-    setPosts(
-      data.map((p: any) => ({
-        id: p.id,
-        author_id: p.author_id,
-        content: p.content || "",
-        video_url: p.video_url,
-        image_url: p.image_url || null,
-        created_at: p.created_at,
-        view_count: p.view_count || 0,
-        profile: {
-          display_name: p.profiles?.display_name || "User",
-          handle: p.profiles?.handle || "user",
-          avatar_url: p.profiles?.avatar_url || null,
-        },
-        liked: myLikeSet.has(p.id),
-        likeCount: likeMap[p.id] || 0,
-        replyCount: replyMap[p.id] || 0,
-        bookmarked: myBookmarkSet.has(p.id),
-        following: followingSet.has(p.author_id),
-      })),
-    );
+  const fetchFollowingIds = useCallback(async () => {
+    if (filter !== "following" || !user) return null;
+    const { data: follows } = await supabase
+      .from("follows")
+      .select("following_id")
+      .eq("follower_id", user.id);
+    return (follows || []).map((r: any) => r.following_id as string);
+  }, [filter, user]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    cursorRef.current = null;
+    setHasMore(true);
+
+    const followingAuthorIds = await fetchFollowingIds();
+    if (followingAuthorIds !== null && followingAuthorIds.length === 0) {
+      setPosts([]);
+      setLoading(false);
+      return;
+    }
+
+    let query = supabase
+      .from("posts")
+      .select(`
+        id, author_id, content, video_url, image_url, created_at, view_count,
+        profiles!posts_author_id_fkey(display_name, handle, avatar_url)
+      `)
+      .eq("post_type", "video")
+      .eq("visibility", "public")
+      .not("video_url", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(PAGE_SIZE);
+
+    if (followingAuthorIds) {
+      query = query.in("author_id", followingAuthorIds);
+    }
+
+    const { data } = await query;
+
+    if (!data || data.length === 0) {
+      setPosts([]);
+      setLoading(false);
+      return;
+    }
+
+    if (data.length < PAGE_SIZE) setHasMore(false);
+    cursorRef.current = data[data.length - 1]?.created_at ?? null;
+
+    const mapped = await buildShortPosts(data, user);
+    setPosts(mapped);
     setLoading(false);
-  }, [user, filter]);
+  }, [user, filter, fetchFollowingIds, buildShortPosts]);
+
+  const loadMore = useCallback(async () => {
+    if (loadMoreInFlight.current || !hasMore || !cursorRef.current) return;
+    loadMoreInFlight.current = true;
+    setLoadingMore(true);
+    try {
+      const followingAuthorIds = await fetchFollowingIds();
+      if (followingAuthorIds !== null && followingAuthorIds.length === 0) return;
+
+      let query = supabase
+        .from("posts")
+        .select(`
+          id, author_id, content, video_url, image_url, created_at, view_count,
+          profiles!posts_author_id_fkey(display_name, handle, avatar_url)
+        `)
+        .eq("post_type", "video")
+        .eq("visibility", "public")
+        .not("video_url", "is", null)
+        .lt("created_at", cursorRef.current!)
+        .order("created_at", { ascending: false })
+        .limit(PAGE_SIZE);
+
+      if (followingAuthorIds) {
+        query = query.in("author_id", followingAuthorIds);
+      }
+
+      const { data } = await query;
+      if (!data || data.length === 0) {
+        setHasMore(false);
+        return;
+      }
+      if (data.length < PAGE_SIZE) setHasMore(false);
+      cursorRef.current = data[data.length - 1]?.created_at ?? null;
+
+      const mapped = await buildShortPosts(data, user);
+      setPosts((prev) => {
+        const existingIds = new Set(prev.map((p) => p.id));
+        return [...prev, ...mapped.filter((p) => !existingIds.has(p.id))];
+      });
+    } finally {
+      setLoadingMore(false);
+      loadMoreInFlight.current = false;
+    }
+  }, [hasMore, user, fetchFollowingIds, buildShortPosts, PAGE_SIZE]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -872,6 +928,9 @@ export default function ShortsFeed({
       windowSize={5}
       initialNumToRender={3}
       maxToRenderPerBatch={3}
+      onEndReached={loadMore}
+      onEndReachedThreshold={0.4}
+      ListFooterComponent={loadingMore ? <ActivityIndicator color={isFullscreen ? "#fff" : colors.accent} style={{ marginVertical: 16 }} /> : null}
       style={{ backgroundColor: isFullscreen ? "#000" : colors.background }}
     />
   );

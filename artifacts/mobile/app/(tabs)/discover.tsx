@@ -98,7 +98,7 @@ function BookmarkButton({ bookmarked, onPress }: { bookmarked: boolean; onPress:
   );
 }
 
-function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImagePress, onRequireAuth, colWidth }: { item: PostItem; onToggleLike: (postId: string) => void; onToggleBookmark: (postId: string) => void; onToggleFollow: (authorId: string) => void; onImagePress?: (images: string[], index: number) => void; onRequireAuth?: () => void; colWidth?: number }) {
+const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImagePress, onRequireAuth, colWidth }: { item: PostItem; onToggleLike: (postId: string) => void; onToggleBookmark: (postId: string) => void; onToggleFollow: (authorId: string) => void; onImagePress?: (images: string[], index: number) => void; onRequireAuth?: () => void; colWidth?: number }) {
   const { colors } = useTheme();
   const { preferredLang } = useLanguage();
   const { width: screenW } = useWindowDimensions();
@@ -466,7 +466,17 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
       </Modal>
     </>
   );
-}
+}, (prev, next) =>
+  prev.item.id === next.item.id &&
+  prev.item.liked === next.item.liked &&
+  prev.item.likeCount === next.item.likeCount &&
+  prev.item.replyCount === next.item.replyCount &&
+  prev.item.bookmarked === next.item.bookmarked &&
+  prev.item.view_count === next.item.view_count &&
+  prev.item.isFollowing === next.item.isFollowing &&
+  prev.item.content === next.item.content &&
+  prev.colWidth === next.colWidth
+);
 
 export default function DiscoverScreen() {
   "use no memo";
@@ -920,11 +930,15 @@ export default function DiscoverScreen() {
     [fetchPosts]
   );
 
+  const loadMoreInFlight = useRef(false);
   const loadMore = useCallback(() => {
-    if (loadingMore || !hasMore || postsRef.current.length === 0) return;
+    if (loadMoreInFlight.current || !hasMore || postsRef.current.length === 0) return;
+    loadMoreInFlight.current = true;
     setLoadingMore(true);
-    fetchPosts(0, false, feedTabRef.current);
-  }, [fetchPosts, loadingMore, hasMore]);
+    fetchPosts(0, false, feedTabRef.current).finally(() => {
+      loadMoreInFlight.current = false;
+    });
+  }, [fetchPosts, hasMore]);
 
   const loadPostsRef = useRef(loadPosts);
   useEffect(() => { loadPostsRef.current = loadPosts; }, [loadPosts]);
@@ -1047,11 +1061,6 @@ export default function DiscoverScreen() {
           setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, replyCount: Math.max(0, p.replyCount + delta) } : p));
         }
       })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "post_views" }, (payload: any) => {
-        const postId = payload.new?.post_id;
-        if (!postId || payload.new?.viewer_id === user?.id) return;
-        setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, view_count: p.view_count + 1 } : p));
-      })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "follows" }, (payload: any) => {
         const followerId = payload.new?.follower_id;
         const followingId = payload.new?.following_id;
@@ -1080,7 +1089,7 @@ export default function DiscoverScreen() {
     loadPosts(feedTab);
   }
 
-  async function toggleBookmark(postId: string) {
+  const toggleBookmark = useCallback(async (postId: string) => {
     if (!user) { setShowSignInPrompt(true); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const post = postsRef.current.find((p) => p.id === postId);
@@ -1096,9 +1105,9 @@ export default function DiscoverScreen() {
         learnedWeightsRef.current = await getLearnedInterestBoosts();
       });
     }
-  }
+  }, [user, postsRef]);
 
-  async function toggleLike(postId: string) {
+  const toggleLike = useCallback(async (postId: string) => {
     if (!user) { setShowSignInPrompt(true); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const post = postsRef.current.find((p) => p.id === postId);
@@ -1132,16 +1141,18 @@ export default function DiscoverScreen() {
         try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("post_liked"); } catch (_) {}
       }
     }
-  }
+  }, [user, profile, postsRef]);
 
-  async function toggleFollow(authorId: string) {
+  const toggleFollow = useCallback(async (authorId: string) => {
     if (!user) { setShowSignInPrompt(true); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const { error } = await supabase.from("follows").upsert({ follower_id: user.id, following_id: authorId }, { onConflict: "follower_id,following_id" });
     if (!error) {
       setPosts((prev) => prev.map((p) => p.author_id === authorId ? { ...p, isFollowing: true } : p));
     }
-  }
+  }, [user]);
+
+  const onRequireAuth = useCallback(() => setShowSignInPrompt(true), []);
 
   // The dedicated Shorts experience now lives at /shorts (which redirects to
   // /video/[id]), so there is only ONE video player implementation app-wide.
@@ -1285,7 +1296,7 @@ export default function DiscoverScreen() {
               onToggleBookmark={toggleBookmark}
               onToggleFollow={toggleFollow}
               onImagePress={imgViewer.openViewer}
-              onRequireAuth={() => setShowSignInPrompt(true)}
+              onRequireAuth={onRequireAuth}
               colWidth={isDesktop ? FEED_COLUMN_MAX_WIDTH : undefined}
             />
           )}
