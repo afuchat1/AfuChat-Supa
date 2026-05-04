@@ -577,7 +577,6 @@ export default function OnboardingScreen() {
             <View style={[
               styles.field,
               { backgroundColor: colors.inputBg },
-              focusedField === "displayName" && { borderWidth: 1.5, borderColor: colors.accent },
             ]}>
               <Ionicons
                 name="person-outline"
@@ -601,14 +600,7 @@ export default function OnboardingScreen() {
 
           <View style={styles.fieldWrap}>
             <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Username</Text>
-            <View style={[
-              styles.field,
-              { backgroundColor: colors.inputBg },
-              focusedField === "handle" && handleStatus === "idle" && { borderWidth: 1.5, borderColor: colors.accent },
-              focusedField === "handle" && handleStatus === "checking" && { borderWidth: 1.5, borderColor: colors.accent },
-              handleStatus === "available" && { borderWidth: 1.5, borderColor: "#34C759" },
-              (handleStatus === "taken" || handleStatus === "invalid_format") && { borderWidth: 1.5, borderColor: "#FF3B30" },
-            ]}>
+            <View style={[styles.field, { backgroundColor: colors.inputBg }]}>
               <Ionicons name="at-outline" size={18} color={
                 handleStatus === "available" ? "#34C759"
                   : (handleStatus === "taken" || handleStatus === "invalid_format") ? "#FF3B30"
@@ -741,11 +733,7 @@ export default function OnboardingScreen() {
                   {selectedCountry ? `${selectedCountry.flag} ${selectedCountry.dial}` : "+--"}
                 </Text>
               </TouchableOpacity>
-              <View style={[
-                styles.phoneField,
-                { backgroundColor: colors.inputBg },
-                focusedField === "phone" && { borderWidth: 1.5, borderColor: colors.accent },
-              ]}>
+              <View style={[styles.phoneField, { backgroundColor: colors.inputBg }]}>
                 <TextInput
                   style={[styles.input, { color: colors.text }]}
                   placeholder={selectedCountry ? `${"0".repeat(selectedCountry.phoneLength[0])}` : "Phone number"}
