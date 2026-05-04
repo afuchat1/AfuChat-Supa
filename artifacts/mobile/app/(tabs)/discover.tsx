@@ -94,7 +94,7 @@ function BookmarkButton({ bookmarked, onPress }: { bookmarked: boolean; onPress:
   );
 }
 
-function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImagePress, colWidth }: { item: PostItem; onToggleLike: (postId: string) => void; onToggleBookmark: (postId: string) => void; onToggleFollow: (authorId: string) => void; onImagePress?: (images: string[], index: number) => void; colWidth?: number }) {
+function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImagePress, onRequireAuth, colWidth }: { item: PostItem; onToggleLike: (postId: string) => void; onToggleBookmark: (postId: string) => void; onToggleFollow: (authorId: string) => void; onImagePress?: (images: string[], index: number) => void; onRequireAuth?: () => void; colWidth?: number }) {
   const { colors } = useTheme();
   const { preferredLang } = useLanguage();
   const { width: screenW } = useWindowDimensions();
@@ -222,7 +222,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
             {showFollowBtn && (
               <TouchableOpacity
                 style={[styles.followBtn, { backgroundColor: colors.accent }]}
-                onPress={() => onToggleFollow(item.author_id)}
+                onPress={() => { if (!currentUser) { onRequireAuth?.(); return; } onToggleFollow(item.author_id); }}
                 activeOpacity={0.7}
               >
                 <Ionicons name="add" size={15} color="#fff" />
@@ -391,7 +391,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
 
           {/* ── Footer ── */}
           <View style={styles.cardFooter}>
-            <TouchableOpacity style={styles.action} onPress={() => onToggleLike(item.id)}>
+            <TouchableOpacity style={styles.action} onPress={() => { if (!currentUser) { onRequireAuth?.(); return; } onToggleLike(item.id); }}>
               <Ionicons
                 name={item.liked ? "heart" : "heart-outline"}
                 size={18}
@@ -403,7 +403,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
                 </Text>
               )}
             </TouchableOpacity>
-            <TouchableOpacity style={styles.action} onPress={openPost}>
+            <TouchableOpacity style={styles.action} onPress={() => { if (!currentUser) { onRequireAuth?.(); return; } openPost(); }}>
               <Ionicons name="chatbubble-outline" size={17} color={colors.textMuted} />
               {item.replyCount > 0 && (
                 <Text style={[styles.actionText, { color: colors.textMuted }]}>{item.replyCount}</Text>
@@ -411,9 +411,9 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.action}
-              onPress={() => item.post_type === "video"
+              onPress={() => { if (!currentUser) { onRequireAuth?.(); return; } item.post_type === "video"
                 ? shareVideo({ postId: item.id, authorName: item.profile.display_name, caption: item.content })
-                : sharePost({ postId: item.id, authorName: item.profile.display_name, content: item.content })}
+                : sharePost({ postId: item.id, authorName: item.profile.display_name, content: item.content }); }}
             >
               <Ionicons name="arrow-redo-outline" size={17} color={colors.textMuted} />
             </TouchableOpacity>
@@ -422,7 +422,7 @@ function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImag
               <Ionicons name="eye-outline" size={14} color={colors.textMuted} />
               <Text style={[styles.viewText, { color: colors.textMuted }]}>{item.view_count}</Text>
             </View>
-            <BookmarkButton bookmarked={item.bookmarked} onPress={() => onToggleBookmark(item.id)} />
+            <BookmarkButton bookmarked={item.bookmarked} onPress={() => { if (!currentUser) { onRequireAuth?.(); return; } onToggleBookmark(item.id); }} />
           </View>
 
           {/* AfuChat watermark — only rendered during image capture */}
@@ -495,6 +495,7 @@ export default function DiscoverScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showCreatePicker, setShowCreatePicker] = useState(false);
+  const [showSignInPrompt, setShowSignInPrompt] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [followingEmpty, setFollowingEmpty] = useState(false);
   const [bgRefreshing, setBgRefreshing] = useState(false);
@@ -990,7 +991,7 @@ export default function DiscoverScreen() {
   }
 
   async function toggleBookmark(postId: string) {
-    if (!user) { router.push("/(auth)/login"); return; }
+    if (!user) { setShowSignInPrompt(true); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const post = postsRef.current.find((p) => p.id === postId);
     if (!post) return;
@@ -1008,7 +1009,7 @@ export default function DiscoverScreen() {
   }
 
   async function toggleLike(postId: string) {
-    if (!user) { router.push("/(auth)/login"); return; }
+    if (!user) { setShowSignInPrompt(true); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const post = postsRef.current.find((p) => p.id === postId);
     if (!post) return;
@@ -1044,7 +1045,7 @@ export default function DiscoverScreen() {
   }
 
   async function toggleFollow(authorId: string) {
-    if (!user) { router.push("/(auth)/login"); return; }
+    if (!user) { setShowSignInPrompt(true); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const { error } = await supabase.from("follows").upsert({ follower_id: user.id, following_id: authorId }, { onConflict: "follower_id,following_id" });
     if (!error) {
@@ -1187,6 +1188,7 @@ export default function DiscoverScreen() {
               onToggleBookmark={toggleBookmark}
               onToggleFollow={toggleFollow}
               onImagePress={imgViewer.openViewer}
+              onRequireAuth={() => setShowSignInPrompt(true)}
               colWidth={isDesktop ? FEED_COLUMN_MAX_WIDTH : undefined}
             />
           )}
@@ -1282,6 +1284,52 @@ export default function DiscoverScreen() {
         visible={imgViewer.visible}
         onClose={imgViewer.closeViewer}
       />
+
+      {/* Sign-in prompt overlay */}
+      <Modal
+        visible={showSignInPrompt}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowSignInPrompt(false)}
+      >
+        <TouchableOpacity
+          style={styles.signInOverlay}
+          activeOpacity={1}
+          onPress={() => setShowSignInPrompt(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+            style={[styles.signInSheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 20 }]}
+          >
+            <View style={[styles.signInHandle, { backgroundColor: colors.border }]} />
+            <View style={[styles.signInIconWrap, { backgroundColor: colors.accent + "18" }]}>
+              <Ionicons name="chatbubble-ellipses" size={32} color={colors.accent} />
+            </View>
+            <Text style={[styles.signInTitle, { color: colors.text }]}>Join the conversation</Text>
+            <Text style={[styles.signInSub, { color: colors.textSecondary }]}>
+              Sign in to like, comment, share, and connect with people on AfuChat.
+            </Text>
+            <TouchableOpacity
+              style={[styles.signInPrimaryBtn, { backgroundColor: colors.accent }]}
+              onPress={() => { setShowSignInPrompt(false); router.push("/(auth)/login"); }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.signInPrimaryBtnText}>Sign In</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.signInSecondaryBtn, { borderColor: colors.border }]}
+              onPress={() => { setShowSignInPrompt(false); router.push("/(auth)/register" as any); }}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.signInSecondaryBtnText, { color: colors.text }]}>Create Account</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowSignInPrompt(false)} style={{ marginTop: 8 }}>
+              <Text style={[styles.signInDismiss, { color: colors.textMuted }]}>Continue browsing</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -1575,5 +1623,73 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#fff",
     overflow: "hidden",
+  },
+  signInOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  signInSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 14,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    gap: 12,
+  },
+  signInHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    marginBottom: 8,
+  },
+  signInIconWrap: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  signInTitle: {
+    fontSize: 22,
+    fontFamily: "Inter_700Bold",
+    textAlign: "center",
+    letterSpacing: -0.3,
+  },
+  signInSub: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    lineHeight: 21,
+    paddingHorizontal: 8,
+  },
+  signInPrimaryBtn: {
+    width: "100%",
+    paddingVertical: 15,
+    borderRadius: 14,
+    alignItems: "center",
+    marginTop: 4,
+  },
+  signInPrimaryBtnText: {
+    color: "#fff",
+    fontSize: 16,
+    fontFamily: "Inter_700Bold",
+  },
+  signInSecondaryBtn: {
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center",
+    borderWidth: 1.5,
+  },
+  signInSecondaryBtnText: {
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+  },
+  signInDismiss: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    paddingVertical: 6,
   },
 });
