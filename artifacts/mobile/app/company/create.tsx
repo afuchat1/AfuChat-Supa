@@ -18,6 +18,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import { showAlert } from "@/lib/alert";
+import { aiGenerateOrgTagline, aiGenerateOrgDescription, type OrgAiContext } from "@/lib/aiHelper";
 
 const ORG_TYPES = [
   { label: "Company", icon: "business-outline" },
@@ -120,8 +121,50 @@ export default function CreateCompanyPageScreen() {
   const [regError, setRegError] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [aiTaglineLoading, setAiTaglineLoading] = useState(false);
+  const [aiDescLoading, setAiDescLoading] = useState(false);
+
   const userCountry = profile?.country || null;
   const jurisdictionCode = userCountry ? (COUNTRY_TO_JURISDICTION[userCountry] || "") : "";
+
+  function buildOrgCtx(): OrgAiContext {
+    return {
+      name: form.name.trim(),
+      orgType: form.org_type || undefined,
+      industry: form.industry || undefined,
+      location: form.location || userCountry || undefined,
+      foundedYear: form.founded_year || undefined,
+      registrationNumber: form.registration_number || undefined,
+      website: form.website || undefined,
+      tagline: form.tagline || undefined,
+    };
+  }
+
+  async function generateTagline() {
+    if (!form.name.trim()) { showAlert("Name required", "Enter your organization name first (Step 1)."); return; }
+    setAiTaglineLoading(true);
+    try {
+      const result = await aiGenerateOrgTagline(buildOrgCtx());
+      set("tagline", result.slice(0, 160));
+    } catch {
+      showAlert("AI unavailable", "Could not reach the AI service. Please try again.");
+    } finally {
+      setAiTaglineLoading(false);
+    }
+  }
+
+  async function generateDescription() {
+    if (!form.name.trim()) { showAlert("Name required", "Enter your organization name first (Step 1)."); return; }
+    setAiDescLoading(true);
+    try {
+      const result = await aiGenerateOrgDescription(buildOrgCtx());
+      set("description", result.slice(0, 2000));
+    } catch {
+      showAlert("AI unavailable", "Could not reach the AI service. Please try again.");
+    } finally {
+      setAiDescLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (userCountry && !form.location) {
@@ -508,8 +551,33 @@ export default function CreateCompanyPageScreen() {
                 <Text style={[styles.stepSub, { color: colors.textMuted }]}>Help people understand what you stand for.</Text>
               </View>
 
+              {/* AI context hint */}
+              <View style={[styles.aiHintBanner, { backgroundColor: colors.accent + "0E", borderColor: colors.accent + "35" }]}>
+                <Ionicons name="sparkles" size={14} color={colors.accent} />
+                <Text style={[styles.aiHintText, { color: colors.textMuted }]}>
+                  AI generates content based only on the facts you've entered — no invented details.
+                  {form.name ? ` Working with: ${form.name}${form.org_type ? ` · ${form.org_type}` : ""}${form.industry ? ` · ${form.industry}` : ""}.` : " Add a name and org type in Step 1 first."}
+                </Text>
+              </View>
+
               <View style={[styles.inputGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Text style={[styles.inputLabel, { color: colors.textMuted }]}>TAGLINE</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Text style={[styles.inputLabel, { color: colors.textMuted }]}>TAGLINE</Text>
+                  <TouchableOpacity
+                    style={[styles.aiBtn, { backgroundColor: aiTaglineLoading ? colors.accent + "20" : colors.accent + "14", borderColor: colors.accent + "40" }]}
+                    onPress={generateTagline}
+                    disabled={aiTaglineLoading}
+                    activeOpacity={0.75}
+                  >
+                    {aiTaglineLoading
+                      ? <ActivityIndicator size={11} color={colors.accent} />
+                      : <Ionicons name="sparkles" size={12} color={colors.accent} />
+                    }
+                    <Text style={[styles.aiBtnText, { color: colors.accent }]}>
+                      {aiTaglineLoading ? "Generating…" : form.tagline ? "Regenerate" : "Generate"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
                 <TextInput
                   style={[styles.inputField, { color: colors.text }]}
                   placeholder="One line that captures your organization"
@@ -518,10 +586,27 @@ export default function CreateCompanyPageScreen() {
                   onChangeText={(v) => set("tagline", v)}
                   maxLength={160}
                 />
+                <Text style={[styles.charCount, { color: colors.textMuted }]}>{form.tagline.length}/160</Text>
               </View>
 
               <View style={[styles.inputGroup, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Text style={[styles.inputLabel, { color: colors.textMuted }]}>DESCRIPTION</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Text style={[styles.inputLabel, { color: colors.textMuted }]}>DESCRIPTION</Text>
+                  <TouchableOpacity
+                    style={[styles.aiBtn, { backgroundColor: aiDescLoading ? colors.accent + "20" : colors.accent + "14", borderColor: colors.accent + "40" }]}
+                    onPress={generateDescription}
+                    disabled={aiDescLoading}
+                    activeOpacity={0.75}
+                  >
+                    {aiDescLoading
+                      ? <ActivityIndicator size={11} color={colors.accent} />
+                      : <Ionicons name="sparkles" size={12} color={colors.accent} />
+                    }
+                    <Text style={[styles.aiBtnText, { color: colors.accent }]}>
+                      {aiDescLoading ? "Generating…" : form.description ? "Regenerate" : "Generate"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
                 <TextInput
                   style={[styles.inputField, styles.textarea, { color: colors.text }]}
                   placeholder="What does your organization do? What's your mission?"
@@ -804,6 +889,10 @@ const styles = StyleSheet.create({
   pickerTitle: { fontSize: 17, fontFamily: "Inter_700Bold", marginBottom: 8 },
   pickerOption: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   pickerOptionText: { fontSize: 15 },
+  aiHintBanner: { flexDirection: "row", alignItems: "flex-start", gap: 8, borderRadius: 12, borderWidth: 1, padding: 12 },
+  aiHintText: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1, lineHeight: 17 },
+  aiBtn: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 8, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 4 },
+  aiBtnText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   registryCard: { borderRadius: 16, borderWidth: 1.5, padding: 16, gap: 10 },
   registryIconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   registryTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },

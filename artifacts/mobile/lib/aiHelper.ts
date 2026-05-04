@@ -137,3 +137,45 @@ export async function aiGenerateCaption(imageDescription?: string): Promise<stri
 
   return askAi(prompt, "Caption writer. Return ONLY the caption text. No quotes. Max 280 characters.", { fast: true, maxTokens: 150 });
 }
+
+export interface OrgAiContext {
+  name: string;
+  orgType?: string;
+  industry?: string;
+  location?: string;
+  foundedYear?: string;
+  registrationNumber?: string;
+  website?: string;
+  tagline?: string;
+}
+
+function buildOrgContext(ctx: OrgAiContext): string {
+  return [
+    `Organization name: ${ctx.name}`,
+    ctx.orgType ? `Type: ${ctx.orgType}` : null,
+    ctx.industry ? `Industry: ${ctx.industry}` : null,
+    ctx.location ? `Location: ${ctx.location}` : null,
+    ctx.foundedYear ? `Founded: ${ctx.foundedYear}` : null,
+    ctx.registrationNumber ? `Government registration number: ${ctx.registrationNumber} (officially registered)` : null,
+    ctx.website ? `Website: ${ctx.website}` : null,
+    ctx.tagline ? `Tagline: ${ctx.tagline}` : null,
+  ].filter(Boolean).join("\n");
+}
+
+export async function aiGenerateOrgTagline(ctx: OrgAiContext): Promise<string> {
+  const context = buildOrgContext(ctx);
+  return askAi(
+    `Write a concise, compelling tagline (max 120 characters) for this organization based ONLY on the facts provided. Do not invent details not listed.\n\n${context}`,
+    "You are a professional brand copywriter. Return ONLY the tagline text — no quotes, no explanation, no prefix. Max 120 characters. Be specific to the organization, professional, and memorable.",
+    { fast: false, maxTokens: 80 }
+  );
+}
+
+export async function aiGenerateOrgDescription(ctx: OrgAiContext): Promise<string> {
+  const context = buildOrgContext(ctx);
+  return askAi(
+    `Write a professional About / Description section (150–400 words) for this organization's public company page. Base it ONLY on the facts provided — do not invent services, products, revenue figures, team sizes, clients, awards, or any other detail not listed. If information is limited, write general but accurate statements that apply to an organization of this type and industry. Use clear, engaging prose suitable for a LinkedIn-style company page.\n\n${context}`,
+    "You are a professional business copywriter. Return ONLY the description text — no headings, no markdown, no bullet points, no explanation. Write in flowing paragraphs. Be accurate and do not fabricate any details not explicitly provided.",
+    { fast: false, maxTokens: 600 }
+  );
+}
