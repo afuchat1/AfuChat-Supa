@@ -726,16 +726,10 @@ export default function DiscoverScreen() {
         : Date.now() - 14 * 24 * 3600000,
     ).toISOString();
 
-    // Logged-in feed: cursor-based pagination newest-first.
-    // Use the minimum created_at across ALL loaded posts, not just the last
-    // item, because diversifyFeed() reorders by score so the last item is not
-    // guaranteed to be the chronologically oldest one.
+    // Logged-in feed: cursor-based pagination newest-first (existing behaviour)
     const fyOlderThan =
       !isGuest && !isRefresh && postsRef.current.length > 0
-        ? postsRef.current.reduce(
-            (min, p) => (p.created_at < min ? p.created_at : min),
-            postsRef.current[0].created_at,
-          )
+        ? postsRef.current[postsRef.current.length - 1]?.created_at
         : null;
 
     const fySelect = `
