@@ -363,8 +363,7 @@ function DiscoverCommentsSheet({
                 }
               </TouchableOpacity>
             </View>
-          </Pressable>
-        </Pressable>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
