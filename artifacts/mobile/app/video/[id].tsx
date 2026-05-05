@@ -83,26 +83,25 @@ function SwipeHintOverlay({ visible }: { visible: boolean }) {
     if (visible) {
       Animated.sequence([
         Animated.delay(900),
-        Animated.timing(opacity, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 600, useNativeDriver: USE_NATIVE }),
       ]).start();
       bounceLoop.current = Animated.loop(
         Animated.sequence([
           Animated.delay(300),
-          Animated.timing(translateY, { toValue: -14, duration: 520, useNativeDriver: true }),
-          Animated.timing(translateY, { toValue: 0, duration: 520, useNativeDriver: true }),
+          Animated.timing(translateY, { toValue: -14, duration: 520, useNativeDriver: USE_NATIVE }),
+          Animated.timing(translateY, { toValue: 0, duration: 520, useNativeDriver: USE_NATIVE }),
         ])
       );
       bounceLoop.current.start();
     } else {
       bounceLoop.current?.stop();
-      Animated.timing(opacity, { toValue: 0, duration: 350, useNativeDriver: true }).start();
+      Animated.timing(opacity, { toValue: 0, duration: 350, useNativeDriver: USE_NATIVE }).start();
     }
     return () => { bounceLoop.current?.stop(); };
   }, [visible]);
 
   return (
     <Animated.View
-      pointerEvents="none"
       style={{
         position: "absolute",
         bottom: 160,
@@ -111,6 +110,7 @@ function SwipeHintOverlay({ visible }: { visible: boolean }) {
         alignItems: "center",
         opacity,
         zIndex: 20,
+        pointerEvents: "none" as any,
       }}
     >
       <Animated.View style={{ alignItems: "center", transform: [{ translateY }] }}>
@@ -818,7 +818,6 @@ function VideoItem({
   const videoRef = useRef<Video>(null);
   const webVideoRef = useRef<HTMLVideoElement | null>(null);
   const cacheAttempted = useRef(false);
-  const nativeTouchRef = useRef<{ y: number; t: number } | null>(null);
 
   // Desktop "card" layout (YouTube-Shorts-style centered video). On mobile and
   // small viewports we keep the existing edge-to-edge fullscreen experience.
