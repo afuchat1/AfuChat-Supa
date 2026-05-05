@@ -1,66 +1,77 @@
-# AfuChat — Replit Project
+# AfuChat
 
-## Overview
-AfuChat is a full-featured social/chat mobile platform. The project is a pnpm monorepo with three main services:
+A full-featured social chat mobile platform with posts, shops, video, push notifications, and AI chat.
 
-1. **API Server** (`artifacts/api-server`) — Express 5 + TypeScript, built with esbuild. Handles auth, uploads, AI chat proxy, video processing, push notifications, and realtime event watching via Supabase.
-2. **Mobile App** (`artifacts/mobile`) — Expo 54 (React Native) with Expo Router. Runs as a web app in Replit preview (port 5000). Also supports iOS/Android via EAS Build.
-3. **Mockup Preview Server** (`artifacts/mockup-sandbox`) — Vite dev server for canvas/mockup previews (port 8000).
+## Run & Operate
 
-## Architecture
+```bash
+pnpm install                              # install all workspace deps
+cd artifacts/api-server && node ./build.mjs   # rebuild API server after source changes
+```
 
-### Backend (API Server — port 3000)
-- **Framework**: Express 5
-- **Language**: TypeScript → esbuild bundle → `dist/index.mjs`
-- **Auth**: Supabase Auth (service-role key for admin operations)
-- **Database**: Supabase (primary), Replit PostgreSQL provisioned via `DATABASE_URL` (for future Drizzle schema use)
-- **Storage**: Cloudflare R2 (S3-compatible) for all user media
-- **Email**: Resend API (`RESEND_API_KEY`)
-- **Realtime**: Supabase Realtime channels (push notifications, email triggers)
-- **Video**: ffmpeg for transcoding, R2 for storage
+**Workflows (auto-started by Replit):**
+| Name | Port | Purpose |
+|------|------|---------|
+| API Server | 3000 | Express REST API |
+| Start application | 5000 | Expo web preview |
+| Mockup Preview Server | 8000 | Canvas mockup previews |
 
-### Frontend (Mobile — port 5000)
-- **Framework**: Expo 54 with Expo Router
-- **Target**: iOS, Android, Web
-- **Auth**: Supabase JS client (anon key)
-- **Build**: Metro bundler (web dev mode in Replit), EAS Build for native
+**Required env vars** (set in `.replit` `[userenv.shared]`):
+- `SUPABASE_SERVICE_ROLE_KEY` — Supabase admin access (server-only, never expose to client)
+- `EXPO_PUBLIC_SUPABASE_ANON_KEY` / `EXPO_PUBLIC_SUPABASE_URL` — client-side Supabase
+- `DATABASE_URL` / `PG*` — Replit PostgreSQL (provisioned)
+- `RESEND_API_KEY` — email (optional; emails skipped if absent)
+- Cloudflare R2 credentials are loaded **at runtime** from Supabase `app_settings` table — no static env vars needed
 
-### Shared Libraries
-- `lib/db` — Drizzle ORM + pg, connects to `DATABASE_URL` (Replit PostgreSQL)
-- `lib/api-spec` — Shared API type definitions
-- `lib/api-zod` — Zod schemas for API validation
-- `lib/api-client-react` — React hooks for API calls
+## Stack
 
-## Environment Variables
-All set in `.replit` `[userenv.shared]`:
-- `SUPABASE_URL` / `SUPABASE_PROJECT_REF`
-- `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY`
-- `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY`
-- `DATABASE_URL` / `PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE` (Replit PostgreSQL)
-- `GITHUB_PAT`
-- Cloudflare R2 credentials loaded at runtime from Supabase `app_settings` table
+- **API**: Express 5, TypeScript, esbuild, Node.js 20
+- **Mobile**: Expo 54 (React Native + Expo Router), Metro bundler
+- **Auth**: Supabase Auth (service-role key on server, anon key on client)
+- **DB**: Supabase (primary), Replit PostgreSQL provisioned for Drizzle ORM (`lib/db`)
+- **Storage**: Cloudflare R2 (S3-compatible)
+- **Email**: Resend API
+- **Realtime/Push**: Supabase Realtime channels + Expo Push
 
-## Workflows
-| Name | Command | Port | Purpose |
-|------|---------|------|---------|
-| API Server | `cd artifacts/api-server && node ./build.mjs && PORT=3000 node --enable-source-maps ./dist/index.mjs` | 3000 | REST API |
-| Start application | `cd artifacts/mobile && EXPO_NO_TELEMETRY=1 ... ./node_modules/.bin/expo start --port 5000 --offline` | 5000 | Mobile web preview (--offline bypasses EAS auth, no CI=1) |
-| Mockup Preview Server | `cd artifacts/mockup-sandbox && PORT=8000 BASE_PATH=/__mockup/ npx vite` | 8000 | Canvas mockups |
+## Where things live
 
-## Key Files
-- `artifacts/api-server/build.mjs` — esbuild bundler script
-- `artifacts/api-server/src/index.ts` — Server entry point
-- `artifacts/api-server/src/lib/bootstrap.ts` — Loads R2 config from Supabase `app_settings` at startup
-- `artifacts/api-server/src/lib/constants.ts` — Hard-coded Supabase URL (public, not a secret)
-- `artifacts/api-server/src/lib/r2.ts` — Cloudflare R2 client
-- `artifacts/api-server/src/services/realtimeWatcher.ts` — Supabase Realtime event handler
-- `artifacts/mobile/app.json` — Expo config (bundle ID: `com.afuchat.app`)
-- `lib/db/src/schema/index.ts` — Drizzle schema (currently empty; add tables here)
-- `pnpm-workspace.yaml` — Workspace packages and catalog versions
+```
+artifacts/api-server/      Express API server
+  src/index.ts             Entry point
+  src/lib/bootstrap.ts     Loads R2 config from Supabase app_settings at boot
+  src/lib/constants.ts     Hard-coded public Supabase URL
+  src/lib/r2.ts            Cloudflare R2 client
+  src/services/realtimeWatcher.ts  Supabase Realtime → email/push
+  build.mjs                esbuild bundler script
+  dist/                    Compiled output (git-ignored)
+artifacts/mobile/          Expo app
+  app.json                 Expo config (bundle ID: com.afuchat.app)
+  metro.config.js          Metro config with /api/* proxy → port 3000
+artifacts/mockup-sandbox/  Vite mockup preview server
+lib/db/                    Drizzle ORM + pg (Replit PostgreSQL)
+lib/api-spec/              Shared API type definitions
+supabase/                  Edge functions + SQL migrations
+```
 
-## Development Notes
-- Run `pnpm install` from workspace root to install all dependencies
-- API server must be rebuilt after source changes: `cd artifacts/api-server && node ./build.mjs`
-- The mobile app uses `CI=1` (not `--non-interactive`) for non-watch mode in Replit
-- Supabase is the primary backend — do NOT replace with Replit Auth/DB unless explicitly requested
-- Cloudflare R2 credentials are fetched from Supabase `app_settings` table at server boot (graceful fallback if unavailable)
+## Architecture decisions
+
+- **Supabase is the primary backend** — do NOT replace with Replit Auth/DB. The project intentionally keeps Supabase Auth, Supabase Realtime, and Supabase edge functions.
+- **R2 credentials are runtime-injected** — `bootstrap.ts` fetches them from `app_settings` at server start so the env surface stays small. Callers gracefully return 503 if R2 is unconfigured.
+- **Metro proxies `/api/*`** — `metro.config.js` forwards all `/api/` requests to port 3000, avoiding CORS issues in web dev mode.
+- **`--offline` flag on Expo** — bypasses EAS auth in Replit (no EAS account/token needed to run the dev server).
+- **esbuild single-file bundle** — API server ships as `dist/index.mjs`; rebuild required after any source change.
+
+## Product
+
+Social chat app: user profiles, posts/feed, group chats, voice messages, video, stories, a shop/marketplace with ACoin escrow payments, push notifications, AI chat assistant, and admin/support ticketing.
+
+## User preferences
+
+- Keep Supabase as the auth and primary database provider — do not migrate to Replit Auth.
+
+## Gotchas
+
+- Always rebuild API server after editing source: `cd artifacts/api-server && node ./build.mjs`
+- `EXPO_NO_LAZY=1` is set in the workflow env to prevent Metro multipart streaming crashes through the Replit proxy.
+- The Supabase URL is intentionally hard-coded in `constants.ts` (it's public info, not a secret).
+- `pnpm install` must be run from the workspace root, not from individual packages.
