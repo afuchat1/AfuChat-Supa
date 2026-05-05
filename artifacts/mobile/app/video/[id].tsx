@@ -1276,29 +1276,15 @@ function VideoItem({
           )}
         </View>
       ) : (
-        // Native: use a View with manual responder tracking so the parent
-        // FlatList can always reclaim vertical swipe gestures for scrolling.
-        // onResponderTerminationRequest returning true is the key — it yields
-        // the touch back to the FlatList the moment it detects a scroll intent.
-        <View
+        // Native: Pressable yields to the parent FlatList scroll on both
+        // Android (rejectResponderTermination defaults to false) and iOS
+        // (React Native's Pressability cooperates with ScrollView capture).
+        // delayLongPress bubbles through to onLongPress without blocking swipe.
+        <Pressable
           style={StyleSheet.absoluteFill}
-          onStartShouldSetResponder={() => true}
-          onResponderTerminationRequest={() => true}
-          onResponderGrant={(e) => {
-            nativeTouchRef.current = { y: e.nativeEvent.pageY, t: Date.now() };
-          }}
-          onResponderRelease={(e) => {
-            const start = nativeTouchRef.current;
-            nativeTouchRef.current = null;
-            if (!start) return;
-            const dy = Math.abs(e.nativeEvent.pageY - start.y);
-            const dt = Date.now() - start.t;
-            if (dy < 12) {
-              if (dt >= 380) onOpenMenu(item);
-              else handleTap();
-            }
-          }}
-          onResponderTerminate={() => { nativeTouchRef.current = null; }}
+          onPress={handleTap}
+          onLongPress={() => onOpenMenu(item)}
+          delayLongPress={380}
         >
           {shouldMountVideo ? (
             <Video
@@ -1316,7 +1302,7 @@ function VideoItem({
           ) : (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />
           )}
-        </View>
+        </Pressable>
       )}
 
       {buffering && isActive && (
@@ -2689,13 +2675,19 @@ export default function VideoPlayerScreen() {
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 
+  // Keep a ref so the stable onViewableItemsChanged callback can always
+  // reach the latest dismiss without being recreated (RN: callback cannot
+  // change after mount — see FlatList docs).
+  const swipeHintDismissRef = useRef(swipeHint.dismiss);
+  useEffect(() => { swipeHintDismissRef.current = swipeHint.dismiss; }, [swipeHint.dismiss]);
+
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     if (viewableItems.length > 0 && viewableItems[0].index !== null) {
       const idx = viewableItems[0].index;
       setActiveIndex(idx);
-      if (idx > 0) swipeHint.dismiss();
+      if (idx > 0) swipeHintDismissRef.current();
     }
-  }, [swipeHint.dismiss]);
+  }, []); // intentionally empty — uses ref to avoid recreating the callback
 
   async function handleLike(postId: string, currentlyLiked: boolean) {
     if (!user) { setShowSignInPrompt(true); return; }
