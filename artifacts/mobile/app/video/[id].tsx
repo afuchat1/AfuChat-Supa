@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -1954,17 +1954,37 @@ export default function VideoPlayerScreen() {
   // Track EFF_H so keyboard handler always uses the latest value.
   const effHRef = useRef(EFF_H);
   useEffect(() => { effHRef.current = EFF_H; }, [EFF_H]);
+  // True while animateToIndex() is driving the transform so the layout-effect
+  // sync doesn't override the in-flight CSS transition.
+  const webAnimatingRef = useRef(false);
 
   // ── Web: custom drag-based scroll engine ────────────────────────────────
   // Animates the inner container's CSS transform to the target index.
   // Does NOT rely on browser-native scroll, so GestureHandlerRootView's
   // touch-action:none on ancestor elements cannot block it.
+  //
+  // IMPORTANT: transform is NOT in the React style prop of webInnerRef's div.
+  // All transform changes go through this function (or the pointer-move path)
+  // to avoid React re-renders overwriting the CSS transition mid-flight.
   function animateToIndex(index: number, durationMs = 320) {
     const inner = webInnerRef.current;
     if (!inner) return;
+    webAnimatingRef.current = true;
     inner.style.transition = `transform ${durationMs}ms cubic-bezier(0.25,0.46,0.45,0.94)`;
     inner.style.transform = `translateY(${-index * effHRef.current}px)`;
+    setTimeout(() => { webAnimatingRef.current = false; }, durationMs + 50);
   }
+
+  // Sync the inner-div position for non-animated state changes (tab switch,
+  // initial mount after videos load).  Skips when animateToIndex is driving.
+  useLayoutEffect(() => {
+    if (Platform.OS !== "web") return;
+    if (webAnimatingRef.current) return;
+    const inner = webInnerRef.current;
+    if (!inner) return;
+    inner.style.transition = "none";
+    inner.style.transform = `translateY(${-activeIndex * effHRef.current}px)`;
+  });
 
   function scrollFeedTo(index: number) {
     if (Platform.OS !== "web") {
@@ -2758,7 +2778,12 @@ export default function VideoPlayerScreen() {
             cursor: "grab",
           } as React.CSSProperties}
         >
-          {/* Inner sliding container — moved by transform, not scroll */}
+          {/* Inner sliding container — moved by transform, not scroll.
+              transform is intentionally NOT in the style prop — it is
+              managed exclusively by animateToIndex() and the pointer-move
+              handler.  Putting it here would cause React re-renders to
+              overwrite the CSS transition mid-flight, breaking keyboard
+              and wheel navigation. */}
           <div
             ref={webInnerRef}
             style={{
@@ -2767,7 +2792,6 @@ export default function VideoPlayerScreen() {
               left: 0,
               width: "100%",
               willChange: "transform",
-              transform: `translateY(${-activeIndex * EFF_H}px)`,
             } as React.CSSProperties}
           >
             {videos.map((item, index) => {
