@@ -726,78 +726,57 @@ export default function CompanyPageScreen() {
           contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         />
       ) : activeTab === "followers" ? (
-        /* Followers Tab — list is only visible to org admins */
-        isAdmin ? (
-          <FlatList
-            data={followers}
-            keyExtractor={(item) => item.user_id}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
-            showsVerticalScrollIndicator={false}
-            ListHeaderComponent={Header}
-            ListEmptyComponent={
-              <View style={styles.emptyPosts}>
-                <Ionicons name="people-outline" size={36} color={colors.textMuted} />
-                <Text style={[styles.emptyText, { color: colors.textMuted }]}>No followers yet.</Text>
-              </View>
-            }
-            renderItem={({ item }) => {
-              const p = item.profiles;
-              if (!p) return null;
-              return (
-                <TouchableOpacity
-                  style={[styles.followerRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  onPress={() => router.push(`/${p.handle}` as any)}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.followerAvatar}>
-                    {p.avatar_url ? (
-                      <Image source={{ uri: p.avatar_url }} style={styles.followerAvatarImg} />
-                    ) : (
-                      <View style={[styles.followerAvatarImg, { backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" }]}>
-                        <Text style={{ color: "#fff", fontFamily: "Inter_700Bold", fontSize: 14 }}>
-                          {(p.display_name || p.handle || "?").slice(0, 1).toUpperCase()}
-                        </Text>
-                      </View>
+        <FlatList
+          data={followers}
+          keyExtractor={(item) => item.user_id}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={Header}
+          ListEmptyComponent={
+            <View style={styles.emptyPosts}>
+              <Ionicons name="people-outline" size={36} color={colors.textMuted} />
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>No followers yet.</Text>
+            </View>
+          }
+          renderItem={({ item }) => {
+            const p = item.profiles;
+            if (!p) return null;
+            return (
+              <TouchableOpacity
+                style={[styles.followerRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                onPress={() => router.push(`/${p.handle}` as any)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.followerAvatar}>
+                  {p.avatar_url ? (
+                    <Image source={{ uri: p.avatar_url }} style={styles.followerAvatarImg} />
+                  ) : (
+                    <View style={[styles.followerAvatarImg, { backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" }]}>
+                      <Text style={{ color: "#fff", fontFamily: "Inter_700Bold", fontSize: 14 }}>
+                        {(p.display_name || p.handle || "?").slice(0, 1).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <Text style={[styles.followerName, { color: colors.text }]} numberOfLines={1}>
+                      {p.display_name || p.handle || "User"}
+                    </Text>
+                    {p.is_verified && (
+                      <Ionicons name="checkmark-circle" size={13} color={colors.accent} />
                     )}
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                      <Text style={[styles.followerName, { color: colors.text }]} numberOfLines={1}>
-                        {p.display_name || p.handle || "User"}
-                      </Text>
-                      {p.is_verified && (
-                        <Ionicons name="checkmark-circle" size={13} color={colors.accent} />
-                      )}
-                    </View>
-                    {p.handle ? (
-                      <Text style={[styles.followerHandle, { color: colors.textMuted }]}>@{p.handle}</Text>
-                    ) : null}
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-                </TouchableOpacity>
-              );
-            }}
-            contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-          />
-        ) : (
-          /* Non-admin: show header + locked state */
-          <FlatList
-            data={[]}
-            keyExtractor={() => "lock"}
-            showsVerticalScrollIndicator={false}
-            ListHeaderComponent={Header}
-            ListEmptyComponent={
-              <View style={[styles.emptyPosts, { paddingTop: 48 }]}>
-                <Ionicons name="lock-closed-outline" size={40} color={colors.textMuted} />
-                <Text style={[styles.emptyText, { color: colors.textMuted, textAlign: "center" }]}>
-                  Follower list is only visible{"\n"}to the page admin.
-                </Text>
-              </View>
-            }
-            renderItem={() => null}
-            contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-          />
-        )
+                  {p.handle ? (
+                    <Text style={[styles.followerHandle, { color: colors.textMuted }]}>@{p.handle}</Text>
+                  ) : null}
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            );
+          }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+        />
       ) : (
         /* Jobs Tab — exclusive to company pages */
         <FlatList
