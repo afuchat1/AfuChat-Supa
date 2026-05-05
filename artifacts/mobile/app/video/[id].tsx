@@ -3,9 +3,10 @@
  *
  * Scroll architecture (why it works):
  *  1. pagingEnabled on FlatList — simplest, most reliable native snap.
- *  2. TapHandler uses the Responder system with onResponderTerminationRequest=true
- *     so the FlatList ALWAYS wins the scroll gesture. No Pressable covers the
- *     full video area (that was blocking every scroll).
+ *  2. TapHandler uses react-native-gesture-handler's native Gesture API
+ *     (GestureDetector + Gesture.Tap/LongPress). Running on the UI thread
+ *     via JSI means zero JS negotiation — FlatList scroll starts the instant
+ *     the finger moves, no "hard push" needed.
  *  3. getItemLayout uses stable window dimensions — never dynamic state.
  *  4. onViewableItemsChanged stored in a stable ref — FlatList never re-wires.
  *  5. windowSize=5, removeClippedSubviews=false so neighbours preload smoothly.
@@ -47,6 +48,7 @@ import { Video, ResizeMode, AVPlaybackStatus } from "expo-av";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
@@ -234,12 +236,12 @@ function GradientOverlay({
 
 // ─── TapHandler ───────────────────────────────────────────────────────────────
 /**
- * Transparent layer that detects taps/double-taps/long-presses WITHOUT blocking
- * the parent FlatList's scroll gesture.
+ * Transparent layer that detects taps/double-taps/long-presses using
+ * react-native-gesture-handler's native Gesture API.
  *
- * The critical key: `onResponderTerminationRequest={() => true}` means that
- * whenever the FlatList wants to claim a vertical scroll gesture, this View
- * immediately yields. Result: the feed always scrolls.
+ * Running on the UI thread via JSI means this NEVER competes with the
+ * FlatList's scroll gesture — the scroll starts the instant the finger
+ * moves, with zero JS-thread negotiation delay.
  */
 function TapHandler({
   onTap,
@@ -250,76 +252,35 @@ function TapHandler({
   onDoubleTap?: () => void;
   onLongPress?: () => void;
 }) {
-  const touchRef = useRef<{ y: number; x: number; t: number } | null>(null);
-  const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastTapTimeRef = useRef(0);
+  const singleTap = Gesture.Tap()
+    .maxDuration(300)
+    .maxDistance(10)
+    .runOnJS(true)
+    .onEnd(() => { onTap(); });
 
-  function clearAll() {
-    if (tapTimerRef.current) { clearTimeout(tapTimerRef.current); tapTimerRef.current = null; }
-    if (longPressRef.current) { clearTimeout(longPressRef.current); longPressRef.current = null; }
-    touchRef.current = null;
-  }
+  const doubleTap = Gesture.Tap()
+    .numberOfTaps(2)
+    .maxDuration(250)
+    .maxDistance(10)
+    .runOnJS(true)
+    .onEnd(() => { onDoubleTap?.(); });
+
+  const longPress = Gesture.LongPress()
+    .minDuration(500)
+    .runOnJS(true)
+    .onStart(() => { onLongPress?.(); });
+
+  // Exclusive: double-tap wins over single-tap (waits to confirm no second tap)
+  // Race: long-press fires as soon as threshold met, cancels tap
+  const composed = Gesture.Race(
+    longPress,
+    Gesture.Exclusive(doubleTap, singleTap),
+  );
 
   return (
-    <View
-      style={StyleSheet.absoluteFill}
-      onStartShouldSetResponder={() => true}
-      onResponderTerminationRequest={() => true}
-      onResponderGrant={(e) => {
-        touchRef.current = {
-          y: e.nativeEvent.pageY,
-          x: e.nativeEvent.pageX,
-          t: Date.now(),
-        };
-        if (onLongPress) {
-          longPressRef.current = setTimeout(() => {
-            longPressRef.current = null;
-            if (touchRef.current) {
-              touchRef.current = null;
-              onLongPress();
-            }
-          }, 500);
-        }
-      }}
-      onResponderMove={(e) => {
-        if (!touchRef.current) return;
-        const dy = Math.abs(e.nativeEvent.pageY - touchRef.current.y);
-        if (dy > 10) {
-          // User is scrolling — abort detection
-          clearAll();
-        }
-      }}
-      onResponderRelease={(e) => {
-        if (longPressRef.current) {
-          clearTimeout(longPressRef.current);
-          longPressRef.current = null;
-        }
-        const start = touchRef.current;
-        touchRef.current = null;
-        if (!start) return;
-        const dy = Math.abs(e.nativeEvent.pageY - start.y);
-        const dt = Date.now() - start.t;
-        if (dy > 10 || dt > 400) return;
-
-        const now = Date.now();
-        if (onDoubleTap && now - lastTapTimeRef.current < 300) {
-          if (tapTimerRef.current) {
-            clearTimeout(tapTimerRef.current);
-            tapTimerRef.current = null;
-          }
-          lastTapTimeRef.current = 0;
-          onDoubleTap();
-        } else {
-          lastTapTimeRef.current = now;
-          tapTimerRef.current = setTimeout(() => {
-            tapTimerRef.current = null;
-            onTap();
-          }, 250);
-        }
-      }}
-      onResponderTerminate={clearAll}
-    />
+    <GestureDetector gesture={composed}>
+      <View style={StyleSheet.absoluteFill} />
+    </GestureDetector>
   );
 }
 
