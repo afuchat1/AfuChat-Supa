@@ -1913,6 +1913,13 @@ export default function VideoPlayerScreen() {
   const [showSignInPrompt, setShowSignInPrompt] = useState(false);
   const listRef = useRef<FlatList>(null);
   const webScrollRef = useRef<HTMLDivElement | null>(null);
+  const webInnerRef = useRef<HTMLDivElement | null>(null);
+  const webDragRef = useRef<{
+    startY: number;
+    startIndex: number;
+    lastY: number;
+    velocity: number;
+  } | null>(null);
   const initialScrollDone = useRef(false);
   const tabAnim = useRef(new Animated.Value(0)).current;
   // Pause toggle exposed by the *currently active* card so keyboard handlers
@@ -1928,20 +1935,93 @@ export default function VideoPlayerScreen() {
   const effHRef = useRef(EFF_H);
   useEffect(() => { effHRef.current = EFF_H; }, [EFF_H]);
 
+  // ── Web: custom drag-based scroll engine ────────────────────────────────
+  // Animates the inner container's CSS transform to the target index.
+  // Does NOT rely on browser-native scroll, so GestureHandlerRootView's
+  // touch-action:none on ancestor elements cannot block it.
+  function animateToIndex(index: number, durationMs = 320) {
+    const inner = webInnerRef.current;
+    if (!inner) return;
+    inner.style.transition = `transform ${durationMs}ms cubic-bezier(0.25,0.46,0.45,0.94)`;
+    inner.style.transform = `translateY(${-index * effHRef.current}px)`;
+  }
+
   function scrollFeedTo(index: number) {
     if (Platform.OS !== "web") {
       listRef.current?.scrollToIndex({ index, animated: true });
       return;
     }
-    webScrollRef.current?.scrollTo({ top: index * effHRef.current, behavior: "smooth" });
+    setActiveIndex(index);
+    activeIndexRef.current = index;
+    animateToIndex(index);
+  }
+
+  function handleWebPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    e.stopPropagation();
+    try { (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId); } catch (_) {}
+    const inner = webInnerRef.current;
+    if (inner) inner.style.transition = "none";
+    webDragRef.current = {
+      startY: e.clientY,
+      startIndex: activeIndexRef.current,
+      lastY: e.clientY,
+      velocity: 0,
+    };
+  }
+
+  function handleWebPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    e.stopPropagation();
+    const drag = webDragRef.current;
+    if (!drag) return;
+    drag.velocity = e.clientY - drag.lastY;
+    drag.lastY = e.clientY;
+    const dy = e.clientY - drag.startY;
+    const h = effHRef.current;
+    const len = videosLenRef.current;
+    const atTop = drag.startIndex === 0 && dy > 0;
+    const atBottom = drag.startIndex >= len - 1 && dy < 0;
+    const resistance = atTop || atBottom ? 0.18 : 1;
+    const inner = webInnerRef.current;
+    if (inner) {
+      inner.style.transform = `translateY(${-drag.startIndex * h + dy * resistance}px)`;
+    }
+  }
+
+  function handleWebPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    e.stopPropagation();
+    const drag = webDragRef.current;
+    if (!drag) return;
+    webDragRef.current = null;
+    const dy = e.clientY - drag.startY;
+    const h = effHRef.current;
+    const len = videosLenRef.current;
+    const SWIPE_THRESHOLD = h * 0.12;
+    const VELOCITY_THRESHOLD = 6;
+    let targetIndex = drag.startIndex;
+    if ((dy < -SWIPE_THRESHOLD || drag.velocity < -VELOCITY_THRESHOLD) && drag.startIndex < len - 1) {
+      targetIndex = drag.startIndex + 1;
+    } else if ((dy > SWIPE_THRESHOLD || drag.velocity > VELOCITY_THRESHOLD) && drag.startIndex > 0) {
+      targetIndex = drag.startIndex - 1;
+    }
+    setActiveIndex(targetIndex);
+    activeIndexRef.current = targetIndex;
+    animateToIndex(targetIndex);
+    if (targetIndex >= len - 3 && !loadingMoreRef.current && hasMore && cursorRef.current) {
+      fetchVideos(videoTab, cursorRef.current);
+    }
+  }
+
+  function handleWebPointerCancel(e: React.PointerEvent<HTMLDivElement>) {
+    e.stopPropagation();
+    const drag = webDragRef.current;
+    if (!drag) return;
+    webDragRef.current = null;
+    animateToIndex(drag.startIndex, 180);
   }
 
   // Web-only keyboard controls:
   //   Space          → toggle pause/play
   //   ArrowDown/Up, PageDown/Up → jump to next/prev video
-  // NOTE: We do NOT intercept wheel events at all — the FlatList's native
-  // CSS overflow-scroll + scroll-snap handles wheel and touch automatically
-  // once we stop calling preventDefault on wheel events globally.
   useEffect(() => {
     if (Platform.OS !== "web") return;
     function onKey(e: KeyboardEvent) {
@@ -1964,120 +2044,65 @@ export default function VideoPlayerScreen() {
       if (e.key === "ArrowDown" || e.key === "PageDown") {
         e.preventDefault();
         const next = Math.min(cur + 1, Math.max(len - 1, 0));
-        if (next !== cur) { scrollFeedTo(next); setActiveIndex(next); }
+        if (next !== cur) scrollFeedTo(next);
       } else if (e.key === "ArrowUp" || e.key === "PageUp") {
         e.preventDefault();
         const prev = Math.max(cur - 1, 0);
-        if (prev !== cur) { scrollFeedTo(prev); setActiveIndex(prev); }
+        if (prev !== cur) scrollFeedTo(prev);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []); // stable — uses refs internally
 
-  // Lock page-level scroll while the video feed is open so the browser never
-  // hijacks the feed's own scroll container.
+  // Lock page scroll while the video feed is open.
   useEffect(() => {
     if (Platform.OS !== "web") return;
     const prevBody = document.body.style.overflow;
     const prevHtml = document.documentElement.style.overflow;
     document.body.style.overflow = "hidden";
     document.documentElement.style.overflow = "hidden";
-    const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
-    const prevMeta = meta?.content ?? "";
-    if (meta) meta.content = "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no";
-    // Inject CSS that:
-    //  1. Hides the webkit scrollbar on our feed div
-    //  2. Forces touch-action:pan-y on the feed div so the browser's native
-    //     scroll-snap runs even when GestureHandlerRootView sets touch-action:none
-    //     on an ancestor (inline styles have higher specificity but we target
-    //     the element directly here to make sure the browser constraint table
-    //     sees pan-y for events that originate inside #vf-web-scroll).
-    const style = document.createElement("style");
-    style.id = "vf-no-scrollbar";
-    style.textContent = [
-      `#vf-web-scroll::-webkit-scrollbar { display: none; }`,
-      `#vf-web-scroll { touch-action: pan-y !important; -webkit-overflow-scrolling: touch !important; }`,
-    ].join("\n");
-    document.head.appendChild(style);
     return () => {
       document.body.style.overflow = prevBody;
       document.documentElement.style.overflow = prevHtml;
-      if (meta && prevMeta) meta.content = prevMeta;
-      style.remove();
     };
   }, []);
 
-  // GestureHandlerRootView intercepts touch/pointer events and calls
-  // preventDefault, blocking our native div scroll. Fix: add listeners on the
-  // scroll div that call stopPropagation() so events never reach GHRV's
-  // handlers. We use passive:true so we don't call preventDefault ourselves
-  // (which would block the browser's native scroll-snap).
+  // Wheel scroll (trackpad / mouse wheel) for web.
+  // We handle this ourselves so RNGH cannot interfere.
   useEffect(() => {
     if (Platform.OS !== "web") return;
-    // Retry every frame until the scroll div is mounted (videos may still be loading)
-    let rafId: number;
-    let detach: (() => void) | null = null;
-    function tryAttach() {
-      const el = webScrollRef.current;
-      if (!el) { rafId = requestAnimationFrame(tryAttach); return; }
-
-      // Force touch-action via inline style so the browser constraint table
-      // sees pan-y even if an ancestor has touch-action:none.
-      el.style.setProperty("touch-action", "pan-y", "important");
-
-      const stop = (e: Event) => e.stopPropagation();
-
-      // Touch events (Safari iOS, older Android)
-      el.addEventListener("touchstart", stop, { passive: true });
-      el.addEventListener("touchmove",  stop, { passive: true });
-      el.addEventListener("touchend",   stop, { passive: true });
-      el.addEventListener("touchcancel",stop, { passive: true });
-      // Pointer events (Chrome, RNGH v2 web backend)
-      el.addEventListener("pointerdown",  stop, { passive: true });
-      el.addEventListener("pointermove",  stop, { passive: true });
-      el.addEventListener("pointerup",    stop, { passive: true });
-      el.addEventListener("pointercancel",stop, { passive: true });
-
-      detach = () => {
-        el.removeEventListener("touchstart",   stop);
-        el.removeEventListener("touchmove",    stop);
-        el.removeEventListener("touchend",     stop);
-        el.removeEventListener("touchcancel",  stop);
-        el.removeEventListener("pointerdown",  stop);
-        el.removeEventListener("pointermove",  stop);
-        el.removeEventListener("pointerup",    stop);
-        el.removeEventListener("pointercancel",stop);
-      };
-    }
-    rafId = requestAnimationFrame(tryAttach);
-    return () => {
-      cancelAnimationFrame(rafId);
-      detach?.();
-    };
-  // Re-run when the div mounts (i.e. when videos go from empty to non-empty)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videos.length > 0]);
-
-  // Called by the native <div> scroll container on web when the user scrolls.
-  // Calculates which video is now centred and updates activeIndex.
-  function handleWebScroll(e: React.UIEvent<HTMLDivElement>) {
-    const scrollTop = (e.target as HTMLDivElement).scrollTop;
-    const h = effHRef.current;
-    if (!h) return;
-    const newIndex = Math.round(scrollTop / h);
-    if (newIndex !== activeIndexRef.current) {
-      setActiveIndex(newIndex);
-      activeIndexRef.current = newIndex;
-    }
-    // Trigger load-more when approaching the end of the list.
-    const scrollHeight = (e.target as HTMLDivElement).scrollHeight;
-    if (scrollHeight - scrollTop - h < h * 3) {
-      if (!loadingMoreRef.current && hasMore && cursorRef.current) {
-        fetchVideos(videoTab, cursorRef.current);
+    const el = webScrollRef.current;
+    if (!el) return;
+    let cooldown = false;
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (cooldown) return;
+      cooldown = true;
+      setTimeout(() => { cooldown = false; }, 550);
+      const delta = Math.sign(e.deltaY);
+      const cur = activeIndexRef.current;
+      const len = videosLenRef.current;
+      const next = Math.max(0, Math.min(len - 1, cur + delta));
+      if (next !== cur) {
+        setActiveIndex(next);
+        activeIndexRef.current = next;
+        const inner = webInnerRef.current;
+        if (inner) {
+          inner.style.transition = "transform 320ms cubic-bezier(0.25,0.46,0.45,0.94)";
+          inner.style.transform = `translateY(${-next * effHRef.current}px)`;
+        }
+        if (next >= len - 3 && !loadingMoreRef.current && hasMore && cursorRef.current) {
+          fetchVideos(videoTab, cursorRef.current);
+        }
       }
     }
-  }
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  // Re-attach when videos first load so el is mounted
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videos.length > 0]);
 
   function switchTab(tab: "for_you" | "following") {
     if (tab === videoTab) return;
@@ -2697,79 +2722,87 @@ export default function VideoPlayerScreen() {
           </Text>
         </View>
       ) : Platform.OS === "web" ? (
-        // ── Web: native browser scroll container with CSS scroll-snap ──────
-        // Using a raw <div> bypasses React Native Web's FlatList/VirtualizedList
-        // which sets touch-action:none on its containers and blocks all browser-
-        // native scroll gestures. A plain <div> with overflow-y:scroll and
-        // scroll-snap-type:y mandatory gives us real, working touch scroll + snap
-        // out of the box — exactly what browsers are built for.
+        // ── Web: custom drag engine — no browser-native scroll ─────────────
+        // Using CSS transform on an inner div driven by pointer events means
+        // GestureHandlerRootView's touch-action:none cannot block our scroll.
+        // Swipe up → next video  |  Swipe down → prev video
+        // Wheel/trackpad also works via the wheel event listener above.
         <div
           ref={webScrollRef}
           id="vf-web-scroll"
-          onScroll={handleWebScroll}
-          onTouchStart={(e) => e.stopPropagation()}
-          onTouchMove={(e) => e.stopPropagation()}
-          onTouchEnd={(e) => e.stopPropagation()}
-          onPointerDown={(e) => e.stopPropagation()}
-          onPointerMove={(e) => e.stopPropagation()}
-          onPointerUp={(e) => e.stopPropagation()}
+          onPointerDown={handleWebPointerDown}
+          onPointerMove={handleWebPointerMove}
+          onPointerUp={handleWebPointerUp}
+          onPointerCancel={handleWebPointerCancel}
           style={{
             height: EFF_H,
             width: EFF_W,
-            overflowY: "scroll",
-            overflowX: "hidden",
-            scrollSnapType: "y mandatory",
-            WebkitOverflowScrolling: "touch",
+            overflow: "hidden",
+            position: "relative",
             backgroundColor: "#000",
-            scrollbarWidth: "none",
-            touchAction: "pan-y",
+            touchAction: "none",
+            userSelect: "none",
+            cursor: "grab",
           } as React.CSSProperties}
         >
-          {videos.map((item, index) => {
-            const isActive = index === activeIndex;
-            const isNearActive = Math.abs(index - activeIndex) <= 2;
-            return (
-              <div
-                key={item.id}
-                style={{
-                  height: EFF_H,
-                  width: EFF_W,
-                  flexShrink: 0,
-                  scrollSnapAlign: "start",
-                  scrollSnapStop: "always",
-                  overflow: "hidden",
-                  position: "relative",
-                } as React.CSSProperties}
-              >
-                <VideoItem
-                  item={item}
-                  isActive={isActive}
-                  isNearActive={isNearActive}
-                  screenH={EFF_H}
-                  screenW={EFF_W}
-                  isFollowing={followingSet.has(item.author_id)}
-                  isSelf={user?.id === item.author_id}
-                  onLike={handleLike}
-                  onBookmark={handleBookmark}
-                  onOpenComments={setCommentPostId}
-                  onShare={handleShare}
-                  onFollow={handleFollow}
-                  onRecordView={handleRecordView}
-                  onOpenMenu={handleOpenMenu}
-                  onOpenSound={handleOpenSound}
-                  activeToggleRef={activeToggleRef}
-                />
+          {/* Inner sliding container — moved by transform, not scroll */}
+          <div
+            ref={webInnerRef}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              willChange: "transform",
+              transform: `translateY(${-activeIndex * EFF_H}px)`,
+            } as React.CSSProperties}
+          >
+            {videos.map((item, index) => {
+              const isActive = index === activeIndex;
+              const isNearActive = Math.abs(index - activeIndex) <= 2;
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    height: EFF_H,
+                    width: EFF_W,
+                    overflow: "hidden",
+                    position: "relative",
+                    flexShrink: 0,
+                  } as React.CSSProperties}
+                >
+                  <VideoItem
+                    item={item}
+                    isActive={isActive}
+                    isNearActive={isNearActive}
+                    screenH={EFF_H}
+                    screenW={EFF_W}
+                    isFollowing={followingSet.has(item.author_id)}
+                    isSelf={user?.id === item.author_id}
+                    onLike={handleLike}
+                    onBookmark={handleBookmark}
+                    onOpenComments={setCommentPostId}
+                    onShare={handleShare}
+                    onFollow={handleFollow}
+                    onRecordView={handleRecordView}
+                    onOpenMenu={handleOpenMenu}
+                    onOpenSound={handleOpenSound}
+                    activeToggleRef={activeToggleRef}
+                  />
+                </div>
+              );
+            })}
+            {loadingMore && (
+              <div style={{ height: EFF_H, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#000" } as React.CSSProperties}>
+                <ActivityIndicator color="rgba(255,255,255,0.6)" size="small" />
               </div>
-            );
-          })}
-          {loadingMore && (
-            <div style={{ height: EFF_H, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#000" } as React.CSSProperties}>
-              <ActivityIndicator color="rgba(255,255,255,0.6)" size="small" />
-            </div>
-          )}
+            )}
+          </div>
         </div>
       ) : (
         // ── Native: FlatList with paging ────────────────────────────────────
+        // pagingEnabled alone (no conflicting snapToInterval) is the correct
+        // approach. RNGH will not interrupt native FlatList scroll.
         <FlatList
           ref={listRef}
           data={videos}
@@ -2806,11 +2839,7 @@ export default function VideoPlayerScreen() {
           pagingEnabled
           decelerationRate="fast"
           scrollEnabled
-          disableIntervalMomentum
-          snapToInterval={EFF_H}
-          snapToAlignment="start"
           style={{ flex: 1, backgroundColor: "#000" }}
-          contentContainerStyle={{ flexGrow: 1 }}
           windowSize={5}
           initialNumToRender={3}
           maxToRenderPerBatch={3}
