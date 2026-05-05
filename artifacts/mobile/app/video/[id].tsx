@@ -212,13 +212,11 @@ function WebVideoPlayer({
         }}
       />
       {/* Transparent interaction overlay.
-          - touch-action:none → gestures are handled entirely by the outer
-            custom drag engine (the parent div has touch-action:none too).
-            Using "pan-y" here was the bug: the browser would claim the pan
-            gesture natively, fire pointercancel on the outer container, and
-            the drag engine would snap back instead of advancing to the next
-            video. With "none" the outer container receives every pointermove
-            and pointerup, so swipes correctly navigate between videos.
+          - touch-action:pan-y → lets the browser process vertical scroll
+            gestures (trackpad, touch) so the CSS scroll-snap container can
+            scroll natively. The old custom drag engine required "none" here,
+            but now that we use overflow-y:scroll + scroll-snap the browser
+            MUST be allowed to claim vertical pan gestures.
           - pointer events still handle click, double-click, and long-press */}
       {/* @ts-expect-error */}
       <div
@@ -233,7 +231,7 @@ function WebVideoPlayer({
           position: "absolute",
           top: 0, left: 0, right: 0, bottom: 0,
           cursor: preloadOnly ? "default" : "pointer",
-          touchAction: "none",
+          touchAction: "pan-y",
         }}
       />
     </>
@@ -1936,6 +1934,8 @@ export default function VideoPlayerScreen() {
   const initialScrollDone = useRef(false);
   // Debounce timer to detect when scroll has settled at a snap point.
   const scrollSettleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Mouse-drag state for the scroll container (touch/trackpad handled by CSS pan-y).
+  const webDragRef = useRef<{ startY: number; startScrollTop: number; lastY: number; velocity: number } | null>(null);
   // Refs so the scroll-settle callback always reads the latest values.
   const hasMoreRef = useRef(hasMore);
   useEffect(() => { hasMoreRef.current = hasMore; }, [hasMore]);
@@ -1955,13 +1955,16 @@ export default function VideoPlayerScreen() {
   const effHRef = useRef(EFF_H);
   useEffect(() => { effHRef.current = EFF_H; }, [EFF_H]);
 
-  // ── Web: CSS scroll-snap engine ──────────────────────────────────────────
-  // The container uses overflow-y:scroll + scroll-snap-type:y mandatory.
-  // The browser handles ALL scroll physics: mouse wheel, trackpad, touch,
-  // and keyboard arrows (when container is focused).  We just listen to the
-  // scroll event to track which slide is active and trigger pagination.
-  // This is identical to how TikTok, YouTube Shorts, and Instagram Reels
-  // work on the web — no custom drag engine needed.
+  // ── Web: CSS scroll-snap + explicit input handlers ───────────────────────
+  // The container uses overflow-y:scroll + scroll-snap-type:y mandatory for
+  // the visual snap behaviour.  Input is driven by three paths:
+  //   1. Touch / trackpad  → browser native (allowed by touchAction:"pan-y"
+  //                          on the WebVideoPlayer overlay — see above).
+  //   2. Mouse wheel       → explicit wheel listener on the container so we
+  //                          jump one video per tick and avoid page-scroll.
+  //   3. Mouse pointer drag→ explicit pointer handlers on the container that
+  //                          drive scrollTop directly, then snap on release.
+  // All paths converge on scrollTo() / scrollTop — no transform manipulation.
 
   // Hide the scrollbar via CSS injection (inline scrollbarWidth covers Firefox;
   // the injected rule covers Chrome/Safari/Edge).
@@ -1973,9 +1976,11 @@ export default function VideoPlayerScreen() {
     return () => { document.head.removeChild(style); };
   }, []);
 
-  // Fires when the scroll container settles on a snap point.
-  // Debounced so we only act after momentum has stopped.
+  // Fires while the scroll container scrolls (native touch/trackpad scroll).
+  // Skip during mouse-drag (pointer handlers set activeIndex directly).
+  // Debounced so we only commit the active index once momentum settles.
   function handleWebScroll(e: React.UIEvent<HTMLDivElement>) {
+    if (webDragRef.current) return;
     const scrollTop = e.currentTarget.scrollTop;
     if (scrollSettleRef.current) clearTimeout(scrollSettleRef.current);
     scrollSettleRef.current = setTimeout(() => {
@@ -1988,6 +1993,92 @@ export default function VideoPlayerScreen() {
         }
       }
     }, 100);
+  }
+
+  // ── Mouse wheel handler ──────────────────────────────────────────────────
+  // Attach to the container so we control exactly one video-jump per tick.
+  // passive:false + preventDefault prevents any ancestor from also scrolling.
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const el = webScrollRef.current;
+    if (!el) return;
+    let cooldown = false;
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      if (cooldown) return;
+      cooldown = true;
+      setTimeout(() => { cooldown = false; }, 600);
+      const h = effHRef.current;
+      const len = videosLenRef.current;
+      const current = Math.round(el!.scrollTop / h);
+      const delta = Math.sign(e.deltaY);
+      const next = Math.max(0, Math.min(len - 1, current + delta));
+      if (next !== current) {
+        el!.scrollTo({ top: next * h, behavior: "smooth" });
+        setActiveIndex(next);
+        activeIndexRef.current = next;
+        if (next >= len - 3 && !loadingMoreRef.current && hasMoreRef.current && cursorRef.current) {
+          fetchVideos(videoTabRef.current, cursorRef.current);
+        }
+      }
+    }
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videos.length > 0]);
+
+  // ── Mouse pointer drag handlers ──────────────────────────────────────────
+  // Touch / trackpad drag is handled by CSS (touch-action:pan-y on overlay).
+  // For mouse drag we drive scrollTop directly, disable snap during motion,
+  // then snap to the nearest video on release.
+  function handleWebPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (e.pointerType === "touch") return;
+    const el = webScrollRef.current;
+    if (!el) return;
+    webDragRef.current = { startY: e.clientY, startScrollTop: el.scrollTop, lastY: e.clientY, velocity: 0 };
+    (el.style as any).scrollSnapType = "none";
+  }
+  function handleWebPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const drag = webDragRef.current;
+    if (!drag) return;
+    drag.velocity = e.clientY - drag.lastY;
+    drag.lastY = e.clientY;
+    const el = webScrollRef.current;
+    if (el) el.scrollTop = drag.startScrollTop - (e.clientY - drag.startY);
+  }
+  function handleWebPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    const drag = webDragRef.current;
+    if (!drag) return;
+    webDragRef.current = null;
+    const el = webScrollRef.current;
+    if (!el) return;
+    (el.style as any).scrollSnapType = "y mandatory";
+    const h = effHRef.current;
+    const len = videosLenRef.current;
+    const dy = e.clientY - drag.startY;
+    const cur = Math.round(drag.startScrollTop / h);
+    let next = cur;
+    if ((dy < -(h * 0.1) || drag.velocity < -4) && cur < len - 1) next = cur + 1;
+    else if ((dy > (h * 0.1) || drag.velocity > 4) && cur > 0) next = cur - 1;
+    else next = Math.round(el.scrollTop / h);
+    const clamped = Math.max(0, Math.min(len - 1, next));
+    el.scrollTo({ top: clamped * h, behavior: "smooth" });
+    setActiveIndex(clamped);
+    activeIndexRef.current = clamped;
+    if (clamped >= len - 3 && !loadingMoreRef.current && hasMoreRef.current && cursorRef.current) {
+      fetchVideos(videoTabRef.current, cursorRef.current);
+    }
+  }
+  function handleWebPointerCancel() {
+    const drag = webDragRef.current;
+    if (!drag) return;
+    webDragRef.current = null;
+    const el = webScrollRef.current;
+    if (!el) return;
+    (el.style as any).scrollSnapType = "y mandatory";
+    const h = effHRef.current;
+    const cur = Math.round(drag.startScrollTop / h);
+    el.scrollTo({ top: cur * h, behavior: "smooth" });
   }
 
   function scrollFeedTo(index: number) {
@@ -2659,16 +2750,21 @@ export default function VideoPlayerScreen() {
           </Text>
         </View>
       ) : Platform.OS === "web" ? (
-        // ── Web: CSS scroll-snap (same approach as TikTok / YouTube Shorts) ─
-        // overflow-y:scroll + scroll-snap-type:y mandatory lets the browser
-        // handle ALL input: mouse wheel, trackpad momentum, touch swipe, and
-        // keyboard arrows (ArrowDown/Up handled by the window keydown listener
-        // above via scrollFeedTo → scrollTo({ behavior:"smooth" })).
-        // No custom drag engine, no transform management, no React/DOM fights.
+        // ── Web: CSS scroll-snap + explicit input handlers ──────────────────
+        // overflow-y:scroll + scroll-snap-type:y mandatory for visual snap.
+        // Input paths:
+        //   touch/trackpad → CSS native via touchAction:"pan-y" on overlay
+        //   mouse wheel    → explicit wheel listener (added in useEffect above)
+        //   mouse drag     → onPointerDown/Move/Up below drive scrollTop
+        //   arrow keys     → window keydown listener calls scrollFeedTo
         <div
           ref={webScrollRef}
           id="vf-web-scroll"
           onScroll={handleWebScroll}
+          onPointerDown={handleWebPointerDown}
+          onPointerMove={handleWebPointerMove}
+          onPointerUp={handleWebPointerUp}
+          onPointerCancel={handleWebPointerCancel}
           style={{
             height: EFF_H,
             width: EFF_W,
@@ -2676,6 +2772,8 @@ export default function VideoPlayerScreen() {
             scrollSnapType: "y mandatory",
             scrollbarWidth: "none",
             backgroundColor: "#000",
+            cursor: "grab",
+            userSelect: "none",
           } as React.CSSProperties}
         >
           {videos.map((item, index) => {
