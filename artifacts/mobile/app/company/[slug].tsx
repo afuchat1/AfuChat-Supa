@@ -87,6 +87,7 @@ export default function CompanyPageScreen() {
   const [postText, setPostText] = useState("");
   const [posting, setPosting] = useState(false);
   const [activeTab, setActiveTab] = useState<"updates" | "followers" | "jobs">("updates");
+  const [aboutExpanded, setAboutExpanded] = useState(false);
   const [jobs, setJobs] = useState<{ id: string; title: string; job_type: string; location: string | null; description: string; apply_url: string | null; created_at: string }[]>([]);
   const [showJobModal, setShowJobModal] = useState(false);
   const [jobForm, setJobForm] = useState({ title: "", job_type: "Full-time", location: "", description: "", apply_url: "" });
@@ -431,11 +432,36 @@ export default function CompanyPageScreen() {
           ) : null}
         </View>
 
-        {/* About */}
+        {/* About — collapsible */}
         {page.description ? (
           <View style={[styles.aboutBox, { borderTopColor: colors.border }]}>
-            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>ABOUT</Text>
-            <Text style={[styles.aboutText, { color: colors.textSecondary }]}>{page.description}</Text>
+            <TouchableOpacity
+              style={styles.aboutHeader}
+              onPress={() => setAboutExpanded((v) => !v)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>ABOUT</Text>
+              <Ionicons
+                name={aboutExpanded ? "chevron-up" : "chevron-down"}
+                size={14}
+                color={colors.textMuted}
+              />
+            </TouchableOpacity>
+            {aboutExpanded ? (
+              <>
+                <Text style={[styles.aboutText, { color: colors.textSecondary }]}>{page.description}</Text>
+                <TouchableOpacity onPress={() => setAboutExpanded(false)} activeOpacity={0.7}>
+                  <Text style={[styles.aboutToggle, { color: colors.accent }]}>Show less</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <TouchableOpacity onPress={() => setAboutExpanded(true)} activeOpacity={0.7}>
+                <Text style={[styles.aboutText, { color: colors.textSecondary }]} numberOfLines={2}>
+                  {page.description}
+                </Text>
+                <Text style={[styles.aboutToggle, { color: colors.accent }]}>Read more</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : null}
 
@@ -873,8 +899,10 @@ const styles = StyleSheet.create({
   websiteBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
   websiteBtnText: { fontSize: 14, fontFamily: "Inter_500Medium" },
   aboutBox: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12, gap: 6 },
+  aboutHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   sectionLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
   aboutText: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 21 },
+  aboutToggle: { fontSize: 13, fontFamily: "Inter_500Medium", marginTop: 2 },
   detailsBox: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12, gap: 8 },
   detailRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   detailText: { fontSize: 14, fontFamily: "Inter_400Regular" },

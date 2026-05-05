@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -13,10 +14,12 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import { showAlert } from "@/lib/alert";
+import { uploadToStorage } from "@/lib/mediaUpload";
 
 type OrgPage = {
   id: string;
@@ -24,6 +27,8 @@ type OrgPage = {
   name: string;
   tagline: string | null;
   description: string | null;
+  logo_url: string | null;
+  cover_url: string | null;
   website: string | null;
   email: string | null;
   industry: string | null;
@@ -50,6 +55,10 @@ export default function ManageCompanyPageScreen() {
   const [page, setPage] = useState<OrgPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [logoUri, setLogoUri] = useState<string | null>(null);
+  const [coverUri, setCoverUri] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
 
   const [form, setForm] = useState({
     name: "", tagline: "", description: "", website: "", email: "",
@@ -90,6 +99,36 @@ export default function ManageCompanyPageScreen() {
     setForm((prev) => ({ ...prev, [field]: val }));
   }
 
+  async function pickLogo() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      showAlert("Permission needed", "Please allow access to your photo library.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.85,
+    });
+    if (!result.canceled && result.assets[0]) setLogoUri(result.assets[0].uri);
+  }
+
+  async function pickCover() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      showAlert("Permission needed", "Please allow access to your photo library.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [3, 1],
+      quality: 0.85,
+    });
+    if (!result.canceled && result.assets[0]) setCoverUri(result.assets[0].uri);
+  }
+
   async function handleSave() {
     if (!page || !user) return;
     if (!form.name.trim()) { showAlert("Required", "Page name cannot be empty."); return; }
@@ -119,6 +158,40 @@ export default function ManageCompanyPageScreen() {
       updates.founded_year = Number(form.founded_year);
     } else {
       updates.founded_year = null;
+    }
+
+    if (logoUri) {
+      setUploadingLogo(true);
+      const ext = logoUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
+      const { publicUrl, error: uploadErr } = await uploadToStorage(
+        "org-logos",
+        `${user.id}/${page.id}_logo.${ext}`,
+        logoUri,
+      );
+      setUploadingLogo(false);
+      if (!publicUrl) {
+        setSaving(false);
+        showAlert("Upload failed", uploadErr || "Could not upload logo. Please try again.");
+        return;
+      }
+      updates.logo_url = publicUrl;
+    }
+
+    if (coverUri) {
+      setUploadingCover(true);
+      const ext = coverUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
+      const { publicUrl, error: uploadErr } = await uploadToStorage(
+        "org-covers",
+        `${user.id}/${page.id}_cover.${ext}`,
+        coverUri,
+      );
+      setUploadingCover(false);
+      if (!publicUrl) {
+        setSaving(false);
+        showAlert("Upload failed", uploadErr || "Could not upload cover image. Please try again.");
+        return;
+      }
+      updates.cover_url = publicUrl;
     }
 
     const { error } = await supabase.from("organization_pages").update(updates).eq("id", page.id);
@@ -187,6 +260,60 @@ export default function ManageCompanyPageScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Cover image picker */}
+          <View style={[styles.imageSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.groupLabel, { color: colors.text, marginTop: 0 }]}>Cover Image</Text>
+            <TouchableOpacity onPress={pickCover} activeOpacity={0.8} style={styles.coverPickerWrap}>
+              {coverUri || page.cover_url ? (
+                <Image
+                  source={{ uri: coverUri ?? page.cover_url! }}
+                  style={styles.coverPreview}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={[styles.coverPlaceholder, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <Ionicons name="image-outline" size={28} color={colors.textMuted} />
+                  <Text style={[styles.placeholderLabel, { color: colors.textMuted }]}>Tap to add cover image</Text>
+                </View>
+              )}
+              <View style={styles.coverEditBadge}>
+                {uploadingCover
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Ionicons name="camera" size={16} color="#fff" />}
+              </View>
+            </TouchableOpacity>
+
+            {/* Logo picker */}
+            <View style={styles.logoPickerRow}>
+              <TouchableOpacity onPress={pickLogo} activeOpacity={0.8} style={styles.logoPickerWrap}>
+                {logoUri || page.logo_url ? (
+                  <Image
+                    source={{ uri: logoUri ?? page.logo_url! }}
+                    style={styles.logoPreview}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={[styles.logoPreview, { backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" }]}>
+                    <Text style={{ color: "#fff", fontSize: 26, fontFamily: "Inter_700Bold" }}>
+                      {page.name.slice(0, 1).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <View style={[styles.logoEditBadge, { backgroundColor: colors.accent }]}>
+                  {uploadingLogo
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Ionicons name="camera" size={12} color="#fff" />}
+                </View>
+              </TouchableOpacity>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={[styles.groupLabel, { color: colors.text, marginTop: 0 }]}>Logo</Text>
+                <Text style={[{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.textMuted }]}>
+                  Square image, min 200×200px
+                </Text>
+              </View>
+            </View>
+          </View>
+
           {/* Stats banner */}
           <View style={[styles.statsBanner, { backgroundColor: colors.accent + "10", borderColor: colors.accent + "30" }]}>
             <StatItem icon="people" value={page.followers_count} label="Followers" accent={colors.accent} />
@@ -321,6 +448,18 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   navBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   navTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", flex: 1, textAlign: "center" },
+
+  imageSection: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden" },
+  coverPickerWrap: { position: "relative" },
+  coverPreview: { width: "100%", height: 120 },
+  coverPlaceholder: { height: 120, alignItems: "center", justifyContent: "center", gap: 6, borderBottomWidth: StyleSheet.hairlineWidth },
+  placeholderLabel: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  coverEditBadge: { position: "absolute", bottom: 8, right: 8, width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" },
+  logoPickerRow: { flexDirection: "row", alignItems: "center", gap: 14, padding: 14 },
+  logoPickerWrap: { position: "relative" },
+  logoPreview: { width: 64, height: 64, borderRadius: 8, overflow: "hidden" },
+  logoEditBadge: { position: "absolute", bottom: -4, right: -4, width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+
   statsBanner: { borderRadius: 14, borderWidth: 1, padding: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-around" },
   statItem: { alignItems: "center", gap: 2 },
   statValue: { fontSize: 18, fontFamily: "Inter_700Bold" },
