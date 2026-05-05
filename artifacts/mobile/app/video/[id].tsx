@@ -64,6 +64,13 @@ import { useResolvedVideoSource } from "@/hooks/useResolvedVideoSource";
 import { getPostVideoManifest, pickBestSource } from "@/lib/videoApi";
 import { ChatBubbleSkeleton, ShortsFeedSkeleton } from "@/components/ui/Skeleton";
 import SignInPromptModal from "@/components/ui/SignInPromptModal";
+import {
+  computeFeedScore,
+  getLearnedInterestBoosts,
+  matchInterestsWeighted,
+  diversifyFeed,
+  type FeedSignals,
+} from "../../lib/feedAlgorithm";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -1223,8 +1230,7 @@ export default function VideoPlayerScreen() {
   // Stable ref for user — lets fetchVideos read the current user without
   // having it as a dep, so auth-context refreshes never reset the feed.
   const userRef = useRef(user);
-  const tabAnim = useRef(new Animated.Value(0)).current;
-  const indicatorLeft = tabAnim.interpolate({ inputRange: [0, 1], outputRange: ["25%", "75%"] });
+  // Tab indicator is driven purely by videoTab state — no Animated needed.
 
   useEffect(() => { hasMoreRef.current = hasMore; }, [hasMore]);
   useEffect(() => { videoTabRef.current = videoTab; }, [videoTab]);
@@ -1330,30 +1336,60 @@ export default function VideoPlayerScreen() {
         likeCount: likeMap[p.id] || 0, replyCount: replyMap[p.id] || 0,
       }));
 
-      // Rank by engagement + recency + personalization
+      // ── Rank by quality algorithm ───────────────────────────────────────────
+      const learnedWeights = await getLearnedInterestBoosts();
       const now = Date.now();
-      const scored = mapped.map((v) => {
-        const ageHours = (now - new Date(v.created_at).getTime()) / 3600000;
-        const eng = v.likeCount * 3 + v.replyCount * 2 + v.view_count * 0.3;
-        let score = Math.log1p(eng) * 20;
-        score += Math.max(0, 1 - ageHours / 336) * 40;
-        if (followedSet.has(v.author_id)) score += 20;
-        if (v.liked) score -= 15;
-        score += Math.random() * 60;
-        return { video: v, score };
-      });
-      scored.sort((a, b) => b.score - a.score);
 
-      // Diversify — no creator more than twice in a row
-      const creatorCount: Record<string, number> = {};
-      const diversified: VideoPost[] = [];
-      const deferred: VideoPost[] = [];
-      for (const { video } of scored) {
-        const seen = creatorCount[video.author_id] || 0;
-        if (seen < 2) { diversified.push(video); creatorCount[video.author_id] = seen + 1; }
-        else deferred.push(video);
+      // Count how many times each author appears in this page (for diversity penalty)
+      const authorPageCount: Record<string, number> = {};
+      for (const v of mapped) authorPageCount[v.author_id] = (authorPageCount[v.author_id] || 0) + 1;
+
+      let diversified: VideoPost[];
+
+      if (tab === "for_you") {
+        // Full quality algorithm: freshness tiers + engagement velocity + interest matching
+        const scored = mapped.map((v) => {
+          const interestMatches = matchInterestsWeighted(v.content, [], learnedWeights);
+          const signals: FeedSignals = {
+            likeCount: v.likeCount,
+            replyCount: v.replyCount,
+            viewCount: v.view_count,
+            createdAt: v.created_at,
+            interestMatches,
+            isFollowing: followedSet.has(v.author_id),
+            authorInteractionCount: v.liked ? 3 : 0,
+            isVerified: false,
+            isOrgVerified: false,
+            hasImages: !!v.image_url,
+            sameCountry: false,
+            authorPostCountInFeed: authorPageCount[v.author_id] || 1,
+            contentLength: v.content?.length || 0,
+          };
+          let score = computeFeedScore(signals);
+          // Penalise already-liked videos so users see fresh content
+          if (v.liked) score -= 30;
+          return { id: v.id, author_id: v.author_id, score, video: v };
+        });
+
+        // diversifyFeed ensures no creator dominates consecutive slots
+        const diversifiedScored = diversifyFeed(scored);
+        diversified = diversifiedScored.map((s) => (s as any).video as VideoPost);
+      } else {
+        // Following tab: newest-first with a light engagement velocity boost.
+        // Users follow specific creators and expect chronological recency,
+        // not algorithmic reordering.
+        const scored = mapped.map((v) => {
+          const ageHours = (now - new Date(v.created_at).getTime()) / 3600000;
+          // Smooth recency decay: full score < 6h, half score at ~24h
+          const recency = Math.max(0, 100 - ageHours * 1.5);
+          // Light velocity bonus so genuinely popular posts surface slightly higher
+          const velocity = Math.min((v.likeCount + v.replyCount * 2) / Math.max(ageHours, 0.5) * 6, 20);
+          const score = recency + velocity + Math.random() * 4;
+          return { id: v.id, author_id: v.author_id, score, video: v };
+        });
+        scored.sort((a, b) => b.score - a.score);
+        diversified = scored.map((s) => s.video);
       }
-      diversified.push(...deferred);
 
       let newVideos = diversified;
       cursorRef.current = data[data.length - 1].created_at;
@@ -1583,7 +1619,6 @@ export default function VideoPlayerScreen() {
   function switchTab(tab: "for_you" | "following") {
     if (tab === videoTab) return;
     if (tab === "following" && !user) { router.push("/(auth)/login"); return; }
-    Animated.timing(tabAnim, { toValue: tab === "following" ? 1 : 0, duration: 200, useNativeDriver: false }).start();
     setActiveIndex(0);
     setVideoTab(tab);
   }
@@ -1628,14 +1663,19 @@ export default function VideoPlayerScreen() {
             <Ionicons name="arrow-back" size={22} color="#fff" />
           </TouchableOpacity>
           <View style={mStyles.tabRow}>
-            <TouchableOpacity onPress={() => switchTab("for_you")} style={mStyles.tabBtn}>
+            <TouchableOpacity
+              onPress={() => switchTab("for_you")}
+              style={[mStyles.tabBtn, videoTab === "for_you" && mStyles.tabBtnActive]}
+            >
               <Text style={[mStyles.tabText, videoTab === "for_you" && mStyles.tabTextActive]}>For You</Text>
             </TouchableOpacity>
             <View style={mStyles.tabDivider} />
-            <TouchableOpacity onPress={() => switchTab("following")} style={mStyles.tabBtn}>
+            <TouchableOpacity
+              onPress={() => switchTab("following")}
+              style={[mStyles.tabBtn, videoTab === "following" && mStyles.tabBtnActive]}
+            >
               <Text style={[mStyles.tabText, videoTab === "following" && mStyles.tabTextActive]}>Following</Text>
             </TouchableOpacity>
-            <Animated.View style={[mStyles.tabIndicator, { left: indicatorLeft, transform: [{ translateX: -14 }] }]} />
           </View>
           <TouchableOpacity hitSlop={12} style={mStyles.headerSide} onPress={() => router.push("/search" as any)}>
             <Ionicons name="search-outline" size={20} color="#fff" />
@@ -1665,14 +1705,19 @@ export default function VideoPlayerScreen() {
           <Ionicons name="arrow-back" size={22} color="#fff" />
         </TouchableOpacity>
         <View style={mStyles.tabRow}>
-          <TouchableOpacity onPress={() => switchTab("for_you")} style={mStyles.tabBtn}>
+          <TouchableOpacity
+            onPress={() => switchTab("for_you")}
+            style={[mStyles.tabBtn, videoTab === "for_you" && mStyles.tabBtnActive]}
+          >
             <Text style={[mStyles.tabText, videoTab === "for_you" && mStyles.tabTextActive]}>For You</Text>
           </TouchableOpacity>
           <View style={mStyles.tabDivider} />
-          <TouchableOpacity onPress={() => switchTab("following")} style={mStyles.tabBtn}>
+          <TouchableOpacity
+            onPress={() => switchTab("following")}
+            style={[mStyles.tabBtn, videoTab === "following" && mStyles.tabBtnActive]}
+          >
             <Text style={[mStyles.tabText, videoTab === "following" && mStyles.tabTextActive]}>Following</Text>
           </TouchableOpacity>
-          <Animated.View style={[mStyles.tabIndicator, { left: indicatorLeft, transform: [{ translateX: -14 }] }]} />
         </View>
         <TouchableOpacity hitSlop={12} style={mStyles.headerSide} onPress={() => router.push("/search" as any)}>
           <Ionicons name="search-outline" size={20} color="#fff" />
@@ -1821,12 +1866,12 @@ const mStyles = StyleSheet.create({
   } as any,
   headerRow: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 30, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingBottom: 10 },
   headerSide: { width: 36, alignItems: "center" },
-  tabRow: { flex: 1, flexDirection: "row", justifyContent: "center", alignItems: "center", position: "relative" },
-  tabBtn: { paddingVertical: 8, paddingHorizontal: 14 },
+  tabRow: { flex: 1, flexDirection: "row", justifyContent: "center", alignItems: "center" },
+  tabBtn: { paddingVertical: 8, paddingHorizontal: 16, borderBottomWidth: 3, borderBottomColor: "transparent" },
+  tabBtnActive: { borderBottomColor: "#fff" },
   tabDivider: { width: 1, height: 14, backgroundColor: "rgba(255,255,255,0.2)" },
   tabText: { color: "rgba(255,255,255,0.5)", fontSize: 16, fontFamily: "Inter_600SemiBold" },
   tabTextActive: { color: "#fff", fontSize: 17, fontFamily: "Inter_700Bold" },
-  tabIndicator: { position: "absolute", bottom: 0, width: 28, height: 3, borderRadius: 1.5, backgroundColor: "#fff" },
   emptyState: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 40 },
   emptyIcon: { width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(255,255,255,0.05)", alignItems: "center", justifyContent: "center", marginBottom: 8 },
   emptyTitle: { color: "rgba(255,255,255,0.6)", fontSize: 18, fontFamily: "Inter_700Bold" },
