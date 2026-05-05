@@ -2903,9 +2903,12 @@ export default function VideoPlayerScreen() {
           )}
         </div>
       ) : (
-        // ── Native: FlatList with paging ────────────────────────────────────
-        // pagingEnabled alone (no conflicting snapToInterval) is the correct
-        // approach. RNGH will not interrupt native FlatList scroll.
+        // ── Native: FlatList with snap-to-interval ──────────────────────────
+        // snapToInterval is used instead of pagingEnabled because pagingEnabled
+        // is unreliable on Android (it silently ignores the gesture on many
+        // devices). snapToInterval + disableIntervalMomentum + decelerationRate
+        // "fast" is the cross-platform TikTok-style pattern and matches what
+        // ShortsFeed uses successfully.
         <FlatList
           ref={listRef}
           data={videos}
@@ -2939,7 +2942,10 @@ export default function VideoPlayerScreen() {
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
           getItemLayout={(_, index) => ({ length: EFF_H, offset: EFF_H * index, index })}
-          pagingEnabled
+          snapToInterval={EFF_H}
+          snapToAlignment="start"
+          disableIntervalMomentum
+          decelerationRate="fast"
           scrollEnabled
           style={{ flex: 1, backgroundColor: "#000" }}
           windowSize={5}
