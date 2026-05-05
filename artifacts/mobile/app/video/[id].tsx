@@ -1986,10 +1986,19 @@ export default function VideoPlayerScreen() {
     const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
     const prevMeta = meta?.content ?? "";
     if (meta) meta.content = "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no";
-    // Hide the webkit scrollbar globally for this page while the feed is open.
+    // Inject CSS that:
+    //  1. Hides the webkit scrollbar on our feed div
+    //  2. Forces touch-action:pan-y on the feed div so the browser's native
+    //     scroll-snap runs even when GestureHandlerRootView sets touch-action:none
+    //     on an ancestor (inline styles have higher specificity but we target
+    //     the element directly here to make sure the browser constraint table
+    //     sees pan-y for events that originate inside #vf-web-scroll).
     const style = document.createElement("style");
     style.id = "vf-no-scrollbar";
-    style.textContent = `#vf-web-scroll::-webkit-scrollbar { display: none; }`;
+    style.textContent = [
+      `#vf-web-scroll::-webkit-scrollbar { display: none; }`,
+      `#vf-web-scroll { touch-action: pan-y !important; -webkit-overflow-scrolling: touch !important; }`,
+    ].join("\n");
     document.head.appendChild(style);
     return () => {
       document.body.style.overflow = prevBody;
@@ -1998,6 +2007,57 @@ export default function VideoPlayerScreen() {
       style.remove();
     };
   }, []);
+
+  // GestureHandlerRootView intercepts touch/pointer events and calls
+  // preventDefault, blocking our native div scroll. Fix: add listeners on the
+  // scroll div that call stopPropagation() so events never reach GHRV's
+  // handlers. We use passive:true so we don't call preventDefault ourselves
+  // (which would block the browser's native scroll-snap).
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    // Retry every frame until the scroll div is mounted (videos may still be loading)
+    let rafId: number;
+    let detach: (() => void) | null = null;
+    function tryAttach() {
+      const el = webScrollRef.current;
+      if (!el) { rafId = requestAnimationFrame(tryAttach); return; }
+
+      // Force touch-action via inline style so the browser constraint table
+      // sees pan-y even if an ancestor has touch-action:none.
+      el.style.setProperty("touch-action", "pan-y", "important");
+
+      const stop = (e: Event) => e.stopPropagation();
+
+      // Touch events (Safari iOS, older Android)
+      el.addEventListener("touchstart", stop, { passive: true });
+      el.addEventListener("touchmove",  stop, { passive: true });
+      el.addEventListener("touchend",   stop, { passive: true });
+      el.addEventListener("touchcancel",stop, { passive: true });
+      // Pointer events (Chrome, RNGH v2 web backend)
+      el.addEventListener("pointerdown",  stop, { passive: true });
+      el.addEventListener("pointermove",  stop, { passive: true });
+      el.addEventListener("pointerup",    stop, { passive: true });
+      el.addEventListener("pointercancel",stop, { passive: true });
+
+      detach = () => {
+        el.removeEventListener("touchstart",   stop);
+        el.removeEventListener("touchmove",    stop);
+        el.removeEventListener("touchend",     stop);
+        el.removeEventListener("touchcancel",  stop);
+        el.removeEventListener("pointerdown",  stop);
+        el.removeEventListener("pointermove",  stop);
+        el.removeEventListener("pointerup",    stop);
+        el.removeEventListener("pointercancel",stop);
+      };
+    }
+    rafId = requestAnimationFrame(tryAttach);
+    return () => {
+      cancelAnimationFrame(rafId);
+      detach?.();
+    };
+  // Re-run when the div mounts (i.e. when videos go from empty to non-empty)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videos.length > 0]);
 
   // Called by the native <div> scroll container on web when the user scrolls.
   // Calculates which video is now centred and updates activeIndex.
@@ -2647,6 +2707,12 @@ export default function VideoPlayerScreen() {
           ref={webScrollRef}
           id="vf-web-scroll"
           onScroll={handleWebScroll}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerMove={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
           style={{
             height: EFF_H,
             width: EFF_W,
@@ -2655,10 +2721,7 @@ export default function VideoPlayerScreen() {
             scrollSnapType: "y mandatory",
             WebkitOverflowScrolling: "touch",
             backgroundColor: "#000",
-            // Hide the scrollbar visually while keeping scroll behaviour.
             scrollbarWidth: "none",
-            // Override body's touch-action:none so vertical swipes
-            // reach this container and the CSS scroll-snap can drive them.
             touchAction: "pan-y",
           } as React.CSSProperties}
         >
@@ -2742,10 +2805,16 @@ export default function VideoPlayerScreen() {
           getItemLayout={(_, index) => ({ length: EFF_H, offset: EFF_H * index, index })}
           pagingEnabled
           decelerationRate="fast"
+          scrollEnabled
+          disableIntervalMomentum
+          snapToInterval={EFF_H}
+          snapToAlignment="start"
           style={{ flex: 1, backgroundColor: "#000" }}
+          contentContainerStyle={{ flexGrow: 1 }}
           windowSize={5}
           initialNumToRender={3}
           maxToRenderPerBatch={3}
+          removeClippedSubviews={false}
           onScrollToIndexFailed={(info) => {
             setTimeout(() => {
               listRef.current?.scrollToIndex({ index: info.index, animated: false });
