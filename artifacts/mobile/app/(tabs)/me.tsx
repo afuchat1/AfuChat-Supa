@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Platform,
   ScrollView,
@@ -187,20 +188,42 @@ export default function MeScreen() {
   const { profile, isPremium, subscription, loading, user } = useAuth();
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [hasCompanyPage, setHasCompanyPage] = useState(false);
-  const [verifyBannerDismissed, setVerifyBannerDismissed] = useState(false);
+  // true when the banner should be hidden (persisted across tab switches / app restarts)
+  const [verifyBannerDismissed, setVerifyBannerDismissed] = useState(true);
+  // true when a verification application already exists (any status)
+  const [hasVerifApp, setHasVerifApp] = useState(false);
   const isAdmin = !!profile?.is_admin;
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (!user) return;
     import("@/lib/supabase").then(({ supabase }) => {
-      supabase
-        .from("organization_pages")
-        .select("id", { count: "exact", head: true })
-        .eq("admin_id", user.id)
-        .then(({ count }) => setHasCompanyPage((count ?? 0) > 0));
+      // Check for company page and existing verification app in parallel
+      Promise.all([
+        supabase
+          .from("organization_pages")
+          .select("id", { count: "exact", head: true })
+          .eq("admin_id", user.id),
+        supabase
+          .from("business_verification_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id),
+      ]).then(([{ count: pageCount }, { count: appCount }]) => {
+        setHasCompanyPage((pageCount ?? 0) > 0);
+        setHasVerifApp((appCount ?? 0) > 0);
+      });
+    });
+    // Load persisted banner dismissal from storage
+    AsyncStorage.getItem("afu_verify_business_banner_dismissed").then((val) => {
+      // Default visible (false = not dismissed) only when no stored value
+      setVerifyBannerDismissed(val === "1");
     });
   }, [user?.id]);
+
+  const dismissVerifyBanner = useCallback(() => {
+    setVerifyBannerDismissed(true);
+    AsyncStorage.setItem("afu_verify_business_banner_dismissed", "1");
+  }, []);
 
   const gradeIcon = profile?.current_grade === "Newcomer" ? "leaf-outline" : "star-outline";
 
@@ -305,7 +328,7 @@ export default function MeScreen() {
 
       <ProfileCompletionBar profile={profile} isPremium={isPremium} />
 
-      {hasCompanyPage && !profile?.is_organization_verified && !verifyBannerDismissed && (
+      {hasCompanyPage && !profile?.is_organization_verified && !hasVerifApp && !verifyBannerDismissed && (
         <View style={styles.verifyBanner}>
           <View style={styles.verifyBannerLeft}>
             <View style={styles.verifyBannerIconWrap}>
@@ -324,7 +347,7 @@ export default function MeScreen() {
               </TouchableOpacity>
             </View>
           </View>
-          <TouchableOpacity hitSlop={12} onPress={() => setVerifyBannerDismissed(true)} style={{ padding: 2, marginTop: -2 }}>
+          <TouchableOpacity hitSlop={12} onPress={dismissVerifyBanner} style={{ padding: 2, marginTop: -2 }}>
             <Ionicons name="close" size={17} color="#D4A85380" />
           </TouchableOpacity>
         </View>
