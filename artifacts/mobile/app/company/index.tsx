@@ -77,7 +77,7 @@ export default function CompanyIndexScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.navTitle, { color: colors.text }]}>Company Pages</Text>
-        {(profile?.is_verified || profile?.is_organization_verified) ? (
+        {(profile?.is_verified || profile?.is_organization_verified) && !loading && myPages.length === 0 ? (
           <TouchableOpacity onPress={() => router.push("/company/create")} hitSlop={12}>
             <Ionicons name="add" size={26} color={colors.accent} />
           </TouchableOpacity>
@@ -136,7 +136,7 @@ export default function CompanyIndexScreen() {
             </View>
           }
           ListHeaderComponent={
-            tab === "discover" && (profile?.is_verified || profile?.is_organization_verified) ? (
+            tab === "discover" && !loading && myPages.length === 0 && (profile?.is_verified || profile?.is_organization_verified) ? (
               <TouchableOpacity
                 style={[styles.verifyBanner, { backgroundColor: colors.accent + "10", borderColor: colors.accent + "40" }]}
                 onPress={() => router.push("/company/create")}
@@ -151,7 +151,7 @@ export default function CompanyIndexScreen() {
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={colors.accent} />
               </TouchableOpacity>
-            ) : tab === "discover" && !profile?.is_verified ? (
+            ) : tab === "discover" && !loading && myPages.length === 0 && !profile?.is_verified && !profile?.is_organization_verified ? (
               <TouchableOpacity
                 style={[styles.verifyBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}
                 onPress={() => router.push("/premium")}

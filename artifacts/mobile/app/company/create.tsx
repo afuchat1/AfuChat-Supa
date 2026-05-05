@@ -106,6 +106,19 @@ export default function CreateCompanyPageScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [showIndustryPicker, setShowIndustryPicker] = useState(false);
 
+  const [existingOrg, setExistingOrg] = useState<{ id: string; name: string } | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("organization_pages")
+      .select("id, name")
+      .eq("admin_id", user.id)
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => setExistingOrg((data as { id: string; name: string } | null)));
+  }, [user?.id]);
+
   const [form, setForm] = useState({
     name: "", slug: "", org_type: "",
     tagline: "", description: "", website: "",
@@ -234,6 +247,37 @@ export default function CreateCompanyPageScreen() {
   }
 
   const canCreate = profile?.is_verified || profile?.is_organization_verified;
+
+  if (existingOrg !== undefined && existingOrg !== null) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <View style={[styles.nav, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.navTitle, { color: colors.text }]}>Create Page</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 20 }}>
+          <View style={{ width: 88, height: 88, borderRadius: 22, backgroundColor: colors.accent + "18", alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name="business" size={44} color={colors.accent} />
+          </View>
+          <Text style={{ fontSize: 22, fontFamily: "Inter_700Bold", color: colors.text, textAlign: "center" }}>You Already Have an Organization</Text>
+          <Text style={{ fontSize: 15, fontFamily: "Inter_400Regular", color: colors.textMuted, textAlign: "center", lineHeight: 22 }}>
+            Each account can only have one organization page. You can manage your existing page "{existingOrg.name}" instead.
+          </Text>
+          <TouchableOpacity
+            style={[styles.submitBtn, { backgroundColor: colors.accent }]}
+            onPress={() => router.replace("/company" as any)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="business-outline" size={18} color="#fff" />
+            <Text style={styles.submitBtnText}>Go to My Page</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   if (!canCreate) {
     return (
