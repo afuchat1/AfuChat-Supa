@@ -110,6 +110,9 @@ export default function CompanyPageScreen() {
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiTone, setAiTone] = useState<"professional" | "exciting" | "informative">("professional");
 
+  // Dismissible verify banner (admin only, unverified pages)
+  const [verifyBannerDismissed, setVerifyBannerDismissed] = useState(false);
+
   const isAdmin = page?.admin_id === user?.id;
   const headerTop = Platform.OS === "ios" ? insets.top : Math.max(insets.top, 16);
 
@@ -587,6 +590,36 @@ export default function CompanyPageScreen() {
           </View>
         ) : null}
       </View>
+
+      {/* Admin verify banner */}
+      {isAdmin && !page.is_verified && !verifyBannerDismissed && (
+        <View style={[styles.verifyBanner, { backgroundColor: "#D4A853" + "14", borderColor: "#D4A853" + "40" }]}>
+          <View style={styles.verifyBannerIcon}>
+            <Ionicons name="shield-checkmark-outline" size={22} color="#D4A853" />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={[styles.verifyBannerTitle, { color: "#D4A853" }]}>Get your page verified</Text>
+            <Text style={[styles.verifyBannerSub, { color: colors.textSecondary }]}>
+              The gold badge builds trust and makes your page stand out to followers.
+            </Text>
+            <TouchableOpacity
+              style={[styles.verifyBannerBtn, { backgroundColor: "#D4A853" }]}
+              onPress={() => router.push(`/company/${page.slug}/manage` as any)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="checkmark-circle-outline" size={14} color="#fff" />
+              <Text style={styles.verifyBannerBtnText}>Apply for Verification</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            hitSlop={12}
+            onPress={() => setVerifyBannerDismissed(true)}
+            style={styles.verifyBannerDismiss}
+          >
+            <Ionicons name="close" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Tabs */}
       <View style={[styles.tabs, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -1263,6 +1296,14 @@ const styles = StyleSheet.create({
   aiGenerateBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
   aiActionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 9, borderRadius: 10, borderWidth: 1 },
   aiActionBtnText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+
+  verifyBanner: { marginHorizontal: 12, marginTop: 8, borderRadius: 14, borderWidth: 1, padding: 14, flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  verifyBannerIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#D4A85318", alignItems: "center", justifyContent: "center", marginTop: 2 },
+  verifyBannerTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  verifyBannerSub: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17 },
+  verifyBannerBtn: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, marginTop: 8 },
+  verifyBannerBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#fff" },
+  verifyBannerDismiss: { padding: 2, marginTop: -2 },
 
   jobCard: { marginHorizontal: 12, marginTop: 12, borderRadius: 14, padding: 14, borderWidth: StyleSheet.hairlineWidth, gap: 10 },
   jobCardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
