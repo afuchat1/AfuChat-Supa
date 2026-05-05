@@ -461,14 +461,32 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [tabFilter, setTabFilter] = useState<ChatTabKey>("all");
 
-  const fetchUnreadCount = useCallback(() => {
+  const fetchUnreadCount = useCallback(async () => {
     if (!user) return;
-    supabase
+    const { data } = await supabase
       .from("notifications")
-      .select("id", { count: "exact", head: true })
+      .select("id, type, is_read, created_at, post_id, reference_id, actor_id")
       .eq("user_id", user.id)
-      .eq("is_read", false)
-      .then(({ count }) => setUnreadNotifCount(count || 0));
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (!data) return;
+    const seen = new Map<string, any>();
+    for (const item of data) {
+      const key = [item.type, item.actor_id ?? "", item.post_id ?? "", item.reference_id ?? ""].join("|");
+      const existing = seen.get(key);
+      if (!existing) {
+        seen.set(key, item);
+      } else {
+        const diff = Math.abs(new Date(item.created_at).getTime() - new Date(existing.created_at).getTime());
+        if (diff < 5 * 60 * 1000) {
+          if (new Date(item.created_at) > new Date(existing.created_at)) seen.set(key, item);
+        } else {
+          seen.set(key + "|" + item.created_at, item);
+        }
+      }
+    }
+    const unread = Array.from(seen.values()).filter(n => !n.is_read).length;
+    setUnreadNotifCount(unread);
   }, [user]);
 
   useFocusEffect(useCallback(() => { fetchUnreadCount(); }, [fetchUnreadCount]));
