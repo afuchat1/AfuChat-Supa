@@ -55,6 +55,9 @@ const USER_SCOPED_BUCKETS = [
   "voice-messages",
   "shop-media",
   "match-photos",
+  "org-logos",
+  "org-covers",
+  "org-post-images",
 ];
 
 /** Allow-list of logical bucket names to prevent arbitrary writes. */
@@ -69,6 +72,9 @@ const ALLOWED_BUCKETS = new Set([
   "voice-messages",
   "shop-media",
   "match-photos",
+  "org-logos",
+  "org-covers",
+  "org-post-images",
 ]);
 
 const MAX_PATH_LEN = 512;

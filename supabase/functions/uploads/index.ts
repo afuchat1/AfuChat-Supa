@@ -25,6 +25,7 @@ const CORS = {
 const ALLOWED_BUCKETS = new Set([
   "avatars", "banners", "post-images", "videos", "stories",
   "group-avatars", "chat-media", "voice-messages", "shop-media", "match-photos",
+  "org-logos", "org-covers", "org-post-images",
 ]);
 const SCOPED_BUCKETS = ALLOWED_BUCKETS; // all buckets are user-scoped
 const USER_BUCKETS = [...ALLOWED_BUCKETS];
