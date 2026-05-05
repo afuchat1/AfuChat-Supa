@@ -61,6 +61,7 @@ import { encodeId, decodeId, isUuid } from "@/lib/shortId";
 import { getCachedVideoUri, cacheVideo } from "@/lib/videoCache";
 import { saveVideoProgress, clearVideoProgress } from "@/lib/videoProgress";
 import { useResolvedVideoSource } from "@/hooks/useResolvedVideoSource";
+import { getPostVideoManifest, pickBestSource } from "@/lib/videoApi";
 import { ChatBubbleSkeleton, ShortsFeedSkeleton } from "@/components/ui/Skeleton";
 import SignInPromptModal from "@/components/ui/SignInPromptModal";
 
@@ -1497,16 +1498,41 @@ export default function VideoPlayerScreen() {
 
   async function handleDownload(item: VideoPost) {
     if (downloading) return;
+
+    // Resolve the best public MP4 URL via the manifest (same as playback).
+    // Falls back to item.video_url if the manifest isn't available yet.
+    async function resolveDownloadUrl(): Promise<string> {
+      try {
+        const manifest = await getPostVideoManifest(item.id);
+        if (manifest) {
+          // Prefer H.264 for broadest device compatibility when saving.
+          const h264 = manifest.sources.find(
+            (s) => s.codec === "h264" && s.url,
+          );
+          if (h264?.url) return h264.url;
+          // Fall back to any ready source.
+          const best = pickBestSource(manifest, { targetHeight: 1080 });
+          if (best.url) return best.url;
+          // Last resort: manifest's fallback_url (the original upload).
+          if (manifest.fallback_url) return manifest.fallback_url;
+        }
+      } catch {
+        // ignore — use raw video_url below
+      }
+      return item.video_url;
+    }
+
     if (Platform.OS === "web") {
       try {
-        const ext = item.video_url.split("?")[0].split(".").pop()?.toLowerCase() || "mp4";
+        const url = await resolveDownloadUrl();
         const a = document.createElement("a");
-        a.href = item.video_url; a.download = `afuchat_${item.id}.${ext}`; a.target = "_blank"; a.rel = "noopener";
+        a.href = url; a.download = `afuchat_${item.id}.mp4`; a.target = "_blank"; a.rel = "noopener";
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         showToast("Download started");
       } catch { showToast("Could not start download"); }
       return;
     }
+
     setDownloading(true); showToast("Saving to device…", 30000);
     try {
       const { status } = await MediaLibrary.requestPermissionsAsync();
@@ -1515,14 +1541,16 @@ export default function VideoPlayerScreen() {
         Alert.alert("Permission needed", "Please allow media library access in Settings to save videos.");
         return;
       }
-      const ext = item.video_url.split("?")[0].split(".").pop()?.toLowerCase() || "mp4";
-      const dest = (FileSystem.cacheDirectory ?? "") + `afuchat_dl_${item.id}.${ext}`;
-      const { uri } = await FileSystem.downloadAsync(item.video_url, dest);
+      const url = await resolveDownloadUrl();
+      const dest = `${FileSystem.cacheDirectory ?? ""}afuchat_dl_${item.id}.mp4`;
+      const { uri, status: dlStatus } = await FileSystem.downloadAsync(url, dest);
+      if (dlStatus !== 200) throw new Error(`HTTP ${dlStatus}`);
       await MediaLibrary.createAssetAsync(uri);
       await FileSystem.deleteAsync(uri, { idempotent: true });
       setDownloading(false); showToast("Saved to your device");
-    } catch {
+    } catch (err) {
       setDownloading(false); setDownloadToast(null);
+      console.error("[download]", err);
       Alert.alert("Download failed", "Could not save the video. Please try again.");
     }
   }
