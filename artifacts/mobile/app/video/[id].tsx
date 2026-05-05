@@ -44,8 +44,93 @@ import { encodeId, decodeId, isUuid } from "@/lib/shortId";
 import { saveVideoProgress, clearVideoProgress } from "@/lib/videoProgress";
 import { ChatBubbleSkeleton, ShortsFeedSkeleton } from "@/components/ui/Skeleton";
 import SignInPromptModal from "@/components/ui/SignInPromptModal";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const USE_NATIVE = Platform.OS !== "web";
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+/*  Swipe-hint — shown once to new users, persisted via AsyncStorage          */
+/* ─────────────────────────────────────────────────────────────────────────── */
+
+const SWIPE_HINT_KEY = "afu_video_swipe_hint_seen";
+
+function useSwipeHint() {
+  const [visible, setVisible] = useState(false);
+  const dismissedRef = useRef(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(SWIPE_HINT_KEY)
+      .then((val) => { if (!val) setVisible(true); })
+      .catch(() => {});
+  }, []);
+
+  const dismiss = useCallback(() => {
+    if (dismissedRef.current) return;
+    dismissedRef.current = true;
+    setVisible(false);
+    AsyncStorage.setItem(SWIPE_HINT_KEY, "1").catch(() => {});
+  }, []);
+
+  return { visible, dismiss };
+}
+
+function SwipeHintOverlay({ visible }: { visible: boolean }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+  const bounceLoop = useRef<Animated.CompositeAnimation | null>(null);
+
+  useEffect(() => {
+    if (visible) {
+      Animated.sequence([
+        Animated.delay(900),
+        Animated.timing(opacity, { toValue: 1, duration: 600, useNativeDriver: true }),
+      ]).start();
+      bounceLoop.current = Animated.loop(
+        Animated.sequence([
+          Animated.delay(300),
+          Animated.timing(translateY, { toValue: -14, duration: 520, useNativeDriver: true }),
+          Animated.timing(translateY, { toValue: 0, duration: 520, useNativeDriver: true }),
+        ])
+      );
+      bounceLoop.current.start();
+    } else {
+      bounceLoop.current?.stop();
+      Animated.timing(opacity, { toValue: 0, duration: 350, useNativeDriver: true }).start();
+    }
+    return () => { bounceLoop.current?.stop(); };
+  }, [visible]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        bottom: 160,
+        left: 0,
+        right: 0,
+        alignItems: "center",
+        opacity,
+        zIndex: 20,
+      }}
+    >
+      <Animated.View style={{ alignItems: "center", transform: [{ translateY }] }}>
+        <Ionicons name="chevron-up" size={30} color="rgba(255,255,255,0.95)" />
+        <Ionicons name="chevron-up" size={30} color="rgba(255,255,255,0.45)" style={{ marginTop: -15 }} />
+      </Animated.View>
+      <Text
+        style={{
+          color: "rgba(255,255,255,0.9)",
+          fontSize: 13,
+          fontFamily: "Inter_600SemiBold",
+          marginTop: 6,
+          letterSpacing: 0.5,
+        }}
+      >
+        Swipe up
+      </Text>
+    </Animated.View>
+  );
+}
 
 /**
  * Lightweight HTML5 video player used on web only.
@@ -1971,6 +2056,7 @@ export default function VideoPlayerScreen() {
   const [downloadToast, setDownloadToast] = useState<string | null>(null);
   const [soundSheetData, setSoundSheetData] = useState<{ item: VideoPost; albumArtUrl: string | null; trackArtist: string | null; trackLabel: string | null } | null>(null);
   const [showSignInPrompt, setShowSignInPrompt] = useState(false);
+  const swipeHint = useSwipeHint();
   const listRef = useRef<FlatList>(null);
   const webScrollRef = useRef<HTMLDivElement | null>(null);
   const initialScrollDone = useRef(false);
@@ -2024,6 +2110,7 @@ export default function VideoPlayerScreen() {
   function handleWebScroll(e: React.UIEvent<HTMLDivElement>) {
     if (webDragRef.current) return;
     const scrollTop = e.currentTarget.scrollTop;
+    if (scrollTop > 40) swipeHint.dismiss();
     if (scrollSettleRef.current) clearTimeout(scrollSettleRef.current);
     scrollSettleRef.current = setTimeout(() => {
       const index = Math.round(scrollTop / effHRef.current);
@@ -2604,9 +2691,11 @@ export default function VideoPlayerScreen() {
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     if (viewableItems.length > 0 && viewableItems[0].index !== null) {
-      setActiveIndex(viewableItems[0].index);
+      const idx = viewableItems[0].index;
+      setActiveIndex(idx);
+      if (idx > 0) swipeHint.dismiss();
     }
-  }, []);
+  }, [swipeHint.dismiss]);
 
   async function handleLike(postId: string, currentlyLiked: boolean) {
     if (!user) { setShowSignInPrompt(true); return; }
@@ -2972,6 +3061,8 @@ export default function VideoPlayerScreen() {
           }
         />
       )}
+
+      <SwipeHintOverlay visible={swipeHint.visible} />
 
       <CommentsSheet
         visible={!!commentPostId}
