@@ -2836,8 +2836,10 @@ export default function VideoPlayerScreen() {
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
           getItemLayout={(_, index) => ({ length: EFF_H, offset: EFF_H * index, index })}
-          pagingEnabled
+          snapToInterval={EFF_H}
+          snapToAlignment="start"
           decelerationRate="fast"
+          disableIntervalMomentum
           scrollEnabled
           style={{ flex: 1, backgroundColor: "#000" }}
           windowSize={5}

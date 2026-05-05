@@ -1519,6 +1519,33 @@ export default function DiscoverScreen() {
     const post = postsRef.current.find((p) => p.id === postId);
     if (!post) return;
 
+    // Org page posts use a different table — update `likes` int column directly
+    if (postId.startsWith("org_")) {
+      const realId = postId.slice(4);
+      if (post.liked) {
+        const { error } = await supabase
+          .from("organization_page_posts")
+          .update({ likes: Math.max(0, post.likeCount - 1) })
+          .eq("id", realId);
+        if (!error) {
+          setPosts((prev) =>
+            prev.map((p) => p.id === postId ? { ...p, liked: false, likeCount: Math.max(0, p.likeCount - 1) } : p)
+          );
+        }
+      } else {
+        const { error } = await supabase
+          .from("organization_page_posts")
+          .update({ likes: post.likeCount + 1 })
+          .eq("id", realId);
+        if (!error) {
+          setPosts((prev) =>
+            prev.map((p) => p.id === postId ? { ...p, liked: true, likeCount: p.likeCount + 1 } : p)
+          );
+        }
+      }
+      return;
+    }
+
     if (post.liked) {
       const { error } = await supabase.from("post_acknowledgments").delete().eq("post_id", postId).eq("user_id", user.id);
       if (!error) {
@@ -2137,6 +2164,7 @@ const dcStyles = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
+    overflow: "hidden",
     flex: 0,
     height: "78%",
     marginTop: "auto",

@@ -189,41 +189,18 @@ function Gift3DCard({
         disabled={!canAfford}
         style={styles.cardTouchable}
       >
-        <LinearGradient
-          colors={gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
+        <View
           style={[
             styles.card,
             selected && { borderColor: rColor, borderWidth: 2 },
           ]}
         >
-          <LinearGradient
-            colors={["rgba(255,255,255,0.22)", "rgba(255,255,255,0)"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0.6, y: 0.7 }}
-            style={StyleSheet.absoluteFill}
-            pointerEvents="none"
-          />
           <Text style={styles.cardEmoji}>{gift.emoji}</Text>
-          <Text style={styles.cardName} numberOfLines={1}>{gift.name}</Text>
           <View style={styles.cardPriceRow}>
             <Ionicons name="diamond" size={8} color={Colors.gold} />
             <Text style={styles.cardPrice}>{price}</Text>
           </View>
-          {showTrend && (
-            <View style={[styles.trendBadge, { backgroundColor: priceChange > 0 ? "#10B98133" : "#EF444433" }]}>
-              <Ionicons
-                name={priceChange > 0 ? "trending-up" : "trending-down"}
-                size={8}
-                color={priceChange > 0 ? "#10B981" : "#EF4444"}
-              />
-              <Text style={[styles.trendText, { color: priceChange > 0 ? "#10B981" : "#EF4444" }]}>
-                {priceChange > 0 ? "+" : ""}{priceChange}%
-              </Text>
-            </View>
-          )}
-        </LinearGradient>
+        </View>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -578,21 +555,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 8,
     paddingHorizontal: 4,
-    gap: 3,
+    gap: 4,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.06)",
     overflow: "hidden",
   },
   cardEmoji: {
-    fontSize: 28,
-    lineHeight: 34,
-  },
-  cardName: {
-    fontSize: 9,
-    fontFamily: "Inter_600SemiBold",
-    color: "rgba(255,255,255,0.9)",
-    textAlign: "center",
-    lineHeight: 12,
+    fontSize: 32,
+    lineHeight: 38,
   },
   cardPriceRow: {
     flexDirection: "row",
