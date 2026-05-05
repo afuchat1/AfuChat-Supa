@@ -215,9 +215,14 @@ function WebVideoPlayer({
         }}
       />
       {/* Transparent interaction overlay.
-          - touch-action:pan-y  → vertical swipes always reach the FlatList
-          - pointer events handle click, double-click, long-press and wheel
-          - NO preventDefault is called so the browser scroll is never blocked */}
+          - touch-action:none → gestures are handled entirely by the outer
+            custom drag engine (the parent div has touch-action:none too).
+            Using "pan-y" here was the bug: the browser would claim the pan
+            gesture natively, fire pointercancel on the outer container, and
+            the drag engine would snap back instead of advancing to the next
+            video. With "none" the outer container receives every pointermove
+            and pointerup, so swipes correctly navigate between videos.
+          - pointer events still handle click, double-click, and long-press */}
       {/* @ts-expect-error */}
       <div
         onClick={handleClick}
@@ -231,7 +236,7 @@ function WebVideoPlayer({
           position: "absolute",
           top: 0, left: 0, right: 0, bottom: 0,
           cursor: preloadOnly ? "default" : "pointer",
-          touchAction: "pan-y",
+          touchAction: "none",
         }}
       />
     </>
