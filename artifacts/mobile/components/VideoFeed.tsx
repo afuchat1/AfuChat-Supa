@@ -3,6 +3,7 @@ import {
   Animated,
   Dimensions,
   FlatList,
+  LayoutChangeEvent,
   Platform,
   StyleSheet,
   Text,
@@ -21,7 +22,7 @@ import { notifyPostLike, notifyNewFollow } from "@/lib/notifyUser";
 import { useResolvedVideoSource } from "@/hooks/useResolvedVideoSource";
 import { VideoFeedSkeleton } from "@/components/ui/Skeleton";
 
-const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get("window");
+const { width: SCREEN_W } = Dimensions.get("window");
 const PAGE_SIZE = 20;
 
 export type VideoPost = {
@@ -47,12 +48,14 @@ function formatCount(n: number): string {
 function VideoItem({
   item,
   isActive,
+  itemHeight,
   onLike,
   onFollow,
   currentUserId,
 }: {
   item: VideoPost;
   isActive: boolean;
+  itemHeight: number;
   onLike: (postId: string, liked: boolean) => void;
   onFollow: (authorId: string) => void;
   currentUserId?: string;
@@ -87,7 +90,7 @@ function VideoItem({
   const videoTouchRef = useRef<{ y: number; t: number } | null>(null);
 
   return (
-    <View style={styles.videoItem}>
+    <View style={[styles.videoItem, { height: itemHeight }]}>
       {/* Video — always auto-plays when active */}
       <View
         style={StyleSheet.absoluteFill}
@@ -189,12 +192,20 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
 
   const [posts, setPosts] = useState<VideoPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [containerHeight, setContainerHeight] = useState(
+    Dimensions.get("window").height - tabBarHeight
+  );
 
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
   const cursorRef = useRef<string | null>(null);
   const loadingMoreRef = useRef(false);
+
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    const h = e.nativeEvent.layout.height;
+    if (h > 0) setContainerHeight(h);
+  }, []);
 
   const enrichPosts = useCallback(async (rawPosts: any[]) => {
     if (!rawPosts.length) return [];
@@ -335,7 +346,7 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
 
   if (posts.length === 0) {
     return (
-      <View style={[styles.center, { height: SCREEN_H, backgroundColor: "#000" }]}>
+      <View style={[styles.center, { flex: 1, backgroundColor: "#000" }]} onLayout={onLayout}>
         <Ionicons name="videocam-outline" size={56} color="rgba(255,255,255,0.4)" />
         <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 16, fontFamily: "Inter_500Medium", marginTop: 16, textAlign: "center" }}>
           No videos yet.{"\n"}Be the first to post!
@@ -360,6 +371,7 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
         <VideoItem
           item={item}
           isActive={index === activeIndex}
+          itemHeight={containerHeight}
           onLike={handleLike}
           onFollow={handleFollow}
           currentUserId={user?.id}
@@ -369,13 +381,14 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
       showsVerticalScrollIndicator={false}
       onViewableItemsChanged={onViewableItemsChanged}
       viewabilityConfig={viewabilityConfig}
-      getItemLayout={(_, index) => ({ length: SCREEN_H, offset: SCREEN_H * index, index })}
+      getItemLayout={(_, index) => ({ length: containerHeight, offset: containerHeight * index, index })}
       decelerationRate="fast"
       onEndReached={onEndReached}
       onEndReachedThreshold={0.5}
+      onLayout={onLayout}
       ListFooterComponent={
         loadingMore ? (
-          <View style={[styles.center, { height: SCREEN_H, backgroundColor: "#000" }]}>
+          <View style={[styles.center, { height: containerHeight, backgroundColor: "#000" }]}>
             <VideoFeedSkeleton />
           </View>
         ) : null
@@ -387,7 +400,7 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#000" },
-  videoItem: { width: SCREEN_W, height: SCREEN_H, backgroundColor: "#000" },
+  videoItem: { width: SCREEN_W, backgroundColor: "#000" },
   gradient: {
     position: "absolute",
     bottom: 0,

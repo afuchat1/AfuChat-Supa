@@ -911,9 +911,9 @@ export default function ShortsFeed({
           />
         );
       }}
-      pagingEnabled
       snapToAlignment="start"
       snapToInterval={cardHeight}
+      disableIntervalMomentum
       decelerationRate="fast"
       showsVerticalScrollIndicator={false}
       onViewableItemsChanged={onViewableItemsChanged}
