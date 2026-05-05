@@ -1592,18 +1592,27 @@ export default function VideoPlayerScreen() {
   const scrollSettleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function handleWebScroll(e: React.UIEvent<HTMLDivElement>) {
-    const scrollTop = e.currentTarget.scrollTop;
+    const el = e.currentTarget;
+    const scrollTop = el.scrollTop;
     if (scrollTop > 40) swipeHint.dismiss();
+
+    // Immediately update active index so the current video pauses the instant
+    // the next snap point is crossed — no perceptible delay for the user.
+    const index = Math.round(scrollTop / SCREEN_H);
+    if (index !== activeIndexRef.current) {
+      setActiveIndex(index);
+      activeIndexRef.current = index;
+    }
+
+    // Debounce only the "load more" check to avoid triggering fetch on every
+    // scroll event during a fast swipe.
     if (scrollSettleRef.current) clearTimeout(scrollSettleRef.current);
     scrollSettleRef.current = setTimeout(() => {
-      const index = Math.round(scrollTop / SCREEN_H);
-      if (index !== activeIndexRef.current) {
-        setActiveIndex(index); activeIndexRef.current = index;
-        if (index >= videosLenRef.current - 3 && !loadingMoreRef.current && hasMoreRef.current && cursorRef.current) {
-          fetchVideos(videoTabRef.current, cursorRef.current);
-        }
+      const idx = Math.round(el.scrollTop / SCREEN_H);
+      if (idx >= videosLenRef.current - 3 && !loadingMoreRef.current && hasMoreRef.current && cursorRef.current) {
+        fetchVideos(videoTabRef.current, cursorRef.current);
       }
-    }, 80);
+    }, 150);
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -1698,7 +1707,9 @@ export default function VideoPlayerScreen() {
               key={item.id}
               style={{
                 height: SCREEN_H, width: SCREEN_W,
-                scrollSnapAlign: "start", flexShrink: 0, overflow: "hidden", position: "relative",
+                scrollSnapAlign: "start",
+                scrollSnapStop: "always",
+                flexShrink: 0, overflow: "hidden", position: "relative",
               } as React.CSSProperties}
             >
               <VideoItem

@@ -363,8 +363,17 @@ function DiscoverCommentsSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-        <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)" }} activeOpacity={1} onPress={onClose} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "web" ? undefined : "height"}
+        style={{ flex: 1, justifyContent: "flex-end" }}
+      >
+        {/* Backdrop — absolute fill so it doesn't push the sheet */}
+        <TouchableOpacity
+          style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.45)" }]}
+          activeOpacity={1}
+          onPress={onClose}
+        />
+
         <View style={[dcStyles.sheet, { maxHeight: sheetMaxHeight, backgroundColor: colors.surface, paddingBottom: Math.max(insets.bottom, 16) }]}>
           {/* Handle */}
           <View style={[dcStyles.handle, { backgroundColor: colors.border }]} />
@@ -396,8 +405,8 @@ function DiscoverCommentsSheet({
           {/* Divider */}
           <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
 
-          {/* Comment list */}
-          <View style={{ flex: 1 }}>
+          {/* Comment list — flexShrink so it yields space to the input bar on web */}
+          <View style={{ flexShrink: 1, minHeight: 80 }}>
             {loading ? (
               <View style={{ padding: 24, alignItems: "center" }}>
                 <ActivityIndicator color={colors.accent} />
@@ -413,7 +422,7 @@ function DiscoverCommentsSheet({
                 ref={listRef}
                 data={sortedComments}
                 keyExtractor={(c) => c.id}
-                style={{ flex: 1 }}
+                style={{ flexGrow: 0, maxHeight: sheetMaxHeight - 200 }}
                 contentContainerStyle={{ padding: 12, gap: 14 }}
                 showsVerticalScrollIndicator={false}
                 onRefresh={loadComments}
