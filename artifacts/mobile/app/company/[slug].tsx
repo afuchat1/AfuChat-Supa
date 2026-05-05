@@ -25,6 +25,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { supabase, supabaseUrl, supabaseAnonKey } from "@/lib/supabase";
 import { showAlert } from "@/lib/alert";
 import { uploadToStorage } from "@/lib/mediaUpload";
+import { aiGenerateOrgUpdate, aiEnhanceOrgPost, aiGenerateHashtags } from "@/lib/aiHelper";
 
 const GOLD = "#D4A853";
 
@@ -102,6 +103,12 @@ export default function CompanyPageScreen() {
   const [myPages, setMyPages] = useState<{ id: string; name: string; slug: string; logo_url: string | null }[]>([]);
   const [pageFollowing, setPageFollowing] = useState<Record<string, boolean>>({});
   const [showPageFollowModal, setShowPageFollowModal] = useState(false);
+
+  // AI writing assistant state
+  const [aiLoading, setAiLoading] = useState<"generate" | "improve" | "hashtags" | null>(null);
+  const [showAiPanel, setShowAiPanel] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiTone, setAiTone] = useState<"professional" | "exciting" | "informative">("professional");
 
   const isAdmin = page?.admin_id === user?.id;
   const headerTop = Platform.OS === "ios" ? insets.top : Math.max(insets.top, 16);
@@ -253,6 +260,9 @@ export default function CompanyPageScreen() {
     setShowPostModal(false);
     setPostText("");
     setPostImageUri(null);
+    setShowAiPanel(false);
+    setAiPrompt("");
+    setAiLoading(null);
   }
 
   async function submitPost() {
@@ -821,7 +831,12 @@ export default function CompanyPageScreen() {
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={closePostModal}>
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ width: "100%" }}>
             <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-              <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
+              <ScrollView
+                style={[styles.modalSheet, { backgroundColor: colors.surface }]}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ gap: 12 }}
+              >
                 <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
 
                 {/* Header row */}
@@ -846,6 +861,131 @@ export default function CompanyPageScreen() {
                   maxLength={3000}
                   autoFocus
                 />
+
+                {/* AI loading bar */}
+                {aiLoading && (
+                  <View style={[styles.aiLoadingBar, { backgroundColor: colors.accent + "12" }]}>
+                    <ActivityIndicator size="small" color={colors.accent} />
+                    <Text style={[styles.aiLoadingText, { color: colors.accent }]}>
+                      {aiLoading === "generate" ? "Writing your update…" : aiLoading === "improve" ? "Improving your draft…" : "Adding hashtags…"}
+                    </Text>
+                  </View>
+                )}
+
+                {/* AI panel toggle */}
+                <TouchableOpacity
+                  style={[styles.aiToggle, { backgroundColor: colors.accent + "0D", borderColor: colors.accent + "25" }]}
+                  onPress={() => setShowAiPanel((v) => !v)}
+                  activeOpacity={0.75}
+                  disabled={!!aiLoading || posting}
+                >
+                  <Ionicons name="sparkles" size={15} color={colors.accent} />
+                  <Text style={[styles.aiToggleText, { color: colors.accent }]}>AI Writing Assistant</Text>
+                  <Ionicons name={showAiPanel ? "chevron-up" : "chevron-down"} size={13} color={colors.accent} />
+                </TouchableOpacity>
+
+                {/* AI panel — expanded */}
+                {showAiPanel && (
+                  <View style={[styles.aiPanel, { backgroundColor: colors.background, borderColor: colors.border }]}>
+
+                    {/* Tone selector */}
+                    <View style={{ flexDirection: "row", gap: 6, marginBottom: 10 }}>
+                      {(["professional", "exciting", "informative"] as const).map((t) => (
+                        <TouchableOpacity
+                          key={t}
+                          style={[styles.toneChip, {
+                            backgroundColor: aiTone === t ? colors.accent : colors.surface,
+                            borderColor: aiTone === t ? colors.accent : colors.border,
+                          }]}
+                          onPress={() => setAiTone(t)}
+                          activeOpacity={0.75}
+                        >
+                          <Text style={[styles.toneChipText, { color: aiTone === t ? "#fff" : colors.textMuted }]}>
+                            {t === "professional" ? "🏢 Pro" : t === "exciting" ? "🚀 Exciting" : "📋 Info"}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    {/* Generate from scratch */}
+                    <View style={[styles.aiGenerateRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                      <TextInput
+                        style={[styles.aiPromptInput, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border }]}
+                        placeholder="Topic to write about (e.g. new product launch)…"
+                        placeholderTextColor={colors.textMuted}
+                        value={aiPrompt}
+                        onChangeText={setAiPrompt}
+                        maxLength={200}
+                        returnKeyType="done"
+                      />
+                      <TouchableOpacity
+                        style={[styles.aiGenerateBtn, { backgroundColor: colors.accent, opacity: !aiPrompt.trim() || !!aiLoading ? 0.5 : 1 }]}
+                        disabled={!aiPrompt.trim() || !!aiLoading}
+                        activeOpacity={0.8}
+                        onPress={async () => {
+                          if (!page || !aiPrompt.trim()) return;
+                          setAiLoading("generate");
+                          try {
+                            const result = await aiGenerateOrgUpdate(
+                              { name: page.name, industry: page.industry ?? undefined, tagline: page.tagline ?? undefined, orgType: page.org_type ?? undefined, location: page.location ?? undefined, website: page.website ?? undefined, foundedYear: page.founded_year ? String(page.founded_year) : undefined },
+                              aiPrompt.trim(),
+                              aiTone
+                            );
+                            setPostText(result.slice(0, 3000));
+                          } catch { showAlert("AI Error", "Could not generate update. Please try again."); }
+                          setAiLoading(null);
+                        }}
+                      >
+                        <Ionicons name="sparkles" size={14} color="#fff" />
+                        <Text style={styles.aiGenerateBtnText}>Generate</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Improve draft + hashtags row */}
+                    <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+                      <TouchableOpacity
+                        style={[styles.aiActionBtn, { backgroundColor: colors.surface, borderColor: colors.border, opacity: !postText.trim() || !!aiLoading ? 0.45 : 1 }]}
+                        disabled={!postText.trim() || !!aiLoading}
+                        activeOpacity={0.75}
+                        onPress={async () => {
+                          if (!postText.trim() || !page) return;
+                          setAiLoading("improve");
+                          try {
+                            const result = await aiEnhanceOrgPost(
+                              postText,
+                              { name: page.name, industry: page.industry ?? undefined, tagline: page.tagline ?? undefined, orgType: page.org_type ?? undefined }
+                            );
+                            setPostText(result.slice(0, 3000));
+                          } catch { showAlert("AI Error", "Could not improve your draft. Try again."); }
+                          setAiLoading(null);
+                        }}
+                      >
+                        <Ionicons name="color-wand-outline" size={15} color="#6366F1" />
+                        <Text style={[styles.aiActionBtnText, { color: colors.text }]}>Improve draft</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.aiActionBtn, { backgroundColor: colors.surface, borderColor: colors.border, opacity: !postText.trim() || !!aiLoading ? 0.45 : 1 }]}
+                        disabled={!postText.trim() || !!aiLoading}
+                        activeOpacity={0.75}
+                        onPress={async () => {
+                          if (!postText.trim()) return;
+                          setAiLoading("hashtags");
+                          try {
+                            const tags = await aiGenerateHashtags(postText);
+                            if (tags.length > 0) {
+                              setPostText((prev) => (prev.trim() + "\n" + tags.join(" ")).slice(0, 3000));
+                            }
+                          } catch { showAlert("AI Error", "Could not generate hashtags. Try again."); }
+                          setAiLoading(null);
+                        }}
+                      >
+                        <Ionicons name="pricetag-outline" size={15} color="#F59E0B" />
+                        <Text style={[styles.aiActionBtnText, { color: colors.text }]}>Add hashtags</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
 
                 {/* Attached image preview */}
                 {postImageUri ? (
@@ -890,7 +1030,7 @@ export default function CompanyPageScreen() {
                     }
                   </TouchableOpacity>
                 </View>
-              </View>
+              </ScrollView>
             </TouchableOpacity>
           </KeyboardAvoidingView>
         </TouchableOpacity>
@@ -1109,6 +1249,20 @@ const styles = StyleSheet.create({
   pageFollowRow: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: 12 },
   pageFollowLogo: { width: 38, height: 38, borderRadius: 4, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   pageFollowChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+
+  aiLoadingBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  aiLoadingText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  aiToggle: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, borderWidth: 1 },
+  aiToggleText: { flex: 1, fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  aiPanel: { borderRadius: 12, borderWidth: 1, padding: 12, gap: 0 },
+  toneChip: { flex: 1, alignItems: "center", paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+  toneChipText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  aiGenerateRow: { gap: 8 },
+  aiPromptInput: { borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, fontFamily: "Inter_400Regular" },
+  aiGenerateBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10 },
+  aiGenerateBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  aiActionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 9, borderRadius: 10, borderWidth: 1 },
+  aiActionBtnText: { fontSize: 13, fontFamily: "Inter_500Medium" },
 
   jobCard: { marginHorizontal: 12, marginTop: 12, borderRadius: 14, padding: 14, borderWidth: StyleSheet.hairlineWidth, gap: 10 },
   jobCardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 8 },

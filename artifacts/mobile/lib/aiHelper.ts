@@ -162,6 +162,34 @@ function buildOrgContext(ctx: OrgAiContext): string {
   ].filter(Boolean).join("\n");
 }
 
+export async function aiGenerateOrgUpdate(
+  ctx: OrgAiContext,
+  topic: string,
+  tone: "professional" | "exciting" | "informative" = "professional"
+): Promise<string> {
+  const context = buildOrgContext(ctx);
+  const toneGuide =
+    tone === "exciting"
+      ? "Use an enthusiastic, celebratory tone with relevant emoji. Highlight wins and momentum."
+      : tone === "informative"
+      ? "Use a clear, factual tone. Prioritise key details and value to the reader. Bullet points where helpful."
+      : "Use a professional, authoritative tone suitable for a company page post.";
+  return askAi(
+    `Write a company page update (150–400 words) about the following topic: "${topic}"\n\n${toneGuide}\n\nOrganization:\n${context}`,
+    "You are a professional B2B content writer. Return ONLY the post text — no headings, no markdown other than occasional line breaks. Do not fabricate statistics or details not provided.",
+    { fast: false, maxTokens: 600 }
+  );
+}
+
+export async function aiEnhanceOrgPost(content: string, ctx?: OrgAiContext): Promise<string> {
+  const orgInfo = ctx ? `\n\nOrganization context:\n${buildOrgContext(ctx)}` : "";
+  return askAi(
+    `Improve this company page update. Make it more engaging, clear, and professional. Keep the same core message and approximate length.${orgInfo}\n\nOriginal:\n${content}`,
+    "You are a professional B2B content editor. Return ONLY the improved post text. No explanations, no markdown headers. Preserve line breaks.",
+    { fast: false, maxTokens: 600 }
+  );
+}
+
 export async function aiGenerateOrgTagline(ctx: OrgAiContext): Promise<string> {
   const context = buildOrgContext(ctx);
   return askAi(
