@@ -1220,6 +1220,9 @@ export default function VideoPlayerScreen() {
   const videoTabRef = useRef(videoTab);
   const activeIndexRef = useRef(activeIndex);
   const videosLenRef = useRef(videos.length);
+  // Stable ref for user — lets fetchVideos read the current user without
+  // having it as a dep, so auth-context refreshes never reset the feed.
+  const userRef = useRef(user);
   const tabAnim = useRef(new Animated.Value(0)).current;
   const indicatorLeft = tabAnim.interpolate({ inputRange: [0, 1], outputRange: ["25%", "75%"] });
 
@@ -1227,6 +1230,7 @@ export default function VideoPlayerScreen() {
   useEffect(() => { videoTabRef.current = videoTab; }, [videoTab]);
   useEffect(() => { activeIndexRef.current = activeIndex; }, [activeIndex]);
   useEffect(() => { videosLenRef.current = videos.length; }, [videos.length]);
+  useEffect(() => { userRef.current = user; }, [user]);
 
   // Web: hide scrollbar CSS
   useEffect(() => {
@@ -1262,9 +1266,10 @@ export default function VideoPlayerScreen() {
       setLoading(true); setVideos([]); cursorRef.current = null; setHasMore(true);
     }
 
+    const currentUser = userRef.current;
     let followingIds: string[] = [];
-    if (tab === "following" && user) {
-      const { data: followData } = await supabase.from("follows").select("following_id").eq("follower_id", user.id);
+    if (tab === "following" && currentUser) {
+      const { data: followData } = await supabase.from("follows").select("following_id").eq("follower_id", currentUser.id);
       followingIds = (followData || []).map((f: any) => f.following_id);
       if (followingIds.length === 0) {
         setVideos([]); setLoading(false); loadingMoreRef.current = false; setLoadingMore(false); return;
@@ -1299,9 +1304,9 @@ export default function VideoPlayerScreen() {
         supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds),
         supabase.from("post_replies").select("post_id").in("post_id", postIds),
         supabase.from("post_views").select("post_id").in("post_id", postIds),
-        user ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id) : { data: [] },
-        user ? supabase.from("post_bookmarks").select("post_id").in("post_id", postIds).eq("user_id", user.id) : { data: [] },
-        user ? supabase.from("follows").select("following_id").eq("follower_id", user.id).in("following_id", authorIds) : { data: [] },
+        currentUser ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", currentUser.id) : { data: [] },
+        currentUser ? supabase.from("post_bookmarks").select("post_id").in("post_id", postIds).eq("user_id", currentUser.id) : { data: [] },
+        currentUser ? supabase.from("follows").select("following_id").eq("follower_id", currentUser.id).in("following_id", authorIds) : { data: [] },
       ]);
 
       setFollowingSet(new Set((myFollows || []).map((f: any) => f.following_id)));
@@ -1391,11 +1396,15 @@ export default function VideoPlayerScreen() {
 
     if (isLoadMore) { loadingMoreRef.current = false; setLoadingMore(false); }
     else setLoading(false);
-  }, [user, id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]); // user intentionally omitted — read via userRef so auth refreshes never reset the feed
 
   useEffect(() => {
+    // videoTab is the only thing that should trigger a full reset (user switched tabs).
+    // fetchVideos intentionally omitted — it's stable (dep is only `id`).
     fetchVideos(videoTab).catch(() => { setLoading(false); });
-  }, [fetchVideos, videoTab]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoTab]);
 
   // Realtime like/reply count updates
   useEffect(() => {
