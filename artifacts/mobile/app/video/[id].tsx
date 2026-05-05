@@ -346,6 +346,7 @@ type Reply = {
   content: string;
   created_at: string;
   parent_reply_id: string | null;
+  like_count: number;
   profile: { display_name: string; handle: string; avatar_url: string | null };
   children?: Reply[];
 };
@@ -381,72 +382,98 @@ function formatRelative(iso: string): string {
 }
 
 const VID_THREAD_COLORS = ["#00BCD4", "#5C6BC0", "#26A69A", "#EF6C00", "#8E24AA"];
+const QUICK_EMOJIS = ["🔥", "❤️", "😂", "😮", "👏", "💯", "🙌", "😍"];
 
-function VideoReplyItem({ reply: r, depth, onReplyTo }: { reply: Reply; depth: number; onReplyTo: (r: Reply) => void }) {
-  const indent = Math.min(depth, 4) * 18;
+function parseCommentText(text: string, accent: string): React.ReactNode {
+  const parts = text.split(/(@\w[\w.]*|#\w+)/g);
+  return parts.map((part, i) => {
+    if (/^@\w/.test(part)) return <Text key={i} style={{ color: accent, fontFamily: "Inter_600SemiBold" }}>{part}</Text>;
+    if (/^#\w/.test(part)) return <Text key={i} style={{ color: accent + "BB" }}>{part}</Text>;
+    return <Text key={i}>{part}</Text>;
+  });
+}
+
+function VideoReplyItem({
+  reply: r, depth, onReplyTo, isCreator, isNew, accent,
+}: {
+  reply: Reply; depth: number; onReplyTo: (r: Reply) => void;
+  isCreator: boolean; isNew: boolean; accent: string;
+}) {
+  const indent = Math.min(depth, 4) * 20;
   const [liked, setLiked] = useState(false);
-  const [localLikes, setLocalLikes] = useState(0);
+  const [localLikes, setLocalLikes] = useState(r.like_count);
   const [collapsed, setCollapsed] = useState(false);
+  const likeScale = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(isNew ? 24 : 0)).current;
+  const fadeAnim = useRef(new Animated.Value(isNew ? 0 : 1)).current;
   const threadColor = VID_THREAD_COLORS[depth % VID_THREAD_COLORS.length];
   const hasChildren = (r.children?.length ?? 0) > 0;
   const isTop = depth === 0;
+
+  useEffect(() => {
+    if (!isNew) return;
+    Animated.parallel([
+      Animated.spring(slideAnim, { toValue: 0, tension: 180, friction: 22, useNativeDriver: USE_NATIVE }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 280, useNativeDriver: USE_NATIVE }),
+    ]).start();
+  }, []);
 
   function handleLike() {
     const next = !liked;
     setLiked(next);
     setLocalLikes((c) => (next ? c + 1 : Math.max(0, c - 1)));
+    Animated.sequence([
+      Animated.spring(likeScale, { toValue: 1.5, tension: 350, friction: 7, useNativeDriver: USE_NATIVE }),
+      Animated.spring(likeScale, { toValue: 1, tension: 350, friction: 7, useNativeDriver: USE_NATIVE }),
+    ]).start();
   }
 
   return (
-    <>
-      <View style={{ flexDirection: "row", paddingLeft: indent, paddingTop: isTop ? 14 : 8, paddingBottom: 2, paddingRight: 0, position: "relative" }}>
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
+      <View style={{ flexDirection: "row", paddingLeft: indent, paddingTop: isTop ? 14 : 8, paddingBottom: 2, position: "relative" }}>
         {depth > 0 && (
           <View style={{
-            position: "absolute",
-            left: indent - 10,
-            top: 0,
-            bottom: 0,
-            width: 2,
-            borderRadius: 1,
-            backgroundColor: threadColor + "40",
+            position: "absolute", left: indent - 10, top: 0, bottom: 0,
+            width: 2, borderRadius: 1, backgroundColor: threadColor + "40",
           }} />
         )}
         <View style={{ marginRight: 10, marginTop: 1 }}>
-          <Avatar uri={r.profile.avatar_url} name={r.profile.display_name} size={isTop ? 34 : 26} />
+          <Avatar uri={r.profile.avatar_url} name={r.profile.display_name} size={isTop ? 36 : 26} />
         </View>
         <View style={{ flex: 1, paddingRight: 8 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 3, flexWrap: "wrap" }}>
-            <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "Inter_700Bold" }}>
-              {r.profile.display_name}
-            </Text>
-            <Text style={{ color: "rgba(255,255,255,0.3)", fontSize: 11 }}>@{r.profile.handle}</Text>
-            <Text style={{ color: "rgba(255,255,255,0.25)", fontSize: 11 }}>· {formatRelative(r.created_at)}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 4, flexWrap: "wrap" }}>
+            <Text style={{ color: "#fff", fontSize: 13, fontFamily: "Inter_700Bold" }}>{r.profile.display_name}</Text>
+            {isCreator && (
+              <View style={{ backgroundColor: accent + "22", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, borderWidth: 1, borderColor: accent + "55" }}>
+                <Text style={{ color: accent, fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.3 }}>Author</Text>
+              </View>
+            )}
+            <Text style={{ color: "rgba(255,255,255,0.28)", fontSize: 11 }}>· {formatRelative(r.created_at)}</Text>
           </View>
-          <Text style={{ color: "rgba(255,255,255,0.88)", fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 }}>
-            {r.content}
+          <Text style={{ color: "rgba(255,255,255,0.88)", fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 21 }}>
+            {parseCommentText(r.content, accent)}
           </Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginTop: 7, marginBottom: 2 }}>
-            <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 4 }} onPress={handleLike} activeOpacity={0.7}>
-              <Ionicons name={liked ? "heart" : "heart-outline"} size={13} color={liked ? "#FF2D55" : "rgba(255,255,255,0.35)"} />
-              {localLikes > 0 && (
-                <Text style={{ color: liked ? "#FF2D55" : "rgba(255,255,255,0.35)", fontSize: 11, fontFamily: "Inter_600SemiBold" }}>
-                  {localLikes}
-                </Text>
-              )}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 18, marginTop: 8, marginBottom: 2 }}>
+            <TouchableOpacity onPress={handleLike} activeOpacity={0.7}
+              style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Animated.View style={{ transform: [{ scale: likeScale }] }}>
+                <Ionicons name={liked ? "heart" : "heart-outline"} size={14} color={liked ? "#FF2D55" : "rgba(255,255,255,0.3)"} />
+              </Animated.View>
+              <Text style={{ color: liked ? "#FF2D55" : "rgba(255,255,255,0.3)", fontSize: 11, fontFamily: "Inter_600SemiBold" }}>
+                {localLikes > 0 ? localLikes : "Like"}
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 4 }} onPress={() => onReplyTo(r)} activeOpacity={0.7}>
-              <Ionicons name="arrow-undo-outline" size={13} color="rgba(255,255,255,0.35)" />
-              <Text style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, fontFamily: "Inter_600SemiBold" }}>Reply</Text>
+            <TouchableOpacity onPress={() => onReplyTo(r)} activeOpacity={0.7}
+              style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Ionicons name="arrow-undo-outline" size={13} color="rgba(255,255,255,0.3)" />
+              <Text style={{ color: "rgba(255,255,255,0.3)", fontSize: 11, fontFamily: "Inter_600SemiBold" }}>Reply</Text>
             </TouchableOpacity>
             {hasChildren && (
-              <TouchableOpacity
-                style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
-                onPress={() => setCollapsed((c) => !c)}
-                activeOpacity={0.7}
-              >
+              <TouchableOpacity onPress={() => setCollapsed((c) => !c)} activeOpacity={0.7}
+                style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
                 <Ionicons name={collapsed ? "chevron-down" : "chevron-up"} size={12} color={threadColor} />
                 <Text style={{ color: threadColor, fontSize: 11, fontFamily: "Inter_600SemiBold" }}>
-                  {collapsed ? `${r.children!.length} ${r.children!.length === 1 ? "reply" : "replies"}` : "Hide"}
+                  {collapsed ? `${r.children!.length} ${r.children!.length === 1 ? "reply" : "replies"}` : "Hide replies"}
                 </Text>
               </TouchableOpacity>
             )}
@@ -454,27 +481,22 @@ function VideoReplyItem({ reply: r, depth, onReplyTo }: { reply: Reply; depth: n
         </View>
       </View>
       {isTop && !hasChildren && (
-        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: "rgba(255,255,255,0.06)", marginLeft: indent + 44, marginRight: 0, marginTop: 4 }} />
+        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: "rgba(255,255,255,0.05)", marginLeft: indent + 46, marginTop: 4 }} />
       )}
       {!collapsed && r.children?.map((child) => (
-        <VideoReplyItem key={child.id} reply={child} depth={depth + 1} onReplyTo={onReplyTo} />
+        <VideoReplyItem key={child.id} reply={child} depth={depth + 1} onReplyTo={onReplyTo} isCreator={isCreator} isNew={false} accent={accent} />
       ))}
       {isTop && hasChildren && !collapsed && (
-        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: "rgba(255,255,255,0.06)", marginTop: 6, marginBottom: 2 }} />
+        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: "rgba(255,255,255,0.05)", marginTop: 6, marginBottom: 2 }} />
       )}
-    </>
+    </Animated.View>
   );
 }
 
 function CommentsSheet({
-  visible,
-  onClose,
-  postId,
-  onReplyCountChange,
+  visible, onClose, postId, postAuthorId, onReplyCountChange,
 }: {
-  visible: boolean;
-  onClose: () => void;
-  postId: string;
+  visible: boolean; onClose: () => void; postId: string; postAuthorId: string;
   onReplyCountChange: (postId: string, delta: number) => void;
 }) {
   const { accent } = useAppAccent();
@@ -485,8 +507,11 @@ function CommentsSheet({
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Reply | null>(null);
+  const [sortMode, setSortMode] = useState<"recent" | "top">("recent");
+  const [newCommentIds, setNewCommentIds] = useState<Set<string>>(new Set());
   const listRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
+  const sendScale = useRef(new Animated.Value(1)).current;
 
   const loadReplies = useCallback(() => {
     if (!postId) return;
@@ -505,6 +530,7 @@ function CommentsSheet({
               content: r.content || "",
               created_at: r.created_at,
               parent_reply_id: r.parent_reply_id || null,
+              like_count: 0,
               profile: {
                 display_name: r.profiles?.display_name || "User",
                 handle: r.profiles?.handle || "user",
@@ -523,6 +549,7 @@ function CommentsSheet({
     setLoading(true);
     setText("");
     setReplyingTo(null);
+    setNewCommentIds(new Set());
     loadReplies();
   }, [visible, postId, loadReplies]);
 
@@ -530,12 +557,8 @@ function CommentsSheet({
     if (!visible || !postId) return;
     const channel = supabase
       .channel(`video-comments:${postId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "post_replies", filter: `post_id=eq.${postId}` }, () => {
-        loadReplies();
-      })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "post_replies", filter: `post_id=eq.${postId}` }, () => {
-        loadReplies();
-      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "post_replies", filter: `post_id=eq.${postId}` }, () => { loadReplies(); })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "post_replies", filter: `post_id=eq.${postId}` }, () => { loadReplies(); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [visible, postId, loadReplies]);
@@ -546,9 +569,30 @@ function CommentsSheet({
     setTimeout(() => inputRef.current?.focus(), 100);
   }
 
+  function getSortedTree(): Reply[] {
+    const tree = buildVideoReplyTree(replies);
+    if (sortMode === "top") {
+      return [...tree].sort((a, b) => {
+        const aScore = (a.children?.length ?? 0) * 2 + a.like_count;
+        const bScore = (b.children?.length ?? 0) * 2 + b.like_count;
+        return bScore - aScore;
+      });
+    }
+    return [...tree].reverse();
+  }
+
   async function sendReply() {
     if (!user || !text.trim()) return;
     setSending(true);
+    Animated.sequence([
+      Animated.spring(sendScale, { toValue: 0.78, tension: 400, friction: 8, useNativeDriver: USE_NATIVE }),
+      Animated.spring(sendScale, { toValue: 1, tension: 400, friction: 8, useNativeDriver: USE_NATIVE }),
+    ]).start();
+    if (Platform.OS !== "web") {
+      import("expo-haptics").then(({ default: Haptics }) => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      });
+    }
     const insertData: any = { post_id: postId, author_id: user.id, content: text.trim() };
     if (replyingTo) insertData.parent_reply_id = replyingTo.id;
     const { data, error } = await supabase
@@ -563,6 +607,7 @@ function CommentsSheet({
         content: data.content,
         created_at: data.created_at,
         parent_reply_id: data.parent_reply_id || null,
+        like_count: 0,
         profile: {
           display_name: profile?.display_name || "You",
           handle: profile?.handle || "you",
@@ -570,6 +615,7 @@ function CommentsSheet({
         },
       };
       setReplies((prev) => [...prev, newReply]);
+      setNewCommentIds((prev) => new Set([...prev, data.id]));
       onReplyCountChange(postId, 1);
       if (replyingTo && replyingTo.author_id !== user.id) {
         notifyPostReply({
@@ -584,97 +630,158 @@ function CommentsSheet({
       setText("");
       setReplyingTo(null);
       if (!wasThreaded) {
-        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150);
       }
     }
     setSending(false);
   }
 
+  const sortedTree = getSortedTree();
+  const charCount = text.length;
+  const charLeft = 500 - charCount;
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior="padding" style={cStyles.kavFull}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={cStyles.kavFull}>
         <Pressable style={cStyles.overlay} onPress={onClose}>
-          <Pressable onPress={() => {}} style={[cStyles.container, { paddingBottom: Math.max(insets.bottom, 16), backgroundColor: "transparent" }]}>
+          <Pressable onPress={() => {}} style={[cStyles.container, { paddingBottom: Math.max(insets.bottom, 16) }]}>
             {Platform.OS === "ios" ? (
-              <BlurView intensity={90} tint="dark" style={[StyleSheet.absoluteFill, { borderTopLeftRadius: 18, borderTopRightRadius: 18 }]} />
+              <BlurView intensity={95} tint="dark" style={[StyleSheet.absoluteFill, { borderTopLeftRadius: 20, borderTopRightRadius: 20 }]} />
             ) : (
-              <View style={[StyleSheet.absoluteFill, { backgroundColor: "#141418", borderTopLeftRadius: 18, borderTopRightRadius: 18 }]} />
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: "#111115", borderTopLeftRadius: 20, borderTopRightRadius: 20 }]} />
             )}
-            <View style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, borderTopLeftRadius: 18, borderTopRightRadius: 18, borderTopWidth: StyleSheet.hairlineWidth, borderLeftWidth: StyleSheet.hairlineWidth, borderRightWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.1)" }} pointerEvents="none" />
+            <View style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTopWidth: StyleSheet.hairlineWidth, borderLeftWidth: StyleSheet.hairlineWidth, borderRightWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.12)" }} pointerEvents="none" />
+
             <View style={cStyles.handle} />
+
+            {/* Header row */}
             <View style={cStyles.header}>
-              <View style={{ width: 28 }} />
-              <Text style={cStyles.title}>Comments</Text>
-              <TouchableOpacity onPress={onClose} hitSlop={12}>
-                <Ionicons name="close" size={22} color="rgba(255,255,255,0.7)" />
+              <View style={{ flex: 1 }}>
+                <Text style={cStyles.title}>
+                  Comments{replies.length > 0 ? <Text style={cStyles.titleCount}> {formatCount(replies.length)}</Text> : null}
+                </Text>
+              </View>
+              <View style={cStyles.sortRow}>
+                {(["recent", "top"] as const).map((mode) => (
+                  <TouchableOpacity
+                    key={mode}
+                    onPress={() => setSortMode(mode)}
+                    style={[cStyles.sortTab, sortMode === mode && { backgroundColor: accent + "22", borderColor: accent + "55" }]}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[cStyles.sortTabText, sortMode === mode && { color: accent }]}>
+                      {mode === "recent" ? "Recent" : "Top"}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity onPress={onClose} hitSlop={12} style={{ marginLeft: 8 }}>
+                <Ionicons name="close" size={20} color="rgba(255,255,255,0.5)" />
               </TouchableOpacity>
             </View>
 
+            {/* Comment list */}
             <View style={cStyles.middle}>
               {loading ? (
-                <View style={{ padding: 8, gap: 6 }}>{[1,2,3].map((i) => <ChatBubbleSkeleton key={i} align={i % 2 === 0 ? "right" : "left"} />)}</View>
+                <View style={{ padding: 12, gap: 6 }}>
+                  {[1, 2, 3].map((i) => <ChatBubbleSkeleton key={i} align={i % 2 === 0 ? "right" : "left"} />)}
+                </View>
               ) : replies.length === 0 ? (
                 <View style={cStyles.center}>
-                  <Ionicons name="chatbubble-outline" size={36} color="rgba(255,255,255,0.15)" />
+                  <View style={cStyles.emptyIcon}>
+                    <Ionicons name="chatbubbles-outline" size={32} color={accent + "80"} />
+                  </View>
                   <Text style={cStyles.emptyText}>No comments yet</Text>
-                  <Text style={cStyles.emptySubtext}>Start the conversation</Text>
+                  <Text style={cStyles.emptySubtext}>Be the first to start the conversation</Text>
                 </View>
               ) : (
                 <FlatList
                   ref={listRef}
-                  data={buildVideoReplyTree(replies)}
+                  data={sortedTree}
                   keyExtractor={(r) => r.id}
                   style={cStyles.list}
+                  contentContainerStyle={{ paddingBottom: 8 }}
                   showsVerticalScrollIndicator={false}
+                  onRefresh={loadReplies}
+                  refreshing={loading}
                   renderItem={({ item: r }) => (
-                    <VideoReplyItem reply={r} depth={0} onReplyTo={handleReplyTo} />
+                    <VideoReplyItem
+                      reply={r}
+                      depth={0}
+                      onReplyTo={handleReplyTo}
+                      isCreator={r.author_id === postAuthorId}
+                      isNew={newCommentIds.has(r.id)}
+                      accent={accent}
+                    />
                   )}
                 />
               )}
             </View>
 
+            {/* Input area */}
             {user ? (
               <View>
                 {replyingTo && (
                   <View style={cStyles.replyingBanner}>
-                    <Text style={cStyles.replyingText}>
-                      Replying to <Text style={{ color: accent }}>@{replyingTo.profile.handle}</Text>
+                    <Ionicons name="arrow-undo-outline" size={13} color={accent} style={{ marginRight: 5 }} />
+                    <Text style={cStyles.replyingText} numberOfLines={1}>
+                      Replying to <Text style={{ color: accent, fontFamily: "Inter_600SemiBold" }}>@{replyingTo.profile.handle}</Text>
                     </Text>
-                    <TouchableOpacity onPress={() => { setReplyingTo(null); setText(""); }} hitSlop={8}>
-                      <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.35)" />
+                    <TouchableOpacity onPress={() => { setReplyingTo(null); setText(""); }} hitSlop={8} style={{ marginLeft: "auto" as any }}>
+                      <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.3)" />
                     </TouchableOpacity>
                   </View>
                 )}
+
+                {/* Quick emoji bar */}
+                <View style={cStyles.emojiBar}>
+                  {QUICK_EMOJIS.map((e) => (
+                    <TouchableOpacity key={e} style={cStyles.emojiBtn} onPress={() => setText((t) => t + e)} activeOpacity={0.6}>
+                      <Text style={cStyles.emojiText}>{e}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Input row */}
                 <View style={cStyles.inputRow}>
-                  <Avatar uri={profile?.avatar_url} name={profile?.display_name || "You"} size={30} />
+                  <Avatar uri={profile?.avatar_url} name={profile?.display_name || "You"} size={32} />
                   <View style={cStyles.inputWrap}>
                     <TextInput
                       ref={inputRef}
                       style={cStyles.input}
                       placeholder={replyingTo ? `Reply to @${replyingTo.profile.handle}...` : "Add a comment..."}
-                      placeholderTextColor="rgba(255,255,255,0.3)"
+                      placeholderTextColor="rgba(255,255,255,0.25)"
                       value={text}
                       onChangeText={setText}
                       multiline
                       maxLength={500}
                     />
-                  </View>
-                  <TouchableOpacity
-                    onPress={sendReply}
-                    disabled={!text.trim() || sending}
-                    style={[cStyles.sendBtn, text.trim() ? [cStyles.sendBtnActive, { backgroundColor: accent }] : null]}
-                  >
-                    {sending ? (
-                      <ActivityIndicator size={16} color="#fff" />
-                    ) : (
-                      <Ionicons name="arrow-up" size={18} color={text.trim() ? "#fff" : "rgba(255,255,255,0.3)"} />
+                    {charCount > 400 && (
+                      <Text style={[cStyles.charCounter, charLeft < 20 && { color: "#FF2D55" }]}>{charLeft}</Text>
                     )}
-                  </TouchableOpacity>
+                  </View>
+                  <Animated.View style={{ transform: [{ scale: sendScale }] }}>
+                    <TouchableOpacity
+                      onPress={sendReply}
+                      disabled={!text.trim() || sending}
+                      style={[cStyles.sendBtn, text.trim() ? { backgroundColor: accent } : null]}
+                      activeOpacity={0.75}
+                    >
+                      {sending ? (
+                        <ActivityIndicator size={14} color="#fff" />
+                      ) : (
+                        <Ionicons name="arrow-up" size={18} color={text.trim() ? "#fff" : "rgba(255,255,255,0.25)"} />
+                      )}
+                    </TouchableOpacity>
+                  </Animated.View>
                 </View>
               </View>
             ) : (
               <TouchableOpacity style={cStyles.signIn} onPress={() => { onClose(); router.push("/(auth)/login"); }}>
-                <Text style={[cStyles.signInText, { color: accent }]}>Sign in to comment</Text>
+                <View style={[cStyles.signInPill, { backgroundColor: accent + "18", borderColor: accent + "50" }]}>
+                  <Ionicons name="person-circle-outline" size={16} color={accent} />
+                  <Text style={[cStyles.signInText, { color: accent }]}>Sign in to comment</Text>
+                </View>
               </TouchableOpacity>
             )}
           </Pressable>
@@ -686,62 +793,61 @@ function CommentsSheet({
 
 const cStyles = StyleSheet.create({
   kavFull: { flex: 1 },
-  overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.55)" },
+  overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.62)" },
   container: {
-    backgroundColor: "#1a1a1d",
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    maxHeight: "70%",
-    minHeight: 360,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "78%",
+    minHeight: 380,
     paddingHorizontal: 16,
     flexDirection: "column",
+    overflow: "hidden",
   },
+  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.18)", alignSelf: "center", marginTop: 10, marginBottom: 8 },
+  header: { flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(255,255,255,0.07)", gap: 8 },
+  title: { color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold" },
+  titleCount: { color: "rgba(255,255,255,0.35)", fontSize: 14, fontFamily: "Inter_400Regular" },
+  sortRow: { flexDirection: "row", gap: 4 },
+  sortTab: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
+  sortTabText: { color: "rgba(255,255,255,0.38)", fontSize: 12, fontFamily: "Inter_600SemiBold" },
   middle: { flex: 1 },
-  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.15)", alignSelf: "center", marginTop: 10, marginBottom: 6 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(255,255,255,0.08)" },
-  title: { color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold", letterSpacing: 0.2 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
-  emptyText: { color: "rgba(255,255,255,0.45)", fontSize: 15, fontFamily: "Inter_600SemiBold", marginTop: 8 },
-  emptySubtext: { color: "rgba(255,255,255,0.25)", fontSize: 13, fontFamily: "Inter_400Regular" },
-  list: { flex: 1, marginTop: 4 },
-  replyRow: { flexDirection: "row", gap: 12, paddingVertical: 12 },
-  replyBody: { flex: 1 },
-  replyMeta: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
-  replyName: { color: "rgba(255,255,255,0.85)", fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  replyTime: { color: "rgba(255,255,255,0.3)", fontSize: 11, fontFamily: "Inter_400Regular" },
-  replyContent: { color: "rgba(255,255,255,0.9)", fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
-  replyToBtn: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6, alignSelf: "flex-start" },
-  replyToBtnText: { color: "rgba(255,255,255,0.35)", fontSize: 11, fontFamily: "Inter_600SemiBold" },
-  replyingBanner: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, paddingVertical: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "rgba(255,255,255,0.08)" },
-  replyingText: { color: "rgba(255,255,255,0.5)", fontSize: 12, fontFamily: "Inter_400Regular" },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 10,
-    paddingTop: 12,
-  },
-  inputWrap: { flex: 1 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
+  emptyIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: "rgba(255,255,255,0.05)", alignItems: "center", justifyContent: "center" },
+  emptyText: { color: "rgba(255,255,255,0.55)", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  emptySubtext: { color: "rgba(255,255,255,0.25)", fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
+  list: { flex: 1, marginTop: 2 },
+  replyingBanner: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 7, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "rgba(255,255,255,0.07)", backgroundColor: "rgba(255,255,255,0.03)" },
+  replyingText: { color: "rgba(255,255,255,0.45)", fontSize: 12, fontFamily: "Inter_400Regular", flex: 1 },
+  emojiBar: { flexDirection: "row", paddingHorizontal: 2, paddingVertical: 7, gap: 0, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "rgba(255,255,255,0.07)" },
+  emojiBtn: { flex: 1, alignItems: "center", paddingVertical: 2 },
+  emojiText: { fontSize: 21 },
+  inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 10, paddingTop: 10 },
+  inputWrap: { flex: 1, position: "relative" },
   input: {
     color: "#fff",
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     paddingVertical: 10,
     paddingHorizontal: 14,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingRight: 38,
+    backgroundColor: "rgba(255,255,255,0.07)",
     borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.1)",
     maxHeight: 88,
   },
+  charCounter: { position: "absolute", right: 10, bottom: 12, color: "rgba(255,255,255,0.28)", fontSize: 11, fontFamily: "Inter_400Regular" },
   sendBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: "rgba(255,255,255,0.08)",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 2,
+    marginBottom: 1,
   },
-  sendBtnActive: {},
-  signIn: { paddingVertical: 16, alignItems: "center" },
+  signIn: { paddingVertical: 14, alignItems: "center" },
+  signInPill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20, borderWidth: 1 },
   signInText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
 });
 
@@ -3059,6 +3165,7 @@ export default function VideoPlayerScreen() {
         visible={!!commentPostId}
         onClose={() => setCommentPostId(null)}
         postId={commentPostId || ""}
+        postAuthorId={videos.find((v) => v.id === commentPostId)?.author_id || ""}
         onReplyCountChange={handleReplyCountChange}
       />
 
