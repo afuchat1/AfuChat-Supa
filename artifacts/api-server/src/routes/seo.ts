@@ -107,6 +107,7 @@ router.get("/sitemap.xml", async (_req, res) => {
         .from("posts")
         .select("id, created_at, author_id")
         .eq("is_blocked", false)
+        .or("visibility.eq.public,visibility.is.null")
         .order("created_at", { ascending: false })
         .limit(5000),
     ]);

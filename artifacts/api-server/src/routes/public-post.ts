@@ -284,6 +284,12 @@ async function handlePostPage(param: string, res: any) {
 
   if (!author || author.is_private) return res.status(404).send(render404());
 
+  // Don't index followers-only or private-visibility posts
+  if ((post as any).visibility && (post as any).visibility !== "public") {
+    res.status(410).set("X-Robots-Tag", "noindex").send(render404());
+    return;
+  }
+
   const images: string[] = [];
   if (postImages && postImages.length > 0) {
     images.push(...postImages.map((pi: any) => pi.image_url));

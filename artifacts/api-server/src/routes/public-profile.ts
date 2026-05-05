@@ -311,7 +311,12 @@ router.get("/@:handle", async (req, res) => {
   }
 
   if (profile.is_private) {
-    res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+    // HTTP 410 Gone: tells Google this URL is intentionally unavailable so it
+    // removes it from the index immediately, rather than keeping it as
+    // "Excluded by noindex" indefinitely (which happens with a 200 + noindex).
+    res.status(410);
+    res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=600");
+    res.set("X-Robots-Tag", "noindex, nofollow");
     return res.send(renderProfilePage({
       ...profile,
       bio: "This account is private.",
