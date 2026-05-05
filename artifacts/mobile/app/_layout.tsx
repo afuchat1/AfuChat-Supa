@@ -184,7 +184,7 @@ export default function RootLayout() {
         e.preventDefault();
       }
     };
-    if (typeof window !== "undefined") {
+    if (Platform.OS === "web" && typeof window !== "undefined" && typeof window.addEventListener === "function") {
       window.addEventListener("unhandledrejection", suppressFontTimeout);
     }
 
@@ -197,7 +197,7 @@ export default function RootLayout() {
       .catch(() => {})
       .finally(() => {
         setFontsLoaded(true);
-        if (typeof window !== "undefined") {
+        if (Platform.OS === "web" && typeof window !== "undefined" && typeof window.removeEventListener === "function") {
           window.removeEventListener("unhandledrejection", suppressFontTimeout);
         }
       });
