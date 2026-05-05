@@ -2134,11 +2134,7 @@ export default function VideoPlayerScreen() {
       if (next !== cur) {
         setActiveIndex(next);
         activeIndexRef.current = next;
-        const inner = webInnerRef.current;
-        if (inner) {
-          inner.style.transition = "transform 320ms cubic-bezier(0.25,0.46,0.45,0.94)";
-          inner.style.transform = `translateY(${-next * effHRef.current}px)`;
-        }
+        animateToIndex(next);
         if (next >= len - 3 && !loadingMoreRef.current && hasMore && cursorRef.current) {
           fetchVideos(videoTab, cursorRef.current);
         }
