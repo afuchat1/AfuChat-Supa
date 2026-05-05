@@ -187,6 +187,7 @@ export default function MeScreen() {
   const { profile, isPremium, subscription, loading, user } = useAuth();
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [hasCompanyPage, setHasCompanyPage] = useState(false);
+  const [verifyBannerDismissed, setVerifyBannerDismissed] = useState(false);
   const isAdmin = !!profile?.is_admin;
   const insets = useSafeAreaInsets();
 
@@ -304,6 +305,31 @@ export default function MeScreen() {
 
       <ProfileCompletionBar profile={profile} isPremium={isPremium} />
 
+      {hasCompanyPage && !profile?.is_organization_verified && !verifyBannerDismissed && (
+        <View style={styles.verifyBanner}>
+          <View style={styles.verifyBannerLeft}>
+            <View style={styles.verifyBannerIconWrap}>
+              <Ionicons name="shield-checkmark-outline" size={22} color="#D4A853" />
+            </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={styles.verifyBannerTitle}>Verify your business</Text>
+              <Text style={styles.verifyBannerSub}>Stand out with the gold badge — it builds trust with followers.</Text>
+              <TouchableOpacity
+                style={styles.verifyBannerBtn}
+                onPress={() => router.push("/company" as any)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="checkmark-circle-outline" size={13} color="#fff" />
+                <Text style={styles.verifyBannerBtnText}>Go to Company Pages</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <TouchableOpacity hitSlop={12} onPress={() => setVerifyBannerDismissed(true)} style={{ padding: 2, marginTop: -2 }}>
+            <Ionicons name="close" size={17} color="#D4A85380" />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {!isPremium && (
         <TouchableOpacity
           style={styles.premiumBanner}
@@ -323,18 +349,6 @@ export default function MeScreen() {
 
       <MenuGroup>
         <MenuItem icon="business-outline" iconBg="#00BCD4" label="Company Pages" onPress={() => router.push("/company" as any)} />
-        {hasCompanyPage && (
-          <>
-            <Separator indent={54} />
-            <MenuItem
-              icon="ribbon-outline"
-              iconBg="#D4A853"
-              label="Business Verification"
-              onPress={() => router.push("/business-verification")}
-              value={profile?.is_organization_verified ? "Verified" : ""}
-            />
-          </>
-        )}
       </MenuGroup>
 
       <MenuGroup>
@@ -539,4 +553,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   premiumBadgeText: { color: "#1C1C1E", fontSize: 10, fontFamily: "Inter_700Bold" },
+  verifyBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    backgroundColor: "#D4A85312",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#D4A85340",
+    padding: 14,
+  },
+  verifyBannerLeft: { flex: 1, flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  verifyBannerIconWrap: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#D4A85320", alignItems: "center", justifyContent: "center", marginTop: 2 },
+  verifyBannerTitle: { color: "#D4A853", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  verifyBannerSub: { color: "#888", fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17 },
+  verifyBannerBtn: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#D4A853", alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, marginTop: 8 },
+  verifyBannerBtnText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
 });
