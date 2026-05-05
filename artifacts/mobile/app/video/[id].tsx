@@ -84,7 +84,7 @@ const SOCIAL_PLATFORMS = [
 type VideoPost = {
   id: string; author_id: string; content: string; video_url: string;
   image_url: string | null; created_at: string; view_count: number;
-  audio_name: string | null; duet_of_post_id: string | null;
+  audio_name: string | null;
   profile: { display_name: string; handle: string; avatar_url: string | null };
   liked: boolean; bookmarked: boolean; likeCount: number; replyCount: number;
 };
@@ -1311,7 +1311,7 @@ export default function VideoPlayerScreen() {
 
     let query = supabase
       .from("posts")
-      .select(`id, author_id, content, video_url, image_url, created_at, audio_name, duet_of_post_id, profiles!posts_author_id_fkey(display_name, handle, avatar_url)`)
+      .select(`id, author_id, content, video_url, image_url, created_at, audio_name, profiles!posts_author_id_fkey(display_name, handle, avatar_url)`)
       .not("video_url", "is", null)
       .or("post_type.eq.video,post_type.is.null")
       .order("created_at", { ascending: false }).limit(VIDEO_PAGE_SIZE);
@@ -1357,7 +1357,7 @@ export default function VideoPlayerScreen() {
       const mapped: VideoPost[] = data.map((p: any) => ({
         id: p.id, author_id: p.author_id, content: p.content || "",
         video_url: p.video_url, image_url: p.image_url || null, created_at: p.created_at,
-        view_count: viewMap[p.id] || 0, audio_name: p.audio_name || null, duet_of_post_id: p.duet_of_post_id || null,
+        view_count: viewMap[p.id] || 0, audio_name: p.audio_name || null,
         profile: { display_name: p.profiles?.display_name || "User", handle: p.profiles?.handle || "user", avatar_url: p.profiles?.avatar_url || null },
         liked: myLikeSet.has(p.id), bookmarked: myBookmarkSet.has(p.id),
         likeCount: likeMap[p.id] || 0, replyCount: replyMap[p.id] || 0,
@@ -1413,7 +1413,7 @@ export default function VideoPlayerScreen() {
               newVideos = [{
                 id: tRow.id, author_id: tRow.author_id, content: tRow.content || "",
                 video_url: tRow.video_url, image_url: tRow.image_url || null, created_at: tRow.created_at,
-                view_count: 0, audio_name: tRow.audio_name || null, duet_of_post_id: null,
+                view_count: 0, audio_name: tRow.audio_name || null,
                 profile: { display_name: (tRow.profiles as any)?.display_name || "User", handle: (tRow.profiles as any)?.handle || "user", avatar_url: (tRow.profiles as any)?.avatar_url || null },
                 liked: false, bookmarked: false, likeCount: 0, replyCount: 0,
               }, ...newVideos];
