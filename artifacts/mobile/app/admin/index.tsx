@@ -123,7 +123,7 @@ function StatCard({ title, value, icon, color, colors: themeColors }: { title: s
 }
 
 export default function AdminDashboard() {
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, accent } = useTheme();
   const { profile } = useAuth();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState("overview");
@@ -388,8 +388,8 @@ export default function AdminDashboard() {
   const loadVerifApps = useCallback(async () => {
     if (!isAdmin) return;
     const { data } = await supabase
-      .from("business_verification_requests")
-      .select("*, profiles!business_verification_requests_user_id_fkey(display_name, handle, avatar_url, is_organization_verified)")
+      .from("org_verification_requests")
+      .select("*, organization_pages!org_verification_requests_page_id_fkey(id, name, slug, org_type, industry, description, website, physical_address, location, registration_number, social_links, is_organization_verified), profiles!org_verification_requests_submitted_by_fkey(id, display_name, handle, avatar_url, is_organization_verified)")
       .order("created_at", { ascending: false })
       .limit(200);
     setVerifApps(data || []);
@@ -1541,16 +1541,19 @@ export default function AdminDashboard() {
     );
   }
 
-  async function handleVerifReview(appId: string, userId: string, decision: "approved" | "rejected") {
+  async function handleVerifReview(appId: string, submittedBy: string, decision: "approved" | "rejected") {
     setVerifReviewSaving(true);
-    await supabase.from("business_verification_requests").update({
+    await supabase.from("org_verification_requests").update({
       status: decision,
       admin_note: verifReviewNote.trim() || null,
       reviewed_by: profile?.id,
       reviewed_at: new Date().toISOString(),
     }).eq("id", appId);
-    if (decision === "approved") {
-      await supabase.from("profiles").update({ is_organization_verified: true, is_verified: true }).eq("id", userId);
+    if (decision === "approved" && reviewingVerifApp?.page_id) {
+      await Promise.all([
+        supabase.from("organization_pages").update({ is_organization_verified: true }).eq("id", reviewingVerifApp.page_id),
+        supabase.from("profiles").update({ is_organization_verified: true }).eq("id", submittedBy),
+      ]);
     }
     setVerifReviewSaving(false);
     setReviewingVerifApp(null);
@@ -1625,7 +1628,8 @@ export default function AdminDashboard() {
             const statusColor = app.status === "approved" ? "#34C759" : app.status === "rejected" ? "#FF3B30" : "#FF9500";
             const profile = app.profiles;
             const isExpanded = verifExpandedId === app.id;
-            const socialLinks = app.social_links || {};
+            const orgPage = app.organization_pages || {};
+            const socialLinks = orgPage.social_links || {};
 
             return (
               <View key={app.id} style={[styles.reportCard, { backgroundColor: colors.surface, borderWidth: 1, borderColor: app.status === "pending" ? GOLD + "40" : colors.border }]}>
@@ -1640,16 +1644,16 @@ export default function AdminDashboard() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <Text style={[styles.reportReason, { color: colors.text, fontSize: 15 }]} numberOfLines={1}>{app.org_name}</Text>
+                      <Text style={[styles.reportReason, { color: colors.text, fontSize: 15 }]} numberOfLines={1}>{orgPage.name ?? "Unknown Org"}</Text>
                       <View style={[styles.statusBadge, { backgroundColor: statusColor + "18" }]}>
                         <Text style={{ color: statusColor, fontSize: 10, fontFamily: "Inter_700Bold", textTransform: "uppercase" }}>{app.status}</Text>
                       </View>
                     </View>
                     <Text style={[styles.reportMeta, { color: colors.textSecondary, marginTop: 2 }]}>
-                      @{profile?.handle || "?"} · {app.org_type}
+                      @{profile?.handle || "?"} · {orgPage.org_type ?? ""}
                     </Text>
-                    {app.industry ? (
-                      <Text style={[styles.reportMeta, { color: colors.textMuted }]}>{app.industry}</Text>
+                    {orgPage.industry ? (
+                      <Text style={[styles.reportMeta, { color: colors.textMuted }]}>{orgPage.industry}</Text>
                     ) : null}
                     <Text style={[styles.reportMeta, { color: colors.textMuted, marginTop: 1 }]}>{timeAgo(app.created_at)}</Text>
                   </View>
@@ -1662,29 +1666,29 @@ export default function AdminDashboard() {
                     <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
 
                     {/* Description */}
-                    {app.description ? (
+                    {orgPage.description ? (
                       <View style={{ backgroundColor: colors.backgroundSecondary, borderRadius: 10, padding: 12 }}>
                         <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.textMuted, letterSpacing: 0.6, marginBottom: 4 }}>DESCRIPTION</Text>
-                        <Text style={{ fontSize: 13, color: colors.text, lineHeight: 19 }}>{app.description}</Text>
+                        <Text style={{ fontSize: 13, color: colors.text, lineHeight: 19 }}>{orgPage.description}</Text>
                       </View>
                     ) : null}
 
-                    {/* Website + notable links */}
-                    {(app.website_url || app.notable_links) ? (
+                    {/* Notes from applicant */}
+                    {app.notes ? (
+                      <View style={{ backgroundColor: colors.backgroundSecondary, borderRadius: 10, padding: 12 }}>
+                        <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.textMuted, letterSpacing: 0.6, marginBottom: 4 }}>APPLICANT NOTES</Text>
+                        <Text style={{ fontSize: 13, color: colors.text, lineHeight: 19 }}>{app.notes}</Text>
+                      </View>
+                    ) : null}
+
+                    {/* Website */}
+                    {orgPage.website ? (
                       <View style={{ backgroundColor: colors.backgroundSecondary, borderRadius: 10, padding: 12, gap: 6 }}>
-                        <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.textMuted, letterSpacing: 0.6 }}>LINKS</Text>
-                        {app.website_url ? (
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                            <Ionicons name="globe-outline" size={14} color={BRAND} />
-                            <Text style={{ fontSize: 13, color: BRAND, flex: 1 }} numberOfLines={1}>{app.website_url}</Text>
-                          </View>
-                        ) : null}
-                        {app.notable_links ? (
-                          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
-                            <Ionicons name="link-outline" size={14} color={colors.textMuted} />
-                            <Text style={{ fontSize: 12, color: colors.textSecondary, flex: 1, lineHeight: 17 }}>{app.notable_links}</Text>
-                          </View>
-                        ) : null}
+                        <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.textMuted, letterSpacing: 0.6 }}>WEBSITE</Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                          <Ionicons name="globe-outline" size={14} color={accent} />
+                          <Text style={{ fontSize: 13, color: accent, flex: 1 }} numberOfLines={1}>{orgPage.website}</Text>
+                        </View>
                       </View>
                     ) : null}
 
@@ -1760,7 +1764,7 @@ export default function AdminDashboard() {
                   <Text style={[styles.modalTitle, { color: colors.text }]}>Review Verification</Text>
                   {reviewingVerifApp && (
                     <Text style={[styles.modalSubtitle, { color: colors.textMuted }]}>
-                      {reviewingVerifApp.org_name} · @{reviewingVerifApp.profiles?.handle}
+                      {reviewingVerifApp.organization_pages?.name} · @{reviewingVerifApp.profiles?.handle}
                     </Text>
                   )}
                 </View>
@@ -1770,12 +1774,12 @@ export default function AdminDashboard() {
               {reviewingVerifApp && (
                 <View style={{ backgroundColor: colors.backgroundSecondary, borderRadius: 10, padding: 12, gap: 5 }}>
                   <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.textMuted, letterSpacing: 0.6 }}>APPLICATION SUMMARY</Text>
-                  <Text style={{ fontSize: 13, color: colors.text, fontFamily: "Inter_600SemiBold" }}>{reviewingVerifApp.org_type}{reviewingVerifApp.industry ? ` · ${reviewingVerifApp.industry}` : ""}</Text>
-                  {reviewingVerifApp.website_url ? (
-                    <Text style={{ fontSize: 12, color: BRAND }} numberOfLines={1}>{reviewingVerifApp.website_url}</Text>
+                  <Text style={{ fontSize: 13, color: colors.text, fontFamily: "Inter_600SemiBold" }}>{reviewingVerifApp.organization_pages?.org_type}{reviewingVerifApp.organization_pages?.industry ? ` · ${reviewingVerifApp.organization_pages.industry}` : ""}</Text>
+                  {reviewingVerifApp.organization_pages?.website ? (
+                    <Text style={{ fontSize: 12, color: accent }} numberOfLines={1}>{reviewingVerifApp.organization_pages.website}</Text>
                   ) : null}
-                  {reviewingVerifApp.description ? (
-                    <Text style={{ fontSize: 12, color: colors.textSecondary, lineHeight: 17 }} numberOfLines={4}>{reviewingVerifApp.description}</Text>
+                  {reviewingVerifApp.organization_pages?.description ? (
+                    <Text style={{ fontSize: 12, color: colors.textSecondary, lineHeight: 17 }} numberOfLines={4}>{reviewingVerifApp.organization_pages.description}</Text>
                   ) : null}
                 </View>
               )}
@@ -1799,7 +1803,7 @@ export default function AdminDashboard() {
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <TouchableOpacity
                   style={[styles.closeBtn, { flex: 1, backgroundColor: "#34C75912", borderColor: "#34C759" }]}
-                  onPress={() => reviewingVerifApp && handleVerifReview(reviewingVerifApp.id, reviewingVerifApp.user_id, "approved")}
+                  onPress={() => reviewingVerifApp && handleVerifReview(reviewingVerifApp.id, reviewingVerifApp.submitted_by, "approved")}
                   disabled={verifReviewSaving}
                 >
                   {verifReviewSaving ? (
@@ -1813,7 +1817,7 @@ export default function AdminDashboard() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.closeBtn, { flex: 1, backgroundColor: "#FF3B3012", borderColor: "#FF3B30" }]}
-                  onPress={() => reviewingVerifApp && handleVerifReview(reviewingVerifApp.id, reviewingVerifApp.user_id, "rejected")}
+                  onPress={() => reviewingVerifApp && handleVerifReview(reviewingVerifApp.id, reviewingVerifApp.submitted_by, "rejected")}
                   disabled={verifReviewSaving}
                 >
                   {verifReviewSaving ? (
@@ -2050,9 +2054,9 @@ export default function AdminDashboard() {
               <Ionicons
                 name={tab.icon as any}
                 size={16}
-                color={activeTab === tab.id ? BRAND : colors.textMuted}
+                color={activeTab === tab.id ? accent : colors.textMuted}
               />
-              <Text style={[styles.tabText, { color: activeTab === tab.id ? BRAND : colors.textMuted }]}>
+              <Text style={[styles.tabText, { color: activeTab === tab.id ? accent : colors.textMuted }]}>
                 {tab.label}
               </Text>
             </TouchableOpacity>
@@ -2136,7 +2140,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
   tabBar: { paddingHorizontal: 12, paddingBottom: 10, gap: 4 },
   tab: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: "transparent" },
-  activeTab: { backgroundColor: "#00BCD415" },
+  activeTab: { backgroundColor: "#00BCD415" }, 
   tabText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   scrollContent: { padding: 16 },
   section: { gap: 12 },
