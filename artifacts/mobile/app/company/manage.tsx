@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -20,6 +21,8 @@ import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import { showAlert } from "@/lib/alert";
 import { uploadToStorage } from "@/lib/mediaUpload";
+
+const GOLD = "#D4A853";
 
 type OrgPage = {
   id: string;
@@ -41,8 +44,16 @@ type OrgPage = {
   jurisdiction_code: string | null;
   social_links: Record<string, string>;
   admin_id: string;
+  is_verified: boolean;
   followers_count: number;
   posts_count: number;
+};
+
+type VerifyRequest = {
+  id: string;
+  status: "pending" | "approved" | "rejected";
+  notes: string | null;
+  created_at: string;
 };
 
 export default function ManageCompanyPageScreen() {
@@ -60,6 +71,11 @@ export default function ManageCompanyPageScreen() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
 
+  const [verifyRequest, setVerifyRequest] = useState<VerifyRequest | null>(null);
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [verifyNotes, setVerifyNotes] = useState("");
+  const [submittingVerify, setSubmittingVerify] = useState(false);
+
   const [form, setForm] = useState({
     name: "", tagline: "", description: "", website: "", email: "",
     industry: "", org_type: "", size: "", founded_year: "", location: "", physical_address: "",
@@ -68,8 +84,17 @@ export default function ManageCompanyPageScreen() {
   });
 
   const load = useCallback(async () => {
-    if (!slug) return;
-    const { data } = await supabase.from("organization_pages").select("*").eq("slug", slug).single();
+    if (!slug || !user) return;
+    const [{ data }, { data: verReqs }] = await Promise.all([
+      supabase.from("organization_pages").select("*").eq("slug", slug).single(),
+      supabase
+        .from("org_verification_requests")
+        .select("id, status, notes, created_at")
+        .eq("submitted_by", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
     if (data) {
       setPage(data as OrgPage);
       setForm({
@@ -90,13 +115,33 @@ export default function ManageCompanyPageScreen() {
         linkedin: data.social_links?.linkedin || "",
       });
     }
+    setVerifyRequest(verReqs as VerifyRequest | null);
     setLoading(false);
-  }, [slug]);
+  }, [slug, user?.id]);
 
   useEffect(() => { load(); }, [load]);
 
   function set(field: string, val: string) {
     setForm((prev) => ({ ...prev, [field]: val }));
+  }
+
+  async function submitVerifyRequest() {
+    if (!page || !user) return;
+    setSubmittingVerify(true);
+    const { error } = await supabase.from("org_verification_requests").insert({
+      page_id: page.id,
+      submitted_by: user.id,
+      notes: verifyNotes.trim() || null,
+    });
+    setSubmittingVerify(false);
+    if (error) {
+      showAlert("Error", error.message || "Could not submit request.");
+      return;
+    }
+    setShowVerifyModal(false);
+    setVerifyNotes("");
+    showAlert("Request submitted", "Our team will review your verification request and get back to you.");
+    load();
   }
 
   async function pickLogo() {
@@ -401,6 +446,62 @@ export default function ManageCompanyPageScreen() {
             </Text>
           </View>
 
+          {/* ── Verification section ── */}
+          <Text style={[styles.groupLabel, { color: colors.text, marginTop: 4 }]}>Page Verification</Text>
+          {page.is_verified ? (
+            <View style={[styles.verifyCard, { backgroundColor: GOLD + "14", borderColor: GOLD + "44" }]}>
+              <Ionicons name="checkmark-circle" size={22} color={GOLD} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.verifyCardTitle, { color: GOLD }]}>Verified Organization</Text>
+                <Text style={[styles.verifyCardSub, { color: colors.textMuted }]}>
+                  This page has been officially verified by AfuChat.
+                </Text>
+              </View>
+            </View>
+          ) : verifyRequest?.status === "pending" ? (
+            <View style={[styles.verifyCard, { backgroundColor: colors.accent + "10", borderColor: colors.accent + "30" }]}>
+              <Ionicons name="time-outline" size={22} color={colors.accent} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.verifyCardTitle, { color: colors.accent }]}>Verification Pending</Text>
+                <Text style={[styles.verifyCardSub, { color: colors.textMuted }]}>
+                  Submitted {new Date(verifyRequest.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}. Our team will review it shortly.
+                </Text>
+              </View>
+            </View>
+          ) : verifyRequest?.status === "rejected" ? (
+            <TouchableOpacity
+              style={[styles.verifyCard, { backgroundColor: "#FF3B3010", borderColor: "#FF3B3030" }]}
+              onPress={() => setShowVerifyModal(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="close-circle-outline" size={22} color="#FF3B30" />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.verifyCardTitle, { color: "#FF3B30" }]}>Verification Not Approved</Text>
+                <Text style={[styles.verifyCardSub, { color: colors.textMuted }]}>
+                  Tap to re-apply with updated information.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.verifyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              onPress={() => setShowVerifyModal(true)}
+              activeOpacity={0.8}
+            >
+              <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: GOLD + "18", alignItems: "center", justifyContent: "center" }}>
+                <Ionicons name="checkmark-circle-outline" size={22} color={GOLD} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.verifyCardTitle, { color: colors.text }]}>Apply for Verification</Text>
+                <Text style={[styles.verifyCardSub, { color: colors.textMuted }]}>
+                  Get the gold badge for your organization page.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             style={[styles.saveBtn, { backgroundColor: colors.accent, opacity: saving ? 0.7 : 1 }]}
             onPress={handleSave} disabled={saving} activeOpacity={0.85}
@@ -414,6 +515,76 @@ export default function ManageCompanyPageScreen() {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Verification request modal */}
+      <Modal visible={showVerifyModal} transparent animationType="slide" onRequestClose={() => setShowVerifyModal(false)}>
+        <TouchableOpacity style={verSt.overlay} activeOpacity={1} onPress={() => setShowVerifyModal(false)}>
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <View style={[verSt.sheet, { backgroundColor: colors.surface }]}>
+              <View style={[verSt.handle, { backgroundColor: colors.border }]} />
+
+              <View style={verSt.headerRow}>
+                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: GOLD + "18", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="checkmark-circle-outline" size={22} color={GOLD} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[verSt.title, { color: colors.text }]}>Apply for Verification</Text>
+                  <Text style={[verSt.sub, { color: colors.textMuted }]}>For <Text style={{ fontFamily: "Inter_600SemiBold" }}>{page.name}</Text></Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowVerifyModal(false)} hitSlop={8}>
+                  <Ionicons name="close" size={22} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={[verSt.infoBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                {[
+                  { icon: "document-text-outline", label: "Registration No.", value: page.registration_number || "Not set — add it in page details" },
+                  { icon: "mail-outline", label: "Contact Email", value: page.email || form.email || "Not set" },
+                  { icon: "location-outline", label: "Physical Address", value: page.physical_address || "Not set" },
+                ].map((row) => (
+                  <View key={row.label} style={verSt.infoRow}>
+                    <Ionicons name={row.icon as any} size={14} color={colors.textMuted} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[verSt.infoLabel, { color: colors.textMuted }]}>{row.label}</Text>
+                      <Text style={[verSt.infoValue, { color: colors.text }]} numberOfLines={2}>{row.value}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              <Text style={[verSt.notesLabel, { color: colors.textMuted }]}>Additional notes (optional)</Text>
+              <TextInput
+                style={[verSt.notes, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border }]}
+                placeholder="Describe your organization, provide supporting links or any extra context…"
+                placeholderTextColor={colors.textMuted}
+                value={verifyNotes}
+                onChangeText={setVerifyNotes}
+                multiline
+                numberOfLines={4}
+                maxLength={1000}
+              />
+              <Text style={[{ color: colors.textMuted, fontSize: 11, fontFamily: "Inter_400Regular", textAlign: "right" }]}>
+                {verifyNotes.length}/1000
+              </Text>
+
+              <TouchableOpacity
+                style={[verSt.submitBtn, { backgroundColor: GOLD, opacity: submittingVerify ? 0.7 : 1 }]}
+                onPress={submitVerifyRequest}
+                disabled={submittingVerify}
+                activeOpacity={0.85}
+              >
+                {submittingVerify
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <>
+                      <Ionicons name="send-outline" size={16} color="#fff" />
+                      <Text style={verSt.submitBtnText}>Submit Request</Text>
+                    </>
+                }
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -444,6 +615,23 @@ const fieldSt = StyleSheet.create({
   label: { fontSize: 12, fontFamily: "Inter_500Medium", letterSpacing: 0.2 },
 });
 
+const verSt = StyleSheet.create({
+  overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" },
+  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 14 },
+  handle: { width: 36, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 4 },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  title: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  sub: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 1 },
+  infoBox: { borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: 12, gap: 10 },
+  infoRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  infoLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  infoValue: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  notesLabel: { fontSize: 12, fontFamily: "Inter_500Medium", marginBottom: -6 },
+  notes: { borderRadius: 12, borderWidth: 1, padding: 12, fontSize: 14, fontFamily: "Inter_400Regular", minHeight: 100, textAlignVertical: "top" },
+  submitBtn: { borderRadius: 12, paddingVertical: 14, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 },
+  submitBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+});
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
   navBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
@@ -472,6 +660,9 @@ const styles = StyleSheet.create({
   textarea: { minHeight: 100, textAlignVertical: "top" },
   slugNote: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, padding: 12 },
   slugNoteText: { fontSize: 13, fontFamily: "Inter_400Regular", flex: 1 },
+  verifyCard: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 14, borderWidth: 1, padding: 14 },
+  verifyCardTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  verifyCardSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   saveBtn: { borderRadius: 14, paddingVertical: 14, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8, marginTop: 8 },
   saveBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
 });

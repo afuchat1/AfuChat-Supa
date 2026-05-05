@@ -537,7 +537,7 @@ export default function CompanyPageScreen() {
             activeOpacity={0.8}
           >
             <Text style={[styles.tabText, { color: activeTab === t ? colors.accent : colors.textMuted }]} numberOfLines={1}>
-              {t === "updates" ? `Updates` : t === "followers" ? `Followers` : `Jobs (${jobs.length})`}
+              {t === "updates" ? `Updates (${posts.length})` : t === "followers" ? `Followers (${page.followers_count})` : `Jobs (${jobs.length})`}
             </Text>
           </TouchableOpacity>
         ))}
