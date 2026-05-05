@@ -49,14 +49,22 @@ function renderPage(page: any, posts: any[]): string {
       </article>`;
   }).join("");
 
-  const jsonLd = {
+  const email = page.email || "";
+  const address = esc(page.physical_address || "");
+  const jsonLd: Record<string, any> = {
     "@context": "https://schema.org",
     "@type": "Organization",
     name: page.name,
     url: pageUrl,
     ...(logo ? { logo } : {}),
+    ...(cover ? { image: cover } : {}),
     ...(description ? { description: page.description } : {}),
     ...(website ? { sameAs: [page.website] } : {}),
+    ...(email ? { email } : {}),
+    ...(foundedYear ? { foundingDate: foundedYear } : {}),
+    ...(address ? { address: { "@type": "PostalAddress", streetAddress: page.physical_address } } : {}),
+    ...(page.size ? { numberOfEmployees: { "@type": "QuantitativeValue", description: page.size } } : {}),
+    ...(industry ? { knowsAbout: page.industry } : {}),
   };
 
   return `<!DOCTYPE html>
@@ -69,15 +77,16 @@ function renderPage(page: any, posts: any[]): string {
   <meta name="robots" content="index, follow" />
   <link rel="canonical" href="${pageUrl}" />
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="${name}" />
-  <meta property="og:description" content="${tagline || description || name}" />
+  <meta property="og:title" content="${name} — ${SITE_NAME}" />
+  <meta property="og:description" content="${tagline || description || `${name} on ${SITE_NAME}`}" />
   <meta property="og:url" content="${pageUrl}" />
   <meta property="og:site_name" content="${SITE_NAME}" />
-  ${logo ? `<meta property="og:image" content="${esc(logo)}" />` : ""}
-  <meta name="twitter:card" content="summary" />
-  <meta name="twitter:title" content="${name}" />
-  <meta name="twitter:description" content="${tagline || description || name}" />
-  ${logo ? `<meta name="twitter:image" content="${esc(logo)}" />` : ""}
+  ${cover ? `<meta property="og:image" content="${esc(cover)}" /><meta property="og:image:width" content="1200" /><meta property="og:image:height" content="630" />` : logo ? `<meta property="og:image" content="${esc(logo)}" />` : ""}
+  <meta name="twitter:card" content="${cover ? "summary_large_image" : "summary"}" />
+  <meta name="twitter:title" content="${name} — ${SITE_NAME}" />
+  <meta name="twitter:description" content="${tagline || description || `${name} on ${SITE_NAME}`}" />
+  ${cover ? `<meta name="twitter:image" content="${esc(cover)}" />` : logo ? `<meta name="twitter:image" content="${esc(logo)}" />` : ""}
+  <meta name="twitter:site" content="@afuchat" />
   <meta name="theme-color" content="${BRAND}" />
   <script type="application/ld+json">${JSON.stringify(jsonLd).replace(/<\//g, "<\\/")}</script>
   <style>
@@ -159,7 +168,7 @@ function renderPage(page: any, posts: any[]): string {
       </div>` : ""}
       ${foundedYear || page.email ? `
       <div class="details">
-        ${page.email ? `<div class="detail-row">✉️ ${esc(page.email)}</div>` : ""}
+        ${page.email ? `<div class="detail-row">✉️ <a href="mailto:${esc(page.email)}" style="color:${BRAND};text-decoration:underline">${esc(page.email)}</a></div>` : ""}
         ${foundedYear ? `<div class="detail-row">🗓️ Founded ${foundedYear}</div>` : ""}
       </div>` : ""}
     </div>

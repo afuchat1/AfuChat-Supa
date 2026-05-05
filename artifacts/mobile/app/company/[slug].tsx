@@ -15,13 +15,14 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseUrl, supabaseAnonKey } from "@/lib/supabase";
 import { showAlert } from "@/lib/alert";
 import { uploadToStorage } from "@/lib/mediaUpload";
 
@@ -284,10 +285,42 @@ export default function CompanyPageScreen() {
     });
     setPosting(false);
     if (error) { showAlert("Error", "Could not publish update."); return; }
+    const publishedContent = postText.trim();
     setPostText("");
     setPostImageUri(null);
     setShowPostModal(false);
     load();
+    notifyFollowers(page, user.id, publishedContent);
+  }
+
+  async function notifyFollowers(p: OrgPage, senderId: string, content: string) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const { data: rows } = await supabase
+        .from("organization_page_followers")
+        .select("user_id")
+        .eq("page_id", p.id)
+        .neq("user_id", senderId)
+        .limit(100);
+      if (!rows || rows.length === 0) return;
+      const userIds = rows.map((r: any) => r.user_id);
+      const body = content.length > 120 ? content.slice(0, 117) + "…" : content;
+      await fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: supabaseAnonKey,
+        },
+        body: JSON.stringify({
+          userIds,
+          title: p.name,
+          body,
+          data: { type: "org_update", page_id: p.id, page_slug: p.slug },
+        }),
+      });
+    } catch (_) {}
   }
 
   async function submitJob() {
@@ -357,10 +390,12 @@ export default function CompanyPageScreen() {
     );
   }
 
+  const coverHeight = headerTop + 48 + 140;
+
   const Header = (
     <View>
-      {/* Cover */}
-      <View style={[styles.cover, { backgroundColor: isDark ? "#1a1a1a" : "#e8f4f8" }]}>
+      {/* Cover — extends all the way to device top edge behind status bar + nav bar */}
+      <View style={[styles.cover, { height: coverHeight, backgroundColor: isDark ? "#1a1a1a" : "#e8f4f8" }]}>
         {page.cover_url ? (
           <Image source={{ uri: page.cover_url }} style={StyleSheet.absoluteFill} resizeMode="cover" />
         ) : (
@@ -368,9 +403,14 @@ export default function CompanyPageScreen() {
             <Ionicons name="business" size={40} color={isDark ? "#333" : "#cde"} />
           </View>
         )}
+        {/* Dark gradient at top so floating nav icons remain legible over any cover */}
+        <LinearGradient
+          colors={["rgba(0,0,0,0.55)", "transparent"]}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, height: headerTop + 60 }}
+        />
       </View>
 
-      {/* Logo (square) */}
+      {/* Logo (square) — overlaps bottom of cover */}
       <View style={[styles.logoWrap, { backgroundColor: colors.background }]}>
         <View style={[styles.logo, { borderColor: colors.background }]}>
           {page.logo_url ? (
@@ -521,7 +561,18 @@ export default function CompanyPageScreen() {
                 colors={colors}
               />
             )}
-            {page.email && <DetailRow icon="mail-outline" text={page.email} colors={colors} />}
+            {page.email && (
+              <TouchableOpacity
+                style={styles.detailRow}
+                onPress={() => Linking.openURL(`mailto:${page.email}`)}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="mail-outline" size={14} color={colors.textMuted} />
+                <Text style={[styles.detailText, { color: colors.accent, textDecorationLine: "underline" }]}>
+                  {page.email}
+                </Text>
+              </TouchableOpacity>
+            )}
             {page.physical_address && <DetailRow icon="location-outline" text={page.physical_address} colors={colors} />}
           </View>
         ) : null}
@@ -565,15 +616,15 @@ export default function CompanyPageScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* Nav */}
-      <View style={[styles.navBar, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      {/* Floating transparent NavBar — overlays cover image */}
+      <View style={[styles.navBarFloat, { paddingTop: headerTop, pointerEvents: "box-none" } as any]}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={[styles.navTitle, { color: colors.text }]} numberOfLines={1}>{page.name}</Text>
+        <Text style={[styles.navTitle, { color: "#fff" }]} numberOfLines={1}>{page.name}</Text>
         {isAdmin ? (
           <TouchableOpacity onPress={() => router.push(`/company/manage?slug=${page.slug}` as any)} hitSlop={12}>
-            <Ionicons name="settings-outline" size={22} color={colors.text} />
+            <Ionicons name="settings-outline" size={22} color="#fff" />
           </TouchableOpacity>
         ) : (
           <View style={{ width: 24 }} />
@@ -632,58 +683,78 @@ export default function CompanyPageScreen() {
           contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         />
       ) : activeTab === "followers" ? (
-        /* Followers Tab */
-        <FlatList
-          data={followers}
-          keyExtractor={(item) => item.user_id}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
-          showsVerticalScrollIndicator={false}
-          ListHeaderComponent={Header}
-          ListEmptyComponent={
-            <View style={styles.emptyPosts}>
-              <Ionicons name="people-outline" size={36} color={colors.textMuted} />
-              <Text style={[styles.emptyText, { color: colors.textMuted }]}>No followers yet.</Text>
-            </View>
-          }
-          renderItem={({ item }) => {
-            const p = item.profiles;
-            if (!p) return null;
-            return (
-              <TouchableOpacity
-                style={[styles.followerRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                onPress={() => router.push(`/${p.handle}` as any)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.followerAvatar}>
-                  {p.avatar_url ? (
-                    <Image source={{ uri: p.avatar_url }} style={styles.followerAvatarImg} />
-                  ) : (
-                    <View style={[styles.followerAvatarImg, { backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" }]}>
-                      <Text style={{ color: "#fff", fontFamily: "Inter_700Bold", fontSize: 14 }}>
-                        {(p.display_name || p.handle || "?").slice(0, 1).toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <Text style={[styles.followerName, { color: colors.text }]} numberOfLines={1}>
-                      {p.display_name || p.handle || "User"}
-                    </Text>
-                    {p.is_verified && (
-                      <Ionicons name="checkmark-circle" size={13} color={colors.accent} />
+        /* Followers Tab — list is only visible to org admins */
+        isAdmin ? (
+          <FlatList
+            data={followers}
+            keyExtractor={(item) => item.user_id}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
+            showsVerticalScrollIndicator={false}
+            ListHeaderComponent={Header}
+            ListEmptyComponent={
+              <View style={styles.emptyPosts}>
+                <Ionicons name="people-outline" size={36} color={colors.textMuted} />
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>No followers yet.</Text>
+              </View>
+            }
+            renderItem={({ item }) => {
+              const p = item.profiles;
+              if (!p) return null;
+              return (
+                <TouchableOpacity
+                  style={[styles.followerRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  onPress={() => router.push(`/${p.handle}` as any)}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.followerAvatar}>
+                    {p.avatar_url ? (
+                      <Image source={{ uri: p.avatar_url }} style={styles.followerAvatarImg} />
+                    ) : (
+                      <View style={[styles.followerAvatarImg, { backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" }]}>
+                        <Text style={{ color: "#fff", fontFamily: "Inter_700Bold", fontSize: 14 }}>
+                          {(p.display_name || p.handle || "?").slice(0, 1).toUpperCase()}
+                        </Text>
+                      </View>
                     )}
                   </View>
-                  {p.handle ? (
-                    <Text style={[styles.followerHandle, { color: colors.textMuted }]}>@{p.handle}</Text>
-                  ) : null}
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-              </TouchableOpacity>
-            );
-          }}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-        />
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <Text style={[styles.followerName, { color: colors.text }]} numberOfLines={1}>
+                        {p.display_name || p.handle || "User"}
+                      </Text>
+                      {p.is_verified && (
+                        <Ionicons name="checkmark-circle" size={13} color={colors.accent} />
+                      )}
+                    </View>
+                    {p.handle ? (
+                      <Text style={[styles.followerHandle, { color: colors.textMuted }]}>@{p.handle}</Text>
+                    ) : null}
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                </TouchableOpacity>
+              );
+            }}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          />
+        ) : (
+          /* Non-admin: show header + locked state */
+          <FlatList
+            data={[]}
+            keyExtractor={() => "lock"}
+            showsVerticalScrollIndicator={false}
+            ListHeaderComponent={Header}
+            ListEmptyComponent={
+              <View style={[styles.emptyPosts, { paddingTop: 48 }]}>
+                <Ionicons name="lock-closed-outline" size={40} color={colors.textMuted} />
+                <Text style={[styles.emptyText, { color: colors.textMuted, textAlign: "center" }]}>
+                  Follower list is only visible{"\n"}to the page admin.
+                </Text>
+              </View>
+            }
+            renderItem={() => null}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          />
+        )
       ) : (
         /* Jobs Tab — exclusive to company pages */
         <FlatList
@@ -961,8 +1032,9 @@ function DetailRow({ icon, text, colors }: { icon: any; text: string; colors: an
 const styles = StyleSheet.create({
   root: { flex: 1 },
   navBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  navBarFloat: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12 },
   navTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", flex: 1, textAlign: "center" },
-  cover: { height: 160, width: "100%" },
+  cover: { width: "100%" },
 
   logoWrap: { paddingHorizontal: 16, marginTop: -44 },
   logo: { width: 88, height: 88, borderRadius: 6, borderWidth: 3, overflow: "hidden" },
