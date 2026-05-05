@@ -1,380 +1,66 @@
-# Overview
-
-This project is a pnpm workspace monorepo utilizing TypeScript to develop AfuChat, a WeChat-style chat super app. AfuChat aims to provide a comprehensive communication and lifestyle platform, connecting users through chat, social features, and integrated services. The platform targets mobile (iOS/Android) with mobile-web parity; on web, a flat Replit-style desktop shell (sidebar + main area, with centered modal panels for compose/edit routes) wraps the same screens at viewport widths ≥ 1024 px and the bottom tab bar is hidden — see `components/desktop/DesktopShell.tsx` and `components/desktop/DesktopSidebar.tsx`. The viewport-based breakpoint can be overridden via the URL query string `?view=mobile` or `?view=desktop` (sticky for the session via `sessionStorage`); this is how the Replit canvas shows two previews — a mobile-sized iframe pointing at `/?view=mobile` and a wider iframe pointing at `/?view=desktop` — from the same Expo bundle. On desktop, the brand color is teal `#00BCD4` (gold accent `#D4A853`) and fonts fall back to the OS system stack (`app/+html.tsx` overrides custom fonts at ≥ 1024 px via the `[data-font="system"]` selector that `DesktopShell.tsx` applies). Camera-only screens (`app/wallet/scan.tsx`, `app/stories/camera.tsx`, `app/admin/id-scanner.tsx`) render `components/desktop/DesktopCameraFallback.tsx` (a QR code + step list) instead of webcam access on desktop. Voice and video calls are now real on web AND mobile: `lib/callSignaling.ts` binds the browser-native `RTCPeerConnection`/`mediaDevices` when running on web (`isCallSupported()` helper) and `app/call/[id].tsx` renders local/remote `MediaStream`s through `components/call/WebVideoStream.tsx` (a `<video srcObject>` wrapper) on web while keeping `RTCView` on native. The signaling flow is **subscription-aware** (the previous implementation lost SDP offers when the realtime channel hadn't fully connected): `CallSession.start()` now waits for the Supabase channel to reach `SUBSCRIBED` state via `waitForSubscribed()` before sending any broadcasts, the callee broadcasts a `callee-ready` handshake (retried up to 5 times) so the caller knows when the other side is actually listening, and the caller retransmits its SDP offer every 1.5 s (up to 20 attempts) until an answer arrives — eliminating the previous "Connecting…" hang caused by the offer being sent before the WebSocket was up and falling back to slow REST broadcast. Connection quality is surfaced live to users via `components/call/CallQualityBadge.tsx`: `CallSession` listens to `RTCPeerConnection.iceConnectionState` and samples `getStats()` every 2 s for round-trip time, jitter, and packet loss, then emits a `CallQualityStats` object (`connecting | excellent | good | poor | reconnecting | disconnected`) through `onQualityChange`. The call screen renders a signal-bar pill under the caller name showing the current bucket plus the underlying RTT/loss numbers, and the status line switches to "Reconnecting…" or "Connection lost" while ICE is recovering. Profile pictures are also tappable everywhere — `components/ui/AvatarViewer.tsx` is a full-screen modal (`Modal` with backdrop, ESC-to-close on web, sized to the smaller window dimension) that opens when the avatar is pressed in `app/(tabs)/me.tsx`, `app/contact/[id].tsx`, and the in-call screen so users can see the photo at full size. The call screen also exposes an in-call chat panel (`components/call/CallChatPanel.tsx`): a Chat button in the controls toggles a side panel (right-slide on desktop, bottom-slide on mobile) that uses its own Supabase realtime broadcast channel `call_chat:<callId>` so participants can text each other without leaving the call. Bottom sheets show as proper centered modals on desktop: `components/SwipeableBottomSheet.tsx` detects `useIsDesktop()` and renders a centered, scaled-in modal card (with overlay + drop shadow) instead of a bottom sheet at viewport widths ≥ 1024 px — every existing usage (wallet send/convert, gifts, marketplace, match) automatically inherits the desktop modal style.
-
-Key capabilities include (latest: Organization Pages):
-- Real-time chat and social networking features (posts, stories, follows) with end-to-end encrypted direct messaging.
-- Advanced AI integrations for chat, image generation, and intelligent features (AfuAi cannot access private messages).
-- Clickable followers/following lists with privacy enforcement (`hide_followers_list`/`hide_following_list` settings respected).
-- In-app wallet with custom currencies (Nexa/ACoin) for virtual goods, gifts, and services.
-- Gamified user experience with XP rewards and in-app games.
-- A marketplace for unique digital gifts.
-- Extensive mini-programs for daily-life services like bill payments, airtime, and data bundles.
-- A robust administrative dashboard for user and content management.
-- **Organization Pages** — LinkedIn-style company pages for verified organizations: discover feed, follow/unfollow, post updates with image attachments (R2 `org-post-images` bucket), manage page details including logo (`org-logos`) and cover (`org-covers`). Gated to `is_organization_verified = true` users. Routes: `/company`, `/company/[slug]`, `/company/create`, `/company/manage`. API server serves `/company/:slug` as SEO-friendly HTML. Desktop TopBar has a "Pages" menu. Me tab has "Company Pages" and "Business Verification" menu items. DB tables: `organization_pages`, `organization_page_followers`, `organization_page_posts`, `organization_page_members`, `org_verification_requests` with full RLS. DB trigger `trg_org_page_followers_count` auto-syncs `followers_count` on follow/unfollow. Verification flow is embedded inside `manage.tsx` (not a separate route) — shows pending/approved/rejected state and an inline modal to submit requests to `org_verification_requests`. Migrations: `supabase/migrations/20260504_organization_pages.sql`, `supabase/migrations/20260505_org_followers_trigger_and_verification.sql`. Upload allowlist in both `artifacts/api-server/src/routes/uploads.ts` and `supabase/functions/uploads/index.ts` includes `org-logos`, `org-covers`, `org-post-images` — all served via Cloudflare CDN at `cdn.afuchat.com`.
-
-The project leverages an existing Supabase backend for data persistence and authentication, focusing on delivering a rich, interactive, and secure user experience.
-
-# Critical Architecture Constraints — DO NOT CHANGE
-
-These are load-bearing infrastructure decisions. Every developer (and every AI agent) working on AfuChat MUST treat them as immutable. Violations will break production for real users and waste days of rework.
-
-## 1. Supabase is the ONLY backend
-
-**Do NOT migrate, replace, mirror, or "modernize" Supabase.** The following Supabase surfaces are production:
-- **Auth** — `@supabase/supabase-js` `auth.signIn*`, OAuth providers, OTP, session refresh, multi-account switching, Telegram Mini App auth (`supabase/functions/telegram-auth`).
-- **Postgres database** — every `*.sql` file under `supabase/migrations/` is the source of truth. Tables: `profiles`, `posts`, `stories`, `messages`, `chats`, `chat_drafts`, `ai_conversations`, `ai_messages`, `notification_preferences`, `pesapal_orders`, `acoin_transactions`, `transaction_requests`, `mini_apps`, `video_assets`, `video_renditions`, `video_jobs`, `app_settings`, `freelance_listings`, `freelance_orders`, `freelance_reviews`, plus all RLS policies, RPC functions (`credit_acoin`, `lookup_profile_by_afu_id`, `claim_video_job`, `bump_mini_app_open`, `award_xp`), triggers, and indexes.
-- **Realtime** — chat, presence, typing indicators, call signaling (`call:<id>`, `call_chat:<callId>`), live discover feed, transaction requests, story bar updates. The mobile app subscribes via `supabase.channel(...)`.
-- **Storage policies** — bucket policies for `videos` and the legacy avatars/post-images buckets are in migrations.
-- **Edge Functions** — `supabase/functions/*` (ai-chat, generate-ai-image, pesapal-initiate, pesapal-ipn, register-push-token, send-marketing-email, send-password-reset, send-push-notification, telegram-auth, transcribe-audio). These are deployed to Supabase Functions and wired into Supabase Auth hooks (`hook_send_email_uri`) and Pesapal IPN.
-
-### Forbidden actions
-
-- ❌ Do NOT replace Supabase Auth with Replit Auth, Clerk, NextAuth, Firebase, Auth0, or anything else.
-- ❌ Do NOT migrate the database to Neon, Replit Postgres, PlanetScale, or any other Postgres host. The `DATABASE_URL` env var that points to the Replit dev DB is **not used** by the app — leave it alone.
-- ❌ Do NOT rewrite Supabase Edge Functions as Express routes in `artifacts/api-server`. The API server is for things that need long-running workers (video encoding) or cross-service orchestration. Upload signing/proxying and auth-tied user actions stay in edge functions.
-- ❌ Do NOT add a Vercel serverless proxy (`artifacts/mobile/api/[...path].js`) — uploads go directly to the Supabase Edge Function; the proxy was removed intentionally.
-- ❌ Do NOT change RLS policies, RPC function signatures, or table column names without coordinating a matching client-side change AND a backwards-compatible migration.
-- ❌ Do NOT hard-delete Supabase migration files. New migrations only — additive and idempotent (`ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`, `DROP POLICY IF EXISTS` before `CREATE POLICY`).
-- ❌ Do NOT remove `@supabase/supabase-js` from `package.json` in either `artifacts/mobile` or `artifacts/api-server`.
-
-### Allowed actions
-
-- ✅ Add new tables, columns, RPCs, RLS policies in a new dated migration under `supabase/migrations/YYYYMMDD_description.sql`.
-- ✅ Add new edge functions under `supabase/functions/<name>/index.ts` and register them in `supabase/config.toml`.
-- ✅ Read from / write to existing Supabase tables from new screens, respecting RLS.
-
-## 2. Cloudflare R2 is the ONLY media CDN
-
-**Do NOT migrate, replace, or duplicate the R2 setup.** All user-uploaded media (avatars, post images, videos, stories, group avatars, chat media, voice messages, shop media, match photos, banners) lives in the single R2 bucket `afuchat-media` and is served via `https://cdn.afuchat.com`.
-
-### How it works (do not change this flow)
-
-**Upload backend: Supabase Edge Function `uploads`** (`supabase/functions/uploads/index.ts`)
-
-- Native (iOS/Android): client calls `POST /functions/v1/uploads/sign` → edge function returns a short-lived AWS Sig V4 presigned PUT URL → client PUTs bytes directly to R2.
-- Web (Vercel): client POSTs bytes to `POST /functions/v1/uploads/upload` → edge function streams them to R2 server-side (avoids R2 CORS restrictions on browsers).
-
-All routes require a valid Supabase Bearer token. The edge function verifies JWTs by calling `GET /auth/v1/user` with the service role key. No external npm CDN packages — AWS Signature V4 is implemented using the native Deno Web Crypto API.
-
-1. Client (`artifacts/mobile/lib/mediaUpload.ts`) uses `UPLOADS_FN = ${supabaseUrl}/functions/v1/uploads`.
-2. Edge function loads R2 credentials lazily from `app_settings` (same table the Express API server uses).
-3. Client writes the `https://cdn.afuchat.com/<bucket>/<userId>/<filename>` CDN URL into the relevant Supabase row.
-4. Supabase only stores the URL string. Bytes never touch Supabase Storage.
-
-The Express API server (`artifacts/api-server`) still handles video encoding jobs and HLS manifest serving — it is NOT used for uploads on the web deployment.
-
-### R2 secrets live in Supabase, not in env files
-
-`artifacts/api-server/src/lib/bootstrap.ts` reads `public.app_settings` (a service-role-only table) at boot and merges these keys into `process.env`:
-- `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_R2_ACCESS_KEY_ID`
-- `CLOUDFLARE_R2_SECRET_ACCESS_KEY`
-- `R2_BUCKET`
-- `R2_PUBLIC_BASE_URL`
-- `R2_DEV_PUBLIC_URL`
-- `R2_S3_ENDPOINT`
-
-The R2 client (`artifacts/api-server/src/lib/r2.ts`) reads these **lazily from `process.env`** so it picks them up after bootstrap — do not refactor this to read at module load time, that breaks production.
-
-To push new R2 keys to Supabase: `pnpm --filter @workspace/scripts push-secrets-to-supabase`.
-
-### Forbidden actions
-
-- ❌ **Supabase Storage is permanently decommissioned.** All 22 buckets have been deleted and every RLS policy on `storage.objects` has been dropped. Do NOT create new buckets, do NOT call `supabase.storage`, do NOT reference `/storage/v1/object/` URLs anywhere in the codebase. There is no fallback — Supabase Storage does not exist for this project.
-- ❌ Do NOT migrate media to Replit Object Storage, AWS S3, Vercel Blob, Cloudinary, ImageKit, UploadThing, or anywhere else.
-- ❌ Do NOT change `https://cdn.afuchat.com` to a different domain. Rewriting URLs would break every existing post / avatar / video that's already in production.
-- ❌ Do NOT split the bucket into multiple R2 buckets. Logical groupings (avatars, posts, videos, …) are KEY PREFIXES inside the single `afuchat-media` bucket — that's deliberate.
-- ❌ Do NOT hard-code R2 credentials in source files, `.env`, `app.json`, or any deployment config. They live in `app_settings` only.
-- ❌ Do NOT change the lifecycle rules (`abort-multipart-7d`, `expire-stories-30d`, `expire-ephemeral-chat-media-30d`) without explicit owner approval.
-
-### Allowed actions
-
-- ✅ Add new logical key prefixes (e.g. `articles/`, `match-rooms/`) by passing a new `bucket` value to `POST /api/uploads/sign`. The presigner accepts any string that matches `^[a-z0-9-]+$`.
-- ✅ Read media from `cdn.afuchat.com` from any new feature.
-- ✅ Add new lifecycle rules via `pnpm --filter @workspace/scripts setup-r2-lifecycle` after coordinating with the owner.
-
-## 3. The `lib/` directory is owner-controlled
-
-Do not change files under `lib/` (the workspace shared libraries: `lib/api-spec`, `lib/api-client-react`, `lib/api-zod`, `lib/db`) without explicit owner approval. These are consumed by both `artifacts/mobile` and `artifacts/api-server`; a careless edit ripples everywhere.
-
-## 4. Replit dev environment specifics
-
-- The `DATABASE_URL` env var pointing to a Replit-provisioned Postgres exists for tooling only. It is NOT the app's database.
-- Do not commit the `SUPABASE_SERVICE_ROLE_KEY` into the mobile bundle or any client-readable file. It belongs only in the API server env and Supabase Function secrets.
-- Do not expose any key prefixed with `EXPO_PUBLIC_` other than the existing `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` — anything else with that prefix ships to users' browsers.
-
-# User Preferences
-
-I prefer clear and concise information.
-I appreciate detailed explanations for complex features.
-I want an iterative development approach with regular updates.
-Please ask for my confirmation before making significant architectural changes or implementing major new features.
-Do not make changes to files in the `lib/` directory without explicit approval.
-Do not make changes to the existing Supabase schema unless absolutely necessary and after thorough discussion.
-Prioritize performance and user experience in all development tasks.
-Ensure all new features are thoroughly tested across all supported platforms (web, iOS, Android).
-
-# System Architecture
-
-The project is structured as a pnpm monorepo using TypeScript, with distinct packages for deployable applications and shared libraries.
-
-**Core Technologies:**
-- **Monorepo Tool**: pnpm workspaces
-- **Backend**: Express 5 API server (`artifacts/api-server`), Supabase for all data persistence, authentication, real-time, and Edge Functions. The Replit PostgreSQL database is provisioned but not used — all data lives in Supabase.
-- **Frontend**: Expo React Native for mobile and web, targeting a unified codebase.
-- **Validation**: Zod for API request and response validation.
-- **API Codegen**: Orval from OpenAPI specification for generating API clients and Zod schemas.
-- **Build**: esbuild for API server, Expo Metro bundler for mobile/web.
-
-**Application Structure:**
-- `artifacts/`: Contains deployable applications (`api-server`, `mobile`, `mockup-sandbox`).
-- `lib/`: Houses shared libraries like `api-spec`, `api-client-react`, `api-zod`, and `db`.
-- `scripts/`: Utility scripts.
-
-**UI/UX and Design:**
-- **Branding**: AfuChat blue-green (`#00BCD4`) and gold (`#D4A853`).
-- **Typography**: Inter font family.
-- **Theming**: Dark/light theme support (dark uses Google-style warm greys, light uses cream tones), persisted via `AsyncStorage`.
-- **App Accent Color**: User-selectable accent color via `AppAccentContext` (AsyncStorage key `app_color_theme`). Six options: Teal (#00BCD4, default), Blue (#2196F3), Purple (#9C27B0), Rose (#E91E63), Amber (#FF9800), Emerald (#4CAF50). The `useTheme()` hook returns `accent` and overrides `colors.accent/tint/tabIconSelected/online/unread`. Color picker is in the Me tab under Appearance. Static StyleSheet references use `Colors.brand` (the constant default teal); dynamic theming is applied via inline styles.
-- **Liquid Glass UI**: `GlassView` component (`components/ui/GlassView.tsx`) uses `BlurView` on iOS (intensity 72+), semi-transparent fallback on Android/web. Applied to `SwipeableBottomSheet`, video `CommentsSheet` modal, and the `ProductTour` tooltip.
-- **Responsive Design**: Utilizes `useWindowDimensions()` and custom `useResponsive()` hooks for dynamic layouts on phone/tablet form factors.
-- **UI Components**: Reusable components for avatars, verified badges, skeletons, offline banners, and swipeable bottom sheets.
-- **Input Styling**: Consistent rounded `borderRadius: 12` for all input fields.
-
-**Technical Implementations:**
-- **Authentication**: Supabase Auth with email/password, Google/GitHub/X/GitLab OAuth, OTP-based password reset, email confirmation. Supports multi-account switching. (Phone sign-in was removed because Twilio Verify requires a paid Twilio plan to text non-verified numbers.)
-- **Navigation**: Expo Router with tab-based navigation and deep linking support. Bottom tabs (mobile + ClassicTabs/NativeTabs in `app/(tabs)/_layout.tsx`, `tabW = SW/4`): Chats, Discover, Apps, Me. Desktop sidebar (`components/desktop/DesktopSidebar.tsx`) mirrors these and additionally surfaces Shorts (`/shorts`). Post creation via FAB on discover page. **Communities is temporarily hidden** — the route file `app/(tabs)/communities.tsx` renders a "coming soon" placeholder, the bottom tab is hidden via `<Tabs.Screen name="communities" options={{ href: null }} />`, and the desktop sidebar entry is removed. The full implementation is preserved in git history for restoration later.
-- **Post Visibility**: Posts have `public`, `followers`, `private` visibility. Discover feed shows posts based on visibility. Search only returns public posts.
-- **Offline Support**: Offline-first architecture with `AsyncStorage` caching, message queuing, and auto-sync on reconnect. Includes network status banners.
-- **Real-time**: Supabase Realtime for chat, notifications, presence, and discover feed updates (likes, comments, views, follows, new posts). Twitter/X-style "New posts" pill for feed updates.
-- **Notifications**: Expo Push Notifications with custom sound, token management, and authenticated edge function triggers.
-- **Media Handling**: All uploads go exclusively to **Cloudflare R2** (single bucket `afuchat-media`, served via `https://cdn.afuchat.com`). Supabase Storage is permanently decommissioned — all 22 buckets deleted, no RLS policies remain. The upload client (`artifacts/mobile/lib/mediaUpload.ts`) calls the `uploads` Supabase Edge Function (`supabase/functions/uploads/index.ts`) which uses native Web Crypto (no external deps) to implement AWS Sig V4: on native it returns a presigned PUT URL so the device uploads directly to R2; on web it proxy-streams the bytes to R2 server-side to avoid CORS. The edge function loads R2 credentials from `public.app_settings` at runtime (same table the Express API server uses). Logical bucket names (avatars, post-images, videos, stories, group-avatars, chat-media, voice-messages, shop-media, match-photos, banners) become key prefixes inside the single R2 bucket. R2 credentials (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_R2_ACCESS_KEY_ID, CLOUDFLARE_R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_PUBLIC_BASE_URL, R2_DEV_PUBLIC_URL, R2_S3_ENDPOINT) live in `app_settings` only and are pushed via `pnpm --filter @workspace/scripts push-secrets-to-supabase`. Per-user usage and file management (list, delete) are also exposed through the `uploads` edge function and consumed by Settings → Storage (`app/settings/storage/`). R2 lifecycle rules are applied via `pnpm --filter @workspace/scripts setup-r2-lifecycle`.
-- **Server Configuration / Secrets**: Runtime settings live in Supabase, not in the deploy environment. The table `public.app_settings (key, value)` is created by `supabase/migrations/20260428_app_settings.sql` with RLS enabled and only `service_role` granted access. On boot, `artifacts/api-server/src/lib/bootstrap.ts` queries this table with the service-role key and merges the rows into `process.env` (env wins on conflict). The only env var the API server needs in production is `SUPABASE_SERVICE_ROLE_KEY`; the public Supabase URL is hard-coded in `artifacts/api-server/src/lib/constants.ts`. `pnpm --filter @workspace/scripts push-secrets-to-supabase` UPSERTs the R2 keys (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_R2_ACCESS_KEY_ID, CLOUDFLARE_R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_PUBLIC_BASE_URL, R2_DEV_PUBLIC_URL, R2_S3_ENDPOINT) from the local environment into Supabase. If Supabase is unreachable at boot, bootstrap logs a warning and the server falls back to whatever is already in `process.env`.
-- **AI Features**: Advanced AI assistant (AfuAi) powered by Groq Llama-3.3-70b via Supabase Edge Functions. Features: chat history persistence (ai_conversations/ai_messages tables), history browser with search/pin/delete, full platform intelligence (pulls user posts, channels, events, marketplace, followers, bookmarks, transactions), 15 executable actions (send_nexa, send_acoin, follow, unfollow, subscribe, cancel_subscription, convert_nexa, create_post, bookmark_post, delete_post, update_bio, update_status, search_users, buy_gift, send_message), auto-conversation-titling, rich markdown rendering, action buttons, suggestion chips, invoices/receipts, and confirmation cards. System prompt includes comprehensive AfuChat encyclopedia with all platform features.
-- **Monetization**: `ACoin` and `Nexa` (XP) in-app currencies, dynamic gift pricing, subscription plans, and in-app purchases.
-- **Freelance Marketplace**: Professional freelance service marketplace (`app/freelance.tsx`) with: browse/search/filter by category & sort, service detail modals with reviews, ACoin payment integration via `transferAcoin`, full order workflow (pending→in_progress→delivered→revision→completed/cancelled), seller dashboard with earnings stats, create/edit listings with tags & requirements, buyer review system with star ratings, and listing management (pause/activate/delete). DB tables: `freelance_listings`, `freelance_orders`, `freelance_reviews` on Supabase.
-- **Gamification**: XP rewards for user activities with cooldowns.
-- **Account Management**: Soft-delete with a 30-day grace period, followed by permanent purge.
-- **SEO & Deep Linking**: API server routes for public profiles and posts with SEO-friendly short IDs, `sitemap.xml`, `robots.txt`, and app link configurations.
-- **Chat UX**: Telegram/WhatsApp/Signal patterns for voice messages, 60fps animations, scroll-to-bottom FAB with unread count, message spacing, date separators, empty chat state, and read receipts.
-- **Chat Preferences**: `ChatPreferencesContext` (`context/ChatPreferencesContext.tsx`) provides live chat customisation — theme color (bubble color via `CHAT_THEME_COLORS`), bubble border radius (via `BUBBLE_RADIUS`), font size, typing indicators, and read receipts. Persisted to Supabase `chat_preferences` table. Provider added to root `_layout.tsx` inside `LanguageProvider`. Chat screen (`app/chat/[id].tsx`) consumes the context: message bubble color, border radius, and font size applied dynamically; typing indicator broadcasting and read receipt marking each gated by their respective preference toggles.
-- **Story Viewer (Web-enabled)**: Full story viewing experience now works on web — image/video stories with progress bar, tap left/right navigation, comment input, viewer list (owner), and share. Previously blocked by a web guard; the guard has been removed since all components (`Video`, `Image`, `Animated`, `TouchableOpacity`) are web-compatible.
-- **Story Camera**: Full-screen camera for story posting with Photo/Video modes, flash, camera flip, and gallery picker.
-- **Story Privacy**: Privacy levels (`everyone`, `close_friends`, `only_me`) enforced by RLS and client-side filtering.
-- **Story Comments**: `story_replies` table with text input at bottom of story viewer. Comments pause story timer while composing. RLS: anyone can read, authenticated users can insert/delete own.
-- **Real-time Stories**: StoriesBar subscribes to Supabase Realtime INSERT events on `stories` table. New story rings appear immediately without refresh.
-- **Articles & Videos (post_type system)**: Posts table supports `post`, `article`, `video` types. Article creation with title, body, audience, word count. Video creation with `expo-image-picker` on native and a hidden `<input type="file" accept="video/*">` plus an HTML5 `<video>` metadata probe (duration / dimensions) on web — both feed into `expo-av` preview and upload to Cloudflare R2. The TikTok-style full-screen video player (`app/video/[id].tsx`) renders on web as well (the previous "Videos are only available in the app" guard was removed) since `expo-av`'s `<Video>` component is fully web-compatible. Web download uses a browser-native anchor with the `download` attribute so users can save the file from the CDN URL directly.
-- **Distinctive Article Cards**: Articles render with a unique card design across discover feed, profile pages, and search results. Features: cover image, badge with read time estimate, bold title, excerpt, branded "Read article" CTA button. Visually distinct from regular posts.
-- **Article Detail Page**: Magazine-style layout with optional cover image + gradient overlay, article badge + read time, large title, italic subtitle (short summary), author section with date, full `article_body` content (not truncated `content`), stats row, rounded action bar (Like/Comment/Share), threaded comments. Share button in header.
-- **Feed Performance & Offline**: Per-tab in-memory cache, `AsyncStorage` persistence with TTL, background fetching for silent refreshes, and auto-refresh on reconnect.
-- **Adaptive Feed Algorithm**: Records user interaction weights per category to learn interests and rank posts accordingly.
-- **Threaded Replies (Video Comments)**: Recursive threaded replies with indentation, "Reply" button, and `@handle` banner.
-- **Music Marquee (Video Player)**: Displays audio name at the bottom of the video player.
-- **Video Web Not Supported**: Video features are app-only; web shows "Videos are only available in the app" message.
-- **Unique Per-User Video Views**: Views recorded in `post_views` table (created by `20260503_video_feed_fixes.sql`) with unique constraint per user. Insert uses `upsert` to handle cross-session duplicates.
-- **Video Feed Bug Fix (2026-05-03)**: The `is_blocked` column was missing from the `posts` table in all migrations, causing every video feed query that used `.not("is_blocked", "is", true)` to fail silently. This made the For You/Following feed show only the single tapped video (the per-ID fallback) and appear non-scrollable. Fix: (1) Created `supabase/migrations/20260503_video_feed_fixes.sql` which adds `is_blocked BOOLEAN DEFAULT FALSE` to `posts` and creates the `post_views` table + RLS; (2) Removed `.not("is_blocked", "is", true)` filters from all 8 feed query locations (`video/[id].tsx`, `ShortsFeed.tsx`, `VideoFeed.tsx`, `discover.tsx` ×2, `shorts/index.tsx`, `create-duet.tsx`, `desktop/RightRail.tsx`) so feeds work immediately even before the migration is applied. The admin screen (`admin/index.tsx`) still reads/writes `is_blocked` for moderation — it will work once the migration runs. Video page size increased from 30 → 50 for more algorithm variety.
-- **Cross-Platform Adaptations**: Platform-specific guards for various features.
-- **Premium Tiering**: Features gated by subscription tiers (Silver, Gold) using `LockedToggle`/`LockedLink` components.
-- **Onboarding**: A forced 5-step onboarding flow for new users.
-- **Referral System**: Deep link-based referral system for user acquisition.
-
-# External Dependencies
-
-- **Supabase**: Primary backend for database (PostgreSQL), authentication, real-time, and storage.
-- **Drizzle ORM**: PostgreSQL ORM.
-- **Express 5**: API framework.
-- **Expo**: Universal React framework.
-  - `expo-router`
-  - `expo-secure-store`
-  - `expo-image-picker`
-  - `expo-av`
-  - `expo-notifications`
-  - `expo-device`
-  - `expo-location`
-- **Zod**: Schema declaration and validation.
-- **Orval**: OpenAPI code generator.
-- **React Query**: Data fetching and caching.
-- **pnpm**: Monorepo package manager.
-- **esbuild**: JavaScript bundler.
-- **Resend**: Email API for transactional emails.
-- **GROQ API**: AI chat features.
-- **Pesapal**: Payment gateway for Nexa/ACoin top-ups.
-- **NetInfo**: Network connectivity status.
-- **React Native Share API**: Content sharing.
-- **`react-native-view-shot`**: Capturing post content.
-- **AI Providers (via Supabase Edge Functions)**: Gemini 2.5 Flash, Lovable AI, DeepSeek, GPT-4o Mini, AIML API, DALL-E 3, Runware, AIML Flux, Freepik AI.
-
-## Tier System
-
-Tiers: `free → silver → gold → platinum`. Managed by `hooks/useTier.ts` (`hasTier(tier)` utility reads `useAuth().subscription.plan_tier`).
-
-Gate component: `components/ui/PremiumGate.tsx` — wraps screen content, shows full-screen lock with upgrade CTA when tier is insufficient.
-
-Applied gates:
-- **Group create** (`app/group/create.tsx`) — Gold required
-- **Channel create** (`app/channel/create.tsx`) — Platinum required
-- **Story create** (`app/stories/create.tsx`) — Gold required
-- **Monetize** (`app/monetize.tsx`) — Silver required
-- **AfuAI chat tap** (`app/(tabs)/index.tsx`) — Platinum intercept, routes to `/premium`
-
-## Desktop Shell (rebuilt 2026-04-29)
-
-The whole product (chrome + every screen) is intentionally **flat / YouTube-style**: a single surface color (`#FFFFFF` light / `#0F0F0F` dark) flows through the sidebar, top bar, and main content area — no border-rights, no border-bottoms, no drop shadows between regions. Active nav rows use a subtle gray fill (`#F2F2F2` / `#272727`) plus bolder text — no accent pills, no left-edge stripes. Hover and active fills use the same color so the entire chrome behaves like a single document. The mobile classic tab bar (`app/(tabs)/_layout.tsx`) is likewise flattened by setting `borderTopWidth: 0`.
-
-The light/dark palettes in `constants/colors.ts` are tuned to YouTube neutrals:
-
-- light: `background/surface/header = #FFFFFF`, `backgroundSecondary = #F2F2F2` (hover/pill fills), `backgroundTertiary = #F8F8F8`, `border/separator = #E5E5E5`, `text = #0F0F0F`, `textSecondary = #606060`, `textMuted = #909090`, `inputBg/bubbleIncoming = #F2F2F2`.
-- dark: `background/surface/header = #0F0F0F`, `backgroundSecondary = #272727`, `backgroundTertiary = #1F1F1F`, `border/separator = #303030`, `text = #F1F1F1`, `textSecondary = #AAAAAA`, `textMuted = #717171`, `inputBg/bubbleIncoming = #272727`.
-
-In-app screens follow the same flatness rules:
-
-- **Discover** (`app/(tabs)/discover.tsx`) — header has no border-bottom, "For You" / "Following" / "Shorts" are YouTube-style underline tabs (3px bottom-border + bold text on the active tab; the Shorts pill includes a small play-circle icon). The Shorts pill no longer drives a sub-tab on this screen — it `router.push("/shorts")` instead, so there is exactly ONE video player implementation app-wide (`app/video/[id].tsx`). The legacy `?tab=shorts` query string is auto-redirected to `/shorts`. The discover header has no theme switcher (the global theme toggle lives in the desktop sidebar footer). Post cards sit on the page background with no surface chip and no top border on the footer action row.
-  - **Single video player (`app/video/[id].tsx` + `/shorts`)**: `/shorts` (`app/shorts/index.tsx`) is a thin redirect that fetches the latest public, non-blocked, video-typed post from `posts` and `router.replace`s to `/video/[id]`. The video player itself uses a vertical `FlatList` with `windowSize=5`, `initialNumToRender=3`, ±2 neighbour preload, `WebVideoPlayer` on web (HTML5 `<video>` with `preload="auto"`, `playsInline`, `objectFit:contain`, **no `muted` attribute** — videos play with sound by default per user request) and expo-av on native (`ResizeMode.CONTAIN`). On desktop the screen is wrapped in a centered 9:16 card. Comments, more-options menu, share, and sound sheets all use `SwipeableBottomSheet`, which auto-renders as a centered modal on desktop and a bottom sheet on mobile — so they open in the same position/style across all video views. The legacy `components/ShortsFeed.tsx` is no longer imported anywhere.
-  - On desktop (`useIsDesktop()` true), the body is wrapped in `<DesktopFeedLayout>` which renders the feed inside a centered 620px column with hairline left/right borders, plus a 340px right rail (`<RightRail />`) when the viewport is ≥1180px. The right rail surfaces three cards in order: **Who to follow** (suggested profiles the signed-in user does not yet follow), **Communities for you** (suggested `paid_communities` ranked by `interest tag overlap × 100 + friend-membership count × 25 + log1p(member_count)` — interests come from `profiles.interests`, "friend memberships" come from `community_members` joined to the user's `follows`, and already-joined communities are filtered out; falls back to popularity for signed-out users; each row shows emoji, name, a one-line "why" reason, and a price pill, tapping opens `/paid-communities`), and **Trending** (top hashtags extracted from posts in the last 7 days). Footer links: Terms · Privacy · About · © year. The FAB and the bottom Communities tab stay outside this wrapper. On mobile the wrapper is a no-op.
-- **Apps** (`app/(tabs)/apps.tsx`) — the featured app row is a flat `Icon · Title · Sub · Open →` row with a neutral square icon (no `LinearGradient` hero); category sections drop the surface card wrapper and lay tiles directly on the page. Individual app tile icons retain their colored gradients because they read as product/launcher icons, not chrome.
-- **Wallet** (`app/wallet/index.tsx`) — balance is a hairline-divided header showing two large neutral stat blocks (Nexa / ACoin), action buttons (Buy ACoin / Send / Convert / Scan QR / Requests) are plain ghost pills using `colors.backgroundSecondary`, and the All / Nexa / ACoin / Gifts filters are underline tabs.
-- **Chats** (`app/(tabs)/index.tsx`) — header drops the bottom hairline; the search bar drops its border + focus shadow and is a plain `colors.backgroundSecondary` pill. On desktop (≥1024px web) the body becomes a row layout with a flat 88px **left filter rail** (Telegram-style: All chats / Unread / Personal / Groups / Channels) — each tab is just an icon stacked over a small label with an optional count badge in the icon's top-right corner (red `#FF3B30` for the Unread tab, neutral gray for the rest). Active state is bolder text + full-contrast icon color, inactive is muted; no tab background, no borders, no left-edge stripe. The story bar only renders when the All filter is active and there is no search query.
-
-The desktop layout is owned by three files and only mounts when `useIsDesktop()` is true (viewport ≥ 1024 px on web):
-
-- `components/desktop/DesktopShell.tsx` — root layout. On web the sidebar is rendered with `position: fixed` (`top:0, left:0, bottom:0`) so it never moves when the main content scrolls, the top bar is `position: fixed` (`top:0, left:SIDEBAR_WIDTH, right:0`), and the main column reserves both via `paddingLeft: SIDEBAR_WIDTH` + `paddingTop: TOPBAR_HEIGHT`. Routes matching `FULLSCREEN_PATTERNS` (`/`, `/(auth)/*`, `/onboarding/*`, `/call/*`, `/video/*`, `/stories/{view,camera}`) bypass the shell entirely. Routes matching `MODAL_PATTERNS` (profile/edit, moments/create, group/create, stories/create, red-envelope, terms, privacy, mini-programs/transfer, mini-programs/fee-details, language-settings, linked-accounts) render as a centred modal card on a backdrop while the sidebar + top bar stay visible behind. **Master-detail chats**: when the pathname matches `/chat/[id]` the main column splits into a row layout — `<ChatsListPanel />` (named export from `app/(tabs)/index.tsx`, which renders `<ChatsScreen panelMode />` as a 360px-wide column with a hairline right border) on the left, route children (the chat conversation) on the right. This gives a WhatsApp/Telegram-style sticky chat list that stays visible while a chat is open; the active chat row is highlighted with `colors.backgroundSecondary` (detected via `usePathname()` inside `ChatsScreen`).
-- `components/desktop/DesktopSidebar.tsx` — exports `SIDEBAR_WIDTH = 240`. Width is locked via `width / minWidth / maxWidth` so it cannot reflow regardless of route or content. Layout: brand row → scrollable nav with a single `Main` group (Chats, Discover, Moments, AfuAI, Notifications) and a footer block with the user card → sign-out menu (or Sign-in row + theme toggle when signed out). Items duplicated by the top-bar dropdowns (Wallet, Marketplace, Apps, Premium, Settings, Help) were removed from the sidebar so each destination is reachable from exactly one place.
-- `components/desktop/DesktopTopBar.tsx` — exports `TOPBAR_HEIGHT = 56`. Layout: left-aligned top-nav buttons with click-anchored dropdowns for sub-pages (`Wallet ▾`, `Marketplace ▾`, `Apps ▾`, `More ▾`); centred search box that routes to `/(tabs)/search?q=...` on submit; right-side utilities — ACoins balance pill (mirrors `profile.acoin`), notifications bell with unread badge (live count via Supabase realtime subscription on `notifications` table filtered by `user_id`), and avatar shortcut to `/(tabs)/me` (or a Sign-in button when signed out). Dropdowns are `position: fixed` panels measured from the trigger's `getBoundingClientRect()`, with outside-click / Escape / scroll / resize close handlers.
-
-## Watch Together (removed 2026-04-29)
-
-The live-matches / Watch Together feature was deleted entirely.
-
-- DB tables dropped (with all data) via Supabase Management API and recorded in migration `supabase/migrations/20260429_drop_watch_together.sql`: `watch_reactions`, `watch_messages`, `watch_match_events`, `watch_rooms`, `watch_matches`, plus helper functions `fn_watch_create_room`, `fn_watch_event_to_message`, `fn_watch_matches_touch`.
-- Files removed: `app/watch/index.tsx`, `app/watch/[matchId].tsx`, `lib/watchTogether.ts`.
-- The "Watch Together" tile was removed from the Entertainment section of `app/(tabs)/apps.tsx`, and the feature was de-listed in `app/terms.tsx`.
-
-## Post Thumbnail Detection
-
-All surfaces now pick the best available thumbnail using priority: `post_images[0]` → `image_url` → null.
-
-- `contact/[id].tsx`: Video posts now render `image_url` behind the play-button overlay (previously showed a blank dark background).
-- `post/[id].tsx`: Query now fetches `article_title`; article posts render a bold title above the body text in the detail view.
-
-## Offline Improvements
-
-- `lib/offlineStore.ts` — `initNetInfo()` on web now **never reads `navigator.onLine` at startup**. That property returns `false` in sandboxed iframes (Replit canvas/workspace preview) and headless browsers even when the network is fully reachable, causing `isOnline()` to return `false` and `fetchPosts` to bail out immediately, leaving the Discover feed blank. The fix keeps `_isOnline = true` (the module-level default) and only ever flips it via the browser `online`/`offline` events, which are reliable across all contexts. This resolves the "blank Discover feed in mobile canvas view" bug.
-- `lib/offlineStore.ts` — added `cacheWallet` / `getCachedWallet` (key `offline_wallet`)
-- `app/wallet/index.tsx` — loads cached transactions when offline; caches on successful load; shows `OfflineBanner`
-- `app/group/create.tsx`, `app/channel/create.tsx`, `app/stories/create.tsx`, `app/monetize.tsx` — `isOnline()` guard before any mutation
-## Post Detail Page Redesign
-
-`app/post/[id].tsx` — Full visual overhaul (all logic preserved):
-- **Article hero**: 280px full-bleed image with `LinearGradient` overlay; article title + badge displayed on top of the gradient for a magazine-style look
-- **Reading time**: Calculated from word count (`Math.ceil(words/200)`) shown in the badge row
-- **Author byline**: Full-width bordered row (avatar + name + date + view count) separating hero from body
-- **Image grid**: Smart `ImageGrid` component — 1 image full-width, 2 images side-by-side, 3-4 in a 2×2 tile grid with "+N" overflow badge
-- **Engagement bar**: 4-column bar (Like · Replies · Views · Share) with `hairlineWidth` dividers; like count turns red when liked
-- **Reply section header**: Centered divider with a badge showing reply count
-- **Reply composer**: Shows user's own avatar; character counter appears at 200+ chars; turns red below 20 remaining
-- **Reply card**: Nested replies get a colored left-border depth indicator; replies render in a rounded bubble
-- **Context menu**: Menu items use icon badge circles (color-coded per action)
-
-## First-Login Welcome Guide
-
-`components/ui/WelcomeGuide.tsx` — New full-screen overlay shown once per account after first login:
-- 6 swipeable slides: Welcome · Chat · Discover · AfuAI · Wallet · Community
-- Each slide: `LinearGradient` background, large icon circle, title, subtitle, 3 feature bullet points
-- Smooth spring entrance animation (scale + translateY)
-- Top-right **Skip** button dismisses immediately
-- Dot page indicators (active dot wider)
-- **Next** → **Get Started** CTA button at bottom
-- Stored in `AsyncStorage` key `afu_welcome_guide_v1_seen` — shown exactly once
-- Wired in `(tabs)/_layout.tsx` after `onboarding_completed === true`, shows user's first name on slide 1
-
-## Hybrid Video Pipeline (H.264 + AV1)
-
-Async, DB-backed encoding queue producing adaptive renditions (360p/720p/1080p) in
-both H.264 (universal compatibility) and AV1 (smaller files for capable devices).
-HLS/DASH not implemented yet — architecture leaves the hooks open.
-
-**Schema** (`supabase/migrations/20260427_video_pipeline.sql`, must be applied on Supabase):
-- `video_assets` — one row per source upload (status: pending/encoding/ready/failed, poster_path)
-- `video_renditions` — one row per (asset, codec, height) output
-- `video_jobs` — work queue, claimed atomically via `claim_video_job(worker_id, codecs[])` (FOR UPDATE SKIP LOCKED)
-- `posts.video_asset_id` FK for fast manifest lookup at playback
-- DB trigger flips `video_assets.status='ready'` once the H.264 baseline (≥720p) lands
-- RLS: public select, service-role-only writes
-
-**API server** (`artifacts/api-server/`):
-- `lib/supabaseAdmin.ts` — singleton service-role client (graceful no-op when key missing)
-- `lib/ffmpeg.ts` — typed spawn helpers, encoder ladder builder (libx264 + libsvtav1)
-- `lib/videoStorage.ts` — Cloudflare R2 I/O for the `videos` logical bucket (keys are `videos/<path>` inside the `afuchat-media` R2 bucket)
-- `routes/videos.ts` — `POST /api/videos`, `GET /api/videos/:id`, `GET /api/videos/:id/manifest`,
-  `GET /api/videos/by-post/:postId/manifest`. Manifest sources are codec-priority sorted
-  (H.264=10, AV1=50; 720<1080<360 height boost).
-- `services/videoEncoder.ts` — background worker started from `index.ts`. Boots only
-  when `SUPABASE_SERVICE_ROLE_KEY` is set AND ffmpeg/libx264 are present. Claims jobs,
-  encodes, uploads to `{owner}/encoded/{asset}/{codec}_{h}p.mp4`, extracts a 1-second
-  poster frame, retries with backoff, skips upscale jobs.
-
-**Mobile** (`artifacts/mobile/`):
-- `lib/videoApi.ts` — `registerVideoAsset`, `getPostVideoManifest`, `getAssetVideoManifest`,
-  `pickBestSource`, `isAv1Supported` (uses `MediaSource.isTypeSupported` on web; AV1
-  disabled on native because expo-av support is inconsistent).
-- `hooks/useResolvedVideoSource.ts` — picks the best ready rendition for a post and
-  polls every 8s (up to ~64s) so freshly uploaded posts swap to the optimized rendition
-  without a refresh. Falls back to the original `video_url` until renditions are ready.
-- `app/moments/create-video.tsx` — calls `registerVideoAsset` after the post insert
-  (non-blocking — encoder failures never break posting).
-- `components/VideoFeed.tsx` and `app/video/[id].tsx` — both wired through the resolver
-  hook; the existing `videoCache` layer still applies for the source URL fallback.
-
-**Operational requirements** (must be done by the user):
-1. Apply `supabase/migrations/20260427_video_pipeline.sql` on the Supabase project
-   (cannot be applied locally — depends on the `auth` schema).
-2. The `videos` Storage bucket must allow service-role writes under
-   `{userId}/encoded/{asset}/...` (existing upload code already uses `{userId}/...`).
-
-## Desktop UX decisions
-
-- **One official global search**: the desktop top bar
-  (`components/desktop/DesktopTopBar.tsx`) owns the search input. The
-  `app/(tabs)/search.tsx` page reads `?q=...` from URL params and hides its
-  own header/title/search input on desktop (kept on mobile). This avoids
-  the duplicate input that previously appeared on `/search`.
-- **Profile dropdown** (`ProfileDropdown` inside `DesktopTopBar.tsx`):
-  the avatar in the top-right opens a 280px panel listing the active
-  account, any other linked accounts (one-click switch via
-  `useAuth().switchAccount`), and shortcuts to Add account / Manage
-  accounts (`/linked-accounts`), My profile (`/(tabs)/me`), Edit profile
-  (`/profile/edit`), Settings, and Sign out. Closes on outside click,
-  scroll, escape, or resize. It replaces the previous direct
-  `router.push("/me")` behaviour.
-- **Video pause/play fixed (web)** — in `/video/[id]` the outer `Pressable` and the inner `<video onClick>` were both firing on the same tap, toggling `paused` twice so it appeared to never pause. Fix: the `<video>` now owns the click handler (with a 220ms single-vs-double-click window) and stops propagation; the `Pressable.onPress` is disabled on web (`onPress={undefined}`). Double-clicking the video still triggers the like-burst animation via `onDoubleClick`. ShortsFeed's `WebShortsPlayer` got the same stopPropagation defensive guard.
-- **Keyboard controls (web)** — both the `/video/[id]` page and `ShortsFeed` now attach a `window.keydown` listener (web only, skipped when focus is in an input/textarea). `Space` prevents default browser scroll and toggles pause/play on the active video. `ArrowDown`/`PageDown` scrolls to the next video; `ArrowUp`/`PageUp` scrolls to the previous one. Active card registers its `setPaused` toggle in a shared `activeToggleRef` that the page-level handler reads.
-- **"Add another account" stays on current page** — clicking "Add another account" in the profile dropdown now navigates to `/linked-accounts?addNew=1`. The linked-accounts screen reads that param: it auto-opens the add form on mount, and after a successful link it calls `router.back()` (returning to the page the user was on) instead of just closing the form.
-- **No tab-switch refreshes** (`context/AuthContext.tsx`):
-  `supabase.auth.onAuthStateChange` ignores `TOKEN_REFRESHED` (it patches
-  the new tokens onto the existing session object in place rather than
-  setting new state) and only updates `session`/`user` when the active
-  user id actually changes. Without this, every browser-tab focus on web
-  re-fetched the profile and cascaded a re-render through every
-  `useAuth()` consumer — making `/shorts` and `/video/[id]` visibly
-  "refresh" each time the user came back to the tab.
-
-## Secrets Policy (IMPORTANT)
-
-**`SUPABASE_SERVICE_ROLE_KEY` MUST live only in Supabase Edge Function secrets** —
-never in Replit env vars, never in `.env`, never anywhere outside Supabase.
-
-Consequences on the Replit-hosted Express API server (`artifacts/api-server`):
-- `getSupabaseAdmin()` returns `null` → all admin-scoped routes degrade gracefully
-  (videos pipeline, account purge, admin endpoints, support endpoints,
-  realtime email watcher, etc.).
-- The video encoder worker stays disabled and `POST /api/videos` returns 503.
-  Videos still play via the original uploaded source URL — only the
-  re-encoding-to-multi-rendition optimization is skipped.
-
-If admin-scoped functionality is ever needed beyond what Supabase Edge Functions
-already provide, port the route into a new Edge Function under
-`supabase/functions/<name>/` rather than adding the service-role key here.
-- **Vercel OG Tag Edge Function (`api/og.ts`)** — Vercel Edge Function deployed at `GET /api/og?type={post|video}&id={shortId}`. All `/p/:id` and `/video/:id` requests are rewritten to this function via `vercel.json`. The function: (1) decodes the base-62 short ID to UUID, (2) fetches post/video data from Supabase using the anon key, (3) fetches the static `index.html` from the same Vercel CDN, (4) strips existing generic OG/Twitter meta tags, (5) injects post-specific `og:title`, `og:description`, `og:image`, `og:url`, `twitter:*` tags, and (6) returns the enriched HTML. This means every `/p/` and `/video/` link returns the correct rich preview in WhatsApp, Twitter, Telegram etc., while still loading the full Expo SPA for regular users (since the same `index.html` content is returned with OG tags in the `<head>`). Cached at `s-maxage=60, stale-while-revalidate=300`.
-- **Video short URLs** — Video share links (`/video/[id]`) now use base-62 short IDs (same encoding as post links) via `encodeId()` from `lib/shortId.ts`. The video screen (`app/video/[id].tsx`) decodes incoming URL params with `decodeId()` when `isUuid()` returns false, so both short IDs (from share links) and raw UUIDs (from in-app navigation) work. The `getVideoUrl()` helper always generates short-ID URLs.
-- **Shorts FlatList scroll fix** — Added `flex: 1` to the FlatList `style` in `app/video/[id].tsx`. Without it, React Native Web rendered the FlatList with no constrained height inside the absolutely-positioned root view, causing all items to stack outside the viewport and making the feed appear stuck on one video.
+# AfuChat — Replit Project
+
+## Overview
+AfuChat is a full-featured social/chat mobile platform. The project is a pnpm monorepo with three main services:
+
+1. **API Server** (`artifacts/api-server`) — Express 5 + TypeScript, built with esbuild. Handles auth, uploads, AI chat proxy, video processing, push notifications, and realtime event watching via Supabase.
+2. **Mobile App** (`artifacts/mobile`) — Expo 54 (React Native) with Expo Router. Runs as a web app in Replit preview (port 5000). Also supports iOS/Android via EAS Build.
+3. **Mockup Preview Server** (`artifacts/mockup-sandbox`) — Vite dev server for canvas/mockup previews (port 8000).
+
+## Architecture
+
+### Backend (API Server — port 3000)
+- **Framework**: Express 5
+- **Language**: TypeScript → esbuild bundle → `dist/index.mjs`
+- **Auth**: Supabase Auth (service-role key for admin operations)
+- **Database**: Supabase (primary), Replit PostgreSQL provisioned via `DATABASE_URL` (for future Drizzle schema use)
+- **Storage**: Cloudflare R2 (S3-compatible) for all user media
+- **Email**: Resend API (`RESEND_API_KEY`)
+- **Realtime**: Supabase Realtime channels (push notifications, email triggers)
+- **Video**: ffmpeg for transcoding, R2 for storage
+
+### Frontend (Mobile — port 5000)
+- **Framework**: Expo 54 with Expo Router
+- **Target**: iOS, Android, Web
+- **Auth**: Supabase JS client (anon key)
+- **Build**: Metro bundler (web dev mode in Replit), EAS Build for native
+
+### Shared Libraries
+- `lib/db` — Drizzle ORM + pg, connects to `DATABASE_URL` (Replit PostgreSQL)
+- `lib/api-spec` — Shared API type definitions
+- `lib/api-zod` — Zod schemas for API validation
+- `lib/api-client-react` — React hooks for API calls
+
+## Environment Variables
+All set in `.replit` `[userenv.shared]`:
+- `SUPABASE_URL` / `SUPABASE_PROJECT_REF`
+- `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY`
+- `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+- `DATABASE_URL` / `PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE` (Replit PostgreSQL)
+- `GITHUB_PAT`
+- Cloudflare R2 credentials loaded at runtime from Supabase `app_settings` table
+
+## Workflows
+| Name | Command | Port | Purpose |
+|------|---------|------|---------|
+| API Server | `cd artifacts/api-server && node ./build.mjs && PORT=3000 node --enable-source-maps ./dist/index.mjs` | 3000 | REST API |
+| Start application | `cd artifacts/mobile && CI=1 ... ./node_modules/.bin/expo start --port 5000` | 5000 | Mobile web preview |
+| Mockup Preview Server | `cd artifacts/mockup-sandbox && PORT=8000 BASE_PATH=/__mockup/ npx vite` | 8000 | Canvas mockups |
+
+## Key Files
+- `artifacts/api-server/build.mjs` — esbuild bundler script
+- `artifacts/api-server/src/index.ts` — Server entry point
+- `artifacts/api-server/src/lib/bootstrap.ts` — Loads R2 config from Supabase `app_settings` at startup
+- `artifacts/api-server/src/lib/constants.ts` — Hard-coded Supabase URL (public, not a secret)
+- `artifacts/api-server/src/lib/r2.ts` — Cloudflare R2 client
+- `artifacts/api-server/src/services/realtimeWatcher.ts` — Supabase Realtime event handler
+- `artifacts/mobile/app.json` — Expo config (bundle ID: `com.afuchat.app`)
+- `lib/db/src/schema/index.ts` — Drizzle schema (currently empty; add tables here)
+- `pnpm-workspace.yaml` — Workspace packages and catalog versions
+
+## Development Notes
+- Run `pnpm install` from workspace root to install all dependencies
+- API server must be rebuilt after source changes: `cd artifacts/api-server && node ./build.mjs`
+- The mobile app uses `CI=1` (not `--non-interactive`) for non-watch mode in Replit
+- Supabase is the primary backend — do NOT replace with Replit Auth/DB unless explicitly requested
+- Cloudflare R2 credentials are fetched from Supabase `app_settings` table at server boot (graceful fallback if unavailable)
