@@ -732,6 +732,7 @@ function VideoItem({
   const videoRef = useRef<Video>(null);
   const webVideoRef = useRef<HTMLVideoElement | null>(null);
   const cacheAttempted = useRef(false);
+  const nativeTouchRef = useRef<{ y: number; t: number } | null>(null);
 
   // Desktop "card" layout (YouTube-Shorts-style centered video). On mobile and
   // small viewports we keep the existing edge-to-edge fullscreen experience.
@@ -1182,12 +1183,29 @@ function VideoItem({
           )}
         </View>
       ) : (
-        // Native: keep Pressable for onPress (tap to pause) + long-press
-        <Pressable
+        // Native: use a View with manual responder tracking so the parent
+        // FlatList can always reclaim vertical swipe gestures for scrolling.
+        // onResponderTerminationRequest returning true is the key — it yields
+        // the touch back to the FlatList the moment it detects a scroll intent.
+        <View
           style={StyleSheet.absoluteFill}
-          onPress={handleTap}
-          onLongPress={() => onOpenMenu(item)}
-          delayLongPress={380}
+          onStartShouldSetResponder={() => true}
+          onResponderTerminationRequest={() => true}
+          onResponderGrant={(e) => {
+            nativeTouchRef.current = { y: e.nativeEvent.pageY, t: Date.now() };
+          }}
+          onResponderRelease={(e) => {
+            const start = nativeTouchRef.current;
+            nativeTouchRef.current = null;
+            if (!start) return;
+            const dy = Math.abs(e.nativeEvent.pageY - start.y);
+            const dt = Date.now() - start.t;
+            if (dy < 12) {
+              if (dt >= 380) onOpenMenu(item);
+              else handleTap();
+            }
+          }}
+          onResponderTerminate={() => { nativeTouchRef.current = null; }}
         >
           {shouldMountVideo ? (
             <Video
@@ -1205,7 +1223,7 @@ function VideoItem({
           ) : (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />
           )}
-        </Pressable>
+        </View>
       )}
 
       {buffering && isActive && (

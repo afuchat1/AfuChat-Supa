@@ -84,13 +84,27 @@ function VideoItem({
   const showFollowButton = !isOwnVideo && !item.following;
   const resolved = useResolvedVideoSource(item.id, item.video_url, { targetHeight: 720 });
 
+  const videoTouchRef = useRef<{ y: number; t: number } | null>(null);
+
   return (
     <View style={styles.videoItem}>
       {/* Video — always auto-plays when active */}
-      <TouchableOpacity
-        activeOpacity={1}
+      <View
         style={StyleSheet.absoluteFill}
-        onPress={() => setPaused((p) => !p)}
+        onStartShouldSetResponder={() => true}
+        onResponderTerminationRequest={() => true}
+        onResponderGrant={(e) => {
+          videoTouchRef.current = { y: e.nativeEvent.pageY, t: Date.now() };
+        }}
+        onResponderRelease={(e) => {
+          const start = videoTouchRef.current;
+          videoTouchRef.current = null;
+          if (!start) return;
+          const dy = Math.abs(e.nativeEvent.pageY - start.y);
+          const dt = Date.now() - start.t;
+          if (dy < 12 && dt < 350) setPaused((p) => !p);
+        }}
+        onResponderTerminate={() => { videoTouchRef.current = null; }}
       >
         <Video
           ref={videoRef}
@@ -106,7 +120,7 @@ function VideoItem({
             <Ionicons name="play" size={52} color="rgba(255,255,255,0.85)" />
           </View>
         )}
-      </TouchableOpacity>
+      </View>
 
       {/* Gradient overlay */}
       <View style={styles.gradient} pointerEvents="none" />

@@ -23,7 +23,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
   ViewToken,
   useWindowDimensions,
@@ -198,11 +197,24 @@ function NativeShortsPlayer({
   onTogglePause: () => void;
 }) {
   const ref = useRef<Video>(null);
+  const touchRef = useRef<{ y: number; t: number } | null>(null);
   return (
-    <TouchableOpacity
-      activeOpacity={1}
+    <View
       style={StyleSheet.absoluteFill}
-      onPress={preloadOnly ? undefined : onTogglePause}
+      onStartShouldSetResponder={() => !preloadOnly}
+      onResponderTerminationRequest={() => true}
+      onResponderGrant={(e) => {
+        touchRef.current = { y: e.nativeEvent.pageY, t: Date.now() };
+      }}
+      onResponderRelease={(e) => {
+        const start = touchRef.current;
+        touchRef.current = null;
+        if (!start) return;
+        const dy = Math.abs(e.nativeEvent.pageY - start.y);
+        const dt = Date.now() - start.t;
+        if (dy < 12 && dt < 350) onTogglePause();
+      }}
+      onResponderTerminate={() => { touchRef.current = null; }}
     >
       <Video
         ref={ref}
@@ -222,7 +234,7 @@ function NativeShortsPlayer({
           </View>
         </View>
       )}
-    </TouchableOpacity>
+    </View>
   );
 }
 
