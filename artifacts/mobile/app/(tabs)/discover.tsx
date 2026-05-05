@@ -264,11 +264,13 @@ function DiscoverCommentsSheet({
 
   const timeDiff = (iso: string) => formatRelative(iso);
 
+  const { height: screenH } = useWindowDimensions();
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-        <Pressable style={{ flex: 1 }} onPress={onClose}>
-          <Pressable onPress={() => {}} style={[dcStyles.sheet, { backgroundColor: colors.surface, paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)" }} activeOpacity={1} onPress={onClose} />
+        <View style={[dcStyles.sheet, { height: screenH * 0.78, backgroundColor: colors.surface, paddingBottom: Math.max(insets.bottom, 16) }]}>
             {/* Handle */}
             <View style={[dcStyles.handle, { backgroundColor: colors.border }]} />
             {/* Header */}
