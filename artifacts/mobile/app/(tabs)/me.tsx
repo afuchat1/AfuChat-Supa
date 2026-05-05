@@ -192,6 +192,8 @@ export default function MeScreen() {
   const [verifyBannerDismissed, setVerifyBannerDismissed] = useState(true);
   // true when a verification application already exists (any status)
   const [hasVerifApp, setHasVerifApp] = useState(false);
+  // true when the user's org page itself is already verified (organization_pages.is_verified)
+  const [isOrgPageVerified, setIsOrgPageVerified] = useState(false);
   const isAdmin = !!profile?.is_admin;
   const insets = useSafeAreaInsets();
 
@@ -202,15 +204,16 @@ export default function MeScreen() {
       Promise.all([
         supabase
           .from("organization_pages")
-          .select("id", { count: "exact", head: true })
+          .select("id, is_verified", { count: "exact" })
           .eq("admin_id", user.id),
         supabase
           .from("business_verification_requests")
           .select("id", { count: "exact", head: true })
           .eq("user_id", user.id),
-      ]).then(([{ count: pageCount }, { count: appCount }]) => {
+      ]).then(([{ data: pageData, count: pageCount }, { count: appCount }]) => {
         setHasCompanyPage((pageCount ?? 0) > 0);
         setHasVerifApp((appCount ?? 0) > 0);
+        setIsOrgPageVerified(!!(pageData && (pageData as any[]).some((p: any) => p.is_verified)));
       });
     });
     // Load persisted banner dismissal from storage
@@ -328,7 +331,7 @@ export default function MeScreen() {
 
       <ProfileCompletionBar profile={profile} isPremium={isPremium} />
 
-      {hasCompanyPage && !profile?.is_organization_verified && !hasVerifApp && !verifyBannerDismissed && (
+      {hasCompanyPage && !profile?.is_organization_verified && !isOrgPageVerified && !hasVerifApp && !verifyBannerDismissed && (
         <View style={styles.verifyBanner}>
           <View style={styles.verifyBannerLeft}>
             <View style={styles.verifyBannerIconWrap}>
