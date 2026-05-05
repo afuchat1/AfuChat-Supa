@@ -34,11 +34,11 @@ export default function NotFoundScreen() {
       )}
 
       <View style={styles.content}>
-        <View style={[styles.iconCircle, { backgroundColor: colors.backgroundSecondary }]}>
-          <Ionicons name="compass-outline" size={isDesktop ? 52 : 44} color="#00BCD4" />
+        <View style={[styles.iconCircle, { backgroundColor: colors.surface ?? colors.backgroundSecondary }]}>
+          <Ionicons name="compass-outline" size={isDesktop ? 52 : 44} color={colors.accent} />
         </View>
 
-        <Text style={[styles.code, { color: "#00BCD4" }]}>404</Text>
+        <Text style={[styles.code, { color: colors.accent }]}>404</Text>
 
         <Text style={[styles.title, { color: colors.text, fontSize: isDesktop ? 26 : 22 }]}>
           Page not found

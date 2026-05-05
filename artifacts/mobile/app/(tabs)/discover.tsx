@@ -71,6 +71,10 @@ type PostItem = {
   video_url: string | null;
   duration_seconds: number | null;
   isFollowing: boolean;
+  org_page_id?: string;
+  org_slug?: string;
+  org_type?: string;
+  org_verified?: boolean;
 };
 
 function formatRelative(iso: string): string {
@@ -137,6 +141,10 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
   }, [preferredLang, item.content]);
 
   function openPost() {
+    if (item.org_page_id) {
+      router.push(`/company/${item.org_slug}` as any);
+      return;
+    }
     if (item.post_type === "article") {
       router.push({ pathname: "/article/[id]", params: { id: item.id } });
       return;
@@ -207,24 +215,60 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
         >
           {/* ── Header ── */}
           <View style={styles.cardHeader}>
-            <TouchableOpacity
-              onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}
-              activeOpacity={0.8}
-            >
-              <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={isDesktop ? 44 : 40} square={!!(item.is_organization_verified)} />
-            </TouchableOpacity>
+            {item.org_page_id ? (
+              <TouchableOpacity
+                onPress={() => router.push(`/company/${item.org_slug}` as any)}
+                activeOpacity={0.8}
+              >
+                <View style={{ width: isDesktop ? 44 : 40, height: isDesktop ? 44 : 40, borderRadius: 8, backgroundColor: "#00BCD420", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                  {item.profile.avatar_url
+                    ? <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={isDesktop ? 44 : 40} square />
+                    : <Text style={{ color: "#00BCD4", fontFamily: "Inter_700Bold", fontSize: isDesktop ? 18 : 16 }}>{(item.profile.display_name || "O").slice(0, 1).toUpperCase()}</Text>
+                  }
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}
+                activeOpacity={0.8}
+              >
+                <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={isDesktop ? 44 : 40} square={!!(item.is_organization_verified)} />
+              </TouchableOpacity>
+            )}
             <View style={{ flex: 1, gap: 2 }}>
               <View style={styles.nameRow}>
-                <Text style={[styles.cardName, { color: colors.text, fontSize: isDesktop ? 17 : 15 }]} numberOfLines={1}>
-                  {item.profile.display_name}
-                </Text>
-                <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={isDesktop ? 15 : 13} />
+                <TouchableOpacity
+                  onPress={() => item.org_page_id ? router.push(`/company/${item.org_slug}` as any) : undefined}
+                  activeOpacity={item.org_page_id ? 0.7 : 1}
+                >
+                  <Text style={[styles.cardName, { color: colors.text, fontSize: isDesktop ? 17 : 15 }]} numberOfLines={1}>
+                    {item.profile.display_name}
+                  </Text>
+                </TouchableOpacity>
+                {item.org_page_id ? (
+                  item.org_verified ? <VerifiedBadge isVerified={false} isOrganizationVerified size={isDesktop ? 15 : 13} /> : null
+                ) : (
+                  <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={isDesktop ? 15 : 13} />
+                )}
               </View>
-              <Text style={[styles.cardMeta, { color: colors.textMuted, fontSize: isDesktop ? 13 : 12 }]} numberOfLines={1}>
-                @{item.profile.handle} · {formatRelative(item.created_at)}
-              </Text>
+              {item.org_page_id ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <View style={{ backgroundColor: "#00BCD415", borderRadius: 4, paddingHorizontal: 6, paddingVertical: 1 }}>
+                    <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: "#00BCD4", textTransform: "capitalize" }}>
+                      {item.org_type?.replace(/\s*\/.*$/, "") || "Company"}
+                    </Text>
+                  </View>
+                  <Text style={[styles.cardMeta, { color: colors.textMuted, fontSize: isDesktop ? 13 : 12 }]}>
+                    · {formatRelative(item.created_at)}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={[styles.cardMeta, { color: colors.textMuted, fontSize: isDesktop ? 13 : 12 }]} numberOfLines={1}>
+                  @{item.profile.handle} · {formatRelative(item.created_at)}
+                </Text>
+              )}
             </View>
-            {showFollowBtn && (
+            {!item.org_page_id && showFollowBtn && (
               <TouchableOpacity
                 style={[styles.followBtn, { backgroundColor: colors.accent }]}
                 onPress={() => { if (!currentUser) { onRequireAuth?.(); return; } onToggleFollow(item.author_id); }}
@@ -234,12 +278,23 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
                 <Text style={styles.followBtnText}>Follow</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity
-              onPress={() => { Haptics.impactAsync?.(); setMenuVisible(true); }}
-              hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
-            >
-              <Ionicons name="ellipsis-horizontal" size={18} color={colors.textMuted} />
-            </TouchableOpacity>
+            {item.org_page_id ? (
+              <TouchableOpacity
+                style={[styles.followBtn, { backgroundColor: "#00BCD415", borderWidth: 1, borderColor: "#00BCD430" }]}
+                onPress={() => router.push(`/company/${item.org_slug}` as any)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="business-outline" size={14} color="#00BCD4" />
+                <Text style={[styles.followBtnText, { color: "#00BCD4" }]}>View Page</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={() => { Haptics.impactAsync?.(); setMenuVisible(true); }}
+                hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
+              >
+                <Ionicons name="ellipsis-horizontal" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* ── VIDEO: thumbnail preview card ── */}
@@ -876,16 +931,80 @@ export default function DiscoverScreen() {
 
       const diversified = diversifyFeed(scored);
 
+      // Fetch org page posts and splice into feed (1 per every ~5 regular posts)
+      let orgPostItems: PostItem[] = [];
+      try {
+        const orgCursor = fyOlderThan;
+        let orgQ: any = supabase
+          .from("organization_page_posts")
+          .select("id, content, image_url, created_at, author_id, likes, page_id, organization_pages!inner(id, slug, name, org_type, logo_url, is_verified)")
+          .order("created_at", { ascending: false })
+          .limit(6);
+        if (orgCursor) orgQ = orgQ.lt("created_at", orgCursor);
+        const { data: orgData } = await orgQ;
+        if (orgData && orgData.length > 0) {
+          orgPostItems = orgData.map((op: any) => {
+            const pg = op.organization_pages;
+            return {
+              id: `org_${op.id}`,
+              author_id: op.author_id || pg?.id || "",
+              content: op.content || "",
+              image_url: op.image_url || null,
+              images: op.image_url ? [op.image_url] : [],
+              created_at: op.created_at,
+              view_count: 0,
+              visibility: "public",
+              is_verified: false,
+              is_organization_verified: pg?.is_verified || false,
+              profile: {
+                display_name: pg?.name || "Organization",
+                handle: pg?.slug || "",
+                avatar_url: pg?.logo_url || null,
+              },
+              liked: false,
+              likeCount: op.likes || 0,
+              replyCount: 0,
+              score: 50,
+              bookmarked: false,
+              post_type: "post",
+              article_title: null,
+              article_body: null,
+              video_url: null,
+              duration_seconds: null,
+              isFollowing: false,
+              org_page_id: pg?.id,
+              org_slug: pg?.slug,
+              org_type: pg?.org_type,
+              org_verified: pg?.is_verified,
+            } as PostItem;
+          });
+        }
+      } catch (_) {}
+
+      // Interleave: insert 1 org post for every 5 regular posts
+      const merged: PostItem[] = [];
+      let orgIdx = 0;
+      for (let i = 0; i < diversified.length; i++) {
+        merged.push(diversified[i] as PostItem);
+        if ((i + 1) % 5 === 0 && orgIdx < orgPostItems.length) {
+          merged.push(orgPostItems[orgIdx++]);
+        }
+      }
+      // Append any remaining org posts at end
+      while (orgIdx < orgPostItems.length) {
+        merged.push(orgPostItems[orgIdx++]);
+      }
+
       if (isRefresh) {
-        setPosts(diversified as PostItem[]);
-        tabPostsCache.current[activeTab] = diversified as PostItem[];
+        setPosts(merged);
+        tabPostsCache.current[activeTab] = merged;
         tabCacheTimestamp.current[activeTab] = Date.now();
-        cacheFeedTab(activeTab, diversified);
-        cacheMoments(diversified as PostItem[]);
+        cacheFeedTab(activeTab, merged);
+        cacheMoments(merged);
       } else {
         setPosts((prev) => {
           const existingIds = new Set(prev.map((p) => p.id));
-          const newItems = (diversified as PostItem[]).filter((i) => !existingIds.has(i.id));
+          const newItems = merged.filter((i) => !existingIds.has(i.id));
           return [...prev, ...newItems];
         });
       }

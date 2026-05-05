@@ -25,7 +25,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { supabase, supabaseUrl, supabaseAnonKey } from "@/lib/supabase";
 import { showAlert } from "@/lib/alert";
 import { uploadToStorage } from "@/lib/mediaUpload";
-import { aiGenerateOrgUpdate, aiEnhanceOrgPost, aiGenerateHashtags } from "@/lib/aiHelper";
+import { aiGenerateOrgUpdate, aiEnhanceOrgPost, aiGenerateHashtags, aiGenerateJobDescription, aiResearchCompanyAndGenerateAbout } from "@/lib/aiHelper";
 
 const GOLD = "#D4A853";
 
@@ -98,6 +98,8 @@ export default function CompanyPageScreen() {
   const [showJobModal, setShowJobModal] = useState(false);
   const [jobForm, setJobForm] = useState({ title: "", job_type: "Full-time", location: "", description: "", apply_url: "" });
   const [postingJob, setPostingJob] = useState(false);
+  const [jobAiLoading, setJobAiLoading] = useState(false);
+  const [jobAiAboutLoading, setJobAiAboutLoading] = useState(false);
 
   // My own company pages (for page-to-page follow)
   const [myPages, setMyPages] = useState<{ id: string; name: string; slug: string; logo_url: string | null }[]>([]);
@@ -604,7 +606,7 @@ export default function CompanyPageScreen() {
             </Text>
             <TouchableOpacity
               style={[styles.verifyBannerBtn, { backgroundColor: "#D4A853" }]}
-              onPress={() => router.push(`/company/${page.slug}/manage` as any)}
+              onPress={() => router.push(`/company/manage?slug=${page.slug}` as any)}
               activeOpacity={0.85}
             >
               <Ionicons name="checkmark-circle-outline" size={14} color="#fff" />
@@ -1052,19 +1054,34 @@ export default function CompanyPageScreen() {
       <Modal visible={showJobModal} transparent animationType="slide" onRequestClose={() => setShowJobModal(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowJobModal(false)}>
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ width: "100%" }}>
-            <ScrollView style={[styles.modalSheet, { backgroundColor: colors.surface }]} keyboardShouldPersistTaps="handled">
+            <ScrollView style={[styles.modalSheet, { backgroundColor: colors.surface }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
               <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Post a Job</Text>
+
+              {/* Header */}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 2 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accent + "18", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="briefcase-outline" size={18} color={colors.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.modalTitle, { color: colors.text, marginBottom: 0 }]}>Post a Job</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_400Regular" }}>{page.name}</Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowJobModal(false)} hitSlop={8}>
+                  <Ionicons name="close" size={22} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+
               <TextInput
                 style={[styles.postInput, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border, minHeight: 44 }]}
-                placeholder="Job title"
+                placeholder="Job title (e.g. Senior Software Engineer)"
                 placeholderTextColor={colors.textMuted}
                 value={jobForm.title}
                 onChangeText={(v) => setJobForm((f) => ({ ...f, title: v }))}
                 maxLength={120}
               />
+
               {/* Job type chips */}
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
                 {["Full-time","Part-time","Contract","Internship","Volunteer","Remote"].map((jt) => (
                   <TouchableOpacity
                     key={jt}
@@ -1076,26 +1093,78 @@ export default function CompanyPageScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+
               <TextInput
-                style={[styles.postInput, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border, minHeight: 44, marginBottom: 8 }]}
+                style={[styles.postInput, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border, minHeight: 44 }]}
                 placeholder="Location (e.g. Nairobi, Kenya or Remote)"
                 placeholderTextColor={colors.textMuted}
                 value={jobForm.location}
                 onChangeText={(v) => setJobForm((f) => ({ ...f, location: v }))}
                 maxLength={100}
               />
+
+              {/* AI Generate button */}
+              <TouchableOpacity
+                style={[styles.aiToggle, { backgroundColor: colors.accent + "0D", borderColor: colors.accent + "30" }]}
+                activeOpacity={0.75}
+                disabled={!jobForm.title.trim() || jobAiLoading}
+                onPress={async () => {
+                  if (!page || !jobForm.title.trim()) return;
+                  setJobAiLoading(true);
+                  try {
+                    const desc = await aiGenerateJobDescription(
+                      jobForm.title.trim(),
+                      jobForm.job_type,
+                      jobForm.location.trim(),
+                      {
+                        orgName: page.name,
+                        orgType: page.org_type ?? undefined,
+                        industry: page.industry ?? undefined,
+                        location: page.location ?? undefined,
+                        website: page.website ?? undefined,
+                        description: page.description ?? undefined,
+                        tagline: page.tagline ?? undefined,
+                      }
+                    );
+                    setJobForm((f) => ({ ...f, description: desc.slice(0, 3000) }));
+                  } catch {
+                    showAlert("AI Error", "Could not generate job description. Please try again.");
+                  }
+                  setJobAiLoading(false);
+                }}
+              >
+                {jobAiLoading ? (
+                  <ActivityIndicator size="small" color={colors.accent} />
+                ) : (
+                  <Ionicons name="sparkles" size={15} color={colors.accent} />
+                )}
+                <Text style={[styles.aiToggleText, { color: colors.accent }]}>
+                  {jobAiLoading ? "Researching company & writing description…" : !jobForm.title.trim() ? "Enter a job title to use AI" : "Generate description with AI"}
+                </Text>
+                {!jobAiLoading && <Ionicons name="arrow-forward" size={13} color={colors.accent} />}
+              </TouchableOpacity>
+
+              {/* AI info banner */}
+              <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: colors.surface, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: colors.border }}>
+                <Ionicons name="information-circle-outline" size={15} color={colors.textMuted} style={{ marginTop: 1 }} />
+                <Text style={{ flex: 1, fontSize: 11, fontFamily: "Inter_400Regular", color: colors.textMuted, lineHeight: 16 }}>
+                  AI analyses {page.name}'s industry, org type, and company info to generate a tailored, accurate job description. Review and edit before posting.
+                </Text>
+              </View>
+
               <TextInput
-                style={[styles.postInput, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border, minHeight: 110, textAlignVertical: "top", marginBottom: 8 }]}
+                style={[styles.postInput, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border, minHeight: 140, textAlignVertical: "top" }]}
                 placeholder="Job description — responsibilities, requirements, benefits…"
                 placeholderTextColor={colors.textMuted}
                 value={jobForm.description}
                 onChangeText={(v) => setJobForm((f) => ({ ...f, description: v }))}
                 multiline
-                numberOfLines={5}
+                numberOfLines={6}
                 maxLength={3000}
               />
+
               <TextInput
-                style={[styles.postInput, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border, minHeight: 44, marginBottom: 12 }]}
+                style={[styles.postInput, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border, minHeight: 44 }]}
                 placeholder="Application URL (optional)"
                 placeholderTextColor={colors.textMuted}
                 value={jobForm.apply_url}
@@ -1104,6 +1173,7 @@ export default function CompanyPageScreen() {
                 keyboardType="url"
                 maxLength={300}
               />
+
               <TouchableOpacity
                 style={[styles.submitBtn, { backgroundColor: colors.accent, opacity: postingJob || !jobForm.title.trim() || !jobForm.description.trim() ? 0.6 : 1, marginBottom: 20 }]}
                 onPress={submitJob}

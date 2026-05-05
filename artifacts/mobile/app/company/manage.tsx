@@ -21,6 +21,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import { showAlert } from "@/lib/alert";
 import { uploadToStorage } from "@/lib/mediaUpload";
+import { aiResearchCompanyAndGenerateAbout } from "@/lib/aiHelper";
 
 const GOLD = "#D4A853";
 
@@ -87,6 +88,7 @@ export default function ManageCompanyPageScreen() {
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [verifyNotes, setVerifyNotes] = useState("");
   const [submittingVerify, setSubmittingVerify] = useState(false);
+  const [aboutAiLoading, setAboutAiLoading] = useState(false);
 
   const [verOrgType, setVerOrgType] = useState("");
   const [verIndustry, setVerIndustry] = useState("");
@@ -430,6 +432,38 @@ export default function ManageCompanyPageScreen() {
           <Text style={[styles.groupLabel, { color: colors.text }, { marginTop: 4 }]}>About</Text>
           <Field label="Description" colors={colors}>
             <TextInput style={[styles.input, styles.textarea, { color: colors.text }]} value={form.description} onChangeText={(v) => set("description", v)} multiline numberOfLines={4} maxLength={2000} placeholder="Describe your organization…" placeholderTextColor={colors.textMuted} />
+            <TouchableOpacity
+              style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: colors.accent + "0D", borderWidth: 1, borderColor: colors.accent + "30", alignSelf: "flex-start" }}
+              activeOpacity={0.75}
+              disabled={aboutAiLoading || !form.name.trim()}
+              onPress={async () => {
+                if (!form.name.trim()) return;
+                setAboutAiLoading(true);
+                try {
+                  const about = await aiResearchCompanyAndGenerateAbout({
+                    orgName: form.name.trim(),
+                    orgType: form.org_type || undefined,
+                    industry: form.industry || undefined,
+                    location: form.location || undefined,
+                    website: form.website || undefined,
+                    description: form.description || undefined,
+                    tagline: form.tagline || undefined,
+                  });
+                  set("description", about.slice(0, 2000));
+                } catch {
+                  showAlert("AI Error", "Could not generate description. Please try again.");
+                }
+                setAboutAiLoading(false);
+              }}
+            >
+              {aboutAiLoading
+                ? <ActivityIndicator size="small" color={colors.accent} />
+                : <Ionicons name="sparkles" size={14} color={colors.accent} />
+              }
+              <Text style={{ fontSize: 13, fontFamily: "Inter_500Medium", color: colors.accent }}>
+                {aboutAiLoading ? "Researching…" : "Write with AI"}
+              </Text>
+            </TouchableOpacity>
           </Field>
           <Field label="Website" colors={colors}>
             <TextInput style={[styles.input, { color: colors.text }]} value={form.website} onChangeText={(v) => set("website", v)} autoCapitalize="none" keyboardType="url" maxLength={200} placeholder="https://…" placeholderTextColor={colors.textMuted} />

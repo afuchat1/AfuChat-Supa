@@ -207,3 +207,53 @@ export async function aiGenerateOrgDescription(ctx: OrgAiContext): Promise<strin
     { fast: false, maxTokens: 600 }
   );
 }
+
+export interface JobAiContext {
+  orgName: string;
+  orgType?: string;
+  industry?: string;
+  location?: string;
+  website?: string;
+  description?: string;
+  tagline?: string;
+}
+
+export async function aiGenerateJobDescription(
+  jobTitle: string,
+  jobType: string,
+  location: string,
+  ctx: JobAiContext
+): Promise<string> {
+  const orgContext = [
+    `Company: ${ctx.orgName}`,
+    ctx.orgType ? `Type: ${ctx.orgType}` : null,
+    ctx.industry ? `Industry: ${ctx.industry}` : null,
+    ctx.location ? `Headquarters: ${ctx.location}` : null,
+    ctx.website ? `Website: ${ctx.website}` : null,
+    ctx.tagline ? `Tagline: ${ctx.tagline}` : null,
+    ctx.description ? `About the company: ${ctx.description}` : null,
+  ].filter(Boolean).join("\n");
+
+  return askAi(
+    `Write a compelling, accurate job description for the following position.\n\nPosition: ${jobTitle}\nType: ${jobType}${location ? `\nLocation: ${location}` : ""}\n\nCompany context:\n${orgContext}\n\nStructure the description with: a short role overview (2–3 sentences), key responsibilities (5–7 bullet points using •), required qualifications (4–6 bullet points), and a short closing statement about culture/growth. Tailor responsibilities and requirements to what this type of company in this industry would actually need. Be specific and realistic.`,
+    "You are an expert HR copywriter and talent acquisition specialist. Return ONLY the job description text — no headings like 'Job Description', no markdown formatting, no extra explanation. Use • for bullet points. Write in clear, engaging, professional English. Do not fabricate salary, benefits, or company-specific details not provided.",
+    { fast: false, maxTokens: 700 }
+  );
+}
+
+export async function aiResearchCompanyAndGenerateAbout(ctx: JobAiContext): Promise<string> {
+  const orgContext = [
+    `Company name: ${ctx.orgName}`,
+    ctx.orgType ? `Organization type: ${ctx.orgType}` : null,
+    ctx.industry ? `Industry: ${ctx.industry}` : null,
+    ctx.location ? `Location: ${ctx.location}` : null,
+    ctx.website ? `Website: ${ctx.website}` : null,
+    ctx.tagline ? `Tagline: ${ctx.tagline}` : null,
+  ].filter(Boolean).join("\n");
+
+  return askAi(
+    `Based on your knowledge, write a professional "About Us" section for this organization's company page. Use what you know about companies in this industry and of this type to write an accurate, specific, and engaging about section (120–250 words). If you have specific knowledge about this company from your training data, use it — otherwise, write accurate general statements that fit the industry and org type.\n\n${orgContext}`,
+    "You are a professional brand copywriter with deep knowledge of industries and organizations worldwide. Return ONLY the About text — no headings, no markdown, no explanation. Write in flowing paragraphs. Be specific to the industry, professional, and engaging. Do not fabricate statistics or client names.",
+    { fast: false, maxTokens: 400 }
+  );
+}
