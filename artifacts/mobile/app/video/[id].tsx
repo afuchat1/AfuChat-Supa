@@ -2546,6 +2546,7 @@ export default function VideoPlayerScreen() {
         }
       }
     }
+
     if (isLoadMore) {
       loadingMoreRef.current = false;
       setLoadingMore(false);
@@ -2554,7 +2555,17 @@ export default function VideoPlayerScreen() {
     }
   }, [user]);
 
-  useEffect(() => { fetchVideos(videoTab); }, [fetchVideos, videoTab]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchVideos(videoTab).catch((err) => {
+      if (cancelled) return;
+      console.error("[VideoFeed] fetchVideos uncaught:", err);
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [fetchVideos, videoTab]);
 
 
   useEffect(() => {
@@ -2778,9 +2789,9 @@ export default function VideoPlayerScreen() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, ...(Platform.OS === "web" ? { position: "absolute" as any, top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 } : {}) }}>
-        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
-        <ShortsFeedSkeleton dark={isDark} />
+      <View style={{ flex: 1, backgroundColor: "#000", ...(Platform.OS === "web" ? { position: "absolute" as any, top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 } : {}) }}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <ShortsFeedSkeleton dark />
       </View>
     );
   }
