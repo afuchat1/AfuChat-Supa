@@ -3,12 +3,15 @@ import {
   ActivityIndicator,
   Animated,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
   Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   ViewToken,
@@ -85,6 +88,286 @@ function formatRelative(iso: string): string {
   return `${Math.floor(diff / 86400000)}d ago`;
 }
 
+function formatNum(n: number): string {
+  if (!n || n < 0) return "0";
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(n < 10_000_000 ? 1 : 0).replace(/\.0$/, "") + "M";
+  if (n >= 10_000) return Math.round(n / 1_000) + "K";
+  if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
+  return String(n);
+}
+
+function RecentCommenters({ postId, replyCount, bgColor }: { postId: string; replyCount: number; bgColor: string }) {
+  const [avatars, setAvatars] = useState<{ avatar_url: string | null; display_name: string }[]>([]);
+  useEffect(() => {
+    if (replyCount === 0) { setAvatars([]); return; }
+    let cancelled = false;
+    const t = setTimeout(() => {
+      supabase
+        .from("post_replies")
+        .select("author_id, profiles!post_replies_author_id_fkey(avatar_url, display_name)")
+        .eq("post_id", postId)
+        .order("created_at", { ascending: false })
+        .limit(5)
+        .then(({ data }) => {
+          if (!cancelled && data) {
+            const seen = new Set<string>();
+            const unique = data
+              .filter((r: any) => {
+                const id = r.author_id;
+                if (!id || seen.has(id)) return false;
+                seen.add(id);
+                return true;
+              })
+              .slice(0, 3)
+              .map((r: any) => ({
+                avatar_url: r.profiles?.avatar_url || null,
+                display_name: r.profiles?.display_name || "U",
+              }));
+            setAvatars(unique);
+          }
+        });
+    }, 300 + Math.random() * 500);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [postId, replyCount]);
+
+  if (avatars.length === 0) return null;
+
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", marginRight: 3 }}>
+      {avatars.map((a, i) => (
+        <View
+          key={i}
+          style={{
+            marginLeft: i === 0 ? 0 : -6,
+            zIndex: 3 - i,
+            width: 20,
+            height: 20,
+            borderRadius: 10,
+            borderWidth: 1.5,
+            borderColor: bgColor,
+            overflow: "hidden",
+            backgroundColor: "#ccc",
+          }}
+        >
+          {a.avatar_url ? (
+            <ExpoImage source={{ uri: a.avatar_url }} style={{ width: 20, height: 20 }} contentFit="cover" />
+          ) : (
+            <View style={{ width: 20, height: 20, backgroundColor: "#00BCD440", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 8, color: "#00BCD4", fontFamily: "Inter_700Bold" }}>{(a.display_name || "U").slice(0, 1).toUpperCase()}</Text>
+            </View>
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+type CommentItem = {
+  id: string;
+  author_id: string;
+  content: string;
+  created_at: string;
+  profile: { display_name: string; handle: string; avatar_url: string | null };
+};
+
+function DiscoverCommentsSheet({
+  visible,
+  onClose,
+  postId,
+  onReplyCountChange,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  postId: string;
+  onReplyCountChange: (postId: string, delta: number) => void;
+}) {
+  const { colors } = useTheme();
+  const { user, profile } = useAuth();
+  const insets = useSafeAreaInsets();
+  const [comments, setComments] = useState<CommentItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const listRef = useRef<FlatList>(null);
+  const inputRef = useRef<TextInput>(null);
+
+  const loadComments = useCallback(() => {
+    if (!postId) return;
+    supabase
+      .from("post_replies")
+      .select("id, author_id, content, created_at, profiles!post_replies_author_id_fkey(display_name, handle, avatar_url)")
+      .eq("post_id", postId)
+      .order("created_at", { ascending: true })
+      .limit(200)
+      .then(({ data }) => {
+        if (data) {
+          setComments(data.map((r: any) => ({
+            id: r.id,
+            author_id: r.author_id,
+            content: r.content || "",
+            created_at: r.created_at,
+            profile: {
+              display_name: r.profiles?.display_name || "User",
+              handle: r.profiles?.handle || "user",
+              avatar_url: r.profiles?.avatar_url || null,
+            },
+          })));
+        }
+        setLoading(false);
+      });
+  }, [postId]);
+
+  useEffect(() => {
+    if (!visible || !postId) return;
+    setComments([]);
+    setLoading(true);
+    setText("");
+    loadComments();
+  }, [visible, postId, loadComments]);
+
+  useEffect(() => {
+    if (!visible || !postId) return;
+    const channel = supabase
+      .channel(`discover-comments:${postId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "post_replies", filter: `post_id=eq.${postId}` }, loadComments)
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "post_replies", filter: `post_id=eq.${postId}` }, loadComments)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [visible, postId, loadComments]);
+
+  async function sendComment() {
+    if (!user || !text.trim()) return;
+    setSending(true);
+    const { data, error } = await supabase
+      .from("post_replies")
+      .insert({ post_id: postId, author_id: user.id, content: text.trim() })
+      .select("id, author_id, content, created_at")
+      .single();
+    if (!error && data) {
+      setComments((prev) => [...prev, {
+        id: data.id,
+        author_id: data.author_id,
+        content: data.content,
+        created_at: data.created_at,
+        profile: {
+          display_name: profile?.display_name || "You",
+          handle: profile?.handle || "you",
+          avatar_url: profile?.avatar_url || null,
+        },
+      }]);
+      onReplyCountChange(postId, 1);
+      setText("");
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+    }
+    setSending(false);
+  }
+
+  const timeDiff = (iso: string) => formatRelative(iso);
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+        <Pressable style={{ flex: 1 }} onPress={onClose}>
+          <Pressable onPress={() => {}} style={[dcStyles.sheet, { backgroundColor: colors.surface, paddingBottom: Math.max(insets.bottom, 16) }]}>
+            {/* Handle */}
+            <View style={[dcStyles.handle, { backgroundColor: colors.border }]} />
+            {/* Header */}
+            <View style={dcStyles.sheetHeader}>
+              <Text style={[dcStyles.sheetTitle, { color: colors.text }]}>
+                Comments{comments.length > 0 ? ` · ${formatNum(comments.length)}` : ""}
+              </Text>
+              <TouchableOpacity onPress={onClose} hitSlop={12}>
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+            {/* Divider */}
+            <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
+            {/* List */}
+            <View style={{ flex: 1 }}>
+              {loading ? (
+                <View style={{ padding: 24, alignItems: "center" }}>
+                  <ActivityIndicator color={colors.accent} />
+                </View>
+              ) : comments.length === 0 ? (
+                <View style={dcStyles.emptyBox}>
+                  <Ionicons name="chatbubble-outline" size={36} color={colors.textMuted} />
+                  <Text style={[dcStyles.emptyText, { color: colors.textMuted }]}>No comments yet</Text>
+                  <Text style={[dcStyles.emptySub, { color: colors.textMuted }]}>Be the first to comment</Text>
+                </View>
+              ) : (
+                <FlatList
+                  ref={listRef}
+                  data={comments}
+                  keyExtractor={(c) => c.id}
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{ padding: 12, gap: 14 }}
+                  showsVerticalScrollIndicator={false}
+                  renderItem={({ item: c }) => (
+                    <View style={dcStyles.commentRow}>
+                      <View style={dcStyles.commentAvatar}>
+                        {c.profile.avatar_url ? (
+                          <ExpoImage source={{ uri: c.profile.avatar_url }} style={{ width: 36, height: 36, borderRadius: 18 }} contentFit="cover" />
+                        ) : (
+                          <View style={[dcStyles.commentAvatarFallback, { backgroundColor: colors.accent + "22" }]}>
+                            <Text style={[dcStyles.commentAvatarLetter, { color: colors.accent }]}>
+                              {(c.profile.display_name || "U").slice(0, 1).toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={[dcStyles.commentBubble, { backgroundColor: colors.backgroundTertiary ?? colors.background }]}>
+                          <Text style={[dcStyles.commentName, { color: colors.text }]}>{c.profile.display_name}</Text>
+                          <Text style={[dcStyles.commentText, { color: colors.text }]}>{c.content}</Text>
+                        </View>
+                        <Text style={[dcStyles.commentTime, { color: colors.textMuted }]}>{timeDiff(c.created_at)}</Text>
+                      </View>
+                    </View>
+                  )}
+                />
+              )}
+            </View>
+            {/* Input */}
+            <View style={[dcStyles.inputRow, { borderTopColor: colors.border, backgroundColor: colors.surface }]}>
+              {profile?.avatar_url ? (
+                <ExpoImage source={{ uri: profile.avatar_url }} style={dcStyles.inputAvatar} contentFit="cover" />
+              ) : (
+                <View style={[dcStyles.inputAvatar, { backgroundColor: colors.accent + "22", alignItems: "center", justifyContent: "center" }]}>
+                  <Text style={{ fontSize: 13, color: colors.accent, fontFamily: "Inter_700Bold" }}>
+                    {(profile?.display_name || "U").slice(0, 1).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              <TextInput
+                ref={inputRef}
+                style={[dcStyles.input, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border }]}
+                placeholder="Add a comment…"
+                placeholderTextColor={colors.textMuted}
+                value={text}
+                onChangeText={setText}
+                multiline
+                maxLength={500}
+                returnKeyType="send"
+                onSubmitEditing={sendComment}
+              />
+              <TouchableOpacity
+                onPress={sendComment}
+                disabled={!text.trim() || sending}
+                style={[dcStyles.sendBtn, { backgroundColor: text.trim() ? colors.accent : colors.border }]}
+              >
+                {sending
+                  ? <ActivityIndicator size={14} color="#fff" />
+                  : <Ionicons name="send" size={15} color="#fff" />
+                }
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 function BookmarkButton({ bookmarked, onPress }: { bookmarked: boolean; onPress: () => void }) {
   const scale = useRef(new Animated.Value(1)).current;
   function handlePress() {
@@ -103,7 +386,7 @@ function BookmarkButton({ bookmarked, onPress }: { bookmarked: boolean; onPress:
   );
 }
 
-const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImagePress, onRequireAuth, colWidth }: { item: PostItem; onToggleLike: (postId: string) => void; onToggleBookmark: (postId: string) => void; onToggleFollow: (authorId: string) => void; onImagePress?: (images: string[], index: number) => void; onRequireAuth?: () => void; colWidth?: number }) {
+const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImagePress, onRequireAuth, colWidth, onOpenComments }: { item: PostItem; onToggleLike: (postId: string) => void; onToggleBookmark: (postId: string) => void; onToggleFollow: (authorId: string) => void; onImagePress?: (images: string[], index: number) => void; onRequireAuth?: () => void; colWidth?: number; onOpenComments: (postId: string) => void }) {
   const { colors } = useTheme();
   const { preferredLang } = useLanguage();
   const { width: screenW } = useWindowDimensions();
@@ -451,37 +734,54 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
 
           {/* ── Footer ── */}
           <View style={styles.cardFooter}>
-            <TouchableOpacity style={styles.action} onPress={() => { if (!currentUser) { onRequireAuth?.(); return; } onToggleLike(item.id); }}>
+            {/* Likes */}
+            <TouchableOpacity
+              style={styles.footerStat}
+              onPress={() => { if (!currentUser) { onRequireAuth?.(); return; } onToggleLike(item.id); }}
+              activeOpacity={0.7}
+            >
               <Ionicons
                 name={item.liked ? "heart" : "heart-outline"}
-                size={18}
+                size={19}
                 color={item.liked ? "#FF3B30" : colors.textMuted}
               />
-              {item.likeCount > 0 && (
-                <Text style={[styles.actionText, { color: item.liked ? "#FF3B30" : colors.textMuted }]}>
-                  {item.likeCount}
-                </Text>
-              )}
+              <Text style={[styles.footerStatNum, { color: item.liked ? "#FF3B30" : colors.textMuted }]}>
+                {formatNum(item.likeCount)}
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.action} onPress={() => { if (!currentUser) { onRequireAuth?.(); return; } openPost(); }}>
-              <Ionicons name="chatbubble-outline" size={17} color={colors.textMuted} />
-              {item.replyCount > 0 && (
-                <Text style={[styles.actionText, { color: colors.textMuted }]}>{item.replyCount}</Text>
-              )}
-            </TouchableOpacity>
+
+            {/* Comments */}
             <TouchableOpacity
-              style={styles.action}
+              style={styles.footerStat}
+              onPress={() => { if (!currentUser) { onRequireAuth?.(); return; } onOpenComments(item.id); }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="chatbubble-outline" size={18} color={colors.textMuted} />
+              <RecentCommenters postId={item.id} replyCount={item.replyCount} bgColor={colors.background} />
+              <Text style={[styles.footerStatNum, { color: colors.textMuted }]}>{formatNum(item.replyCount)}</Text>
+            </TouchableOpacity>
+
+            {/* Share */}
+            <TouchableOpacity
+              style={styles.footerStat}
               onPress={() => { if (!currentUser) { onRequireAuth?.(); return; } item.post_type === "video"
                 ? shareVideo({ postId: item.id, authorName: item.profile.display_name, caption: item.content })
                 : sharePost({ postId: item.id, authorName: item.profile.display_name, content: item.content }); }}
+              activeOpacity={0.7}
             >
-              <Ionicons name="arrow-redo-outline" size={17} color={colors.textMuted} />
+              <Ionicons name="arrow-redo-outline" size={18} color={colors.textMuted} />
+              <Text style={[styles.footerStatNum, { color: colors.textMuted }]}>Share</Text>
             </TouchableOpacity>
+
             <View style={{ flex: 1 }} />
-            <View style={styles.viewCount}>
-              <Ionicons name="eye-outline" size={14} color={colors.textMuted} />
-              <Text style={[styles.viewText, { color: colors.textMuted }]}>{item.view_count}</Text>
+
+            {/* Views */}
+            <View style={styles.footerStat}>
+              <Ionicons name="eye-outline" size={15} color={colors.textMuted} />
+              <Text style={[styles.footerStatNum, { color: colors.textMuted }]}>{formatNum(item.view_count)}</Text>
             </View>
+
+            {/* Bookmark */}
             <BookmarkButton bookmarked={item.bookmarked} onPress={() => { if (!currentUser) { onRequireAuth?.(); return; } onToggleBookmark(item.id); }} />
           </View>
 
@@ -569,8 +869,17 @@ export default function DiscoverScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [followingEmpty, setFollowingEmpty] = useState(false);
   const [bgRefreshing, setBgRefreshing] = useState(false);
+  const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const PAGE_SIZE = 30;
   const imgViewer = useImageViewer();
+
+  const onOpenComments = useCallback((postId: string) => {
+    setCommentPostId(postId);
+  }, []);
+
+  const onCommentReplyCountChange = useCallback((postId: string, delta: number) => {
+    setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, replyCount: Math.max(0, p.replyCount + delta) } : p));
+  }, []);
 
   const fabRef = useRef<TouchableOpacity>(null);
 
@@ -1394,6 +1703,7 @@ export default function DiscoverScreen() {
               onImagePress={imgViewer.openViewer}
               onRequireAuth={onRequireAuth}
               colWidth={isDesktop ? FEED_COLUMN_MAX_WIDTH : undefined}
+              onOpenComments={onOpenComments}
             />
           )}
           contentContainerStyle={{
@@ -1498,6 +1808,13 @@ export default function DiscoverScreen() {
       />
 
       <SignInPromptModal visible={showSignInPrompt} onDismiss={() => setShowSignInPrompt(false)} />
+
+      <DiscoverCommentsSheet
+        visible={!!commentPostId}
+        postId={commentPostId ?? ""}
+        onClose={() => setCommentPostId(null)}
+        onReplyCountChange={onCommentReplyCountChange}
+      />
     </View>
   );
 }
@@ -1551,9 +1868,23 @@ const styles = StyleSheet.create({
   cardFooter: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    gap: 18,
+    paddingBottom: 12,
+    gap: 2,
+  },
+  footerStat: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  footerStatNum: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    letterSpacing: -0.1,
   },
   action: { flexDirection: "row", alignItems: "center", gap: 5 },
   actionText: { fontSize: 13, fontFamily: "Inter_500Medium" },
@@ -1798,5 +2129,135 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#fff",
     overflow: "hidden",
+  },
+});
+
+const dcStyles = StyleSheet.create({
+  sheet: {
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    flex: 0,
+    height: "78%",
+    marginTop: "auto",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 20,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  sheetTitle: {
+    fontSize: 16,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: -0.2,
+  },
+  emptyBox: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 48,
+  },
+  emptyText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    marginTop: 4,
+  },
+  emptySub: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+  },
+  commentRow: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "flex-start",
+  },
+  commentAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: "hidden",
+    flexShrink: 0,
+  },
+  commentAvatarFallback: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  commentAvatarLetter: {
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
+  },
+  commentBubble: {
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    gap: 2,
+  },
+  commentName: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    marginBottom: 1,
+  },
+  commentText: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 20,
+  },
+  commentTime: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  inputAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    overflow: "hidden",
+    flexShrink: 0,
+  },
+  input: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
+    borderWidth: 1,
+    maxHeight: 90,
+    minHeight: 38,
+  },
+  sendBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
   },
 });
