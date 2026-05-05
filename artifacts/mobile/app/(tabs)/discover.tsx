@@ -45,6 +45,7 @@ import { DesktopFeedLayout, FEED_COLUMN_MAX_WIDTH } from "@/components/desktop/D
 import { encodeId } from "@/lib/shortId";
 import { useVideoProgress } from "@/hooks/useVideoProgress";
 import SignInPromptModal from "@/components/ui/SignInPromptModal";
+import { TrendingSoundsSection } from "@/components/TrendingSoundsSection";
 
 let ViewShot: any = ({ children, style, ...rest }: any) => <View style={style} {...rest}>{children}</View>;
 try {
@@ -1865,6 +1866,7 @@ export default function DiscoverScreen() {
               tintColor={colors.accent}
             />
           }
+          ListHeaderComponent={feedTab === "for_you" ? <TrendingSoundsSection /> : null}
           ListFooterComponent={
             loadingMore ? (
               <View style={{ padding: 8, gap: 8 }}>
