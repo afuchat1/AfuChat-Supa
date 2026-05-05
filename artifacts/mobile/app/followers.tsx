@@ -46,7 +46,6 @@ export default function FollowersScreen() {
   const [filtered, setFiltered] = useState<FollowUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [privacyBlocked, setPrivacyBlocked] = useState(false);
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
   const [togglingFollow, setTogglingFollow] = useState<string | null>(null);
 
@@ -72,23 +71,7 @@ export default function FollowersScreen() {
 
   const loadPrivacyAndUsers = async () => {
     setLoading(true);
-    setPrivacyBlocked(false);
     setUsers([]);
-
-    if (!isOwnProfile) {
-      const privacyField = type === "followers" ? "hide_followers_list" : "hide_following_list";
-      const { data: privSettings } = await supabase
-        .from("profiles")
-        .select(privacyField)
-        .eq("id", userId)
-        .single();
-
-      if (privSettings && (privSettings as any)[privacyField]) {
-        setPrivacyBlocked(true);
-        setLoading(false);
-        return;
-      }
-    }
 
     const followCol = type === "followers" ? "following_id" : "follower_id";
     const joinCol = type === "followers" ? "follower_id" : "following_id";
@@ -276,22 +259,7 @@ export default function FollowersScreen() {
         <View style={{ width: 32 }} />
       </View>
 
-      {privacyBlocked ? (
-        <View style={styles.privacyContainer}>
-          <View style={[styles.privacyCard, { backgroundColor: colors.surface }]}>
-            <View style={[styles.privacyIconWrap, { backgroundColor: colors.accent + "15" }]}>
-              <Ionicons name="lock-closed" size={32} color={colors.accent} />
-            </View>
-            <Text style={[styles.privacyTitle, { color: colors.text }]}>
-              This list is private
-            </Text>
-            <Text style={[styles.privacyDesc, { color: colors.textMuted }]}>
-              @{ownerHandle || "This user"} has chosen to keep their{" "}
-              {type === "followers" ? "followers" : "following"} list private.
-            </Text>
-          </View>
-        </View>
-      ) : loading ? (
+      {loading ? (
         <View style={{ padding: 8, gap: 2 }}>
           {[1,2,3,4,5,6,7,8].map(i => <ContactRowSkeleton key={i} />)}
         </View>
@@ -429,46 +397,6 @@ const styles = StyleSheet.create({
   },
 
   separator: { height: StyleSheet.hairlineWidth },
-
-  loadingContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  privacyContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 40,
-  },
-  privacyCard: {
-    alignItems: "center",
-    paddingHorizontal: 32,
-    paddingVertical: 40,
-    borderRadius: 20,
-    gap: 12,
-    width: "100%",
-  },
-  privacyIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 4,
-  },
-  privacyTitle: {
-    fontSize: 18,
-    fontFamily: "Inter_600SemiBold",
-    textAlign: "center",
-  },
-  privacyDesc: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-    textAlign: "center",
-    lineHeight: 20,
-  },
 
   emptyContainer: {
     alignItems: "center",
