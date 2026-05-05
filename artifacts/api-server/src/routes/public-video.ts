@@ -104,6 +104,87 @@ function renderEmbedPage(videoUrl: string, posterUrl?: string): string {
 </html>`;
 }
 
+// ── JSON-LD VideoObject ───────────────────────────────────────────────────────
+/**
+ * Builds a schema.org/VideoObject JSON-LD block.
+ * Google requires: name, description, thumbnailUrl, uploadDate + contentUrl|embedUrl.
+ * Optional but high-value: duration (ISO 8601), interactionStatistic, author.
+ */
+function buildVideoJsonLd(opts: {
+  name: string;
+  description: string;
+  thumbnailUrl: string;
+  uploadDate: string;        // ISO 8601 datetime
+  contentUrl: string;
+  embedUrl: string;
+  pageUrl: string;
+  durationSeconds: number | null;
+  viewCount: number;
+  likeCount: number;
+  authorName: string;
+  authorUrl: string;
+}): string {
+  // Convert seconds → ISO 8601 duration (e.g. 93 → "PT1M33S")
+  function toIsoDuration(secs: number | null): string | null {
+    if (!secs || secs <= 0) return null;
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = Math.round(secs % 60);
+    let out = "PT";
+    if (h) out += `${h}H`;
+    if (m) out += `${m}M`;
+    if (s || (!h && !m)) out += `${s}S`;
+    return out;
+  }
+
+  const ld: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    "name": opts.name,
+    "description": opts.description,
+    "thumbnailUrl": opts.thumbnailUrl,
+    "uploadDate": opts.uploadDate,
+    "contentUrl": opts.contentUrl,
+    "embedUrl": opts.embedUrl,
+    "url": opts.pageUrl,
+    "author": {
+      "@type": "Person",
+      "name": opts.authorName,
+      "url": opts.authorUrl,
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": SITE_NAME,
+      "url": SITE_URL,
+      "logo": {
+        "@type": "ImageObject",
+        "url": `${SITE_URL}/logo.png`,
+      },
+    },
+    "interactionStatistic": [
+      {
+        "@type": "InteractionCounter",
+        "interactionType": "https://schema.org/WatchAction",
+        "userInteractionCount": opts.viewCount,
+      },
+      {
+        "@type": "InteractionCounter",
+        "interactionType": "https://schema.org/LikeAction",
+        "userInteractionCount": opts.likeCount,
+      },
+    ],
+    "potentialAction": {
+      "@type": "WatchAction",
+      "target": opts.pageUrl,
+    },
+  };
+
+  const iso = toIsoDuration(opts.durationSeconds);
+  if (iso) ld["duration"] = iso;
+
+  return JSON.stringify(ld);
+}
+
 // ── Full video share page ─────────────────────────────────────────────────────
 function renderVideoPage(
   post: any,
@@ -112,6 +193,7 @@ function renderVideoPage(
   posterUrl: string,
   stats: { likes: number; replies: number },
   shortId: string,
+  durationSeconds: number | null = null,
 ): string {
   const displayName = escapeHtml(author.display_name || "User");
   const handle = escapeHtml(author.handle || "user");
@@ -139,6 +221,21 @@ function renderVideoPage(
 
   const ogImageFinal = posterUrl || avatarUrl || `${SITE_URL}/logo.png`;
 
+  const jsonLd = buildVideoJsonLd({
+    name: `@${author.handle || "user"}: ${content ? truncate(content, 100) : "Video"}`,
+    description: ogDescription,
+    thumbnailUrl: ogImageFinal,
+    uploadDate: new Date(post.created_at).toISOString(),
+    contentUrl: videoUrl,
+    embedUrl,
+    pageUrl,
+    durationSeconds,
+    viewCount: post.view_count || 0,
+    likeCount: stats.likes,
+    authorName: author.display_name || author.handle || "User",
+    authorUrl: profileUrl,
+  });
+
   return `<!DOCTYPE html>
 <html lang="en" prefix="og: https://ogp.me/ns# video: https://ogp.me/ns/video#">
 <head>
@@ -148,6 +245,9 @@ function renderVideoPage(
   <meta name="description" content="${escapeHtml(ogDescription)}" />
   <meta name="robots" content="index, follow, max-image-preview:large" />
   <link rel="canonical" href="${pageUrl}" />
+
+  <!-- JSON-LD: VideoObject (Google Video Search + Discover eligibility) -->
+  <script type="application/ld+json">${jsonLd}</script>
 
   <!-- Open Graph: video (WhatsApp, Facebook, Telegram inline playback) -->
   <meta property="og:type" content="video.other" />
@@ -290,7 +390,7 @@ async function handleVideoPage(param: string, res: any, embedOnly = false) {
 
   const { data: post } = await supabase
     .from("posts")
-    .select("id, content, video_url, image_url, created_at, author_id, view_count, post_type")
+    .select("id, content, video_url, image_url, created_at, author_id, view_count, post_type, video_asset_id")
     .eq("id", postId)
     .not("is_blocked", "is", true)
     .single();
@@ -309,7 +409,9 @@ async function handleVideoPage(param: string, res: any, embedOnly = false) {
     return res.send(renderEmbedPage(videoUrl, posterUrl || undefined));
   }
 
-  const [{ data: author }, { data: likes }, { data: replies }] = await Promise.all([
+  const assetId: string | null = (post as any).video_asset_id || null;
+
+  const [{ data: author }, { data: likes }, { data: replies }, { data: asset }] = await Promise.all([
     supabase
       .from("profiles")
       .select("display_name, handle, avatar_url, is_verified, is_organization_verified, is_private")
@@ -317,16 +419,20 @@ async function handleVideoPage(param: string, res: any, embedOnly = false) {
       .single(),
     supabase.from("post_acknowledgments").select("id", { count: "exact", head: true }).eq("post_id", postId),
     supabase.from("post_replies").select("id", { count: "exact", head: true }).eq("post_id", postId),
+    assetId
+      ? supabase.from("video_assets").select("duration_seconds").eq("id", assetId).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   if (!author || author.is_private) return res.status(404).send(render404());
 
   const likeCount = (likes as any)?.count || 0;
   const replyCount = (replies as any)?.count || 0;
+  const durationSeconds: number | null = (asset as any)?.duration_seconds ?? null;
   const shortId = encodeUuidToShort(post.id);
 
   res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
-  res.send(renderVideoPage(post, author, videoUrl, posterUrl, { likes: likeCount, replies: replyCount }, shortId));
+  res.send(renderVideoPage(post, author, videoUrl, posterUrl, { likes: likeCount, replies: replyCount }, shortId, durationSeconds));
 }
 
 // Full video preview page
