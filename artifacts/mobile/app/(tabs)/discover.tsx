@@ -434,7 +434,6 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
       return;
     }
     if (item.post_type === "video") {
-      if (isDesktop) return;
       router.push({ pathname: "/video/[id]", params: { id: item.id } });
       return;
     }
@@ -583,51 +582,29 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
 
           {/* ── VIDEO: thumbnail preview card ── */}
           {item.post_type === "video" && item.video_url && (
-            isDesktop ? (
-              <View style={styles.videoCard}>
-                <View style={styles.videoThumb}>
-                  <VideoThumbnail
-                    videoUrl={item.video_url!}
-                    fallbackImageUrl={item.image_url}
-                    style={StyleSheet.absoluteFill}
-                    lowData={true}
-                    durationSeconds={item.duration_seconds}
-                    watchedFraction={null}
-                  />
-                  <View style={styles.videoBadge}>
-                    <Ionicons name="videocam" size={11} color="#fff" />
-                    <Text style={styles.videoBadgeText}>Video</Text>
-                  </View>
-                  <View style={[styles.playCircle, { backgroundColor: "rgba(0,0,0,0.55)" }]}>
-                    <Ionicons name="phone-portrait-outline" size={18} color="rgba(255,255,255,0.7)" />
-                  </View>
+            <TouchableOpacity
+              activeOpacity={0.88}
+              onPress={() => router.push({ pathname: "/video/[id]", params: { id: item.id } })}
+              style={styles.videoCard}
+            >
+              <View style={styles.videoThumb}>
+                <VideoThumbnail
+                  videoUrl={item.video_url!}
+                  fallbackImageUrl={item.image_url}
+                  style={StyleSheet.absoluteFill}
+                  lowData={isDesktop}
+                  durationSeconds={item.duration_seconds}
+                  watchedFraction={isDesktop ? null : watchedFraction}
+                />
+                <View style={styles.playCircle}>
+                  <Ionicons name="play" size={22} color="#fff" />
+                </View>
+                <View style={styles.videoBadge}>
+                  <Ionicons name="videocam" size={11} color="#fff" />
+                  <Text style={styles.videoBadgeText}>Video</Text>
                 </View>
               </View>
-            ) : (
-              <TouchableOpacity
-                activeOpacity={0.88}
-                onPress={() => router.push({ pathname: "/video/[id]", params: { id: item.id } })}
-                style={styles.videoCard}
-              >
-                <View style={styles.videoThumb}>
-                  <VideoThumbnail
-                    videoUrl={item.video_url!}
-                    fallbackImageUrl={item.image_url}
-                    style={StyleSheet.absoluteFill}
-                    lowData={false}
-                    durationSeconds={item.duration_seconds}
-                    watchedFraction={watchedFraction}
-                  />
-                  <View style={styles.playCircle}>
-                    <Ionicons name="play" size={22} color="#fff" />
-                  </View>
-                  <View style={styles.videoBadge}>
-                    <Ionicons name="videocam" size={11} color="#fff" />
-                    <Text style={styles.videoBadgeText}>Video</Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            )
+            </TouchableOpacity>
           )}
 
           {/* ── ARTICLE: distinctive card ── */}
@@ -1642,8 +1619,7 @@ export default function DiscoverScreen() {
                 Following
               </Text>
             </TouchableOpacity>
-            {!isDesktop && (
-              <TouchableOpacity
+            <TouchableOpacity
                 style={styles.tabPill}
                 onPress={() => router.push("/shorts" as any)}
               >
@@ -1654,7 +1630,6 @@ export default function DiscoverScreen() {
                   </Text>
                 </View>
               </TouchableOpacity>
-            )}
           </View>
 
           {!user && (

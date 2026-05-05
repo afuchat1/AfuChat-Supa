@@ -39,9 +39,6 @@ import * as FileSystem from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
 import { BlurView } from "expo-blur";
-import { useIsDesktop } from "@/hooks/useIsDesktop";
-import { SIDEBAR_WIDTH } from "@/components/desktop/DesktopSidebar";
-import { TOPBAR_HEIGHT } from "@/components/desktop/DesktopTopBar";
 import { useTheme } from "@/hooks/useTheme";
 import { encodeId, decodeId, isUuid } from "@/lib/shortId";
 import { saveVideoProgress, clearVideoProgress } from "@/lib/videoProgress";
@@ -1913,11 +1910,11 @@ export default function VideoPlayerScreen() {
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
-  const { isDesktop: isDesktopShell } = useIsDesktop();
-  // On desktop the sidebar (240px) and topbar (56px) are visible, so the
-  // feed lives within the remaining content area — not the full viewport.
-  const EFF_W = isDesktopShell ? SCREEN_W - SIDEBAR_WIDTH : SCREEN_W;
-  const EFF_H = isDesktopShell ? SCREEN_H - TOPBAR_HEIGHT : SCREEN_H;
+  // The /video/ route is in FULLSCREEN_PATTERNS in DesktopShell, so the
+  // sidebar and topbar are NEVER rendered here — even on desktop. Use the
+  // full viewport dimensions for both the web drag engine and VideoItem.
+  const EFF_W = SCREEN_W;
+  const EFF_H = SCREEN_H;
   const [videoTab, setVideoTab] = useState<"for_you" | "following">("for_you");
   const [videos, setVideos] = useState<VideoPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2692,19 +2689,6 @@ export default function VideoPlayerScreen() {
     }
   }, [user]);
 
-  if (isDesktopShell) {
-    return (
-      <View style={mStyles.mobileOnlyRoot}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-        <Ionicons name="phone-portrait-outline" size={56} color="rgba(255,255,255,0.35)" />
-        <Text style={mStyles.mobileOnlyTitle}>Videos are mobile-only</Text>
-        <Text style={mStyles.mobileOnlySubtitle}>
-          Open AfuChat on your phone to watch videos.
-        </Text>
-      </View>
-    );
-  }
-
   if (loading) {
     return (
       <View style={{ flex: 1, ...(Platform.OS === "web" ? { position: "absolute" as any, top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 } : {}) }}>
@@ -2957,28 +2941,6 @@ const mStyles = StyleSheet.create({
     justifyContent: "center",
     ...(Platform.OS === "web" ? { position: "absolute" as any, top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 } : {}),
   } as any,
-  mobileOnlyRoot: {
-    flex: 1,
-    backgroundColor: "#000",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 40,
-    gap: 16,
-  },
-  mobileOnlyTitle: {
-    color: "rgba(255,255,255,0.75)",
-    fontSize: 22,
-    fontFamily: "Inter_700Bold",
-    textAlign: "center",
-  },
-  mobileOnlySubtitle: {
-    color: "rgba(255,255,255,0.4)",
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-    textAlign: "center",
-    lineHeight: 22,
-  },
-
   headerRow: {
     position: "absolute",
     top: 0,

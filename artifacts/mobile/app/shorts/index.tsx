@@ -6,19 +6,15 @@
  * instead of two competing scrolls.
  */
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Platform } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { Stack, router } from "expo-router";
 import { ShortsFeedSkeleton } from "@/components/ui/Skeleton";
-import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
-import { useIsDesktop } from "@/hooks/useIsDesktop";
 
 export default function ShortsRedirect() {
-  const { isDesktop } = useIsDesktop();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isDesktop) return;
     let cancelled = false;
     (async () => {
       try {
@@ -49,21 +45,6 @@ export default function ShortsRedirect() {
     return () => { cancelled = true; };
   }, []);
 
-  if (isDesktop) {
-    return (
-      <View style={styles.root}>
-        <Stack.Screen options={{ headerShown: false }} />
-        <View style={styles.mobileOnlyIcon}>
-          <Ionicons name="phone-portrait-outline" size={48} color="rgba(255,255,255,0.4)" />
-        </View>
-        <Text style={styles.mobileOnlyTitle}>Videos are mobile-only</Text>
-        <Text style={styles.mobileOnlySubtitle}>
-          Open AfuChat on your phone to watch videos.
-        </Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.root}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -83,23 +64,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 32,
-  },
-  mobileOnlyIcon: {
-    marginBottom: 20,
-  },
-  mobileOnlyTitle: {
-    color: "rgba(255,255,255,0.75)",
-    fontSize: 20,
-    fontFamily: "Inter_700Bold",
-    textAlign: "center",
-    marginBottom: 10,
-  },
-  mobileOnlySubtitle: {
-    color: "rgba(255,255,255,0.45)",
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-    textAlign: "center",
-    lineHeight: 22,
   },
   errorText: {
     color: "rgba(255,255,255,0.7)",
