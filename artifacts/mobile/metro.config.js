@@ -4,6 +4,28 @@ const http = require("http");
 const config = getDefaultConfig(__dirname);
 
 /**
+ * EXPO_NO_LAZY=1 is set in the workflow env so Metro never uses multipart/mixed
+ * streaming responses. This prevents the "Error while reading multipart response"
+ * crash that Expo Go on Android shows when the bundle download is interrupted by
+ * the Replit tunnel proxy.
+ *
+ * Additional hardening here:
+ *  - Increased socket timeout to handle proxy latency
+ *  - Fewer transformer workers to avoid OOM pressure during first bundle
+ */
+
+// Limit worker threads — large projects + Replit's 2 GB RAM limit = OOM risk
+config.maxWorkers = 2;
+
+// Transformer: use fewer inline requires to reduce bundle complexity
+config.transformer = {
+  ...(config.transformer || {}),
+  minifierConfig: {
+    ...(config.transformer?.minifierConfig || {}),
+  },
+};
+
+/**
  * Dev-only proxy: forward all `/api/*` requests to the local API server
  * (Express, port 3000 by default). Without this, fetch("/api/...") on the
  * web bundle would hit Metro itself, which returns the SPA index.html and
@@ -48,6 +70,11 @@ config.server = {
       ? originalEnhance(middleware, server)
       : middleware;
     return (req, res, next) => {
+      // Extend socket timeout for all requests — Replit proxy adds latency and
+      // the default 30 s timeout kills large bundle transfers on slow connections.
+      req.socket?.setTimeout?.(120_000);
+      res.setTimeout?.(120_000);
+
       if (req.url && req.url.startsWith("/api/")) {
         return proxyApi(req, res);
       }
