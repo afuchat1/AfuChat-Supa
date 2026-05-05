@@ -18,7 +18,7 @@ EXPO_PUBLIC_SUPABASE_URL = "https://rhnsjqqtdzlkvqazfcbg.supabase.co"
 EXPO_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJobnNqcXF0ZHpsa3ZxYXpmY2JnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2NzA4NjksImV4cCI6MjA3NzI0Njg2OX0.j8zuszO1K6Apjn-jRiVUyZeqe3Re424xyOho9qDl_oY"
 PORT = "3000"
 SUPABASE_URL = "https://rhnsjqqtdzlkvqazfcbg.supabase.co"
-GITHUB_PAT = "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"
+GITHUB_PAT = "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"
 
 [workflows]
 runButton = "Project"

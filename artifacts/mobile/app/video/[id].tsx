@@ -1958,7 +1958,13 @@ export default function VideoPlayerScreen() {
 
   function handleWebPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     e.stopPropagation();
-    try { (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId); } catch (_) {}
+    // Do NOT call setPointerCapture here — capturing all events on the outer
+    // container means the WebVideoPlayer overlay's onPointerMove never fires,
+    // so pointerMoved stays false and the long-press timer fires during every
+    // swipe, opening the context menu and cancelling the drag.
+    // Without capture, events bubble normally: the overlay cancels its
+    // long-press timer when movement is detected, and the outer container's
+    // move/up handlers still fire via bubbling.
     const inner = webInnerRef.current;
     if (inner) inner.style.transition = "none";
     webDragRef.current = {
