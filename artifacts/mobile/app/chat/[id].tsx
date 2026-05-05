@@ -206,18 +206,20 @@ function PremiumBubbleShimmer() {
 
 function BubbleTail({ isMe, color }: { isMe: boolean; color: string }) {
   if (isMe) {
+    // Right-side tail: sharp point at bottom-right, concave inner curve back to top-left
     return (
       <View style={st.tailMe}>
-        <Svg width={12} height={16} viewBox="0 0 12 16">
-          <Path d="M0 0 C0 0 0 8 6 12 C9 14 12 16 12 16 L12 0 Z" fill={color} />
+        <Svg width={14} height={20} viewBox="0 0 14 20">
+          <Path d="M0 0 L14 20 C9 15 2 9 0 0 Z" fill={color} />
         </Svg>
       </View>
     );
   }
+  // Left-side tail: mirror of the above
   return (
     <View style={st.tailOther}>
-      <Svg width={12} height={16} viewBox="0 0 12 16">
-        <Path d="M12 0 C12 0 12 8 6 12 C3 14 0 16 0 16 L0 0 Z" fill={color} />
+      <Svg width={14} height={20} viewBox="0 0 14 20">
+        <Path d="M14 0 L0 20 C5 15 12 9 14 0 Z" fill={color} />
       </Svg>
     </View>
   );
@@ -4255,7 +4257,7 @@ const st = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
   },
 
-  msgRow: { flexDirection: "row", paddingHorizontal: 6, marginVertical: 0 },
+  msgRow: { flexDirection: "row", paddingHorizontal: 12, marginVertical: 0 },
   msgRowMe: { justifyContent: "flex-end" },
   msgRowOther: { justifyContent: "flex-start" },
 
@@ -4263,14 +4265,16 @@ const st = StyleSheet.create({
   bubbleContainerMe: { alignItems: "flex-end" },
   bubbleContainerOther: { alignItems: "flex-start" },
 
-  tailMe: { position: "absolute", right: -6, bottom: 0, zIndex: 1 },
-  tailOther: { position: "absolute", left: -6, bottom: 0, zIndex: 1 },
+  // Tail sits just outside the bubble corner, overlapping by 2 px so
+  // there's no hairline gap between bubble and tail.
+  tailMe: { position: "absolute", right: -12, bottom: 0, zIndex: 1 },
+  tailOther: { position: "absolute", left: -12, bottom: 0, zIndex: 1 },
 
   bubble: {
-    paddingHorizontal: 10,
-    paddingTop: 6,
-    paddingBottom: 4,
-    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 6,
+    borderRadius: 18,
     minWidth: 64,
     overflow: "hidden",
     flexShrink: 1,
@@ -4278,17 +4282,16 @@ const st = StyleSheet.create({
   bubbleWithReply: {
     alignSelf: "stretch",
   },
-  bubbleMe: {
-    borderBottomRightRadius: 16,
-  },
-  bubbleOther: {
-    borderBottomLeftRadius: 16,
-  },
+  // When no tail: all four corners stay at the full radius (set above).
+  bubbleMe: {},
+  bubbleOther: {},
+  // When the tail IS shown: flatten the corner the tail attaches to so the
+  // tail and bubble meet seamlessly, matching iMessage style.
   bubbleTailMe: {
-    borderBottomRightRadius: 4,
+    borderBottomRightRadius: 0,
   },
   bubbleTailOther: {
-    borderBottomLeftRadius: 4,
+    borderBottomLeftRadius: 0,
   },
 
   senderName: { fontSize: 12, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
