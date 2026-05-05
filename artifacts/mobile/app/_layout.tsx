@@ -11,6 +11,7 @@ import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Linking, Platform } from "react-native";
+import { useTheme } from "@/hooks/useTheme";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -100,6 +101,7 @@ const bottomSheetAnim = Platform.OS === "web"
   : { animation: "slide_from_bottom" as const, gestureDirection: "vertical" as const };
 
 function RootLayoutNav() {
+  const { colors } = useTheme();
   return (
     <Stack
       screenOptions={{
@@ -108,6 +110,7 @@ function RootLayoutNav() {
         animationDuration: Platform.OS === "web" ? 0 : 250,
         gestureEnabled: Platform.OS !== "web",
         gestureDirection: "horizontal",
+        contentStyle: { backgroundColor: colors.background },
       }}
     >
       <Stack.Screen name="index" options={{ animation: Platform.OS === "web" ? "none" : "fade" }} />

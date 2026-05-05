@@ -7,24 +7,27 @@ type SkeletonProps = {
   height: number;
   borderRadius?: number;
   style?: ViewStyle;
+  /** Force white-on-dark styling regardless of app theme (use on dark/black backgrounds). */
+  forceDark?: boolean;
 };
 
-export function Skeleton({ width, height, borderRadius = 8, style }: SkeletonProps) {
+export function Skeleton({ width, height, borderRadius = 8, style, forceDark }: SkeletonProps) {
   const { isDark } = useTheme();
-  const anim = useRef(new Animated.Value(0.5)).current;
+  const anim = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(anim, { toValue: 1, duration: 900, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 0.5, duration: 900, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0.3, duration: 800, useNativeDriver: true }),
       ])
     );
     loop.start();
     return () => loop.stop();
   }, [anim]);
 
-  const bgColor = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)";
+  const useDark = forceDark ?? isDark;
+  const bgColor = useDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.10)";
 
   return (
     <Animated.View
@@ -457,28 +460,32 @@ export function VideoFeedSkeleton() {
 
 export function ShortsFeedSkeleton({ dark = true }: { dark?: boolean }) {
   const { colors } = useTheme();
-  const bg = dark ? "#000" : colors.background;
-  const cardH = 520;
+  const bg = dark ? "#0a0a0a" : colors.background;
   return (
     <View style={{ flex: 1, backgroundColor: bg }}>
-      <View style={{ flex: 1, justifyContent: "flex-end", padding: 16, gap: 8 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <Skeleton width={44} height={44} borderRadius={22} />
-          <View style={{ gap: 5 }}>
-            <Skeleton width={110} height={14} />
-            <Skeleton width={70} height={11} />
+      {/* Main content area — pushed to bottom like the real video UI */}
+      <View style={{ flex: 1, justifyContent: "flex-end", paddingHorizontal: 16, paddingBottom: 90 }}>
+        {/* Creator info row */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 }}>
+          <Skeleton width={44} height={44} borderRadius={22} forceDark={dark} />
+          <View style={{ gap: 6 }}>
+            <Skeleton width={120} height={14} forceDark={dark} />
+            <Skeleton width={80} height={11} forceDark={dark} />
           </View>
         </View>
-        <Skeleton width="75%" height={13} />
-        <Skeleton width="55%" height={13} />
-        <View style={{ position: "absolute", right: 14, bottom: 100, gap: 20, alignItems: "center" }}>
-          {[44, 44, 44, 44].map((s, i) => (
-            <View key={i} style={{ alignItems: "center", gap: 3 }}>
-              <Skeleton width={s} height={s} borderRadius={22} />
-              <Skeleton width={26} height={10} />
-            </View>
-          ))}
-        </View>
+        {/* Caption lines */}
+        <Skeleton width="78%" height={13} forceDark={dark} style={{ marginBottom: 6 }} />
+        <Skeleton width="58%" height={13} forceDark={dark} style={{ marginBottom: 4 }} />
+      </View>
+
+      {/* Right-side action rail */}
+      <View style={{ position: "absolute", right: 14, bottom: 110, gap: 22, alignItems: "center" }}>
+        {[44, 44, 44, 44].map((s, i) => (
+          <View key={i} style={{ alignItems: "center", gap: 5 }}>
+            <Skeleton width={s} height={s} borderRadius={22} forceDark={dark} />
+            <Skeleton width={28} height={10} forceDark={dark} />
+          </View>
+        ))}
       </View>
     </View>
   );

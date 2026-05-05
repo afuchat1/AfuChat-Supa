@@ -1613,6 +1613,25 @@ export default function VideoPlayerScreen() {
       <View style={mStyles.root}>
         <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
         <ShortsFeedSkeleton dark />
+        {/* Render the real header on top so navigation chrome is visible during load */}
+        <View style={[mStyles.headerRow, { paddingTop: insets.top + 6 }]}>
+          <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={mStyles.headerSide}>
+            <Ionicons name="arrow-back" size={22} color="#fff" />
+          </TouchableOpacity>
+          <View style={mStyles.tabRow}>
+            <TouchableOpacity onPress={() => switchTab("for_you")} style={mStyles.tabBtn}>
+              <Text style={[mStyles.tabText, videoTab === "for_you" && mStyles.tabTextActive]}>For You</Text>
+            </TouchableOpacity>
+            <View style={mStyles.tabDivider} />
+            <TouchableOpacity onPress={() => switchTab("following")} style={mStyles.tabBtn}>
+              <Text style={[mStyles.tabText, videoTab === "following" && mStyles.tabTextActive]}>Following</Text>
+            </TouchableOpacity>
+            <Animated.View style={[mStyles.tabIndicator, { left: indicatorLeft, transform: [{ translateX: -14 }] }]} />
+          </View>
+          <TouchableOpacity hitSlop={12} style={mStyles.headerSide} onPress={() => router.push("/search" as any)}>
+            <Ionicons name="search-outline" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
