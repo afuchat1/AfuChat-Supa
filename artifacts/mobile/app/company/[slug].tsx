@@ -18,10 +18,12 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import { showAlert } from "@/lib/alert";
+import { uploadToStorage } from "@/lib/mediaUpload";
 
 const GOLD = "#D4A853";
 
@@ -85,6 +87,8 @@ export default function CompanyPageScreen() {
   const [followLoading, setFollowLoading] = useState(false);
   const [showPostModal, setShowPostModal] = useState(false);
   const [postText, setPostText] = useState("");
+  const [postImageUri, setPostImageUri] = useState<string | null>(null);
+  const [uploadingPostImage, setUploadingPostImage] = useState(false);
   const [posting, setPosting] = useState(false);
   const [activeTab, setActiveTab] = useState<"updates" | "followers" | "jobs">("updates");
   const [aboutExpanded, setAboutExpanded] = useState(false);
@@ -230,17 +234,58 @@ export default function CompanyPageScreen() {
     }
   }
 
+  async function pickPostImage() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      showAlert("Permission needed", "Please allow access to your photo library.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: false,
+      quality: 0.9,
+    });
+    if (!result.canceled && result.assets[0]) setPostImageUri(result.assets[0].uri);
+  }
+
+  function closePostModal() {
+    setShowPostModal(false);
+    setPostText("");
+    setPostImageUri(null);
+  }
+
   async function submitPost() {
     if (!postText.trim() || !page || !user) return;
     setPosting(true);
+
+    let image_url: string | null = null;
+    if (postImageUri) {
+      setUploadingPostImage(true);
+      const ext = postImageUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
+      const { publicUrl, error: uploadErr } = await uploadToStorage(
+        "org-post-images",
+        `${user.id}/${page.id}_${Date.now()}.${ext}`,
+        postImageUri,
+      );
+      setUploadingPostImage(false);
+      if (!publicUrl) {
+        setPosting(false);
+        showAlert("Upload failed", uploadErr || "Could not upload image. Please try again.");
+        return;
+      }
+      image_url = publicUrl;
+    }
+
     const { error } = await supabase.from("organization_page_posts").insert({
       page_id: page.id,
       author_id: user.id,
       content: postText.trim(),
+      ...(image_url ? { image_url } : {}),
     });
     setPosting(false);
     if (error) { showAlert("Error", "Could not publish update."); return; }
     setPostText("");
+    setPostImageUri(null);
     setShowPostModal(false);
     load();
   }
@@ -701,38 +746,81 @@ export default function CompanyPageScreen() {
       )}
 
       {/* Post update modal */}
-      <Modal visible={showPostModal} transparent animationType="slide" onRequestClose={() => setShowPostModal(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowPostModal(false)}>
+      <Modal visible={showPostModal} transparent animationType="slide" onRequestClose={closePostModal}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={closePostModal}>
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ width: "100%" }}>
-            <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
-              <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Post an Update</Text>
-              <TextInput
-                style={[styles.postInput, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border }]}
-                placeholder={`Share an update from ${page.name}…`}
-                placeholderTextColor={colors.textMuted}
-                value={postText}
-                onChangeText={setPostText}
-                multiline
-                numberOfLines={5}
-                maxLength={3000}
-                autoFocus
-              />
-              <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 2 }}>
-                <Text style={{ color: colors.textMuted, fontSize: 12 }}>{postText.length}/3000</Text>
+            <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+              <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
+                <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+
+                {/* Header row */}
+                <View style={styles.postModalHeader}>
+                  <TouchableOpacity onPress={closePostModal} hitSlop={8}>
+                    <Ionicons name="close" size={22} color={colors.textMuted} />
+                  </TouchableOpacity>
+                  <Text style={[styles.modalTitle, { color: colors.text, marginBottom: 0 }]}>Post an Update</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_400Regular" }}>
+                    {postText.length}/3000
+                  </Text>
+                </View>
+
+                <TextInput
+                  style={[styles.postInput, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border }]}
+                  placeholder={`Share an update from ${page.name}…`}
+                  placeholderTextColor={colors.textMuted}
+                  value={postText}
+                  onChangeText={setPostText}
+                  multiline
+                  numberOfLines={5}
+                  maxLength={3000}
+                  autoFocus
+                />
+
+                {/* Attached image preview */}
+                {postImageUri ? (
+                  <View style={styles.postImageWrap}>
+                    <Image source={{ uri: postImageUri }} style={styles.postImagePreview} resizeMode="cover" />
+                    <TouchableOpacity
+                      style={styles.postImageRemove}
+                      onPress={() => setPostImageUri(null)}
+                      hitSlop={8}
+                    >
+                      <Ionicons name="close-circle" size={24} color="#fff" />
+                    </TouchableOpacity>
+                    {uploadingPostImage && (
+                      <View style={styles.postImageUploadingOverlay}>
+                        <ActivityIndicator color="#fff" />
+                      </View>
+                    )}
+                  </View>
+                ) : null}
+
+                {/* Toolbar + publish */}
+                <View style={styles.postModalFooter}>
+                  <TouchableOpacity
+                    style={[styles.attachBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
+                    onPress={pickPostImage}
+                    activeOpacity={0.7}
+                    disabled={posting}
+                  >
+                    <Ionicons name="image-outline" size={20} color={colors.accent} />
+                    <Text style={[styles.attachBtnText, { color: colors.accent }]}>Photo</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.submitBtn, { backgroundColor: colors.accent, opacity: posting || !postText.trim() ? 0.6 : 1, flex: 1 }]}
+                    onPress={submitPost}
+                    disabled={posting || !postText.trim()}
+                    activeOpacity={0.85}
+                  >
+                    {posting
+                      ? <ActivityIndicator color="#fff" size="small" />
+                      : <Text style={styles.submitBtnText}>Publish</Text>
+                    }
+                  </TouchableOpacity>
+                </View>
               </View>
-              <TouchableOpacity
-                style={[styles.submitBtn, { backgroundColor: colors.accent, opacity: posting || !postText.trim() ? 0.6 : 1 }]}
-                onPress={submitPost}
-                disabled={posting || !postText.trim()}
-                activeOpacity={0.85}
-              >
-                {posting
-                  ? <ActivityIndicator color="#fff" size="small" />
-                  : <Text style={styles.submitBtnText}>Publish Update</Text>
-                }
-              </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
           </KeyboardAvoidingView>
         </TouchableOpacity>
       </Modal>
@@ -934,7 +1022,15 @@ const styles = StyleSheet.create({
   modalSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 12 },
   modalHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 4 },
   modalTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  postModalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
   postInput: { borderRadius: 12, borderWidth: 1, padding: 12, fontSize: 15, fontFamily: "Inter_400Regular", minHeight: 120, textAlignVertical: "top" },
+  postImageWrap: { position: "relative", borderRadius: 12, overflow: "hidden" },
+  postImagePreview: { width: "100%", height: 180, borderRadius: 12 },
+  postImageRemove: { position: "absolute", top: 8, right: 8 },
+  postImageUploadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center", borderRadius: 12 },
+  postModalFooter: { flexDirection: "row", alignItems: "center", gap: 10 },
+  attachBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
+  attachBtnText: { fontSize: 14, fontFamily: "Inter_500Medium" },
   submitBtn: { borderRadius: 12, paddingVertical: 13, alignItems: "center", justifyContent: "center" },
   submitBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
 
