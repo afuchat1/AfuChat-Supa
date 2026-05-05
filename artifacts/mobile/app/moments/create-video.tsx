@@ -24,6 +24,12 @@ import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
 import { uploadToStorage } from "@/lib/mediaUpload";
 import { registerVideoAsset } from "@/lib/videoApi";
+import {
+  startPostUpload,
+  updatePostProgress,
+  finishPostUpload,
+  failPostUpload,
+} from "@/lib/postUploadStore";
 
 const MAX_DURATION_SECONDS = 90;
 const WARN_SIZE_MB = 80;
@@ -232,8 +238,6 @@ export default function CreateVideoScreen() {
   const [videoWidth, setVideoWidth] = useState<number | null>(null);
   const [videoHeight, setVideoHeight] = useState<number | null>(null);
   const [caption, setCaption] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState("");
   const [soundDismissed, setSoundDismissed] = useState(false);
 
   const [thumbnailUri, setThumbnailUri] = useState<string | null>(null);
@@ -366,7 +370,7 @@ export default function CreateVideoScreen() {
   }
 
   // ── Post ───────────────────────────────────────────────────────────────────
-  async function post() {
+  function post() {
     if (!user) {
       router.push("/(auth)/login");
       return;
@@ -397,99 +401,120 @@ export default function CreateVideoScreen() {
     doPost();
   }
 
-  async function doPost() {
-    setLoading(true);
-    setUploadProgress("Preparing video…");
-    try {
-      const rawExt =
-        videoUri!.split(".").pop()?.split("?")[0]?.toLowerCase() || "";
-      const ext = ["mp4", "mov", "avi", "webm", "mkv", "m4v"].includes(rawExt)
-        ? rawExt
-        : "mp4";
-      const filePath = `${user!.id}/${Date.now()}.${ext}`;
-      const resolvedMime =
-        videoMime || (ext === "mov" ? "video/quicktime" : `video/${ext}`);
+  function doPost() {
+    // Capture all state before navigating away
+    const _videoUri = videoUri!;
+    const _videoMime = videoMime;
+    const _caption = caption.trim();
+    const _thumbnailUri = thumbnailUri;
+    const _thumbTime = thumbTime;
+    const _duration = duration;
+    const _fileSize = fileSize;
+    const _videoWidth = videoWidth;
+    const _videoHeight = videoHeight;
+    const _userId = user!.id;
+    const _soundName = soundName;
+    const _soundDismissed = soundDismissed;
 
-      setUploadProgress("Uploading video…");
-      const { publicUrl, error: uploadError } = await uploadToStorage(
-        "videos",
-        filePath,
-        videoUri!,
-        resolvedMime,
-      );
-      if (uploadError || !publicUrl)
-        throw new Error(uploadError || "Upload failed");
-
-      setUploadProgress("Uploading thumbnail…");
-      let thumbnailPublicUrl: string | null = null;
-      try {
-        let thumbLocalUri = thumbnailUri;
-
-        if (!thumbLocalUri) {
-          if (Platform.OS === "web") {
-            thumbLocalUri = await generateWebThumbnail(videoUri!, thumbTime);
-          } else if (!videoUri!.startsWith("blob:")) {
-            thumbLocalUri = await generateNativeThumbnail(
-              videoUri!,
-              Math.round(thumbTime * 1000),
-            );
-          }
-        }
-
-        if (thumbLocalUri) {
-          const thumbPath = `${user!.id}/${Date.now()}_thumb.jpg`;
-          const uploaded = await uploadToStorage(
-            "videos",
-            thumbPath,
-            thumbLocalUri,
-            "image/jpeg",
-          );
-          if (uploaded.publicUrl) thumbnailPublicUrl = uploaded.publicUrl;
-        }
-      } catch (_) {}
-
-      setUploadProgress("Publishing…");
-      const { data: insertedPost, error } = await supabase
-        .from("posts")
-        .insert({
-          author_id: user!.id,
-          content: caption.trim(),
-          video_url: publicUrl,
-          image_url: thumbnailPublicUrl,
-          post_type: "video",
-          visibility: "public",
-          view_count: 0,
-          ...(soundName && !soundDismissed ? { audio_name: soundName } : {}),
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-
-      const newPostId = (insertedPost as { id?: string } | null)?.id ?? null;
-      registerVideoAsset({
-        source_path: filePath,
-        post_id: newPostId,
-        duration: duration > 0 ? duration : null,
-        width: videoWidth,
-        height: videoHeight,
-        source_size_bytes: fileSize > 0 ? fileSize : null,
-        source_mime: resolvedMime,
-      }).catch((e) => console.warn("registerVideoAsset:", e));
-
-      try {
-        const { rewardXp } = await import("../../lib/rewardXp");
-        rewardXp("post_created");
-      } catch (_) {}
-      router.back();
-    } catch (err: any) {
-      showAlert("Error", err.message || "Failed to post video.");
-    } finally {
-      setLoading(false);
-      setUploadProgress("");
+    // Navigate immediately — upload runs in the background
+    if (router.canDismiss()) {
+      router.dismissAll();
+    } else {
+      router.replace("/(tabs)");
     }
+
+    startPostUpload("video", _caption);
+
+    (async () => {
+      try {
+        updatePostProgress(0.1);
+
+        const rawExt =
+          _videoUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "";
+        const ext = ["mp4", "mov", "avi", "webm", "mkv", "m4v"].includes(rawExt)
+          ? rawExt
+          : "mp4";
+        const filePath = `${_userId}/${Date.now()}.${ext}`;
+        const resolvedMime =
+          _videoMime || (ext === "mov" ? "video/quicktime" : `video/${ext}`);
+
+        updatePostProgress(0.2);
+        const { publicUrl, error: uploadError } = await uploadToStorage(
+          "videos",
+          filePath,
+          _videoUri,
+          resolvedMime,
+        );
+        if (uploadError || !publicUrl)
+          throw new Error(uploadError || "Upload failed");
+
+        updatePostProgress(0.7);
+        let thumbnailPublicUrl: string | null = null;
+        try {
+          let thumbLocalUri = _thumbnailUri;
+          if (!thumbLocalUri) {
+            if (Platform.OS === "web") {
+              thumbLocalUri = await generateWebThumbnail(_videoUri, _thumbTime);
+            } else if (!_videoUri.startsWith("blob:")) {
+              thumbLocalUri = await generateNativeThumbnail(
+                _videoUri,
+                Math.round(_thumbTime * 1000),
+              );
+            }
+          }
+          if (thumbLocalUri) {
+            const thumbPath = `${_userId}/${Date.now()}_thumb.jpg`;
+            const uploaded = await uploadToStorage(
+              "videos",
+              thumbPath,
+              thumbLocalUri,
+              "image/jpeg",
+            );
+            if (uploaded.publicUrl) thumbnailPublicUrl = uploaded.publicUrl;
+          }
+        } catch (_) {}
+
+        updatePostProgress(0.85);
+        const { data: insertedPost, error } = await supabase
+          .from("posts")
+          .insert({
+            author_id: _userId,
+            content: _caption,
+            video_url: publicUrl,
+            image_url: thumbnailPublicUrl,
+            post_type: "video",
+            visibility: "public",
+            view_count: 0,
+            ...(_soundName && !_soundDismissed ? { audio_name: _soundName } : {}),
+          })
+          .select("id")
+          .single();
+        if (error) throw error;
+
+        const newPostId = (insertedPost as { id?: string } | null)?.id ?? null;
+        registerVideoAsset({
+          source_path: filePath,
+          post_id: newPostId,
+          duration: _duration > 0 ? _duration : null,
+          width: _videoWidth,
+          height: _videoHeight,
+          source_size_bytes: _fileSize > 0 ? _fileSize : null,
+          source_mime: resolvedMime,
+        }).catch((e) => console.warn("registerVideoAsset:", e));
+
+        try {
+          const { rewardXp } = await import("../../lib/rewardXp");
+          rewardXp("post_created");
+        } catch (_) {}
+
+        finishPostUpload();
+      } catch (err: any) {
+        failPostUpload(err?.message || "Failed to post video.");
+      }
+    })();
   }
 
-  const canPost = !!videoUri && !!caption.trim() && !loading;
+  const canPost = !!videoUri && !!caption.trim();
   const durationLabel =
     duration > 0 ? `${Math.round(duration)}s / ${MAX_DURATION_SECONDS}s` : "";
   const sizeLabel = fileSize > 0 ? formatBytes(fileSize) : "";
@@ -546,18 +571,14 @@ export default function CreateVideoScreen() {
             },
           ]}
         >
-          {loading ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text
-              style={[
-                styles.postBtnText,
-                { color: canPost ? "#fff" : colors.textMuted },
-              ]}
-            >
-              Post
-            </Text>
-          )}
+          <Text
+            style={[
+              styles.postBtnText,
+              { color: canPost ? "#fff" : colors.textMuted },
+            ]}
+          >
+            Post
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -910,20 +931,6 @@ export default function CreateVideoScreen() {
             ))}
           </View>
 
-          {/* Upload progress */}
-          {uploadProgress ? (
-            <View style={styles.progressRow}>
-              <ActivityIndicator size="small" color={colors.accent} />
-              <Text
-                style={[
-                  styles.progressText,
-                  { color: colors.textSecondary },
-                ]}
-              >
-                {uploadProgress}
-              </Text>
-            </View>
-          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </View>

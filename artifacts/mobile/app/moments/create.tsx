@@ -30,6 +30,12 @@ import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { uploadToStorage } from "@/lib/mediaUpload";
 import { aiEnhancePost, aiGenerateHashtags, aiGenerateCaption } from "@/lib/aiHelper";
+import {
+  startPostUpload,
+  updatePostProgress,
+  finishPostUpload,
+  failPostUpload,
+} from "@/lib/postUploadStore";
 import { LANG_LABELS } from "@/lib/translate";
 
 type Audience = "public" | "followers" | "private";
@@ -52,8 +58,6 @@ export default function CreatePostScreen() {
 
   const [content, setContent] = useState("");
   const [images, setImages] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState("");
   const [aiLoading, setAiLoading] = useState<string | null>(null);
   const [audience, setAudience] = useState<Audience>("public");
   const [showAudienceModal, setShowAudienceModal] = useState(false);
@@ -108,7 +112,7 @@ export default function CreatePostScreen() {
     setTimeout(() => inputRef.current?.focus(), 100);
   }
 
-  async function handlePost() {
+  function handlePost() {
     if (!content.trim() && images.length === 0) {
       showAlert("Empty post", "Write something or add a photo to share.");
       return;
@@ -118,7 +122,6 @@ export default function CreatePostScreen() {
       return;
     }
     if (!user) return;
-    setLoading(true);
 
     Animated.sequence([
       Animated.timing(postBtnScale, { toValue: 0.92, duration: 80, useNativeDriver: true }),
@@ -126,74 +129,83 @@ export default function CreatePostScreen() {
     ]).start();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    let uploadedUrls: string[] = [];
-    if (images.length > 0) {
-      for (let idx = 0; idx < images.length; idx++) {
-        setUploadProgress(`Uploading ${idx + 1}/${images.length}...`);
-        const uri = images[idx];
-        let ext: string;
-        let mime: string | undefined;
-        if (uri.startsWith("data:")) {
-          const dataMime = uri.match(/data:([^;]+)/)?.[1] || "";
-          ext = dataMime.includes("png") ? "png" : dataMime.includes("webp") ? "webp" : "jpg";
-          mime = dataMime || "image/jpeg";
-        } else {
-          ext = uri.split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
-        }
-        const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
-        const { publicUrl, error: upErr } = await uploadToStorage("post-images", fileName, uri, mime);
-        if (publicUrl) {
-          uploadedUrls.push(publicUrl);
-        } else {
-          setLoading(false);
-          setUploadProgress("");
-          showAlert("Upload failed", upErr || `Could not upload image ${idx + 1}. Please try again.`);
-          return;
-        }
-      }
-      setUploadProgress("");
-    }
+    // Capture all state before navigating away
+    const _content = content.trim();
+    const _images = [...images];
+    const _userId = user.id;
+    const _audience = audience;
+    const _langCode = langCode;
+    const _locationTag = locationTag;
 
-    const firstImage = uploadedUrls.length > 0 ? uploadedUrls[0] : null;
-    let postContent = content.trim();
-    if (locationTag) postContent += `\n📍 ${locationTag}`;
-
-    const insertPayload: any = {
-      author_id: user.id,
-      content: postContent,
-      image_url: firstImage,
-      visibility: audience,
-    };
-    if (langCode) insertPayload.language_code = langCode;
-
-    const { data: post, error } = await supabase
-      .from("posts")
-      .insert(insertPayload)
-      .select()
-      .single();
-
-    if (error || !post) {
-      setLoading(false);
-      showAlert("Error", "Could not create post. Please try again.");
-      return;
-    }
-
-    if (uploadedUrls.length > 0) {
-      const imageRows = uploadedUrls.map((url, i) => ({
-        post_id: post.id,
-        image_url: url,
-        display_order: i,
-      }));
-      await supabase.from("post_images").insert(imageRows);
-    }
-
-    try {
-      const { rewardXp } = await import("../../lib/rewardXp");
-      await rewardXp("post_created");
-    } catch (_) {}
-
-    setLoading(false);
+    // Navigate immediately — upload runs in the background
     router.back();
+
+    startPostUpload("post", _content.slice(0, 80));
+
+    (async () => {
+      try {
+        const uploadedUrls: string[] = [];
+        if (_images.length > 0) {
+          for (let idx = 0; idx < _images.length; idx++) {
+            updatePostProgress(0.05 + (idx / _images.length) * 0.6);
+            const uri = _images[idx];
+            let ext: string;
+            let mime: string | undefined;
+            if (uri.startsWith("data:")) {
+              const dataMime = uri.match(/data:([^;]+)/)?.[1] || "";
+              ext = dataMime.includes("png") ? "png" : dataMime.includes("webp") ? "webp" : "jpg";
+              mime = dataMime || "image/jpeg";
+            } else {
+              ext = uri.split(".").pop()?.split("?")[0]?.toLowerCase() || "jpg";
+            }
+            const fileName = `${_userId}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+            const { publicUrl, error: upErr } = await uploadToStorage("post-images", fileName, uri, mime);
+            if (!publicUrl) throw new Error(upErr || `Could not upload image ${idx + 1}`);
+            uploadedUrls.push(publicUrl);
+          }
+        }
+
+        updatePostProgress(0.75);
+
+        const firstImage = uploadedUrls.length > 0 ? uploadedUrls[0] : null;
+        let postContent = _content;
+        if (_locationTag) postContent += `\n📍 ${_locationTag}`;
+
+        const insertPayload: any = {
+          author_id: _userId,
+          content: postContent,
+          image_url: firstImage,
+          visibility: _audience,
+        };
+        if (_langCode) insertPayload.language_code = _langCode;
+
+        const { data: post, error } = await supabase
+          .from("posts")
+          .insert(insertPayload)
+          .select()
+          .single();
+
+        if (error || !post) throw new Error("Could not create post. Please try again.");
+
+        if (uploadedUrls.length > 0) {
+          const imageRows = uploadedUrls.map((url, i) => ({
+            post_id: post.id,
+            image_url: url,
+            display_order: i,
+          }));
+          await supabase.from("post_images").insert(imageRows);
+        }
+
+        try {
+          const { rewardXp } = await import("../../lib/rewardXp");
+          await rewardXp("post_created");
+        } catch (_) {}
+
+        finishPostUpload();
+      } catch (err: any) {
+        failPostUpload(err?.message || "Failed to create post.");
+      }
+    })();
   }
 
   const charCount = content.trim().length;
@@ -226,27 +238,17 @@ export default function CreatePostScreen() {
           <Ionicons name="close" size={24} color={colors.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }} />
-        {loading && uploadProgress ? (
-          <View style={[styles.progressPill, { backgroundColor: colors.accent }]}>
-            <ActivityIndicator size={12} color="#fff" />
-            <Text style={styles.progressText}>{uploadProgress}</Text>
-          </View>
-        ) : null}
         <Animated.View style={{ transform: [{ scale: postBtnScale }] }}>
           <TouchableOpacity
             style={[
               styles.postBtn,
-              { backgroundColor: colors.accent, opacity: loading || isOverLimit || (!content.trim() && images.length === 0) ? 0.5 : 1 },
+              { backgroundColor: colors.accent, opacity: isOverLimit || (!content.trim() && images.length === 0) ? 0.5 : 1 },
             ]}
             onPress={handlePost}
-            disabled={loading || isOverLimit}
+            disabled={isOverLimit}
             activeOpacity={0.8}
           >
-            {loading && !uploadProgress ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.postBtnText}>Post</Text>
-            )}
+            <Text style={styles.postBtnText}>Post</Text>
           </TouchableOpacity>
         </Animated.View>
       </View>
