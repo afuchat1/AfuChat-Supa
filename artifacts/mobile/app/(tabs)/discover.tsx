@@ -170,6 +170,66 @@ type CommentItem = {
   profile: { display_name: string; handle: string; avatar_url: string | null };
 };
 
+const DC_USE_NATIVE = Platform.OS !== "web";
+const DC_QUICK_EMOJIS = ["🔥", "❤️", "😂", "😮", "👏", "💯", "🙌", "😍"];
+
+function parseDcCommentText(text: string, accentColor: string): React.ReactNode {
+  return text.split(/(@\w[\w.]*|#\w+)/g).map((p, i) => {
+    if (/^@\w/.test(p)) return <Text key={i} style={{ color: accentColor, fontFamily: "Inter_600SemiBold" }}>{p}</Text>;
+    if (/^#\w/.test(p)) return <Text key={i} style={{ color: accentColor + "BB" }}>{p}</Text>;
+    return <Text key={i}>{p}</Text>;
+  });
+}
+
+function DcCommentRow({ c, colors, onLike, liked }: {
+  c: CommentItem; colors: any; liked: boolean; onLike: (id: string) => void;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  function handleLike() {
+    Animated.sequence([
+      Animated.spring(scale, { toValue: 1.45, tension: 350, friction: 7, useNativeDriver: DC_USE_NATIVE }),
+      Animated.spring(scale, { toValue: 1, tension: 350, friction: 7, useNativeDriver: DC_USE_NATIVE }),
+    ]).start();
+    onLike(c.id);
+  }
+
+  return (
+    <View style={dcStyles.commentRow}>
+      <View style={dcStyles.commentAvatar}>
+        {c.profile.avatar_url ? (
+          <ExpoImage source={{ uri: c.profile.avatar_url }} style={{ width: 36, height: 36, borderRadius: 18 }} contentFit="cover" />
+        ) : (
+          <View style={[dcStyles.commentAvatarFallback, { backgroundColor: colors.accent + "22" }]}>
+            <Text style={[dcStyles.commentAvatarLetter, { color: colors.accent }]}>
+              {(c.profile.display_name || "U").slice(0, 1).toUpperCase()}
+            </Text>
+          </View>
+        )}
+      </View>
+      <View style={{ flex: 1 }}>
+        <View style={[dcStyles.commentBubble, { backgroundColor: colors.backgroundTertiary ?? colors.background }]}>
+          <Text style={[dcStyles.commentName, { color: colors.text }]}>{c.profile.display_name}</Text>
+          <Text style={[dcStyles.commentText, { color: colors.text }]}>
+            {parseDcCommentText(c.content, colors.accent)}
+          </Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginTop: 5, marginLeft: 4 }}>
+          <Text style={[dcStyles.commentTime, { color: colors.textMuted }]}>{formatRelative(c.created_at)}</Text>
+          <TouchableOpacity onPress={handleLike} style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+            <Animated.View style={{ transform: [{ scale }] }}>
+              <Ionicons name={liked ? "heart" : "heart-outline"} size={13} color={liked ? "#FF2D55" : colors.textMuted} />
+            </Animated.View>
+            <Text style={{ color: liked ? "#FF2D55" : colors.textMuted, fontSize: 11, fontFamily: "Inter_600SemiBold" }}>
+              {liked ? "Liked" : "Like"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 function DiscoverCommentsSheet({
   visible,
   onClose,
@@ -184,12 +244,16 @@ function DiscoverCommentsSheet({
   const { colors } = useTheme();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
+  const { height: screenH } = useWindowDimensions();
   const [comments, setComments] = useState<CommentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [sortMode, setSortMode] = useState<"recent" | "top">("recent");
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const listRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
+  const sendScale = useRef(new Animated.Value(1)).current;
 
   const loadComments = useCallback(() => {
     if (!postId) return;
@@ -219,9 +283,7 @@ function DiscoverCommentsSheet({
 
   useEffect(() => {
     if (!visible || !postId) return;
-    setComments([]);
-    setLoading(true);
-    setText("");
+    setComments([]); setLoading(true); setText(""); setLikedIds(new Set()); setSortMode("recent");
     loadComments();
   }, [visible, postId, loadComments]);
 
@@ -235,9 +297,31 @@ function DiscoverCommentsSheet({
     return () => { supabase.removeChannel(channel); };
   }, [visible, postId, loadComments]);
 
+  function handleLike(id: string) {
+    setLikedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+    Haptics.impactAsync("light").catch(() => {});
+  }
+
+  const sortedComments = sortMode === "top"
+    ? [...comments].sort((a, b) => {
+        const aScore = (likedIds.has(a.id) ? 1 : 0) + new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        const bScore = (likedIds.has(b.id) ? 1 : 0);
+        return bScore - aScore;
+      })
+    : [...comments].reverse();
+
   async function sendComment() {
     if (!user || !text.trim()) return;
     setSending(true);
+    Animated.sequence([
+      Animated.spring(sendScale, { toValue: 0.78, tension: 400, friction: 8, useNativeDriver: DC_USE_NATIVE }),
+      Animated.spring(sendScale, { toValue: 1, tension: 400, friction: 8, useNativeDriver: DC_USE_NATIVE }),
+    ]).start();
+    Haptics.impactAsync("light").catch(() => {});
     const { data, error } = await supabase
       .from("post_replies")
       .insert({ post_id: postId, author_id: user.id, content: text.trim() })
@@ -262,107 +346,147 @@ function DiscoverCommentsSheet({
     setSending(false);
   }
 
-  const timeDiff = (iso: string) => formatRelative(iso);
+  // Adaptive height: short sheet when few comments, tall when many
+  const sheetMaxHeight = React.useMemo(() => {
+    if (loading || comments.length === 0) return Math.min(380, screenH * 0.5);
+    if (comments.length <= 3) return Math.min(480, screenH * 0.6);
+    if (comments.length <= 6) return Math.min(580, screenH * 0.72);
+    return screenH * 0.85;
+  }, [loading, comments.length, screenH]);
 
-  const { height: screenH } = useWindowDimensions();
+  const charLeft = 500 - text.length;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
         <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)" }} activeOpacity={1} onPress={onClose} />
-        <View style={[dcStyles.sheet, { height: screenH * 0.78, backgroundColor: colors.surface, paddingBottom: Math.max(insets.bottom, 16) }]}>
-            {/* Handle */}
-            <View style={[dcStyles.handle, { backgroundColor: colors.border }]} />
-            {/* Header */}
-            <View style={dcStyles.sheetHeader}>
-              <Text style={[dcStyles.sheetTitle, { color: colors.text }]}>
-                Comments{comments.length > 0 ? ` · ${formatNum(comments.length)}` : ""}
-              </Text>
-              <TouchableOpacity onPress={onClose} hitSlop={12}>
-                <Ionicons name="close" size={22} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-            {/* Divider */}
-            <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
-            {/* List */}
-            <View style={{ flex: 1 }}>
-              {loading ? (
-                <View style={{ padding: 24, alignItems: "center" }}>
-                  <ActivityIndicator color={colors.accent} />
-                </View>
-              ) : comments.length === 0 ? (
-                <View style={dcStyles.emptyBox}>
-                  <Ionicons name="chatbubble-outline" size={36} color={colors.textMuted} />
-                  <Text style={[dcStyles.emptyText, { color: colors.textMuted }]}>No comments yet</Text>
-                  <Text style={[dcStyles.emptySub, { color: colors.textMuted }]}>Be the first to comment</Text>
-                </View>
-              ) : (
-                <FlatList
-                  ref={listRef}
-                  data={comments}
-                  keyExtractor={(c) => c.id}
-                  style={{ flex: 1 }}
-                  contentContainerStyle={{ padding: 12, gap: 14 }}
-                  showsVerticalScrollIndicator={false}
-                  renderItem={({ item: c }) => (
-                    <View style={dcStyles.commentRow}>
-                      <View style={dcStyles.commentAvatar}>
-                        {c.profile.avatar_url ? (
-                          <ExpoImage source={{ uri: c.profile.avatar_url }} style={{ width: 36, height: 36, borderRadius: 18 }} contentFit="cover" />
-                        ) : (
-                          <View style={[dcStyles.commentAvatarFallback, { backgroundColor: colors.accent + "22" }]}>
-                            <Text style={[dcStyles.commentAvatarLetter, { color: colors.accent }]}>
-                              {(c.profile.display_name || "U").slice(0, 1).toUpperCase()}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <View style={[dcStyles.commentBubble, { backgroundColor: colors.backgroundTertiary ?? colors.background }]}>
-                          <Text style={[dcStyles.commentName, { color: colors.text }]}>{c.profile.display_name}</Text>
-                          <Text style={[dcStyles.commentText, { color: colors.text }]}>{c.content}</Text>
-                        </View>
-                        <Text style={[dcStyles.commentTime, { color: colors.textMuted }]}>{timeDiff(c.created_at)}</Text>
-                      </View>
-                    </View>
-                  )}
-                />
-              )}
-            </View>
-            {/* Input */}
-            <View style={[dcStyles.inputRow, { borderTopColor: colors.border, backgroundColor: colors.surface }]}>
-              {profile?.avatar_url ? (
-                <ExpoImage source={{ uri: profile.avatar_url }} style={dcStyles.inputAvatar} contentFit="cover" />
-              ) : (
-                <View style={[dcStyles.inputAvatar, { backgroundColor: colors.accent + "22", alignItems: "center", justifyContent: "center" }]}>
-                  <Text style={{ fontSize: 13, color: colors.accent, fontFamily: "Inter_700Bold" }}>
-                    {(profile?.display_name || "U").slice(0, 1).toUpperCase()}
+        <View style={[dcStyles.sheet, { maxHeight: sheetMaxHeight, backgroundColor: colors.surface, paddingBottom: Math.max(insets.bottom, 16) }]}>
+          {/* Handle */}
+          <View style={[dcStyles.handle, { backgroundColor: colors.border }]} />
+
+          {/* Header */}
+          <View style={dcStyles.sheetHeader}>
+            <Text style={[dcStyles.sheetTitle, { color: colors.text }]}>
+              Comments{comments.length > 0 ? <Text style={{ color: colors.textMuted, fontFamily: "Inter_400Regular", fontSize: 14 }}> · {formatNum(comments.length)}</Text> : null}
+            </Text>
+            <View style={dcStyles.sortRow}>
+              {(["recent", "top"] as const).map((mode) => (
+                <TouchableOpacity
+                  key={mode}
+                  onPress={() => setSortMode(mode)}
+                  style={[dcStyles.sortTab, sortMode === mode && { backgroundColor: colors.accent + "22", borderColor: colors.accent + "55" }]}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[dcStyles.sortTabText, { color: sortMode === mode ? colors.accent : colors.textMuted }]}>
+                    {mode === "recent" ? "Recent" : "Top"}
                   </Text>
-                </View>
-              )}
-              <TextInput
-                ref={inputRef}
-                style={[dcStyles.input, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border }]}
-                placeholder="Add a comment…"
-                placeholderTextColor={colors.textMuted}
-                value={text}
-                onChangeText={setText}
-                multiline
-                maxLength={500}
-                returnKeyType="send"
-                onSubmitEditing={sendComment}
-              />
-              <TouchableOpacity
-                onPress={sendComment}
-                disabled={!text.trim() || sending}
-                style={[dcStyles.sendBtn, { backgroundColor: text.trim() ? colors.accent : colors.border }]}
-              >
-                {sending
-                  ? <ActivityIndicator size={14} color="#fff" />
-                  : <Ionicons name="send" size={15} color="#fff" />
-                }
-              </TouchableOpacity>
+                </TouchableOpacity>
+              ))}
             </View>
+            <TouchableOpacity onPress={onClose} hitSlop={12}>
+              <Ionicons name="close" size={22} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Divider */}
+          <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
+
+          {/* Comment list */}
+          <View style={{ flex: 1 }}>
+            {loading ? (
+              <View style={{ padding: 24, alignItems: "center" }}>
+                <ActivityIndicator color={colors.accent} />
+              </View>
+            ) : comments.length === 0 ? (
+              <View style={dcStyles.emptyBox}>
+                <Ionicons name="chatbubble-outline" size={36} color={colors.textMuted} />
+                <Text style={[dcStyles.emptyText, { color: colors.textMuted }]}>No comments yet</Text>
+                <Text style={[dcStyles.emptySub, { color: colors.textMuted }]}>Be the first to comment</Text>
+              </View>
+            ) : (
+              <FlatList
+                ref={listRef}
+                data={sortedComments}
+                keyExtractor={(c) => c.id}
+                style={{ flex: 1 }}
+                contentContainerStyle={{ padding: 12, gap: 14 }}
+                showsVerticalScrollIndicator={false}
+                onRefresh={loadComments}
+                refreshing={loading}
+                renderItem={({ item: c }) => (
+                  <DcCommentRow
+                    c={c} colors={colors}
+                    liked={likedIds.has(c.id)}
+                    onLike={handleLike}
+                  />
+                )}
+              />
+            )}
+          </View>
+
+          {/* Input area */}
+          {user ? (
+            <View>
+              {/* Quick emoji bar */}
+              <View style={[dcStyles.emojiBar, { borderTopColor: colors.border }]}>
+                {DC_QUICK_EMOJIS.map((e) => (
+                  <TouchableOpacity key={e} style={dcStyles.emojiBtn} onPress={() => setText((t) => t + e)} activeOpacity={0.6}>
+                    <Text style={dcStyles.emojiText}>{e}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Text input row */}
+              <View style={[dcStyles.inputRow, { borderTopColor: colors.border, backgroundColor: colors.surface }]}>
+                {profile?.avatar_url ? (
+                  <ExpoImage source={{ uri: profile.avatar_url }} style={dcStyles.inputAvatar} contentFit="cover" />
+                ) : (
+                  <View style={[dcStyles.inputAvatar, { backgroundColor: colors.accent + "22", alignItems: "center", justifyContent: "center" }]}>
+                    <Text style={{ fontSize: 13, color: colors.accent, fontFamily: "Inter_700Bold" }}>
+                      {(profile?.display_name || "U").slice(0, 1).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <View style={{ flex: 1, position: "relative" }}>
+                  <TextInput
+                    ref={inputRef}
+                    style={[dcStyles.input, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border }]}
+                    placeholder="Add a comment…"
+                    placeholderTextColor={colors.textMuted}
+                    value={text}
+                    onChangeText={setText}
+                    multiline
+                    maxLength={500}
+                  />
+                  {text.length > 400 && (
+                    <Text style={[dcStyles.charCounter, { color: charLeft < 20 ? "#FF2D55" : colors.textMuted }]}>{charLeft}</Text>
+                  )}
+                </View>
+                <Animated.View style={{ transform: [{ scale: sendScale }] }}>
+                  <TouchableOpacity
+                    onPress={sendComment}
+                    disabled={!text.trim() || sending}
+                    style={[dcStyles.sendBtn, { backgroundColor: text.trim() ? colors.accent : colors.border }]}
+                  >
+                    {sending
+                      ? <ActivityIndicator size={14} color="#fff" />
+                      : <Ionicons name="arrow-up" size={16} color="#fff" />
+                    }
+                  </TouchableOpacity>
+                </Animated.View>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={{ paddingVertical: 14, alignItems: "center" }}
+              onPress={() => { onClose(); router.push("/(auth)/login"); }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderColor: colors.accent + "50", backgroundColor: colors.accent + "18" }}>
+                <Ionicons name="person-circle-outline" size={16} color={colors.accent} />
+                <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.accent }}>Sign in to comment</Text>
+              </View>
+            </TouchableOpacity>
+          )}
         </View>
       </KeyboardAvoidingView>
     </Modal>
