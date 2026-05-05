@@ -1312,14 +1312,19 @@ export default function VideoPlayerScreen() {
     let query = supabase
       .from("posts")
       .select(`id, author_id, content, video_url, image_url, created_at, audio_name, duet_of_post_id, profiles!posts_author_id_fkey(display_name, handle, avatar_url)`)
-      .eq("post_type", "video").not("video_url", "is", null)
+      .not("video_url", "is", null)
+      .or("post_type.eq.video,post_type.is.null")
       .order("created_at", { ascending: false }).limit(VIDEO_PAGE_SIZE);
 
-    if (tab === "following" && followingIds.length > 0) query = query.in("author_id", followingIds).in("visibility", ["public", "followers"]);
-    else query = query.eq("visibility", "public");
+    if (tab === "following" && followingIds.length > 0) {
+      query = query.in("author_id", followingIds).or("visibility.eq.public,visibility.eq.followers,visibility.is.null");
+    } else {
+      query = query.or("visibility.eq.public,visibility.is.null");
+    }
     if (cursor) query = query.lt("created_at", cursor);
 
-    const { data } = await query;
+    const { data, error: qErr } = await query;
+    if (qErr) console.error("[VideoFeed] query error:", qErr.message, qErr.details);
 
     if (data && data.length > 0) {
       const postIds = data.map((p: any) => p.id);
