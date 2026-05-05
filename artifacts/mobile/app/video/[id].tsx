@@ -2040,6 +2040,8 @@ export default function VideoPlayerScreen() {
   // ── Mouse wheel handler ──────────────────────────────────────────────────
   // Attach to the container so we control exactly one video-jump per tick.
   // passive:false + preventDefault prevents any ancestor from also scrolling.
+  // Dependency: !loading && videos.length > 0 — this ensures the ref is
+  // non-null when the effect runs (the div only mounts once loading is done).
   useEffect(() => {
     if (Platform.OS !== "web") return;
     const el = webScrollRef.current;
@@ -2051,6 +2053,7 @@ export default function VideoPlayerScreen() {
       cooldown = true;
       setTimeout(() => { cooldown = false; }, 600);
       const h = effHRef.current;
+      if (!h) return;
       const len = videosLenRef.current;
       const current = Math.round(el!.scrollTop / h);
       const delta = Math.sign(e.deltaY);
@@ -2067,18 +2070,43 @@ export default function VideoPlayerScreen() {
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videos.length > 0]);
+  }, [!loading && videos.length > 0]);
 
   // ── Mouse pointer drag handlers ──────────────────────────────────────────
-  // Touch / trackpad drag is handled by CSS (touch-action:pan-y on overlay).
+  // Touch / trackpad drag is handled by CSS (touch-action:pan-y on the
+  // container and overlay).
   // For mouse drag we drive scrollTop directly, disable snap during motion,
   // then snap to the nearest video on release.
+  // A document-level safety listener ensures scroll snap is always restored
+  // even when pointerup fires outside the scroll container (e.g. user drags
+  // off-screen, or a child button captures the event before it bubbles).
   function handleWebPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (e.pointerType === "touch") return;
     const el = webScrollRef.current;
     if (!el) return;
     webDragRef.current = { startY: e.clientY, startScrollTop: el.scrollTop, lastY: e.clientY, velocity: 0 };
     (el.style as any).scrollSnapType = "none";
+
+    // Safety net: restore snap + clear drag state if the div's own onPointerUp
+    // never fires (pointer released outside the element or captured by a child).
+    function safetyRelease() {
+      document.removeEventListener("pointerup", safetyRelease);
+      document.removeEventListener("pointercancel", safetyRelease);
+      if (webDragRef.current) {
+        webDragRef.current = null;
+        const scrollEl = webScrollRef.current;
+        if (scrollEl) {
+          (scrollEl.style as any).scrollSnapType = "y mandatory";
+          const h = effHRef.current;
+          if (h) {
+            const cur = Math.round(scrollEl.scrollTop / h);
+            scrollEl.scrollTo({ top: cur * h, behavior: "smooth" });
+          }
+        }
+      }
+    }
+    document.addEventListener("pointerup", safetyRelease, { once: true });
+    document.addEventListener("pointercancel", safetyRelease, { once: true });
   }
   function handleWebPointerMove(e: React.PointerEvent<HTMLDivElement>) {
     const drag = webDragRef.current;
@@ -2096,6 +2124,7 @@ export default function VideoPlayerScreen() {
     if (!el) return;
     (el.style as any).scrollSnapType = "y mandatory";
     const h = effHRef.current;
+    if (!h) return;
     const len = videosLenRef.current;
     const dy = e.clientY - drag.startY;
     const cur = Math.round(drag.startScrollTop / h);
@@ -2119,6 +2148,7 @@ export default function VideoPlayerScreen() {
     if (!el) return;
     (el.style as any).scrollSnapType = "y mandatory";
     const h = effHRef.current;
+    if (!h) return;
     const cur = Math.round(drag.startScrollTop / h);
     el.scrollTo({ top: cur * h, behavior: "smooth" });
   }
@@ -2816,6 +2846,7 @@ export default function VideoPlayerScreen() {
             backgroundColor: "#000",
             cursor: "grab",
             userSelect: "none",
+            touchAction: "pan-y",
           } as React.CSSProperties}
         >
           {videos.map((item, index) => {
@@ -2897,10 +2928,8 @@ export default function VideoPlayerScreen() {
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
           getItemLayout={(_, index) => ({ length: EFF_H, offset: EFF_H * index, index })}
-          snapToInterval={EFF_H}
-          snapToAlignment="start"
+          pagingEnabled
           decelerationRate="fast"
-          disableIntervalMomentum
           scrollEnabled
           style={{ flex: 1, backgroundColor: "#000" }}
           windowSize={5}
