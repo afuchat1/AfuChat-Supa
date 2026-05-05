@@ -7,6 +7,7 @@ import {
   Linking,
   Modal,
   Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -1052,8 +1053,9 @@ export default function CompanyPageScreen() {
 
       {/* Post Job modal — exclusive to company page admins */}
       <Modal visible={showJobModal} transparent animationType="slide" onRequestClose={() => setShowJobModal(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowJobModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowJobModal(false)}>
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ width: "100%" }}>
+            <Pressable>
             <ScrollView style={[styles.modalSheet, { backgroundColor: colors.surface }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
               <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
 
@@ -1186,8 +1188,9 @@ export default function CompanyPageScreen() {
                 }
               </TouchableOpacity>
             </ScrollView>
+            </Pressable>
           </KeyboardAvoidingView>
-        </TouchableOpacity>
+        </Pressable>
       </Modal>
 
       {/* Page-to-page follow modal */}
