@@ -2940,7 +2940,6 @@ export default function VideoPlayerScreen() {
           viewabilityConfig={viewabilityConfig}
           getItemLayout={(_, index) => ({ length: EFF_H, offset: EFF_H * index, index })}
           pagingEnabled
-          decelerationRate="fast"
           scrollEnabled
           style={{ flex: 1, backgroundColor: "#000" }}
           windowSize={5}

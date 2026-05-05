@@ -44,7 +44,7 @@ All set in `.replit` `[userenv.shared]`:
 | Name | Command | Port | Purpose |
 |------|---------|------|---------|
 | API Server | `cd artifacts/api-server && node ./build.mjs && PORT=3000 node --enable-source-maps ./dist/index.mjs` | 3000 | REST API |
-| Start application | `cd artifacts/mobile && CI=1 ... ./node_modules/.bin/expo start --port 5000` | 5000 | Mobile web preview |
+| Start application | `cd artifacts/mobile && EXPO_NO_TELEMETRY=1 ... ./node_modules/.bin/expo start --port 5000 --offline` | 5000 | Mobile web preview (--offline bypasses EAS auth, no CI=1) |
 | Mockup Preview Server | `cd artifacts/mockup-sandbox && PORT=8000 BASE_PATH=/__mockup/ npx vite` | 8000 | Canvas mockups |
 
 ## Key Files
