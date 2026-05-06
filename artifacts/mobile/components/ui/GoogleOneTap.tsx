@@ -40,11 +40,19 @@ export default function GoogleOneTap() {
 
     window.handleGoogleOneTap = async (response: { credential: string }) => {
       try {
-        const { error } = await supabase.auth.signInWithIdToken({
+        const { data, error } = await supabase.auth.signInWithIdToken({
           provider: "google",
           token: response.credential,
         });
         if (!error) {
+          const uid = data.user?.id;
+          if (uid) {
+            const { data: prof } = await supabase.from("profiles").select("onboarding_completed").eq("id", uid).maybeSingle();
+            if (!prof?.onboarding_completed) {
+              router.replace({ pathname: "/onboarding", params: { userId: uid } } as any);
+              return;
+            }
+          }
           router.replace("/(tabs)");
         }
       } catch (_) {}

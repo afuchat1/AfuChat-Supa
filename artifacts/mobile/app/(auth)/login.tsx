@@ -494,9 +494,17 @@ export default function LoginScreen() {
     try {
       const code = new URL(url).searchParams.get("code");
       if (!code) { showAlert("Error", "No code received."); setOauthModalUrl(null); setOauthLoading(null); return; }
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
-      if (error) showAlert("Error", error.message);
-      else { setOauthModalUrl(null); setOauthLoading(null); router.replace("/(tabs)"); return; }
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) { showAlert("Error", error.message); }
+      else {
+        setOauthModalUrl(null); setOauthLoading(null);
+        const uid = data.user?.id;
+        if (uid) {
+          const { data: prof } = await supabase.from("profiles").select("onboarding_completed").eq("id", uid).maybeSingle();
+          if (!prof?.onboarding_completed) { router.replace({ pathname: "/onboarding", params: { userId: uid } } as any); return; }
+        }
+        router.replace("/(tabs)"); return;
+      }
     } catch { showAlert("Error", "Could not complete sign in."); }
     setOauthModalUrl(null); setOauthLoading(null);
   }
@@ -506,13 +514,38 @@ export default function LoginScreen() {
       setOauthLoading("google");
       GoogleSignin.configure({ webClientId: "830762767270-lmefgjjk25i17lithkq6iisjv8gfh08d.apps.googleusercontent.com" });
       await GoogleSignin.hasPlayServices();
-      const resp = await GoogleSignin.signIn();
-      const idToken = resp?.data?.idToken;
+
+      // Try silent sign-in first — if the user already chose an account before,
+      // this returns the token immediately without showing the account picker again.
+      let idToken: string | null = null;
+      try {
+        const silentResp = await GoogleSignin.signInSilently();
+        idToken = silentResp?.data?.idToken ?? null;
+      } catch (_) {
+        // No previously selected account — fall through to interactive picker
+      }
+
+      if (!idToken) {
+        const resp = await GoogleSignin.signIn();
+        idToken = resp?.data?.idToken ?? null;
+      }
+
       if (!idToken) { showAlert("Error", "Could not get Google ID token."); setOauthLoading(null); return; }
-      const { error } = await supabase.auth.signInWithIdToken({ provider: "google", token: idToken });
-      if (error) { showAlert("Error", error.message); setOauthLoading(null); } else router.replace("/(tabs)");
+
+      const { data, error } = await supabase.auth.signInWithIdToken({ provider: "google", token: idToken });
+      if (error) { showAlert("Error", error.message); setOauthLoading(null); return; }
+
+      // Route to onboarding for brand-new Google users, tabs for returning users
+      const uid = data.user?.id;
+      if (uid) {
+        const { data: prof } = await supabase.from("profiles").select("onboarding_completed").eq("id", uid).maybeSingle();
+        if (!prof?.onboarding_completed) {
+          router.replace({ pathname: "/onboarding", params: { userId: uid } } as any);
+          return;
+        }
+      }
+      router.replace("/(tabs)");
     } catch (err: any) {
-      if (err?.code === 10 || String(err?.message ?? "").includes("DEVELOPER_ERROR")) return signInWithProvider("google");
       if (isErrorWithCode?.(err) && (err.code === statusCodes?.SIGN_IN_CANCELLED || err.code === statusCodes?.IN_PROGRESS)) { setOauthLoading(null); return; }
       setOauthLoading(null); showAlert("Error", err?.message || "Google sign in failed.");
     }
@@ -548,7 +581,18 @@ export default function LoginScreen() {
       if (result.type === "success" && result.url) {
         const url = new URL(result.url);
         const code = url.searchParams.get("code");
-        if (code) { const { error: e } = await supabase.auth.exchangeCodeForSession(code); if (e) showAlert("Error", e.message); else router.replace("/(tabs)"); setOauthLoading(null); return; }
+        if (code) {
+          const { data: sd, error: e } = await supabase.auth.exchangeCodeForSession(code);
+          if (e) { showAlert("Error", e.message); }
+          else {
+            const uid = sd.user?.id;
+            if (uid) {
+              const { data: prof } = await supabase.from("profiles").select("onboarding_completed").eq("id", uid).maybeSingle();
+              if (!prof?.onboarding_completed) { setOauthLoading(null); router.replace({ pathname: "/onboarding", params: { userId: uid } } as any); return; }
+            }
+            setOauthLoading(null); router.replace("/(tabs)"); return;
+          }
+        }
         let at = url.hash ? new URLSearchParams(url.hash.substring(1)).get("access_token") : null;
         let rt = url.hash ? new URLSearchParams(url.hash.substring(1)).get("refresh_token") : null;
         if (!at) { at = url.searchParams.get("access_token"); rt = url.searchParams.get("refresh_token"); }
