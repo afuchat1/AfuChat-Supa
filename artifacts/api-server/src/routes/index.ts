@@ -8,6 +8,7 @@ import supportRouter from "./support";
 import adminRouter from "./admin";
 import videosRouter from "./videos";
 import uploadsRouter from "./uploads";
+import paymentsRouter from "./payments";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(supportRouter);
 router.use(adminRouter);
 router.use(videosRouter);
 router.use(uploadsRouter);
+router.use(paymentsRouter);
 
 export default router;

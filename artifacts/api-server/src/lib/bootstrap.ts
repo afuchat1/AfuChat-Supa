@@ -27,6 +27,10 @@ const KEYS_WE_CARE_ABOUT = [
   "R2_PUBLIC_BASE_URL",
   "R2_DEV_PUBLIC_URL",
   "R2_S3_ENDPOINT",
+  "PESAPAL_CONSUMER_KEY",
+  "PESAPAL_CONSUMER_SECRET",
+  "PESAPAL_IPN_ID",
+  "PESAPAL_ENV",
 ];
 
 export interface BootstrapResult {

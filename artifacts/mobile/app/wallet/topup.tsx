@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   ActivityIndicator,
-  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -9,6 +8,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  KeyboardAvoidingView,
 } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,16 +16,17 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
-import { supabase, supabaseUrl, supabaseAnonKey } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
 let WebView: any = null;
-let WebViewNavigation: any = null;
 if (Platform.OS !== "web") {
   const wv = require("react-native-webview");
   WebView = wv.WebView;
 }
+
+// ─── ACoin packages ───────────────────────────────────────────────────────────
 
 const ACOIN_PACKAGES = [
   { label: "100 ACoin", amount: 100, priceUsd: 1.0 },
@@ -35,34 +36,346 @@ const ACOIN_PACKAGES = [
   { label: "20,000 ACoin", amount: 20000, priceUsd: 200.0 },
 ];
 
-const CALLBACK_PATTERNS = [
-  "afuchat.com/wallet/payment-complete",
-  "payment-complete",
-  "payment_status=COMPLETED",
-  "OrderNotificationType=IPNCHANGE",
-];
+type PaymentMethod = "google_pay" | "card" | "mtn" | "airtel";
+type Screen =
+  | "select"
+  | "method"
+  | "card_form"
+  | "mobile_form"
+  | "google_pay"
+  | "processing"
+  | "verifying"
+  | "success"
+  | "failed";
 
-type Screen = "select" | "paying" | "awaiting" | "verifying" | "success" | "failed";
+// ─── API helper ───────────────────────────────────────────────────────────────
+
+function getApiBase(): string {
+  const explicit = (process.env.EXPO_PUBLIC_API_URL || "").trim();
+  if (explicit) return explicit.replace(/\/+$/, "");
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    return window.location.origin.replace(/\/+$/, "");
+  }
+  const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
+  if (domain) return `https://${domain}`.replace(/\/+$/, "");
+  return "";
+}
+
+async function getAuthToken(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Session expired. Please sign in again.");
+  return session.access_token;
+}
+
+// ─── Google Pay HTML ──────────────────────────────────────────────────────────
+
+function buildGooglePayHtml(amountUsd: string, isDark: boolean): string {
+  const bg = isDark ? "#0F0F0F" : "#FFFFFF";
+  const text = isDark ? "#F1F1F1" : "#0F0F0F";
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { background: ${bg}; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    #container { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 24px; width: 100%; max-width: 400px; }
+    #status { color: ${text}; font-family: -apple-system, sans-serif; font-size: 14px; text-align: center; min-height: 20px; }
+    #google-pay-button { width: 100%; min-height: 48px; }
+    .spinner { width: 32px; height: 32px; border: 3px solid #E5E5E5; border-top-color: #00BCD4; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="google-pay-button"></div>
+    <div id="status"></div>
+  </div>
+  <script>
+    const MERCHANT_ID = 'BCR2DN5TY2R53GCL';
+    const AMOUNT = '${amountUsd}';
+
+    const paymentRequest = {
+      apiVersion: 2,
+      apiVersionMinor: 0,
+      allowedPaymentMethods: [{
+        type: 'CARD',
+        parameters: {
+          allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
+          allowedCardNetworks: ['MASTERCARD', 'VISA', 'AMEX', 'DISCOVER'],
+        },
+        tokenizationSpecification: {
+          type: 'DIRECT',
+          parameters: {
+            protocolVersion: 'ECv2',
+            publicKey: 'BCR2DN5TY2R53GCL',
+          }
+        }
+      }],
+      merchantInfo: {
+        merchantId: MERCHANT_ID,
+        merchantName: 'AfuChat',
+      },
+      transactionInfo: {
+        totalPriceStatus: 'FINAL',
+        totalPriceLabel: 'ACoin Top-up',
+        totalPrice: AMOUNT,
+        currencyCode: 'USD',
+        countryCode: 'US',
+      },
+    };
+
+    function postMsg(obj) {
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify(obj));
+      }
+    }
+
+    function setStatus(msg) {
+      document.getElementById('status').textContent = msg;
+    }
+
+    function onGooglePayLoaded() {
+      const client = new google.payments.api.PaymentsClient({ environment: 'PRODUCTION' });
+      client.isReadyToPay({
+        apiVersion: 2,
+        apiVersionMinor: 0,
+        allowedPaymentMethods: paymentRequest.allowedPaymentMethods,
+      }).then(res => {
+        if (res.result) {
+          const btn = client.createButton({
+            onClick: () => {
+              setStatus('Opening Google Pay...');
+              client.loadPaymentData(paymentRequest).then(paymentData => {
+                setStatus('Processing...');
+                postMsg({ type: 'success', data: paymentData });
+              }).catch(err => {
+                if (err.statusCode === 'CANCELED') {
+                  postMsg({ type: 'cancel' });
+                } else {
+                  setStatus('Payment failed: ' + (err.message || 'Unknown error'));
+                  postMsg({ type: 'error', message: err.message || 'Google Pay failed' });
+                }
+              });
+            },
+            buttonSizeMode: 'fill',
+            buttonType: 'pay',
+          });
+          document.getElementById('google-pay-button').appendChild(btn);
+        } else {
+          setStatus('Google Pay is not available on this device.');
+          postMsg({ type: 'unavailable' });
+        }
+      }).catch(err => {
+        setStatus('Could not load Google Pay.');
+        postMsg({ type: 'error', message: 'Google Pay not available' });
+      });
+    }
+  </script>
+  <script async src="https://pay.google.com/gp/p/js/pay.js" onload="onGooglePayLoaded()"></script>
+</body>
+</html>`;
+}
+
+// ─── Card form ────────────────────────────────────────────────────────────────
+
+function CardForm({
+  colors,
+  onSubmit,
+  loading,
+}: {
+  colors: any;
+  onSubmit: (data: { number: string; expiry_month: string; expiry_year: string; cvv: string; name_on_card: string }) => void;
+  loading: boolean;
+}) {
+  const [number, setNumber] = useState("");
+  const [expiry, setExpiry] = useState("");
+  const [cvv, setCvv] = useState("");
+  const [name, setName] = useState("");
+
+  function formatCardNumber(v: string) {
+    const digits = v.replace(/\D/g, "").slice(0, 16);
+    return digits.replace(/(.{4})/g, "$1 ").trim();
+  }
+
+  function formatExpiry(v: string) {
+    const digits = v.replace(/\D/g, "").slice(0, 4);
+    if (digits.length > 2) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    return digits;
+  }
+
+  function handleSubmit() {
+    const rawNumber = number.replace(/\s/g, "");
+    if (rawNumber.length < 13) { showAlert("Invalid card", "Enter a valid card number."); return; }
+    const [mm, yy] = expiry.split("/");
+    if (!mm || !yy || mm.length !== 2 || yy.length !== 2) { showAlert("Invalid expiry", "Enter expiry as MM/YY."); return; }
+    if (cvv.length < 3) { showAlert("Invalid CVV", "Enter a valid CVV."); return; }
+    onSubmit({
+      number: rawNumber,
+      expiry_month: mm,
+      expiry_year: `20${yy}`,
+      cvv,
+      name_on_card: name || "Card Holder",
+    });
+  }
+
+  const inputStyle = [styles.input, { backgroundColor: colors.inputBg, color: colors.text, borderColor: colors.border }];
+
+  return (
+    <View style={styles.form}>
+      <Text style={[styles.formLabel, { color: colors.textMuted }]}>CARD NUMBER</Text>
+      <TextInput
+        style={inputStyle}
+        placeholder="1234 5678 9012 3456"
+        placeholderTextColor={colors.textMuted}
+        value={number}
+        onChangeText={(v) => setNumber(formatCardNumber(v))}
+        keyboardType="numeric"
+        maxLength={19}
+      />
+      <View style={styles.row2}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.formLabel, { color: colors.textMuted }]}>EXPIRY</Text>
+          <TextInput
+            style={inputStyle}
+            placeholder="MM/YY"
+            placeholderTextColor={colors.textMuted}
+            value={expiry}
+            onChangeText={(v) => setExpiry(formatExpiry(v))}
+            keyboardType="numeric"
+            maxLength={5}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.formLabel, { color: colors.textMuted }]}>CVV</Text>
+          <TextInput
+            style={inputStyle}
+            placeholder="123"
+            placeholderTextColor={colors.textMuted}
+            value={cvv}
+            onChangeText={(v) => setCvv(v.replace(/\D/g, "").slice(0, 4))}
+            keyboardType="numeric"
+            maxLength={4}
+            secureTextEntry
+          />
+        </View>
+      </View>
+      <Text style={[styles.formLabel, { color: colors.textMuted }]}>NAME ON CARD (optional)</Text>
+      <TextInput
+        style={inputStyle}
+        placeholder="John Doe"
+        placeholderTextColor={colors.textMuted}
+        value={name}
+        onChangeText={setName}
+        autoCapitalize="words"
+      />
+      <TouchableOpacity
+        style={[styles.payBtn, { backgroundColor: Colors.brand, opacity: loading ? 0.7 : 1 }]}
+        onPress={handleSubmit}
+        disabled={loading}
+      >
+        {loading ? <ActivityIndicator color="#fff" size="small" /> : (
+          <>
+            <Ionicons name="card" size={20} color="#fff" />
+            <Text style={styles.payBtnText}>Pay with Card</Text>
+          </>
+        )}
+      </TouchableOpacity>
+      <View style={[styles.securityNote, { backgroundColor: colors.inputBg }]}>
+        <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
+        <Text style={[styles.securityText, { color: colors.textMuted }]}>
+          Card details are encrypted and never stored. Processed by Pesapal.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// ─── Mobile Money form ────────────────────────────────────────────────────────
+
+function MobileMoneyForm({
+  method,
+  colors,
+  onSubmit,
+  loading,
+}: {
+  method: "mtn" | "airtel";
+  colors: any;
+  onSubmit: (phone: string) => void;
+  loading: boolean;
+}) {
+  const [phone, setPhone] = useState("");
+  const isMtn = method === "mtn";
+  const accent = isMtn ? "#FFCC00" : "#E40000";
+  const label = isMtn ? "MTN Mobile Money" : "Airtel Money";
+  const placeholder = isMtn ? "+256 7XX XXX XXX" : "+255 7XX XXX XXX";
+
+  function handleSubmit() {
+    const normalized = phone.trim().replace(/\s/g, "");
+    if (normalized.length < 9) { showAlert("Invalid number", "Enter a valid mobile money number."); return; }
+    onSubmit(normalized);
+  }
+
+  return (
+    <View style={styles.form}>
+      <View style={[styles.mmoBadge, { backgroundColor: accent + "18" }]}>
+        <View style={[styles.mmoIcon, { backgroundColor: accent }]}>
+          <Ionicons name="phone-portrait" size={20} color="#fff" />
+        </View>
+        <View>
+          <Text style={[styles.mmoTitle, { color: colors.text }]}>{label}</Text>
+          <Text style={[styles.mmoSub, { color: colors.textMuted }]}>
+            You'll receive an STK push on your phone
+          </Text>
+        </View>
+      </View>
+      <Text style={[styles.formLabel, { color: colors.textMuted }]}>MOBILE MONEY NUMBER</Text>
+      <TextInput
+        style={[styles.input, { backgroundColor: colors.inputBg, color: colors.text, borderColor: colors.border }]}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textMuted}
+        value={phone}
+        onChangeText={setPhone}
+        keyboardType="phone-pad"
+        autoFocus
+      />
+      <Text style={[styles.mmoHint, { color: colors.textMuted }]}>
+        Include country code, e.g. +256712345678
+      </Text>
+      <TouchableOpacity
+        style={[styles.payBtn, { backgroundColor: accent, opacity: loading ? 0.7 : 1 }]}
+        onPress={handleSubmit}
+        disabled={loading}
+      >
+        {loading ? <ActivityIndicator color="#fff" size="small" /> : (
+          <>
+            <Ionicons name="phone-portrait" size={20} color="#fff" />
+            <Text style={styles.payBtnText}>Send Payment Request</Text>
+          </>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function TopUpScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { profile, refreshProfile } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [screen, setScreen] = useState<Screen>("select");
   const [selectedPack, setSelectedPack] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState("");
+  const [activeMethod, setActiveMethod] = useState<PaymentMethod>("card");
   const [loading, setLoading] = useState(false);
-  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [merchantRef, setMerchantRef] = useState<string | null>(null);
   const [creditedAcoin, setCreditedAcoin] = useState(0);
+  const [failureMsg, setFailureMsg] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, []);
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
   function getSelectedAmount(): number {
     if (selectedPack !== null) return ACOIN_PACKAGES[selectedPack].amount;
@@ -70,60 +383,19 @@ export default function TopUpScreen() {
     return isNaN(custom) ? 0 : custom;
   }
 
-  async function initiatePayment() {
-    const amount = getSelectedAmount();
-    if (amount < 50) {
-      showAlert("Select a package", "Please select a package or enter at least 50 ACoin.");
-      return;
-    }
+  function getAmountUsd(): string {
+    return (getSelectedAmount() * 0.01).toFixed(2);
+  }
 
-    setLoading(true);
-    Haptics.selectionAsync();
-
-    try {
-      let data: any;
-
-      if (Platform.OS === "web") {
-        // Web: use SDK invoke — it handles CORS headers correctly
-        const { data: invoked, error: fnErr } = await supabase.functions.invoke("pesapal-initiate", {
-          body: { acoin_amount: amount, currency: "USD" },
-        });
-        if (fnErr) throw new Error(fnErr.message || "Failed to start payment. Please try again.");
-        data = invoked;
-      } else {
-        // Native Android/iOS: raw fetch — no CORS, simpler and more reliable
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error("Session expired. Please sign in again.");
-        const res = await fetch(`${supabaseUrl}/functions/v1/pesapal-initiate`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${session.access_token}`,
-            "apikey": supabaseAnonKey,
-          },
-          body: JSON.stringify({ acoin_amount: amount, currency: "USD" }),
-        });
-        data = await res.json();
-        if (!res.ok) throw new Error(data?.error || `Payment service error (${res.status})`);
-      }
-
-      if (!data?.redirect_url) {
-        throw new Error(data?.error || "No payment URL returned. Please try again.");
-      }
-
-      setCreditedAcoin(amount);
-      setPaymentUrl(data.redirect_url);
-      setMerchantRef(data.merchant_reference);
-
-      // Both web and native now show the payment inside the app
-      setScreen("paying");
-      // Start polling so we catch the result even if navigation detection misses it
-      startPolling(data.merchant_reference);
-    } catch (err: any) {
-      showAlert("Payment Error", err?.message || "Could not start payment. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+  function reset() {
+    if (pollRef.current) clearInterval(pollRef.current);
+    setScreen("select");
+    setMerchantRef(null);
+    setSelectedPack(null);
+    setCustomAmount("");
+    setCreditedAcoin(0);
+    setFailureMsg("");
+    setLoading(false);
   }
 
   const startPolling = useCallback((ref: string) => {
@@ -131,17 +403,13 @@ export default function TopUpScreen() {
     let attempts = 0;
     pollRef.current = setInterval(async () => {
       attempts++;
-      if (attempts > 36) {
-        clearInterval(pollRef.current!);
-        return;
-      }
+      if (attempts > 36) { clearInterval(pollRef.current!); return; }
       try {
         const { data: order } = await supabase
           .from("pesapal_orders")
           .select("status")
           .eq("merchant_reference", ref)
           .maybeSingle();
-
         if (order?.status === "completed") {
           clearInterval(pollRef.current!);
           await refreshProfile();
@@ -155,137 +423,102 @@ export default function TopUpScreen() {
     }, 5000);
   }, [refreshProfile]);
 
-  const handleWebViewNavigation = useCallback(
-    (navState: any) => {
-      const url = navState.url || "";
-      const isCallback = CALLBACK_PATTERNS.some((p) => url.includes(p));
-      if (isCallback && merchantRef) {
-        // Pesapal redirects to callback URL for ALL outcomes (success/fail/cancelled).
-        // The URL alone doesn't tell us the outcome — show a checking screen and poll the DB.
-        setScreen("verifying");
-        startPolling(merchantRef);
-      }
+  async function initiatePayment(
+    method: PaymentMethod,
+    paymentData: Record<string, string>,
+  ) {
+    const amount = getSelectedAmount();
+    if (amount < 50) { showAlert("Select a package", "Please select or enter at least 50 ACoin."); return; }
+
+    setLoading(true);
+    Haptics.selectionAsync();
+
+    try {
+      const token = await getAuthToken();
+      const res = await fetch(`${getApiBase()}/api/payments/initiate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          acoin_amount: amount,
+          currency: "USD",
+          payment_method: method,
+          payment_data: paymentData,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `Payment error (${res.status})`);
+
+      setCreditedAcoin(amount);
+      setMerchantRef(data.merchant_reference);
+
+      setScreen("processing");
+      startPolling(data.merchant_reference);
+    } catch (err: any) {
+      showAlert("Payment Error", err?.message || "Could not start payment. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ─── Google Pay WebView handler ─────────────────────────────────────────────
+
+  const handleGooglePayMessage = useCallback(
+    async (event: any) => {
+      try {
+        const msg = JSON.parse(event.nativeEvent.data);
+        if (msg.type === "success") {
+          setScreen("processing");
+          const gpToken = JSON.stringify(msg.data?.paymentMethodData?.tokenizationData?.token || msg.data);
+          await initiatePayment("google_pay", { token: gpToken });
+        } else if (msg.type === "cancel") {
+          setScreen("method");
+        } else if (msg.type === "unavailable") {
+          showAlert("Google Pay Unavailable", "Google Pay is not available on this device. Please use another payment method.");
+          setScreen("method");
+        } else if (msg.type === "error") {
+          showAlert("Google Pay Error", msg.message || "Google Pay payment failed.");
+          setScreen("method");
+        }
+      } catch {}
     },
-    [merchantRef, startPolling],
+    [activeMethod],
   );
 
-  function reset() {
-    if (pollRef.current) clearInterval(pollRef.current);
-    setScreen("select");
-    setPaymentUrl(null);
-    setMerchantRef(null);
-    setSelectedPack(null);
-    setCustomAmount("");
-    setCreditedAcoin(0);
-  }
+  // ─── Render screens ──────────────────────────────────────────────────────────
 
-  if (screen === "paying" && paymentUrl) {
-    const paymentHeader = (
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + 8,
-            backgroundColor: colors.surface,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <TouchableOpacity
-          onPress={() =>
-            showAlert(
-              "Cancel Payment",
-              "Are you sure you want to cancel this payment?",
-              [
-                { text: "Continue Paying", style: "cancel" },
-                { text: "Cancel", style: "destructive", onPress: reset },
-              ],
-            )
-          }
-        >
-          <Ionicons name="close" size={24} color={colors.text} />
+  function Header({ title, onBack }: { title: string; onBack?: () => void }) {
+    return (
+      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={onBack || (() => router.back())}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Secure Payment
-        </Text>
-        <View style={styles.lockBadge}>
-          <Ionicons name="lock-closed" size={14} color={Colors.brand} />
-          <Text style={[styles.lockText, { color: Colors.brand }]}>
-            Pesapal
-          </Text>
-        </View>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>{title}</Text>
+        <View style={{ width: 24 }} />
       </View>
     );
-
-    if (Platform.OS === "web") {
-      return (
-        <View style={[styles.root, { backgroundColor: colors.background }]}>
-          {paymentHeader}
-          {/* @ts-ignore – iframe is valid DOM on web */}
-          <iframe
-            src={paymentUrl}
-            title="Pesapal Secure Payment"
-            style={{
-              flex: 1,
-              border: "none",
-              width: "100%",
-              height: "100%",
-              minHeight: 500,
-            } as any}
-            allow="payment"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-top-navigation"
-          />
-        </View>
-      );
-    }
-
-    if (WebView) {
-      return (
-        <View style={[styles.root, { backgroundColor: colors.background }]}>
-          {paymentHeader}
-          <WebView
-            source={{ uri: paymentUrl }}
-            onNavigationStateChange={handleWebViewNavigation}
-            style={{ flex: 1 }}
-            startInLoadingState
-            renderLoading={() => (
-              <View style={styles.webviewLoader}>
-                <ActivityIndicator size="large" color={Colors.brand} />
-                <Text style={[styles.loadingText, { color: colors.textMuted }]}>
-                  Loading secure payment…
-                </Text>
-              </View>
-            )}
-            allowsInlineMediaPlayback
-            javaScriptEnabled
-            domStorageEnabled
-          />
-        </View>
-      );
-    }
   }
 
-  if (screen === "awaiting") {
+  if (screen === "processing") {
     return (
       <View style={[styles.root, styles.resultScreen, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={Colors.brand} style={{ marginBottom: 24 }} />
-        <Text style={[styles.resultTitle, { color: colors.text, fontSize: 22 }]}>
-          Waiting for payment…
-        </Text>
-        <Text style={[styles.resultSub, { color: colors.textMuted }]}>
-          Complete your payment in the browser window that just opened. This page will update automatically when your payment is confirmed.
-        </Text>
-        <TouchableOpacity
-          style={[styles.doneBtn, { backgroundColor: Colors.brand, marginTop: 16 }]}
-          onPress={() => paymentUrl && Linking.openURL(paymentUrl)}
-        >
-          <Text style={styles.doneBtnText}>Open Payment Page</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={reset} style={{ marginTop: 16 }}>
-          <Text style={[styles.topUpAgain, { color: colors.textMuted }]}>
-            Cancel
+        <View style={[styles.processingCard, { backgroundColor: colors.surface }]}>
+          <ActivityIndicator size="large" color={Colors.brand} style={{ marginBottom: 20 }} />
+          <Text style={[styles.resultTitle, { color: colors.text }]}>Processing Payment</Text>
+          <Text style={[styles.resultSub, { color: colors.textMuted }]}>
+            Please wait while we confirm your payment. This may take a few moments.
           </Text>
-        </TouchableOpacity>
+          {merchantRef && (
+            <View style={[styles.refRow, { backgroundColor: colors.inputBg }]}>
+              <Text style={[styles.refLabel, { color: colors.textMuted }]}>Reference</Text>
+              <Text style={[styles.refValue, { color: colors.text }]} numberOfLines={1}>
+                {merchantRef.slice(-16)}
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
     );
   }
@@ -294,11 +527,9 @@ export default function TopUpScreen() {
     return (
       <View style={[styles.root, styles.resultScreen, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={Colors.brand} style={{ marginBottom: 24 }} />
-        <Text style={[styles.resultTitle, { color: colors.text, fontSize: 22 }]}>
-          Checking your payment…
-        </Text>
+        <Text style={[styles.resultTitle, { color: colors.text }]}>Verifying Payment…</Text>
         <Text style={[styles.resultSub, { color: colors.textMuted }]}>
-          Please wait while we confirm your payment. This usually takes a few seconds.
+          Checking with Pesapal. This usually takes a few seconds.
         </Text>
       </View>
     );
@@ -307,22 +538,24 @@ export default function TopUpScreen() {
   if (screen === "success") {
     return (
       <View style={[styles.root, styles.resultScreen, { backgroundColor: colors.background }]}>
-        <Ionicons name="checkmark-circle" size={80} color="#34C759" style={{ marginBottom: 20 }} />
-        <Text style={[styles.resultTitle, { color: colors.text }]}>
-          Payment Successful!
-        </Text>
+        <View style={[styles.successIcon, { backgroundColor: "#34C75918" }]}>
+          <Ionicons name="checkmark-circle" size={64} color="#34C759" />
+        </View>
+        <Text style={[styles.resultTitle, { color: colors.text, marginTop: 20 }]}>Payment Successful!</Text>
         <Text style={[styles.resultSub, { color: colors.textMuted }]}>
           {creditedAcoin > 0
-            ? `${creditedAcoin.toLocaleString()} ACoin will be added to your wallet shortly.`
+            ? `${creditedAcoin.toLocaleString()} ACoin has been added to your wallet.`
             : "Your ACoin will be credited shortly."}
         </Text>
-        <Text style={[styles.resultNote, { color: colors.textMuted }]}>
-          If your balance doesn't update within a few minutes, please contact support.
-        </Text>
-        <TouchableOpacity
-          style={[styles.doneBtn, { backgroundColor: Colors.brand }]}
-          onPress={() => router.back()}
-        >
+        {merchantRef && (
+          <View style={[styles.refRow, { backgroundColor: colors.inputBg, marginBottom: 28 }]}>
+            <Text style={[styles.refLabel, { color: colors.textMuted }]}>Transaction Reference</Text>
+            <Text style={[styles.refValue, { color: colors.text }]} numberOfLines={1}>
+              {merchantRef.slice(-16)}
+            </Text>
+          </View>
+        )}
+        <TouchableOpacity style={[styles.doneBtn, { backgroundColor: Colors.brand }]} onPress={() => router.back()}>
           <Text style={styles.doneBtnText}>Done</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={reset} style={{ marginTop: 12 }}>
@@ -335,15 +568,14 @@ export default function TopUpScreen() {
   if (screen === "failed") {
     return (
       <View style={[styles.root, styles.resultScreen, { backgroundColor: colors.background }]}>
-        <Ionicons name="close-circle" size={80} color="#FF3B30" style={{ marginBottom: 20 }} />
-        <Text style={[styles.resultTitle, { color: colors.text }]}>Payment Failed</Text>
+        <View style={[styles.successIcon, { backgroundColor: "#FF3B3018" }]}>
+          <Ionicons name="close-circle" size={64} color="#FF3B30" />
+        </View>
+        <Text style={[styles.resultTitle, { color: colors.text, marginTop: 20 }]}>Payment Failed</Text>
         <Text style={[styles.resultSub, { color: colors.textMuted }]}>
-          Your payment was not completed. No funds were charged.
+          {failureMsg || "Your payment was not completed. No funds were charged."}
         </Text>
-        <TouchableOpacity
-          style={[styles.doneBtn, { backgroundColor: Colors.gold }]}
-          onPress={reset}
-        >
+        <TouchableOpacity style={[styles.doneBtn, { backgroundColor: Colors.gold }]} onPress={reset}>
           <Text style={styles.doneBtnText}>Try Again</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 12 }}>
@@ -353,34 +585,185 @@ export default function TopUpScreen() {
     );
   }
 
+  if (screen === "google_pay" && WebView) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <Header title="Google Pay" onBack={() => setScreen("method")} />
+        <WebView
+          source={{ html: buildGooglePayHtml(getAmountUsd(), isDark) }}
+          style={{ flex: 1, backgroundColor: colors.background }}
+          onMessage={handleGooglePayMessage}
+          originWhitelist={["*"]}
+          javaScriptEnabled
+          domStorageEnabled
+          mixedContentMode="compatibility"
+          startInLoadingState
+          renderLoading={() => (
+            <View style={[styles.webviewLoader, { backgroundColor: colors.background }]}>
+              <ActivityIndicator size="large" color={Colors.brand} />
+            </View>
+          )}
+        />
+      </View>
+    );
+  }
+
+  if (screen === "card_form") {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
+        <Header title="Card Payment" onBack={() => setScreen("method")} />
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
+            <View style={[styles.amountChip, { backgroundColor: Colors.brand + "18" }]}>
+              <Ionicons name="diamond" size={16} color={Colors.brand} />
+              <Text style={[styles.amountChipText, { color: Colors.brand }]}>
+                {getSelectedAmount().toLocaleString()} ACoin · ${getAmountUsd()} USD
+              </Text>
+            </View>
+            <View style={[styles.formCard, { backgroundColor: colors.surface }]}>
+              <CardForm colors={colors} onSubmit={(d) => initiatePayment("card", d as any)} loading={loading} />
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
+    );
+  }
+
+  if (screen === "mobile_form") {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
+        <Header
+          title={activeMethod === "mtn" ? "MTN Mobile Money" : "Airtel Money"}
+          onBack={() => setScreen("method")}
+        />
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
+            <View style={[styles.amountChip, { backgroundColor: Colors.gold + "18" }]}>
+              <Ionicons name="diamond" size={16} color={Colors.gold} />
+              <Text style={[styles.amountChipText, { color: Colors.gold }]}>
+                {getSelectedAmount().toLocaleString()} ACoin · ${getAmountUsd()} USD
+              </Text>
+            </View>
+            <View style={[styles.formCard, { backgroundColor: colors.surface }]}>
+              <MobileMoneyForm
+                method={activeMethod as "mtn" | "airtel"}
+                colors={colors}
+                onSubmit={(phone) => initiatePayment(activeMethod as "mtn" | "airtel", { phone_number: phone })}
+                loading={loading}
+              />
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
+    );
+  }
+
+  if (screen === "method") {
+    const amount = getSelectedAmount();
+    return (
+      <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
+        <Header title="Choose Payment Method" onBack={() => setScreen("select")} />
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
+          <View style={[styles.amountChip, { backgroundColor: Colors.brand + "18" }]}>
+            <Ionicons name="diamond" size={16} color={Colors.brand} />
+            <Text style={[styles.amountChipText, { color: Colors.brand }]}>
+              {amount.toLocaleString()} ACoin · ${getAmountUsd()} USD
+            </Text>
+          </View>
+
+          <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>RECOMMENDED</Text>
+
+          {/* Google Pay — primary / most prominent */}
+          <TouchableOpacity
+            style={[styles.googlePayBtn, { shadowColor: colors.text }]}
+            onPress={() => {
+              Haptics.selectionAsync();
+              if (Platform.OS === "web") {
+                showAlert("Google Pay", "Google Pay is available on the Android app.");
+              } else {
+                setScreen("google_pay");
+              }
+            }}
+            activeOpacity={0.85}
+          >
+            <View style={styles.googlePayInner}>
+              <View style={styles.googlePayLogoRow}>
+                <Text style={styles.googlePayG}>G</Text>
+                <Text style={[styles.googlePayLabel, { color: "#1a1a1a" }]}>oogle Pay</Text>
+              </View>
+              <View style={styles.googlePayRight}>
+                <Ionicons name="chevron-forward" size={20} color="#444" />
+              </View>
+            </View>
+            <Text style={styles.googlePaySub}>Fast & secure · No card details needed</Text>
+          </TouchableOpacity>
+
+          <Text style={[styles.sectionTitle, { color: colors.textMuted, marginTop: 8 }]}>MORE OPTIONS</Text>
+
+          {/* Card */}
+          <TouchableOpacity
+            style={[styles.methodCard, { backgroundColor: colors.surface }]}
+            onPress={() => { Haptics.selectionAsync(); setScreen("card_form"); }}
+          >
+            <View style={[styles.methodIcon, { backgroundColor: "#1677FF18" }]}>
+              <Ionicons name="card" size={22} color="#1677FF" />
+            </View>
+            <View style={styles.methodInfo}>
+              <Text style={[styles.methodTitle, { color: colors.text }]}>Debit / Credit Card</Text>
+              <Text style={[styles.methodSub, { color: colors.textMuted }]}>Visa, Mastercard, Amex</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+
+          {/* MTN Mobile Money */}
+          <TouchableOpacity
+            style={[styles.methodCard, { backgroundColor: colors.surface }]}
+            onPress={() => { Haptics.selectionAsync(); setActiveMethod("mtn"); setScreen("mobile_form"); }}
+          >
+            <View style={[styles.methodIcon, { backgroundColor: "#FFCC0018" }]}>
+              <Ionicons name="phone-portrait" size={22} color="#FFCC00" />
+            </View>
+            <View style={styles.methodInfo}>
+              <Text style={[styles.methodTitle, { color: colors.text }]}>MTN Mobile Money</Text>
+              <Text style={[styles.methodSub, { color: colors.textMuted }]}>STK push to your MTN number</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+
+          {/* Airtel Money */}
+          <TouchableOpacity
+            style={[styles.methodCard, { backgroundColor: colors.surface }]}
+            onPress={() => { Haptics.selectionAsync(); setActiveMethod("airtel"); setScreen("mobile_form"); }}
+          >
+            <View style={[styles.methodIcon, { backgroundColor: "#E4000018" }]}>
+              <Ionicons name="phone-portrait" size={22} color="#E40000" />
+            </View>
+            <View style={styles.methodInfo}>
+              <Text style={[styles.methodTitle, { color: colors.text }]}>Airtel Money</Text>
+              <Text style={[styles.methodSub, { color: colors.textMuted }]}>STK push to your Airtel number</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+
+          <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
+            <Ionicons name="shield-checkmark" size={16} color={Colors.brand} />
+            <Text style={[styles.infoText, { color: colors.textMuted }]}>
+              All payments are processed securely by Pesapal. Your financial data never leaves our secure servers.
+            </Text>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + 8,
-            backgroundColor: colors.surface,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Buy ACoin</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
-      >
+      <Header title="Buy ACoin" />
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
         <View style={[styles.balanceCard, { backgroundColor: Colors.gold }]}>
           <Ionicons name="diamond" size={28} color="rgba(255,255,255,0.9)" />
           <Text style={styles.balanceLabel}>Current Balance</Text>
-          <Text style={styles.balanceValue}>
-            {(profile?.acoin || 0).toLocaleString()} ACoin
-          </Text>
+          <Text style={styles.balanceValue}>{(profile?.acoin || 0).toLocaleString()} ACoin</Text>
         </View>
 
         <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>SELECT PACKAGE</Text>
@@ -388,18 +771,8 @@ export default function TopUpScreen() {
         {ACOIN_PACKAGES.map((pack, i) => (
           <TouchableOpacity
             key={i}
-            style={[
-              styles.packCard,
-              {
-                backgroundColor: colors.surface,
-                borderColor: selectedPack === i ? Colors.gold : "transparent",
-              },
-            ]}
-            onPress={() => {
-              setSelectedPack(i);
-              setCustomAmount("");
-              Haptics.selectionAsync();
-            }}
+            style={[styles.packCard, { backgroundColor: colors.surface, borderColor: selectedPack === i ? Colors.gold : "transparent" }]}
+            onPress={() => { setSelectedPack(i); setCustomAmount(""); Haptics.selectionAsync(); }}
           >
             <View style={styles.packLeft}>
               <Ionicons name="diamond" size={20} color={Colors.gold} />
@@ -410,15 +783,11 @@ export default function TopUpScreen() {
                 </Text>
               </View>
             </View>
-            {selectedPack === i && (
-              <Ionicons name="checkmark-circle" size={22} color={Colors.gold} />
-            )}
+            {selectedPack === i && <Ionicons name="checkmark-circle" size={22} color={Colors.gold} />}
           </TouchableOpacity>
         ))}
 
-        <Text style={[styles.sectionTitle, { color: colors.textMuted, marginTop: 16 }]}>
-          OR ENTER CUSTOM AMOUNT
-        </Text>
+        <Text style={[styles.sectionTitle, { color: colors.textMuted, marginTop: 16 }]}>OR ENTER CUSTOM AMOUNT</Text>
         <View style={[styles.customRow, { backgroundColor: colors.surface }]}>
           <Ionicons name="diamond" size={18} color={Colors.gold} style={{ marginRight: 8 }} />
           <TextInput
@@ -426,10 +795,7 @@ export default function TopUpScreen() {
             placeholder="ACoin amount (min. 50)"
             placeholderTextColor={colors.textMuted}
             value={customAmount}
-            onChangeText={(v) => {
-              setCustomAmount(v.replace(/[^0-9]/g, ""));
-              setSelectedPack(null);
-            }}
+            onChangeText={(v) => { setCustomAmount(v.replace(/[^0-9]/g, "")); setSelectedPack(null); }}
             keyboardType="numeric"
           />
           {customAmount ? (
@@ -439,37 +805,28 @@ export default function TopUpScreen() {
           ) : null}
         </View>
 
-        <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
-          <Ionicons name="shield-checkmark" size={18} color={Colors.brand} />
-          <Text style={[styles.infoText, { color: colors.textMuted }]}>
-            Payments are processed securely by Pesapal. Supports M-Pesa, Airtel Money,
-            MTN MoMo, Visa, Mastercard and more across Africa.
-          </Text>
-        </View>
-
         <TouchableOpacity
-          style={[styles.payBtn, { backgroundColor: Colors.gold, opacity: loading ? 0.7 : 1 }]}
-          onPress={initiatePayment}
-          disabled={loading}
+          style={[styles.continueBtn, { backgroundColor: Colors.brand, opacity: (getSelectedAmount() < 50) ? 0.5 : 1 }]}
+          onPress={() => {
+            if (getSelectedAmount() < 50) { showAlert("Select a package", "Please select a package or enter at least 50 ACoin."); return; }
+            Haptics.selectionAsync();
+            setScreen("method");
+          }}
           activeOpacity={0.85}
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <>
-              <Ionicons name="card-outline" size={20} color="#fff" />
-              <Text style={styles.payBtnText}>Pay with Pesapal</Text>
-            </>
-          )}
+          <Text style={styles.continueBtnText}>Continue to Payment</Text>
+          <Ionicons name="chevron-forward" size={20} color="#fff" />
         </TouchableOpacity>
 
         <Text style={[styles.rateNote, { color: colors.textMuted }]}>
-          1 ACoin = $0.01 USD · Prices shown in USD
+          1 ACoin = $0.01 USD · Supports Google Pay, Card, MTN & Airtel Money
         </Text>
       </ScrollView>
     </View>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
@@ -482,94 +839,99 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  lockBadge: { flexDirection: "row", alignItems: "center", gap: 4 },
-  lockText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   content: { paddingHorizontal: 16, paddingTop: 16, gap: 12 },
   balanceCard: { borderRadius: 16, padding: 20, alignItems: "center", gap: 6 },
   balanceLabel: { fontSize: 13, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.7)" },
   balanceValue: { fontSize: 32, fontFamily: "Inter_700Bold", color: "#fff" },
-  sectionTitle: { fontSize: 12, fontFamily: "Inter_600SemiBold", marginLeft: 4, marginTop: 8 },
+  sectionTitle: { fontSize: 12, fontFamily: "Inter_600SemiBold", marginLeft: 4, marginTop: 4 },
   packCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 2,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    borderRadius: 14, padding: 16, borderWidth: 2,
   },
   packLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
   packLabel: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
   packSub: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
   customRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 4,
+    flexDirection: "row", alignItems: "center",
+    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 4,
   },
   customInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 48 },
   customPrice: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  continueBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, borderRadius: 14, paddingVertical: 16, marginTop: 8,
+  },
+  continueBtnText: { color: "#fff", fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  rateNote: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", marginTop: 4 },
+  amountChip: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, alignSelf: "center",
+  },
+  amountChipText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  googlePayBtn: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 16,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  googlePayInner: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  googlePayLogoRow: { flexDirection: "row", alignItems: "center" },
+  googlePayG: { fontSize: 22, fontFamily: "Inter_700Bold", color: "#4285F4" },
+  googlePayLabel: { fontSize: 20, fontFamily: "Inter_400Regular" },
+  googlePayRight: {},
+  googlePaySub: { fontSize: 13, fontFamily: "Inter_400Regular", color: "#666", marginTop: 6 },
+  methodCard: {
+    flexDirection: "row", alignItems: "center",
+    borderRadius: 14, padding: 16, gap: 14,
+  },
+  methodIcon: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  methodInfo: { flex: 1 },
+  methodTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  methodSub: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
   infoCard: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 4,
+    flexDirection: "row", alignItems: "flex-start",
+    gap: 10, borderRadius: 12, padding: 14, marginTop: 4,
   },
   infoText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
+  formCard: { borderRadius: 16, padding: 20 },
+  form: { gap: 12 },
+  formLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", marginBottom: -4 },
+  input: {
+    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 15, fontFamily: "Inter_400Regular", borderWidth: 1,
+  },
+  row2: { flexDirection: "row", gap: 12 },
   payBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderRadius: 14,
-    paddingVertical: 16,
-    marginTop: 8,
-    minHeight: 54,
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, borderRadius: 14, paddingVertical: 16, marginTop: 8,
   },
   payBtnText: { color: "#fff", fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  rateNote: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", marginTop: 4 },
-  webviewLoader: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-    backgroundColor: "transparent",
+  securityNote: {
+    flexDirection: "row", alignItems: "center",
+    gap: 8, borderRadius: 10, padding: 12, marginTop: 4,
   },
-  loadingText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  securityText: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 16 },
+  mmoBadge: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 12, padding: 14 },
+  mmoIcon: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  mmoTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  mmoSub: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
+  mmoHint: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: -6 },
   resultScreen: { alignItems: "center", justifyContent: "center", padding: 32 },
-  resultTitle: {
-    fontSize: 26,
-    fontFamily: "Inter_700Bold",
-    textAlign: "center",
-    marginBottom: 12,
-  },
-  resultSub: {
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-    textAlign: "center",
-    lineHeight: 22,
-    marginBottom: 12,
-  },
-  resultNote: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    textAlign: "center",
-    lineHeight: 18,
-    marginBottom: 32,
-  },
-  doneBtn: {
-    borderRadius: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 48,
-    alignItems: "center",
-    width: "100%",
-  },
+  processingCard: { borderRadius: 20, padding: 28, alignItems: "center", width: "100%", maxWidth: 340 },
+  resultTitle: { fontSize: 24, fontFamily: "Inter_700Bold", textAlign: "center", marginBottom: 12 },
+  resultSub: { fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22, marginBottom: 16 },
+  successIcon: { width: 96, height: 96, borderRadius: 48, alignItems: "center", justifyContent: "center" },
+  refRow: { width: "100%", borderRadius: 10, padding: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  refLabel: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  refValue: { fontSize: 12, fontFamily: "Inter_600SemiBold", maxWidth: "55%" },
+  doneBtn: { borderRadius: 14, paddingVertical: 16, paddingHorizontal: 48, alignItems: "center", width: "100%" },
   doneBtnText: { color: "#fff", fontSize: 17, fontFamily: "Inter_600SemiBold" },
   topUpAgain: { fontSize: 15, fontFamily: "Inter_500Medium" },
+  webviewLoader: {
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: "center", justifyContent: "center",
+  },
 });
