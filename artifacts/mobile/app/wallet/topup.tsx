@@ -48,6 +48,109 @@ type Screen =
   | "success"
   | "failed";
 
+// ─── Card network detection ───────────────────────────────────────────────────
+
+type CardNetwork = "visa" | "mastercard" | "amex" | "discover" | "unknown";
+
+function detectCardNetwork(number: string): CardNetwork {
+  const n = number.replace(/\s/g, "");
+  if (/^4/.test(n)) return "visa";
+  if (/^(5[1-5]|2(2[2-9][1-9]|[3-6]\d{2}|7[01]\d|720))/.test(n)) return "mastercard";
+  if (/^3[47]/.test(n)) return "amex";
+  if (/^(6011|622(1(2[6-9]|[3-9]\d)|[2-8]\d{2}|9([01]\d|2[0-5]))|64[4-9]|65)/.test(n)) return "discover";
+  return "unknown";
+}
+
+// ─── Card network logos (inline SVG-style React Native components) ─────────────
+
+function VisaLogo({ size = 36 }: { size?: number }) {
+  const h = Math.round(size * 0.56);
+  return (
+    <View style={[cardLogoStyles.container, { width: size, height: h, backgroundColor: "#1A1F71", borderRadius: 4 }]}>
+      <Text style={[cardLogoStyles.visaText, { fontSize: h * 0.52 }]}>VISA</Text>
+    </View>
+  );
+}
+
+function MastercardLogo({ size = 36 }: { size?: number }) {
+  const h = Math.round(size * 0.56);
+  const circR = h * 0.44;
+  const overlap = circR * 0.35;
+  const totalW = circR * 2 * 2 - overlap;
+  return (
+    <View style={{ width: size, height: h, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ flexDirection: "row", alignItems: "center", width: totalW }}>
+        <View style={{ width: circR * 2, height: circR * 2, borderRadius: circR, backgroundColor: "#EB001B" }} />
+        <View style={{ width: circR * 2, height: circR * 2, borderRadius: circR, backgroundColor: "#F79E1B", marginLeft: -overlap, opacity: 0.92 }} />
+      </View>
+    </View>
+  );
+}
+
+function AmexLogo({ size = 36 }: { size?: number }) {
+  const h = Math.round(size * 0.56);
+  return (
+    <View style={[cardLogoStyles.container, { width: size, height: h, backgroundColor: "#016FD0", borderRadius: 4 }]}>
+      <Text style={[cardLogoStyles.amexText, { fontSize: h * 0.38 }]}>AMERICAN{"\n"}EXPRESS</Text>
+    </View>
+  );
+}
+
+function DiscoverLogo({ size = 36 }: { size?: number }) {
+  const h = Math.round(size * 0.56);
+  return (
+    <View style={[cardLogoStyles.container, { width: size, height: h, backgroundColor: "#FFFFFF", borderRadius: 4, borderWidth: 1, borderColor: "#E0E0E0" }]}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+        <Text style={[cardLogoStyles.discoverText, { fontSize: h * 0.35 }]}>DISCOVER</Text>
+        <View style={{ width: h * 0.38, height: h * 0.38, borderRadius: h * 0.19, backgroundColor: "#F76F20" }} />
+      </View>
+    </View>
+  );
+}
+
+function CardNetworkLogo({ network, size = 36 }: { network: CardNetwork; size?: number }) {
+  if (network === "visa") return <VisaLogo size={size} />;
+  if (network === "mastercard") return <MastercardLogo size={size} />;
+  if (network === "amex") return <AmexLogo size={size} />;
+  if (network === "discover") return <DiscoverLogo size={size} />;
+  return (
+    <View style={{ flexDirection: "row", gap: 4 }}>
+      <VisaLogo size={size * 0.8} />
+      <MastercardLogo size={size * 0.8} />
+    </View>
+  );
+}
+
+const cardLogoStyles = StyleSheet.create({
+  container: { alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  visaText: { color: "#FFFFFF", fontStyle: "italic", fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
+  amexText: { color: "#FFFFFF", fontFamily: "Inter_700Bold", fontSize: 7, textAlign: "center", lineHeight: 8 },
+  discoverText: { color: "#231F20", fontFamily: "Inter_700Bold", letterSpacing: -0.3 },
+});
+
+// ─── MTN Logo ─────────────────────────────────────────────────────────────────
+
+function MtnLogo({ size = 44 }: { size?: number }) {
+  return (
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: "#FFCB00", alignItems: "center", justifyContent: "center" }}>
+      <Text style={{ fontSize: size * 0.27, fontFamily: "Inter_700Bold", color: "#000000", letterSpacing: -0.5 }}>MTN</Text>
+    </View>
+  );
+}
+
+// ─── Airtel Logo ──────────────────────────────────────────────────────────────
+
+function AirtelLogo({ size = 44 }: { size?: number }) {
+  return (
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: "#E40000", alignItems: "center", justifyContent: "center" }}>
+      <View style={{ alignItems: "center" }}>
+        <View style={{ width: size * 0.42, height: size * 0.42 * 0.55, borderTopLeftRadius: size * 0.21, borderTopRightRadius: size * 0.21, borderWidth: size * 0.055, borderBottomWidth: 0, borderColor: "#FFFFFF" }} />
+        <View style={{ width: size * 0.08, height: size * 0.18, backgroundColor: "#FFFFFF", marginTop: -size * 0.02, borderBottomLeftRadius: size * 0.04, borderBottomRightRadius: size * 0.04 }} />
+      </View>
+    </View>
+  );
+}
+
 // ─── API helper ───────────────────────────────────────────────────────────────
 
 function getApiBase(): string {
@@ -145,15 +248,13 @@ function buildGooglePayHtml(amountUsd: string, isDark: boolean): string {
         if (res.result) {
           const btn = client.createButton({
             onClick: () => {
-              setStatus('Opening Google Pay...');
+              setStatus('');
               client.loadPaymentData(paymentRequest).then(paymentData => {
-                setStatus('Processing...');
                 postMsg({ type: 'success', data: paymentData });
               }).catch(err => {
                 if (err.statusCode === 'CANCELED') {
                   postMsg({ type: 'cancel' });
                 } else {
-                  setStatus('Payment failed: ' + (err.message || 'Unknown error'));
                   postMsg({ type: 'error', message: err.message || 'Google Pay failed' });
                 }
               });
@@ -163,11 +264,9 @@ function buildGooglePayHtml(amountUsd: string, isDark: boolean): string {
           });
           document.getElementById('google-pay-button').appendChild(btn);
         } else {
-          setStatus('Google Pay is not available on this device.');
           postMsg({ type: 'unavailable' });
         }
-      }).catch(err => {
-        setStatus('Could not load Google Pay.');
+      }).catch(() => {
         postMsg({ type: 'error', message: 'Google Pay not available' });
       });
     }
@@ -192,6 +291,10 @@ function CardForm({
   const [expiry, setExpiry] = useState("");
   const [cvv, setCvv] = useState("");
   const [name, setName] = useState("");
+
+  const network = detectCardNetwork(number);
+  const isAmex = network === "amex";
+  const maxCvv = isAmex ? 4 : 3;
 
   function formatCardNumber(v: string) {
     const digits = v.replace(/\D/g, "").slice(0, 16);
@@ -223,16 +326,32 @@ function CardForm({
 
   return (
     <View style={styles.form}>
+      {/* Card preview strip */}
+      <View style={[styles.cardPreview, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+        <View style={styles.cardPreviewLeft}>
+          <View style={[styles.cardChip, { backgroundColor: colors.border }]} />
+        </View>
+        <CardNetworkLogo network={network} size={48} />
+      </View>
+
       <Text style={[styles.formLabel, { color: colors.textMuted }]}>CARD NUMBER</Text>
-      <TextInput
-        style={inputStyle}
-        placeholder="1234 5678 9012 3456"
-        placeholderTextColor={colors.textMuted}
-        value={number}
-        onChangeText={(v) => setNumber(formatCardNumber(v))}
-        keyboardType="numeric"
-        maxLength={19}
-      />
+      <View style={[styles.inputRow, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+        <TextInput
+          style={[styles.inputInner, { color: colors.text }]}
+          placeholder="1234 5678 9012 3456"
+          placeholderTextColor={colors.textMuted}
+          value={number}
+          onChangeText={(v) => setNumber(formatCardNumber(v))}
+          keyboardType="numeric"
+          maxLength={19}
+        />
+        {network !== "unknown" && (
+          <View style={{ paddingRight: 12 }}>
+            <CardNetworkLogo network={network} size={32} />
+          </View>
+        )}
+      </View>
+
       <View style={styles.row2}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.formLabel, { color: colors.textMuted }]}>EXPIRY</Text>
@@ -247,45 +366,55 @@ function CardForm({
           />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.formLabel, { color: colors.textMuted }]}>CVV</Text>
+          <Text style={[styles.formLabel, { color: colors.textMuted }]}>
+            {isAmex ? "CID (4 digits)" : "CVV"}
+          </Text>
           <TextInput
             style={inputStyle}
-            placeholder="123"
+            placeholder={isAmex ? "1234" : "123"}
             placeholderTextColor={colors.textMuted}
             value={cvv}
-            onChangeText={(v) => setCvv(v.replace(/\D/g, "").slice(0, 4))}
+            onChangeText={(v) => setCvv(v.replace(/\D/g, "").slice(0, maxCvv))}
             keyboardType="numeric"
-            maxLength={4}
+            maxLength={maxCvv}
             secureTextEntry
           />
         </View>
       </View>
-      <Text style={[styles.formLabel, { color: colors.textMuted }]}>NAME ON CARD (optional)</Text>
+
+      <Text style={[styles.formLabel, { color: colors.textMuted }]}>NAME ON CARD</Text>
       <TextInput
         style={inputStyle}
-        placeholder="John Doe"
+        placeholder="Cardholder name"
         placeholderTextColor={colors.textMuted}
         value={name}
         onChangeText={setName}
         autoCapitalize="words"
       />
+
       <TouchableOpacity
-        style={[styles.payBtn, { backgroundColor: Colors.brand, opacity: loading ? 0.7 : 1 }]}
+        style={[styles.payBtn, { backgroundColor: "#1A1F71", opacity: loading ? 0.7 : 1 }]}
         onPress={handleSubmit}
         disabled={loading}
       >
         {loading ? <ActivityIndicator color="#fff" size="small" /> : (
-          <>
-            <Ionicons name="card" size={20} color="#fff" />
-            <Text style={styles.payBtnText}>Pay with Card</Text>
-          </>
+          <View style={styles.payBtnInner}>
+            <CardNetworkLogo network={network} size={28} />
+            <Text style={styles.payBtnText}>Pay Now</Text>
+          </View>
         )}
       </TouchableOpacity>
+
       <View style={[styles.securityNote, { backgroundColor: colors.inputBg }]}>
-        <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
-        <Text style={[styles.securityText, { color: colors.textMuted }]}>
-          Card details are encrypted and never stored. Processed by Pesapal.
-        </Text>
+        <Ionicons name="lock-closed" size={13} color={colors.textMuted} />
+        <Text style={[styles.securityText, { color: colors.textMuted }]}>PCI DSS Secured</Text>
+        <View style={{ flex: 1 }} />
+        <View style={{ flexDirection: "row", gap: 6 }}>
+          <VisaLogo size={28} />
+          <MastercardLogo size={28} />
+          <AmexLogo size={28} />
+          <DiscoverLogo size={28} />
+        </View>
       </View>
     </View>
   );
@@ -306,9 +435,8 @@ function MobileMoneyForm({
 }) {
   const [phone, setPhone] = useState("");
   const isMtn = method === "mtn";
-  const accent = isMtn ? "#FFCC00" : "#E40000";
-  const label = isMtn ? "MTN Mobile Money" : "Airtel Money";
-  const placeholder = isMtn ? "+256 7XX XXX XXX" : "+255 7XX XXX XXX";
+  const accent = isMtn ? "#FFCB00" : "#E40000";
+  const textAccent = isMtn ? "#000000" : "#FFFFFF";
 
   function handleSubmit() {
     const normalized = phone.trim().replace(/\s/g, "");
@@ -318,21 +446,23 @@ function MobileMoneyForm({
 
   return (
     <View style={styles.form}>
-      <View style={[styles.mmoBadge, { backgroundColor: accent + "18" }]}>
-        <View style={[styles.mmoIcon, { backgroundColor: accent }]}>
-          <Ionicons name="phone-portrait" size={20} color="#fff" />
-        </View>
-        <View>
-          <Text style={[styles.mmoTitle, { color: colors.text }]}>{label}</Text>
-          <Text style={[styles.mmoSub, { color: colors.textMuted }]}>
-            You'll receive an STK push on your phone
+      {/* Brand header */}
+      <View style={[styles.mmoBrandCard, { backgroundColor: accent }]}>
+        {isMtn ? <MtnLogo size={52} /> : <AirtelLogo size={52} />}
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.mmoBrandName, { color: textAccent }]}>
+            {isMtn ? "MTN Mobile Money" : "Airtel Money"}
+          </Text>
+          <Text style={[styles.mmoBrandCountry, { color: isMtn ? "#333" : "rgba(255,255,255,0.75)" }]}>
+            {isMtn ? "Uganda · Rwanda · Ghana" : "Uganda · Tanzania · Kenya"}
           </Text>
         </View>
       </View>
+
       <Text style={[styles.formLabel, { color: colors.textMuted }]}>MOBILE MONEY NUMBER</Text>
       <TextInput
         style={[styles.input, { backgroundColor: colors.inputBg, color: colors.text, borderColor: colors.border }]}
-        placeholder={placeholder}
+        placeholder={isMtn ? "+256 7XX XXX XXX" : "+255 7XX XXX XXX"}
         placeholderTextColor={colors.textMuted}
         value={phone}
         onChangeText={setPhone}
@@ -340,18 +470,21 @@ function MobileMoneyForm({
         autoFocus
       />
       <Text style={[styles.mmoHint, { color: colors.textMuted }]}>
-        Include country code, e.g. +256712345678
+        Include country code · e.g. +256712345678
       </Text>
+
       <TouchableOpacity
         style={[styles.payBtn, { backgroundColor: accent, opacity: loading ? 0.7 : 1 }]}
         onPress={handleSubmit}
         disabled={loading}
       >
-        {loading ? <ActivityIndicator color="#fff" size="small" /> : (
-          <>
-            <Ionicons name="phone-portrait" size={20} color="#fff" />
-            <Text style={styles.payBtnText}>Send Payment Request</Text>
-          </>
+        {loading ? (
+          <ActivityIndicator color={textAccent} size="small" />
+        ) : (
+          <View style={styles.payBtnInner}>
+            {isMtn ? <MtnLogo size={24} /> : <AirtelLogo size={24} />}
+            <Text style={[styles.payBtnText, { color: textAccent }]}>Confirm Payment</Text>
+          </View>
         )}
       </TouchableOpacity>
     </View>
@@ -453,7 +586,6 @@ export default function TopUpScreen() {
 
       setCreditedAcoin(amount);
       setMerchantRef(data.merchant_reference);
-
       setScreen("processing");
       startPolling(data.merchant_reference);
     } catch (err: any) {
@@ -462,8 +594,6 @@ export default function TopUpScreen() {
       setLoading(false);
     }
   }
-
-  // ─── Google Pay WebView handler ─────────────────────────────────────────────
 
   const handleGooglePayMessage = useCallback(
     async (event: any) => {
@@ -487,8 +617,6 @@ export default function TopUpScreen() {
     [activeMethod],
   );
 
-  // ─── Render screens ──────────────────────────────────────────────────────────
-
   function Header({ title, onBack }: { title: string; onBack?: () => void }) {
     return (
       <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
@@ -501,14 +629,16 @@ export default function TopUpScreen() {
     );
   }
 
+  // ─── Result screens ───────────────────────────────────────────────────────
+
   if (screen === "processing") {
     return (
       <View style={[styles.root, styles.resultScreen, { backgroundColor: colors.background }]}>
         <View style={[styles.processingCard, { backgroundColor: colors.surface }]}>
           <ActivityIndicator size="large" color={Colors.brand} style={{ marginBottom: 20 }} />
-          <Text style={[styles.resultTitle, { color: colors.text }]}>Processing Payment</Text>
+          <Text style={[styles.resultTitle, { color: colors.text }]}>Processing…</Text>
           <Text style={[styles.resultSub, { color: colors.textMuted }]}>
-            Please wait while we confirm your payment. This may take a few moments.
+            Confirming your payment
           </Text>
           {merchantRef && (
             <View style={[styles.refRow, { backgroundColor: colors.inputBg }]}>
@@ -527,10 +657,7 @@ export default function TopUpScreen() {
     return (
       <View style={[styles.root, styles.resultScreen, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={Colors.brand} style={{ marginBottom: 24 }} />
-        <Text style={[styles.resultTitle, { color: colors.text }]}>Verifying Payment…</Text>
-        <Text style={[styles.resultSub, { color: colors.textMuted }]}>
-          Checking with Pesapal. This usually takes a few seconds.
-        </Text>
+        <Text style={[styles.resultTitle, { color: colors.text }]}>Verifying…</Text>
       </View>
     );
   }
@@ -544,12 +671,12 @@ export default function TopUpScreen() {
         <Text style={[styles.resultTitle, { color: colors.text, marginTop: 20 }]}>Payment Successful!</Text>
         <Text style={[styles.resultSub, { color: colors.textMuted }]}>
           {creditedAcoin > 0
-            ? `${creditedAcoin.toLocaleString()} ACoin has been added to your wallet.`
-            : "Your ACoin will be credited shortly."}
+            ? `${creditedAcoin.toLocaleString()} ACoin added to your wallet`
+            : "ACoin will be credited shortly"}
         </Text>
         {merchantRef && (
           <View style={[styles.refRow, { backgroundColor: colors.inputBg, marginBottom: 28 }]}>
-            <Text style={[styles.refLabel, { color: colors.textMuted }]}>Transaction Reference</Text>
+            <Text style={[styles.refLabel, { color: colors.textMuted }]}>Reference</Text>
             <Text style={[styles.refValue, { color: colors.text }]} numberOfLines={1}>
               {merchantRef.slice(-16)}
             </Text>
@@ -573,7 +700,7 @@ export default function TopUpScreen() {
         </View>
         <Text style={[styles.resultTitle, { color: colors.text, marginTop: 20 }]}>Payment Failed</Text>
         <Text style={[styles.resultSub, { color: colors.textMuted }]}>
-          {failureMsg || "Your payment was not completed. No funds were charged."}
+          {failureMsg || "No funds were charged."}
         </Text>
         <TouchableOpacity style={[styles.doneBtn, { backgroundColor: Colors.gold }]} onPress={reset}>
           <Text style={styles.doneBtnText}>Try Again</Text>
@@ -638,9 +765,9 @@ export default function TopUpScreen() {
         />
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
-            <View style={[styles.amountChip, { backgroundColor: Colors.gold + "18" }]}>
-              <Ionicons name="diamond" size={16} color={Colors.gold} />
-              <Text style={[styles.amountChipText, { color: Colors.gold }]}>
+            <View style={[styles.amountChip, { backgroundColor: (activeMethod === "mtn" ? "#FFCB00" : "#E40000") + "18" }]}>
+              <Ionicons name="diamond" size={16} color={activeMethod === "mtn" ? "#FFCB00" : "#E40000"} />
+              <Text style={[styles.amountChipText, { color: activeMethod === "mtn" ? "#FFCB00" : "#E40000" }]}>
                 {getSelectedAmount().toLocaleString()} ACoin · ${getAmountUsd()} USD
               </Text>
             </View>
@@ -662,7 +789,7 @@ export default function TopUpScreen() {
     const amount = getSelectedAmount();
     return (
       <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-        <Header title="Choose Payment Method" onBack={() => setScreen("select")} />
+        <Header title="Payment" onBack={() => setScreen("select")} />
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
           <View style={[styles.amountChip, { backgroundColor: Colors.brand + "18" }]}>
             <Ionicons name="diamond" size={16} color={Colors.brand} />
@@ -671,9 +798,7 @@ export default function TopUpScreen() {
             </Text>
           </View>
 
-          <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>RECOMMENDED</Text>
-
-          {/* Google Pay — primary / most prominent */}
+          {/* Google Pay — primary */}
           <TouchableOpacity
             style={[styles.googlePayBtn, { shadowColor: colors.text }]}
             onPress={() => {
@@ -691,26 +816,26 @@ export default function TopUpScreen() {
                 <Text style={styles.googlePayG}>G</Text>
                 <Text style={[styles.googlePayLabel, { color: "#1a1a1a" }]}>oogle Pay</Text>
               </View>
-              <View style={styles.googlePayRight}>
-                <Ionicons name="chevron-forward" size={20} color="#444" />
-              </View>
+              <Ionicons name="chevron-forward" size={20} color="#444" />
             </View>
-            <Text style={styles.googlePaySub}>Fast & secure · No card details needed</Text>
           </TouchableOpacity>
 
-          <Text style={[styles.sectionTitle, { color: colors.textMuted, marginTop: 8 }]}>MORE OPTIONS</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textMuted, marginTop: 8 }]}>MORE WAYS TO PAY</Text>
 
           {/* Card */}
           <TouchableOpacity
             style={[styles.methodCard, { backgroundColor: colors.surface }]}
             onPress={() => { Haptics.selectionAsync(); setScreen("card_form"); }}
           >
-            <View style={[styles.methodIcon, { backgroundColor: "#1677FF18" }]}>
-              <Ionicons name="card" size={22} color="#1677FF" />
+            <View style={[styles.methodIconBox, { backgroundColor: "#1A1F7110" }]}>
+              <View style={{ flexDirection: "row", gap: 3 }}>
+                <VisaLogo size={24} />
+                <MastercardLogo size={24} />
+              </View>
             </View>
             <View style={styles.methodInfo}>
               <Text style={[styles.methodTitle, { color: colors.text }]}>Debit / Credit Card</Text>
-              <Text style={[styles.methodSub, { color: colors.textMuted }]}>Visa, Mastercard, Amex</Text>
+              <Text style={[styles.methodSub, { color: colors.textMuted }]}>Visa · Mastercard · Amex · Discover</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
@@ -720,12 +845,12 @@ export default function TopUpScreen() {
             style={[styles.methodCard, { backgroundColor: colors.surface }]}
             onPress={() => { Haptics.selectionAsync(); setActiveMethod("mtn"); setScreen("mobile_form"); }}
           >
-            <View style={[styles.methodIcon, { backgroundColor: "#FFCC0018" }]}>
-              <Ionicons name="phone-portrait" size={22} color="#FFCC00" />
+            <View style={[styles.methodIconBox, { backgroundColor: "#FFCB0010" }]}>
+              <MtnLogo size={40} />
             </View>
             <View style={styles.methodInfo}>
               <Text style={[styles.methodTitle, { color: colors.text }]}>MTN Mobile Money</Text>
-              <Text style={[styles.methodSub, { color: colors.textMuted }]}>STK push to your MTN number</Text>
+              <Text style={[styles.methodSub, { color: colors.textMuted }]}>Uganda · Rwanda · Ghana</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
@@ -735,26 +860,26 @@ export default function TopUpScreen() {
             style={[styles.methodCard, { backgroundColor: colors.surface }]}
             onPress={() => { Haptics.selectionAsync(); setActiveMethod("airtel"); setScreen("mobile_form"); }}
           >
-            <View style={[styles.methodIcon, { backgroundColor: "#E4000018" }]}>
-              <Ionicons name="phone-portrait" size={22} color="#E40000" />
+            <View style={[styles.methodIconBox, { backgroundColor: "#E4000010" }]}>
+              <AirtelLogo size={40} />
             </View>
             <View style={styles.methodInfo}>
               <Text style={[styles.methodTitle, { color: colors.text }]}>Airtel Money</Text>
-              <Text style={[styles.methodSub, { color: colors.textMuted }]}>STK push to your Airtel number</Text>
+              <Text style={[styles.methodSub, { color: colors.textMuted }]}>Uganda · Tanzania · Kenya</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
 
-          <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
-            <Ionicons name="shield-checkmark" size={16} color={Colors.brand} />
-            <Text style={[styles.infoText, { color: colors.textMuted }]}>
-              All payments are processed securely by Pesapal. Your financial data never leaves our secure servers.
-            </Text>
+          <View style={[styles.securedRow, { borderColor: colors.border }]}>
+            <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
+            <Text style={[styles.securedText, { color: colors.textMuted }]}>Secured by Pesapal · PCI DSS Compliant</Text>
           </View>
         </ScrollView>
       </View>
     );
   }
+
+  // ─── Package select screen ─────────────────────────────────────────────────
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
@@ -787,7 +912,7 @@ export default function TopUpScreen() {
           </TouchableOpacity>
         ))}
 
-        <Text style={[styles.sectionTitle, { color: colors.textMuted, marginTop: 16 }]}>OR ENTER CUSTOM AMOUNT</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textMuted, marginTop: 16 }]}>CUSTOM AMOUNT</Text>
         <View style={[styles.customRow, { backgroundColor: colors.surface }]}>
           <Ionicons name="diamond" size={18} color={Colors.gold} style={{ marginRight: 8 }} />
           <TextInput
@@ -814,12 +939,12 @@ export default function TopUpScreen() {
           }}
           activeOpacity={0.85}
         >
-          <Text style={styles.continueBtnText}>Continue to Payment</Text>
+          <Text style={styles.continueBtnText}>Continue</Text>
           <Ionicons name="chevron-forward" size={20} color="#fff" />
         </TouchableOpacity>
 
         <Text style={[styles.rateNote, { color: colors.textMuted }]}>
-          1 ACoin = $0.01 USD · Supports Google Pay, Card, MTN & Airtel Money
+          1 ACoin = $0.01 USD
         </Text>
       </ScrollView>
     </View>
@@ -881,43 +1006,59 @@ const styles = StyleSheet.create({
   googlePayLogoRow: { flexDirection: "row", alignItems: "center" },
   googlePayG: { fontSize: 22, fontFamily: "Inter_700Bold", color: "#4285F4" },
   googlePayLabel: { fontSize: 20, fontFamily: "Inter_400Regular" },
-  googlePayRight: {},
-  googlePaySub: { fontSize: 13, fontFamily: "Inter_400Regular", color: "#666", marginTop: 6 },
   methodCard: {
     flexDirection: "row", alignItems: "center",
-    borderRadius: 14, padding: 16, gap: 14,
+    borderRadius: 14, padding: 14, gap: 14,
   },
-  methodIcon: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  methodIconBox: { width: 52, height: 52, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   methodInfo: { flex: 1 },
   methodTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   methodSub: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
-  infoCard: {
-    flexDirection: "row", alignItems: "flex-start",
-    gap: 10, borderRadius: 12, padding: 14, marginTop: 4,
+  securedRow: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    justifyContent: "center", paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth, marginTop: 4,
   },
-  infoText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
+  securedText: { fontSize: 12, fontFamily: "Inter_400Regular" },
   formCard: { borderRadius: 16, padding: 20 },
   form: { gap: 12 },
   formLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", marginBottom: -4 },
+  cardPreview: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    borderRadius: 12, padding: 14, borderWidth: 1, marginBottom: 4,
+  },
+  cardPreviewLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
+  cardChip: { width: 28, height: 22, borderRadius: 4 },
+  inputRow: {
+    flexDirection: "row", alignItems: "center",
+    borderRadius: 10, borderWidth: 1, overflow: "hidden",
+  },
+  inputInner: {
+    flex: 1, paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 15, fontFamily: "Inter_400Regular",
+  },
   input: {
     borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12,
     fontSize: 15, fontFamily: "Inter_400Regular", borderWidth: 1,
   },
   row2: { flexDirection: "row", gap: 12 },
   payBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 8, borderRadius: 14, paddingVertical: 16, marginTop: 8,
+    borderRadius: 14, paddingVertical: 16, marginTop: 8,
+    alignItems: "center", justifyContent: "center",
   },
+  payBtnInner: { flexDirection: "row", alignItems: "center", gap: 10 },
   payBtnText: { color: "#fff", fontSize: 17, fontFamily: "Inter_600SemiBold" },
   securityNote: {
     flexDirection: "row", alignItems: "center",
-    gap: 8, borderRadius: 10, padding: 12, marginTop: 4,
+    gap: 6, borderRadius: 10, padding: 10, marginTop: 4,
   },
-  securityText: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 16 },
-  mmoBadge: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 12, padding: 14 },
-  mmoIcon: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  mmoTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  mmoSub: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
+  securityText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  mmoBrandCard: {
+    flexDirection: "row", alignItems: "center",
+    gap: 14, borderRadius: 14, padding: 16, marginBottom: 4,
+  },
+  mmoBrandName: { fontSize: 17, fontFamily: "Inter_700Bold" },
+  mmoBrandCountry: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   mmoHint: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: -6 },
   resultScreen: { alignItems: "center", justifyContent: "center", padding: 32 },
   processingCard: { borderRadius: 20, padding: 28, alignItems: "center", width: "100%", maxWidth: 340 },
