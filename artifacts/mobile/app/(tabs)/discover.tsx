@@ -50,11 +50,8 @@ import { encodeId } from "@/lib/shortId";
 import { useVideoProgress } from "@/hooks/useVideoProgress";
 import SignInPromptModal from "@/components/ui/SignInPromptModal";
 import { TrendingSoundsSection } from "@/components/TrendingSoundsSection";
-
-let ViewShot: any = ({ children, style, ...rest }: any) => <View style={style} {...rest}>{children}</View>;
-try {
-  ViewShot = require("react-native-view-shot").default;
-} catch (_) {}
+import { PostShareCaptureModal, type ShareablePost } from "@/components/ui/PostShareCard";
+import { DiscoverCommentsSheet } from "@/components/ui/DiscoverComments";
 
 type PostItem = {
   id: string;
@@ -167,352 +164,6 @@ function RecentCommenters({ postId, replyCount, bgColor }: { postId: string; rep
   );
 }
 
-type CommentItem = {
-  id: string;
-  author_id: string;
-  content: string;
-  created_at: string;
-  profile: { display_name: string; handle: string; avatar_url: string | null };
-};
-
-const DC_USE_NATIVE = Platform.OS !== "web";
-const DC_QUICK_EMOJIS = ["🔥", "❤️", "😂", "😮", "👏", "💯", "🙌", "😍"];
-
-function parseDcCommentText(text: string, accentColor: string): React.ReactNode {
-  return text.split(/(@\w[\w.]*|#\w+)/g).map((p, i) => {
-    if (/^@\w/.test(p)) return <Text key={i} style={{ color: accentColor, fontFamily: "Inter_600SemiBold" }}>{p}</Text>;
-    if (/^#\w/.test(p)) return <Text key={i} style={{ color: accentColor + "BB" }}>{p}</Text>;
-    return <Text key={i}>{p}</Text>;
-  });
-}
-
-function DcCommentRow({ c, colors, onLike, liked }: {
-  c: CommentItem; colors: any; liked: boolean; onLike: (id: string) => void;
-}) {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  function handleLike() {
-    Animated.sequence([
-      Animated.spring(scale, { toValue: 1.45, tension: 350, friction: 7, useNativeDriver: DC_USE_NATIVE }),
-      Animated.spring(scale, { toValue: 1, tension: 350, friction: 7, useNativeDriver: DC_USE_NATIVE }),
-    ]).start();
-    onLike(c.id);
-  }
-
-  return (
-    <View style={dcStyles.commentRow}>
-      <View style={dcStyles.commentAvatar}>
-        {c.profile.avatar_url ? (
-          <ExpoImage source={{ uri: c.profile.avatar_url }} style={{ width: 36, height: 36, borderRadius: 18 }} contentFit="cover" />
-        ) : (
-          <View style={[dcStyles.commentAvatarFallback, { backgroundColor: colors.accent + "22" }]}>
-            <Text style={[dcStyles.commentAvatarLetter, { color: colors.accent }]}>
-              {(c.profile.display_name || "U").slice(0, 1).toUpperCase()}
-            </Text>
-          </View>
-        )}
-      </View>
-      <View style={{ flex: 1 }}>
-        <View style={[dcStyles.commentBubble, { backgroundColor: colors.backgroundTertiary ?? colors.background }]}>
-          <Text style={[dcStyles.commentName, { color: colors.text }]}>{c.profile.display_name}</Text>
-          <Text style={[dcStyles.commentText, { color: colors.text }]}>
-            {parseDcCommentText(c.content, colors.accent)}
-          </Text>
-        </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginTop: 5, marginLeft: 4 }}>
-          <Text style={[dcStyles.commentTime, { color: colors.textMuted }]}>{formatRelative(c.created_at)}</Text>
-          <TouchableOpacity onPress={handleLike} style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-            <Animated.View style={{ transform: [{ scale }] }}>
-              <Ionicons name={liked ? "heart" : "heart-outline"} size={13} color={liked ? "#FF2D55" : colors.textMuted} />
-            </Animated.View>
-            <Text style={{ color: liked ? "#FF2D55" : colors.textMuted, fontSize: 11, fontFamily: "Inter_600SemiBold" }}>
-              {liked ? "Liked" : "Like"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function DiscoverCommentsSheet({
-  visible,
-  onClose,
-  postId,
-  onReplyCountChange,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  postId: string;
-  onReplyCountChange: (postId: string, delta: number) => void;
-}) {
-  const { colors } = useTheme();
-  const { user, profile } = useAuth();
-  const insets = useSafeAreaInsets();
-  const { height: screenH } = useWindowDimensions();
-  const [comments, setComments] = useState<CommentItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [text, setText] = useState("");
-  const [sending, setSending] = useState(false);
-  const [sortMode, setSortMode] = useState<"recent" | "top">("recent");
-  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
-  const listRef = useRef<FlatList>(null);
-  const inputRef = useRef<TextInput>(null);
-  const sendScale = useRef(new Animated.Value(1)).current;
-
-  const loadComments = useCallback(() => {
-    if (!postId) return;
-    supabase
-      .from("post_replies")
-      .select("id, author_id, content, created_at, profiles!post_replies_author_id_fkey(display_name, handle, avatar_url)")
-      .eq("post_id", postId)
-      .order("created_at", { ascending: true })
-      .limit(200)
-      .then(({ data }) => {
-        if (data) {
-          setComments(data.map((r: any) => ({
-            id: r.id,
-            author_id: r.author_id,
-            content: r.content || "",
-            created_at: r.created_at,
-            profile: {
-              display_name: r.profiles?.display_name || "User",
-              handle: r.profiles?.handle || "user",
-              avatar_url: r.profiles?.avatar_url || null,
-            },
-          })));
-        }
-        setLoading(false);
-      });
-  }, [postId]);
-
-  useEffect(() => {
-    if (!visible || !postId) return;
-    setComments([]); setLoading(true); setText(""); setLikedIds(new Set()); setSortMode("recent");
-    loadComments();
-  }, [visible, postId, loadComments]);
-
-  useEffect(() => {
-    if (!visible || !postId) return;
-    const channel = supabase
-      .channel(`discover-comments:${postId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "post_replies", filter: `post_id=eq.${postId}` }, loadComments)
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "post_replies", filter: `post_id=eq.${postId}` }, loadComments)
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [visible, postId, loadComments]);
-
-  function handleLike(id: string) {
-    setLikedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-    Haptics.impactAsync("light").catch(() => {});
-  }
-
-  const sortedComments = sortMode === "top"
-    ? [...comments].sort((a, b) => {
-        const aScore = (likedIds.has(a.id) ? 1 : 0) + new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-        const bScore = (likedIds.has(b.id) ? 1 : 0);
-        return bScore - aScore;
-      })
-    : [...comments].reverse();
-
-  async function sendComment() {
-    if (!user || !text.trim()) return;
-    setSending(true);
-    Animated.sequence([
-      Animated.spring(sendScale, { toValue: 0.78, tension: 400, friction: 8, useNativeDriver: DC_USE_NATIVE }),
-      Animated.spring(sendScale, { toValue: 1, tension: 400, friction: 8, useNativeDriver: DC_USE_NATIVE }),
-    ]).start();
-    Haptics.impactAsync("light").catch(() => {});
-    const { data, error } = await supabase
-      .from("post_replies")
-      .insert({ post_id: postId, author_id: user.id, content: text.trim() })
-      .select("id, author_id, content, created_at")
-      .single();
-    if (!error && data) {
-      setComments((prev) => [...prev, {
-        id: data.id,
-        author_id: data.author_id,
-        content: data.content,
-        created_at: data.created_at,
-        profile: {
-          display_name: profile?.display_name || "You",
-          handle: profile?.handle || "you",
-          avatar_url: profile?.avatar_url || null,
-        },
-      }]);
-      onReplyCountChange(postId, 1);
-      setText("");
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
-    } else if (error) {
-      showAlert(
-        "Comment failed",
-        "Your comment could not be posted. If this keeps happening, check the Status page under Settings → Help & About.",
-        [{ text: "OK" }],
-      );
-    }
-    setSending(false);
-  }
-
-  // Adaptive height: short sheet when few comments, tall when many
-  const sheetMaxHeight = React.useMemo(() => {
-    if (loading || comments.length === 0) return Math.min(380, screenH * 0.5);
-    if (comments.length <= 3) return Math.min(480, screenH * 0.6);
-    if (comments.length <= 6) return Math.min(580, screenH * 0.72);
-    return screenH * 0.85;
-  }, [loading, comments.length, screenH]);
-
-  const charLeft = 500 - text.length;
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "web" ? undefined : "height"}
-        style={{ flex: 1, justifyContent: "flex-end" }}
-      >
-        {/* Backdrop — absolute fill so it doesn't push the sheet */}
-        <TouchableOpacity
-          style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.45)" }]}
-          activeOpacity={1}
-          onPress={onClose}
-        />
-
-        <View style={[dcStyles.sheet, { maxHeight: sheetMaxHeight, backgroundColor: colors.surface, paddingBottom: Math.max(insets.bottom, 16) }]}>
-          {/* Handle */}
-          <View style={[dcStyles.handle, { backgroundColor: colors.border }]} />
-
-          {/* Header */}
-          <View style={dcStyles.sheetHeader}>
-            <Text style={[dcStyles.sheetTitle, { color: colors.text }]}>
-              Comments{comments.length > 0 ? <Text style={{ color: colors.textMuted, fontFamily: "Inter_400Regular", fontSize: 14 }}> · {formatNum(comments.length)}</Text> : null}
-            </Text>
-            <View style={dcStyles.sortRow}>
-              {(["recent", "top"] as const).map((mode) => (
-                <TouchableOpacity
-                  key={mode}
-                  onPress={() => setSortMode(mode)}
-                  style={[dcStyles.sortTab, sortMode === mode && { backgroundColor: colors.accent + "22", borderColor: colors.accent + "55" }]}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[dcStyles.sortTabText, { color: sortMode === mode ? colors.accent : colors.textMuted }]}>
-                    {mode === "recent" ? "Recent" : "Top"}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TouchableOpacity onPress={onClose} hitSlop={12}>
-              <Ionicons name="close" size={22} color={colors.textMuted} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Divider */}
-          <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
-
-          {/* Comment list — flexShrink so it yields space to the input bar on web */}
-          <View style={{ flexShrink: 1, minHeight: 80 }}>
-            {loading ? (
-              <View style={{ padding: 24, alignItems: "center" }}>
-                <ActivityIndicator color={colors.accent} />
-              </View>
-            ) : comments.length === 0 ? (
-              <View style={dcStyles.emptyBox}>
-                <Ionicons name="chatbubble-outline" size={36} color={colors.textMuted} />
-                <Text style={[dcStyles.emptyText, { color: colors.textMuted }]}>No comments yet</Text>
-                <Text style={[dcStyles.emptySub, { color: colors.textMuted }]}>Be the first to comment</Text>
-              </View>
-            ) : (
-              <FlatList
-                ref={listRef}
-                data={sortedComments}
-                keyExtractor={(c) => c.id}
-                style={{ flexGrow: 0, maxHeight: Math.max(sheetMaxHeight - 210 - Math.max(insets.bottom, 16), 60) }}
-                contentContainerStyle={{ padding: 12, gap: 14 }}
-                showsVerticalScrollIndicator={false}
-                onRefresh={loadComments}
-                refreshing={loading}
-                renderItem={({ item: c }) => (
-                  <DcCommentRow
-                    c={c} colors={colors}
-                    liked={likedIds.has(c.id)}
-                    onLike={handleLike}
-                  />
-                )}
-              />
-            )}
-          </View>
-
-          {/* Input area */}
-          {user ? (
-            <View>
-              {/* Quick emoji bar */}
-              <View style={[dcStyles.emojiBar, { borderTopColor: colors.border }]}>
-                {DC_QUICK_EMOJIS.map((e) => (
-                  <TouchableOpacity key={e} style={dcStyles.emojiBtn} onPress={() => setText((t) => t + e)} activeOpacity={0.6}>
-                    <Text style={dcStyles.emojiText}>{e}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Text input row */}
-              <View style={[dcStyles.inputRow, { borderTopColor: colors.border, backgroundColor: colors.surface }]}>
-                {profile?.avatar_url ? (
-                  <ExpoImage source={{ uri: profile.avatar_url }} style={dcStyles.inputAvatar} contentFit="cover" />
-                ) : (
-                  <View style={[dcStyles.inputAvatar, { backgroundColor: colors.accent + "22", alignItems: "center", justifyContent: "center" }]}>
-                    <Text style={{ fontSize: 13, color: colors.accent, fontFamily: "Inter_700Bold" }}>
-                      {(profile?.display_name || "U").slice(0, 1).toUpperCase()}
-                    </Text>
-                  </View>
-                )}
-                <View style={{ flex: 1, position: "relative" }}>
-                  <TextInput
-                    ref={inputRef}
-                    style={[dcStyles.input, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border }]}
-                    placeholder="Add a comment…"
-                    placeholderTextColor={colors.textMuted}
-                    value={text}
-                    onChangeText={setText}
-                    multiline
-                    maxLength={500}
-                  />
-                  {text.length > 400 && (
-                    <Text style={[dcStyles.charCounter, { color: charLeft < 20 ? "#FF2D55" : colors.textMuted }]}>{charLeft}</Text>
-                  )}
-                </View>
-                <Animated.View style={{ transform: [{ scale: sendScale }] }}>
-                  <TouchableOpacity
-                    onPress={sendComment}
-                    disabled={!text.trim() || sending}
-                    style={[dcStyles.sendBtn, { backgroundColor: text.trim() ? colors.accent : colors.border }]}
-                  >
-                    {sending
-                      ? <ActivityIndicator size={14} color="#fff" />
-                      : <Ionicons name="arrow-up" size={16} color="#fff" />
-                    }
-                  </TouchableOpacity>
-                </Animated.View>
-              </View>
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={{ paddingVertical: 14, alignItems: "center" }}
-              onPress={() => { onClose(); router.push("/(auth)/login"); }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderColor: colors.accent + "50", backgroundColor: colors.accent + "18" }}>
-                <Ionicons name="person-circle-outline" size={16} color={colors.accent} />
-                <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.accent }}>Sign in to comment</Text>
-              </View>
-            </TouchableOpacity>
-          )}
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
 function usePostUpload() {
   return useSyncExternalStore(subscribePostUpload, getPostUploadState);
 }
@@ -568,7 +219,7 @@ function BookmarkButton({ bookmarked, onPress }: { bookmarked: boolean; onPress:
   );
 }
 
-const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImagePress, onRequireAuth, colWidth, onOpenComments }: { item: PostItem; onToggleLike: (postId: string) => void; onToggleBookmark: (postId: string) => void; onToggleFollow: (authorId: string) => void; onImagePress?: (images: string[], index: number) => void; onRequireAuth?: () => void; colWidth?: number; onOpenComments: (postId: string) => void }) {
+const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImagePress, onRequireAuth, colWidth, onOpenComments }: { item: PostItem; onToggleLike: (postId: string) => void; onToggleBookmark: (postId: string) => void; onToggleFollow: (authorId: string) => void; onImagePress?: (images: string[], index: number) => void; onRequireAuth?: () => void; colWidth?: number; onOpenComments: (postId: string, authorId: string) => void }) {
   const { colors } = useTheme();
   const { preferredLang } = useLanguage();
   const { width: screenW } = useWindowDimensions();
@@ -579,8 +230,8 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
   const [displayContent, setDisplayContent] = useState(item.content);
   const [isTranslated, setIsTranslated] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
-  const [capturing, setCapturing] = useState(false);
-  const cardRef = useRef<any>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareablePost, setShareablePost] = useState<ShareablePost | null>(null);
   const isOwnPost = currentUser?.id === item.author_id;
   const showFollowBtn = !isOwnPost && !item.isFollowing;
 
@@ -621,62 +272,35 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
     router.push({ pathname: "/p/[id]", params: { id: encodeId(item.id) } });
   }
 
-  async function capturePostImage() {
+  function capturePostImage() {
     setMenuVisible(false);
-    if (!cardRef.current) return;
-    setCapturing(true);
-    try {
-      if (Platform.OS === "web") {
-        const html2canvas = (await import("html2canvas")).default;
-        let el: HTMLElement | null = null;
-        if (typeof document !== "undefined") {
-          el = document.querySelector("[data-post-card=\"" + item.id + "\"]") as HTMLElement | null;
-        }
-        if (!el) {
-          showAlert("Error", "Capture not available.");
-          setCapturing(false);
-          return;
-        }
-        const canvas = await html2canvas(el as HTMLElement, {
-          useCORS: true,
-          allowTaint: false,
-          backgroundColor: null,
-          scale: 2,
-        });
-        const dataUrl = canvas.toDataURL("image/png");
-        const link = document.createElement("a");
-        link.href = dataUrl;
-        link.download = `afuchat-post-${Date.now()}.png`;
-        link.click();
-      } else {
-        if (typeof (cardRef.current as any).capture !== "function") {
-          showAlert("Error", "Capture not available.");
-          setCapturing(false);
-          return;
-        }
-        const uri = await (cardRef.current as any).capture();
-        const Sharing = require("expo-sharing");
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: "Save Post Image" });
-        } else {
-          showAlert("Not available", "Sharing is not available on this device.");
-        }
-      }
-    } catch (err) {
-      showAlert("Error", "Could not capture post image.");
-    }
-    setCapturing(false);
+    setShareablePost({
+      id: item.id,
+      author_name: item.profile.display_name,
+      author_handle: item.profile.handle,
+      avatar_url: item.profile.avatar_url,
+      is_verified: item.is_verified,
+      is_org_verified: item.is_organization_verified,
+      created_at: item.created_at,
+      post_type: item.post_type,
+      content: item.content,
+      article_title: item.article_title ?? null,
+      like_count: item.likeCount,
+      reply_count: item.replyCount,
+      view_count: item.view_count,
+      bookmarked: item.bookmarked,
+      accent: colors.accent,
+    });
+    setShowShareModal(true);
   }
 
   return (
     <>
-      <ViewShot ref={cardRef} options={{ format: "png", quality: 1, result: "tmpfile" }}>
-        <TouchableOpacity
-          style={[styles.card, { backgroundColor: colors.background }]}
-          onPress={openPost}
-          activeOpacity={0.97}
-          {...(Platform.OS === "web" ? { dataSet: { postCard: item.id } } as any : {})}
-        >
+      <TouchableOpacity
+        style={[styles.card, { backgroundColor: colors.background }]}
+        onPress={openPost}
+        activeOpacity={0.97}
+      >
           {/* ── Header ── */}
           <View style={styles.cardHeader}>
             {item.org_page_id ? (
@@ -912,7 +536,7 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
             {/* Comments */}
             <TouchableOpacity
               style={styles.footerStat}
-              onPress={() => onOpenComments(item.id)}
+              onPress={() => onOpenComments(item.id, item.author_id)}
               activeOpacity={0.7}
             >
               <Ionicons name="chatbubble-outline" size={18} color={colors.textMuted} />
@@ -944,15 +568,13 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
             <BookmarkButton bookmarked={item.bookmarked} onPress={() => { if (!currentUser) { onRequireAuth?.(); return; } onToggleBookmark(item.id); }} />
           </View>
 
-          {/* AfuChat watermark — only rendered during image capture */}
-          {capturing && (
-            <View style={[styles.watermarkBar, { backgroundColor: colors.accent }]}>
-              <Ionicons name="chatbubble-ellipses" size={13} color="#fff" />
-              <Text style={styles.watermarkText}>AfuChat · afuchat.com</Text>
-            </View>
-          )}
         </TouchableOpacity>
-      </ViewShot>
+
+      <PostShareCaptureModal
+        post={shareablePost}
+        visible={showShareModal}
+        onClose={() => { setShowShareModal(false); setShareablePost(null); }}
+      />
 
       <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
         <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setMenuVisible(false)}>
@@ -965,11 +587,8 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
               <Ionicons name="share-outline" size={22} color={colors.accent} />
               <Text style={[styles.menuItemText, { color: colors.text }]}>Share Post</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={capturePostImage} disabled={capturing}>
-              {capturing
-                ? <ActivityIndicator size={22} color={colors.accent} />
-                : <Ionicons name="image-outline" size={22} color={colors.accent} />
-              }
+            <TouchableOpacity style={styles.menuItem} onPress={capturePostImage}>
+              <Ionicons name="image-outline" size={22} color={colors.accent} />
               <Text style={[styles.menuItemText, { color: colors.text }]}>Save as Image</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => setMenuVisible(false)}>
@@ -1029,11 +648,13 @@ export default function DiscoverScreen() {
   const [followingEmpty, setFollowingEmpty] = useState(false);
   const [bgRefreshing, setBgRefreshing] = useState(false);
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
+  const [commentPostAuthorId, setCommentPostAuthorId] = useState<string>("");
   const PAGE_SIZE = 30;
   const imgViewer = useImageViewer();
 
-  const onOpenComments = useCallback((postId: string) => {
+  const onOpenComments = useCallback((postId: string, authorId: string) => {
     setCommentPostId(postId);
+    setCommentPostAuthorId(authorId);
   }, []);
 
   const onCommentReplyCountChange = useCallback((postId: string, delta: number) => {
@@ -1998,7 +1619,8 @@ export default function DiscoverScreen() {
       <DiscoverCommentsSheet
         visible={!!commentPostId}
         postId={commentPostId ?? ""}
-        onClose={() => setCommentPostId(null)}
+        postAuthorId={commentPostAuthorId}
+        onClose={() => { setCommentPostId(null); setCommentPostAuthorId(""); }}
         onReplyCountChange={onCommentReplyCountChange}
       />
     </View>
@@ -2076,21 +1698,6 @@ const styles = StyleSheet.create({
   actionText: { fontSize: 13, fontFamily: "Inter_500Medium" },
   viewCount: { flexDirection: "row", alignItems: "center", gap: 4 },
   viewText: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  watermarkBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 9,
-    paddingHorizontal: 16,
-    backgroundColor: "#00BCD4",
-  },
-  watermarkText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: 0.5,
-  },
   videoCard: { marginHorizontal: 16, marginBottom: 2 },
   videoThumb: {
     height: 220,
@@ -2318,167 +1925,4 @@ const styles = StyleSheet.create({
   },
 });
 
-const dcStyles = StyleSheet.create({
-  sheet: {
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 20,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: "center",
-    marginTop: 10,
-    marginBottom: 6,
-  },
-  sheetHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-  },
-  sheetTitle: {
-    fontSize: 16,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: -0.2,
-  },
-  sortRow: {
-    flexDirection: "row",
-    gap: 6,
-  },
-  sortTab: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-  sortTabText: {
-    fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
-  },
-  emptyBox: {
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 48,
-  },
-  emptyText: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-    marginTop: 4,
-  },
-  emptySub: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-  },
-  commentRow: {
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "flex-start",
-  },
-  commentAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    overflow: "hidden",
-    flexShrink: 0,
-  },
-  commentAvatarFallback: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  commentAvatarLetter: {
-    fontSize: 15,
-    fontFamily: "Inter_700Bold",
-  },
-  commentBubble: {
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    gap: 2,
-  },
-  commentName: {
-    fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
-    marginBottom: 1,
-  },
-  commentText: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 20,
-  },
-  commentTime: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-    marginTop: 4,
-    marginLeft: 4,
-  },
-  emojiBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 2,
-  },
-  emojiBtn: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 6,
-  },
-  emojiText: {
-    fontSize: 20,
-  },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  inputAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    overflow: "hidden",
-    flexShrink: 0,
-  },
-  input: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 20,
-    borderWidth: 1,
-    maxHeight: 90,
-    minHeight: 38,
-  },
-  charCounter: {
-    position: "absolute",
-    right: 14,
-    bottom: 10,
-    fontSize: 10,
-    fontFamily: "Inter_500Medium",
-  },
-  sendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-});
+
