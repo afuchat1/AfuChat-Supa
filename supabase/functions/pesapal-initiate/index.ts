@@ -16,6 +16,7 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const PESAPAL_CONSUMER_KEY = Deno.env.get("PESAPAL_CONSUMER_KEY") ?? "";
 const PESAPAL_CONSUMER_SECRET = Deno.env.get("PESAPAL_CONSUMER_SECRET") ?? "";
+const PESAPAL_IPN_ID = Deno.env.get("PESAPAL_IPN_ID") ?? "";
 
 const IPN_URL = `${SUPABASE_URL}/functions/v1/pesapal-ipn`;
 const CALLBACK_URL = "https://afuchat.com/wallet/payment-complete";
@@ -36,8 +37,7 @@ async function pesapalToken(): Promise<string> {
 }
 
 async function getOrRegisterIPN(token: string): Promise<string> {
-  const existingIpnId = Deno.env.get("PESAPAL_IPN_ID");
-  if (existingIpnId) return existingIpnId;
+  if (PESAPAL_IPN_ID) return PESAPAL_IPN_ID;
   const res = await fetch(`${PESAPAL_BASE}/api/URLSetup/RegisterIPN`, {
     method: "POST",
     headers: {
@@ -85,9 +85,18 @@ Deno.serve(async (req: Request) => {
       auth: { persistSession: false },
     });
 
-    const bodyText = await req.text();
-    const body = JSON.parse(bodyText);
-    const { acoin_amount, currency } = body;
+    const body = await req.json();
+    const {
+      acoin_amount,
+      currency,
+      payment_method,
+      payment_data,
+    } = body as {
+      acoin_amount: number;
+      currency?: string;
+      payment_method?: "google_pay" | "card" | "mtn" | "airtel";
+      payment_data?: Record<string, string>;
+    };
 
     if (!acoin_amount || typeof acoin_amount !== "number" || acoin_amount < 50) {
       return new Response(
@@ -97,7 +106,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const amount_usd = parseFloat((acoin_amount * 0.01).toFixed(2));
-    const finalCurrency = (currency && typeof currency === "string") ? currency.toUpperCase() : "USD";
+    const finalCurrency = (currency || "USD").toUpperCase();
     const merchantRef = `AFUCHAT-${user.id.replace(/-/g, "").slice(0, 12)}-${Date.now()}`;
 
     const { data: profile } = await adminClient
@@ -106,7 +115,7 @@ Deno.serve(async (req: Request) => {
       .eq("id", user.id)
       .single();
 
-    const displayName = ((profile as { display_name?: string; handle?: string } | null)?.display_name || (profile as { display_name?: string; handle?: string } | null)?.handle || "AfuChat User").trim();
+    const displayName = ((profile as any)?.display_name || (profile as any)?.handle || "AfuChat User").trim();
     const nameParts = displayName.split(" ");
     const firstName = nameParts[0] || "AfuChat";
     const lastName = nameParts.slice(1).join(" ") || "User";
@@ -114,9 +123,8 @@ Deno.serve(async (req: Request) => {
     const token = await pesapalToken();
     const ipnId = await getOrRegisterIPN(token);
 
-    console.log(`[pesapal-initiate] ${merchantRef} user=${user.id} ${acoin_amount} ACoin $${amount_usd}`);
-
-    const orderPayload = {
+    // Build base order payload
+    const orderPayload: Record<string, unknown> = {
       id: merchantRef,
       currency: finalCurrency,
       amount: amount_usd,
@@ -127,9 +135,54 @@ Deno.serve(async (req: Request) => {
         email_address: user.email || "",
         first_name: firstName,
         last_name: lastName,
-        ...(user.phone ? { phone_number: user.phone } : {}),
       },
     };
+
+    // Apply payment-method-specific fields
+    if (payment_method === "mtn" || payment_method === "airtel") {
+      const phone = payment_data?.phone_number || "";
+      if (!phone) {
+        return new Response(
+          JSON.stringify({ error: "Phone number is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      const normalized = phone.startsWith("+")
+        ? phone.replace(/[^\d+]/g, "")
+        : `+${phone.replace(/\D/g, "")}`;
+      (orderPayload.billing_address as any).phone_number = normalized;
+      orderPayload.payment_method = payment_method === "mtn" ? "MTN" : "AIRTEL";
+
+    } else if (payment_method === "card") {
+      const { number, expiry_month, expiry_year, cvv, name_on_card } = payment_data || {};
+      if (!number || !expiry_month || !expiry_year || !cvv) {
+        return new Response(
+          JSON.stringify({ error: "Card details are incomplete" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      orderPayload.payment_method = "card";
+      orderPayload.card = {
+        number: number.replace(/\s/g, ""),
+        expiry_month,
+        expiry_year,
+        cvv,
+        name_on_card: name_on_card || displayName,
+      };
+
+    } else if (payment_method === "google_pay") {
+      const gpToken = payment_data?.token;
+      if (!gpToken) {
+        return new Response(
+          JSON.stringify({ error: "Google Pay token is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      orderPayload.payment_method = "googlepay";
+      orderPayload.google_pay_token = gpToken;
+    }
+
+    console.log(`[pesapal-initiate] ${merchantRef} user=${user.id} method=${payment_method} ${acoin_amount} ACoin $${amount_usd}`);
 
     const orderRes = await fetch(`${PESAPAL_BASE}/api/Transactions/SubmitOrderRequest`, {
       method: "POST",
@@ -145,8 +198,8 @@ Deno.serve(async (req: Request) => {
     if (!orderRes.ok) throw new Error(`Order submission failed (${orderRes.status}): ${orderText}`);
 
     const orderData = JSON.parse(orderText);
-    if (!orderData.redirect_url) throw new Error(`No redirect_url: ${orderText}`);
 
+    // Persist the order
     const { error: insertErr } = await adminClient.from("pesapal_orders").insert({
       user_id: user.id,
       merchant_reference: merchantRef,
@@ -160,9 +213,10 @@ Deno.serve(async (req: Request) => {
 
     return new Response(
       JSON.stringify({
-        redirect_url: orderData.redirect_url,
         merchant_reference: merchantRef,
-        tracking_id: orderData.order_tracking_id || null,
+        order_tracking_id: orderData.order_tracking_id || null,
+        redirect_url: orderData.redirect_url || null,
+        status: "pending",
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
