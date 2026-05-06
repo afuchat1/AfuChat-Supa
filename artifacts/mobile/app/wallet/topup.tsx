@@ -43,10 +43,13 @@ type Screen =
   | "card_form"
   | "mobile_form"
   | "google_pay"
+  | "mmo_webview"
   | "processing"
   | "verifying"
   | "success"
   | "failed";
+
+const PESAPAL_CALLBACK_URL = "https://afuchat.com/wallet/payment-complete";
 
 // ─── Card network detection ───────────────────────────────────────────────────
 
@@ -508,6 +511,7 @@ export default function TopUpScreen() {
   const [failureMsg, setFailureMsg] = useState("");
   const [processingMethod, setProcessingMethod] = useState<PaymentMethod>("card");
   const [manualChecking, setManualChecking] = useState(false);
+  const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
@@ -532,6 +536,7 @@ export default function TopUpScreen() {
     setFailureMsg("");
     setLoading(false);
     setManualChecking(false);
+    setRedirectUrl(null);
   }
 
   async function checkOrderStatus(ref: string): Promise<"completed" | "failed" | "pending"> {
@@ -622,8 +627,18 @@ export default function TopUpScreen() {
       setCreditedAcoin(amount);
       setMerchantRef(data.merchant_reference);
       setProcessingMethod(method);
-      setScreen("processing");
-      startPolling(data.merchant_reference);
+
+      const isMmo = method === "mtn" || method === "airtel";
+      if (isMmo && data.redirect_url) {
+        // Open Pesapal's hosted page in-app — this triggers the STK push
+        setRedirectUrl(data.redirect_url);
+        setScreen("mmo_webview");
+        // Start polling in background so we catch the IPN as soon as it fires
+        startPolling(data.merchant_reference);
+      } else {
+        setScreen("processing");
+        startPolling(data.merchant_reference);
+      }
     } catch (err: any) {
       showAlert("Payment Error", err?.message || "Could not start payment. Please try again.");
     } finally {
@@ -724,6 +739,92 @@ export default function TopUpScreen() {
       <View style={[styles.root, styles.resultScreen, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={Colors.brand} style={{ marginBottom: 24 }} />
         <Text style={[styles.resultTitle, { color: colors.text }]}>Verifying…</Text>
+      </View>
+    );
+  }
+
+  // ─── Mobile Money WebView — loads Pesapal hosted page to trigger STK push ────
+  if (screen === "mmo_webview" && redirectUrl) {
+    const isMtn = processingMethod === "mtn";
+
+    // Native: use a WebView that monitors navigation to the callback URL
+    if (Platform.OS !== "web" && WebView) {
+      return (
+        <View style={[styles.root, { backgroundColor: colors.background }]}>
+          <Header
+            title={isMtn ? "MTN Mobile Money" : "Airtel Money"}
+            onBack={() => {
+              if (pollRef.current) clearInterval(pollRef.current);
+              reset();
+            }}
+          />
+          <WebView
+            source={{ uri: redirectUrl }}
+            style={{ flex: 1 }}
+            onNavigationStateChange={(navState: { url?: string }) => {
+              const url = navState?.url || "";
+              if (url.startsWith(PESAPAL_CALLBACK_URL) || url.includes("payment-complete")) {
+                // Payment submitted — switch to polling screen
+                setRedirectUrl(null);
+                setScreen("processing");
+              }
+            }}
+            startInLoadingState
+            renderLoading={() => (
+              <View style={[styles.webviewLoader, { backgroundColor: colors.background }]}>
+                <ActivityIndicator size="large" color={Colors.brand} />
+                <Text style={[styles.resultSub, { color: colors.textMuted, marginTop: 16 }]}>
+                  Loading payment page…
+                </Text>
+              </View>
+            )}
+            originWhitelist={["*"]}
+            javaScriptEnabled
+            domStorageEnabled
+          />
+        </View>
+      );
+    }
+
+    // Web platform fallback — can't embed cross-origin, so open in new tab + poll manually
+    return (
+      <View style={[styles.root, styles.resultScreen, { backgroundColor: colors.background }]}>
+        <View style={[styles.processingCard, { backgroundColor: colors.surface }]}>
+          {isMtn ? <MtnLogo size={56} /> : <AirtelLogo size={56} />}
+          <Text style={[styles.resultTitle, { color: colors.text, marginTop: 16 }]}>
+            Complete Payment
+          </Text>
+          <Text style={[styles.resultSub, { color: colors.textMuted }]}>
+            {isMtn
+              ? "Tap below to open the MTN payment page. You'll receive a PIN prompt on your phone."
+              : "Tap below to open the Airtel payment page. You'll receive a PIN prompt on your phone."}
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.checkBtn, { backgroundColor: isMtn ? "#FFCB00" : "#E40000", marginBottom: 8 }]}
+            onPress={() => {
+              if (typeof window !== "undefined") window.open(redirectUrl, "_blank");
+            }}
+          >
+            <Text style={[styles.checkBtnText, { color: isMtn ? "#000" : "#fff" }]}>
+              Open Payment Page
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.checkBtn, { backgroundColor: Colors.brand, opacity: manualChecking ? 0.7 : 1 }]}
+            onPress={handleManualCheck}
+            disabled={manualChecking}
+          >
+            {manualChecking
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Text style={styles.checkBtnText}>I've completed the payment</Text>}
+          </TouchableOpacity>
+
+          <TouchableOpacity style={{ marginTop: 16 }} onPress={() => { if (pollRef.current) clearInterval(pollRef.current); reset(); }}>
+            <Text style={[styles.cancelLink, { color: colors.textMuted }]}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
