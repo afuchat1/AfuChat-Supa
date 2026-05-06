@@ -161,6 +161,7 @@ function RootLayoutNav() {
       <Stack.Screen name="support/ticket/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding/index" options={{ animation: "fade", gestureEnabled: false }} />
       <Stack.Screen name="referral" />
+      <Stack.Screen name="qr-scanner" options={{ headerShown: false, animation: "slide_from_bottom" }} />
       <Stack.Screen name="language-settings" />
       <Stack.Screen name="linked-accounts" />
       <Stack.Screen name="terms" options={bottomSheetAnim} />

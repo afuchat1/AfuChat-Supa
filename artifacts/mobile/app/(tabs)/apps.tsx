@@ -152,6 +152,14 @@ const CATEGORIES: Category[] = [
         featuredSub: "Your verifiable digital identity card.",
       },
       {
+        id: "qrscanner",
+        label: "QR Scanner",
+        icon: "qr-code",
+        gradient: ["#1C1C1E", "#3A3A3C"],
+        route: "/qr-scanner",
+        featuredSub: "Scan any QR code — links, Wi-Fi, contacts and more.",
+      },
+      {
         id: "saved",
         label: "Saved",
         icon: "bookmark",
