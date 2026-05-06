@@ -422,7 +422,7 @@ function DiscoverCommentsSheet({
                 ref={listRef}
                 data={sortedComments}
                 keyExtractor={(c) => c.id}
-                style={{ flexGrow: 0, maxHeight: sheetMaxHeight - 200 }}
+                style={{ flexGrow: 0, maxHeight: Math.max(sheetMaxHeight - 210 - Math.max(insets.bottom, 16), 60) }}
                 contentContainerStyle={{ padding: 12, gap: 14 }}
                 showsVerticalScrollIndicator={false}
                 onRefresh={loadComments}

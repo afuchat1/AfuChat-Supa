@@ -297,11 +297,12 @@ function TapHandler({
 function WebVideoPlayer({
   src, poster, active, paused, preloadOnly,
   onTogglePause, onDoubleTap, onLongPress,
-  onProgress, onBuffering, externalRef,
+  onProgress, onBuffering, onFirstPlay, externalRef,
 }: {
   src: string; poster?: string | null; active: boolean; paused: boolean; preloadOnly: boolean;
   onTogglePause: () => void; onDoubleTap?: () => void; onLongPress?: () => void;
   onProgress: (posMs: number, durMs: number) => void; onBuffering: (b: boolean) => void;
+  onFirstPlay?: () => void;
   externalRef?: React.MutableRefObject<HTMLVideoElement | null>;
 }) {
   const innerRef = useRef<HTMLVideoElement | null>(null);
@@ -390,7 +391,7 @@ function WebVideoPlayer({
           if (v.duration) onProgress(v.currentTime * 1000, v.duration * 1000);
         }}
         onWaiting={() => onBuffering(true)}
-        onPlaying={() => onBuffering(false)}
+        onPlaying={() => { onBuffering(false); onFirstPlay?.(); }}
         onCanPlay={() => onBuffering(false)}
         style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#000", pointerEvents: "none" }}
       />
@@ -611,12 +612,15 @@ function CommentsSheet({ visible, onClose, postId, postAuthorId, onReplyCountCha
 
   const sortedTree = getSortedTree();
   const charLeft = 500 - text.length;
+  const { height: sheetH } = useWindowDimensions();
+  const sheetMaxH = Math.min(sheetH * 0.88, 680);
+  const listMaxH = Math.max(sheetMaxH - 210 - Math.max(insets.bottom, 16), 80);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={cStyles.kavFull}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "web" ? undefined : "height"} style={cStyles.kavFull}>
         <Pressable style={cStyles.overlay} onPress={onClose}>
-          <Pressable onPress={() => {}} style={[cStyles.container, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <Pressable onPress={() => {}} style={[cStyles.container, { paddingBottom: Math.max(insets.bottom, 16), maxHeight: sheetMaxH }]}>
             {Platform.OS === "ios" ? (
               <BlurView intensity={95} tint="dark" style={[StyleSheet.absoluteFill, { borderTopLeftRadius: 20, borderTopRightRadius: 20 }]} />
             ) : (
@@ -663,7 +667,7 @@ function CommentsSheet({ visible, onClose, postId, postAuthorId, onReplyCountCha
                 ref={listRef}
                 data={sortedTree}
                 keyExtractor={(r) => r.id}
-                style={{ flex: 1 }}
+                style={{ flexShrink: 1, minHeight: 80, maxHeight: listMaxH }}
                 contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
                 showsVerticalScrollIndicator={false}
                 renderItem={({ item: r }) => (
@@ -752,7 +756,7 @@ function CommentsSheet({ visible, onClose, postId, postAuthorId, onReplyCountCha
 const cStyles = StyleSheet.create({
   kavFull: { flex: 1 },
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
-  container: { maxHeight: "88%", borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: "hidden" },
+  container: { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: "hidden" },
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.2)", alignSelf: "center", marginVertical: 12 },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 12, gap: 10 },
   title: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
@@ -902,6 +906,8 @@ function VideoItem({
   const webVideoRef = useRef<HTMLVideoElement | null>(null);
   const [paused, setPaused] = useState(false);
   const [buffering, setBuffering] = useState(false);
+  const [showBuffering, setShowBuffering] = useState(false);
+  const [videoStarted, setVideoStarted] = useState(false);
   const [progress, setProgress] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
   const [expanded, setExpanded] = useState(false);
@@ -912,6 +918,7 @@ function VideoItem({
   const doubleTapScale = useRef(new Animated.Value(0.3)).current;
   const viewRecorded = useRef(false);
   const cacheAttempted = useRef(false);
+  const bufferingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const resolved = useResolvedVideoSource(item.id, item.video_url, { targetHeight: 720 });
   const playbackUri = cachedUri || resolved.uri || item.video_url;
@@ -919,22 +926,28 @@ function VideoItem({
   const preloadOnly = !isActive && isNearActive;
   const showExpand = !!item.content && (item.content.split("\n").length > 2 || item.content.length > 120);
 
-  // Reset when leaving viewport
+  // Start pre-caching as soon as the video enters the preload window (not just when active)
+  useEffect(() => {
+    if (!isNearActive || cacheAttempted.current || !item.video_url) return;
+    cacheAttempted.current = true;
+    getCachedVideoUri(item.video_url).then((ex) => {
+      if (ex) setCachedUri(ex);
+      else cacheVideo(item.video_url).then((l) => { if (l) setCachedUri(l); });
+    });
+  }, [isNearActive]);
+
+  // Reset when leaving viewport; record view when becoming active
   useEffect(() => {
     if (!isActive) {
       setPaused(false);
       setProgress(0);
       setExpanded(false);
+      setVideoStarted(false);
+      setShowBuffering(false);
+      if (bufferingTimerRef.current) { clearTimeout(bufferingTimerRef.current); bufferingTimerRef.current = null; }
       if (!cachedUri) videoRef.current?.unloadAsync().catch(() => {});
     } else {
       if (!viewRecorded.current) { viewRecorded.current = true; onRecordView(item.id); }
-      if (!cacheAttempted.current && item.video_url) {
-        cacheAttempted.current = true;
-        getCachedVideoUri(item.video_url).then((ex) => {
-          if (ex) setCachedUri(ex);
-          else cacheVideo(item.video_url).then((l) => { if (l) setCachedUri(l); });
-        });
-      }
     }
   }, [isActive]);
 
@@ -965,7 +978,17 @@ function VideoItem({
 
   function onPlaybackStatus(status: AVPlaybackStatus) {
     if (!status.isLoaded) return;
-    setBuffering(status.isBuffering);
+    const isNowBuffering = status.isBuffering;
+    setBuffering(isNowBuffering);
+    if (isNowBuffering) {
+      if (!bufferingTimerRef.current) {
+        bufferingTimerRef.current = setTimeout(() => { setShowBuffering(true); bufferingTimerRef.current = null; }, 400);
+      }
+    } else {
+      if (bufferingTimerRef.current) { clearTimeout(bufferingTimerRef.current); bufferingTimerRef.current = null; }
+      setShowBuffering(false);
+      if ((status as any).isPlaying) setVideoStarted(true);
+    }
     if (status.durationMillis && status.durationMillis > 0) {
       setDurationMs(status.durationMillis);
       const frac = status.positionMillis / status.durationMillis;
@@ -995,7 +1018,19 @@ function VideoItem({
             setProgress(frac);
             if (frac >= 0.97) clearVideoProgress(item.id); else saveVideoProgress(item.id, frac);
           }}
-          onBuffering={setBuffering} externalRef={webVideoRef}
+          onBuffering={(b) => {
+            setBuffering(b);
+            if (b) {
+              if (!bufferingTimerRef.current) {
+                bufferingTimerRef.current = setTimeout(() => { setShowBuffering(true); bufferingTimerRef.current = null; }, 400);
+              }
+            } else {
+              if (bufferingTimerRef.current) { clearTimeout(bufferingTimerRef.current); bufferingTimerRef.current = null; }
+              setShowBuffering(false);
+            }
+          }}
+          onFirstPlay={() => setVideoStarted(true)}
+          externalRef={webVideoRef}
         />
       ) : <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />}
     </View>
@@ -1030,7 +1065,19 @@ function VideoItem({
       {videoElement}
 
       {/* Overlays — pointerEvents="none" so touches pass through to TapHandler */}
-      {buffering && isActive && (
+      {/* Poster thumbnail: persists until first frame renders, eliminates black flash on swipe */}
+      {item.image_url && !videoStarted && (
+        <View style={[StyleSheet.absoluteFill, { pointerEvents: "none" }]}>
+          <ExpoImage
+            source={{ uri: item.image_url }}
+            style={StyleSheet.absoluteFill}
+            contentFit="contain"
+            priority="high"
+          />
+        </View>
+      )}
+
+      {showBuffering && isActive && (
         <View style={vStyles.centerOverlay} pointerEvents="none">
           <ActivityIndicator color="rgba(255,255,255,0.7)" size="small" />
         </View>
@@ -1760,7 +1807,7 @@ export default function VideoPlayerScreen() {
               <VideoItem
                 item={item}
                 isActive={index === activeIndex}
-                isNearActive={Math.abs(index - activeIndex) <= 1}
+                isNearActive={Math.abs(index - activeIndex) <= 2}
                 isFollowing={followingSet.has(item.author_id)}
                 isSelf={user?.id === item.author_id}
                 {...videoItemProps}
@@ -1783,7 +1830,7 @@ export default function VideoPlayerScreen() {
             <VideoItem
               item={item}
               isActive={index === activeIndex}
-              isNearActive={Math.abs(index - activeIndex) <= 1}
+              isNearActive={Math.abs(index - activeIndex) <= 2}
               isFollowing={followingSet.has(item.author_id)}
               isSelf={user?.id === item.author_id}
               {...videoItemProps}
