@@ -625,7 +625,7 @@ export default function ArticleDetailScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 52 : 0}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 52 : 0}>
         <FlatList
           data={buildArticleReplyTree(replies)}
           keyExtractor={(r) => r.id}
@@ -740,7 +740,7 @@ const styles = StyleSheet.create({
   replyName: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   replyTime: { fontSize: 12, fontFamily: "Inter_400Regular" },
   replyContent: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 21 },
-  replyBar: { flexDirection: "row", alignItems: "flex-end", gap: 10, paddingHorizontal: 16, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  replyBar: { flexDirection: "row", alignItems: "flex-end", gap: 10, paddingHorizontal: 16, paddingTop: 10 },
   replyInput: { flex: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, fontFamily: "Inter_400Regular", maxHeight: 100 },
   sendBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   signInBar: { alignItems: "center", paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth },

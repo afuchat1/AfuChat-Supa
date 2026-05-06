@@ -272,7 +272,7 @@ export default function ViewStoryScreen() {
   });
 
   return (
-    <View style={[styles.root, { backgroundColor: "#0D0D0D" }]}>
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[styles.root, { backgroundColor: "#0D0D0D" }]}>
       {story.media_type === "video" ? (
         <Video
           source={{ uri: story.media_url }}
@@ -370,11 +370,7 @@ export default function ViewStoryScreen() {
       ) : null}
 
       {!showViewers && !showShareSheet && (
-        <KeyboardAvoidingView
-          behavior="padding"
-          keyboardVerticalOffset={0}
-          style={[styles.commentBar, { paddingBottom: insets.bottom + 8 }]}
-        >
+        <View style={[styles.commentBar, { paddingBottom: insets.bottom + 8 }]}>
           <TextInput
             style={styles.commentInput}
             placeholder={isOwner ? "Your story…" : "Send a comment…"}
@@ -401,7 +397,7 @@ export default function ViewStoryScreen() {
           <TouchableOpacity style={styles.shareBtn} onPress={openShareSheet} activeOpacity={0.8}>
             <Ionicons name="share-social" size={20} color="#fff" />
           </TouchableOpacity>
-        </KeyboardAvoidingView>
+        </View>
       )}
 
       {showShareSheet && (
@@ -515,7 +511,7 @@ export default function ViewStoryScreen() {
           </Animated.View>
         </>
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
