@@ -506,6 +506,8 @@ export default function TopUpScreen() {
   const [merchantRef, setMerchantRef] = useState<string | null>(null);
   const [creditedAcoin, setCreditedAcoin] = useState(0);
   const [failureMsg, setFailureMsg] = useState("");
+  const [processingMethod, setProcessingMethod] = useState<PaymentMethod>("card");
+  const [manualChecking, setManualChecking] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
@@ -529,6 +531,16 @@ export default function TopUpScreen() {
     setCreditedAcoin(0);
     setFailureMsg("");
     setLoading(false);
+    setManualChecking(false);
+  }
+
+  async function checkOrderStatus(ref: string): Promise<"completed" | "failed" | "pending"> {
+    const { data: order } = await supabase
+      .from("pesapal_orders")
+      .select("status")
+      .eq("merchant_reference", ref)
+      .maybeSingle();
+    return (order?.status as any) || "pending";
   }
 
   const startPolling = useCallback((ref: string) => {
@@ -536,25 +548,48 @@ export default function TopUpScreen() {
     let attempts = 0;
     pollRef.current = setInterval(async () => {
       attempts++;
-      if (attempts > 36) { clearInterval(pollRef.current!); return; }
+      if (attempts > 36) {
+        clearInterval(pollRef.current!);
+        setFailureMsg(
+          "Payment confirmation is taking longer than expected. If money was deducted from your account, it will be credited automatically within a few minutes.",
+        );
+        setScreen("failed");
+        return;
+      }
       try {
-        const { data: order } = await supabase
-          .from("pesapal_orders")
-          .select("status")
-          .eq("merchant_reference", ref)
-          .maybeSingle();
-        if (order?.status === "completed") {
+        const status = await checkOrderStatus(ref);
+        if (status === "completed") {
           clearInterval(pollRef.current!);
           await refreshProfile();
           Haptics.notificationAsync("success");
           setScreen("success");
-        } else if (order?.status === "failed" || order?.status === "invalid") {
+        } else if (status === "failed" || status === "invalid") {
           clearInterval(pollRef.current!);
+          setFailureMsg("Your payment could not be completed. No funds were charged.");
           setScreen("failed");
         }
       } catch {}
     }, 5000);
   }, [refreshProfile]);
+
+  async function handleManualCheck() {
+    if (!merchantRef || manualChecking) return;
+    setManualChecking(true);
+    try {
+      const status = await checkOrderStatus(merchantRef);
+      if (status === "completed") {
+        if (pollRef.current) clearInterval(pollRef.current);
+        await refreshProfile();
+        Haptics.notificationAsync("success");
+        setScreen("success");
+      } else if (status === "failed" || status === "invalid") {
+        if (pollRef.current) clearInterval(pollRef.current);
+        setFailureMsg("Your payment could not be completed. No funds were charged.");
+        setScreen("failed");
+      }
+    } catch {}
+    setManualChecking(false);
+  }
 
   async function initiatePayment(
     method: PaymentMethod,
@@ -586,6 +621,7 @@ export default function TopUpScreen() {
 
       setCreditedAcoin(amount);
       setMerchantRef(data.merchant_reference);
+      setProcessingMethod(method);
       setScreen("processing");
       startPolling(data.merchant_reference);
     } catch (err: any) {
@@ -632,22 +668,52 @@ export default function TopUpScreen() {
   // ─── Result screens ───────────────────────────────────────────────────────
 
   if (screen === "processing") {
+    const isMobileMoney = processingMethod === "mtn" || processingMethod === "airtel";
+    const methodHint = processingMethod === "mtn"
+      ? "Check your phone for an MTN Mobile Money prompt and enter your PIN to complete."
+      : processingMethod === "airtel"
+      ? "Check your phone for an Airtel Money prompt and enter your PIN to complete."
+      : processingMethod === "google_pay"
+      ? "Waiting for Google Pay confirmation…"
+      : "Verifying your card payment…";
+
     return (
       <View style={[styles.root, styles.resultScreen, { backgroundColor: colors.background }]}>
         <View style={[styles.processingCard, { backgroundColor: colors.surface }]}>
           <ActivityIndicator size="large" color={Colors.brand} style={{ marginBottom: 20 }} />
           <Text style={[styles.resultTitle, { color: colors.text }]}>Processing…</Text>
-          <Text style={[styles.resultSub, { color: colors.textMuted }]}>
-            Confirming your payment
-          </Text>
+          <Text style={[styles.resultSub, { color: colors.textMuted }]}>{methodHint}</Text>
+
           {merchantRef && (
-            <View style={[styles.refRow, { backgroundColor: colors.inputBg }]}>
+            <View style={[styles.refRow, { backgroundColor: colors.inputBg, marginBottom: 16 }]}>
               <Text style={[styles.refLabel, { color: colors.textMuted }]}>Reference</Text>
               <Text style={[styles.refValue, { color: colors.text }]} numberOfLines={1}>
                 {merchantRef.slice(-16)}
               </Text>
             </View>
           )}
+
+          {isMobileMoney && (
+            <TouchableOpacity
+              style={[styles.checkBtn, { backgroundColor: Colors.brand, opacity: manualChecking ? 0.7 : 1 }]}
+              onPress={handleManualCheck}
+              disabled={manualChecking}
+            >
+              {manualChecking
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={styles.checkBtnText}>I've completed the payment</Text>}
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={{ marginTop: 16 }}
+            onPress={() => {
+              if (pollRef.current) clearInterval(pollRef.current);
+              reset();
+            }}
+          >
+            <Text style={[styles.cancelLink, { color: colors.textMuted }]}>Cancel</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -1075,4 +1141,10 @@ const styles = StyleSheet.create({
     position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
     alignItems: "center", justifyContent: "center",
   },
+  checkBtn: {
+    width: "100%", borderRadius: 12, paddingVertical: 14,
+    alignItems: "center", justifyContent: "center", marginTop: 4,
+  },
+  checkBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  cancelLink: { fontSize: 14, fontFamily: "Inter_400Regular" },
 });
