@@ -1,5 +1,8 @@
 import { supabase } from "@/lib/supabase";
 
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
+
 type NotifyParams = {
   userId: string;
   title: string;
@@ -12,15 +15,38 @@ type NotifyParams = {
   referenceType?: string | null;
 };
 
+async function dispatchPush(userId: string, title: string, body: string, data?: Record<string, string>) {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token || !SUPABASE_URL) return;
+
+    fetch(`${SUPABASE_URL}/functions/v1/send-push-notification`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${token}`,
+      },
+      body: JSON.stringify({ userId, title, body, data: data || {} }),
+    }).catch(() => {});
+  } catch {
+  }
+}
+
 async function callNotify(params: NotifyParams) {
   const {
-    userId, notificationType, actorId,
+    userId, title, body, data, notificationType, actorId,
     postId, referenceId, referenceType,
   } = params;
 
-  // Push notifications are now handled server-side by the API watcher which
-  // listens to `messages` and `notifications` table inserts via Supabase
-  // Realtime. No client-side push call needed here.
+  // Fire push via Supabase edge function (runs on Supabase servers, always has the service
+  // role key). This is the primary push path when the API server watcher is unavailable.
+  // The server-side realtime watcher also sends push when SUPABASE_SERVICE_ROLE_KEY is set,
+  // but the edge function ensures pushes work regardless of Replit secret configuration.
+  if (title && body) {
+    dispatchPush(userId, title, body, data);
+  }
 
   // Insert in-app notification record (client-side, works independently of push)
   if (notificationType) {
