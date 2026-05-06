@@ -2702,48 +2702,71 @@ STRICT RULES:
       showAlert("Message limit", `You can only send one message until ${chatInfo?.other_name || "this user"} replies or follows you.`);
       return;
     }
-    setSending(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const activeChatId = await getOrCreateChatId();
-    if (!activeChatId) { setSending(false); return; }
+    if (!activeChatId) return;
 
+    // Capture all values before clearing preview state
+    const { uri, type, name, mimeType } = attachmentPreview;
+    const caption = input.trim();
+    const label = caption || (type === "image" ? "📷 Photo" : type === "video" ? "🎥 Video" : `📎 ${name || "File"}`);
+
+    // Show optimistic message immediately with local URI — user sees their content right away
+    const tempId = `pending-${Date.now()}`;
+    setMessages((prev) => [{
+      id: tempId,
+      chat_id: activeChatId,
+      sender_id: user.id,
+      encrypted_content: label,
+      sent_at: new Date().toISOString(),
+      sender: { display_name: profile?.display_name || "You", avatar_url: profile?.avatar_url || null, handle: profile?.handle || "" },
+      attachment_url: uri,
+      attachment_type: type,
+      _pending: true,
+      reactions: [],
+    }, ...prev]);
+
+    // Close preview and clear input immediately
+    setAttachmentPreview(null);
+    setInput("");
+    saveDraft("");
+
+    // Upload and insert in the background
     try {
-      const caption = input.trim();
-      const label = caption || (attachmentPreview.type === "image" ? "📷 Photo" : `📎 ${attachmentPreview.name || "File"}`);
-
       const { publicUrl, error: uploadErr } = await uploadChatMedia(
         "chat-attachments",
         activeChatId,
         user.id,
-        attachmentPreview.uri,
-        attachmentPreview.name || undefined,
-        attachmentPreview.mimeType,
+        uri,
+        name || undefined,
+        mimeType,
       );
 
       if (uploadErr || !publicUrl) {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
         showAlert("Upload failed", uploadErr || "Could not upload file. Please try again.");
-        setSending(false);
         return;
       }
 
-      await supabase.from("messages").insert({
+      const { data: inserted } = await supabase.from("messages").insert({
         chat_id: activeChatId,
         sender_id: user.id,
         encrypted_content: label,
         attachment_url: publicUrl,
-        attachment_type: attachmentPreview.type,
-      });
+        attachment_type: type,
+      }).select("id").single();
 
-      setInput("");
-      saveDraft("");
-      loadMessages();
+      // Replace optimistic bubble with real message (real URL + real DB id)
+      setMessages((prev) => prev.map((m) =>
+        m.id === tempId
+          ? { ...m, id: inserted?.id || tempId, attachment_url: publicUrl, _pending: false }
+          : m
+      ));
     } catch (e: any) {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
       showAlert("Upload failed", e?.message || "Could not upload file");
     }
-
-    setAttachmentPreview(null);
-    setSending(false);
   }
 
   async function sendGifMessage(gifUrl: string) {

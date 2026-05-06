@@ -912,6 +912,7 @@ function VideoItem({
   const [durationMs, setDurationMs] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [cachedUri, setCachedUri] = useState<string | null>(null);
+  const [videoError, setVideoError] = useState(false);
   const [progressBarWidth, setProgressBarWidth] = useState(0);
   const heartScale = useRef(new Animated.Value(1)).current;
   const doubleTapOpacity = useRef(new Animated.Value(0)).current;
@@ -921,7 +922,8 @@ function VideoItem({
   const bufferingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const resolved = useResolvedVideoSource(item.id, item.video_url, { targetHeight: 720 });
-  const playbackUri = cachedUri || resolved.uri || item.video_url;
+  // When an error occurs fall back directly to the raw video_url, bypassing cache/manifest
+  const playbackUri = videoError ? item.video_url : (cachedUri || resolved.uri || item.video_url);
   const shouldMountVideo = isActive || isNearActive;
   const preloadOnly = !isActive && isNearActive;
   const showExpand = !!item.content && (item.content.split("\n").length > 2 || item.content.length > 120);
@@ -944,6 +946,7 @@ function VideoItem({
       setExpanded(false);
       setVideoStarted(false);
       setShowBuffering(false);
+      setVideoError(false);
       if (bufferingTimerRef.current) { clearTimeout(bufferingTimerRef.current); bufferingTimerRef.current = null; }
       if (!cachedUri) videoRef.current?.unloadAsync().catch(() => {});
     } else {
@@ -1048,6 +1051,12 @@ function VideoItem({
           posterSource={item.image_url ? { uri: item.image_url } : undefined}
           usePosterImage={!!item.image_url}
           onPlaybackStatusUpdate={onPlaybackStatus}
+          onError={() => {
+            if (!videoError) {
+              setCachedUri(null);
+              setVideoError(true);
+            }
+          }}
         />
       ) : <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />}
 
@@ -1572,7 +1581,7 @@ export default function VideoPlayerScreen() {
   const handleRecordView = useCallback(async (postId: string) => {
     if (!user || recordedViews.current.has(postId)) return;
     recordedViews.current.add(postId);
-    await supabase.from("post_views").upsert({ post_id: postId, viewer_id: user.id }, { onConflict: "post_id,viewer_id" }).catch(() => {});
+    supabase.from("post_views").upsert({ post_id: postId, viewer_id: user.id }, { onConflict: "post_id,viewer_id" }).then(null, () => {});
     setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, view_count: v.view_count + 1 } : v));
   }, [user]);
 
@@ -1636,7 +1645,7 @@ export default function VideoPlayerScreen() {
       const url = await resolveDownloadUrl();
       const dest = `${FileSystem.cacheDirectory ?? ""}afuchat_dl_${item.id}.mp4`;
       const { uri, status: dlStatus } = await FileSystem.downloadAsync(url, dest);
-      if (dlStatus !== 200) throw new Error(`HTTP ${dlStatus}`);
+      if (!uri || (dlStatus !== undefined && (dlStatus < 200 || dlStatus >= 400))) throw new Error(`HTTP ${dlStatus}`);
       await MediaLibrary.createAssetAsync(uri);
       await FileSystem.deleteAsync(uri, { idempotent: true });
       setDownloading(false); showToast("Saved to your device");

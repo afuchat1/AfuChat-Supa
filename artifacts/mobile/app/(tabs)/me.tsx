@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { supabase } from "@/lib/supabase";
 import {
   Platform,
   ScrollView,
@@ -183,42 +184,50 @@ function XpLevelBar({ xp }: { xp: number }) {
   );
 }
 
+function fmtCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
 export default function MeScreen() {
   const { colors, accent } = useTheme();
   const { profile, isPremium, subscription, loading, user } = useAuth();
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [hasCompanyPage, setHasCompanyPage] = useState(false);
-  // true when the banner should be hidden (persisted across tab switches / app restarts)
   const [verifyBannerDismissed, setVerifyBannerDismissed] = useState(true);
-  // true when a verification application already exists (any status)
   const [hasVerifApp, setHasVerifApp] = useState(false);
-  // true when the user's org page itself is already verified (organization_pages.is_verified)
   const [isOrgPageVerified, setIsOrgPageVerified] = useState(false);
+  const [followerCount, setFollowerCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [postCount, setPostCount] = useState(0);
   const isAdmin = !!profile?.is_admin;
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (!user) return;
-    import("@/lib/supabase").then(({ supabase }) => {
-      // Check for company page and existing verification app in parallel
-      Promise.all([
-        supabase
-          .from("organization_pages")
-          .select("id, is_verified", { count: "exact" })
-          .eq("admin_id", user.id),
-        supabase
-          .from("business_verification_requests")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", user.id),
-      ]).then(([{ data: pageData, count: pageCount }, { count: appCount }]) => {
-        setHasCompanyPage((pageCount ?? 0) > 0);
-        setHasVerifApp((appCount ?? 0) > 0);
-        setIsOrgPageVerified(!!(pageData && (pageData as any[]).some((p: any) => p.is_verified)));
-      });
+    // Fetch follower/following/post counts
+    Promise.all([
+      supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", user.id),
+      supabase.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", user.id),
+      supabase.from("posts").select("*", { count: "exact", head: true }).eq("author_id", user.id),
+    ]).then(([{ count: fc }, { count: fgc }, { count: pc }]) => {
+      setFollowerCount(fc ?? 0);
+      setFollowingCount(fgc ?? 0);
+      setPostCount(pc ?? 0);
     });
-    // Load persisted banner dismissal from storage
+
+    // Check for company page and existing verification app in parallel
+    Promise.all([
+      supabase.from("organization_pages").select("id, is_verified", { count: "exact" }).eq("admin_id", user.id),
+      supabase.from("business_verification_requests").select("id", { count: "exact", head: true }).eq("user_id", user.id),
+    ]).then(([{ data: pageData, count: pageCount }, { count: appCount }]) => {
+      setHasCompanyPage((pageCount ?? 0) > 0);
+      setHasVerifApp((appCount ?? 0) > 0);
+      setIsOrgPageVerified(!!(pageData && (pageData as any[]).some((p: any) => p.is_verified)));
+    });
+
     AsyncStorage.getItem("afu_verify_business_banner_dismissed").then((val) => {
-      // Default visible (false = not dismissed) only when no stored value
       setVerifyBannerDismissed(val === "1");
     });
   }, [user?.id]);
@@ -306,6 +315,36 @@ export default function MeScreen() {
           <Ionicons name="chevron-forward" size={14} color={colors.accent} style={{ marginLeft: "auto" }} />
         </TouchableOpacity>
       )}
+
+      {/* Social stats — followers / following / posts */}
+      <View style={[styles.socialRow, { backgroundColor: colors.surface }]}>
+        <TouchableOpacity
+          style={styles.socialCell}
+          activeOpacity={0.7}
+          onPress={() => profile?.id && router.push({ pathname: "/followers", params: { userId: profile.id, type: "followers", ownerHandle: profile.handle } } as any)}
+        >
+          <Text style={[styles.socialValue, { color: colors.text }]}>{fmtCount(followerCount)}</Text>
+          <Text style={[styles.socialLabel, { color: colors.textMuted }]}>Followers</Text>
+        </TouchableOpacity>
+        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+        <TouchableOpacity
+          style={styles.socialCell}
+          activeOpacity={0.7}
+          onPress={() => profile?.id && router.push({ pathname: "/followers", params: { userId: profile.id, type: "following", ownerHandle: profile.handle } } as any)}
+        >
+          <Text style={[styles.socialValue, { color: colors.text }]}>{fmtCount(followingCount)}</Text>
+          <Text style={[styles.socialLabel, { color: colors.textMuted }]}>Following</Text>
+        </TouchableOpacity>
+        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+        <TouchableOpacity
+          style={styles.socialCell}
+          activeOpacity={0.7}
+          onPress={() => profile?.id && router.push({ pathname: "/contact/[id]", params: { id: profile.id } })}
+        >
+          <Text style={[styles.socialValue, { color: colors.text }]}>{fmtCount(postCount)}</Text>
+          <Text style={[styles.socialLabel, { color: colors.textMuted }]}>Posts</Text>
+        </TouchableOpacity>
+      </View>
 
       <View style={[styles.statsRow, { backgroundColor: colors.surface }]}>
         <View style={styles.statItem}>
@@ -521,6 +560,15 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   viewProfileText: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  socialRow: {
+    flexDirection: "row",
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+  },
+  socialCell: { flex: 1, alignItems: "center", gap: 3 },
+  socialValue: { fontSize: 20, fontFamily: "Inter_700Bold" },
+  socialLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
   statsRow: {
     flexDirection: "row",
     borderRadius: 14,
