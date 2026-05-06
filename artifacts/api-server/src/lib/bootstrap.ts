@@ -16,7 +16,7 @@
  * to keep startup independent of any client-side caches.
  */
 
-import { SUPABASE_URL } from "./constants";
+import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "./constants";
 import { logger } from "./logger";
 
 const KEYS_WE_CARE_ABOUT = [
@@ -41,7 +41,7 @@ export interface BootstrapResult {
 }
 
 export async function loadAppSettings(): Promise<BootstrapResult> {
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  const serviceKey = SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) {
     logger.warn(
       "bootstrap: SUPABASE_SERVICE_ROLE_KEY missing — skipping Supabase settings load. " +

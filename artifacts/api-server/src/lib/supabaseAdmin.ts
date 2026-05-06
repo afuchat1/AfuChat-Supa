@@ -1,12 +1,9 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { SUPABASE_URL } from "./constants";
+import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "./constants";
 import { logger } from "./logger";
 
-// SUPABASE_URL is hard-coded in `./constants` because the project URL is
-// public information, not a secret. Only the service-role key needs to
-// come from the environment.
 const supabaseUrl = SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const serviceRoleKey = SUPABASE_SERVICE_ROLE_KEY;
 
 let cached: SupabaseClient | null = null;
 let warnedMissing = false;

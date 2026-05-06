@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { logger } from "../lib/logger";
-import { SUPABASE_URL } from "../lib/constants";
+import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "../lib/constants";
 import {
   emailUserTicketCreated,
   emailStaffNewTicket,
@@ -117,7 +117,7 @@ async function sendExpoPush(
 }
 
 const supabaseUrl = SUPABASE_URL;
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const serviceKey = SUPABASE_SERVICE_ROLE_KEY;
 
 let watcherStarted = false;
 
