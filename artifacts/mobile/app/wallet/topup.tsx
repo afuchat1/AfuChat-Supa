@@ -51,6 +51,48 @@ type Screen =
 
 const PESAPAL_CALLBACK_URL = "https://afuchat.com/wallet/payment-complete";
 
+// ─── Mobile money country config ──────────────────────────────────────────────
+
+type MmoCountry = {
+  name: string;
+  dialCode: string;
+  flag: string;
+  mtn: boolean;
+  airtel: boolean;
+};
+
+const MMO_COUNTRIES: Record<string, MmoCountry> = {
+  UG: { name: "Uganda",   dialCode: "+256", flag: "🇺🇬", mtn: true,  airtel: true  },
+  RW: { name: "Rwanda",   dialCode: "+250", flag: "🇷🇼", mtn: true,  airtel: false },
+  GH: { name: "Ghana",    dialCode: "+233", flag: "🇬🇭", mtn: true,  airtel: false },
+  TZ: { name: "Tanzania", dialCode: "+255", flag: "🇹🇿", mtn: false, airtel: true  },
+  KE: { name: "Kenya",    dialCode: "+254", flag: "🇰🇪", mtn: false, airtel: true  },
+};
+
+const TZ_TO_COUNTRY: Record<string, string> = {
+  "Africa/Kampala":       "UG",
+  "Africa/Kigali":        "RW",
+  "Africa/Accra":         "GH",
+  "Africa/Dar_es_Salaam": "TZ",
+  "Africa/Nairobi":       "KE",
+};
+
+function detectUserCountry(): string | null {
+  try {
+    const opts = Intl.DateTimeFormat().resolvedOptions();
+    // e.g. "en-UG" → "UG"
+    const localeParts = (opts.locale || "").split(/[-_]/);
+    const regionFromLocale = localeParts.length >= 2
+      ? localeParts[localeParts.length - 1].toUpperCase()
+      : "";
+    if (regionFromLocale && MMO_COUNTRIES[regionFromLocale]) return regionFromLocale;
+    // Fall back to timezone
+    return TZ_TO_COUNTRY[opts.timeZone || ""] || null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Card network detection ───────────────────────────────────────────────────
 
 type CardNetwork = "visa" | "mastercard" | "amex" | "discover" | "unknown";
@@ -430,21 +472,27 @@ function MobileMoneyForm({
   colors,
   onSubmit,
   loading,
+  dialCode,
+  flag,
 }: {
   method: "mtn" | "airtel";
   colors: any;
   onSubmit: (phone: string) => void;
   loading: boolean;
+  dialCode: string;
+  flag: string;
 }) {
-  const [phone, setPhone] = useState("");
+  const [number, setNumber] = useState("");
   const isMtn = method === "mtn";
   const accent = isMtn ? "#FFCB00" : "#E40000";
   const textAccent = isMtn ? "#000000" : "#FFFFFF";
 
   function handleSubmit() {
-    const normalized = phone.trim().replace(/\s/g, "");
-    if (normalized.length < 9) { showAlert("Invalid number", "Enter a valid mobile money number."); return; }
-    onSubmit(normalized);
+    const digits = number.trim().replace(/\D/g, "");
+    if (digits.length < 7) { showAlert("Invalid number", "Enter your mobile money number without the country code."); return; }
+    // Combine dial code + digits, remove leading 0 if present
+    const subscriber = digits.startsWith("0") ? digits.slice(1) : digits;
+    onSubmit(`${dialCode}${subscriber}`);
   }
 
   return (
@@ -463,17 +511,24 @@ function MobileMoneyForm({
       </View>
 
       <Text style={[styles.formLabel, { color: colors.textMuted }]}>MOBILE MONEY NUMBER</Text>
-      <TextInput
-        style={[styles.input, { backgroundColor: colors.inputBg, color: colors.text, borderColor: colors.border }]}
-        placeholder={isMtn ? "+256 7XX XXX XXX" : "+255 7XX XXX XXX"}
-        placeholderTextColor={colors.textMuted}
-        value={phone}
-        onChangeText={setPhone}
-        keyboardType="phone-pad"
-        autoFocus
-      />
+      <View style={[styles.dialRow, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+        <View style={[styles.dialPrefix, { borderRightColor: colors.border }]}>
+          <Text style={styles.dialFlag}>{flag}</Text>
+          <Text style={[styles.dialCode, { color: colors.text }]}>{dialCode}</Text>
+        </View>
+        <TextInput
+          style={[styles.dialInput, { color: colors.text }]}
+          placeholder="7XX XXX XXX"
+          placeholderTextColor={colors.textMuted}
+          value={number}
+          onChangeText={(v) => setNumber(v.replace(/[^\d\s]/g, ""))}
+          keyboardType="phone-pad"
+          autoFocus
+          maxLength={12}
+        />
+      </View>
       <Text style={[styles.mmoHint, { color: colors.textMuted }]}>
-        Include country code · e.g. +256712345678
+        Enter your number without the country code
       </Text>
 
       <TouchableOpacity
@@ -512,9 +567,15 @@ export default function TopUpScreen() {
   const [processingMethod, setProcessingMethod] = useState<PaymentMethod>("card");
   const [manualChecking, setManualChecking] = useState(false);
   const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
+  const [userCountry, setUserCountry] = useState<MmoCountry | null | undefined>(undefined);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  useEffect(() => {
+    const code = detectUserCountry();
+    setUserCountry(code ? (MMO_COUNTRIES[code] ?? null) : null);
+  }, []);
 
   function getSelectedAmount(): number {
     if (selectedPack !== null) return ACOIN_PACKAGES[selectedPack].amount;
@@ -944,6 +1005,8 @@ export default function TopUpScreen() {
                 colors={colors}
                 onSubmit={(phone) => initiatePayment(activeMethod as "mtn" | "airtel", { phone_number: phone })}
                 loading={loading}
+                dialCode={userCountry?.dialCode ?? "+256"}
+                flag={userCountry?.flag ?? "🌍"}
               />
             </View>
           </ScrollView>
@@ -1007,35 +1070,52 @@ export default function TopUpScreen() {
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
 
-          {/* MTN Mobile Money */}
-          <TouchableOpacity
-            style={[styles.methodCard, { backgroundColor: colors.surface }]}
-            onPress={() => { Haptics.selectionAsync(); setActiveMethod("mtn"); setScreen("mobile_form"); }}
-          >
-            <View style={[styles.methodIconBox, { backgroundColor: "#FFCB0010" }]}>
-              <MtnLogo size={40} />
+          {/* Mobile money — shown only when country is detected and supported */}
+          {userCountry === undefined ? null : userCountry === null ? (
+            <View style={[styles.mmoUnavailable, { backgroundColor: colors.surface }]}>
+              <Ionicons name="location-outline" size={20} color={colors.textMuted} />
+              <Text style={[styles.mmoUnavailableText, { color: colors.textMuted }]}>
+                Mobile money is not available in your region
+              </Text>
             </View>
-            <View style={styles.methodInfo}>
-              <Text style={[styles.methodTitle, { color: colors.text }]}>MTN Mobile Money</Text>
-              <Text style={[styles.methodSub, { color: colors.textMuted }]}>Uganda · Rwanda · Ghana</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          {/* Airtel Money */}
-          <TouchableOpacity
-            style={[styles.methodCard, { backgroundColor: colors.surface }]}
-            onPress={() => { Haptics.selectionAsync(); setActiveMethod("airtel"); setScreen("mobile_form"); }}
-          >
-            <View style={[styles.methodIconBox, { backgroundColor: "#E4000010" }]}>
-              <AirtelLogo size={40} />
-            </View>
-            <View style={styles.methodInfo}>
-              <Text style={[styles.methodTitle, { color: colors.text }]}>Airtel Money</Text>
-              <Text style={[styles.methodSub, { color: colors.textMuted }]}>Uganda · Tanzania · Kenya</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
+          ) : (
+            <>
+              {userCountry.mtn && (
+                <TouchableOpacity
+                  style={[styles.methodCard, { backgroundColor: colors.surface }]}
+                  onPress={() => { Haptics.selectionAsync(); setActiveMethod("mtn"); setScreen("mobile_form"); }}
+                >
+                  <View style={[styles.methodIconBox, { backgroundColor: "#FFCB0010" }]}>
+                    <MtnLogo size={40} />
+                  </View>
+                  <View style={styles.methodInfo}>
+                    <Text style={[styles.methodTitle, { color: colors.text }]}>MTN Mobile Money</Text>
+                    <Text style={[styles.methodSub, { color: colors.textMuted }]}>
+                      {userCountry.flag} {userCountry.name} · {userCountry.dialCode}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+              )}
+              {userCountry.airtel && (
+                <TouchableOpacity
+                  style={[styles.methodCard, { backgroundColor: colors.surface }]}
+                  onPress={() => { Haptics.selectionAsync(); setActiveMethod("airtel"); setScreen("mobile_form"); }}
+                >
+                  <View style={[styles.methodIconBox, { backgroundColor: "#E4000010" }]}>
+                    <AirtelLogo size={40} />
+                  </View>
+                  <View style={styles.methodInfo}>
+                    <Text style={[styles.methodTitle, { color: colors.text }]}>Airtel Money</Text>
+                    <Text style={[styles.methodSub, { color: colors.textMuted }]}>
+                      {userCountry.flag} {userCountry.name} · {userCountry.dialCode}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </>
+          )}
 
           <View style={[styles.securedRow, { borderColor: colors.border }]}>
             <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
@@ -1248,4 +1328,24 @@ const styles = StyleSheet.create({
   },
   checkBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
   cancelLink: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  dialRow: {
+    flexDirection: "row", alignItems: "center",
+    borderRadius: 10, borderWidth: 1, overflow: "hidden",
+  },
+  dialPrefix: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 12, paddingVertical: 12,
+    borderRightWidth: 1,
+  },
+  dialFlag: { fontSize: 20 },
+  dialCode: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  dialInput: {
+    flex: 1, paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 15, fontFamily: "Inter_400Regular",
+  },
+  mmoUnavailable: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    borderRadius: 14, padding: 16,
+  },
+  mmoUnavailableText: { fontSize: 14, fontFamily: "Inter_400Regular", flex: 1 },
 });
