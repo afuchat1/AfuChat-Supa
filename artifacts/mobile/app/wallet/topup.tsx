@@ -689,9 +689,13 @@ export default function TopUpScreen() {
       setMerchantRef(data.merchant_reference);
       setProcessingMethod(method);
 
-      // Pesapal sends the STK/USSD push to the phone automatically the moment
-      // the order is submitted — no redirect to a hosted page is needed.
-      // We go straight to the processing screen and poll for the IPN.
+      // For mobile money: store the redirect_url so a hidden background WebView
+      // can load it silently — this is what triggers Pesapal to send the USSD/STK
+      // push to the user's phone. The user only ever sees the processing screen.
+      if ((method === "mtn" || method === "airtel") && data.redirect_url) {
+        setRedirectUrl(data.redirect_url);
+      }
+
       setScreen("processing");
       startPolling(data.merchant_reference);
     } catch (err: any) {
@@ -749,6 +753,23 @@ export default function TopUpScreen() {
 
     return (
       <View style={[styles.root, styles.resultScreen, { backgroundColor: colors.background }]}>
+        {/* Hidden background WebView — loads the Pesapal redirect URL silently.
+            This is the ONLY way to trigger Pesapal's USSD/STK push to the user's
+            phone. The view is 0×0 and off-screen; the user never sees it. */}
+        {isMobileMoney && redirectUrl && Platform.OS !== "web" && WebView && (
+          <WebView
+            source={{ uri: redirectUrl }}
+            style={{ width: 0, height: 0, opacity: 0, position: "absolute" }}
+            javaScriptEnabled
+            domStorageEnabled
+            onLoad={() => {
+              // STK push has been triggered — clear the URL so the WebView unmounts
+              setTimeout(() => setRedirectUrl(null), 3000);
+            }}
+            onError={() => setRedirectUrl(null)}
+          />
+        )}
+
         <View style={[styles.processingCard, { backgroundColor: colors.surface }]}>
           <ActivityIndicator size="large" color={Colors.brand} style={{ marginBottom: 20 }} />
           <Text style={[styles.resultTitle, { color: colors.text }]}>Processing…</Text>
