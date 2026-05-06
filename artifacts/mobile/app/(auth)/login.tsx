@@ -419,9 +419,10 @@ export default function LoginScreen() {
 
   function getApiBase(): string {
     if (Platform.OS === "web" && typeof window !== "undefined") return "";
-    const domain = process.env.EXPO_PUBLIC_DOMAIN || "";
-    if (domain) return `https://${domain}`;
-    return "http://localhost:3000";
+    const apiUrl = (process.env.EXPO_PUBLIC_API_URL || "").trim();
+    if (apiUrl) return apiUrl.replace(/\/+$/, "");
+    const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
+    return domain ? `https://${domain}` : "";
   }
 
   async function resolveIdentifierToEmail(raw: string): Promise<string | null> {

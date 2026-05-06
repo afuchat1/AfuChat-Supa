@@ -52,10 +52,11 @@ const ACOIN_PACKAGES = [
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getApiBase(): string {
-  const d = process.env.EXPO_PUBLIC_DOMAIN || process.env.EXPO_PUBLIC_REPLIT_DEV_DOMAIN || "";
-  if (d) return `https://${d}`;
   if (typeof window !== "undefined" && window.location?.origin) return window.location.origin;
-  return "";
+  const apiUrl = (process.env.EXPO_PUBLIC_API_URL || "").trim();
+  if (apiUrl) return apiUrl.replace(/\/+$/, "");
+  const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
+  return domain ? `https://${domain}` : "";
 }
 
 async function getAuthToken(): Promise<string> {

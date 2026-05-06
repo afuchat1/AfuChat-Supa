@@ -127,8 +127,10 @@ function fmtNum(n: number) {
 
 function getApiBase(): string {
   if (Platform.OS === "web" && typeof window !== "undefined") return window.location.origin;
+  const apiUrl = (process.env.EXPO_PUBLIC_API_URL || "").trim();
+  if (apiUrl) return apiUrl.replace(/\/+$/, "");
   const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
-  return domain ? `https://${domain}` : "http://localhost:3000";
+  return domain ? `https://${domain}` : "";
 }
 
 function dateRangeCutoff(range: DateRange): string | null {

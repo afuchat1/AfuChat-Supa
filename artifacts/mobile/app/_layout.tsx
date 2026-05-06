@@ -49,11 +49,15 @@ try {
 } catch (_) {}
 
 try {
-  const apiBase =
-    Platform.OS === "web" && typeof window !== "undefined"
-      ? window.location.origin
-      : `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
-  setBaseUrl(apiBase);
+  let apiBase = "";
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    apiBase = window.location.origin;
+  } else {
+    const apiUrl = (process.env.EXPO_PUBLIC_API_URL || "").trim();
+    const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
+    apiBase = apiUrl ? apiUrl.replace(/\/+$/, "") : domain ? `https://${domain}` : "";
+  }
+  if (apiBase) setBaseUrl(apiBase);
 } catch (_) {}
 
 SplashScreen.preventAutoHideAsync();

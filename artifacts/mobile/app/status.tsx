@@ -113,9 +113,13 @@ export default function StatusPage() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  const apiBase = Platform.OS === "web" && typeof window !== "undefined"
-    ? window.location.origin
-    : `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+  const apiBase = (() => {
+    if (Platform.OS === "web" && typeof window !== "undefined") return window.location.origin;
+    const apiUrl = (process.env.EXPO_PUBLIC_API_URL || "").trim();
+    if (apiUrl) return apiUrl.replace(/\/+$/, "");
+    const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
+    return domain ? `https://${domain}` : "";
+  })();
 
   const fetchStatus = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
