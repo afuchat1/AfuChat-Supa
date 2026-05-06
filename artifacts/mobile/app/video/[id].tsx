@@ -889,7 +889,7 @@ const cmStyles = StyleSheet.create({
 
 // ─── VideoItem ────────────────────────────────────────────────────────────────
 
-function VideoItem({
+const VideoItem = React.memo(function VideoItem({
   item, isActive, isNearActive, screenH, screenW, isFollowing, isSelf,
   onLike, onBookmark, onOpenComments, onShare, onFollow, onRecordView, onOpenMenu,
 }: {
@@ -920,6 +920,12 @@ function VideoItem({
   const viewRecorded = useRef(false);
   const cacheAttempted = useRef(false);
   const bufferingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Perf refs — avoid setState on every video frame
+  const bufferingRef = useRef(false);
+  const videoStartedRef = useRef(false);
+  const lastProgressFrameRef = useRef(0);   // timestamp of last setProgress call
+  const lastSavedProgressRef = useRef(0);   // timestamp of last AsyncStorage save
+  const cacheDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const resolved = useResolvedVideoSource(item.id, item.video_url, { targetHeight: 720 });
   // When an error occurs fall back directly to the raw video_url, bypassing cache/manifest
@@ -928,14 +934,18 @@ function VideoItem({
   const preloadOnly = !isActive && isNearActive;
   const showExpand = !!item.content && (item.content.split("\n").length > 2 || item.content.length > 120);
 
-  // Start pre-caching as soon as the video enters the preload window (not just when active)
+  // Start pre-caching once the video enters the preload window.
+  // Delay by 500 ms so the download does NOT compete with the swipe animation.
   useEffect(() => {
     if (!isNearActive || cacheAttempted.current || !item.video_url) return;
     cacheAttempted.current = true;
-    getCachedVideoUri(item.video_url).then((ex) => {
-      if (ex) setCachedUri(ex);
-      else cacheVideo(item.video_url).then((l) => { if (l) setCachedUri(l); });
-    });
+    cacheDelayRef.current = setTimeout(() => {
+      getCachedVideoUri(item.video_url).then((ex) => {
+        if (ex) setCachedUri(ex);
+        else cacheVideo(item.video_url).then((l) => { if (l) setCachedUri(l); });
+      });
+    }, 500);
+    return () => { if (cacheDelayRef.current) { clearTimeout(cacheDelayRef.current); cacheDelayRef.current = null; } };
   }, [isNearActive]);
 
   // Reset when leaving viewport; record view when becoming active
@@ -949,6 +959,11 @@ function VideoItem({
       setVideoError(false);
       if (bufferingTimerRef.current) { clearTimeout(bufferingTimerRef.current); bufferingTimerRef.current = null; }
       if (!cachedUri) videoRef.current?.unloadAsync().catch(() => {});
+      // Reset per-frame perf refs when leaving viewport
+      bufferingRef.current = false;
+      videoStartedRef.current = false;
+      lastProgressFrameRef.current = 0;
+      lastSavedProgressRef.current = 0;
     } else {
       if (!viewRecorded.current) {
         viewRecorded.current = true;
@@ -991,23 +1006,46 @@ function VideoItem({
 
   function onPlaybackStatus(status: AVPlaybackStatus) {
     if (!status.isLoaded) return;
+
+    // ── Buffering — only call setState when the value actually changes ────────
     const isNowBuffering = status.isBuffering;
-    setBuffering(isNowBuffering);
-    if (isNowBuffering) {
-      if (!bufferingTimerRef.current) {
-        bufferingTimerRef.current = setTimeout(() => { setShowBuffering(true); bufferingTimerRef.current = null; }, 400);
+    if (isNowBuffering !== bufferingRef.current) {
+      bufferingRef.current = isNowBuffering;
+      setBuffering(isNowBuffering);
+      if (isNowBuffering) {
+        if (!bufferingTimerRef.current) {
+          bufferingTimerRef.current = setTimeout(() => { setShowBuffering(true); bufferingTimerRef.current = null; }, 400);
+        }
+      } else {
+        if (bufferingTimerRef.current) { clearTimeout(bufferingTimerRef.current); bufferingTimerRef.current = null; }
+        setShowBuffering(false);
       }
-    } else {
-      if (bufferingTimerRef.current) { clearTimeout(bufferingTimerRef.current); bufferingTimerRef.current = null; }
-      setShowBuffering(false);
-      if ((status as any).isPlaying) setVideoStarted(true);
     }
+
+    // ── Video started — only fire once ────────────────────────────────────────
+    if ((status as any).isPlaying && !videoStartedRef.current) {
+      videoStartedRef.current = true;
+      setVideoStarted(true);
+    }
+
+    // ── Progress — throttle UI re-renders to ≤4fps (250 ms) ──────────────────
     if (status.durationMillis && status.durationMillis > 0) {
-      setDurationMs(status.durationMillis);
       const frac = status.positionMillis / status.durationMillis;
-      setProgress(frac);
-      if (frac >= 0.97) clearVideoProgress(item.id);
-      else saveVideoProgress(item.id, frac);
+      const now = Date.now();
+
+      if (now - lastProgressFrameRef.current >= 250) {
+        lastProgressFrameRef.current = now;
+        setDurationMs(status.durationMillis);
+        setProgress(frac);
+      }
+
+      // Throttle AsyncStorage writes to every 2 s — they block the JS thread
+      if (frac >= 0.97) {
+        clearVideoProgress(item.id);
+      } else if (now - lastSavedProgressRef.current >= 2000) {
+        lastSavedProgressRef.current = now;
+        saveVideoProgress(item.id, frac);
+      }
     }
   }
 
@@ -1229,7 +1267,7 @@ function VideoItem({
       </TouchableOpacity>
     </View>
   );
-}
+}); // React.memo
 
 const vStyles = StyleSheet.create({
   item: { backgroundColor: "#000", overflow: "hidden" },
@@ -1551,7 +1589,7 @@ export default function VideoPlayerScreen() {
 
   // ── Interactions ───────────────────────────────────────────────────────────
 
-  async function handleLike(postId: string, currentlyLiked: boolean) {
+  const handleLike = useCallback(async (postId: string, currentlyLiked: boolean) => {
     if (!user) { setShowSignInPrompt(true); return; }
     const post = videos.find((v) => v.id === postId);
     if (!post) return;
@@ -1563,9 +1601,10 @@ export default function VideoPlayerScreen() {
       setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, liked: true, likeCount: v.likeCount + 1 } : v));
       if (post.author_id !== user.id) notifyPostLike({ postAuthorId: post.author_id, likerName: profile?.display_name || "Someone", likerUserId: user.id, postId });
     }
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
-  async function handleBookmark(postId: string, currentlyBookmarked: boolean) {
+  const handleBookmark = useCallback(async (postId: string, currentlyBookmarked: boolean) => {
     if (!user) { setShowSignInPrompt(true); return; }
     if (currentlyBookmarked) {
       await supabase.from("post_bookmarks").delete().eq("post_id", postId).eq("user_id", user.id);
@@ -1574,14 +1613,16 @@ export default function VideoPlayerScreen() {
       await supabase.from("post_bookmarks").upsert({ post_id: postId, user_id: user.id }, { onConflict: "post_id,user_id" });
       setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, bookmarked: true } : v));
     }
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
-  async function handleFollow(authorId: string, isFollowing: boolean) {
+  const handleFollow = useCallback(async (authorId: string, isFollowing: boolean) => {
     if (!user) { setShowSignInPrompt(true); return; }
     if (isFollowing) await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", authorId);
     else await supabase.from("follows").insert({ follower_id: user.id, following_id: authorId });
     setFollowingSet((prev) => { const next = new Set(prev); if (isFollowing) next.delete(authorId); else next.add(authorId); return next; });
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   function handleReplyCountChange(postId: string, delta: number) {
     setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, replyCount: v.replyCount + delta } : v));
@@ -1751,15 +1792,18 @@ export default function VideoPlayerScreen() {
     );
   }
 
-  const videoItemProps = {
+  const onShare = useCallback((item: VideoPost) => setShareSheetItem(item), []);
+  const onOpenMenu = useCallback((item: VideoPost) => setMenuItem(item), []);
+
+  const videoItemProps = React.useMemo(() => ({
     screenH: SCREEN_H, screenW: SCREEN_W,
     onLike: handleLike, onBookmark: handleBookmark,
     onOpenComments: setCommentPostId,
-    onShare: (item: VideoPost) => setShareSheetItem(item),
+    onShare,
     onFollow: handleFollow,
     onRecordView: handleRecordView,
-    onOpenMenu: (item: VideoPost) => setMenuItem(item),
-  };
+    onOpenMenu,
+  }), [SCREEN_H, SCREEN_W, handleLike, handleBookmark, handleFollow, handleRecordView, onShare, onOpenMenu]);
 
   return (
     <View style={mStyles.root}>
@@ -1845,7 +1889,7 @@ export default function VideoPlayerScreen() {
           ref={listRef}
           data={videos}
           keyExtractor={(v) => v.id}
-          renderItem={({ item, index }) => (
+          renderItem={useCallback(({ item, index }: { item: VideoPost; index: number }) => (
             <VideoItem
               item={item}
               isActive={index === activeIndex}
@@ -1854,7 +1898,8 @@ export default function VideoPlayerScreen() {
               isSelf={user?.id === item.author_id}
               {...videoItemProps}
             />
-          )}
+          // eslint-disable-next-line react-hooks/exhaustive-deps
+          ), [activeIndex, followingSet, user?.id, videoItemProps])}
           // Core scroll config
           pagingEnabled
           showsVerticalScrollIndicator={false}
@@ -1863,7 +1908,7 @@ export default function VideoPlayerScreen() {
           viewabilityConfig={viewabilityConfig}
           // Performance
           getItemLayout={getItemLayout}
-          windowSize={5}
+          windowSize={3}
           initialNumToRender={2}
           maxToRenderPerBatch={3}
           removeClippedSubviews={false}
