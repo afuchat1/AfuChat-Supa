@@ -547,13 +547,15 @@ export default function LoginScreen() {
       router.replace("/(tabs)");
     } catch (err: any) {
       if (isErrorWithCode?.(err) && (err.code === statusCodes?.SIGN_IN_CANCELLED || err.code === statusCodes?.IN_PROGRESS)) { setOauthLoading(null); return; }
+      // DEVELOPER_ERROR (code 10) means webClientId mismatch — fall back to web OAuth without recursing
+      if (err?.code === 10 || String(err?.message ?? "").includes("DEVELOPER_ERROR")) { signInWithProvider("google", false); return; }
       setOauthLoading(null); showAlert("Error", err?.message || "Google sign in failed.");
     }
   }
 
-  async function signInWithProvider(provider: string) {
+  async function signInWithProvider(provider: string, useNativeFlow = true) {
     try {
-      if (provider === "google" && Platform.OS !== "web" && GoogleSignin) return nativeGoogleSignIn();
+      if (useNativeFlow && provider === "google" && Platform.OS !== "web" && GoogleSignin) return nativeGoogleSignIn();
       setOauthLoading(provider);
       const redirectUrl = Platform.OS === "web"
         ? (typeof window !== "undefined" ? window.location.origin + "/" : "https://afuchat.com/")
