@@ -2317,9 +2317,6 @@ const dcStyles = StyleSheet.create({
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     overflow: "hidden",
-    flex: 0,
-    height: "78%",
-    marginTop: "auto",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.15,
@@ -2346,8 +2343,22 @@ const dcStyles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     letterSpacing: -0.2,
   },
+  sortRow: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  sortTab: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  sortTabText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
   emptyBox: {
-    flex: 1,
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
@@ -2407,9 +2418,25 @@ const dcStyles = StyleSheet.create({
     marginTop: 4,
     marginLeft: 4,
   },
-  inputRow: {
+  emojiBar: {
     flexDirection: "row",
     alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 2,
+  },
+  emojiBtn: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 6,
+  },
+  emojiText: {
+    fontSize: 20,
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
     gap: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -2432,6 +2459,13 @@ const dcStyles = StyleSheet.create({
     borderWidth: 1,
     maxHeight: 90,
     minHeight: 38,
+  },
+  charCounter: {
+    position: "absolute",
+    right: 14,
+    bottom: 10,
+    fontSize: 10,
+    fontFamily: "Inter_500Medium",
   },
   sendBtn: {
     width: 36,
