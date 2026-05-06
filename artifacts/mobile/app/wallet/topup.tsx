@@ -689,17 +689,11 @@ export default function TopUpScreen() {
       setMerchantRef(data.merchant_reference);
       setProcessingMethod(method);
 
-      const isMmo = method === "mtn" || method === "airtel";
-      if (isMmo && data.redirect_url) {
-        // Open Pesapal's hosted page in-app — this triggers the STK push
-        setRedirectUrl(data.redirect_url);
-        setScreen("mmo_webview");
-        // Start polling in background so we catch the IPN as soon as it fires
-        startPolling(data.merchant_reference);
-      } else {
-        setScreen("processing");
-        startPolling(data.merchant_reference);
-      }
+      // Pesapal sends the STK/USSD push to the phone automatically the moment
+      // the order is submitted — no redirect to a hosted page is needed.
+      // We go straight to the processing screen and poll for the IPN.
+      setScreen("processing");
+      startPolling(data.merchant_reference);
     } catch (err: any) {
       showAlert("Payment Error", err?.message || "Could not start payment. Please try again.");
     } finally {
