@@ -25,6 +25,7 @@ import { ThemeProvider, useThemeContext } from "@/context/ThemeContext";
 import { supabase } from "@/lib/supabase";
 import { registerAlertListener, unregisterAlertListener } from "@/lib/alert";
 import { setBaseUrl } from "@/lib/api-client-react/src";
+import { clearExpiredOfflineVideos } from "@/lib/videoCache";
 import { AppLockGate } from "@/components/AppLockGate";
 import { SplashOverlay } from "@/components/SplashOverlay";
 import { ChatPreferencesProvider } from "@/context/ChatPreferencesContext";
@@ -151,6 +152,7 @@ function RootLayoutNav() {
       <Stack.Screen name="stories/view" options={{ animation: "fade" }} />
       <Stack.Screen name="red-envelope/[id]" options={bottomSheetAnim} />
       <Stack.Screen name="settings/index" options={{ headerShown: false }} />
+      <Stack.Screen name="settings/offline-videos" options={{ headerShown: false }} />
       <Stack.Screen name="settings/privacy" />
       <Stack.Screen name="settings/notifications" />
       <Stack.Screen name="settings/chat" />
@@ -205,6 +207,11 @@ export default function RootLayout() {
           window.removeEventListener("unhandledrejection", suppressFontTimeout);
         }
       });
+  }, []);
+
+  // Clean up expired offline video cache once on every app launch
+  useEffect(() => {
+    clearExpiredOfflineVideos().catch(() => {});
   }, []);
 
   const [showSplash, setShowSplash] = useState(Platform.OS !== "web");

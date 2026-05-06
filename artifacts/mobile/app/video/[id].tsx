@@ -58,7 +58,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { notifyPostLike, notifyPostReply } from "@/lib/notifyUser";
 import { RichText } from "@/components/ui/RichText";
 import { encodeId, decodeId, isUuid } from "@/lib/shortId";
-import { getCachedVideoUri, cacheVideo } from "@/lib/videoCache";
+import { getCachedVideoUri, cacheVideo, markVideoWatched } from "@/lib/videoCache";
 import { saveVideoProgress, clearVideoProgress } from "@/lib/videoProgress";
 import { useResolvedVideoSource } from "@/hooks/useResolvedVideoSource";
 import { getPostVideoManifest, pickBestSource } from "@/lib/videoApi";
@@ -950,7 +950,17 @@ function VideoItem({
       if (bufferingTimerRef.current) { clearTimeout(bufferingTimerRef.current); bufferingTimerRef.current = null; }
       if (!cachedUri) videoRef.current?.unloadAsync().catch(() => {});
     } else {
-      if (!viewRecorded.current) { viewRecorded.current = true; onRecordView(item.id); }
+      if (!viewRecorded.current) {
+        viewRecorded.current = true;
+        onRecordView(item.id);
+        // Auto-cache this video for 24h offline playback — no user action needed
+        const title = (item.profile?.display_name ?? "") +
+          (item.content ? `: ${item.content.slice(0, 60)}` : "");
+        markVideoWatched(item.id, item.video_url, {
+          title,
+          thumbnail: item.image_url ?? null,
+        }).catch(() => {});
+      }
     }
   }, [isActive]);
 

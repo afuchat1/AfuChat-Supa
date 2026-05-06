@@ -73,6 +73,8 @@ supabase/                  Edge functions (ai-chat, pesapal-*) + SQL migrations
 
 Social chat app: profiles, posts/feed, group chats, voice messages, video, stories, shop/marketplace with ACoin escrow, push notifications, AI chat assistant, admin/support ticketing, in-app ACoin top-up via Google Pay / Card / MTN / Airtel.
 
+**Offline video cache (TikTok-style):** Videos are auto-cached to `afuchat_offline/` when watched. 24h TTL, auto-expired on app launch. Registry stored in AsyncStorage (`afu_offline_video_registry_v2`). Managed via Settings → Offline Videos. No re-downloads — `getCachedVideoUri` checks both `CACHE_DIR` and `OFFLINE_DIR` before downloading.
+
 ## User preferences
 
 - Keep Supabase as the auth and primary database provider — do not migrate to Replit Auth or Neon.
