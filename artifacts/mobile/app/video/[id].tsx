@@ -1701,6 +1701,33 @@ export default function VideoPlayerScreen() {
     }, 150);
   }
 
+  // ── Derived callbacks — must be declared before any early return ───────────
+
+  const onShare = useCallback((item: VideoPost) => setShareSheetItem(item), []);
+  const onOpenMenu = useCallback((item: VideoPost) => setMenuItem(item), []);
+
+  const videoItemProps = React.useMemo(() => ({
+    screenH: SCREEN_H, screenW: SCREEN_W,
+    onLike: handleLike, onBookmark: handleBookmark,
+    onOpenComments: setCommentPostId,
+    onShare,
+    onFollow: handleFollow,
+    onRecordView: handleRecordView,
+    onOpenMenu,
+  }), [SCREEN_H, SCREEN_W, handleLike, handleBookmark, handleFollow, handleRecordView, onShare, onOpenMenu]);
+
+  const renderItem = useCallback(({ item, index }: { item: VideoPost; index: number }) => (
+    <VideoItem
+      item={item}
+      isActive={index === activeIndex}
+      isNearActive={Math.abs(index - activeIndex) <= 2}
+      isFollowing={followingSet.has(item.author_id)}
+      isSelf={user?.id === item.author_id}
+      {...videoItemProps}
+    />
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [activeIndex, followingSet, user?.id, videoItemProps]);
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -1735,31 +1762,6 @@ export default function VideoPlayerScreen() {
       </View>
     );
   }
-
-  const onShare = useCallback((item: VideoPost) => setShareSheetItem(item), []);
-  const onOpenMenu = useCallback((item: VideoPost) => setMenuItem(item), []);
-
-  const videoItemProps = React.useMemo(() => ({
-    screenH: SCREEN_H, screenW: SCREEN_W,
-    onLike: handleLike, onBookmark: handleBookmark,
-    onOpenComments: setCommentPostId,
-    onShare,
-    onFollow: handleFollow,
-    onRecordView: handleRecordView,
-    onOpenMenu,
-  }), [SCREEN_H, SCREEN_W, handleLike, handleBookmark, handleFollow, handleRecordView, onShare, onOpenMenu]);
-
-  const renderItem = useCallback(({ item, index }: { item: VideoPost; index: number }) => (
-    <VideoItem
-      item={item}
-      isActive={index === activeIndex}
-      isNearActive={Math.abs(index - activeIndex) <= 2}
-      isFollowing={followingSet.has(item.author_id)}
-      isSelf={user?.id === item.author_id}
-      {...videoItemProps}
-    />
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [activeIndex, followingSet, user?.id, videoItemProps]);
 
   return (
     <View style={mStyles.root}>
