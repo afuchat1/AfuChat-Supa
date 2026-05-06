@@ -1,7 +1,4 @@
-import { supabase } from "@/lib/supabase";
-
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
+import { supabase, supabaseUrl, supabaseAnonKey } from "@/lib/supabase";
 
 type NotifyParams = {
   userId: string;
@@ -19,13 +16,13 @@ async function dispatchPush(userId: string, title: string, body: string, data?: 
   try {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData?.session?.access_token;
-    if (!token || !SUPABASE_URL) return;
+    if (!token || !supabaseUrl) return;
 
-    fetch(`${SUPABASE_URL}/functions/v1/send-push-notification`, {
+    fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "apikey": SUPABASE_ANON_KEY,
+        "apikey": supabaseAnonKey,
         "Authorization": `Bearer ${token}`,
       },
       body: JSON.stringify({ userId, title, body, data: data || {} }),

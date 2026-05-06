@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { Platform } from "react-native";
 import { router } from "expo-router";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseUrl, supabaseAnonKey } from "@/lib/supabase";
 
 const EAS_PROJECT_ID = "b55c5d92-7a83-472f-b660-d1838efba5fe";
 
@@ -162,8 +162,6 @@ export async function registerForPushNotifications(userId: string): Promise<stri
     console.log("[PushNotif] Token registered:", token?.slice(0, 30));
 
     // Primary: save via server-side edge function (uses service role key, always works)
-    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
-    const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
     let savedViaEdge = false;
 
     try {
