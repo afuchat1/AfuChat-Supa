@@ -546,6 +546,12 @@ function CommentsSheet({ visible, onClose, postId, postAuthorId, onReplyCountCha
       const wasThreaded = !!replyingTo;
       setText(""); setReplyingTo(null);
       if (!wasThreaded) setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150);
+    } else if (error) {
+      Alert.alert(
+        "Comment failed",
+        "Your comment could not be posted. If this keeps happening, check the Status page under Settings → Help & About.",
+        [{ text: "OK" }],
+      );
     }
     setSending(false);
   }
@@ -1649,7 +1655,7 @@ export default function VideoPlayerScreen() {
     } catch (err) {
       setDownloading(false); setDownloadToast(null);
       console.error("[download]", err);
-      Alert.alert("Download failed", "Could not save the video. Please try again.");
+      Alert.alert("Download failed", "Could not save the video. If the issue persists, check the Status page under Settings → Help & About.");
     }
   }
 

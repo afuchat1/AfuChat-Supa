@@ -229,6 +229,13 @@ export default function SettingsScreen() {
           />
           <Separator indent={54} />
           <MenuItem
+            icon="pulse-outline"
+            iconBg="#22C55E"
+            label="System Status"
+            onPress={() => router.push("/status" as any)}
+          />
+          <Separator indent={54} />
+          <MenuItem
             icon="information-circle-outline"
             iconBg="#007AFF"
             label="About AfuChat"

@@ -29,12 +29,12 @@ export default function ShortsRedirect() {
 
         if (cancelled) return;
         if (dbErr) {
-          setError("Could not load Shorts");
+          setError("Could not load Shorts. Check the Status page under Settings if this persists.");
           return;
         }
         const first = data?.[0];
         if (!first?.id) {
-          setError("No videos yet");
+          setError("No videos yet — check back soon.");
           return;
         }
         router.replace({ pathname: "/video/[id]", params: { id: first.id } });

@@ -347,6 +347,12 @@ function DiscoverCommentsSheet({
       onReplyCountChange(postId, 1);
       setText("");
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+    } else if (error) {
+      showAlert(
+        "Comment failed",
+        "Your comment could not be posted. If this keeps happening, check the Status page under Settings → Help & About.",
+        [{ text: "OK" }],
+      );
     }
     setSending(false);
   }
@@ -906,7 +912,7 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
             {/* Comments */}
             <TouchableOpacity
               style={styles.footerStat}
-              onPress={() => { if (!currentUser) { onRequireAuth?.(); return; } onOpenComments(item.id); }}
+              onPress={() => onOpenComments(item.id)}
               activeOpacity={0.7}
             >
               <Ionicons name="chatbubble-outline" size={18} color={colors.textMuted} />
