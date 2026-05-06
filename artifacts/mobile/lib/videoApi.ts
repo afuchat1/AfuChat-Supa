@@ -9,24 +9,11 @@
 import { Platform } from "react-native";
 import { supabase, supabaseUrl } from "./supabase";
 
-// The API server base URL. _layout.tsx sets the api-client base URL via
-// `setBaseUrl(...)`, but this module fetches directly so it can be used
-// outside the generated react-query client.
-//
-// On web we always use window.location.origin — both Metro (dev) and the
-// production serve.js proxy `/api/*` to the Express API server from the
-// same origin. EXPO_PUBLIC_DOMAIN is checked last for native only, because
-// it gets baked in as the dev domain at bundle time and would point
-// production web deployments at the wrong server.
-const API_BASE: string = (() => {
-  const explicit = (process.env.EXPO_PUBLIC_API_URL || "").trim();
-  if (explicit) return explicit.replace(/\/+$/, "");
-  if (Platform.OS === "web" && typeof window !== "undefined") {
-    return window.location.origin.replace(/\/+$/, "");
-  }
-  const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
-  if (domain) return `https://${domain}`.replace(/\/+$/, "");
-  return "";
+// All video API calls go directly to the Supabase Edge Function.
+// No Express API server needed.
+const EDGE_BASE: string = (() => {
+  const url = (process.env.EXPO_PUBLIC_SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  return url ? `${url}/functions/v1/videos` : "";
 })();
 
 export interface VideoSource {
@@ -83,7 +70,7 @@ export interface RegisterVideoAssetResult {
 export async function registerVideoAsset(
   input: RegisterVideoAssetInput,
 ): Promise<RegisterVideoAssetResult | null> {
-  if (!API_BASE) return null;
+  if (!EDGE_BASE) return null;
   try {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -91,7 +78,7 @@ export async function registerVideoAsset(
     };
     if (!headers.Authorization) return null;
 
-    const res = await fetch(`${API_BASE}/api/videos`, {
+    const res = await fetch(`${EDGE_BASE}`, {
       method: "POST",
       headers,
       body: JSON.stringify(input),
@@ -132,9 +119,9 @@ async function safeJson<T>(res: Response): Promise<T | null> {
 export async function getAssetVideoManifest(
   assetId: string,
 ): Promise<VideoManifest | null> {
-  if (!API_BASE || !assetId) return null;
+  if (!EDGE_BASE || !assetId) return null;
   try {
-    const res = await fetch(`${API_BASE}/api/videos/${assetId}/manifest`);
+    const res = await fetch(`${EDGE_BASE}/${assetId}/manifest`);
     if (!res.ok) return null;
     return await safeJson<VideoManifest>(res);
   } catch {
@@ -145,11 +132,9 @@ export async function getAssetVideoManifest(
 export async function getPostVideoManifest(
   postId: string,
 ): Promise<VideoManifest | null> {
-  if (!API_BASE || !postId) return null;
+  if (!EDGE_BASE || !postId) return null;
   try {
-    const res = await fetch(
-      `${API_BASE}/api/videos/by-post/${postId}/manifest`,
-    );
+    const res = await fetch(`${EDGE_BASE}/by-post/${postId}/manifest`);
     if (!res.ok) return null;
     return await safeJson<VideoManifest>(res);
   } catch {

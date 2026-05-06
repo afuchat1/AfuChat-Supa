@@ -417,19 +417,14 @@ export default function LoginScreen() {
     return "handle";
   }
 
-  function getApiBase(): string {
-    if (Platform.OS === "web" && typeof window !== "undefined") return "";
-    const apiUrl = (process.env.EXPO_PUBLIC_API_URL || "").trim();
-    if (apiUrl) return apiUrl.replace(/\/+$/, "");
-    const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
-    return domain ? `https://${domain}` : "";
-  }
-
   async function resolveIdentifierToEmail(raw: string): Promise<string | null> {
     try {
-      const res = await fetch(`${getApiBase()}/api/auth/resolve-identifier`, {
+      const supaUrl = (process.env.EXPO_PUBLIC_SUPABASE_URL || "").trim().replace(/\/+$/, "");
+      const anonKey = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "").trim();
+      if (!supaUrl) return null;
+      const res = await fetch(`${supaUrl}/functions/v1/auth-resolve-identifier`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", apikey: anonKey },
         body: JSON.stringify({ identifier: raw.trim() }),
       });
       if (!res.ok) return null;

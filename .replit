@@ -31,10 +31,6 @@ args = "Start application"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "API Server"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "Mockup Preview Server"
 
 [[workflows.workflow]]
@@ -48,18 +44,6 @@ outputType = "webview"
 task = "shell.exec"
 args = "cd artifacts/mobile && EXPO_NO_TELEMETRY=1 EXPO_NO_LAZY=1 EXPO_PACKAGER_PROXY_URL=https://$REPLIT_EXPO_DEV_DOMAIN EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN EXPO_PUBLIC_REPL_ID=$REPL_ID REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_DEV_DOMAIN ./node_modules/.bin/expo start --port 5000 --offline"
 waitForPort = 5000
-
-[[workflows.workflow]]
-name = "API Server"
-author = "agent"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd /home/runner/workspace && pnpm --filter @workspace/api-server run build && cd artifacts/api-server && PORT=3000 node --enable-source-maps ./dist/index.mjs"
-waitForPort = 3000
 
 [[workflows.workflow]]
 name = "Mockup Preview Server"

@@ -51,12 +51,8 @@ const ACOIN_PACKAGES = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getApiBase(): string {
-  if (typeof window !== "undefined" && window.location?.origin) return window.location.origin;
-  const apiUrl = (process.env.EXPO_PUBLIC_API_URL || "").trim();
-  if (apiUrl) return apiUrl.replace(/\/+$/, "");
-  const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
-  return domain ? `https://${domain}` : "";
+function getEdgeFnBase(): string {
+  return (process.env.EXPO_PUBLIC_SUPABASE_URL || "").trim().replace(/\/+$/, "") + "/functions/v1";
 }
 
 async function getAuthToken(): Promise<string> {
@@ -514,7 +510,7 @@ export default function TopupScreen() {
       const token = await getAuthToken();
       // No payment_method → Pesapal returns a hosted checkout redirect_url
       // where the user picks their own method (card, mobile money, etc.)
-      const res = await fetch(`${getApiBase()}/api/payments/initiate`, {
+      const res = await fetch(`${getEdgeFnBase()}/pesapal-initiate`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({

@@ -1,59 +1,24 @@
 /**
- * Media upload helpers — Cloudflare R2 backed via the Supabase Edge Function
- * (Vercel/production web) or the Express API server (Replit dev).
+ * Media upload helpers — Cloudflare R2 backed via the Supabase Edge Function.
  *
  * Uploads flow:
- *   Web — Vercel production (EXPO_PUBLIC_DOMAIN not set at build time):
+ *   Web:
  *     1. POST bytes to Supabase Edge Function /functions/v1/uploads/upload.
  *     2. Edge function streams them to R2 server-side (avoids R2 CORS issues).
  *     3. Write the returned CDN URL into Supabase DB.
  *
- *   Web — Replit dev (EXPO_PUBLIC_DOMAIN set at dev-server start):
- *     1. POST bytes to /api/uploads/upload on the Express API server
- *        (proxied at window.location.origin by the Expo dev server).
- *     2. Express streams them to R2 server-side.
- *     3. Write the returned CDN URL into Supabase DB.
- *
  *   Native (iOS/Android):
- *     1. Call POST /api/uploads/sign → get presigned PUT URL (Express server
- *        if EXPO_PUBLIC_API_URL or EXPO_PUBLIC_DOMAIN is set, otherwise falls
- *        back to Supabase Edge Function).
+ *     1. POST to Supabase Edge Function /functions/v1/uploads/sign → presigned PUT URL.
  *     2. PUT bytes directly to Cloudflare R2 using the presigned URL.
  *     3. Write the returned CDN URL into Supabase DB.
+ *     4. Falls back to proxy upload via Edge Function if presigned PUT fails.
  */
 
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase, supabaseUrl, supabaseAnonKey } from "./supabase";
 
-/**
- * Returns the base URL for the uploads API.
- *
- * Priority order:
- *   1. EXPO_PUBLIC_API_URL — explicit override (e.g. a dedicated API host).
- *   2. Web + EXPO_PUBLIC_DOMAIN set — Replit dev environment; the Expo dev
- *      server proxies /api/* to Express at port 3000, so same-origin works.
- *   3. Web + no domain — Vercel/production; no Express server at the origin,
- *      so route through the Supabase Edge Function instead.
- *   4. Native + EXPO_PUBLIC_DOMAIN — construct https://<domain>/api/uploads.
- *   5. Fallback — Supabase Edge Function (always available).
- */
 function getUploadsBase(): string {
-  const explicit = (process.env.EXPO_PUBLIC_API_URL || "").trim();
-  if (explicit) return `${explicit.replace(/\/+$/, "")}/api/uploads`;
-
-  if (Platform.OS === "web" && typeof window !== "undefined") {
-    const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
-    if (domain) {
-      // Replit dev: Express is proxied at the same origin.
-      return `${window.location.origin}/api/uploads`;
-    }
-    // Vercel production: no Express server at this origin — use Supabase edge function.
-    return `${supabaseUrl}/functions/v1/uploads`;
-  }
-
-  const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
-  if (domain) return `https://${domain}/api/uploads`;
   return `${supabaseUrl}/functions/v1/uploads`;
 }
 

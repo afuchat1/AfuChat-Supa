@@ -125,12 +125,8 @@ function fmtNum(n: number) {
   return String(n);
 }
 
-function getApiBase(): string {
-  if (Platform.OS === "web" && typeof window !== "undefined") return window.location.origin;
-  const apiUrl = (process.env.EXPO_PUBLIC_API_URL || "").trim();
-  if (apiUrl) return apiUrl.replace(/\/+$/, "");
-  const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
-  return domain ? `https://${domain}` : "";
+function getEdgeFnBase(): string {
+  return (process.env.EXPO_PUBLIC_SUPABASE_URL || "").trim().replace(/\/+$/, "") + "/functions/v1";
 }
 
 function dateRangeCutoff(range: DateRange): string | null {
@@ -143,7 +139,7 @@ function dateRangeCutoff(range: DateRange): string | null {
 
 async function fetchAiInsight(query: string): Promise<AiInsight | null> {
   try {
-    const res = await fetch(`${getApiBase()}/api/ai/chat`, {
+    const res = await fetch(`${getEdgeFnBase()}/ai-chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

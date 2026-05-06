@@ -113,18 +113,12 @@ export default function StatusPage() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  const apiBase = (() => {
-    if (Platform.OS === "web" && typeof window !== "undefined") return window.location.origin;
-    const apiUrl = (process.env.EXPO_PUBLIC_API_URL || "").trim();
-    if (apiUrl) return apiUrl.replace(/\/+$/, "");
-    const domain = (process.env.EXPO_PUBLIC_DOMAIN || "").trim();
-    return domain ? `https://${domain}` : "";
-  })();
+  const edgeFnBase = (process.env.EXPO_PUBLIC_SUPABASE_URL || "").trim().replace(/\/+$/, "") + "/functions/v1";
 
   const fetchStatus = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
-      const res = await fetch(`${apiBase}/api/status`, {
+      const res = await fetch(`${edgeFnBase}/status`, {
         headers: { Accept: "application/json" },
         signal: AbortSignal.timeout(10000),
       });
@@ -137,7 +131,7 @@ export default function StatusPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [apiBase]);
+  }, [edgeFnBase]);
 
   useEffect(() => {
     fetchStatus();
