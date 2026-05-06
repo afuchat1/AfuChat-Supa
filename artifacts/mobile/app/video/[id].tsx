@@ -75,7 +75,6 @@ import {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const USE_NATIVE = Platform.OS !== "web";
-const SWIPE_HINT_KEY = "afu_video_swipe_hint_seen";
 const VIDEO_PAGE_SIZE = 50;
 const VID_THREAD_COLORS = ["#00BCD4", "#5C6BC0", "#26A69A", "#EF6C00", "#8E24AA"];
 const QUICK_EMOJIS = ["🔥", "❤️", "😂", "😮", "👏", "💯", "🙌", "😍"];
@@ -144,65 +143,6 @@ function parseCommentText(text: string, accent: string): React.ReactNode {
     if (/^#\w/.test(p)) return <Text key={i} style={{ color: accent + "BB" }}>{p}</Text>;
     return <Text key={i}>{p}</Text>;
   });
-}
-
-// ─── SwipeHint ────────────────────────────────────────────────────────────────
-
-function useSwipeHint() {
-  const [visible, setVisible] = useState(false);
-  const dismissedRef = useRef(false);
-  useEffect(() => {
-    AsyncStorage.getItem(SWIPE_HINT_KEY)
-      .then((v) => { if (!v) setVisible(true); })
-      .catch(() => {});
-  }, []);
-  const dismiss = useCallback(() => {
-    if (dismissedRef.current) return;
-    dismissedRef.current = true;
-    setVisible(false);
-    AsyncStorage.setItem(SWIPE_HINT_KEY, "1").catch(() => {});
-  }, []);
-  return { visible, dismiss };
-}
-
-function SwipeHintOverlay({ visible }: { visible: boolean }) {
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(0)).current;
-  const loop = useRef<Animated.CompositeAnimation | null>(null);
-
-  useEffect(() => {
-    if (visible) {
-      Animated.sequence([
-        Animated.delay(1000),
-        Animated.timing(opacity, { toValue: 1, duration: 600, useNativeDriver: USE_NATIVE }),
-      ]).start();
-      loop.current = Animated.loop(Animated.sequence([
-        Animated.delay(300),
-        Animated.timing(translateY, { toValue: -16, duration: 520, useNativeDriver: USE_NATIVE }),
-        Animated.timing(translateY, { toValue: 0, duration: 520, useNativeDriver: USE_NATIVE }),
-      ]));
-      loop.current.start();
-    } else {
-      loop.current?.stop();
-      Animated.timing(opacity, { toValue: 0, duration: 350, useNativeDriver: USE_NATIVE }).start();
-    }
-    return () => { loop.current?.stop(); };
-  }, [visible]);
-
-  return (
-    <Animated.View
-      style={{ position: "absolute", bottom: 160, left: 0, right: 0, alignItems: "center", opacity, zIndex: 20 }}
-      pointerEvents="none"
-    >
-      <Animated.View style={{ alignItems: "center", transform: [{ translateY }] }}>
-        <Ionicons name="chevron-up" size={30} color="rgba(255,255,255,0.95)" />
-        <Ionicons name="chevron-up" size={30} color="rgba(255,255,255,0.45)" style={{ marginTop: -16 }} />
-      </Animated.View>
-      <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 13, fontFamily: "Inter_600SemiBold", marginTop: 6 }}>
-        Swipe up for next
-      </Text>
-    </Animated.View>
-  );
 }
 
 // ─── GradientOverlay ──────────────────────────────────────────────────────────
@@ -918,6 +858,7 @@ const VideoItem = React.memo(function VideoItem({
   const doubleTapOpacity = useRef(new Animated.Value(0)).current;
   const doubleTapScale = useRef(new Animated.Value(0.3)).current;
   const viewRecorded = useRef(false);
+  const offlineSaved = useRef(false);
   const cacheAttempted = useRef(false);
   const bufferingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Perf refs — avoid setState on every video frame
@@ -964,17 +905,24 @@ const VideoItem = React.memo(function VideoItem({
       videoStartedRef.current = false;
       lastProgressFrameRef.current = 0;
       lastSavedProgressRef.current = 0;
+      // Reset offline-save flag so it retries on next view if the save failed
+      offlineSaved.current = false;
     } else {
       if (!viewRecorded.current) {
         viewRecorded.current = true;
         onRecordView(item.id);
-        // Auto-cache this video for 24h offline playback — no user action needed
+      }
+      if (!offlineSaved.current) {
+        offlineSaved.current = true;
         const title = (item.profile?.display_name ?? "") +
           (item.content ? `: ${item.content.slice(0, 60)}` : "");
         markVideoWatched(item.id, item.video_url, {
           title,
           thumbnail: item.image_url ?? null,
-        }).catch(() => {});
+        }).catch(() => {
+          // Reset so the next time the user views this video it tries again
+          offlineSaved.current = false;
+        });
       }
     }
   }, [isActive]);
@@ -1322,7 +1270,6 @@ export default function VideoPlayerScreen() {
   const [downloadToast, setDownloadToast] = useState<string | null>(null);
   const [showSignInPrompt, setShowSignInPrompt] = useState(false);
 
-  const swipeHint = useSwipeHint();
   const listRef = useRef<FlatList>(null);
   const webScrollRef = useRef<HTMLDivElement | null>(null);
   const cursorRef = useRef<string | null>(null);
@@ -1573,7 +1520,6 @@ export default function VideoPlayerScreen() {
       const idx = viewableItems[0].index;
       setActiveIndex(idx);
       activeIndexRef.current = idx;
-      if (idx > 0) swipeHint.dismiss();
       // Preload more when 3 from end
       if (idx >= videosLenRef.current - 3 && !loadingMoreRef.current && hasMoreRef.current && cursorRef.current) {
         fetchVideos(videoTabRef.current, cursorRef.current);
@@ -1736,8 +1682,6 @@ export default function VideoPlayerScreen() {
   function handleWebScroll(e: React.UIEvent<HTMLDivElement>) {
     const el = e.currentTarget;
     const scrollTop = el.scrollTop;
-    if (scrollTop > 40) swipeHint.dismiss();
-
     // Immediately update active index so the current video pauses the instant
     // the next snap point is crossed — no perceptible delay for the user.
     const index = Math.round(scrollTop / SCREEN_H);
@@ -1804,6 +1748,18 @@ export default function VideoPlayerScreen() {
     onRecordView: handleRecordView,
     onOpenMenu,
   }), [SCREEN_H, SCREEN_W, handleLike, handleBookmark, handleFollow, handleRecordView, onShare, onOpenMenu]);
+
+  const renderItem = useCallback(({ item, index }: { item: VideoPost; index: number }) => (
+    <VideoItem
+      item={item}
+      isActive={index === activeIndex}
+      isNearActive={Math.abs(index - activeIndex) <= 2}
+      isFollowing={followingSet.has(item.author_id)}
+      isSelf={user?.id === item.author_id}
+      {...videoItemProps}
+    />
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [activeIndex, followingSet, user?.id, videoItemProps]);
 
   return (
     <View style={mStyles.root}>
@@ -1889,17 +1845,7 @@ export default function VideoPlayerScreen() {
           ref={listRef}
           data={videos}
           keyExtractor={(v) => v.id}
-          renderItem={useCallback(({ item, index }: { item: VideoPost; index: number }) => (
-            <VideoItem
-              item={item}
-              isActive={index === activeIndex}
-              isNearActive={Math.abs(index - activeIndex) <= 2}
-              isFollowing={followingSet.has(item.author_id)}
-              isSelf={user?.id === item.author_id}
-              {...videoItemProps}
-            />
-          // eslint-disable-next-line react-hooks/exhaustive-deps
-          ), [activeIndex, followingSet, user?.id, videoItemProps])}
+          renderItem={renderItem}
           // Core scroll config
           pagingEnabled
           showsVerticalScrollIndicator={false}
@@ -1932,8 +1878,6 @@ export default function VideoPlayerScreen() {
           ) : null}
         />
       )}
-
-      <SwipeHintOverlay visible={swipeHint.visible} />
 
       <CommentsSheet
         visible={!!commentPostId} onClose={() => setCommentPostId(null)}

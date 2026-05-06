@@ -202,14 +202,29 @@ export async function markVideoWatched(
     if (existingOffline.exists && (existingOffline as any).size > 0) {
       fileSize = (existingOffline as any).size ?? 0;
     } else {
-      // Try to copy from the regular playback cache (avoids a second download)
-      const regularPath = CACHE_DIR + filename;
-      const regularFile = await FileSystem.getInfoAsync(regularPath);
-      if (regularFile.exists && (regularFile as any).size > 0) {
-        await FileSystem.copyAsync({ from: regularPath, to: offlinePath });
-        fileSize = (regularFile as any).size ?? 0;
-      } else {
-        // Download fresh to the offline dir
+      // If cacheVideo() is currently downloading this URL, wait for it — avoids
+      // a second parallel download of the same file.
+      let regularPath: string | null = null;
+      if (inProgress.has(url)) {
+        regularPath = await inProgress.get(url)!;
+      }
+      if (!regularPath) {
+        const candidate = CACHE_DIR + filename;
+        const info = await FileSystem.getInfoAsync(candidate);
+        if (info.exists && (info as any).size > 0) regularPath = candidate;
+      }
+
+      if (regularPath) {
+        // Copy the already-downloaded file rather than downloading again
+        try {
+          await FileSystem.copyAsync({ from: regularPath, to: offlinePath });
+          const copied = await FileSystem.getInfoAsync(offlinePath);
+          fileSize = (copied as any).size ?? 0;
+        } catch (_) {}
+      }
+
+      if (!fileSize) {
+        // Nothing cached yet — download fresh directly to offline dir
         const result = await FileSystem.downloadAsync(url, offlinePath);
         const info = await FileSystem.getInfoAsync(result.uri);
         if (!info.exists || (info as any).size === 0) return;
