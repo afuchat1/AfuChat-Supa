@@ -202,7 +202,7 @@ function CommentRow({
     onLike(c.id);
   }
 
-  const likeCount = c.like_count + (liked ? 1 : 0);
+  const likeCount = c.like_count;
   const indentLeft = depth * 40 + 16;
 
   return (
@@ -363,38 +363,68 @@ export function DiscoverCommentsSheet({
   const listRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
   const sendScale = useRef(new Animated.Value(1)).current;
+  const mounted = useRef(true);
 
-  const loadComments = useCallback(() => {
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  const loadComments = useCallback(async () => {
     if (!postId) return;
-    supabase
-      .from("post_replies")
-      .select(
-        "id, author_id, content, created_at, parent_reply_id, profiles!post_replies_author_id_fkey(display_name, handle, avatar_url)",
-      )
-      .eq("post_id", postId)
-      .order("created_at", { ascending: true })
-      .limit(500)
-      .then(({ data }) => {
-        if (data) {
-          setComments(
-            data.map((r: any) => ({
-              id: r.id,
-              author_id: r.author_id,
-              content: r.content || "",
-              created_at: r.created_at,
-              parent_reply_id: r.parent_reply_id || null,
-              like_count: 0,
-              profile: {
-                display_name: r.profiles?.display_name || "User",
-                handle: r.profiles?.handle || "user",
-                avatar_url: r.profiles?.avatar_url || null,
-              },
-            })),
-          );
-        }
-        setLoading(false);
-      });
-  }, [postId]);
+    try {
+      const { data: replies, error } = await supabase
+        .from("post_replies")
+        .select(
+          "id, author_id, content, created_at, parent_reply_id, profiles(display_name, handle, avatar_url)",
+        )
+        .eq("post_id", postId)
+        .order("created_at", { ascending: true })
+        .limit(500);
+
+      if (error) throw error;
+      if (!replies || !mounted.current) return;
+
+      const replyIds = replies.map((r: any) => r.id);
+
+      const [{ data: allLikes }, { data: userLikes }] = await Promise.all([
+        replyIds.length > 0
+          ? supabase.from("post_reply_likes").select("reply_id").in("reply_id", replyIds)
+          : Promise.resolve({ data: [] as any[] }),
+        user && replyIds.length > 0
+          ? supabase.from("post_reply_likes").select("reply_id").in("reply_id", replyIds).eq("user_id", user.id)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+
+      if (!mounted.current) return;
+
+      const likeCounts: Record<string, number> = {};
+      for (const l of (allLikes || [])) {
+        likeCounts[l.reply_id] = (likeCounts[l.reply_id] || 0) + 1;
+      }
+
+      setLikedIds(new Set((userLikes || []).map((l: any) => l.reply_id)));
+      setComments(
+        replies.map((r: any) => ({
+          id: r.id,
+          author_id: r.author_id,
+          content: r.content || "",
+          created_at: r.created_at,
+          parent_reply_id: r.parent_reply_id || null,
+          like_count: likeCounts[r.id] || 0,
+          profile: {
+            display_name: r.profiles?.display_name || "User",
+            handle: r.profiles?.handle || "user",
+            avatar_url: r.profiles?.avatar_url || null,
+          },
+        })),
+      );
+    } catch (e) {
+      console.warn("[Comments] Load failed:", e);
+    } finally {
+      if (mounted.current) setLoading(false);
+    }
+  }, [postId, user?.id]);
 
   useEffect(() => {
     if (!visible || !postId) return;
@@ -437,18 +467,54 @@ export function DiscoverCommentsSheet({
   }, [visible, postId, loadComments]);
 
   function handleLike(id: string) {
+    if (!user) return;
+    const wasLiked = likedIds.has(id);
+
     setLikedIds((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      wasLiked ? next.delete(id) : next.add(id);
       return next;
     });
+    setComments((prev) =>
+      prev.map((c) =>
+        c.id === id
+          ? { ...c, like_count: Math.max(0, c.like_count + (wasLiked ? -1 : 1)) }
+          : c,
+      ),
+    );
+
+    if (wasLiked) {
+      supabase
+        .from("post_reply_likes")
+        .delete()
+        .eq("reply_id", id)
+        .eq("user_id", user.id)
+        .then(({ error }) => {
+          if (error && mounted.current) {
+            setLikedIds((prev) => { const n = new Set(prev); n.add(id); return n; });
+            setComments((prev) => prev.map((c) => c.id === id ? { ...c, like_count: c.like_count + 1 } : c));
+          }
+        });
+    } else {
+      supabase
+        .from("post_reply_likes")
+        .insert({ reply_id: id, user_id: user.id })
+        .then(({ error }) => {
+          if (error && error.code !== "23505" && mounted.current) {
+            setLikedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+            setComments((prev) => prev.map((c) => c.id === id ? { ...c, like_count: Math.max(0, c.like_count - 1) } : c));
+          }
+        });
+    }
   }
 
   async function handleDelete(id: string) {
     if (!user) return;
-    await supabase.from("post_replies").delete().eq("id", id).eq("author_id", user.id);
-    setComments((prev) => prev.filter((c) => c.id !== id));
-    onReplyCountChange(postId, -1);
+    const { error } = await supabase.from("post_replies").delete().eq("id", id).eq("author_id", user.id);
+    if (!error && mounted.current) {
+      setComments((prev) => prev.filter((c) => c.id !== id));
+      onReplyCountChange(postId, -1);
+    }
   }
 
   function handleReplyTo(c: CommentItem) {
@@ -486,7 +552,7 @@ export function DiscoverCommentsSheet({
       .select("id, author_id, content, created_at, parent_reply_id")
       .single();
 
-    if (!error && data) {
+    if (!error && data && mounted.current) {
       const newC: CommentItem = {
         id: data.id,
         author_id: data.author_id,
@@ -519,14 +585,14 @@ export function DiscoverCommentsSheet({
       setText("");
       setReplyingTo(null);
       if (!wasThread) setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150);
-    } else if (error) {
+    } else if (error && mounted.current) {
       showAlert(
         "Comment failed",
         "Could not post your comment. If this keeps happening, check the Status page under Settings → Help & About.",
         [{ text: "OK" }],
       );
     }
-    setSending(false);
+    if (mounted.current) setSending(false);
   }
 
   const tree = React.useMemo(() => {
@@ -534,12 +600,12 @@ export function DiscoverCommentsSheet({
     if (sortMode === "top") {
       return [...roots].sort((a, b) => {
         const score = (x: CommentItem) =>
-          (x.children?.length ?? 0) * 2 + x.like_count + (likedIds.has(x.id) ? 1 : 0);
+          (x.children?.length ?? 0) * 2 + x.like_count;
         return score(b) - score(a);
       });
     }
     return [...roots].reverse();
-  }, [comments, sortMode, likedIds]);
+  }, [comments, sortMode]);
 
   const totalCount = comments.length;
   const charLeft = 500 - text.length;

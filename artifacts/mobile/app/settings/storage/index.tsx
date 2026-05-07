@@ -104,7 +104,7 @@ export default function StorageSettingsScreen() {
   }));
 
   const percent = usage
-    ? Math.min(100, Math.max(0, usage.percent_used * 100))
+    ? Math.min(100, Math.max(0, usage.percent_used))
     : 0;
   const overQuota = usage ? usage.used_bytes > usage.quota_bytes : false;
   const barColor = overQuota

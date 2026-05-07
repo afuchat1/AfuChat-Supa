@@ -229,21 +229,27 @@ export default function NotificationsScreen() {
       return;
     }
 
-    const { data } = await supabase
-      .from("notifications")
-      .select("id, type, is_read, created_at, post_id, reference_id, reference_type, profiles!notifications_actor_id_fkey(id, display_name, avatar_url, handle, is_verified, is_organization_verified)")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(100);
+    try {
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("id, type, is_read, created_at, post_id, reference_id, reference_type, profiles!notifications_actor_id_fkey(id, display_name, avatar_url, handle, is_verified, is_organization_verified)")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(100);
 
-    if (data) {
-      const mapped = data.map((n: any) => ({ ...n, actor: n.profiles }));
-      const deduped = deduplicateNotifs(mapped);
-      setItems(deduped);
-      cacheNotifications(deduped as any);
+      if (error) throw error;
+      if (data) {
+        const mapped = data.map((n: any) => ({ ...n, actor: n.profiles }));
+        const deduped = deduplicateNotifs(mapped);
+        setItems(deduped);
+        cacheNotifications(deduped as any);
+      }
+    } catch (e) {
+      console.warn("[Notifications] Load failed:", e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-    setLoading(false);
-    setRefreshing(false);
   }, [user]);
 
   useEffect(() => {

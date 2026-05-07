@@ -96,13 +96,17 @@ serve(async (req) => {
       );
     }
 
-    const { data: prefRows } = await adminClient
-      .from('notification_preferences')
-      .select('user_id, push_enabled')
-      .in('user_id', profiles.map(p => p.id));
+    let prefRows: { user_id: string; push_enabled: boolean | null }[] = [];
+    try {
+      const { data, error } = await adminClient
+        .from('notification_preferences')
+        .select('user_id, push_enabled')
+        .in('user_id', profiles.map(p => p.id));
+      if (!error && data) prefRows = data;
+    } catch { /* table may not exist yet — default to all users enabled */ }
 
     const disabledUsers = new Set(
-      (prefRows || []).filter(p => p.push_enabled === false).map(p => p.user_id)
+      prefRows.filter(p => p.push_enabled === false).map(p => p.user_id)
     );
 
     const tokens = profiles
