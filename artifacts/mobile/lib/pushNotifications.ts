@@ -123,7 +123,6 @@ export async function registerForPushNotifications(userId: string): Promise<stri
   if (Platform.OS === "web" || !Notifications || !Device) return null;
   try {
     if (!Device.isDevice) {
-      console.log("[PushNotif] Physical device required");
       return null;
     }
 
@@ -149,7 +148,6 @@ export async function registerForPushNotifications(userId: string): Promise<stri
     }
 
     if (finalStatus !== "granted") {
-      console.log("[PushNotif] Permission not granted:", finalStatus);
       return null;
     }
 
@@ -158,8 +156,6 @@ export async function registerForPushNotifications(userId: string): Promise<stri
 
     const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData.data;
-
-    console.log("[PushNotif] Token registered:", token?.slice(0, 30));
 
     // Primary: save via server-side edge function (uses service role key, always works)
     let savedViaEdge = false;
@@ -179,7 +175,6 @@ export async function registerForPushNotifications(userId: string): Promise<stri
         });
         if (res.ok) {
           savedViaEdge = true;
-          console.log("[PushNotif] Token saved via edge function");
         } else {
           const errText = await res.text();
           console.warn("[PushNotif] Edge function token save failed:", errText);
@@ -198,8 +193,6 @@ export async function registerForPushNotifications(userId: string): Promise<stri
 
       if (dbError) {
         console.warn("[PushNotif] Fallback DB save failed:", dbError.message);
-      } else {
-        console.log("[PushNotif] Token saved via Supabase client (fallback)");
       }
     }
 
@@ -207,7 +200,6 @@ export async function registerForPushNotifications(userId: string): Promise<stri
   } catch (error: any) {
     const msg = error?.message || String(error);
     if (msg?.includes?.("removed from Expo Go")) {
-      console.log("[PushNotif] Push notifications not available in Expo Go");
       _lastRegistrationError = "Not available in Expo Go";
     } else {
       console.warn("[PushNotif] Registration failed:", msg);

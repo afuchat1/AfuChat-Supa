@@ -1,290 +1,238 @@
-# Contributing to AfuChat
+# AfuChat — Contributor Guidelines
 
-Thank you for your interest in contributing to AfuChat! This document provides guidelines and instructions for contributing to the project.
+Read this before touching any code. These rules protect decisions that are easy to break accidentally and very hard to debug after the fact.
 
 ---
 
 ## Table of Contents
 
-- [Code of Conduct](#code-of-conduct)
-- [Getting Started](#getting-started)
-- [Development Setup](#development-setup)
-- [Branch Naming](#branch-naming)
-- [Commit Messages](#commit-messages)
-- [Pull Request Process](#pull-request-process)
-- [Coding Standards](#coding-standards)
-- [Project Structure](#project-structure)
-- [Reporting Issues](#reporting-issues)
-- [Feature Requests](#feature-requests)
-- [Security Vulnerabilities](#security-vulnerabilities)
+- [Architecture — non-negotiable rules](#architecture--non-negotiable-rules)
+- [Storage on device — most commonly broken rule](#storage-on-device--most-commonly-broken-rule)
+- [Supabase queries](#supabase-queries)
+- [Push notifications](#push-notifications)
+- [Code quality](#code-quality)
+- [Branch & commit conventions](#branch--commit-conventions)
+- [Pull request checklist](#pull-request-checklist)
+- [Deploying Edge Functions](#deploying-edge-functions)
+- [Building the APK](#building-the-apk)
+- [Reporting issues & security](#reporting-issues--security)
 
 ---
 
-## Code of Conduct
+## Architecture — non-negotiable rules
 
-By participating in this project, you agree to maintain a respectful and inclusive environment. We expect all contributors to:
+### 1. Supabase is the ONLY backend
+All API logic lives in **Supabase Edge Functions** (`supabase/functions/`).
 
-- Be respectful and considerate in all communications
-- Welcome newcomers and help them get started
-- Accept constructive criticism gracefully
-- Focus on what is best for the community and the project
-- Show empathy towards other contributors
+- Do **not** add an Express server, Fastify server, or any other server process.
+- Do **not** use Replit Auth or Replit Database. Auth and data are Supabase only.
+- Do **not** call external services (R2, Pesapal, Resend, Expo Push) directly from the client — go through an Edge Function so credentials stay server-side.
 
-Unacceptable behavior includes harassment, trolling, personal attacks, and publishing private information without consent. Violations may result in removal from the project.
+### 2. R2 (Cloudflare) is the ONLY storage backend
+All file uploads (images, videos, audio, documents) go to Cloudflare R2.
 
----
+- Do **not** add Supabase Storage, Firebase Storage, S3 buckets, or any other storage provider.
+- R2 credentials are fetched at runtime from the `app_settings` table inside Edge Functions — never hardcode them client-side.
 
-## Getting Started
-
-1. **Fork** the repository on GitHub
-2. **Clone** your fork locally:
-   ```bash
-   git clone https://github.com/<afuchat1>/afuchat.git
-   cd afuchat
-   ```
-3. **Install dependencies**:
-   ```bash
-   pnpm install
-   ```
-4. **Create a branch** for your work:
-   ```bash
-   git checkout -b feat/your-feature-name
-   ```
+### 3. All payments stay in-app via Pesapal
+- Google Pay is the primary (most prominent) payment method in the checkout UI.
+- Do **not** redirect users to a hosted Pesapal checkout page.
+- Do **not** add Stripe, PayPal, or any other payment provider.
 
 ---
 
-## Development Setup
+## Storage on device — most commonly broken rule
 
-### Prerequisites
+Android splits on-device storage into **User data** and **Cache**:
 
-- Node.js 20+
-- pnpm 9+
-- Expo Go app (for testing on a mobile device) or a web browser
+| Android label | Expo constant | Survives "Clear Cache"? | OS wipes automatically? |
+|---|---|---|---|
+| User data | `FileSystem.documentDirectory` | ✅ Yes | ❌ Never |
+| Cache | `FileSystem.cacheDirectory` | ❌ No | ✅ Yes (low space) |
 
-### Running the App
+**The rule:**
 
-```bash
-# Start both the API server and Expo app
-# API Server runs on port 3000
-cd artifacts/api-server && pnpm run dev
+- **User-intentional data → `documentDirectory`**
+  Examples: offline videos the user saves to watch later, downloaded files, user preferences.
+- **Expendable / auto-refills → `cacheDirectory`**
+  Examples: streaming playback buffer that refills automatically, temp files deleted immediately after use.
 
-# Expo App runs on port 5000 (in a separate terminal)
-cd artifacts/mobile && pnpm run dev
+### Never do this
+```ts
+// WRONG — user's saved offline videos end up counted as Android Cache
+const OFFLINE_DIR = FileSystem.cacheDirectory + "afuchat_offline/";
 ```
 
-### Type Checking
+### Always do this
+```ts
+// CORRECT — counted as User data, survives cache clears, user controls it
+const OFFLINE_DIR = FileSystem.documentDirectory + "afuchat_offline/";
+```
 
-```bash
-# Run type checks across the entire monorepo
-pnpm run typecheck
+**If you add a new directory**, ask: "Would the user be upset if Android wiped this without warning?" If yes → `documentDirectory`.
+
+**If you move a directory**, bump the registry key (e.g. `v2` → `v3`) and write a one-time migration that runs at startup to delete stale files from the old path. See `lib/videoCache.ts → migrateOfflineCacheV2toV3` as the reference pattern.
+
+---
+
+## Supabase queries
+
+### Foreign-key hints
+PostgREST FK hints (`table!constraint_name`) disambiguate joins when a table has **more than one** FK pointing at the same target table.
+
+- Use a hint **only** when genuinely ambiguous (two FKs to the same table from the same source table).
+- When there is only one FK, omit the hint — plain `profiles(...)` is cleaner and safer.
+- Verify the exact constraint name exists in the DB before committing. A wrong hint silently returns no joined data.
+
+### Always handle errors
+Every `await supabase.from(...)` call must check the `error` return value. Loading functions must use `try/catch/finally` so the UI never gets stuck in a loading state when a query fails:
+
+```ts
+try {
+  const { data, error } = await supabase.from("...").select("...");
+  if (error) throw error;
+  setData(data);
+} catch (e) {
+  console.warn("[MyScreen] load failed:", e);
+} finally {
+  setLoading(false);
+}
+```
+
+### Mounted refs in async components
+Any component that calls `setState` after an `await` must guard every state update with a mounted ref:
+
+```ts
+const mounted = useRef(true);
+useEffect(() => {
+  mounted.current = true;
+  return () => { mounted.current = false; };
+}, []);
+
+async function load() {
+  const { data } = await supabase.from("...").select("...");
+  if (!mounted.current) return; // always check before setState
+  setData(data);
+}
 ```
 
 ---
 
-## Branch Naming
+## Push notifications
 
-Use clear, descriptive branch names with a prefix:
+- Do **not** call `registerForPushNotifications` on every app foreground event. A 10-minute cooldown exists in `PushNotificationManager` — keep it. Calling it too often burns Expo's API quota and delays startup.
+- Do **not** make the `notification_preferences` lookup in `send-push-notification` blocking. It is wrapped in try/catch that defaults to all-notifications-enabled — this prevents one missing table from silently breaking all pushes.
+- Notification channels (default, messages, social, marketplace, system) are defined in `lib/pushNotifications.ts`. Add new channels there; do not create ad-hoc channel IDs elsewhere.
+
+---
+
+## Code quality
+
+### No `console.log` in production code
+| Statement | Rule |
+|---|---|
+| `console.log` | Remove entirely — adds bundle weight and leaks info in production |
+| `console.warn` | Only for recoverable unexpected conditions |
+| `console.error` | Only for real, non-recoverable errors |
+
+### No silent fallbacks
+If something fails, be explicit — show an error state, log a warning, or throw. Never substitute placeholder data and pretend success.
+
+### No duplicate helpers
+Before adding a utility, check `lib/` first:
+
+| Need | Use |
+|---|---|
+| Alerts / toasts | `lib/alert.ts` (`showAlert`, `showToast`, `confirmAlert`) |
+| Haptics | `lib/haptics.ts` |
+| Notify another user | `lib/notifyUser.ts` |
+| AI requests | `lib/aiHelper.ts` |
+| Media upload | `lib/mediaUpload.ts` |
+| Offline caching | `lib/offlineStore.ts` |
+| Video cache | `lib/videoCache.ts` |
+
+### Keep files focused
+Files over ~800 lines are a sign a screen or component is doing too much. Extract:
+
+- Reusable UI pieces → `components/ui/`
+- Business logic / API calls → `lib/`
+- Context / global state → `context/`
+
+Do not put shared logic inside a screen file.
+
+### Avoid redundant state calculations
+Never add `+ (liked ? 1 : 0)` or similar adjustments on top of a value already fetched from the database. Load the real count and update it directly. Double-counting bugs are silent and hard to spot in testing.
+
+---
+
+## Branch & commit conventions
+
+Branch names:
 
 | Prefix | Purpose | Example |
 |---|---|---|
 | `feat/` | New feature | `feat/voice-call-support` |
-| `fix/` | Bug fix | `fix/message-delivery-delay` |
-| `refactor/` | Code refactoring | `refactor/auth-context-cleanup` |
-| `docs/` | Documentation only | `docs/api-endpoint-guide` |
-| `chore/` | Tooling, CI, dependencies | `chore/upgrade-expo-sdk` |
-| `test/` | Adding or updating tests | `test/wallet-transactions` |
+| `fix/` | Bug fix | `fix/comment-like-crash` |
+| `refactor/` | Code clean-up | `refactor/auth-context` |
+| `chore/` | Tooling, deps | `chore/upgrade-expo-sdk` |
 | `hotfix/` | Urgent production fix | `hotfix/login-crash` |
 
----
-
-## Commit Messages
-
-Follow the [Conventional Commits](https://www.conventionalcommits.org/) format:
+Commit format ([Conventional Commits](https://www.conventionalcommits.org/)):
 
 ```
 <type>(<scope>): <short description>
+
+feat(mobile): add offline video TTL setting
+fix(edge): make notification_preferences query defensive
+chore(mobile): bump video cache registry to v3
 ```
 
-### Types
-
-| Type | Description |
-|---|---|
-| `feat` | A new feature |
-| `fix` | A bug fix |
-| `docs` | Documentation changes |
-| `style` | Formatting, whitespace (no logic change) |
-| `refactor` | Code restructuring (no feature or fix) |
-| `perf` | Performance improvement |
-| `test` | Adding or updating tests |
-| `chore` | Build, CI, tooling, dependency updates |
-
-### Scopes
-
-Use the package or area being modified:
-
-- `mobile` — Expo app (`artifacts/mobile`)
-- `api` — API server (`artifacts/api-server`)
-- `db` — Database schema (`lib/db`)
-- `edge` — Supabase Edge Functions (`supabase/functions`)
-- `ui` — Shared UI components
-- `auth` — Authentication flow
-- `chat` — Messaging features
-- `wallet` — Currency and payments
-- `ai` — AfuAi assistant
-
-### Examples
-
-```
-feat(mobile): add video calling screen
-fix(chat): resolve duplicate message on reconnect
-refactor(api): extract rate limiter to middleware
-docs(readme): update environment variable table
-chore(mobile): upgrade expo-notifications to v0.32
-```
+Scopes: `mobile`, `edge`, `db`, `ui`, `auth`, `chat`, `wallet`, `ai`.
 
 ---
 
-## Pull Request Process
+## Pull request checklist
 
-1. **Ensure your branch is up to date** with `main`:
-   ```bash
-   git fetch origin
-   git rebase origin/main
-   ```
-
-2. **Run type checks** before submitting:
-   ```bash
-   pnpm run typecheck
-   ```
-
-3. **Write a clear PR description** that includes:
-   - What the change does
-   - Why the change is needed
-   - Screenshots or recordings for UI changes
-   - Any breaking changes or migration steps
-
-4. **Keep PRs focused** — one feature or fix per PR. Large changes should be split into smaller, reviewable pieces.
-
-5. **Respond to review feedback** promptly and push updates to the same branch.
-
-6. **Squash or rebase** commits before merging to keep the history clean.
-
-### PR Checklist
-
-- [ ] Code follows the project coding standards
-- [ ] TypeScript type checks pass (`pnpm run typecheck`)
-- [ ] No hardcoded secrets or credentials
-- [ ] New screens include loading skeletons and error states
-- [ ] Offline behavior considered (caching, queue, fallback)
+- [ ] No `console.log` left in the diff
+- [ ] All `await supabase` calls handle `error`
+- [ ] Async state updates guarded by mounted ref
+- [ ] User-facing files use `documentDirectory`, not `cacheDirectory`
+- [ ] No new FK hints added without verifying the constraint name exists
+- [ ] New screens have loading skeletons and error states
 - [ ] Dark mode and light mode both look correct
 - [ ] Works on iOS, Android, and web where applicable
+- [ ] No hardcoded credentials or secrets
 
 ---
 
-## Coding Standards
+## Deploying Edge Functions
 
-### General
+After any change to `supabase/functions/`:
 
-- **Language**: TypeScript for all code (strict mode)
-- **Formatting**: Prettier with project defaults
-- **Imports**: Use workspace aliases (`@workspace/db`, `@workspace/api-zod`)
-- **No `any`**: Avoid `any` types — use proper interfaces and generics
-- **No commented-out code**: Remove dead code instead of commenting it out
+```bash
+SUPABASE_ACCESS_TOKEN=$SUPABASE_ACCESS_TOKEN \
+  npx supabase functions deploy <function-name> \
+  --project-ref rhnsjqqtdzlkvqazfcbg
+```
 
-### React Native / Expo
-
-- Use functional components with hooks
-- Use `expo-router` for navigation (file-based routing in `app/`)
-- Use the project's `showAlert()` from `lib/alert.ts` instead of `Alert.alert` directly
-- Use `useTheme()` hook for colors — never hardcode theme colors
-- Add skeleton loaders from `components/ui/Skeleton.tsx` for loading states
-- Use `OfflineBanner` component on screens that fetch data
-- Persist user-facing state with AsyncStorage via `lib/offlineStore.ts`
-
-### API Server
-
-- Use Express Router for route grouping
-- Validate request bodies before processing
-- Return consistent JSON error responses: `{ error: "message" }`
-- Use `pino` logger (never `console.log` in production code)
-- Add rate limiting for public-facing endpoints
-
-### Supabase
-
-- All storage upload paths must start with `{userId}/` for RLS compliance
-- Use the Supabase client from `lib/supabase.ts` — never create ad-hoc clients
-- Edge functions must include CORS headers
-- Use `SECURITY DEFINER` DB functions for sensitive operations (currency, XP)
-
-### File Organization
-
-- One component per file
-- Co-locate styles with components
-- Keep files under 400 lines — split large files into smaller modules
-- Name files in kebab-case; name components in PascalCase
+`SUPABASE_SERVICE_ROLE_KEY` must be set in the **Supabase Dashboard** (Project Settings → Edge Function Secrets), not in Replit Secrets. Edge Functions read it from their own secret store.
 
 ---
 
-## Project Structure
+## Building the APK
 
-Before contributing, familiarize yourself with the monorepo layout:
+Run from `artifacts/mobile/` with `EXPO_TOKEN` set:
 
-| Directory | Description |
-|---|---|
-| `artifacts/api-server/` | Express API server |
-| `artifacts/mobile/app/` | Expo Router screens |
-| `artifacts/mobile/components/` | Reusable React Native components |
-| `artifacts/mobile/context/` | Context providers (Auth, Theme) |
-| `artifacts/mobile/hooks/` | Custom hooks |
-| `artifacts/mobile/lib/` | Utilities, Supabase client, helpers |
-| `artifacts/mobile/constants/` | Colors, config constants |
-| `lib/db/` | Drizzle ORM schema and database connection |
-| `lib/api-spec/` | OpenAPI spec and Orval codegen config |
-| `lib/api-zod/` | Generated Zod schemas |
-| `lib/api-client-react/` | Generated TanStack Query hooks |
-| `supabase/functions/` | Supabase Deno Edge Functions |
+```bash
+eas build --platform android --profile production
+```
+
+EAS project ID: `b55c5d92-7a83-472f-b660-d1838efba5fe`.
 
 ---
 
-## Reporting Issues
+## Reporting issues & security
 
-When reporting a bug, please include:
+**Bugs** — include: description, steps to reproduce, platform (iOS / Android / Web + OS version), screenshots, and any console errors.
 
-1. **Description** — What happened vs. what you expected
-2. **Steps to reproduce** — Numbered steps to trigger the issue
-3. **Platform** — iOS, Android, or Web (include OS version and device)
-4. **Screenshots or recordings** — Visual evidence if applicable
-5. **Console logs** — Any relevant error messages
-
-Use the **Bug Report** issue template if available.
-
----
-
-## Feature Requests
-
-We welcome feature ideas! When submitting a feature request:
-
-1. **Check existing issues** to avoid duplicates
-2. **Describe the problem** the feature would solve
-3. **Propose a solution** with details on expected behavior
-4. **Consider alternatives** you've thought about
-
-Use the **Feature Request** issue template if available.
-
----
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability, **do not** open a public issue. Instead, email **security@afuchat.com** with:
-
-- Description of the vulnerability
-- Steps to reproduce
-- Potential impact
-
-We will respond within 48 hours and work with you to resolve the issue before any public disclosure.
-
----
-
-## Thank You
-
-Every contribution, whether it's fixing a typo or building a new feature, helps make AfuChat better. We appreciate your time and effort!
+**Security vulnerabilities** — do **not** open a public issue. Email **security@afuchat.com** with the description, reproduction steps, and potential impact. We respond within 48 hours.
