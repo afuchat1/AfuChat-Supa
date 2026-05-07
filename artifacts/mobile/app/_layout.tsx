@@ -25,7 +25,7 @@ import { ThemeProvider, useThemeContext } from "@/context/ThemeContext";
 import { supabase } from "@/lib/supabase";
 import { registerAlertListener, unregisterAlertListener } from "@/lib/alert";
 import { setBaseUrl } from "@/lib/api-client-react/src";
-import { clearExpiredOfflineVideos } from "@/lib/videoCache";
+import { clearExpiredOfflineVideos, migrateOfflineCacheV2toV3 } from "@/lib/videoCache";
 import { AppLockGate } from "@/components/AppLockGate";
 import { SplashOverlay } from "@/components/SplashOverlay";
 import { ChatPreferencesProvider } from "@/context/ChatPreferencesContext";
@@ -213,8 +213,10 @@ export default function RootLayout() {
       });
   }, []);
 
-  // Clean up expired offline video cache once on every app launch
+  // On first launch after upgrade: migrate old cacheDirectory files to documentDirectory,
+  // then clean up any expired offline videos.
   useEffect(() => {
+    migrateOfflineCacheV2toV3().catch(() => {});
     clearExpiredOfflineVideos().catch(() => {});
   }, []);
 

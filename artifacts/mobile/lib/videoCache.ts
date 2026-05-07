@@ -4,12 +4,18 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // ─── Directories ──────────────────────────────────────────────────────────────
 
+// Playback streaming buffer — genuinely temporary, OS may clear anytime
 const CACHE_DIR = (FileSystem.cacheDirectory ?? "") + "afuchat_videos/";
-const OFFLINE_DIR = (FileSystem.cacheDirectory ?? "") + "afuchat_offline/";
+
+// User-saved offline videos — stored in documentDirectory so Android counts
+// them as "User data" (survives cache clears, not wiped by the OS)
+const OFFLINE_DIR = (FileSystem.documentDirectory ?? "") + "afuchat_offline/";
 
 // ─── Offline registry ─────────────────────────────────────────────────────────
 
-const OFFLINE_REGISTRY_KEY = "afu_offline_video_registry_v2";
+// Bumped to v3 — old v2 entries point at cacheDirectory paths which are now
+// stale; a fresh registry is cleaner than a migration.
+const OFFLINE_REGISTRY_KEY = "afu_offline_video_registry_v3";
 const OFFLINE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const MAX_CACHE_FILES = 60;
 
@@ -303,6 +309,32 @@ export async function clearExpiredOfflineVideos(): Promise<number> {
     }
   }
   return expired.length;
+}
+
+/**
+ * One-time migration from v2 (cacheDirectory) to v3 (documentDirectory).
+ * Removes the stale v2 AsyncStorage key and deletes old files in cacheDirectory.
+ * Safe to call on every launch — no-ops immediately after the first run.
+ */
+export async function migrateOfflineCacheV2toV3(): Promise<void> {
+  if (Platform.OS === "web") return;
+  const OLD_KEY = "afu_offline_video_registry_v2";
+  const OLD_DIR = (FileSystem.cacheDirectory ?? "") + "afuchat_offline/";
+  try {
+    const raw = await AsyncStorage.getItem(OLD_KEY);
+    if (raw) {
+      // Delete any old files that were stored in cacheDirectory
+      try {
+        const oldEntries: OfflineVideoEntry[] = JSON.parse(raw);
+        await Promise.all(
+          oldEntries.map((e) => FileSystem.deleteAsync(e.fileUri, { idempotent: true }).catch(() => {}))
+        );
+      } catch (_) {}
+      // Remove the old directory itself and the old AsyncStorage key
+      await FileSystem.deleteAsync(OLD_DIR, { idempotent: true }).catch(() => {});
+      await AsyncStorage.removeItem(OLD_KEY);
+    }
+  } catch (_) {}
 }
 
 /** Clears all offline videos immediately (user-initiated). */
