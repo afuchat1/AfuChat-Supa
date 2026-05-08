@@ -9,6 +9,7 @@ export * from "./localMessages";
 export * from "./localConversations";
 export * from "./localFeed";
 export * from "./localNotifications";
+export * from "./localContacts";
 export * from "./syncQueue";
 export * from "./mediaCache";
 export * from "./searchHistory";

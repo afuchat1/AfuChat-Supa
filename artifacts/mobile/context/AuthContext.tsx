@@ -4,7 +4,7 @@ import { AppState } from "react-native";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { getStoredAccounts, storeAccount, removeStoredAccount, updateAccountTokens, type StoredAccount } from "@/lib/accountStore";
-import { cacheProfile, getCachedProfile, isOnline, onConnectivityChange } from "@/lib/offlineStore";
+import { cacheProfile, getCachedProfile, getCachedProfileSync, isOnline, onConnectivityChange } from "@/lib/offlineStore";
 import { startOfflineSync } from "@/lib/offlineSync";
 import { clearPushToken } from "@/lib/pushNotifications";
 import { registerDeviceSession } from "@/lib/deviceSession";
@@ -90,9 +90,13 @@ const AuthContext = createContext<AuthContextType>({
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  // Pre-populate from MMKV synchronously — zero I/O, zero wait.
+  // Screens like the Me tab render immediately with cached profile data.
+  const _syncProfile = getCachedProfileSync();
+  const [profile, setProfile] = useState<Profile | null>(_syncProfile as Profile | null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [loading, setLoading] = useState(true);
+  // If we have a cached profile, don't block screens while waiting for auth.
+  const [loading, setLoading] = useState(!_syncProfile);
   const [linkedAccounts, setLinkedAccounts] = useState<StoredAccount[]>([]);
 
   async function fetchProfile(userId: string) {

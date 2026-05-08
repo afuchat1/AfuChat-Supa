@@ -199,10 +199,37 @@ async function runMigrations(db: DB) {
 
   // ── v2: Add delta-sync helpers (newest_at columns for cursors) ───────────────
   if (currentVersion < 2) {
-    // SQLite ignores "ADD COLUMN IF NOT EXISTS" — we catch errors instead
     const safeAdd = async (sql: string) => { try { await db.execAsync(sql); } catch {} };
     await safeAdd("ALTER TABLE feed_posts ADD COLUMN viewed_at INTEGER");
     await safeAdd("ALTER TABLE feed_posts ADD COLUMN saved_to_tab TEXT");
     await db.runAsync("UPDATE schema_version SET version = 2");
+  }
+
+  // ── v3: Richer notification columns + permanent contacts table ────────────────
+  if (currentVersion < 3) {
+    const safeAdd = async (sql: string) => { try { await db.execAsync(sql); } catch {} };
+    // Notifications — extra fields needed by the UI
+    await safeAdd("ALTER TABLE notifications ADD COLUMN post_id TEXT");
+    await safeAdd("ALTER TABLE notifications ADD COLUMN reference_id TEXT");
+    await safeAdd("ALTER TABLE notifications ADD COLUMN reference_type TEXT");
+    await safeAdd("ALTER TABLE notifications ADD COLUMN actor_handle TEXT");
+    await safeAdd("ALTER TABLE notifications ADD COLUMN actor_is_verified INTEGER NOT NULL DEFAULT 0");
+    await safeAdd("ALTER TABLE notifications ADD COLUMN actor_is_org_verified INTEGER NOT NULL DEFAULT 0");
+    await safeAdd("ALTER TABLE notifications ADD COLUMN is_read INTEGER NOT NULL DEFAULT 0");
+    // Contacts — permanent, follows-based people list
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS contacts (
+        id TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL,
+        handle TEXT NOT NULL,
+        avatar_url TEXT,
+        bio TEXT,
+        is_verified INTEGER NOT NULL DEFAULT 0,
+        is_organization_verified INTEGER NOT NULL DEFAULT 0,
+        stored_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_contacts_name ON contacts(display_name COLLATE NOCASE);
+    `);
+    await db.runAsync("UPDATE schema_version SET version = 3");
   }
 }

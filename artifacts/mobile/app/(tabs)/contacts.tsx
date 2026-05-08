@@ -25,7 +25,8 @@ import Colors from "@/constants/colors";
 import { ContactRowSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import OfflineBanner from "@/components/ui/OfflineBanner";
-import { cacheContacts, getCachedContacts, isOnline } from "@/lib/offlineStore";
+import { isOnline } from "@/lib/offlineStore";
+import { getLocalContacts, saveLocalContacts } from "@/lib/storage/localContacts";
 
 type Contact = {
   id: string;
@@ -102,12 +103,19 @@ export default function ContactsScreen() {
   const [addResult, setAddResult] = useState<Contact | null>(null);
   const [addLoading, setAddLoading] = useState(false);
 
-  const loadContacts = useCallback(async () => {
+  const loadContacts = useCallback(async (background = false) => {
     if (!user) return;
 
+    if (!background) {
+      // Show locally stored contacts immediately — no spinner for returning users.
+      const local = await getLocalContacts();
+      if (local.length > 0) {
+        setContacts(local);
+        setLoading(false);
+      }
+    }
+
     if (!isOnline()) {
-      const cached = await getCachedContacts();
-      if (cached.length > 0) setContacts(cached);
       setLoading(false);
       setRefreshing(false);
       return;
@@ -124,7 +132,8 @@ export default function ContactsScreen() {
         .filter(Boolean)
         .sort((a: Contact, b: Contact) => a.display_name.localeCompare(b.display_name));
       setContacts(list);
-      cacheContacts(list);
+      // Persist permanently to SQLite so contacts are available offline.
+      saveLocalContacts(list).catch(() => {});
     }
     setLoading(false);
     setRefreshing(false);
@@ -140,7 +149,7 @@ export default function ContactsScreen() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "follows", filter: `follower_id=eq.${user.id}` },
-        () => loadContacts()
+        () => loadContacts(true)
       )
       .subscribe();
 

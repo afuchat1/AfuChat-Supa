@@ -28,7 +28,8 @@ import { playNotificationSound, preloadNotificationSound } from "@/lib/soundMana
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { NotificationSkeleton } from "@/components/ui/Skeleton";
 import OfflineBanner from "@/components/ui/OfflineBanner";
-import { cacheNotifications, getCachedNotifications, isOnline } from "@/lib/offlineStore";
+import { isOnline } from "@/lib/offlineStore";
+import { getLocalNotifications, saveNotifications, markNotificationRead as markLocalRead, markAllNotificationsRead as markAllLocalRead } from "@/lib/storage/localNotifications";
 import { encodeId } from "@/lib/shortId";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -344,7 +345,7 @@ export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
 
   const [items, setItems] = useState<NotifItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [category, setCategory] = useState<NotifCategory>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -355,15 +356,45 @@ export default function NotificationsScreen() {
     preloadNotificationSound();
   }, []);
 
-  const load = useCallback(async () => {
+  // Map a SQLite local notification row to the NotifItem shape the UI expects.
+  function localToNotifItem(n: any): NotifItem {
+    return {
+      id: n.id,
+      type: n.type,
+      is_read: n.is_read === 1 || n.is_read === true,
+      created_at: n.created_at,
+      post_id: n.post_id ?? null,
+      reference_id: n.reference_id ?? null,
+      reference_type: n.reference_type ?? null,
+      actor: n.actor_id ? {
+        id: n.actor_id,
+        display_name: n.actor_name ?? "",
+        avatar_url: n.actor_avatar ?? null,
+        handle: n.actor_handle ?? "",
+        is_verified: n.actor_is_verified === 1 || n.actor_is_verified === true,
+        is_organization_verified: n.actor_is_org_verified === 1 || n.actor_is_org_verified === true,
+      } : null,
+    };
+  }
+
+  const load = useCallback(async (background = false) => {
     if (!user) return;
+
+    if (!background) {
+      // Show local SQLite data immediately — no spinner, no wait.
+      const local = await getLocalNotifications(100);
+      if (local.length > 0) {
+        setItems(local.map(localToNotifItem));
+        setLoading(false);
+      }
+    }
+
     if (!isOnline()) {
-      const cached = await getCachedNotifications();
-      if (cached.length > 0) setItems(cached as any);
       setLoading(false);
       setRefreshing(false);
       return;
     }
+
     try {
       const { data, error } = await supabase
         .from("notifications")
@@ -376,7 +407,8 @@ export default function NotificationsScreen() {
         const mapped = data.map((n: any) => ({ ...n, actor: n.profiles }));
         const deduped = deduplicateNotifs(mapped);
         setItems(deduped);
-        cacheNotifications(deduped as any);
+        // Save permanently to SQLite so they're available offline.
+        saveNotifications(deduped).catch(() => {});
       }
     } catch (e) {
       console.warn("[Notifications] Load failed:", e);
@@ -403,7 +435,7 @@ export default function NotificationsScreen() {
         () => {
           if (isFirstLoad.current) { isFirstLoad.current = false; return; }
           playNotificationSound();
-          load();
+          load(true);
         }
       )
       .subscribe();
@@ -415,13 +447,15 @@ export default function NotificationsScreen() {
   }, []);
 
   async function markRead(id: string) {
-    await supabase.from("notifications").update({ is_read: true }).eq("id", id);
+    supabase.from("notifications").update({ is_read: true }).eq("id", id).then(() => {});
+    markLocalRead(id).catch(() => {});
     setItems((prev) => prev.map((n) => n.id === id ? { ...n, is_read: true } : n));
   }
 
   async function markAllRead() {
     if (!user) return;
-    await supabase.from("notifications").update({ is_read: true }).eq("user_id", user.id).eq("is_read", false);
+    supabase.from("notifications").update({ is_read: true }).eq("user_id", user.id).eq("is_read", false).then(() => {});
+    markAllLocalRead().catch(() => {});
     setItems((prev) => prev.map((n) => ({ ...n, is_read: true })));
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }
