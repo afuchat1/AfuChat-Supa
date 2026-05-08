@@ -27,16 +27,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { showAlert } from "@/lib/alert";
 import { GoogleLogo, GitHubLogo, XLogo, GitLabLogo } from "@/components/ui/OAuthLogos";
-
-let GoogleSignin: any = null;
-let isErrorWithCode: any = null;
-let statusCodes: any = null;
-try {
-  const mod = require("@react-native-google-signin/google-signin");
-  GoogleSignin = mod.GoogleSignin;
-  isErrorWithCode = mod.isErrorWithCode;
-  statusCodes = mod.statusCodes;
-} catch (_) {}
+import { googleSignIn } from "@/lib/googleAuth";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -510,52 +501,27 @@ export default function LoginScreen() {
   }
 
   async function nativeGoogleSignIn() {
-    try {
-      setOauthLoading("google");
-      GoogleSignin.configure({ webClientId: "830762767270-lmefgjjk25i17lithkq6iisjv8gfh08d.apps.googleusercontent.com" });
-      await GoogleSignin.hasPlayServices();
-
-      // Try silent sign-in first — if the user already chose an account before,
-      // this returns the token immediately without showing the account picker again.
-      let idToken: string | null = null;
-      try {
-        const silentResp = await GoogleSignin.signInSilently();
-        idToken = silentResp?.data?.idToken ?? null;
-      } catch (_) {
-        // No previously selected account — fall through to interactive picker
-      }
-
-      if (!idToken) {
-        const resp = await GoogleSignin.signIn();
-        idToken = resp?.data?.idToken ?? null;
-      }
-
-      if (!idToken) { showAlert("Error", "Could not get Google ID token."); setOauthLoading(null); return; }
-
-      const { data, error } = await supabase.auth.signInWithIdToken({ provider: "google", token: idToken });
-      if (error) { showAlert("Error", error.message); setOauthLoading(null); return; }
-
-      // Route to onboarding for brand-new Google users, tabs for returning users
-      const uid = data.user?.id;
-      if (uid) {
-        const { data: prof } = await supabase.from("profiles").select("onboarding_completed").eq("id", uid).maybeSingle();
-        if (!prof?.onboarding_completed) {
-          router.replace({ pathname: "/onboarding", params: { userId: uid } } as any);
-          return;
-        }
-      }
-      router.replace("/(tabs)");
-    } catch (err: any) {
-      if (isErrorWithCode?.(err) && (err.code === statusCodes?.SIGN_IN_CANCELLED || err.code === statusCodes?.IN_PROGRESS)) { setOauthLoading(null); return; }
-      // DEVELOPER_ERROR (code 10) means webClientId mismatch — fall back to web OAuth without recursing
-      if (err?.code === 10 || String(err?.message ?? "").includes("DEVELOPER_ERROR")) { signInWithProvider("google", false); return; }
-      setOauthLoading(null); showAlert("Error", err?.message || "Google sign in failed.");
+    setOauthLoading("google");
+    const result = await googleSignIn();
+    if (!result.ok) {
+      setOauthLoading(null);
+      if (!result.cancelled) showAlert("Error", result.error);
+      return;
     }
+    const uid = result.userId;
+    if (uid) {
+      const { data: prof } = await supabase.from("profiles").select("onboarding_completed").eq("id", uid).maybeSingle();
+      if (!prof?.onboarding_completed) {
+        router.replace({ pathname: "/onboarding", params: { userId: uid } } as any);
+        return;
+      }
+    }
+    router.replace("/(tabs)");
   }
 
   async function signInWithProvider(provider: string, useNativeFlow = true) {
     try {
-      if (useNativeFlow && provider === "google" && Platform.OS !== "web" && GoogleSignin) return nativeGoogleSignIn();
+      if (useNativeFlow && provider === "google" && Platform.OS !== "web") return nativeGoogleSignIn();
       setOauthLoading(provider);
       const redirectUrl = Platform.OS === "web"
         ? (typeof window !== "undefined" ? window.location.origin + "/" : "https://afuchat.com/")
