@@ -37,24 +37,32 @@ const STATUS_CONFIG: Record<ServiceStatus, { color: string; icon: string; label:
   outage:      { color: "#EF4444", icon: "close-circle",      label: "Outage"      },
 };
 
-const OVERALL_CONFIG: Record<ServiceStatus, { bg: string; text: string; title: string; sub: string }> = {
+type HeroState = ServiceStatus | "unknown";
+
+const OVERALL_CONFIG: Record<HeroState, { bg: string; text: string; title: string; sub: string; icon: string }> = {
   operational: {
-    bg: "#16A34A",
-    text: "#fff",
+    bg: "#16A34A", text: "#fff",
     title: "All Systems Operational",
     sub: "Everything is running smoothly.",
+    icon: "checkmark-circle",
   },
   degraded: {
-    bg: "#D97706",
-    text: "#fff",
+    bg: "#D97706", text: "#fff",
     title: "Partial System Degradation",
     sub: "Some features may be limited. We're working on it.",
+    icon: "warning",
   },
   outage: {
-    bg: "#DC2626",
-    text: "#fff",
+    bg: "#DC2626", text: "#fff",
     title: "Service Disruption",
     sub: "We're aware of the issue and working to restore service.",
+    icon: "close-circle",
+  },
+  unknown: {
+    bg: "#4B5563", text: "#fff",
+    title: "Status Unavailable",
+    sub: "Could not reach the status server.",
+    icon: "cloud-offline-outline",
   },
 };
 
@@ -156,8 +164,12 @@ export default function StatusPage() {
     return () => pulseAnim.stopAnimation();
   }, [data?.overall]);
 
-  const overall = data?.overall ?? "operational";
+  // If fetch failed and we have no cached data, show the "unknown" hero state.
+  // Previously this defaulted to "operational" which caused the green banner and
+  // the error card to appear simultaneously — two contradictory states at once.
+  const overall: HeroState = data?.overall ?? (error && !data ? "unknown" : "operational");
   const overallCfg = OVERALL_CONFIG[overall];
+  const isPulse = overall !== "operational" && overall !== "unknown";
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -178,9 +190,9 @@ export default function StatusPage() {
             <ActivityIndicator color="#fff" size="large" />
           ) : (
             <>
-              <Animated.View style={{ opacity: overall !== "operational" ? pulseAnim : 1 }}>
+              <Animated.View style={{ opacity: isPulse ? pulseAnim : 1 }}>
                 <Ionicons
-                  name={STATUS_CONFIG[overall].icon as any}
+                  name={overallCfg.icon as any}
                   size={48}
                   color="#fff"
                   style={{ marginBottom: 12 }}
