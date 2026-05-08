@@ -168,12 +168,12 @@ export default function AdvancedFeaturesScreen() {
   const insets = useSafeAreaInsets();
   const { features, loading: advLoading, setFeature } = useAdvancedFeatures();
   const { prefs, loading: prefsLoading, updatePref } = useChatPreferences();
-  const { setAppTheme } = useAppAccent();
+  const { appTheme, setAppTheme } = useAppAccent();
   const [saving, setSaving] = useState(false);
 
   const loading = advLoading || prefsLoading;
   const currentStatus = STATUS_OPTIONS.find((s) => s.value === features.activity_status) ?? STATUS_OPTIONS[0];
-  const themeAccent = CHAT_THEME_COLORS[prefs.chat_theme]?.accent || accent;
+  const themeAccent = CHAT_THEME_COLORS[appTheme]?.accent || accent;
 
   async function toggle<K extends keyof typeof features>(key: K, val: (typeof features)[K]) {
     setSaving(true);
@@ -238,17 +238,17 @@ export default function AdvancedFeaturesScreen() {
               <Text style={[styles.rowLabel, { color: colors.text }]}>App Colour</Text>
               <Text style={[styles.rowDesc, { color: colors.textMuted }]}>Changes tabs, buttons, and chat bubbles</Text>
             </View>
-            <Text style={[styles.chipLabel, { color: themeAccent }]}>{prefs.chat_theme}</Text>
+            <Text style={[styles.chipLabel, { color: themeAccent }]}>{appTheme}</Text>
           </View>
           <View style={styles.colourRow}>
             {THEMES.map((t) => (
               <TouchableOpacity
                 key={t.name}
                 onPress={() => handleTheme(t.name)}
-                style={[styles.colourCircle, { backgroundColor: t.hex }, prefs.chat_theme === t.name && styles.colourCircleActive]}
+                style={[styles.colourCircle, { backgroundColor: t.hex }, appTheme === t.name && styles.colourCircleActive]}
                 activeOpacity={0.8}
               >
-                {prefs.chat_theme === t.name && <Ionicons name="checkmark" size={18} color="#fff" />}
+                {appTheme === t.name && <Ionicons name="checkmark" size={18} color="#fff" />}
               </TouchableOpacity>
             ))}
           </View>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -24,7 +24,6 @@ import {
   BubbleStyle,
   MediaQuality,
 } from "@/context/ChatPreferencesContext";
-import { useAppAccent } from "@/context/AppAccentContext";
 
 const BUBBLE_STYLES: { name: BubbleStyle; radius: number }[] = [
   { name: "Rounded", radius: 18 },
@@ -36,19 +35,12 @@ const FONT_SIZES = [13, 15, 17, 19];
 const MEDIA_QUALITIES: MediaQuality[] = ["Auto", "High", "Low"];
 
 export default function ChatSettingsScreen() {
-  const { colors } = useTheme();
+  const { colors, accent: themeAccent } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const { prefs, loading, updatePref } = useChatPreferences();
-  const { setAppTheme } = useAppAccent();
   const [clearing, setClearing] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
-
-  useEffect(() => {
-    if (!loading && prefs.chat_theme) setAppTheme(prefs.chat_theme);
-  }, [loading, prefs.chat_theme]);
-
-  const themeAccent = CHAT_THEME_COLORS[prefs.chat_theme]?.accent || colors.accent;
 
   async function handleClearAllChats() {
     showAlert(
