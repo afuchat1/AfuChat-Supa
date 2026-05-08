@@ -106,6 +106,12 @@ export async function handleNotificationAction(
               body: "You snoozed a notification — here's your reminder.",
               data: { ...data, snoozed: "true" },
               sound: "notification.wav",
+              // Show the full-colour AfuChat app icon as the large icon on Android
+              ...(Platform.OS === "android" && {
+                icon: "@mipmap/ic_launcher",
+                largeIcon: "@mipmap/ic_launcher",
+                color: "#00BCD4",
+              }),
             },
             trigger: {
               type: "timeInterval",

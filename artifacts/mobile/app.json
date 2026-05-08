@@ -9,7 +9,7 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "notification": {
-      "icon": "./assets/images/afu-symbol.png",
+      "icon": "./assets/images/notification-icon-white.png",
       "color": "#00BCD4",
       "iosDisplayInForeground": true
     },
@@ -128,7 +128,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/afu-symbol.png",
+          "icon": "./assets/images/notification-icon-white.png",
           "color": "#00BCD4",
           "defaultChannel": "default",
           "sounds": [
