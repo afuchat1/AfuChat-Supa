@@ -121,12 +121,20 @@ export default function ContactProfileScreen() {
   const [optionsVisible, setOptionsVisible] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
 
+  // Non-logged-in users should see the public profile page, not this screen.
+  // Redirect them to /@handle once we know the handle (and there's no session).
   useEffect(() => {
-    if (!profile?.handle) return;
+    if (!profile?.handle || user) return;
+    router.replace(`/@${profile.handle}` as any);
+  }, [profile?.handle, user]);
+
+  // On web, replace the URL with the pretty /@handle format for logged-in users.
+  useEffect(() => {
+    if (!profile?.handle || !user) return;
     if (Platform.OS === "web" && typeof window !== "undefined") {
       window.history.replaceState(null, "", `/@${profile.handle}`);
     }
-  }, [profile?.handle]);
+  }, [profile?.handle, user]);
 
   useEffect(() => {
     if (!id) return;
