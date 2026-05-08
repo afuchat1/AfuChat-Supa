@@ -122,7 +122,13 @@ export default function StatusPage() {
         headers: { Accept: "application/json" },
         signal: AbortSignal.timeout(10000),
       });
+      if (!res.ok) {
+        throw new Error(`Server returned HTTP ${res.status}`);
+      }
       const json: StatusResponse = await res.json();
+      if (!Array.isArray(json?.services)) {
+        throw new Error("Unexpected response from status service.");
+      }
       setData(json);
       setError(null);
     } catch (e: any) {
@@ -229,7 +235,7 @@ export default function StatusPage() {
                     </View>
                   </View>
                 ))
-              : data?.services.map((svc) => (
+              : data?.services?.map((svc) => (
                   <ServiceRow key={svc.name} svc={svc} colors={colors} />
                 ))
             }
