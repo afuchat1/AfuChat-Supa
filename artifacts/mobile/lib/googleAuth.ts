@@ -16,15 +16,6 @@ try {
   _statusCodes = mod.statusCodes;
 } catch (_) {}
 
-/**
- * Returns true when the native Google Sign-In module is loaded and available.
- * This is false in Expo Go (native module not bundled) — callers should fall
- * back to the Supabase web OAuth flow in that case.
- */
-export function isNativeGoogleSignInAvailable(): boolean {
-  return _GoogleSignin !== null;
-}
-
 export type GoogleSignInResult =
   | { ok: true; userId: string }
   | { ok: false; cancelled: true }

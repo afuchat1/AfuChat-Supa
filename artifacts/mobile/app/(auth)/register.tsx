@@ -28,7 +28,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { showAlert } from "@/lib/alert";
 import { GoogleLogo, GitHubLogo, XLogo, GitLabLogo } from "@/components/ui/OAuthLogos";
-import { googleSignIn, isNativeGoogleSignInAvailable } from "@/lib/googleAuth";
+import { googleSignIn } from "@/lib/googleAuth";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -273,9 +273,6 @@ export default function RegisterScreen() {
   }
 
   async function nativeGoogleSignIn() {
-    if (!isNativeGoogleSignInAvailable()) {
-      return signInWithProvider("google", false);
-    }
     setOauthLoading("google");
     const result = await googleSignIn();
     if (!result.ok) {
