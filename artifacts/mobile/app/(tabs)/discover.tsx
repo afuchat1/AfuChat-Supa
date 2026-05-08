@@ -670,6 +670,11 @@ export default function DiscoverScreen() {
   const learnedWeightsRef = useRef<Record<string, number>>({});
   const postsRef = useRef<PostItem[]>([]);
   const feedTabRef = useRef<"for_you" | "following">("for_you");
+  // Throwback pagination — tracks how far into the older-posts pool we've paged.
+  // Reset to a random starting point on each fresh load so every session shows
+  // different older content.
+  const throwbackOffsetRef = useRef(0);
+  const throwbackExhaustedRef = useRef(false);
   const flatListRef = useRef<FlatList>(null);
   const recordedViewsRef = useRef<Set<string>>(new Set());
 
@@ -896,8 +901,17 @@ export default function DiscoverScreen() {
     const userInterests: string[] = profile?.interests || [];
     const userCountry: string = profile?.country || "";
 
-    // Cursor-based pagination newest-first — same behaviour for guests and
-    // logged-in users so the feed scrolls without limit in both cases.
+    // Two-stream feed:
+    //  1. RECENT  — newest ~20 posts (cursor-based, newest-first)
+    //  2. THROWBACK — high-engagement posts older than 30 days
+    //     Uses a random session offset so each refresh surfaces different old gems.
+    //     Offset resets on every full refresh; increments on load-more.
+    const RECENT_SIZE = 20;
+    const THROWBACK_SIZE = 10;
+
+    // 30 days ago threshold for the throwback stream
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
     const fyOlderThan =
       !isRefresh && postsRef.current.length > 0
         ? postsRef.current[postsRef.current.length - 1]?.created_at
@@ -911,8 +925,17 @@ export default function DiscoverScreen() {
       video_assets!posts_video_asset_id_fkey(duration_seconds)
     `;
 
-    // Delta sync: on refresh, only fetch posts NEWER than newest stored — never re-download existing posts
+    // Delta sync: on refresh, only fetch posts NEWER than newest stored
     const fyNewerThan = isRefresh ? await getNewestFeedPostDate("for_you") : null;
+
+    // On refresh, reset throwback pagination to a random offset (0–100) so
+    // the feed always shows different older content each session.
+    if (isRefresh) {
+      throwbackOffsetRef.current = Math.floor(Math.random() * 100);
+      throwbackExhaustedRef.current = false;
+    }
+
+    // ── Stream 1: Recent posts ──
     let fyQ: any = supabase.from("posts").select(fySelect).eq("visibility", "public")
       .order("created_at", { ascending: false });
     if (fyOlderThan) {
@@ -920,13 +943,43 @@ export default function DiscoverScreen() {
     } else if (fyNewerThan) {
       fyQ = fyQ.gt("created_at", fyNewerThan);
     }
-    fyQ = fyQ.limit(PAGE_SIZE);
+    fyQ = fyQ.limit(RECENT_SIZE);
 
-    const { data } = await fyQ;
+    // ── Stream 2: Throwback posts (older than 30 days, high engagement) ──
+    const tbOffset = throwbackOffsetRef.current;
+    const throwbackPromise = throwbackExhaustedRef.current
+      ? Promise.resolve({ data: [] as any[] })
+      : supabase.from("posts")
+          .select(fySelect)
+          .eq("visibility", "public")
+          .lt("created_at", thirtyDaysAgo)
+          .order("view_count", { ascending: false })
+          .range(tbOffset, tbOffset + THROWBACK_SIZE - 1)
+          .then((res) => {
+            if (!res.data || res.data.length === 0) {
+              throwbackExhaustedRef.current = true;
+            } else {
+              // Advance cursor for next load-more
+              throwbackOffsetRef.current += THROWBACK_SIZE;
+            }
+            return res;
+          });
+
+    const [{ data: recentData }, { data: throwbackData }] = await Promise.all([fyQ, throwbackPromise]);
+
+    // Merge and deduplicate — recent posts take priority
+    const existingIds = new Set((postsRef.current || []).map((p) => p.id));
+    const allRaw = [
+      ...(recentData || []),
+      ...(throwbackData || []).filter((p: any) => !existingIds.has(p.id)),
+    ];
+    const data = allRaw;
 
     if (data) {
-      if (data.length < PAGE_SIZE) setHasMore(false);
-      else setHasMore(true);
+      // hasMore is true if recent stream is still full (more new pages exist)
+      // OR if the throwback stream hasn't been exhausted yet
+      const recentFull = (recentData || []).length >= RECENT_SIZE;
+      setHasMore(recentFull || !throwbackExhaustedRef.current);
 
       const postIds = data.map((p: any) => p.id);
       const authorIds = [...new Set(data.map((p: any) => p.author_id))];
@@ -1127,8 +1180,8 @@ export default function DiscoverScreen() {
         // Delta sync: prepend new posts to existing local posts (don't wipe them)
         if (fyNewerThan && merged.length > 0) {
           setPosts((prev) => {
-            const existingIds = new Set(prev.map((p) => p.id));
-            const brandNew = merged.filter((p) => !existingIds.has(p.id));
+            const prevIds = new Set(prev.map((p) => p.id));
+            const brandNew = merged.filter((p) => !prevIds.has(p.id));
             return brandNew.length > 0 ? [...brandNew, ...prev] : prev;
           });
         } else if (!fyNewerThan) {
