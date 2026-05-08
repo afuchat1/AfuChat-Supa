@@ -253,19 +253,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id).finally(() => setLoading(false));
+        // Show cached profile immediately — no network wait needed for initial render.
+        const cached = await getCachedProfile();
+        if (cached) setProfile(cached as Profile);
+        setLoading(false);
+        // Refresh profile from network in the background.
+        fetchProfile(session.user.id);
         startOfflineSync();
         supabase.from("profiles").select("display_name").eq("id", session.user.id).single().then(({ data }) => {
           ensureAfuAiChat(session.user.id, data?.display_name).catch(() => {});
         });
       } else {
-        getCachedProfile().then((cached) => {
-          if (cached) setProfile(cached as Profile);
-        });
+        const cached = await getCachedProfile();
+        if (cached) setProfile(cached as Profile);
         setLoading(false);
       }
     });

@@ -678,7 +678,19 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
     ) => {
       if (action === "open") {
         Haptics.selectionAsync();
-        router.push({ pathname: "/chat/[id]", params: { id: item.id } });
+        router.push({
+          pathname: "/chat/[id]",
+          params: {
+            id: item.id,
+            otherName: item.other_display_name || "",
+            otherAvatar: item.other_avatar || "",
+            otherId: item.other_id || "",
+            isGroup: item.is_group ? "true" : "false",
+            isChannel: item.is_channel ? "true" : "false",
+            chatName: item.name || "",
+            chatAvatar: item.avatar_url || "",
+          },
+        });
         return;
       }
       if (action === "togglePin") {
@@ -1063,7 +1075,19 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                   isActive={panelMode && item.id === activeChatId}
                   onPress={() => {
                     Haptics.selectionAsync();
-                    router.push({ pathname: "/chat/[id]", params: { id: item.id } });
+                    router.push({
+                      pathname: "/chat/[id]",
+                      params: {
+                        id: item.id,
+                        otherName: item.other_display_name || "",
+                        otherAvatar: item.other_avatar || "",
+                        otherId: item.other_id || "",
+                        isGroup: item.is_group ? "true" : "false",
+                        isChannel: item.is_channel ? "true" : "false",
+                        chatName: item.name || "",
+                        chatAvatar: item.avatar_url || "",
+                      },
+                    });
                   }}
                   onAction={handleChatAction}
                 />

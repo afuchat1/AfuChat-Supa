@@ -49,7 +49,7 @@ import {
   onConnectivityChange,
 } from "@/lib/offlineStore";
 import { getLocalMessages, saveMessages, savePendingMessage, getNewestMessageDate } from "@/lib/storage/localMessages";
-import { clearUnread } from "@/lib/storage/localConversations";
+import { clearUnread, getLocalConversation } from "@/lib/storage/localConversations";
 import { uploadChatMedia } from "@/lib/mediaUpload";
 import { syncPendingMessages } from "@/lib/offlineSync";
 import OfflineBanner from "@/components/ui/OfflineBanner";
@@ -1035,13 +1035,11 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
  */
 export default function ChatScreenRoute() {
   const { user, loading } = useAuth();
-  const { colors } = useTheme();
 
-  if (loading) {
-    return <ChatLoadingSkeleton />;
-  }
-
-  if (!user) {
+  // Don't block on loading — if there's no user yet but loading is still in
+  // progress, render the screen optimistically. The inner ChatScreen will
+  // redirect to login if user turns out to be null once loading finishes.
+  if (!loading && !user) {
     return <Redirect href="/(auth)/login" />;
   }
 
@@ -1049,11 +1047,31 @@ export default function ChatScreenRoute() {
 }
 
 function ChatScreen() {
-  const { id, contactId, contactName, contactAvatar } = useLocalSearchParams<{
+  const {
+    id,
+    contactId,
+    contactName,
+    contactAvatar,
+    // Pre-populated chat metadata passed from the chat list for instant rendering.
+    otherName,
+    otherAvatar,
+    otherId,
+    isGroup,
+    isChannel,
+    chatName,
+    chatAvatar,
+  } = useLocalSearchParams<{
     id: string;
     contactId?: string;
     contactName?: string;
     contactAvatar?: string;
+    otherName?: string;
+    otherAvatar?: string;
+    otherId?: string;
+    isGroup?: string;
+    isChannel?: string;
+    chatName?: string;
+    chatAvatar?: string;
   }>();
   const isDraft = id === "new";
   const { user, profile, isPremium, subscription, refreshProfile } = useAuth();
@@ -1081,24 +1099,42 @@ function ChatScreen() {
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(!isDraft);
+  // Start without a loading spinner — messages are shown from local cache immediately.
+  const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const imgViewer = useImageViewer();
   const [realChatId, setRealChatId] = useState<string | null>(null);
-  const [chatInfo, setChatInfo] = useState<ChatInfo | null>(
-    isDraft && contactName
-      ? {
-          is_group: false,
-          is_channel: false,
-          name: null,
-          other_name: contactName as string,
-          other_avatar: contactAvatar as string | null || null,
-          other_id: contactId as string,
-          member_ids: contactId ? [contactId as string] : [],
-          avatar_url: null,
-        }
-      : null
-  );
+
+  // Build initial chatInfo from navigation params so the header renders instantly.
+  const buildInitialChatInfo = (): ChatInfo | null => {
+    if (otherName || chatName) {
+      return {
+        is_group: isGroup === "true",
+        is_channel: isChannel === "true",
+        name: chatName || null,
+        other_name: otherName || chatName || "Unknown",
+        other_avatar: otherAvatar || chatAvatar || null,
+        other_id: otherId || "",
+        member_ids: otherId ? [otherId] : [],
+        avatar_url: chatAvatar || null,
+      };
+    }
+    if (isDraft && contactName) {
+      return {
+        is_group: false,
+        is_channel: false,
+        name: null,
+        other_name: contactName as string,
+        other_avatar: contactAvatar as string | null || null,
+        other_id: contactId as string,
+        member_ids: contactId ? [contactId as string] : [],
+        avatar_url: null,
+      };
+    }
+    return null;
+  };
+
+  const [chatInfo, setChatInfo] = useState<ChatInfo | null>(buildInitialChatInfo);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const typingMapRef = useRef<Map<string, string>>(new Map());
   const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -1118,6 +1154,27 @@ function ChatScreen() {
   const [miniProfileUserId, setMiniProfileUserId] = useState<string | null>(null);
   const [emojiKeyboardHeight, setEmojiKeyboardHeight] = useState(280);
   const [reminderMsg, setReminderMsg] = useState<Message | null>(null);
+
+  // Load chatInfo from local SQLite cache immediately so the header renders
+  // without any network delay, even if nav params weren't passed.
+  useEffect(() => {
+    if (isDraft || chatInfo) return;
+    getLocalConversation(id).then((local) => {
+      if (!local) return;
+      setChatInfo((prev) => prev ?? {
+        is_group: local.is_group,
+        is_channel: local.is_channel,
+        name: local.name,
+        other_name: local.other_display_name || "Unknown",
+        other_avatar: local.other_avatar,
+        other_id: local.other_id || "",
+        member_ids: local.other_id ? [local.other_id] : [],
+        avatar_url: local.avatar_url,
+        other_last_seen: local.other_last_seen,
+        other_show_online_status: local.other_show_online,
+      });
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
