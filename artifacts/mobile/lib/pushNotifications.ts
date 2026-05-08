@@ -2,8 +2,15 @@
 import { Platform } from "react-native";
 import { router } from "expo-router";
 import { supabase, supabaseUrl, supabaseAnonKey } from "@/lib/supabase";
+import { playNotificationSound } from "@/lib/soundManager";
 
 const EAS_PROJECT_ID = "b55c5d92-7a83-472f-b660-d1838efba5fe";
+
+// AfuChat branded notification sound filename (without extension).
+// The file lives at assets/sounds/notification.wav and is registered in app.json
+// under the expo-notifications plugin "sounds" array so EAS Build copies it to
+// android/app/src/main/res/raw/ automatically.
+const AFUCHAT_SOUND = "notification.wav";
 
 let _lastRegistrationError: string | null = null;
 export function getLastPushRegistrationError(): string | null { return _lastRegistrationError; }
@@ -52,12 +59,14 @@ if (Platform.OS !== "web") {
 export async function setupNotificationChannels(): Promise<void> {
   if (Platform.OS !== "android" || !Notifications) return;
   try {
+    // Default / catch-all channel — AfuChat branded sound
     await Notifications.setNotificationChannelAsync("default", {
-      name: "Default",
+      name: "AfuChat",
+      description: "General AfuChat notifications",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: "#00BCD4",
-      sound: true,
+      sound: AFUCHAT_SOUND,
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       showBadge: true,
       enableVibrate: true,
@@ -65,12 +74,13 @@ export async function setupNotificationChannels(): Promise<void> {
       bypassDnd: false,
     });
 
+    // Messages — highest priority, AfuChat branded sound
     await Notifications.setNotificationChannelAsync("messages", {
       name: "Messages",
       description: "Chat messages from your contacts",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250],
-      sound: true,
+      sound: AFUCHAT_SOUND,
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       showBadge: true,
       enableVibrate: true,
@@ -79,24 +89,28 @@ export async function setupNotificationChannels(): Promise<void> {
       bypassDnd: false,
     });
 
+    // Social — likes, follows, replies, mentions
     await Notifications.setNotificationChannelAsync("social", {
       name: "Social",
-      description: "Likes, follows, and replies",
+      description: "Likes, follows, replies and mentions",
       importance: Notifications.AndroidImportance.HIGH,
-      sound: true,
+      sound: AFUCHAT_SOUND,
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       showBadge: true,
       enableVibrate: true,
+      enableLights: true,
+      lightColor: "#007AFF",
       bypassDnd: false,
     });
 
+    // Marketplace & Payments — orders, escrow, disputes
     await Notifications.setNotificationChannelAsync("marketplace", {
       name: "Marketplace & Payments",
-      description: "Orders, escrow releases, disputes, and payments",
+      description: "Orders, escrow releases, disputes and payments",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: "#34C759",
-      sound: true,
+      sound: AFUCHAT_SOUND,
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       showBadge: true,
       enableVibrate: true,
@@ -104,11 +118,12 @@ export async function setupNotificationChannels(): Promise<void> {
       bypassDnd: false,
     });
 
+    // System — account updates, verifications, admin
     await Notifications.setNotificationChannelAsync("system", {
       name: "System & Account",
-      description: "Account updates, verifications, and admin messages",
+      description: "Account updates, verifications and admin messages",
       importance: Notifications.AndroidImportance.HIGH,
-      sound: true,
+      sound: AFUCHAT_SOUND,
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       showBadge: true,
       enableVibrate: false,
@@ -122,9 +137,7 @@ export async function setupNotificationChannels(): Promise<void> {
 export async function registerForPushNotifications(userId: string): Promise<string | null> {
   if (Platform.OS === "web" || !Notifications || !Device) return null;
   try {
-    if (!Device.isDevice) {
-      return null;
-    }
+    if (!Device.isDevice) return null;
 
     await setupNotificationChannels();
 
@@ -147,19 +160,14 @@ export async function registerForPushNotifications(userId: string): Promise<stri
       finalStatus = status;
     }
 
-    if (finalStatus !== "granted") {
-      return null;
-    }
+    if (finalStatus !== "granted") return null;
 
-    const projectId =
-      process.env.EXPO_PUBLIC_EAS_PROJECT_ID || EAS_PROJECT_ID;
-
+    const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID || EAS_PROJECT_ID;
     const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData.data;
 
-    // Primary: save via server-side edge function (uses service role key, always works)
+    // Primary: save via edge function (uses service role key, always works)
     let savedViaEdge = false;
-
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
@@ -173,9 +181,8 @@ export async function registerForPushNotifications(userId: string): Promise<stri
           },
           body: JSON.stringify({ token }),
         });
-        if (res.ok) {
-          savedViaEdge = true;
-        } else {
+        if (res.ok) savedViaEdge = true;
+        else {
           const errText = await res.text();
           console.warn("[PushNotif] Edge function token save failed:", errText);
         }
@@ -190,10 +197,7 @@ export async function registerForPushNotifications(userId: string): Promise<stri
         .from("profiles")
         .update({ expo_push_token: token })
         .eq("id", userId);
-
-      if (dbError) {
-        console.warn("[PushNotif] Fallback DB save failed:", dbError.message);
-      }
+      if (dbError) console.warn("[PushNotif] Fallback DB save failed:", dbError.message);
     }
 
     return token;
@@ -221,12 +225,8 @@ function routeNotificationResponse(response: any) {
   if (alreadyHandled(id)) return;
 
   const data = (response.notification.request.content.data || {}) as Record<string, string>;
-  // Priority 1: explicit deep-link URL
-  if (data?.url) {
-    router.push(data.url as any);
-    return;
-  }
-  // Priority 2: type-based routing
+  if (data?.url) { router.push(data.url as any); return; }
+
   switch (data?.type) {
     case "message":
       if (data.chatId) router.push(`/chat/${data.chatId}` as any);
@@ -268,18 +268,22 @@ export function setupNotificationListeners() {
   if (_listenersActive) return () => {};
   _listenersActive = true;
 
-  // Drain any pending cold-start response (e.g. app launched by tapping notification).
-  // This marks the ID as handled so the addNotificationResponseReceivedListener
-  // replay on the same session doesn't re-route.
+  // Drain cold-start response (app launched by tapping notification)
   Notifications.getLastNotificationResponseAsync().then((response) => {
     if (response) routeNotificationResponse(response);
   }).catch(() => {});
+
+  // Play AfuChat sound when a notification arrives while the app is foregrounded
+  const receivedSubscription = Notifications.addNotificationReceivedListener(() => {
+    playNotificationSound();
+  });
 
   const responseSubscription = Notifications.addNotificationResponseReceivedListener(
     (response) => routeNotificationResponse(response),
   );
 
   return () => {
+    receivedSubscription.remove();
     responseSubscription.remove();
     _listenersActive = false;
   };
@@ -305,8 +309,13 @@ export async function sendPushNotification(params: {
         ? "messages"
         : params.data?.type === "follow" ||
           params.data?.type === "like" ||
-          params.data?.type === "reply"
+          params.data?.type === "reply" ||
+          params.data?.type === "mention"
         ? "social"
+        : params.data?.type === "order" ||
+          params.data?.type === "escrow" ||
+          params.data?.type === "payment"
+        ? "marketplace"
         : "default";
 
     const res = await fetch("https://exp.host/--/api/v2/push/send", {
@@ -321,7 +330,7 @@ export async function sendPushNotification(params: {
         title: params.title,
         body: params.body,
         data: params.data || {},
-        sound: "default",
+        sound: AFUCHAT_SOUND,
         badge: 1,
         priority: "high",
         channelId,
