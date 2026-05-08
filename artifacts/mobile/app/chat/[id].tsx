@@ -781,7 +781,13 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
                   delayLongPress={300}
                   activeOpacity={0.9}
                 >
-                  <Image source={{ uri: msg.attachment_url! }} style={st.attachImage} resizeMode="cover" />
+                  <View>
+                    <Image source={{ uri: msg.attachment_url! }} style={st.attachImage} resizeMode="cover" />
+                    <View style={{ position: "absolute", bottom: 6, right: 6, backgroundColor: "rgba(0,0,0,0.42)", borderRadius: 10, paddingHorizontal: 6, paddingVertical: 3, flexDirection: "row", alignItems: "center", gap: 3 }}>
+                      <Ionicons name="expand-outline" size={11} color="#fff" />
+                      <Text style={{ color: "#fff", fontSize: 10, fontFamily: "Inter_400Regular" }}>Tap to zoom</Text>
+                    </View>
+                  </View>
                 </TouchableOpacity>
               {hasTextContent && (
                 <RichText style={[st.bubbleText, { color: textColor, marginTop: 6, fontSize: chatPrefsLocal?.font_size ?? 15, lineHeight: (chatPrefsLocal?.font_size ?? 15) + 5 }]} linkColor={isMe ? "#FFFFFF" : "#00BCD4"}>{displayText}</RichText>
@@ -1373,9 +1379,13 @@ function ChatScreen() {
     const chatId = isDraft ? realChatId : id;
     if (!chatId || !user) return;
 
-    const cached = await getLocalMessages(chatId, 60);
+    // Load ALL locally stored messages (no limit — SQLite is fast, no network cost).
+    // getLocalMessages returns oldest-first (ASC). FlatList is inverted so index 0
+    // must be the NEWEST message (appears at bottom). Reverse to get newest-first.
+    const cached = await getLocalMessages(chatId, 5000);
     if (cached.length > 0) {
-      setMessages(cached.map((m) => ({
+      const newestFirst = [...cached].reverse();
+      setMessages(newestFirst.map((m) => ({
         id: m.id, chat_id: m.conversation_id, sender_id: m.sender_id,
         encrypted_content: m.content ?? "", sent_at: m.sent_at,
         reply_to_message_id: m.reply_to_id, attachment_url: m.attachment_url,
@@ -1383,6 +1393,13 @@ function ChatScreen() {
         status: m.status as any, reactions: [], _pending: m.is_pending,
       })));
       setLoading(false);
+      // Seed the pagination cursor from the OLDEST cached message (cached[0] = oldest
+      // in ASC order). This lets loadMoreMessages fetch server messages older than
+      // anything in SQLite when the user scrolls to the very top.
+      if (!oldestCursorRef.current) {
+        oldestCursorRef.current = cached[0].sent_at;
+        setHasMore(true);
+      }
     }
 
     if (!isOnline()) {
@@ -1398,7 +1415,7 @@ function ChatScreen() {
       .select(`id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`)
       .eq("chat_id", chatId)
       .order("sent_at", { ascending: false })
-      .limit(50);
+      .limit(100);
     if (newestStored) {
       // Only fetch messages sent after the newest one we already have
       msgQuery = msgQuery.gt("sent_at", newestStored);
@@ -1642,14 +1659,17 @@ function ChatScreen() {
 
     const loadCached = async () => {
       if (id) {
-        const cached = await getLocalMessages(id, 60);
-        if (cached.length > 0) setMessages(cached.map((m) => ({
-          id: m.id, chat_id: m.conversation_id, sender_id: m.sender_id,
-          encrypted_content: m.content ?? "", sent_at: m.sent_at,
-          reply_to_message_id: m.reply_to_id, attachment_url: m.attachment_url,
-          attachment_type: m.attachment_type, edited_at: m.edited_at,
-          status: m.status as any, reactions: [], _pending: m.is_pending,
-        })));
+        const cached = await getLocalMessages(id, 5000);
+        if (cached.length > 0) {
+          const newestFirst = [...cached].reverse();
+          setMessages(newestFirst.map((m) => ({
+            id: m.id, chat_id: m.conversation_id, sender_id: m.sender_id,
+            encrypted_content: m.content ?? "", sent_at: m.sent_at,
+            reply_to_message_id: m.reply_to_id, attachment_url: m.attachment_url,
+            attachment_type: m.attachment_type, edited_at: m.edited_at,
+            status: m.status as any, reactions: [], _pending: m.is_pending,
+          })));
+        }
       }
     };
     loadCached();
