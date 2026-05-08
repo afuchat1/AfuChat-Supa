@@ -21,7 +21,7 @@ import { getDB } from "./storage/db";
 // ─── Directories ───────────────────────────────────────────────────────────────
 
 // Permanent watched-video store — survives cache pressure, lives until user deletes
-const VIDEO_DIR = (FileSystem.documentDirectory ?? "") + "afuchat_videos/";
+const VIDEO_DIR = ((FileSystem as any).documentDirectory ?? "") + "afuchat_videos/";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 

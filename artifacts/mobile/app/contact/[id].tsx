@@ -156,7 +156,7 @@ export default function ContactProfileScreen() {
     supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", id).then(({ count }) => setFollowerCount(count || 0));
     supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", id).then(({ count }) => setFollowingCount(count || 0));
     if (user) {
-      supabase.rpc("get_mutual_followers_count", { user_a: user.id, user_b: id }).then(({ data }) => setMutualCount(data || 0)).catch(() => {});
+      supabase.rpc("get_mutual_followers_count", { user_a: user.id, user_b: id }).then(({ data }) => setMutualCount(data || 0), () => {});
     }
   }, [id, user]);
 
@@ -293,7 +293,7 @@ export default function ContactProfileScreen() {
       : `https://afuchat.com/contact/${id}`;
     Clipboard.setStringAsync(url).then(() => {
       showAlert("Copied", "Profile link copied to clipboard.");
-    }).catch(() => {});
+    }, () => {});
     setOptionsVisible(false);
   }
 
@@ -550,7 +550,7 @@ export default function ContactProfileScreen() {
           contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
         >
           {profileHeader}
-          <PostsTab posts={textPosts} loading={postsLoading} profile={profile} colors={colors} />
+          <PostsTab posts={textPosts} loading={postsLoading} profile={profile} colors={colors} isDesktop={isDesktop} />
         </ScrollView>
       )}
 
@@ -847,7 +847,7 @@ export default function ContactProfileScreen() {
   );
 }
 
-function PostsTab({ posts, loading, profile, colors }: { posts: UserPost[]; loading: boolean; profile: Profile | null; colors: any }) {
+function PostsTab({ posts, loading, profile, colors, isDesktop }: { posts: UserPost[]; loading: boolean; profile: Profile | null; colors: any; isDesktop: boolean }) {
   if (loading) {
     return <View style={{ padding: 12, gap: 10 }}>{[1,2,3,4].map(i => <PostSkeleton key={i} />)}</View>;
   }

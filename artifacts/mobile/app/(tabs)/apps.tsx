@@ -284,7 +284,7 @@ function FeaturedBanner({ app, onTap }: { app: AppItem; onTap: (id: string) => v
     <Pressable
       onPress={handlePress}
       style={[styles.featuredFlat, { borderBottomColor: colors.border }]}
-      android_ripple={{ color: colors.hover ?? "rgba(0,0,0,0.04)", borderless: false }}
+      android_ripple={{ color: (colors as any).hover ?? "rgba(0,0,0,0.04)", borderless: false }}
     >
       <View style={[styles.featuredFlatIcon, { backgroundColor: colors.backgroundSecondary }]}>
         <Ionicons name={app.icon} size={26} color={colors.text} />

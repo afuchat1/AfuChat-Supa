@@ -198,7 +198,7 @@ function CommentRow({
         useNativeDriver: USE_NATIVE,
       }),
     ]).start();
-    Haptics.impactAsync("light").catch(() => {});
+    void Haptics.impactAsync("light");
     onLike(c.id);
   }
 
@@ -520,7 +520,7 @@ export function DiscoverCommentsSheet({
   function handleReplyTo(c: CommentItem) {
     setReplyingTo(c);
     setText("");
-    Haptics.impactAsync("light").catch(() => {});
+    void Haptics.impactAsync("light");
     setTimeout(() => inputRef.current?.focus(), 120);
   }
 
@@ -541,7 +541,7 @@ export function DiscoverCommentsSheet({
         useNativeDriver: USE_NATIVE,
       }),
     ]).start();
-    Haptics.impactAsync("light").catch(() => {});
+    void Haptics.impactAsync("light");
 
     const payload: any = { post_id: postId, author_id: user.id, content: text.trim() };
     if (replyingTo) payload.parent_reply_id = replyingTo.id;

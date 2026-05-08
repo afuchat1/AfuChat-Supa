@@ -32,7 +32,7 @@ export default function VerifiedBadge({ isVerified, isOrganizationVerified, size
 
   const badgeColor = isOrg ? "#D4A853" : accent;
 
-  const REASONS: { icon: Parameters<typeof Ionicons>[0]["name"]; label: string; premiumLink?: boolean }[] = isOrg
+  const REASONS: { icon: string; label: string; premiumLink?: boolean }[] = isOrg
     ? [
         { icon: "business-outline", label: "Confirmed authentic business, brand, or organization" },
         { icon: "shield-checkmark-outline", label: "Notable presence in its industry or community", premiumLink: true },
@@ -100,7 +100,7 @@ export default function VerifiedBadge({ isVerified, isOrganizationVerified, size
                   onPress={() => { setVisible(false); router.push("/premium"); }}
                 >
                   <View style={[s.bulletIcon, { backgroundColor: badgeColor + "28" }]}>
-                    <Ionicons name={r.icon} size={15} color={badgeColor} />
+                    <Ionicons name={r.icon as any} size={15} color={badgeColor} />
                   </View>
                   <Text style={[s.bulletText, { color: colors.textSecondary, flex: 1 }]}>{r.label}</Text>
                   <View style={[s.premiumPill, { backgroundColor: badgeColor + "22" }]}>
@@ -111,7 +111,7 @@ export default function VerifiedBadge({ isVerified, isOrganizationVerified, size
               ) : (
                 <View key={i} style={s.bulletRow}>
                   <View style={[s.bulletIcon, { backgroundColor: badgeColor + "18" }]}>
-                    <Ionicons name={r.icon} size={15} color={badgeColor} />
+                    <Ionicons name={r.icon as any} size={15} color={badgeColor} />
                   </View>
                   <Text style={[s.bulletText, { color: colors.textSecondary }]}>{r.label}</Text>
                 </View>

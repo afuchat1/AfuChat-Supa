@@ -109,7 +109,7 @@ export function AdvancedFeaturesProvider({ children }: { children: React.ReactNo
       .eq("user_id", user.id)
       .maybeSingle()
       .then(({ data }) => {
-        if (data) setFeatures({ ...defaults, ...data });
+        if (data) setFeatures({ ...defaults, ...(data as any) });
         setLoading(false);
       });
   }, [user?.id]);

@@ -1275,7 +1275,6 @@ const styles = StyleSheet.create({
   unreadBadgeText: { color: "#fff", fontSize: 11, fontFamily: "Inter_700Bold", lineHeight: 14 },
   onlineDot: { position: "absolute", bottom: 1, right: 1, width: 13, height: 13, borderRadius: 7, backgroundColor: "#34C759", borderWidth: 2 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
-  emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   emptySubtitle: { fontSize: 14, fontFamily: "Inter_400Regular" },
   fab: {
     position: "absolute",

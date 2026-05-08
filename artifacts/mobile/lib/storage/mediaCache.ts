@@ -14,7 +14,7 @@ import * as FileSystem from "expo-file-system";
 import { getDB } from "./db";
 
 // ── documentDirectory = permanent; OS never clears this automatically ──────────
-const BASE_DIR = (FileSystem.documentDirectory ?? "") + "afuchat_media/";
+const BASE_DIR = ((FileSystem as any).documentDirectory ?? "") + "afuchat_media/";
 const THUMB_DIR = BASE_DIR + "thumbs/";
 const AVATAR_DIR = BASE_DIR + "avatars/";
 

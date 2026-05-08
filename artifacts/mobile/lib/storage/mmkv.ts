@@ -100,13 +100,13 @@ function getStore(): MMKVLike {
     _store = createWebStore();
   } else {
     try {
-      const { MMKV } = require("react-native-mmkv") as typeof import("react-native-mmkv");
+      const { MMKV } = require("react-native-mmkv") as any;
       _store = new MMKV({ id: "afuchat-store" });
     } catch {
       _store = createWebStore();
     }
   }
-  return _store;
+  return _store!;
 }
 
 // ─── Typed helpers ─────────────────────────────────────────────────────────────

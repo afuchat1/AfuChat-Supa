@@ -60,7 +60,7 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
         tabBarInactiveTintColor: colors.tabIconDefault,
         headerShown: false,
         lazy: false,
-        contentStyle: { backgroundColor: colors.background },
+        ...(({ contentStyle: { backgroundColor: colors.background } }) as any),
         tabBarStyle: hideTabs
           ? { display: "none" }
           : {

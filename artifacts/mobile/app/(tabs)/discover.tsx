@@ -180,7 +180,7 @@ function PostUploadBanner({ colors }: { colors: typeof Colors.light }) {
   const errorMsg = upload.type === "video" ? "Video failed to post." : "Post failed to publish.";
 
   const label = upload.done ? doneMsg : upload.failed ? errorMsg : activeMsg;
-  const bgColor = upload.failed ? "#FF3B30" : colors.accent;
+  const bgColor = upload.failed ? "#FF3B30" : (colors as any).accent ?? colors.tint;
   const barWidth = `${Math.round(upload.progress * 100)}%` as any;
 
   return (
@@ -663,7 +663,7 @@ export default function DiscoverScreen() {
     setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, replyCount: Math.max(0, p.replyCount + delta) } : p));
   }, []);
 
-  const fabRef = useRef<TouchableOpacity>(null);
+  const fabRef = useRef<React.ElementRef<typeof TouchableOpacity>>(null);
 
   const tabPostsCache = useRef<Record<"for_you" | "following", PostItem[]>>({ for_you: [], following: [] });
   const tabCacheTimestamp = useRef<Record<"for_you" | "following", number>>({ for_you: 0, following: 0 });

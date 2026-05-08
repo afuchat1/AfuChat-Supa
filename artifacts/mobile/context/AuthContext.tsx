@@ -31,6 +31,7 @@ type Profile = {
   is_admin: boolean;
   is_support_staff: boolean;
   is_organization_verified: boolean;
+  is_business_mode: boolean;
   gender: string | null;
   date_of_birth: string | null;
   region: string | null;

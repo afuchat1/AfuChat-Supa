@@ -288,8 +288,7 @@ export default function HandleScreen() {
         if (data?.id) setProfileId(data.id);
         else setProfileNotFound(true);
         setDataReady(true);
-      })
-      .catch(() => { setProfileNotFound(true); setDataReady(true); });
+      }, () => { setProfileNotFound(true); setDataReady(true); });
   }, [cleanHandle, isValidHandle, isAtHandle, authLoading, session]);
 
   // Effect 2: navigate once data is ready

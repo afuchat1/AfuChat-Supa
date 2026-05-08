@@ -21,7 +21,7 @@ export type StorageStats = {
 async function getSQLiteSize(): Promise<number> {
   if (Platform.OS === "web") return 0;
   try {
-    const dbPath = (FileSystem.documentDirectory ?? "") + "SQLite/afuchat_local.db";
+    const dbPath = ((FileSystem as any).documentDirectory ?? "") + "SQLite/afuchat_local.db";
     const info = await FileSystem.getInfoAsync(dbPath);
     return (info as any).size ?? 0;
   } catch {
