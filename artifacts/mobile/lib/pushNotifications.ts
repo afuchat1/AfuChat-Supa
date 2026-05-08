@@ -3,14 +3,20 @@ import { Platform } from "react-native";
 import { router } from "expo-router";
 import { supabase, supabaseUrl, supabaseAnonKey } from "@/lib/supabase";
 import { playNotificationSound } from "@/lib/soundManager";
+import { handleNotificationAction } from "@/lib/notificationActions";
 
 const EAS_PROJECT_ID = "b55c5d92-7a83-472f-b660-d1838efba5fe";
 
-// AfuChat branded notification sound filename (without extension).
-// The file lives at assets/sounds/notification.wav and is registered in app.json
-// under the expo-notifications plugin "sounds" array so EAS Build copies it to
-// android/app/src/main/res/raw/ automatically.
+// AfuChat branded notification sound file (registered in app.json expo-notifications plugin).
 const AFUCHAT_SOUND = "notification.wav";
+
+// ── Notification Category IDs ─────────────────────────────────────────
+export const NOTIF_CATEGORY = {
+  MESSAGE_REPLY:   "afuchat_message_reply",
+  POST_INTERACT:   "afuchat_post_interact",
+  NEW_FOLLOWER:    "afuchat_new_follower",
+  ORDER_UPDATE:    "afuchat_order_update",
+} as const;
 
 let _lastRegistrationError: string | null = null;
 export function getLastPushRegistrationError(): string | null { return _lastRegistrationError; }
@@ -56,83 +62,162 @@ if (Platform.OS !== "web") {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Notification Categories (action buttons in status bar)
+// ─────────────────────────────────────────────────────────────────────
+
+export async function setupNotificationCategories(): Promise<void> {
+  if (Platform.OS === "web" || !Notifications) return;
+  try {
+    // ── Chat message: inline reply + mark read + snooze ──────────────
+    await Notifications.setNotificationCategoryAsync(NOTIF_CATEGORY.MESSAGE_REPLY, [
+      {
+        identifier: "chat_reply",
+        buttonTitle: "Reply",
+        options: { opensAppToForeground: false },
+        textInput: {
+          submitButtonTitle: "Send",
+          placeholder: "Type a message…",
+        },
+      },
+      {
+        identifier: "mark_read",
+        buttonTitle: "Mark Read",
+        options: { opensAppToForeground: false, isDestructive: false },
+      },
+      {
+        identifier: "snooze_1h",
+        buttonTitle: "Snooze 1h",
+        options: { opensAppToForeground: false, isDestructive: false },
+      },
+    ]);
+
+    // ── Post / mention: inline reply + like + view ────────────────────
+    await Notifications.setNotificationCategoryAsync(NOTIF_CATEGORY.POST_INTERACT, [
+      {
+        identifier: "post_reply",
+        buttonTitle: "Reply",
+        options: { opensAppToForeground: false },
+        textInput: {
+          submitButtonTitle: "Send",
+          placeholder: "Write your reply…",
+        },
+      },
+      {
+        identifier: "like",
+        buttonTitle: "❤️ Like",
+        options: { opensAppToForeground: false, isDestructive: false },
+      },
+      {
+        identifier: "view_post",
+        buttonTitle: "View Post",
+        options: { opensAppToForeground: true },
+      },
+    ]);
+
+    // ── New follower: follow back + view profile + mark read ──────────
+    await Notifications.setNotificationCategoryAsync(NOTIF_CATEGORY.NEW_FOLLOWER, [
+      {
+        identifier: "follow_back",
+        buttonTitle: "Follow Back",
+        options: { opensAppToForeground: false, isDestructive: false },
+      },
+      {
+        identifier: "view_profile",
+        buttonTitle: "View Profile",
+        options: { opensAppToForeground: true },
+      },
+      {
+        identifier: "mark_read",
+        buttonTitle: "Dismiss",
+        options: { opensAppToForeground: false, isDestructive: false },
+      },
+    ]);
+
+    // ── Order / marketplace: view order + dismiss ─────────────────────
+    await Notifications.setNotificationCategoryAsync(NOTIF_CATEGORY.ORDER_UPDATE, [
+      {
+        identifier: "view_order",
+        buttonTitle: "View Order",
+        options: { opensAppToForeground: true },
+      },
+      {
+        identifier: "mark_read",
+        buttonTitle: "Dismiss",
+        options: { opensAppToForeground: false, isDestructive: false },
+      },
+    ]);
+  } catch (e) {
+    console.warn("[PushNotif] Category setup failed:", e);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Notification Channels (Android — each branded with AfuChat sound)
+// ─────────────────────────────────────────────────────────────────────
+
 export async function setupNotificationChannels(): Promise<void> {
   if (Platform.OS !== "android" || !Notifications) return;
   try {
-    // Default / catch-all channel — AfuChat branded sound
+    const base = {
+      sound: AFUCHAT_SOUND,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      showBadge: true,
+      enableVibrate: true,
+      enableLights: true,
+      bypassDnd: false,
+    };
+
     await Notifications.setNotificationChannelAsync("default", {
       name: "AfuChat",
       description: "General AfuChat notifications",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: "#00BCD4",
-      sound: AFUCHAT_SOUND,
-      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-      showBadge: true,
-      enableVibrate: true,
-      enableLights: true,
-      bypassDnd: false,
+      ...base,
     });
 
-    // Messages — highest priority, AfuChat branded sound
     await Notifications.setNotificationChannelAsync("messages", {
       name: "Messages",
       description: "Chat messages from your contacts",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250],
-      sound: AFUCHAT_SOUND,
-      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-      showBadge: true,
-      enableVibrate: true,
-      enableLights: true,
       lightColor: "#00BCD4",
-      bypassDnd: false,
+      ...base,
     });
 
-    // Social — likes, follows, replies, mentions
     await Notifications.setNotificationChannelAsync("social", {
       name: "Social",
       description: "Likes, follows, replies and mentions",
       importance: Notifications.AndroidImportance.HIGH,
-      sound: AFUCHAT_SOUND,
-      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-      showBadge: true,
-      enableVibrate: true,
-      enableLights: true,
       lightColor: "#007AFF",
-      bypassDnd: false,
+      ...base,
     });
 
-    // Marketplace & Payments — orders, escrow, disputes
     await Notifications.setNotificationChannelAsync("marketplace", {
       name: "Marketplace & Payments",
       description: "Orders, escrow releases, disputes and payments",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: "#34C759",
-      sound: AFUCHAT_SOUND,
-      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-      showBadge: true,
-      enableVibrate: true,
-      enableLights: true,
-      bypassDnd: false,
+      ...base,
     });
 
-    // System — account updates, verifications, admin
     await Notifications.setNotificationChannelAsync("system", {
       name: "System & Account",
       description: "Account updates, verifications and admin messages",
       importance: Notifications.AndroidImportance.HIGH,
-      sound: AFUCHAT_SOUND,
-      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-      showBadge: true,
       enableVibrate: false,
-      bypassDnd: false,
+      ...base,
     });
   } catch (e) {
     console.warn("[PushNotif] Channel setup failed:", e);
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// Registration
+// ─────────────────────────────────────────────────────────────────────
 
 export async function registerForPushNotifications(userId: string): Promise<string | null> {
   if (Platform.OS === "web" || !Notifications || !Device) return null;
@@ -140,6 +225,7 @@ export async function registerForPushNotifications(userId: string): Promise<stri
     if (!Device.isDevice) return null;
 
     await setupNotificationChannels();
+    await setupNotificationCategories();
 
     const { status: existing } = await Notifications.getPermissionsAsync();
     let finalStatus = existing;
@@ -166,7 +252,7 @@ export async function registerForPushNotifications(userId: string): Promise<stri
     const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData.data;
 
-    // Primary: save via edge function (uses service role key, always works)
+    // Primary: save via edge function (service role key)
     let savedViaEdge = false;
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -182,10 +268,7 @@ export async function registerForPushNotifications(userId: string): Promise<stri
           body: JSON.stringify({ token }),
         });
         if (res.ok) savedViaEdge = true;
-        else {
-          const errText = await res.text();
-          console.warn("[PushNotif] Edge function token save failed:", errText);
-        }
+        else console.warn("[PushNotif] Edge function token save failed:", await res.text());
       }
     } catch (edgeErr: any) {
       console.warn("[PushNotif] Edge function unreachable:", edgeErr?.message);
@@ -214,17 +297,35 @@ export async function registerForPushNotifications(userId: string): Promise<stri
 }
 
 export async function clearPushToken(userId: string): Promise<void> {
-  await supabase
-    .from("profiles")
-    .update({ expo_push_token: null })
-    .eq("id", userId);
+  await supabase.from("profiles").update({ expo_push_token: null }).eq("id", userId);
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// Notification response routing (tap on notification body)
+// ─────────────────────────────────────────────────────────────────────
 
 function routeNotificationResponse(response: any) {
   const id = response.notification.request.identifier;
   if (alreadyHandled(id)) return;
 
   const data = (response.notification.request.content.data || {}) as Record<string, string>;
+
+  // Explicit view actions from action buttons
+  if (response.actionIdentifier === "view_post" && data.postId) {
+    router.push(`/p/${data.postId}` as any);
+    return;
+  }
+  if (response.actionIdentifier === "view_profile" && data.actorId) {
+    router.push(`/contact/${data.actorId}` as any);
+    return;
+  }
+  if (response.actionIdentifier === "view_order") {
+    if (data.orderId) router.push(`/shop/order/${data.orderId}` as any);
+    else router.push("/shop/my-orders" as any);
+    return;
+  }
+
+  // Default tap (no action button) — deep link or type-based routing
   if (data?.url) { router.push(data.url as any); return; }
 
   switch (data?.type) {
@@ -244,13 +345,13 @@ function routeNotificationResponse(response: any) {
       router.push("/channel/intro" as any);
       break;
     case "follow":
-      if (data.userId) router.push(`/contact/${data.userId}` as any);
+      if (data.actorId) router.push(`/contact/${data.actorId}` as any);
       else router.push("/notifications" as any);
       break;
     case "like":
     case "reply":
     case "mention":
-      if (data.postId) router.push(`/post/${data.postId}` as any);
+      if (data.postId) router.push(`/p/${data.postId}` as any);
       else router.push("/notifications" as any);
       break;
     case "gift":
@@ -261,6 +362,10 @@ function routeNotificationResponse(response: any) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Notification listeners
+// ─────────────────────────────────────────────────────────────────────
+
 let _listenersActive = false;
 
 export function setupNotificationListeners() {
@@ -270,16 +375,42 @@ export function setupNotificationListeners() {
 
   // Drain cold-start response (app launched by tapping notification)
   Notifications.getLastNotificationResponseAsync().then((response) => {
-    if (response) routeNotificationResponse(response);
+    if (response) {
+      const { actionIdentifier, userText } = response as any;
+      const data = (response.notification.request.content.data || {}) as Record<string, string>;
+      handleNotificationAction(actionIdentifier, userText, data).then(() => {
+        routeNotificationResponse(response);
+      });
+    }
   }).catch(() => {});
 
-  // Play AfuChat sound when a notification arrives while the app is foregrounded
+  // Play AfuChat sound when notification arrives while app is foregrounded
   const receivedSubscription = Notifications.addNotificationReceivedListener(() => {
     playNotificationSound();
   });
 
+  // Handle action button taps AND notification taps
   const responseSubscription = Notifications.addNotificationResponseReceivedListener(
-    (response) => routeNotificationResponse(response),
+    async (response) => {
+      const { actionIdentifier, userText } = response as any;
+      const data = (response.notification.request.content.data || {}) as Record<string, string>;
+
+      // Run action (reply, like, follow_back, etc.) — safe in background
+      await handleNotificationAction(actionIdentifier, userText, data);
+
+      // Then route if needed (navigation actions / default tap)
+      const DEFAULT = Notifications?.DEFAULT_ACTION_IDENTIFIER ?? "com.apple.UNNotificationDefaultActionIdentifier";
+      const isNavAction = [
+        DEFAULT,
+        "view_post",
+        "view_profile",
+        "view_order",
+      ].includes(actionIdentifier);
+
+      if (isNavAction) {
+        routeNotificationResponse(response);
+      }
+    }
   );
 
   return () => {
@@ -289,11 +420,16 @@ export function setupNotificationListeners() {
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Direct push sender (client-side, for completeness)
+// ─────────────────────────────────────────────────────────────────────
+
 export async function sendPushNotification(params: {
   userId: string;
   title: string;
   body: string;
   data?: Record<string, string>;
+  categoryIdentifier?: string;
 }): Promise<void> {
   try {
     const { data: profile } = await supabase
@@ -304,19 +440,34 @@ export async function sendPushNotification(params: {
 
     if (!profile?.expo_push_token) return;
 
+    const { getPushSoundToken } = await import("@/lib/soundManager");
+    const soundToken = await getPushSoundToken();
+
     const channelId =
-      params.data?.type === "message"
-        ? "messages"
-        : params.data?.type === "follow" ||
-          params.data?.type === "like" ||
-          params.data?.type === "reply" ||
-          params.data?.type === "mention"
-        ? "social"
-        : params.data?.type === "order" ||
-          params.data?.type === "escrow" ||
-          params.data?.type === "payment"
-        ? "marketplace"
-        : "default";
+      params.data?.type === "message"       ? "messages"
+      : params.data?.type === "follow"      ? "social"
+      : params.data?.type === "like"        ? "social"
+      : params.data?.type === "reply"       ? "social"
+      : params.data?.type === "mention"     ? "social"
+      : params.data?.type === "order"       ? "marketplace"
+      : params.data?.type === "escrow"      ? "marketplace"
+      : params.data?.type === "payment"     ? "marketplace"
+      : "default";
+
+    const payload: Record<string, any> = {
+      to: profile.expo_push_token,
+      title: params.title,
+      body: params.body,
+      data: params.data || {},
+      badge: 1,
+      priority: "high",
+      channelId,
+      ttl: 604800,
+      expiration: Math.floor(Date.now() / 1000) + 604800,
+    };
+
+    if (soundToken) payload.sound = soundToken;
+    if (params.categoryIdentifier) payload.categoryIdentifier = params.categoryIdentifier;
 
     const res = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
@@ -325,18 +476,7 @@ export async function sendPushNotification(params: {
         Accept: "application/json",
         "Accept-Encoding": "gzip, deflate",
       },
-      body: JSON.stringify({
-        to: profile.expo_push_token,
-        title: params.title,
-        body: params.body,
-        data: params.data || {},
-        sound: AFUCHAT_SOUND,
-        badge: 1,
-        priority: "high",
-        channelId,
-        ttl: 604800,
-        expiration: Math.floor(Date.now() / 1000) + 604800,
-      }),
+      body: JSON.stringify(payload),
     });
 
     const json = await res.json();
