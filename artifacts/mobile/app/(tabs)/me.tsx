@@ -435,8 +435,6 @@ export default function MeScreen() {
       <MenuGroup>
         <Separator indent={54} />
         <MenuItem icon="person-add-outline" iconBg="#00BCD4" label="Find People" onPress={() => router.push("/user-discovery")} badge="NEW" />
-        {Platform.OS !== "web" && <Separator indent={54} />}
-        {Platform.OS !== "web" && <MenuItem icon="notifications-outline" iconBg="#007AFF" label="Notifications" onPress={() => router.push("/notifications")} />}
       </MenuGroup>
 
       <MenuGroup>

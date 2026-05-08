@@ -54,6 +54,8 @@ const SOUND_OPTIONS: { value: SoundMode; icon: string; label: string; sub: strin
 ];
 
 export default function NotificationSettingsScreen() {
+  if (Platform.OS === "web") return null;
+
   const { colors, accent } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();

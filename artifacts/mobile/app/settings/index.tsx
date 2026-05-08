@@ -154,13 +154,15 @@ export default function SettingsScreen() {
             value={langLabel}
             onPress={() => router.push("/language-settings")}
           />
-          <Separator indent={54} />
-          <MenuItem
-            icon="notifications-outline"
-            iconBg="#5856D6"
-            label="Notifications"
-            onPress={() => router.push("/settings/notifications")}
-          />
+          {Platform.OS !== "web" && <Separator indent={54} />}
+          {Platform.OS !== "web" && (
+            <MenuItem
+              icon="notifications-outline"
+              iconBg="#5856D6"
+              label="Notifications"
+              onPress={() => router.push("/settings/notifications")}
+            />
+          )}
           <Separator indent={54} />
           <MenuItem
             icon="chatbubbles-outline"
@@ -226,13 +228,6 @@ export default function SettingsScreen() {
             iconBg="#5856D6"
             label="Support Center"
             onPress={() => router.push("/support" as any)}
-          />
-          <Separator indent={54} />
-          <MenuItem
-            icon="pulse-outline"
-            iconBg="#22C55E"
-            label="System Status"
-            onPress={() => router.push("/status" as any)}
           />
           <Separator indent={54} />
           <MenuItem

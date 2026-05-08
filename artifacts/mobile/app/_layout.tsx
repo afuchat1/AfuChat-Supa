@@ -259,7 +259,7 @@ export default function RootLayout() {
                     <ChatPreferencesProvider>
                     <AdvancedFeaturesProvider>
                     <DataModeProvider>
-                    <PushNotificationManager />
+                    {Platform.OS !== "web" && <PushNotificationManager />}
                     <CallManager />
                     <AppLockGate>
                       <DesktopShell>

@@ -340,6 +340,8 @@ function NotifRow({
 }
 
 export default function NotificationsScreen() {
+  if (Platform.OS === "web") return null;
+
   const { colors, accent } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
