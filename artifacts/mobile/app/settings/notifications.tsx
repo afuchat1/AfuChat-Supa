@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
@@ -17,7 +17,6 @@ import * as Haptics from "expo-haptics";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
-import { registerForPushNotifications, getLastPushRegistrationError } from "@/lib/pushNotifications";
 import { getSoundMode, setSoundMode, playNotificationSound, SoundMode } from "@/lib/soundManager";
 
 type Prefs = {
@@ -42,11 +41,6 @@ const defaults: Prefs = {
   quiet_hours_enabled: false,
 };
 
-type DiagState =
-  | { status: "idle" }
-  | { status: "checking" }
-  | { status: "done"; permission: string; token: string | null; dbToken: string | null; error?: string };
-
 const SOUND_OPTIONS: { value: SoundMode; icon: string; label: string; sub: string }[] = [
   { value: "afuchat", icon: "musical-notes",  label: "AfuChat Sound",   sub: "Branded tune — our signature sound" },
   { value: "device",  icon: "phone-portrait",  label: "Device Default",  sub: "Your system notification sound" },
@@ -63,7 +57,6 @@ export default function NotificationSettingsScreen() {
   const [prefs, setPrefs]           = useState<Prefs>(defaults);
   const [soundMode, setSoundModeState] = useState<SoundMode>("afuchat");
   const [testingSound, setTestingSound] = useState(false);
-  const [diag, setDiag]             = useState<DiagState>({ status: "idle" });
 
   // Load prefs from DB
   useEffect(() => {
@@ -107,44 +100,6 @@ export default function NotificationSettingsScreen() {
       Linking.openSettings();
     }
   }
-
-  const runDiagnostics = useCallback(async () => {
-    if (!user || Platform.OS === "web") return;
-    setDiag({ status: "checking" });
-    let permission = "unknown";
-    let token: string | null = null;
-    let dbToken: string | null = null;
-    let error: string | undefined;
-
-    try {
-      const Notifications = require("expo-notifications");
-      const { status } = await Notifications.getPermissionsAsync();
-      permission = status;
-    } catch (e: any) {
-      permission = "error: " + (e?.message || "unknown");
-    }
-
-    try {
-      token = await registerForPushNotifications(user.id);
-      if (!token) error = getLastPushRegistrationError() ?? "returned null";
-    } catch (e: any) {
-      error = e?.message || "registration threw";
-    }
-
-    try {
-      const { data } = await supabase.from("profiles").select("expo_push_token").eq("id", user.id).single();
-      dbToken = data?.expo_push_token ?? null;
-    } catch {}
-
-    setDiag({ status: "done", permission, token, dbToken, error });
-  }, [user]);
-
-  useEffect(() => {
-    if (Platform.OS !== "web" && user) runDiagnostics();
-  }, [user]);
-
-  const statusColor = (ok: boolean | null) =>
-    ok === null ? colors.textMuted : ok ? "#34C759" : "#FF3B30";
 
   function PrefRow({ label, field, sub }: { label: string; field: keyof Prefs; sub?: string }) {
     return (
@@ -270,63 +225,6 @@ export default function NotificationSettingsScreen() {
         </View>
       </View>
 
-      {/* ── Push Token Diagnostics ────────────────────────────────── */}
-      {Platform.OS !== "web" && (
-        <>
-          <Text style={[st.section, { color: colors.textSecondary }]}>Push Registration Status</Text>
-          <View style={[st.diagCard, { backgroundColor: colors.surface }]}>
-            {diag.status === "checking" || diag.status === "idle" ? (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <ActivityIndicator color={accent} />
-                <Text style={[st.diagLabel, { color: colors.textSecondary }]}>Checking push registration…</Text>
-              </View>
-            ) : (
-              <>
-                <View style={st.diagRow}>
-                  <Text style={[st.diagLabel, { color: colors.textSecondary }]}>Permission</Text>
-                  <Text style={[st.diagValue, { color: diag.permission === "granted" ? "#34C759" : "#FF3B30" }]}>
-                    {diag.permission}
-                  </Text>
-                </View>
-                <View style={st.diagRow}>
-                  <Text style={[st.diagLabel, { color: colors.textSecondary }]}>Token obtained</Text>
-                  <Text style={[st.diagValue, { color: statusColor(!!diag.token) }]}>
-                    {diag.token ? "✓ yes" : "✗ no"}
-                  </Text>
-                </View>
-                {diag.token && (
-                  <View style={st.diagRow}>
-                    <Text style={[st.diagLabel, { color: colors.textSecondary }]}>Token</Text>
-                    <Text style={[st.diagValueSmall, { color: colors.textMuted }]} numberOfLines={2}>
-                      {diag.token}
-                    </Text>
-                  </View>
-                )}
-                <View style={st.diagRow}>
-                  <Text style={[st.diagLabel, { color: colors.textSecondary }]}>Saved in DB</Text>
-                  <Text style={[st.diagValue, { color: statusColor(!!diag.dbToken) }]}>
-                    {diag.dbToken ? "✓ yes" : "✗ no"}
-                  </Text>
-                </View>
-                {diag.error && (
-                  <View style={[st.errorBox, { backgroundColor: "#FF3B3020" }]}>
-                    <Ionicons name="warning-outline" size={14} color="#FF3B30" />
-                    <Text style={st.errorText}>{diag.error}</Text>
-                  </View>
-                )}
-              </>
-            )}
-            <TouchableOpacity
-              style={[st.retryBtn, { backgroundColor: accent + "20", borderColor: accent }]}
-              onPress={runDiagnostics}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="refresh-outline" size={16} color={accent} />
-              <Text style={[st.retryText, { color: accent }]}>Re-register push token</Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
     </ScrollView>
   );
 }
@@ -406,19 +304,4 @@ const st = StyleSheet.create({
   actionTag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   actionTagText: { fontSize: 12, fontFamily: "Inter_500Medium" },
 
-  // Diagnostics
-  diagCard: {
-    marginHorizontal: 16, borderRadius: 14, padding: 14, gap: 10,
-  },
-  diagRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
-  diagLabel: { fontSize: 14, fontFamily: "Inter_400Regular", flex: 1 },
-  diagValue: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  diagValueSmall: { fontSize: 11, fontFamily: "Inter_400Regular", flex: 2, textAlign: "right" },
-  errorBox: { flexDirection: "row", alignItems: "flex-start", gap: 6, borderRadius: 8, padding: 8 },
-  errorText: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#FF3B30", flex: 1 },
-  retryBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 6, borderRadius: 10, paddingVertical: 10, borderWidth: 1, marginTop: 4,
-  },
-  retryText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
 });

@@ -90,7 +90,6 @@ export function ChatPreferencesProvider({ children }: { children: React.ReactNod
       .maybeSingle();
     if (data) {
       setPrefs({ ...defaults, ...data });
-      if (data.chat_theme) AsyncStorage.setItem(APP_ACCENT_KEY, data.chat_theme);
     }
     setLoading(false);
   }, [user]);

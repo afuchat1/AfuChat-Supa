@@ -67,37 +67,6 @@ function StatusBarManager() {
   return <StatusBar style={isDark ? "light" : "dark"} translucent backgroundColor="transparent" />;
 }
 
-function ThemeSyncManager() {
-  const { user } = useAuth();
-  const { themeMode, setThemeMode } = useThemeContext();
-  const initialLoadDone = useRef(false);
-
-  useEffect(() => {
-    if (!user) { initialLoadDone.current = false; return; }
-    supabase
-      .from("advanced_feature_settings")
-      .select("theme_mode")
-      .eq("user_id", user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.theme_mode && ["light", "dark", "system"].includes(data.theme_mode)) {
-          setThemeMode(data.theme_mode as any);
-        }
-        initialLoadDone.current = true;
-      })
-      .then(undefined, () => { initialLoadDone.current = true; });
-  }, [user?.id]);
-
-  useEffect(() => {
-    if (!user || !initialLoadDone.current) return;
-    supabase
-      .from("advanced_feature_settings")
-      .upsert({ user_id: user.id, theme_mode: themeMode }, { onConflict: "user_id" })
-      .then(() => {}, () => {});
-  }, [themeMode]);
-
-  return null;
-}
 
 const bottomSheetAnim = Platform.OS === "web"
   ? { animation: "none" as const }
@@ -252,7 +221,6 @@ export default function RootLayout() {
                 <AppAccentProvider>
                 <StatusBarManager />
                 <AuthProvider>
-                  <ThemeSyncManager />
                   <GoogleOneTap />
                   <CommunityBannerManager />
                   <LanguageProvider>
