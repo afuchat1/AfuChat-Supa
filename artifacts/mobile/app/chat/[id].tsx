@@ -50,6 +50,7 @@ import {
 } from "@/lib/offlineStore";
 import { getLocalMessages, saveMessages, savePendingMessage, getNewestMessageDate } from "@/lib/storage/localMessages";
 import { clearUnread, getLocalConversation } from "@/lib/storage/localConversations";
+import { getLocalAttachmentUri, ensureChatAttachmentDownloaded, autoDownloadChatAttachments, openChatFile } from "@/lib/storage/chatAttachmentCache";
 import { uploadChatMedia } from "@/lib/mediaUpload";
 import { syncPendingMessages } from "@/lib/offlineSync";
 import OfflineBanner from "@/components/ui/OfflineBanner";
@@ -566,6 +567,39 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   const [showTranscript, setShowTranscript] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
+  // ── Local attachment URI (from device cache) ──────────────────────────────
+  // Initialise synchronously from the in-memory cache; then resolve in the
+  // background so the local file is used on re-renders without any re-download.
+  const [attachUri, setAttachUri] = useState<string>(() => {
+    if (!msg.attachment_url) return "";
+    return getLocalAttachmentUri(msg.attachment_url) ?? msg.attachment_url;
+  });
+  const [fileDownloading, setFileDownloading] = useState(false);
+
+  useEffect(() => {
+    const url  = msg.attachment_url;
+    const type = msg.attachment_type;
+    if (!url || !type || type === "video") return;
+    // Already resolved to a local path — nothing to do
+    if (attachUri && !attachUri.startsWith("http")) return;
+    ensureChatAttachmentDownloaded(url, type)
+      .then((local) => { if (local && local !== attachUri) setAttachUri(local); })
+      .catch(() => {});
+  }, [msg.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleFileTap() {
+    if (!msg.attachment_url) return;
+    const local = getLocalAttachmentUri(msg.attachment_url);
+    if (local) { openChatFile(local); return; }
+    setFileDownloading(true);
+    try {
+      const downloaded = await ensureChatAttachmentDownloaded(msg.attachment_url, "file");
+      if (downloaded) { setAttachUri(downloaded); openChatFile(downloaded); }
+    } finally {
+      setFileDownloading(false);
+    }
+  }
+
   const swipeX = useRef(new Animated.Value(0)).current;
   const swipeTriggered = useRef(false);
   const swipePan = useRef(
@@ -776,13 +810,13 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
           {hasImage ? (
             <>
               <TouchableOpacity
-                  onPress={() => onImageTap?.([msg.attachment_url!], 0)}
+                  onPress={() => onImageTap?.([attachUri || msg.attachment_url!], 0)}
                   onLongPress={() => onLongPress(msg)}
                   delayLongPress={300}
                   activeOpacity={0.9}
                 >
                   <View>
-                    <Image source={{ uri: msg.attachment_url! }} style={st.attachImage} resizeMode="cover" />
+                    <Image source={{ uri: attachUri || msg.attachment_url! }} style={st.attachImage} resizeMode="cover" />
                     <View style={{ position: "absolute", bottom: 6, right: 6, backgroundColor: "rgba(0,0,0,0.42)", borderRadius: 10, paddingHorizontal: 6, paddingVertical: 3, flexDirection: "row", alignItems: "center", gap: 3 }}>
                       <Ionicons name="expand-outline" size={11} color="#fff" />
                       <Text style={{ color: "#fff", fontSize: 10, fontFamily: "Inter_400Regular" }}>Tap to zoom</Text>
@@ -807,7 +841,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
             </TouchableOpacity>
           ) : hasAudio ? (
             <View>
-              <AudioPlayer uri={msg.attachment_url!} tintColor={textColor} waveColor={isMe ? "#FFFFFF" : "#00BCD4"} />
+              <AudioPlayer uri={attachUri || msg.attachment_url!} tintColor={textColor} waveColor={isMe ? "#FFFFFF" : "#00BCD4"} />
               {canTranscribe && (
                 <TouchableOpacity
                   onPress={handleTranscribe}
@@ -829,13 +863,32 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
               )}
             </View>
           ) : hasFile ? (
-            <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9} style={st.fileRow}>
+            <TouchableOpacity
+              onPress={handleFileTap}
+              onLongPress={() => onLongPress(msg)}
+              delayLongPress={300}
+              activeOpacity={0.9}
+              style={st.fileRow}
+            >
               <View style={[st.fileIconBg, { backgroundColor: isMe ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.06)" }]}>
-                <Ionicons name="document-text" size={22} color={textColor} />
+                {fileDownloading
+                  ? <ActivityIndicator size={18} color={textColor} />
+                  : <Ionicons
+                      name={attachUri && !attachUri.startsWith("http") ? "document-text" : "download-outline"}
+                      size={22}
+                      color={textColor}
+                    />
+                }
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[st.fileName, { color: textColor }]} numberOfLines={2}>{displayText}</Text>
-                <Text style={[st.fileMeta, { color: isMe ? "rgba(255,255,255,0.6)" : colors.textMuted }]}>Document</Text>
+                <Text style={[st.fileMeta, { color: isMe ? "rgba(255,255,255,0.6)" : colors.textMuted }]}>
+                  {fileDownloading
+                    ? "Downloading…"
+                    : attachUri && !attachUri.startsWith("http")
+                      ? "Tap to open"
+                      : "Tap to download"}
+                </Text>
               </View>
             </TouchableOpacity>
           ) : hasStoryReply ? (
@@ -1547,6 +1600,8 @@ function ChatScreen() {
         );
       });
       saveMessages(chatId, mapped).catch(() => {});
+      // Download all attachments from the freshly-fetched messages in the background
+      autoDownloadChatAttachments(mapped);
       clearUnread(chatId).catch(() => {});
       // Only update the scroll cursor and pagination flag on a FULL load
       // (newestStored === null). On a delta sync the cursor was already set on
@@ -1726,6 +1781,12 @@ function ChatScreen() {
             attachment_type: m.attachment_type, edited_at: m.edited_at,
             status: m.status as any, reactions: [], _pending: m.is_pending,
           })));
+          // Kick off background downloads for all attachments in cached messages
+          autoDownloadChatAttachments(cached.map((m) => ({
+            attachment_url: m.attachment_url,
+            attachment_type: m.attachment_type,
+            encrypted_content: m.content ?? "",
+          })));
         }
       }
     };
@@ -1743,6 +1804,10 @@ function ChatScreen() {
           if (newMsg.sender_id === AFUAI_BOT_ID) return;
           const { data: senderProfile } = await supabase.from("profiles").select("display_name, avatar_url, handle").eq("id", newMsg.sender_id).single();
           setMessages((prev) => [{ ...newMsg, sender: senderProfile as any, reactions: [], status: undefined }, ...prev]);
+          // Auto-download any attachment on the incoming message immediately
+          if (newMsg.attachment_url && newMsg.attachment_type && newMsg.attachment_type !== "video") {
+            ensureChatAttachmentDownloaded(newMsg.attachment_url, newMsg.attachment_type).catch(() => {});
+          }
           playNotificationSound();
           if (showScrollBtnRef.current) {
             setNewMsgCount((c) => c + 1);

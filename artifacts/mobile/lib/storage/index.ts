@@ -12,6 +12,7 @@ export * from "./localNotifications";
 export * from "./localContacts";
 export * from "./syncQueue";
 export * from "./mediaCache";
+export * from "./chatAttachmentCache";
 export * from "./searchHistory";
 
 import { getDB } from "./db";

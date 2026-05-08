@@ -232,4 +232,11 @@ async function runMigrations(db: DB) {
     `);
     await db.runAsync("UPDATE schema_version SET version = 3");
   }
+
+  // ── v4: Add file_name to media_cache (chat attachments) ──────────────────
+  if (currentVersion < 4) {
+    const safeAdd = async (sql: string) => { try { await db.execAsync(sql); } catch {} };
+    await safeAdd("ALTER TABLE media_cache ADD COLUMN file_name TEXT");
+    await db.runAsync("UPDATE schema_version SET version = 4");
+  }
 }
