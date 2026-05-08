@@ -701,7 +701,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
 
   const isRedEnvelope = msg.encrypted_content?.startsWith("🧧") ?? false;
   const isGiftMsg = msg.encrypted_content?.startsWith("🎁") ?? false;
-  const meBubbleColor = chatTheme?.bubble || BRAND;
+  const meBubbleColor = BRAND;
   const otherBubbleColor = colors.bubbleIncoming;
   const bubbleColor = isMe ? meBubbleColor : otherBubbleColor;
   const textColor = isMe ? "#FFFFFF" : colors.bubbleIncomingText;
@@ -804,7 +804,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
             </TouchableOpacity>
           )}
           {isHighlighted && (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,188,212,0.22)", borderRadius: chatRadius ?? 18, pointerEvents: "none" }]} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: BRAND + "38", borderRadius: chatRadius ?? 18, pointerEvents: "none" }]} />
           )}
 
           {hasImage ? (
@@ -824,7 +824,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
                   </View>
                 </TouchableOpacity>
               {hasTextContent && (
-                <RichText style={[st.bubbleText, { color: textColor, marginTop: 6, fontSize: chatPrefsLocal?.font_size ?? 15, lineHeight: (chatPrefsLocal?.font_size ?? 15) + 5 }]} linkColor={isMe ? "#FFFFFF" : "#00BCD4"}>{displayText}</RichText>
+                <RichText style={[st.bubbleText, { color: textColor, marginTop: 6, fontSize: chatPrefsLocal?.font_size ?? 15, lineHeight: (chatPrefsLocal?.font_size ?? 15) + 5 }]} linkColor={isMe ? "#FFFFFF" : BRAND}>{displayText}</RichText>
               )}
             </>
           ) : hasVideo ? (
@@ -841,7 +841,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
             </TouchableOpacity>
           ) : hasAudio ? (
             <View>
-              <AudioPlayer uri={attachUri || msg.attachment_url!} tintColor={textColor} waveColor={isMe ? "#FFFFFF" : "#00BCD4"} />
+              <AudioPlayer uri={attachUri || msg.attachment_url!} tintColor={textColor} waveColor={isMe ? "#FFFFFF" : BRAND} />
               {canTranscribe && (
                 <TouchableOpacity
                   onPress={handleTranscribe}
@@ -937,7 +937,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
             <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
               {msg._isAi
                 ? <AiRichContent content={displayText} colors={colors} isUser={isMe} />
-                : <RichText style={[st.bubbleText, { color: textColor, fontSize: chatPrefsLocal?.font_size ?? 15, lineHeight: (chatPrefsLocal?.font_size ?? 15) + 5 }]} linkColor={isMe ? "#FFFFFF" : "#00BCD4"} selectable={Platform.OS === "web"}>{displayText}</RichText>
+                : <RichText style={[st.bubbleText, { color: textColor, fontSize: chatPrefsLocal?.font_size ?? 15, lineHeight: (chatPrefsLocal?.font_size ?? 15) + 5 }]} linkColor={isMe ? "#FFFFFF" : BRAND} selectable={Platform.OS === "web"}>{displayText}</RichText>
               }
             </TouchableOpacity>
           )}
@@ -1052,10 +1052,10 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
           <View style={{ gap: 6, marginTop: 4 }}>
             {msg._aiActions.map((action, i) => (
               <TouchableOpacity key={i} onPress={() => { if (action.action === "navigate" && action.params?.route) router.push(action.params.route as any); }} activeOpacity={0.7}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 11, borderRadius: 12, backgroundColor: "#00BCD410", borderWidth: 1, borderColor: "#00BCD430" }}>
-                  <Ionicons name={action.icon as any} size={16} color="#00BCD4" />
-                  <Text style={{ flex: 1, fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#00BCD4" }}>{action.label}</Text>
-                  <Ionicons name="chevron-forward" size={14} color="#00BCD4" />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 11, borderRadius: 12, backgroundColor: BRAND + "10", borderWidth: 1, borderColor: BRAND + "30" }}>
+                  <Ionicons name={action.icon as any} size={16} color={BRAND} />
+                  <Text style={{ flex: 1, fontSize: 14, fontFamily: "Inter_600SemiBold", color: BRAND }}>{action.label}</Text>
+                  <Ionicons name="chevron-forward" size={14} color={BRAND} />
                 </View>
               </TouchableOpacity>
             ))}
@@ -1065,8 +1065,8 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6, marginBottom: 4 }}>
             {msg._aiSuggestions.map((s, i) => (
               <TouchableOpacity key={i} onPress={() => onSuggestionTap?.(s)} activeOpacity={0.7}>
-                <View style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, borderWidth: 1, borderColor: "#00BCD450", backgroundColor: "#00BCD408" }}>
-                  <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: "#00BCD4" }}>{s}</Text>
+                <View style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, borderWidth: 1, borderColor: BRAND + "50", backgroundColor: BRAND + "08" }}>
+                  <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: BRAND }}>{s}</Text>
                 </View>
               </TouchableOpacity>
             ))}
@@ -1510,6 +1510,13 @@ function ChatScreen() {
         oldestCursorRef.current = cached[0].sent_at;
         setHasMore(true);
       }
+      // Kick off background attachment downloads for cached messages so they
+      // render from local storage without any network wait.
+      autoDownloadChatAttachments(cached.map((m) => ({
+        attachment_url: m.attachment_url,
+        attachment_type: m.attachment_type,
+        encrypted_content: m.content ?? "",
+      })));
     }
 
     if (!isOnline()) {
@@ -1535,30 +1542,7 @@ function ChatScreen() {
     if (data) {
       const msgIds = data.map((m: any) => m.id);
 
-      const [{ data: reactions }, { data: statuses }] = await Promise.all([
-        msgIds.length > 0 ? supabase.from("message_reactions").select("message_id, reaction, user_id").in("message_id", msgIds) : { data: [] },
-        msgIds.length > 0 ? supabase.from("message_status").select("message_id, read_at, delivered_at").in("message_id", msgIds) : { data: [] },
-      ]);
-
-      const reactionMap: Record<string, { emoji: string; count: number; myReaction: boolean }[]> = {};
-      for (const r of (reactions || []) as any[]) {
-        if (!reactionMap[r.message_id]) reactionMap[r.message_id] = [];
-        const existing = reactionMap[r.message_id].find((x) => x.emoji === r.reaction);
-        if (existing) {
-          existing.count++;
-          if (r.user_id === user.id) existing.myReaction = true;
-        } else {
-          reactionMap[r.message_id].push({ emoji: r.reaction, count: 1, myReaction: r.user_id === user.id });
-        }
-      }
-
-      const readSet = new Set<string>();
-      const deliveredSet = new Set<string>();
-      for (const s of (statuses || []) as any[]) {
-        if (s.read_at) readSet.add(s.message_id);
-        else if (s.delivered_at) deliveredSet.add(s.message_id);
-      }
-
+      // ── Fast path: map and display messages immediately, no reactions yet ────
       const mapped = data.map((m: any) => {
         const isBot = m.sender_id === AFUAI_BOT_ID;
         const aiParsed = isBot ? parseAfuAiTags(m.encrypted_content || "") : null;
@@ -1573,68 +1557,98 @@ function ChatScreen() {
           attachment_type: m.attachment_type,
           edited_at: m.edited_at,
           sender: m.profiles,
-          reactions: reactionMap[m.id] || [],
-          status: m.sender_id === user.id
-            ? (readSet.has(m.id) ? "read" : deliveredSet.has(m.id) ? "delivered" : "sent")
-            : undefined,
+          reactions: [],
+          status: undefined as any,
           _isAi: isBot || undefined,
           _aiActions: aiParsed && aiParsed.actions.length > 0 ? aiParsed.actions : undefined,
           _aiInvoices: aiParsed && aiParsed.invoices.length > 0 ? aiParsed.invoices : undefined,
         };
       });
 
+      // Display new messages the instant we have them — reactions paint after.
       setMessages((prev) => {
-        // Nothing new from the server (delta sync found no newer messages).
-        // Keep existing state intact — the cached history is already displayed.
         if (mapped.length === 0) return prev;
-
-        // Merge new server messages with any existing messages not covered by
-        // this fetch (older cached messages, pending local messages, etc.).
-        // Deduplication by ID prevents any duplicates.
         const serverIds = new Set(mapped.map((m: any) => m.id));
         const notInServer = prev.filter((m) => !serverIds.has(m.id));
-
-        // Sort newest-first: FlatList is inverted so index 0 appears at bottom.
         return [...mapped, ...notInServer].sort(
           (a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
         );
       });
+
       saveMessages(chatId, mapped).catch(() => {});
-      // Download all attachments from the freshly-fetched messages in the background
       autoDownloadChatAttachments(mapped);
       clearUnread(chatId).catch(() => {});
-      // Only update the scroll cursor and pagination flag on a FULL load
-      // (newestStored === null). On a delta sync the cursor was already set on
-      // the first open and must not be reset — resetting it to null breaks
-      // "load older messages" because loadMoreMessages guards on the cursor.
+
       if (!newestStored) {
         oldestCursorRef.current = data.length > 0 ? data[data.length - 1].sent_at : null;
         setHasMore(data.length >= 50);
       }
+      if (chatId) markChatVisited(chatId);
 
+      // ── Background: enrich with reactions + delivery status ──────────────────
+      // Fired after the UI already shows the messages — zero perceived latency.
+      if (msgIds.length > 0) {
+        Promise.all([
+          supabase.from("message_reactions").select("message_id, reaction, user_id").in("message_id", msgIds),
+          supabase.from("message_status").select("message_id, read_at, delivered_at").in("message_id", msgIds),
+        ]).then(([{ data: reactions }, { data: statuses }]) => {
+          const reactionMap: Record<string, { emoji: string; count: number; myReaction: boolean }[]> = {};
+          for (const r of (reactions || []) as any[]) {
+            if (!reactionMap[r.message_id]) reactionMap[r.message_id] = [];
+            const existing = reactionMap[r.message_id].find((x: any) => x.emoji === r.reaction);
+            if (existing) {
+              existing.count++;
+              if (r.user_id === user.id) existing.myReaction = true;
+            } else {
+              reactionMap[r.message_id].push({ emoji: r.reaction, count: 1, myReaction: r.user_id === user.id });
+            }
+          }
+          const readSet = new Set<string>();
+          const deliveredSet = new Set<string>();
+          for (const s of (statuses || []) as any[]) {
+            if (s.read_at) readSet.add(s.message_id);
+            else if (s.delivered_at) deliveredSet.add(s.message_id);
+          }
+          const msgIdSet = new Set(msgIds);
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (!msgIdSet.has(m.id)) return m;
+              return {
+                ...m,
+                reactions: reactionMap[m.id] ?? m.reactions,
+                status: m.sender_id === user.id
+                  ? (readSet.has(m.id) ? "read" : deliveredSet.has(m.id) ? "delivered" : (m.status || "sent"))
+                  : m.status,
+              };
+            })
+          );
+        }).catch(() => {});
+      }
+
+      // ── Background: mark incoming messages as read ────────────────────────────
       const unreadFromOthers = data.filter((m: any) => m.sender_id !== user.id);
       if (unreadFromOthers.length > 0) {
         const now = new Date().toISOString();
         const unreadIds = unreadFromOthers.map((m: any) => m.id);
-        const { data: myReadRows } = unreadIds.length > 0
-          ? await supabase.from("message_status").select("message_id").eq("user_id", user.id).not("read_at", "is", null).in("message_id", unreadIds)
-          : { data: [] };
-        const alreadyRead = new Set((myReadRows || []).map((r: any) => r.message_id));
-        const toMark = unreadFromOthers.filter((m: any) => !alreadyRead.has(m.id));
-        if (toMark.length > 0) {
-          supabase.from("message_status").upsert(
-            toMark.map((m: any) => ({
-              message_id: m.id,
-              user_id: user.id,
-              delivered_at: now,
-              read_at: now,
-            })),
-            { onConflict: "message_id,user_id" }
-          ).then(() => {});
-          typingChannelRef.current?.send({ type: "broadcast", event: "read", payload: { reader_id: user.id, message_ids: toMark.map((m: any) => m.id) } });
-        }
+        supabase.from("message_status")
+          .select("message_id").eq("user_id", user.id).not("read_at", "is", null).in("message_id", unreadIds)
+          .then(({ data: myReadRows }) => {
+            const alreadyRead = new Set((myReadRows || []).map((r: any) => r.message_id));
+            const toMark = unreadFromOthers.filter((m: any) => !alreadyRead.has(m.id));
+            if (toMark.length > 0) {
+              supabase.from("message_status").upsert(
+                toMark.map((m: any) => ({
+                  message_id: m.id,
+                  user_id: user.id,
+                  delivered_at: now,
+                  read_at: now,
+                })),
+                { onConflict: "message_id,user_id" }
+              ).then(() => {});
+              typingChannelRef.current?.send({ type: "broadcast", event: "read", payload: { reader_id: user.id, message_ids: toMark.map((m: any) => m.id) } });
+            }
+          }).catch(() => {});
       }
-      if (chatId) markChatVisited(chatId);
     }
     setLoading(false);
   }, [id, user, isDraft, realChatId]);
@@ -1768,29 +1782,6 @@ function ChatScreen() {
 
   useEffect(() => {
     if (isDraft) return;
-
-    const loadCached = async () => {
-      if (id) {
-        const cached = await getLocalMessages(id, 5000);
-        if (cached.length > 0) {
-          const newestFirst = [...cached].reverse();
-          setMessages(newestFirst.map((m) => ({
-            id: m.id, chat_id: m.conversation_id, sender_id: m.sender_id,
-            encrypted_content: m.content ?? "", sent_at: m.sent_at,
-            reply_to_message_id: m.reply_to_id, attachment_url: m.attachment_url,
-            attachment_type: m.attachment_type, edited_at: m.edited_at,
-            status: m.status as any, reactions: [], _pending: m.is_pending,
-          })));
-          // Kick off background downloads for all attachments in cached messages
-          autoDownloadChatAttachments(cached.map((m) => ({
-            attachment_url: m.attachment_url,
-            attachment_type: m.attachment_type,
-            encrypted_content: m.content ?? "",
-          })));
-        }
-      }
-    };
-    loadCached();
 
     loadChatInfo();
     loadMessages();
@@ -3740,7 +3731,7 @@ STRICT RULES:
               <TouchableOpacity onPress={scrollToBottom} style={st.scrollFabBtn} activeOpacity={0.7}>
                 <Ionicons name="chevron-down" size={22} color={colors.text} />
                 {newMsgCount > 0 && (
-                  <View style={st.scrollFabBadge}>
+                  <View style={[st.scrollFabBadge, { backgroundColor: BRAND }]}>
                     <Text style={st.scrollFabBadgeText}>{newMsgCount > 99 ? "99+" : newMsgCount}</Text>
                   </View>
                 )}
@@ -4762,7 +4753,7 @@ const st = StyleSheet.create({
   sheetActionRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, paddingHorizontal: 4 },
   sheetActionText: { fontSize: 16, fontFamily: "Inter_500Medium" },
 
-  swipeReplyIcon: { position: "absolute", top: "50%", marginTop: -12, width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(0,188,212,0.12)", alignItems: "center", justifyContent: "center" },
+  swipeReplyIcon: { position: "absolute", top: "50%", marginTop: -12, width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(128,128,128,0.12)", alignItems: "center", justifyContent: "center" },
   specialMsgTap: { padding: 4 },
   specialMsgEmoji: { fontSize: 56 },
   redEnvBtn: { backgroundColor: "#FF3B30", borderRadius: 14, paddingVertical: 14, alignItems: "center" },
