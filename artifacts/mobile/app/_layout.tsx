@@ -8,8 +8,7 @@ import * as Font from "expo-font";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import * as SplashScreen from "expo-splash-screen";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { Linking, Platform } from "react-native";
 import { useTheme } from "@/hooks/useTheme";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -27,7 +26,6 @@ import { registerAlertListener, unregisterAlertListener } from "@/lib/alert";
 import { setBaseUrl } from "@/lib/api-client-react/src";
 import { clearExpiredOfflineVideos, migrateOfflineCacheV2toV3 } from "@/lib/videoCache";
 import { AppLockGate } from "@/components/AppLockGate";
-import { SplashOverlay } from "@/components/SplashOverlay";
 import { ChatPreferencesProvider } from "@/context/ChatPreferencesContext";
 import { AppAccentProvider } from "@/context/AppAccentContext";
 import { AdvancedFeaturesProvider } from "@/context/AdvancedFeaturesContext";
@@ -36,6 +34,7 @@ import GoogleOneTap from "@/components/ui/GoogleOneTap";
 import CommunityBanner from "@/components/ui/CommunityBanner";
 import { DesktopShell } from "@/components/desktop/DesktopShell";
 import { DevViewToolbar } from "@/components/dev/DevViewToolbar";
+import { useState } from "react";
 
 function CommunityBannerManager() {
   const { session } = useAuth();
@@ -59,8 +58,6 @@ try {
   }
   if (apiBase) setBaseUrl(apiBase);
 } catch (_) {}
-
-SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
@@ -184,57 +181,6 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded, setFontsLoaded] = useState(false);
-
-  useEffect(() => {
-    // Suppress fontfaceobserver timeout — expo-font creates an internal promise that
-    // rejects before the outer catch can attach, firing a spurious unhandledrejection.
-    const suppressFontTimeout = (e: PromiseRejectionEvent) => {
-      if (e?.reason?.message?.includes("timeout exceeded")) {
-        e.preventDefault();
-      }
-    };
-    if (Platform.OS === "web" && typeof window !== "undefined" && typeof window.addEventListener === "function") {
-      window.addEventListener("unhandledrejection", suppressFontTimeout);
-    }
-
-    Font.loadAsync({
-      Inter_400Regular,
-      Inter_500Medium,
-      Inter_600SemiBold,
-      Inter_700Bold,
-    })
-      .catch(() => {})
-      .finally(() => {
-        setFontsLoaded(true);
-        if (Platform.OS === "web" && typeof window !== "undefined" && typeof window.removeEventListener === "function") {
-          window.removeEventListener("unhandledrejection", suppressFontTimeout);
-        }
-      });
-  }, []);
-
-  // On first launch after upgrade: migrate old cacheDirectory files to documentDirectory,
-  // then clean up any expired offline videos.
-  useEffect(() => {
-    migrateOfflineCacheV2toV3().catch(() => {});
-    clearExpiredOfflineVideos().catch(() => {});
-  }, []);
-
-  const [showSplash, setShowSplash] = useState(Platform.OS !== "web");
-  const splashDismissed = useRef(false);
-  const dismissSplash = useCallback(() => {
-    if (!splashDismissed.current) {
-      splashDismissed.current = true;
-      setShowSplash(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (Platform.OS === "web") return;
-    const t = setTimeout(dismissSplash, 5000);
-    return () => clearTimeout(t);
-  }, []);
-
   const [alertState, setAlertState] = useState<{
     visible: boolean;
     title: string;
@@ -252,10 +198,18 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded]);
+    migrateOfflineCacheV2toV3().catch(() => {});
+    clearExpiredOfflineVideos().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    Font.loadAsync({
+      Inter_400Regular,
+      Inter_500Medium,
+      Inter_600SemiBold,
+      Inter_700Bold,
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
@@ -283,8 +237,6 @@ export default function RootLayout() {
     const sub = Linking.addEventListener("url", ({ url }) => handleDeepLink(url));
     return () => sub.remove();
   }, []);
-
-  if (!fontsLoaded) return null;
 
   return (
     <SafeAreaProvider>
@@ -328,9 +280,6 @@ export default function RootLayout() {
             </KeyboardProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>
-        {showSplash && (
-          <SplashOverlay onFinish={dismissSplash} />
-        )}
       </ErrorBoundary>
     </SafeAreaProvider>
   );
