@@ -64,6 +64,7 @@ import { AFUAI_BOT_ID } from "@/lib/afuAiBot";
 import { getDailyUsage, recordDailyUsage } from "@/lib/featureUsage";
 import { EmojiKeyboard } from "rn-emoji-keyboard";
 import GiftPickerSheet, { DbGift } from "@/components/gifts/GiftPickerSheet";
+import MiniProfilePopup from "@/components/chat/MiniProfilePopup";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import ReAnimated, {
   useSharedValue,
@@ -534,7 +535,7 @@ function AiConfirmationCard({ exec: ea, colors: c, onConfirm, onCancel }: { exec
 
 const SWIPE_THRESHOLD = 60;
 
-function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, replyPreview, onTapReply, isHighlighted, onTapEnvelope, onTapGift, onImageTap, isPremiumSender, onConfirmExec, onCancelExec, onSuggestionTap }: {
+function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, replyPreview, onTapReply, isHighlighted, onTapEnvelope, onTapGift, onImageTap, isPremiumSender, onConfirmExec, onCancelExec, onSuggestionTap, onSenderPress }: {
   msg: Message;
   isMe: boolean;
   showTail: boolean;
@@ -551,6 +552,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   onConfirmExec?: (msgId: string) => void;
   onCancelExec?: (msgId: string) => void;
   onSuggestionTap?: (text: string) => void;
+  onSenderPress?: (senderId: string) => void;
 }) {
   const { colors } = useTheme();
   const BRAND = colors.accent;
@@ -735,9 +737,21 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
         ]}>
           {isPremiumSender && <PremiumBubbleShimmer />}
           {!isMe && showName && (
-            <Text style={[st.senderName, { color: BRAND }]}>
-              {msg.sender?.display_name}
-            </Text>
+            onSenderPress ? (
+              <TouchableOpacity
+                onPress={() => onSenderPress(msg.sender_id)}
+                activeOpacity={0.65}
+                hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+              >
+                <Text style={[st.senderName, { color: BRAND }]}>
+                  {msg.sender?.display_name}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={[st.senderName, { color: BRAND }]}>
+                {msg.sender?.display_name}
+              </Text>
+            )
           )}
 
           {replyPreview && (
@@ -1095,6 +1109,7 @@ function ChatScreen() {
   const [envelopeMsg, setEnvelopeMsg] = useState("");
   const [envelopeCount, setEnvelopeCount] = useState("1");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [miniProfileUserId, setMiniProfileUserId] = useState<string | null>(null);
   const [emojiKeyboardHeight, setEmojiKeyboardHeight] = useState(280);
 
   useEffect(() => {
@@ -3375,10 +3390,11 @@ STRICT RULES:
           onConfirmExec={handleConfirmAiExec}
           onCancelExec={handleCancelAiExec}
           onSuggestionTap={(text) => sendMessage(text)}
+          onSenderPress={advancedFeatures.mini_profile_popup && !isMe ? (id) => setMiniProfileUserId(id) : undefined}
         />
       </View>
     );
-  }, [messages, user, colors, highlightedMsgId, scrollToMessage]);
+  }, [messages, user, colors, highlightedMsgId, scrollToMessage, advancedFeatures.mini_profile_popup]);
 
   return (
     <View style={[st.root, { backgroundColor: colors.background }]}>
@@ -3770,6 +3786,13 @@ STRICT RULES:
           </View>
         )}
       </KeyboardAvoidingView>
+
+      <MiniProfilePopup
+        userId={miniProfileUserId}
+        visible={!!miniProfileUserId}
+        onClose={() => setMiniProfileUserId(null)}
+        currentChatId={chatInfo && !chatInfo.is_group && chatInfo.other_id === miniProfileUserId ? chatInfo.other_id : null}
+      />
 
       <Modal visible={!!showReactions} transparent animationType="fade" onRequestClose={() => { setShowReactions(null); setAiResult(null); setAiResultType(null); setAiReplies([]); }}>
         <View style={st.reactModalOverlay}>
