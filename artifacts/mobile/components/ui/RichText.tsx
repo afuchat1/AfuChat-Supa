@@ -1,8 +1,11 @@
 import React from "react";
-import { Text, StyleSheet, Linking } from "react-native";
+import { Platform, StyleSheet, Text } from "react-native";
+import { Linking } from "react-native";
 import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAppAccent } from "@/context/AppAccentContext";
+import { useAdvancedFeatures } from "@/context/AdvancedFeaturesContext";
+import * as WebBrowser from "expo-web-browser";
 
 type RichTextProps = {
   children: string;
@@ -82,43 +85,54 @@ function parseText(text: string): Segment[] {
   return segments;
 }
 
-function handlePress(segment: Segment) {
-  switch (segment.type) {
-    case "url": {
-      let url = segment.text;
-      if (!url.startsWith("http")) url = "https://" + url;
-      Linking.openURL(url).catch(() => {});
-      break;
-    }
-    case "email": {
-      Linking.openURL(`mailto:${segment.text}`).catch(() => {});
-      break;
-    }
-    case "mention": {
-      const handle = segment.text.replace("@", "");
-      supabase
-        .from("profiles")
-        .select("id")
-        .eq("handle", handle)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (data?.id) {
-            router.push({ pathname: "/contact/[id]", params: { id: data.id } });
-          }
-        });
-      break;
-    }
-    case "hashtag": {
-      const tag = segment.text.replace("#", "");
-      router.push({ pathname: "/(tabs)/search", params: { tag } });
-      break;
-    }
-  }
-}
-
 export function RichText({ children, style, linkColor, numberOfLines, selectable }: RichTextProps) {
   const { accent } = useAppAccent();
+  const { features } = useAdvancedFeatures();
   const effectiveLinkColor = linkColor ?? accent;
+
+  function handlePress(segment: Segment) {
+    switch (segment.type) {
+      case "url": {
+        let url = segment.text;
+        if (!url.startsWith("http")) url = "https://" + url;
+        if (features.in_app_browser && Platform.OS !== "web") {
+          WebBrowser.openBrowserAsync(url, {
+            toolbarColor: "#00BCD4",
+            controlsColor: "#ffffff",
+            presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+            enableBarCollapsing: true,
+            showTitle: true,
+          }).catch(() => Linking.openURL(url).catch(() => {}));
+        } else {
+          Linking.openURL(url).catch(() => {});
+        }
+        break;
+      }
+      case "email": {
+        Linking.openURL(`mailto:${segment.text}`).catch(() => {});
+        break;
+      }
+      case "mention": {
+        const handle = segment.text.replace("@", "");
+        supabase
+          .from("profiles")
+          .select("id")
+          .eq("handle", handle)
+          .maybeSingle()
+          .then(({ data }) => {
+            if (data?.id) {
+              router.push({ pathname: "/contact/[id]", params: { id: data.id } });
+            }
+          });
+        break;
+      }
+      case "hashtag": {
+        const tag = segment.text.replace("#", "");
+        router.push({ pathname: "/(tabs)/search", params: { tag } });
+        break;
+      }
+    }
+  }
 
   if (!children) return <Text style={style} selectable={selectable}>{""}</Text>;
   const segments = parseText(children);

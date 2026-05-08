@@ -1111,6 +1111,7 @@ function ChatScreen() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [miniProfileUserId, setMiniProfileUserId] = useState<string | null>(null);
   const [emojiKeyboardHeight, setEmojiKeyboardHeight] = useState(280);
+  const [reminderMsg, setReminderMsg] = useState<Message | null>(null);
 
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
@@ -2337,6 +2338,57 @@ STRICT RULES:
     } finally {
       setTranslatingLang(false);
     }
+  }
+
+  async function scheduleReminder(msg: Message, secondsFromNow: number) {
+    if (Platform.OS === "web") {
+      showAlert("Not supported", "Message reminders are only available on mobile.");
+      setReminderMsg(null);
+      return;
+    }
+    try {
+      const Notifications = await import("expo-notifications");
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== "granted") {
+        const { status: reqStatus } = await Notifications.requestPermissionsAsync();
+        if (reqStatus !== "granted") {
+          showAlert("Permission needed", "Allow notifications to use message reminders.");
+          setReminderMsg(null);
+          return;
+        }
+      }
+      const preview = msg.encrypted_content?.slice(0, 80) || "Message";
+      const senderName = msg.sender?.display_name || "Someone";
+      const activeChatId = isDraft ? realChatId : id;
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `⏰ Reminder: ${senderName}`,
+          body: preview,
+          data: { chatId: activeChatId || id, type: "message_reminder" },
+          sound: "notification.wav",
+          ...(Platform.OS === "android" && {
+            icon: "@mipmap/notification_icon",
+            largeIcon: "@mipmap/ic_launcher",
+            color: "#00BCD4",
+          }),
+        },
+        trigger: {
+          type: "timeInterval",
+          seconds: secondsFromNow,
+          repeats: false,
+        } as any,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const label =
+        secondsFromNow <= 1800 ? "30 minutes" :
+        secondsFromNow <= 3600 ? "1 hour" :
+        secondsFromNow <= 14400 ? "4 hours" :
+        secondsFromNow <= 86400 ? "tomorrow morning" : "next week";
+      showAlert("Reminder set", `You'll be reminded about this message in ${label}.`);
+    } catch (e) {
+      showAlert("Error", "Could not set reminder. Please try again.");
+    }
+    setReminderMsg(null);
   }
 
   async function openForward(msg: Message) {
@@ -3874,6 +3926,15 @@ STRICT RULES:
                 <Text style={[st.reactModalActionText, { color: "#FF3B30" }]}>Report Message</Text>
               </TouchableOpacity>
             )}
+            {advancedFeatures.message_reminders && showReactions && showReactions.encrypted_content && !showReactions.encrypted_content.startsWith("🎁 ") && !showReactions.encrypted_content.startsWith("🧧") && !["📷 Photo", "🎥 Video", "GIF"].includes(showReactions.encrypted_content) && (
+              <TouchableOpacity
+                style={st.reactModalAction}
+                onPress={() => { setReminderMsg(showReactions); setShowReactions(null); setAiResult(null); setAiResultType(null); setAiReplies([]); }}
+              >
+                <Ionicons name="alarm-outline" size={20} color={colors.accent} />
+                <Text style={[st.reactModalActionText, { color: colors.text }]}>Remind Me</Text>
+              </TouchableOpacity>
+            )}
 
             {(chatInfo?.is_group || chatInfo?.is_channel) && (
               <>
@@ -3957,6 +4018,46 @@ STRICT RULES:
               <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.textMuted, marginTop: 2 }}>Delete all messages and start a new thread</Text>
             </View>
           </TouchableOpacity>
+        </View>
+      </BottomSheet>
+
+      <BottomSheet visible={!!reminderMsg} onClose={() => setReminderMsg(null)}>
+        <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 }}>
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accent + "18", alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="alarm-outline" size={20} color={colors.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 16, fontFamily: "Inter_700Bold", color: colors.text }}>Remind Me</Text>
+              <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.textMuted, marginTop: 1 }} numberOfLines={1}>
+                {reminderMsg?.encrypted_content?.slice(0, 60) || "This message"}
+              </Text>
+            </View>
+          </View>
+          {[
+            { label: "In 30 minutes", icon: "time-outline" as const, seconds: 30 * 60 },
+            { label: "In 1 hour",     icon: "time-outline" as const, seconds: 60 * 60 },
+            { label: "In 4 hours",    icon: "time-outline" as const, seconds: 4 * 60 * 60 },
+            { label: "Tomorrow morning", icon: "sunny-outline" as const, seconds: (() => {
+                const now = new Date();
+                const tom = new Date(now);
+                tom.setDate(tom.getDate() + 1);
+                tom.setHours(8, 0, 0, 0);
+                return Math.max(3600, Math.floor((tom.getTime() - now.getTime()) / 1000));
+              })() },
+            { label: "Next week",     icon: "calendar-outline" as const, seconds: 7 * 24 * 60 * 60 },
+          ].map((opt) => (
+            <TouchableOpacity
+              key={opt.label}
+              style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 13, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}
+              onPress={() => reminderMsg && scheduleReminder(reminderMsg, opt.seconds)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name={opt.icon} size={20} color={colors.accent} />
+              <Text style={{ fontSize: 15, fontFamily: "Inter_500Medium", color: colors.text, flex: 1 }}>{opt.label}</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          ))}
         </View>
       </BottomSheet>
 
