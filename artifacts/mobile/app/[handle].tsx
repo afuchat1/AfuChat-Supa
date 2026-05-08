@@ -85,7 +85,7 @@ function PublicProfileScreen({ handle }: { handle: string }) {
       const [{ count: followers }, { count: following }, { count: posts }] = await Promise.all([
         supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", data.id),
         supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", data.id),
-        supabase.from("posts").select("id", { count: "exact", head: true }).eq("user_id", data.id),
+        supabase.from("posts").select("id", { count: "exact", head: true }).eq("author_id", data.id),
       ]);
       setCounts({ followers: followers || 0, following: following || 0, posts: posts || 0 });
       setLoading(false);
@@ -228,18 +228,12 @@ export default function HandleScreen() {
   const cleanHandle = (rawHandle || "").replace(/^@/, "").toLowerCase();
   const isValidHandle = /^[a-zA-Z0-9_]+$/.test(cleanHandle);
 
-  // If /@username and not logged in → show public profile directly (no redirect needed)
-  if (isAtHandle && !authLoading && !session) {
-    if (!isValidHandle) return <NotFoundScreen />;
-    return <PublicProfileScreen handle={cleanHandle} />;
-  }
+  // ── All hooks run unconditionally — React requires this ─────────────────────
+  // Conditional returns are at the BOTTOM, after every hook.
 
-  // For logged-in users visiting /@username → still navigate to contact page
-  // For /username (referral) + logged in → navigate to contact page
-  // For /username (referral) + not logged in → save referrer + go to register
-
+  // Effect 1: resolve handle → profile ID (skipped in public-profile mode)
   useEffect(() => {
-    // Public profile mode: skip — PublicProfileScreen handles its own data
+    // Public profile mode (/@handle + guest): PublicProfileScreen fetches its own data.
     if (isAtHandle && !authLoading && !session) return;
     if (!cleanHandle || !isValidHandle) { setDataReady(true); return; }
     supabase
@@ -253,14 +247,17 @@ export default function HandleScreen() {
         setDataReady(true);
       })
       .catch(() => { setProfileNotFound(true); setDataReady(true); });
-  }, [cleanHandle, isValidHandle]);
+  }, [cleanHandle, isValidHandle, isAtHandle, authLoading, session]);
 
+  // Effect 2: navigate once data is ready
   useEffect(() => {
     if (hasNavigated.current) return;
     if (!dataReady) return;
     if (authLoading) return;
     if (!navigationState?.key) return;
     if (profileNotFound || !cleanHandle || !isValidHandle) return;
+    // Public profile mode handled inline below — no navigation needed.
+    if (isAtHandle && !session) return;
 
     hasNavigated.current = true;
 
@@ -277,9 +274,11 @@ export default function HandleScreen() {
     }
   }, [dataReady, authLoading, navigationState?.key, cleanHandle, isValidHandle, profileId, profileNotFound, session, isAtHandle]);
 
+  // Effect 3: web fallback timeout
   useEffect(() => {
     if (Platform.OS !== "web") return;
     if (hasNavigated.current) return;
+    if (isAtHandle && !session) return; // public profile — no redirect
     const timeout = setTimeout(() => {
       if (hasNavigated.current) return;
       if (!dataReady) return;
@@ -290,7 +289,15 @@ export default function HandleScreen() {
       }
     }, 8000);
     return () => clearTimeout(timeout);
-  }, [dataReady, session, profileNotFound]);
+  }, [dataReady, session, profileNotFound, isAtHandle]);
+
+  // ── Conditional renders — hooks are all done, safe to return early ───────────
+
+  // /@username visited by a guest → show public profile card (no auth required)
+  if (isAtHandle && !authLoading && !session) {
+    if (!isValidHandle) return <NotFoundScreen />;
+    return <PublicProfileScreen handle={cleanHandle} />;
+  }
 
   if (dataReady && (profileNotFound || !isValidHandle)) return <NotFoundScreen />;
 
