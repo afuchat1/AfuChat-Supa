@@ -61,6 +61,10 @@ import { useAdvancedFeatures } from "@/context/AdvancedFeaturesContext";
 import { useDataMode } from "@/context/DataModeContext";
 import { markChatVisited } from "@/lib/chatVisited";
 import { askAi, aiSuggestReply, transcribeAudio } from "@/lib/aiHelper";
+import {
+  playNotificationSound as playMgrSound,
+  resetToPlaybackMode,
+} from "@/lib/soundManager";
 import { AFUAI_BOT_ID } from "@/lib/afuAiBot";
 import { getDailyUsage, recordDailyUsage } from "@/lib/featureUsage";
 import { EmojiKeyboard } from "rn-emoji-keyboard";
@@ -1135,19 +1139,9 @@ function ChatScreen() {
   const { isLowData: chatIsLowData } = useDataMode();
   const { statsMap, getDynamicPrice } = useGiftPrices();
 
-  const playNotificationSound = useCallback(async () => {
+  const playNotificationSound = useCallback(() => {
     if (!chatPrefs.sounds_enabled) return;
-    try {
-      const { sound } = await Audio.Sound.createAsync(
-        require("../../assets/sounds/notification.wav"),
-        { shouldPlay: true, volume: 1.0 }
-      );
-      sound.setOnPlaybackStatusUpdate((status: any) => {
-        if (status.isLoaded && status.didJustFinish) {
-          sound.unloadAsync().catch(() => {});
-        }
-      });
-    } catch (_) {}
+    playMgrSound();
   }, [chatPrefs.sounds_enabled]);
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -1729,7 +1723,7 @@ function ChatScreen() {
       if (recordingRef.current) {
         recordingRef.current.stopAndUnloadAsync().catch(() => {});
         recordingRef.current = null;
-        Audio.setAudioModeAsync({ allowsRecordingIOS: false }).catch(() => {});
+        resetToPlaybackMode().catch(() => {});
       }
     };
   }, []);
@@ -3068,7 +3062,7 @@ STRICT RULES:
       if (!recPressActiveSV.value && !recLockedSV.value) {
         try {
           await recording.stopAndUnloadAsync();
-          await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+          await resetToPlaybackMode();
         } catch (_) {}
         recordingRef.current = null;
         recStartedSV.value = false;
@@ -3118,7 +3112,7 @@ STRICT RULES:
       recLockedSV.value = false;
       setIsRecording(false);
       setRecLocked(false);
-      try { await Audio.setAudioModeAsync({ allowsRecordingIOS: false }); } catch (_) {}
+      await resetToPlaybackMode().catch(() => {});
       showAlert("Error", "Could not start recording.");
     }
   }
@@ -3174,7 +3168,7 @@ STRICT RULES:
       recLockedSV.value = false;
       setIsRecording(false);
       setRecLocked(false);
-      try { await Audio.setAudioModeAsync({ allowsRecordingIOS: false }); } catch (_) {}
+      await resetToPlaybackMode().catch(() => {});
       showAlert("Error", "Could not start recording.");
     }
   }
@@ -3206,7 +3200,7 @@ STRICT RULES:
     if (capturedDuration < 1) {
       try {
         await recordingRef.current.stopAndUnloadAsync();
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+        await resetToPlaybackMode();
       } catch (_) {}
       recordingRef.current = null;
       return;
@@ -3215,7 +3209,7 @@ STRICT RULES:
     try {
       await recordingRef.current.stopAndUnloadAsync();
       const uri = recordingRef.current.getURI();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      await resetToPlaybackMode();
       recordingRef.current = null;
 
       if (!uri || !user) return;
@@ -3304,7 +3298,7 @@ STRICT RULES:
     if (recordingRef.current) {
       try {
         await recordingRef.current.stopAndUnloadAsync();
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+        await resetToPlaybackMode();
       } catch (_) {}
       recordingRef.current = null;
     }
