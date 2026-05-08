@@ -337,10 +337,11 @@ export default function CreateVideoScreen() {
       );
       return;
     }
+    const { getVideoPickerQuality } = await import("@/lib/networkQuality");
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: "videos",
       allowsEditing: false,
-      quality: 0.7,
+      quality: getVideoPickerQuality(),
       videoMaxDuration: MAX_DURATION_SECONDS,
     });
     if (!result.canceled && result.assets[0]) {
@@ -427,7 +428,8 @@ export default function CreateVideoScreen() {
 
     (async () => {
       try {
-        updatePostProgress(0.1);
+        // Step 1: Prepare — file type detection and path setup
+        updatePostProgress(0.05);
 
         const rawExt =
           _videoUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "";
@@ -438,11 +440,39 @@ export default function CreateVideoScreen() {
         const resolvedMime =
           _videoMime || (ext === "mov" ? "video/quicktime" : `video/${ext}`);
 
+        // Step 2: Network-aware pre-compression on cellular to save upload data
+        // On WiFi the server re-encodes anyway, so we skip client compression there.
+        let uploadUri = _videoUri;
+        if (Platform.OS !== "web" && !_videoUri.startsWith("blob:")) {
+          try {
+            const { isCellular } = await import("@/lib/networkQuality");
+            if (isCellular()) {
+              // Attempt hardware-accelerated compression to ~720p before upload.
+              // Falls back to original if the compressor isn't available (Expo Go).
+              const Compressor = await import("react-native-compressor").catch(() => null);
+              if (Compressor?.Video?.compress) {
+                updatePostProgress(0.1);
+                const compressed = await Compressor.Video.compress(_videoUri, {
+                  compressionMethod: "auto",
+                  maxSize: 1280,
+                  bitrate: 1_500_000,
+                }, (progress: number) => {
+                  // Map 0–100 → 0.10–0.20 in the progress bar
+                  updatePostProgress(0.1 + progress * 0.001);
+                });
+                if (compressed) uploadUri = compressed;
+              }
+            }
+          } catch {
+            // Non-fatal — continue with original file
+          }
+        }
+
         updatePostProgress(0.2);
         const { publicUrl, error: uploadError } = await uploadToStorage(
           "videos",
           filePath,
-          _videoUri,
+          uploadUri,
           resolvedMime,
         );
         if (uploadError || !publicUrl)

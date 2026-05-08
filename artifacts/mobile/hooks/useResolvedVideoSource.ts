@@ -4,6 +4,7 @@ import {
   pickBestSource,
   type VideoManifest,
 } from "@/lib/videoApi";
+import { getPreferredVideoHeight } from "@/lib/networkQuality";
 
 interface ResolvedSource {
   uri: string;
@@ -56,7 +57,9 @@ export function useResolvedVideoSource(
 
       if (manifest && manifest.sources.length > 0) {
         const picked = pickBestSource(manifest, {
-          targetHeight: opts.targetHeight ?? 720,
+          // If caller didn't specify a target height, use network-aware default:
+          // 360p on cellular (saves ~75% vs 720p), 720p on WiFi
+          targetHeight: opts.targetHeight ?? getPreferredVideoHeight(),
         });
         setState({
           uri: picked.url || fallbackUrl,

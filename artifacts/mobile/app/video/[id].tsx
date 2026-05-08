@@ -9,7 +9,7 @@
  *     the finger moves, no "hard push" needed.
  *  3. getItemLayout uses stable window dimensions — never dynamic state.
  *  4. onViewableItemsChanged stored in a stable ref — FlatList never re-wires.
- *  5. windowSize=5, removeClippedSubviews=false so neighbours preload smoothly.
+ *  5. windowSize=3, removeClippedSubviews=false so neighbours preload smoothly.
  */
 import React, {
   useCallback,
@@ -62,6 +62,7 @@ import { getCachedVideoUri, cacheVideo, markVideoWatched } from "@/lib/videoCach
 import { saveVideoProgress, clearVideoProgress } from "@/lib/videoProgress";
 import { useResolvedVideoSource } from "@/hooks/useResolvedVideoSource";
 import { getPostVideoManifest, pickBestSource } from "@/lib/videoApi";
+import { getPreferredVideoHeight } from "@/lib/networkQuality";
 import { ChatBubbleSkeleton, ShortsFeedSkeleton } from "@/components/ui/Skeleton";
 import SignInPromptModal from "@/components/ui/SignInPromptModal";
 import {
@@ -874,7 +875,7 @@ const VideoItem = React.memo(function VideoItem({
   const lastSavedProgressRef = useRef(0);   // timestamp of last AsyncStorage save
   const cacheDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const resolved = useResolvedVideoSource(item.id, item.video_url, { targetHeight: 720 });
+  const resolved = useResolvedVideoSource(item.id, item.video_url, { targetHeight: getPreferredVideoHeight() });
   // When an error occurs fall back directly to the raw video_url, bypassing cache/manifest
   const playbackUri = videoError ? item.video_url : (cachedUri || resolved.uri || item.video_url);
   const shouldMountVideo = isActive || isNearActive;

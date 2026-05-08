@@ -1,13 +1,11 @@
 /**
- * VideoFeed — TikTok-style vertical paging feed.
- *
- * Core design decisions that make scroll work reliably:
- *  1. Use `pagingEnabled` (not snapToInterval) — simplest, most reliable.
- *  2. Item height = full window height, measured ONCE at mount, never from layout.
- *  3. Tap detection via the Responder system (NOT Pressable) so the FlatList
- *     always wins the scroll gesture.
- *  4. `onViewableItemsChanged` stored in a ref so it never changes identity.
- *  5. `getItemLayout` is always consistent — no dependency on dynamic state.
+ * VideoFeed — TikTok-style vertical paging feed with:
+ *  - Network-aware quality: 360p on cellular, 720p on WiFi (via useResolvedVideoSource)
+ *  - Thumbnail poster shown instantly while video buffers (zero-wait first frame)
+ *  - Smooth snap-to-page scroll (pagingEnabled + getItemLayout)
+ *  - Minimal FlatList window (windowSize=3) to conserve memory and data
+ *  - ActivityIndicator spinner for buffering (not a jarring icon)
+ *  - Tap to pause, double-tap to like, scroll to next
  */
 import React, {
   useCallback,
@@ -16,9 +14,11 @@ import React, {
   useState,
 } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   FlatList,
+  Image,
   Platform,
   StyleSheet,
   Text,
@@ -36,6 +36,8 @@ import { useAppAccent } from "@/context/AppAccentContext";
 import { notifyPostLike, notifyNewFollow } from "@/lib/notifyUser";
 import { VideoFeedSkeleton } from "@/components/ui/Skeleton";
 import { LinearGradient } from "expo-linear-gradient";
+import { useResolvedVideoSource } from "@/hooks/useResolvedVideoSource";
+import { getPreferredVideoHeight } from "@/lib/networkQuality";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -50,6 +52,7 @@ export type VideoPost = {
   author_id: string;
   content: string;
   video_url: string;
+  image_url: string | null;
   created_at: string;
   view_count: number;
   profile: { display_name: string; handle: string; avatar_url: string | null };
@@ -69,10 +72,8 @@ function formatCount(n: number): string {
 
 // ─── TapHandler ───────────────────────────────────────────────────────────────
 /**
- * A transparent view that detects taps using the Responder system.
- * `onResponderTerminationRequest={() => true}` is the critical line —
- * it lets the parent FlatList claim the gesture for scrolling, so the
- * feed always scrolls even when the user touches the video surface.
+ * Transparent responder overlay. onResponderTerminationRequest=true lets the
+ * parent FlatList steal the gesture for scrolling — critical for smooth feed.
  */
 function TapHandler({
   onTap,
@@ -159,6 +160,7 @@ function GradientOverlay() {
 function VideoItem({
   item,
   isActive,
+  isNearActive,
   itemHeight,
   onLike,
   onFollow,
@@ -166,6 +168,7 @@ function VideoItem({
 }: {
   item: VideoPost;
   isActive: boolean;
+  isNearActive: boolean;
   itemHeight: number;
   onLike: (postId: string, liked: boolean) => void;
   onFollow: (authorId: string) => void;
@@ -174,26 +177,33 @@ function VideoItem({
   const { accent } = useAppAccent();
   const videoRef = useRef<Video>(null);
   const [paused, setPaused] = useState(false);
-  const [buffering, setBuffering] = useState(false);
+  const [buffering, setBuffering] = useState(true);
+  const [videoReady, setVideoReady] = useState(false);
   const heartScale = useRef(new Animated.Value(1)).current;
   const doubleTapHeartOpacity = useRef(new Animated.Value(0)).current;
   const doubleTapHeartScale = useRef(new Animated.Value(0.3)).current;
   const followScale = useRef(new Animated.Value(1)).current;
 
-  // Reset state when item leaves the viewport
+  // Network-aware quality: 360p on cellular, 720p on WiFi
+  const targetHeight = getPreferredVideoHeight();
+  const resolved = useResolvedVideoSource(item.id, item.video_url, { targetHeight });
+  const playUri = resolved.uri || item.video_url;
+
+  // Reset state when scrolled away
   useEffect(() => {
     if (!isActive) {
       setPaused(false);
-      setBuffering(false);
+      setBuffering(true);
+      setVideoReady(false);
     }
   }, [isActive]);
 
-  // Unload video when scrolled far away to free resources
+  // Stop video to free resources when far from viewport
   useEffect(() => {
-    if (!isActive && videoRef.current) {
+    if (!isNearActive && videoRef.current) {
       videoRef.current.stopAsync().catch(() => {});
     }
-  }, [isActive]);
+  }, [isNearActive]);
 
   function handleTap() {
     setPaused((p) => !p);
@@ -232,39 +242,59 @@ function VideoItem({
 
   function onPlaybackStatus(status: AVPlaybackStatus) {
     if (!status.isLoaded) return;
-    setBuffering(status.isBuffering);
+    const isBuffering = status.isBuffering;
+    const isPlaying = status.isPlaying;
+    setBuffering(isBuffering);
+    if (!videoReady && (isPlaying || !isBuffering)) {
+      setVideoReady(true);
+    }
   }
 
   const isOwnVideo = currentUserId === item.author_id;
   const showFollowButton = !isOwnVideo && !item.following;
+  // Show thumbnail until video actually starts rendering
+  const showThumbnail = !videoReady && !!item.image_url;
 
   return (
     <View style={[styles.itemContainer, { height: itemHeight, width: SCREEN_W }]}>
-      {/* Video */}
-      {Platform.OS === "web" ? (
-        // @ts-ignore
-        <video
-          src={item.video_url}
-          autoPlay={isActive && !paused}
-          loop
-          muted={false}
-          playsInline
-          style={styles.webVideo as any}
+      {/* Thumbnail poster — shown instantly while video buffers, hides once playing */}
+      {item.image_url ? (
+        <Image
+          source={{ uri: item.image_url }}
+          style={[StyleSheet.absoluteFill, styles.poster]}
+          resizeMode="cover"
         />
-      ) : (
-        <Video
-          ref={videoRef}
-          source={{ uri: item.video_url }}
-          style={StyleSheet.absoluteFill}
-          resizeMode={ResizeMode.COVER}
-          shouldPlay={isActive && !paused}
-          isLooping
-          isMuted={false}
-          onPlaybackStatusUpdate={onPlaybackStatus}
-        />
+      ) : null}
+
+      {/* Video — only mounted when near active to conserve memory/data */}
+      {isNearActive && (
+        Platform.OS === "web" ? (
+          // @ts-ignore
+          <video
+            src={playUri}
+            autoPlay={isActive && !paused}
+            loop
+            muted={false}
+            playsInline
+            style={[styles.webVideo, showThumbnail && { opacity: 0 }] as any}
+            onPlaying={() => setVideoReady(true)}
+          />
+        ) : (
+          <Video
+            ref={videoRef}
+            source={{ uri: playUri }}
+            style={[StyleSheet.absoluteFill, showThumbnail && styles.hiddenVideo]}
+            resizeMode={ResizeMode.COVER}
+            shouldPlay={isActive && !paused}
+            isLooping
+            isMuted={false}
+            onPlaybackStatusUpdate={onPlaybackStatus}
+            onReadyForDisplay={() => setVideoReady(true)}
+          />
+        )
       )}
 
-      {/* Tap handler — MUST come after video so touches reach it */}
+      {/* Tap handler — must come after video */}
       <TapHandler onTap={handleTap} onDoubleTap={handleDoubleTap} />
 
       {/* Double-tap heart burst */}
@@ -287,10 +317,10 @@ function VideoItem({
         </View>
       )}
 
-      {/* Buffering indicator */}
-      {buffering && isActive && (
-        <View style={styles.pauseOverlay} pointerEvents="none">
-          <Ionicons name="reload" size={28} color="rgba(255,255,255,0.7)" />
+      {/* Buffering — smooth spinner, not a jarring icon */}
+      {buffering && isActive && !paused && (
+        <View style={styles.bufferingOverlay} pointerEvents="none">
+          <ActivityIndicator size="large" color="rgba(255,255,255,0.85)" />
         </View>
       )}
 
@@ -336,9 +366,18 @@ function VideoItem({
             {item.content}
           </Text>
         ) : null}
+
+        {/* Quality badge — subtle indicator of selected rendition */}
+        {resolved.height && resolved.codec !== "source" && (
+          <View style={styles.qualityBadge}>
+            <Text style={styles.qualityText}>
+              {resolved.codec === "av1" ? "AV1" : "HD"} · {resolved.height}p
+            </Text>
+          </View>
+        )}
       </View>
 
-      {/* Right actions — each with its own hit area */}
+      {/* Right actions */}
       <View style={styles.rightActions} pointerEvents="box-none">
         <View style={styles.actionItem}>
           <Animated.View style={{ transform: [{ scale: heartScale }] }}>
@@ -392,7 +431,6 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
   const { user, profile } = useAuth();
   const { accent } = useAppAccent();
 
-  // Use a stable height that never changes — critical for getItemLayout
   const ITEM_HEIGHT = SCREEN_H - tabBarHeight;
 
   const [posts, setPosts] = useState<VideoPost[]>([]);
@@ -460,6 +498,7 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
         author_id: p.author_id,
         content: p.content || "",
         video_url: p.video_url,
+        image_url: p.image_url ?? null,
         created_at: p.created_at,
         view_count: p.view_count || 0,
         profile: {
@@ -490,7 +529,8 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
       let query = supabase
         .from("posts")
         .select(
-          `id, author_id, content, video_url, created_at, view_count,
+          // image_url = thumbnail poster shown while video buffers
+          `id, author_id, content, video_url, image_url, created_at, view_count,
            profiles!posts_author_id_fkey(display_name, handle, avatar_url)`
         )
         .eq("post_type", "video")
@@ -603,7 +643,6 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
 
   // ── FlatList config ────────────────────────────────────────────────────────
 
-  // Stable ref — never recreated, so FlatList never gets confused
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       if (viewableItems.length > 0 && viewableItems[0].index !== null) {
@@ -612,8 +651,10 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
     }
   ).current;
 
+  // 300ms minimum view time: snappy feel without accidental triggers on fast swipe
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 50,
+    itemVisiblePercentThreshold: 60,
+    minimumViewTime: 300,
   }).current;
 
   const getItemLayout = useCallback(
@@ -668,13 +709,14 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
         <VideoItem
           item={item}
           isActive={index === activeIndex}
+          // Mount ±1 items around active to preload thumbnails and video metadata
+          isNearActive={Math.abs(index - activeIndex) <= 1}
           itemHeight={ITEM_HEIGHT}
           onLike={handleLike}
           onFollow={handleFollow}
           currentUserId={user?.id}
         />
       )}
-      // pagingEnabled is the most reliable way to get TikTok-style snapping
       pagingEnabled
       showsVerticalScrollIndicator={false}
       onViewableItemsChanged={onViewableItemsChanged}
@@ -682,10 +724,14 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
       getItemLayout={getItemLayout}
       decelerationRate="fast"
       onEndReached={onEndReached}
-      onEndReachedThreshold={2}
-      windowSize={5}
+      onEndReachedThreshold={3}
+      // windowSize=3 keeps only the active item ±1 neighbour in memory:
+      // dramatically reduces data usage and memory on mobile data
+      windowSize={3}
       initialNumToRender={2}
-      maxToRenderPerBatch={3}
+      maxToRenderPerBatch={2}
+      // removeClippedSubviews must be false — turning it on with pagingEnabled
+      // causes the video to go blank on some Android devices when scrolling back
       removeClippedSubviews={false}
       style={{ flex: 1, backgroundColor: "#000" }}
       ListFooterComponent={
@@ -735,6 +781,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#000",
     overflow: "hidden",
   },
+  poster: {
+    backgroundColor: "#111",
+  },
+  hiddenVideo: {
+    opacity: 0,
+  },
   webVideo: {
     position: "absolute" as any,
     top: 0,
@@ -768,6 +820,12 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
+  },
+  bufferingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.15)",
   },
   pauseCircle: {
     width: 64,
@@ -828,6 +886,20 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(0,0,0,0.5)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
+  },
+  qualityBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(0,0,0,0.45)",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 2,
+  },
+  qualityText: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 10,
+    fontFamily: "Inter_500Medium",
+    letterSpacing: 0.3,
   },
   rightActions: {
     position: "absolute",

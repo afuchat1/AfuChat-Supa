@@ -76,9 +76,10 @@ export default function CreatePostScreen() {
   const postBtnScale = useRef(new Animated.Value(1)).current;
 
   async function pickImage() {
+    const { getImageQuality } = await import("@/lib/networkQuality");
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: "images",
-      quality: 0.8,
+      quality: getImageQuality(),
       allowsMultipleSelection: true,
       selectionLimit: 9 - images.length,
     });
