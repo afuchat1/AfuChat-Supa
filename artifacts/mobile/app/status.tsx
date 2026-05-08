@@ -122,22 +122,50 @@ export default function StatusPage() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const edgeFnBase = (process.env.EXPO_PUBLIC_SUPABASE_URL || "").trim().replace(/\/+$/, "") + "/functions/v1";
+  const anonKey = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "").trim();
 
   const fetchStatus = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
       const res = await fetch(`${edgeFnBase}/status`, {
-        headers: { Accept: "application/json" },
+        headers: {
+          Accept: "application/json",
+          ...(anonKey ? { Authorization: `Bearer ${anonKey}` } : {}),
+        },
         signal: AbortSignal.timeout(10000),
       });
       if (!res.ok) {
         throw new Error(`Server returned HTTP ${res.status}`);
       }
-      const json: StatusResponse = await res.json();
-      if (!Array.isArray(json?.services)) {
+      const raw = await res.json();
+
+      // Normalise both response shapes into StatusResponse:
+      // New shape:  { ok, timestamp, services: { supabase: {ok, latency_ms}, r2: {ok}, … } }
+      // Legacy shape: { overall, checked_at, services: ServiceCheck[] }
+      let normalized: StatusResponse;
+      if (Array.isArray(raw?.services)) {
+        // Already in expected format
+        normalized = raw as StatusResponse;
+      } else if (raw?.services && typeof raw.services === "object") {
+        // Transform object map → ServiceCheck[]
+        const serviceEntries = Object.entries(raw.services as Record<string, any>);
+        const services: ServiceCheck[] = serviceEntries.map(([key, svc]) => ({
+          name: key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " "),
+          status: svc.ok === false ? "outage" : "operational",
+          latency_ms: svc.latency_ms,
+          message: svc.message,
+        }));
+        const hasOutage = services.some((s) => s.status === "outage");
+        normalized = {
+          overall: raw.ok === false ? (hasOutage ? "outage" : "degraded") : "operational",
+          checked_at: raw.timestamp ?? new Date().toISOString(),
+          services,
+        };
+      } else {
         throw new Error("Unexpected response from status service.");
       }
-      setData(json);
+
+      setData(normalized);
       setError(null);
     } catch (e: any) {
       setError("Could not reach the status server. Check your internet connection.");
@@ -145,7 +173,7 @@ export default function StatusPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [edgeFnBase]);
+  }, [edgeFnBase, anonKey]);
 
   useEffect(() => {
     fetchStatus();
