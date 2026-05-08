@@ -206,7 +206,50 @@ function PublicProfileScreen({ handle }: { handle: string }) {
             </View>
           </View>
         )}
+
+        {/* Bottom padding so content clears the sticky sign-in bar */}
+        <View style={{ height: 110 }} />
       </ScrollView>
+
+      {/* ── Sticky sign-in prompt ─────────────────────────────────────────── */}
+      <View
+        style={[
+          pub.signinBar,
+          {
+            backgroundColor: colors.surface,
+            borderTopColor: colors.border,
+            paddingBottom: insets.bottom + 12,
+          },
+        ]}
+      >
+        <View style={pub.signinBarInner}>
+          <Ionicons name="lock-closed" size={18} color={Colors.brand} style={{ marginTop: 1 }} />
+          <View style={{ flex: 1 }}>
+            <Text style={[pub.signinBarTitle, { color: colors.text }]}>
+              Sign in to follow or message
+            </Text>
+            <Text style={[pub.signinBarSub, { color: colors.textMuted }]}>
+              Join AfuChat to connect with @{profile.handle}
+            </Text>
+          </View>
+        </View>
+        <View style={pub.signinBtnRow}>
+          <TouchableOpacity
+            style={[pub.signinBtn, { backgroundColor: Colors.brand }]}
+            onPress={() => router.push("/(auth)/login" as any)}
+            activeOpacity={0.85}
+          >
+            <Text style={pub.signinBtnText}>Sign In</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[pub.signinBtn, pub.signinBtnOutline, { borderColor: Colors.brand }]}
+            onPress={() => router.push("/(auth)/register" as any)}
+            activeOpacity={0.85}
+          >
+            <Text style={[pub.signinBtnText, { color: Colors.brand }]}>Create Account</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     </View>
   );
 }
@@ -379,6 +422,48 @@ const pub = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     alignSelf: "flex-start",
+  },
+
+  signinBar: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+  },
+  signinBarInner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginBottom: 12,
+  },
+  signinBarTitle: {
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
+    marginBottom: 2,
+  },
+  signinBarSub: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 18,
+  },
+  signinBtnRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  signinBtn: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    borderRadius: 14,
+  },
+  signinBtnOutline: {
+    borderWidth: 1.5,
+    backgroundColor: "transparent",
+  },
+  signinBtnText: {
+    color: "#fff",
+    fontSize: 14,
+    fontFamily: "Inter_700Bold",
   },
 });
 
