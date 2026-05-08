@@ -39,7 +39,7 @@ import {
   subscribePostUpload,
 } from "@/lib/postUploadStore";
 import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
-import { getLocalFeedPosts, saveFeedPosts, type FeedTab as LocalFeedTab } from "@/lib/storage/localFeed";
+import { getLocalFeedPosts, saveFeedPosts, getNewestFeedPostDate, type FeedTab as LocalFeedTab } from "@/lib/storage/localFeed";
 import { getCachedFeedTab, cacheFeedTab, getCachedMoments, cacheMoments, cacheFeedCursor } from "@/lib/offlineStore";
 import { notifyPostLike } from "@/lib/notifyUser";
 import { sharePost, shareVideo } from "@/lib/share";
@@ -773,7 +773,7 @@ export default function DiscoverScreen() {
             })) as unknown as PostItem[];
             setPosts(p);
             tabPostsCache.current[activeTab] = p;
-            tabCacheTimestamp.current[activeTab] = localPosts[0]?.cached_at ?? Date.now();
+            tabCacheTimestamp.current[activeTab] = localPosts[0]?.stored_at ?? Date.now();
           } else {
             const cached = await getCachedFeedTab(activeTab);
             if (cached?.posts?.length) {
@@ -816,6 +816,8 @@ export default function DiscoverScreen() {
       const followOlderThan = !isRefresh && postsRef.current.length > 0
         ? postsRef.current[postsRef.current.length - 1]?.created_at
         : null;
+      // Delta sync: on refresh, only fetch posts NEWER than newest stored — never re-download existing posts
+      const followNewerThan = isRefresh ? await getNewestFeedPostDate("following") : null;
       const followBaseQ = supabase
         .from("posts")
         .select(`
@@ -830,7 +832,9 @@ export default function DiscoverScreen() {
         .order("created_at", { ascending: false });
       const { data } = await (followOlderThan
         ? followBaseQ.lt("created_at", followOlderThan).limit(PAGE_SIZE)
-        : followBaseQ.limit(PAGE_SIZE));
+        : followNewerThan
+          ? followBaseQ.gt("created_at", followNewerThan).limit(PAGE_SIZE)
+          : followBaseQ.limit(PAGE_SIZE));
 
       if (data) {
         if (data.length < PAGE_SIZE) setHasMore(false); else setHasMore(true);
@@ -866,7 +870,16 @@ export default function DiscoverScreen() {
         }));
 
         if (isRefresh) {
-          setPosts(mapped);
+          // Delta sync: prepend new posts to existing local posts (don't wipe them)
+          if (followNewerThan && mapped.length > 0) {
+            setPosts((prev) => {
+              const existingIds = new Set(prev.map((p) => p.id));
+              const brandNew = mapped.filter((p) => !existingIds.has(p.id));
+              return brandNew.length > 0 ? [...brandNew, ...prev] : prev;
+            });
+          } else if (!followNewerThan) {
+            setPosts(mapped);
+          }
           tabPostsCache.current[activeTab] = mapped;
           tabCacheTimestamp.current[activeTab] = Date.now();
           cacheFeedTab(activeTab, mapped);
@@ -898,9 +911,15 @@ export default function DiscoverScreen() {
       video_assets!posts_video_asset_id_fkey(duration_seconds)
     `;
 
+    // Delta sync: on refresh, only fetch posts NEWER than newest stored — never re-download existing posts
+    const fyNewerThan = isRefresh ? await getNewestFeedPostDate("for_you") : null;
     let fyQ: any = supabase.from("posts").select(fySelect).eq("visibility", "public")
       .order("created_at", { ascending: false });
-    if (fyOlderThan) fyQ = fyQ.lt("created_at", fyOlderThan);
+    if (fyOlderThan) {
+      fyQ = fyQ.lt("created_at", fyOlderThan);
+    } else if (fyNewerThan) {
+      fyQ = fyQ.gt("created_at", fyNewerThan);
+    }
     fyQ = fyQ.limit(PAGE_SIZE);
 
     const { data } = await fyQ;
@@ -1105,7 +1124,16 @@ export default function DiscoverScreen() {
       }
 
       if (isRefresh) {
-        setPosts(merged);
+        // Delta sync: prepend new posts to existing local posts (don't wipe them)
+        if (fyNewerThan && merged.length > 0) {
+          setPosts((prev) => {
+            const existingIds = new Set(prev.map((p) => p.id));
+            const brandNew = merged.filter((p) => !existingIds.has(p.id));
+            return brandNew.length > 0 ? [...brandNew, ...prev] : prev;
+          });
+        } else if (!fyNewerThan) {
+          setPosts(merged);
+        }
         tabPostsCache.current[activeTab] = merged;
         tabCacheTimestamp.current[activeTab] = Date.now();
         cacheFeedTab(activeTab, merged);
@@ -1189,18 +1217,19 @@ export default function DiscoverScreen() {
       if (fyLocal.length > 0) {
         const toItem = (r: any) => ({ ...r, likeCount: r.like_count, replyCount: r.reply_count, is_organization_verified: r.is_org_verified, profile: { display_name: r.author_name ?? "User", handle: r.author_handle ?? "user", avatar_url: r.author_avatar ?? null }, article_body: null, duration_seconds: null, isFollowing: false }) as unknown as PostItem;
         tabPostsCache.current.for_you = fyLocal.map(toItem);
-        tabCacheTimestamp.current.for_you = fyLocal[0]?.cached_at ?? Date.now();
+        tabCacheTimestamp.current.for_you = fyLocal[0]?.stored_at ?? Date.now();
         if (feedTabRef.current === "for_you") { setPosts(tabPostsCache.current.for_you); setLoading(false); }
       }
       if (flLocal.length > 0) {
         const toItem = (r: any) => ({ ...r, likeCount: r.like_count, replyCount: r.reply_count, is_organization_verified: r.is_org_verified, profile: { display_name: r.author_name ?? "User", handle: r.author_handle ?? "user", avatar_url: r.author_avatar ?? null }, article_body: null, duration_seconds: null, isFollowing: true }) as unknown as PostItem;
         tabPostsCache.current.following = flLocal.map(toItem);
-        tabCacheTimestamp.current.following = flLocal[0]?.cached_at ?? Date.now();
+        tabCacheTimestamp.current.following = flLocal[0]?.stored_at ?? Date.now();
         if (feedTabRef.current === "following") { setPosts(tabPostsCache.current.following); setLoading(false); }
       }
+      // Only fall through to AsyncStorage if SQLite had nothing
       const [fyCache, flCache] = await Promise.all([
-        getCachedFeedTab("for_you"),
-        getCachedFeedTab("following"),
+        fyLocal.length > 0 ? Promise.resolve(null) : getCachedFeedTab("for_you"),
+        flLocal.length > 0 ? Promise.resolve(null) : getCachedFeedTab("following"),
       ]);
       if (fyCache?.posts?.length) {
         const p = fyCache.posts as PostItem[];

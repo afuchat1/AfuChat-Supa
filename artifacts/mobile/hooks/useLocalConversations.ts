@@ -1,7 +1,7 @@
 // ─── useLocalConversations ─────────────────────────────────────────────────────
-// Local-first hook: renders conversations from SQLite instantly (zero network),
-// then background-syncs from Supabase and merges silently.
-// This is how WhatsApp/Telegram make the chat list appear before any API call.
+// Permanent local-first hook: conversation list renders from device instantly.
+// Network sync only fetches what changed since the last update.
+// Conversations are stored permanently — no TTL.
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { AppState, type AppStateStatus } from "react-native";
@@ -20,9 +20,9 @@ export function useLocalConversations(userId: string | undefined) {
   const [conversations, setConversations] = useState<LocalConversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const syncedRef = useRef(false);
+  const lastSyncRef = useRef<number>(0);
 
-  // Step 1: Load from SQLite instantly (no network)
+  // Step 1: Render from device instantly — zero network
   const loadLocal = useCallback(async () => {
     const local = await getLocalConversations();
     if (local.length > 0) {
@@ -32,8 +32,12 @@ export function useLocalConversations(userId: string | undefined) {
   }, []);
 
   // Step 2: Background sync from Supabase
-  const syncFromServer = useCallback(async () => {
+  const syncFromServer = useCallback(async (force = false) => {
     if (!userId || !isOnline() || syncing) return;
+    // Debounce: don't sync more than once every 30s unless forced
+    const now = Date.now();
+    if (!force && now - lastSyncRef.current < 30_000) return;
+    lastSyncRef.current = now;
     setSyncing(true);
     try {
       const { data: memberRows } = await supabase
@@ -74,7 +78,7 @@ export function useLocalConversations(userId: string | undefined) {
           let preview = m.encrypted_content || "";
           if (m.attachment_type === "story_reply" && preview.startsWith("storyUserId:")) {
             const pipeIdx = preview.indexOf("|");
-            preview = pipeIdx >= 0 ? `📸 ${preview.slice(pipeIdx + 1)}` : "📸 Story";
+            preview = pipeIdx >= 0 ? `\u{1F4F8} ${preview.slice(pipeIdx + 1)}` : "\u{1F4F8} Story";
           }
           lastMsgMap[m.chat_id] = {
             last_message: preview,
@@ -84,7 +88,7 @@ export function useLocalConversations(userId: string | undefined) {
         }
       }
 
-      const items = chatRows.map((c: any) => {
+      const items: LocalConversation[] = chatRows.map((c: any) => {
         const others = (c.chat_members ?? []).filter((m: any) => m.user_id !== userId);
         const other = others[0]?.profiles;
         const lm = lastMsgMap[c.id] ?? {};
@@ -108,8 +112,8 @@ export function useLocalConversations(userId: string | undefined) {
           is_organization_verified: !!other?.is_organization_verified,
           other_last_seen: other?.last_seen ?? null,
           other_show_online: other?.show_online_status !== false,
-          cached_at: Date.now(),
-        } satisfies LocalConversation;
+          stored_at: Date.now(),
+        };
       });
 
       items.sort((a, b) => {
@@ -120,8 +124,8 @@ export function useLocalConversations(userId: string | undefined) {
 
       setConversations(items);
       setLoading(false);
+      // Persist permanently (INSERT OR REPLACE — updates metadata like last_message)
       await saveConversations(items);
-      syncedRef.current = true;
     } catch {
     } finally {
       setSyncing(false);
@@ -130,18 +134,16 @@ export function useLocalConversations(userId: string | undefined) {
 
   useEffect(() => {
     if (!userId) return;
-    loadLocal().then(() => syncFromServer());
+    loadLocal().then(() => syncFromServer(true));
   }, [userId]);
 
-  // Re-sync when network returns
   useEffect(() => {
     if (!userId) return;
     return onConnectivityChange((online) => {
-      if (online) syncFromServer();
+      if (online) syncFromServer(true);
     });
   }, [userId, syncFromServer]);
 
-  // Re-sync when app comes to foreground
   useEffect(() => {
     if (!userId) return;
     const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
@@ -150,5 +152,5 @@ export function useLocalConversations(userId: string | undefined) {
     return () => sub.remove();
   }, [userId, syncFromServer]);
 
-  return { conversations, loading, syncing, refresh: syncFromServer };
+  return { conversations, loading, syncing, refresh: () => syncFromServer(true) };
 }

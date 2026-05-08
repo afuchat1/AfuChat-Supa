@@ -1,12 +1,15 @@
 // ─── useLocalMessages ──────────────────────────────────────────────────────────
-// Local-first hook: renders messages from SQLite instantly, then background-
-// syncs from Supabase. Exactly how WhatsApp shows messages before server ACK.
+// Permanent local-first hook: ALL messages load from SQLite on device instantly.
+// Delta sync: only messages NEWER than the newest stored one are fetched.
+// Already-stored messages are NEVER re-downloaded.
+// Older messages (pagination) are fetched on demand and stored permanently too.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getLocalMessages,
   saveMessages,
-  trimMessages,
+  getNewestMessageDate,
+  getOldestMessageDate,
   type LocalMessage,
 } from "@/lib/storage/localMessages";
 import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
@@ -17,13 +20,13 @@ export type { LocalMessage };
 export function useLocalMessages(
   conversationId: string | undefined,
   userId: string | undefined,
-  limit = 60,
+  pageSize = 100,
 ) {
   const [messages, setMessages] = useState<LocalMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
-  const oldestCursorRef = useRef<string | null>(null);
+  const oldestOnDeviceRef = useRef<string | null>(null);
 
   const mapRow = useCallback(
     (m: any): LocalMessage => ({
@@ -43,62 +46,103 @@ export function useLocalMessages(
     [conversationId],
   );
 
-  // Step 1: Load from SQLite (zero network)
+  // Step 1: Render everything on device instantly — no network at all
   const loadLocal = useCallback(async () => {
     if (!conversationId) return;
-    const local = await getLocalMessages(conversationId, limit);
+    const local = await getLocalMessages(conversationId, pageSize);
     if (local.length > 0) {
       setMessages(local);
       setLoading(false);
     }
-  }, [conversationId, limit]);
+    // Track oldest message on device for "load more" pagination
+    oldestOnDeviceRef.current = await getOldestMessageDate(conversationId);
+  }, [conversationId, pageSize]);
 
-  // Step 2: Sync from Supabase
-  const syncFromServer = useCallback(async () => {
+  // Step 2: Delta sync — only fetch messages NEWER than what's already stored
+  const syncNewFromServer = useCallback(async () => {
     if (!conversationId || !isOnline()) return;
     try {
-      const { data } = await supabase
+      // Get cursor: newest message already on device
+      const newestStored = await getNewestMessageDate(conversationId);
+
+      // Build query: if we have stored messages, only fetch newer ones
+      let query = supabase
         .from("messages")
         .select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at")
         .eq("chat_id", conversationId)
         .order("sent_at", { ascending: false })
-        .limit(limit);
+        .limit(pageSize);
 
-      if (data) {
-        const mapped = data.map(mapRow).reverse();
-        setMessages((prev) => {
-          const pending = prev.filter((m) => m.is_pending);
-          const serverIds = new Set(mapped.map((m) => m.id));
-          const pendingOnly = pending.filter((m) => !serverIds.has(m.id));
-          return [...pendingOnly, ...mapped];
-        });
+      if (newestStored) {
+        // Only fetch messages sent AFTER our newest stored message
+        query = query.gt("sent_at", newestStored);
+      }
+
+      const { data } = await query;
+      if (!data?.length) {
         setLoading(false);
-        oldestCursorRef.current = data.length > 0 ? data[data.length - 1].sent_at : null;
-        setHasMore(data.length >= limit);
-        await saveMessages(conversationId, data);
-        await trimMessages(conversationId, 200);
+        return;
+      }
+
+      // Save permanently (INSERT OR IGNORE — never re-downloads existing)
+      await saveMessages(conversationId, data);
+
+      // Merge new messages into state
+      const newMsgs = data.map(mapRow).reverse();
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        const pending = prev.filter((m) => m.is_pending);
+        const brand_new = newMsgs.filter((m) => !existingIds.has(m.id));
+        const serverIds = new Set(newMsgs.map((m) => m.id));
+        const pendingOnly = pending.filter((m) => !serverIds.has(m.id));
+        if (brand_new.length === 0) return prev;
+        return [...prev.filter((m) => !m.is_pending), ...brand_new, ...pendingOnly];
+      });
+      setLoading(false);
+
+      // If server had no stored cursor (first sync), check if there are older messages
+      if (!newestStored) {
+        setHasMore(data.length >= pageSize);
       }
     } catch {}
-  }, [conversationId, limit, mapRow]);
+  }, [conversationId, pageSize, mapRow]);
 
-  // Load more (pagination)
+  // Step 3: Load older messages from device first, then from server if needed
   const loadMore = useCallback(async () => {
-    if (!conversationId || !isOnline() || loadingMore || !hasMore || !oldestCursorRef.current) return;
+    if (!conversationId || loadingMore) return;
     setLoadingMore(true);
     try {
+      // First try to load from device (free — no network)
+      const oldestDisplayed = messages[0]?.sent_at;
+      if (oldestDisplayed) {
+        const olderOnDevice = await getLocalMessages(conversationId, pageSize, oldestDisplayed);
+        if (olderOnDevice.length > 0) {
+          setMessages((prev) => [...olderOnDevice, ...prev]);
+          oldestOnDeviceRef.current = olderOnDevice[0]?.sent_at ?? null;
+          setHasMore(olderOnDevice.length >= pageSize);
+          setLoadingMore(false);
+          return;
+        }
+      }
+
+      // Nothing older on device — fetch from server and store permanently
+      if (!isOnline()) { setHasMore(false); setLoadingMore(false); return; }
+      const cursor = messages[0]?.sent_at;
+      if (!cursor) { setLoadingMore(false); return; }
+
       const { data } = await supabase
         .from("messages")
         .select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at")
         .eq("chat_id", conversationId)
-        .lt("sent_at", oldestCursorRef.current)
+        .lt("sent_at", cursor)
         .order("sent_at", { ascending: false })
-        .limit(limit);
+        .limit(pageSize);
 
       if (data?.length) {
         const older = data.map(mapRow).reverse();
         setMessages((prev) => [...older, ...prev]);
-        oldestCursorRef.current = data[data.length - 1].sent_at;
-        setHasMore(data.length >= limit);
+        setHasMore(data.length >= pageSize);
+        // Store permanently on device
         await saveMessages(conversationId, data);
       } else {
         setHasMore(false);
@@ -107,33 +151,30 @@ export function useLocalMessages(
     } finally {
       setLoadingMore(false);
     }
-  }, [conversationId, loadingMore, hasMore, limit, mapRow]);
+  }, [conversationId, loadingMore, messages, pageSize, mapRow]);
 
   useEffect(() => {
     if (!conversationId) return;
     setMessages([]);
     setLoading(true);
-    loadLocal().then(() => syncFromServer());
+    setHasMore(false);
+    loadLocal().then(() => syncNewFromServer());
   }, [conversationId]);
 
-  // Re-sync on reconnect
+  // Delta sync on reconnect — only fetches new messages, not everything
   useEffect(() => {
     if (!conversationId) return;
     return onConnectivityChange((online) => {
-      if (online) syncFromServer();
+      if (online) syncNewFromServer();
     });
-  }, [conversationId, syncFromServer]);
+  }, [conversationId, syncNewFromServer]);
 
-  // Add a new message to local state (optimistic insert)
   const addOptimisticMessage = useCallback((msg: LocalMessage) => {
     setMessages((prev) => [...prev, msg]);
   }, []);
 
-  // Resolve optimistic message with server id
   const resolveOptimistic = useCallback((localId: string, serverMsg: LocalMessage) => {
-    setMessages((prev) =>
-      prev.map((m) => (m.id === localId ? serverMsg : m)),
-    );
+    setMessages((prev) => prev.map((m) => (m.id === localId ? serverMsg : m)));
   }, []);
 
   return {
@@ -142,7 +183,7 @@ export function useLocalMessages(
     loadingMore,
     hasMore,
     loadMore,
-    syncFromServer,
+    syncNewFromServer,
     addOptimisticMessage,
     resolveOptimistic,
   };

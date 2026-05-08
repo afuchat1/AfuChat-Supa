@@ -1,3 +1,14 @@
+// ─── Permanent Feed Post Store ──────────────────────────────────────────────────
+// Feed posts are stored permanently on device once downloaded/viewed.
+// Delta sync: only posts NEWER than the newest stored post_id are fetched.
+// Already-stored posts are never re-downloaded.
+//
+// RULES:
+//   • INSERT OR IGNORE — a post stored once is never overwritten/re-fetched
+//   • No TTL, no auto-trim — posts accumulate until user clears storage
+//   • getNewestFeedPostDate(tab) → cursor for delta sync (only fetch newer)
+//   • updateLocalPost* helpers update reactive state (likes, bookmarks) without re-fetching
+
 import { getDB } from "./db";
 
 export type FeedTab = "for_you" | "following";
@@ -24,11 +35,8 @@ export type LocalPost = {
   is_org_verified: boolean;
   tab: FeedTab;
   score: number;
-  cached_at: number;
+  stored_at: number;
 };
-
-const FEED_TTL_MS = 45 * 60 * 1000; // 45 min
-const MAX_FEED_POSTS = 150;
 
 function mapPost(item: any, tab: FeedTab): LocalPost {
   const profile = item.profile ?? {};
@@ -54,45 +62,93 @@ function mapPost(item: any, tab: FeedTab): LocalPost {
     is_org_verified: item.is_organization_verified ?? item.is_org_verified ?? false,
     tab,
     score: item.score ?? 0,
-    cached_at: Date.now(),
+    stored_at: Date.now(),
   };
 }
 
-// ─── Reads ─────────────────────────────────────────────────────────────────────
+// ─── Reads ──────────────────────────────────────────────────────────────────────
 
-export async function getLocalFeedPosts(tab: FeedTab, limit = 30): Promise<LocalPost[]> {
+/**
+ * Load stored feed posts for a tab. Returns most recent first by default.
+ * No TTL — returns everything stored, not just "fresh" data.
+ */
+export async function getLocalFeedPosts(
+  tab: FeedTab,
+  limit = 50,
+  beforeCreatedAt?: string,
+): Promise<LocalPost[]> {
   try {
     const db = await getDB();
-    const cutoff = Date.now() - FEED_TTL_MS;
-    const rows = await db.getAllAsync<any>(
-      `SELECT * FROM feed_posts
-       WHERE tab = ? AND cached_at > ?
-       ORDER BY score DESC, created_at DESC
-       LIMIT ?`,
-      [tab, cutoff, limit],
-    );
+    let rows: any[];
+    if (beforeCreatedAt) {
+      rows = await db.getAllAsync<any>(
+        `SELECT * FROM feed_posts WHERE tab = ? AND created_at < ?
+         ORDER BY created_at DESC LIMIT ?`,
+        [tab, beforeCreatedAt, limit],
+      );
+    } else {
+      rows = await db.getAllAsync<any>(
+        `SELECT * FROM feed_posts WHERE tab = ?
+         ORDER BY created_at DESC LIMIT ?`,
+        [tab, limit],
+      );
+    }
     return rows.map(rowToPost);
   } catch {
     return [];
   }
 }
 
-export async function hasLocalFeedPosts(tab: FeedTab): Promise<boolean> {
+/**
+ * Returns the created_at of the NEWEST post stored for this tab.
+ * Used as the delta-sync cursor: only fetch posts with created_at > this value.
+ */
+export async function getNewestFeedPostDate(tab: FeedTab): Promise<string | null> {
   try {
     const db = await getDB();
-    const cutoff = Date.now() - FEED_TTL_MS;
-    const row = await db.getFirstAsync<{ c: number }>(
-      "SELECT COUNT(*) as c FROM feed_posts WHERE tab = ? AND cached_at > ?",
-      [tab, cutoff],
+    const row = await db.getFirstAsync<{ created_at: string }>(
+      "SELECT created_at FROM feed_posts WHERE tab = ? ORDER BY created_at DESC LIMIT 1",
+      [tab],
     );
-    return (row?.c ?? 0) > 0;
+    return row?.created_at ?? null;
   } catch {
-    return false;
+    return null;
   }
 }
 
-// ─── Writes ────────────────────────────────────────────────────────────────────
+export async function getLocalFeedPostCount(tab: FeedTab): Promise<number> {
+  try {
+    const db = await getDB();
+    const row = await db.getFirstAsync<{ c: number }>(
+      "SELECT COUNT(*) as c FROM feed_posts WHERE tab = ?",
+      [tab],
+    );
+    return row?.c ?? 0;
+  } catch {
+    return 0;
+  }
+}
 
+export async function hasLocalFeedPosts(tab: FeedTab): Promise<boolean> {
+  return (await getLocalFeedPostCount(tab)) > 0;
+}
+
+export async function getLocalFeedPost(id: string): Promise<LocalPost | null> {
+  try {
+    const db = await getDB();
+    const row = await db.getFirstAsync<any>("SELECT * FROM feed_posts WHERE id = ?", [id]);
+    return row ? rowToPost(row) : null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Writes ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Save posts permanently. INSERT OR IGNORE ensures a post already on device
+ * is never overwritten — it was already downloaded, no need to do it again.
+ */
 export async function saveFeedPosts(posts: any[], tab: FeedTab): Promise<void> {
   if (!posts.length) return;
   try {
@@ -101,11 +157,11 @@ export async function saveFeedPosts(posts: any[], tab: FeedTab): Promise<void> {
     for (const item of posts) {
       const p = mapPost(item, tab);
       await db.runAsync(
-        `INSERT OR REPLACE INTO feed_posts
+        `INSERT OR IGNORE INTO feed_posts
          (id, author_id, content, image_url, images, video_url, post_type, article_title,
           created_at, like_count, reply_count, view_count, liked, bookmarked,
           author_name, author_handle, author_avatar, is_verified, is_org_verified,
-          tab, score, cached_at)
+          tab, score, stored_at)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           p.id, p.author_id, p.content, p.image_url,
@@ -118,17 +174,16 @@ export async function saveFeedPosts(posts: any[], tab: FeedTab): Promise<void> {
         ],
       );
     }
-    // Keep only the freshest MAX_FEED_POSTS per tab
-    await db.runAsync(
-      `DELETE FROM feed_posts WHERE tab = ? AND id NOT IN (
-         SELECT id FROM feed_posts WHERE tab = ? ORDER BY score DESC, created_at DESC LIMIT ?
-       )`,
-      [tab, tab, MAX_FEED_POSTS],
-    );
   } catch {}
 }
 
-export async function updateLocalPostLike(postId: string, liked: boolean, likeCount: number): Promise<void> {
+// ─── Reactive updates (no re-fetch needed) ──────────────────────────────────────
+
+export async function updateLocalPostLike(
+  postId: string,
+  liked: boolean,
+  likeCount: number,
+): Promise<void> {
   try {
     const db = await getDB();
     await db.runAsync(
@@ -148,18 +203,33 @@ export async function updateLocalPostBookmark(postId: string, bookmarked: boolea
   } catch {}
 }
 
-export async function clearFeedCache(tab?: FeedTab): Promise<void> {
+export async function incrementLocalPostView(postId: string): Promise<void> {
   try {
     const db = await getDB();
-    if (tab) {
-      await db.runAsync("DELETE FROM feed_posts WHERE tab = ?", [tab]);
-    } else {
-      await db.runAsync("DELETE FROM feed_posts");
-    }
+    await db.runAsync(
+      "UPDATE feed_posts SET view_count = view_count + 1, viewed_at = ? WHERE id = ?",
+      [Date.now(), postId],
+    );
   } catch {}
 }
 
-// ─── Internal ──────────────────────────────────────────────────────────────────
+/** User-initiated: delete ALL stored feed posts (both tabs). */
+export async function clearAllFeedPosts(): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.runAsync("DELETE FROM feed_posts");
+  } catch {}
+}
+
+/** User-initiated: delete stored posts for one tab. */
+export async function clearFeedPosts(tab: FeedTab): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.runAsync("DELETE FROM feed_posts WHERE tab = ?", [tab]);
+  } catch {}
+}
+
+// ─── Internal ───────────────────────────────────────────────────────────────────
 
 function rowToPost(r: any): LocalPost {
   return {

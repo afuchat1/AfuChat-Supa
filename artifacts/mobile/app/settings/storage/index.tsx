@@ -480,7 +480,7 @@ export default function StorageSettingsScreen() {
               </Text>
             </View>
             <Text style={[styles.footnote, { color: colors.textMuted, marginTop: 8 }]}>
-              Offline videos and thumbnail cache are safe to clear — they'll be re-downloaded when you browse. Chat history is preserved separately.
+              Offline videos and thumbnail cache are safe to clear — they'll be re-downloaded as you watch and browse. Chat messages and feed posts are stored permanently in the local database and are unaffected by clearing this cache.
             </Text>
           </>
         )}

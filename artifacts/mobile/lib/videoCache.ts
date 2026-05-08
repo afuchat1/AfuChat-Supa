@@ -1,41 +1,47 @@
 import { Platform } from "react-native";
 import * as FileSystem from "expo-file-system";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getDB } from "./storage/db";
 
-// ─── Directories ──────────────────────────────────────────────────────────────
+// ─── Permanent Video Store ──────────────────────────────────────────────────────
+// Videos are stored in documentDirectory once watched — permanently.
+// The OS never auto-clears documentDirectory (unlike cacheDirectory).
+// Data is only removed when the user explicitly clears storage, or uninstalls.
+//
+// RULES:
+//   • No TTL — watched videos stay forever
+//   • No auto-prune — grows until user clears it
+//   • getCachedVideoUri() returns local path instantly if already on device
+//   • markVideoWatched() is idempotent — calling it twice does nothing extra
+//
+// documentDirectory:
+//   Android → /data/data/<pkg>/files/
+//   iOS     → <app>/Documents/
 
-// Playback streaming buffer — genuinely temporary, OS may clear anytime
-const CACHE_DIR = (FileSystem.cacheDirectory ?? "") + "afuchat_videos/";
+// ─── Directories ───────────────────────────────────────────────────────────────
 
-// User-saved offline videos — stored in documentDirectory so Android counts
-// them as "User data" (survives cache clears, not wiped by the OS)
-const OFFLINE_DIR = (FileSystem.documentDirectory ?? "") + "afuchat_offline/";
+// Permanent watched-video store — survives cache pressure, lives until user deletes
+const VIDEO_DIR = (FileSystem.documentDirectory ?? "") + "afuchat_videos/";
 
-// ─── Offline registry ─────────────────────────────────────────────────────────
-
-// Bumped to v3 — old v2 entries point at cacheDirectory paths which are now
-// stale; a fresh registry is cleaner than a migration.
-const OFFLINE_REGISTRY_KEY = "afu_offline_video_registry_v3";
-const OFFLINE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-const MAX_CACHE_FILES = 60;
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
 export type OfflineVideoEntry = {
   postId: string;
   url: string;
   fileUri: string;
   fileSize: number;
-  cachedAt: number;
+  cachedAt: number; // kept for compat — now means "storedAt"
   title: string;
   thumbnail: string | null;
 };
 
-// ─── In-memory maps ───────────────────────────────────────────────────────────
+// ─── In-memory maps ────────────────────────────────────────────────────────────
 
-const memoryMap = new Map<string, string>();
+const memoryMap = new Map<string, string>();      // url → local path
 const inProgress = new Map<string, Promise<string | null>>();
-const offlineInProgress = new Set<string>();
+const saveInProgress = new Set<string>();
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function urlToFilename(url: string): string {
   let h = 5381;
@@ -51,63 +57,113 @@ function urlToFilename(url: string): string {
 async function ensureDir(dir: string) {
   try {
     const info = await FileSystem.getInfoAsync(dir);
-    if (!info.exists) {
-      await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-    }
-  } catch (_) {}
+    if (!info.exists) await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+  } catch {}
 }
 
-async function readRegistry(): Promise<OfflineVideoEntry[]> {
+// ─── SQLite registry ───────────────────────────────────────────────────────────
+
+async function dbGetEntry(postId: string): Promise<OfflineVideoEntry | null> {
   try {
-    const raw = await AsyncStorage.getItem(OFFLINE_REGISTRY_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as OfflineVideoEntry[];
+    const db = await getDB();
+    const row = await db.getFirstAsync<any>(
+      "SELECT * FROM video_registry WHERE post_id = ?",
+      [postId],
+    );
+    if (!row) return null;
+    return {
+      postId: row.post_id,
+      url: row.url,
+      fileUri: row.file_uri,
+      fileSize: row.file_size,
+      cachedAt: row.stored_at,
+      title: row.title ?? "",
+      thumbnail: row.thumbnail ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function dbGetAll(): Promise<OfflineVideoEntry[]> {
+  try {
+    const db = await getDB();
+    const rows = await db.getAllAsync<any>(
+      "SELECT * FROM video_registry ORDER BY stored_at DESC",
+    );
+    return rows.map((row) => ({
+      postId: row.post_id,
+      url: row.url,
+      fileUri: row.file_uri,
+      fileSize: row.file_size,
+      cachedAt: row.stored_at,
+      title: row.title ?? "",
+      thumbnail: row.thumbnail ?? null,
+    }));
   } catch {
     return [];
   }
 }
 
-async function writeRegistry(entries: OfflineVideoEntry[]): Promise<void> {
+async function dbSaveEntry(entry: OfflineVideoEntry): Promise<void> {
   try {
-    await AsyncStorage.setItem(OFFLINE_REGISTRY_KEY, JSON.stringify(entries));
-  } catch (_) {}
+    const db = await getDB();
+    await db.runAsync(
+      `INSERT OR REPLACE INTO video_registry
+       (post_id, url, file_uri, file_size, title, thumbnail, stored_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        entry.postId, entry.url, entry.fileUri, entry.fileSize,
+        entry.title, entry.thumbnail, Date.now(),
+      ],
+    );
+  } catch {}
 }
 
-// ─── Regular playback cache ───────────────────────────────────────────────────
+async function dbDeleteEntry(postId: string): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.runAsync("DELETE FROM video_registry WHERE post_id = ?", [postId]);
+  } catch {}
+}
+
+async function dbDeleteAll(): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.runAsync("DELETE FROM video_registry");
+  } catch {}
+}
+
+// ─── Playback: get local path or null ──────────────────────────────────────────
 
 /**
- * Check if a video URL is already cached locally.
- * Checks both the playback cache dir and the offline cache dir.
+ * Returns the local file path for a video URL if it's already on device.
+ * Zero network — looks in memory map first, then the video directory.
+ * Returns null if the video hasn't been downloaded yet.
  */
 export async function getCachedVideoUri(url: string): Promise<string | null> {
   if (Platform.OS === "web" || !url) return null;
-  if (memoryMap.has(url)) return memoryMap.get(url)!;
-  try {
-    await ensureDir(CACHE_DIR);
-    const filename = urlToFilename(url);
 
-    // Check regular playback cache first
-    const localPath = CACHE_DIR + filename;
+  // 1. Memory map
+  if (memoryMap.has(url)) return memoryMap.get(url)!;
+
+  // 2. Check the permanent video directory
+  try {
+    await ensureDir(VIDEO_DIR);
+    const localPath = VIDEO_DIR + urlToFilename(url);
     const info = await FileSystem.getInfoAsync(localPath);
     if (info.exists && (info as any).size > 0) {
       memoryMap.set(url, localPath);
       return localPath;
     }
+  } catch {}
 
-    // Also check offline dir — a watched video lives there
-    const offlinePath = OFFLINE_DIR + filename;
-    const offlineInfo = await FileSystem.getInfoAsync(offlinePath);
-    if (offlineInfo.exists && (offlineInfo as any).size > 0) {
-      memoryMap.set(url, offlinePath);
-      return offlinePath;
-    }
-  } catch (_) {}
   return null;
 }
 
 /**
- * Download a video to the local playback cache.
- * Returns immediately if already cached (no re-download).
+ * Pre-fetch a video to local storage (e.g. for the next video in the feed).
+ * Returns immediately if already on device — no duplicate download.
  */
 export function cacheVideo(url: string): Promise<string | null> {
   if (Platform.OS === "web" || !url) return Promise.resolve(null);
@@ -116,8 +172,8 @@ export function cacheVideo(url: string): Promise<string | null> {
 
   const task = (async (): Promise<string | null> => {
     try {
-      await ensureDir(CACHE_DIR);
-      const localPath = CACHE_DIR + urlToFilename(url);
+      await ensureDir(VIDEO_DIR);
+      const localPath = VIDEO_DIR + urlToFilename(url);
       const existing = await FileSystem.getInfoAsync(localPath);
       if (existing.exists && (existing as any).size > 0) {
         memoryMap.set(url, localPath);
@@ -127,10 +183,9 @@ export function cacheVideo(url: string): Promise<string | null> {
       const check = await FileSystem.getInfoAsync(result.uri);
       if (check.exists && (check as any).size > 0) {
         memoryMap.set(url, result.uri);
-        pruneCache().catch(() => {});
         return result.uri;
       }
-    } catch (_) {}
+    } catch {}
     return null;
   })().finally(() => inProgress.delete(url));
 
@@ -138,42 +193,12 @@ export function cacheVideo(url: string): Promise<string | null> {
   return task;
 }
 
-async function pruneCache() {
-  try {
-    const files = await FileSystem.readDirectoryAsync(CACHE_DIR);
-    if (files.length <= MAX_CACHE_FILES) return;
-    const infos = await Promise.all(
-      files.map(async (f) => {
-        const p = CACHE_DIR + f;
-        const i = await FileSystem.getInfoAsync(p);
-        return { path: p, mt: (i as any).modificationTime ?? 0 };
-      })
-    );
-    infos.sort((a, b) => a.mt - b.mt);
-    const toDelete = infos.slice(0, infos.length - MAX_CACHE_FILES);
-    await Promise.all(toDelete.map((f) => FileSystem.deleteAsync(f.path, { idempotent: true })));
-    for (const f of toDelete) {
-      for (const [k, v] of memoryMap.entries()) {
-        if (v === f.path) memoryMap.delete(k);
-      }
-    }
-  } catch (_) {}
-}
-
-export async function clearVideoCache(): Promise<void> {
-  try {
-    await FileSystem.deleteAsync(CACHE_DIR, { idempotent: true });
-    memoryMap.clear();
-  } catch (_) {}
-}
-
-// ─── Offline cache (auto 24h TTL, TikTok-style) ───────────────────────────────
+// ─── Watch → Permanent Store ───────────────────────────────────────────────────
 
 /**
- * Called automatically when a video starts playing.
- * Saves it to the offline cache and registers it with a 24h expiry.
- * If the video is already cached (playback cache or offline cache) the file
- * is simply registered / expiry refreshed — no extra download.
+ * Called when a user watches a video. Saves it permanently to device storage.
+ * Idempotent — if already stored, updates metadata only (no extra download).
+ * The video is NEVER re-downloaded if already on device.
  */
 export async function markVideoWatched(
   postId: string,
@@ -181,191 +206,164 @@ export async function markVideoWatched(
   meta: { title: string; thumbnail: string | null },
 ): Promise<void> {
   if (Platform.OS === "web" || !url || !postId) return;
-  if (offlineInProgress.has(postId)) return;
-  offlineInProgress.add(postId);
+  if (saveInProgress.has(postId)) return;
+  saveInProgress.add(postId);
 
   try {
-    const now = Date.now();
-    const entries = await readRegistry();
-    const existing = entries.find((e) => e.postId === postId);
+    await ensureDir(VIDEO_DIR);
+    const filename = urlToFilename(url);
+    const localPath = VIDEO_DIR + filename;
 
-    if (existing) {
-      // Already registered — just refresh the expiry so the 24h resets from now
-      await writeRegistry(entries.map((e) =>
-        e.postId === postId ? { ...e, cachedAt: now, title: meta.title, thumbnail: meta.thumbnail } : e
-      ));
+    // Check if already on device (in video dir)
+    const existing = await FileSystem.getInfoAsync(localPath);
+    if (existing.exists && (existing as any).size > 0) {
+      // Already stored — just update metadata in registry, no download
+      memoryMap.set(url, localPath);
+      await dbSaveEntry({
+        postId, url, fileUri: localPath,
+        fileSize: (existing as any).size ?? 0,
+        cachedAt: Date.now(),
+        title: meta.title,
+        thumbnail: meta.thumbnail,
+      });
       return;
     }
 
-    await ensureDir(OFFLINE_DIR);
-    const filename = urlToFilename(url);
-    const offlinePath = OFFLINE_DIR + filename;
-
-    // Check if file already exists in offline dir
-    let fileUri = offlinePath;
+    // Not yet on device — if a download is in progress, reuse it
+    let fileUri = localPath;
     let fileSize = 0;
-    const existingOffline = await FileSystem.getInfoAsync(offlinePath);
-    if (existingOffline.exists && (existingOffline as any).size > 0) {
-      fileSize = (existingOffline as any).size ?? 0;
-    } else {
-      // If cacheVideo() is currently downloading this URL, wait for it — avoids
-      // a second parallel download of the same file.
-      let regularPath: string | null = null;
-      if (inProgress.has(url)) {
-        regularPath = await inProgress.get(url)!;
-      }
-      if (!regularPath) {
-        const candidate = CACHE_DIR + filename;
-        const info = await FileSystem.getInfoAsync(candidate);
-        if (info.exists && (info as any).size > 0) regularPath = candidate;
-      }
 
-      if (regularPath) {
-        // Copy the already-downloaded file rather than downloading again
-        try {
-          await FileSystem.copyAsync({ from: regularPath, to: offlinePath });
-          const copied = await FileSystem.getInfoAsync(offlinePath);
-          fileSize = (copied as any).size ?? 0;
-        } catch (_) {}
-      }
-
-      if (!fileSize) {
-        // Nothing cached yet — download fresh directly to offline dir
-        const result = await FileSystem.downloadAsync(url, offlinePath);
-        const info = await FileSystem.getInfoAsync(result.uri);
-        if (!info.exists || (info as any).size === 0) return;
-        fileSize = (info as any).size ?? 0;
+    if (inProgress.has(url)) {
+      const result = await inProgress.get(url)!;
+      if (result) {
+        // Copy from wherever it landed to our permanent path (if different)
+        if (result !== localPath) {
+          try {
+            await FileSystem.copyAsync({ from: result, to: localPath });
+            const info = await FileSystem.getInfoAsync(localPath);
+            fileSize = (info as any).size ?? 0;
+          } catch {
+            fileUri = result;
+            const info = await FileSystem.getInfoAsync(result);
+            fileSize = (info as any).size ?? 0;
+          }
+        } else {
+          const info = await FileSystem.getInfoAsync(result);
+          fileSize = (info as any).size ?? 0;
+        }
       }
     }
 
-    memoryMap.set(url, offlinePath);
+    if (fileSize === 0) {
+      // Download fresh directly to permanent location
+      const result = await FileSystem.downloadAsync(url, localPath);
+      const info = await FileSystem.getInfoAsync(result.uri);
+      if (!info.exists || (info as any).size === 0) return;
+      fileUri = result.uri;
+      fileSize = (info as any).size ?? 0;
+    }
 
-    const entry: OfflineVideoEntry = {
-      postId,
-      url,
-      fileUri,
-      fileSize,
-      cachedAt: now,
-      title: meta.title,
-      thumbnail: meta.thumbnail,
-    };
-
-    const fresh = await readRegistry();
-    await writeRegistry([entry, ...fresh.filter((e) => e.postId !== postId)]);
-  } catch (_) {
+    memoryMap.set(url, fileUri);
+    await dbSaveEntry({
+      postId, url, fileUri, fileSize,
+      cachedAt: Date.now(), title: meta.title, thumbnail: meta.thumbnail,
+    });
+  } catch {
   } finally {
-    offlineInProgress.delete(postId);
+    saveInProgress.delete(postId);
   }
 }
 
-/** Returns all non-expired offline videos, newest first. */
+// ─── Registry queries ──────────────────────────────────────────────────────────
+
+/** Returns all permanently stored videos, newest first. No TTL filtering. */
 export async function getOfflineVideos(): Promise<OfflineVideoEntry[]> {
   if (Platform.OS === "web") return [];
-  const now = Date.now();
-  const entries = await readRegistry();
-  return entries
-    .filter((e) => now - e.cachedAt < OFFLINE_TTL_MS)
-    .sort((a, b) => b.cachedAt - a.cachedAt);
+  return dbGetAll();
 }
 
-/** Returns total size and count of currently cached offline videos. */
+/** Total size and count of permanently stored videos. */
 export async function getOfflineCacheStats(): Promise<{ count: number; bytes: number }> {
-  const videos = await getOfflineVideos();
-  return {
-    count: videos.length,
-    bytes: videos.reduce((acc, v) => acc + v.fileSize, 0),
-  };
-}
-
-/**
- * Deletes expired offline entries and their files.
- * Should be called once at app startup.
- * Returns the number of entries cleaned up.
- */
-export async function clearExpiredOfflineVideos(): Promise<number> {
-  if (Platform.OS === "web") return 0;
-  const now = Date.now();
-  const entries = await readRegistry();
-  const valid: OfflineVideoEntry[] = [];
-  const expired: OfflineVideoEntry[] = [];
-
-  for (const e of entries) {
-    if (now - e.cachedAt < OFFLINE_TTL_MS) {
-      valid.push(e);
-    } else {
-      expired.push(e);
-    }
-  }
-
-  if (expired.length === 0) return 0;
-
-  await writeRegistry(valid);
-  await Promise.all(
-    expired.map((e) => FileSystem.deleteAsync(e.fileUri, { idempotent: true }).catch(() => {}))
-  );
-  for (const e of expired) {
-    for (const [k, v] of memoryMap.entries()) {
-      if (v === e.fileUri) memoryMap.delete(k);
-    }
-  }
-  return expired.length;
-}
-
-/**
- * One-time migration from v2 (cacheDirectory) to v3 (documentDirectory).
- * Removes the stale v2 AsyncStorage key and deletes old files in cacheDirectory.
- * Safe to call on every launch — no-ops immediately after the first run.
- */
-export async function migrateOfflineCacheV2toV3(): Promise<void> {
-  if (Platform.OS === "web") return;
-  const OLD_KEY = "afu_offline_video_registry_v2";
-  const OLD_DIR = (FileSystem.cacheDirectory ?? "") + "afuchat_offline/";
+  if (Platform.OS === "web") return { count: 0, bytes: 0 };
   try {
-    const raw = await AsyncStorage.getItem(OLD_KEY);
-    if (raw) {
-      // Delete any old files that were stored in cacheDirectory
-      try {
-        const oldEntries: OfflineVideoEntry[] = JSON.parse(raw);
-        await Promise.all(
-          oldEntries.map((e) => FileSystem.deleteAsync(e.fileUri, { idempotent: true }).catch(() => {}))
-        );
-      } catch (_) {}
-      // Remove the old directory itself and the old AsyncStorage key
-      await FileSystem.deleteAsync(OLD_DIR, { idempotent: true }).catch(() => {});
-      await AsyncStorage.removeItem(OLD_KEY);
-    }
-  } catch (_) {}
+    const db = await getDB();
+    const row = await db.getFirstAsync<{ count: number; bytes: number }>(
+      "SELECT COUNT(*) as count, COALESCE(SUM(file_size), 0) as bytes FROM video_registry",
+    );
+    return { count: row?.count ?? 0, bytes: row?.bytes ?? 0 };
+  } catch {
+    return { count: 0, bytes: 0 };
+  }
 }
 
-/** Clears all offline videos immediately (user-initiated). */
+/** User-initiated: delete ALL stored videos from device. */
 export async function clearAllOfflineVideos(): Promise<void> {
   if (Platform.OS === "web") return;
-  const entries = await readRegistry();
-  await writeRegistry([]);
-  await Promise.all(
-    entries.map((e) => FileSystem.deleteAsync(e.fileUri, { idempotent: true }).catch(() => {}))
-  );
-  try {
-    await FileSystem.deleteAsync(OFFLINE_DIR, { idempotent: true });
-  } catch (_) {}
+  const entries = await dbGetAll();
+  await dbDeleteAll();
+  memoryMap.clear();
+  await FileSystem.deleteAsync(VIDEO_DIR, { idempotent: true }).catch(() => {});
+  // Also clear any in-progress downloads
+  inProgress.clear();
+  // No-op for any entry whose file doesn't exist
   for (const e of entries) {
-    for (const [k, v] of memoryMap.entries()) {
-      if (v === e.fileUri) memoryMap.delete(k);
-    }
+    await FileSystem.deleteAsync(e.fileUri, { idempotent: true }).catch(() => {});
   }
 }
 
-/** Removes a single offline video by postId. */
+/** User-initiated: delete a single video by postId. */
 export async function removeOfflineVideo(postId: string): Promise<void> {
   if (Platform.OS === "web") return;
-  const entries = await readRegistry();
-  const entry = entries.find((e) => e.postId === postId);
+  const entry = await dbGetEntry(postId);
   if (!entry) return;
-  await writeRegistry(entries.filter((e) => e.postId !== postId));
+  await dbDeleteEntry(postId);
   await FileSystem.deleteAsync(entry.fileUri, { idempotent: true }).catch(() => {});
   for (const [k, v] of memoryMap.entries()) {
     if (v === entry.fileUri) memoryMap.delete(k);
   }
 }
 
-export const OFFLINE_TTL_MS_EXPORT = OFFLINE_TTL_MS;
+// ─── Legacy compat / migration helpers ─────────────────────────────────────────
+
+/** No-op — kept so callers don't break. TTL is gone; nothing expires. */
+export async function clearExpiredOfflineVideos(): Promise<number> {
+  return 0;
+}
+
+/** Migrate old AsyncStorage registry entries into SQLite. Safe to call repeatedly. */
+export async function migrateOfflineCacheV2toV3(): Promise<void> {
+  if (Platform.OS === "web") return;
+  const KEYS = ["afu_offline_video_registry_v2", "afu_offline_video_registry_v3"];
+  for (const key of KEYS) {
+    try {
+      const raw = await AsyncStorage.getItem(key);
+      if (!raw) continue;
+      const entries: OfflineVideoEntry[] = JSON.parse(raw);
+      for (const e of entries) {
+        // Check if file still exists before migrating
+        const info = await FileSystem.getInfoAsync(e.fileUri);
+        if (info.exists && (info as any).size > 0) {
+          // Move to permanent VIDEO_DIR if not already there
+          await ensureDir(VIDEO_DIR);
+          const destPath = VIDEO_DIR + urlToFilename(e.url);
+          if (e.fileUri !== destPath) {
+            try {
+              await FileSystem.copyAsync({ from: e.fileUri, to: destPath });
+              e.fileUri = destPath;
+            } catch {}
+          }
+          await dbSaveEntry(e);
+          memoryMap.set(e.url, e.fileUri);
+        }
+      }
+      await AsyncStorage.removeItem(key);
+    } catch {}
+  }
+}
+
+/** @deprecated Use clearAllOfflineVideos instead */
+export async function clearVideoCache(): Promise<void> {
+  await clearAllOfflineVideos();
+}
+
+export const OFFLINE_TTL_MS_EXPORT = 0; // TTL removed — kept for import compat

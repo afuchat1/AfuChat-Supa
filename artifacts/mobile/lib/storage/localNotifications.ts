@@ -1,3 +1,9 @@
+// ─── Permanent Notification Store ──────────────────────────────────────────────
+// Notifications are stored permanently on device using INSERT OR IGNORE.
+// Already-stored notifications are never re-downloaded.
+// Delta sync: only notifications newer than the newest stored one are fetched.
+// No TTL, no auto-trim — accumulates until user clears storage.
+
 import { getDB } from "./db";
 
 export type LocalNotification = {
@@ -10,18 +16,15 @@ export type LocalNotification = {
   body: string | null;
   read_at: string | null;
   created_at: string;
-  cached_at: number;
+  stored_at: number;
 };
 
-const NOTIF_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const MAX_NOTIFS = 200;
+// ─── Reads ──────────────────────────────────────────────────────────────────────
 
-// ─── Reads ─────────────────────────────────────────────────────────────────────
-
-export async function getLocalNotifications(limit = 50): Promise<LocalNotification[]> {
+export async function getLocalNotifications(limit = 100): Promise<LocalNotification[]> {
   try {
     const db = await getDB();
-    const rows = await db.getAllAsync<LocalNotification>(
+    const rows = await db.getAllAsync<any>(
       `SELECT * FROM notifications ORDER BY created_at DESC LIMIT ?`,
       [limit],
     );
@@ -55,8 +58,28 @@ export async function hasLocalNotifications(): Promise<boolean> {
   }
 }
 
-// ─── Writes ────────────────────────────────────────────────────────────────────
+/**
+ * Returns the created_at of the newest stored notification.
+ * Used as delta-sync cursor — only fetch notifications newer than this.
+ */
+export async function getNewestNotificationDate(): Promise<string | null> {
+  try {
+    const db = await getDB();
+    const row = await db.getFirstAsync<{ created_at: string }>(
+      "SELECT created_at FROM notifications ORDER BY created_at DESC LIMIT 1",
+    );
+    return row?.created_at ?? null;
+  } catch {
+    return null;
+  }
+}
 
+// ─── Writes ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Persist notifications permanently using INSERT OR IGNORE.
+ * Already-stored notifications are never overwritten or re-downloaded.
+ */
 export async function saveNotifications(items: any[]): Promise<void> {
   if (!items.length) return;
   try {
@@ -64,8 +87,8 @@ export async function saveNotifications(items: any[]): Promise<void> {
     const now = Date.now();
     for (const n of items) {
       await db.runAsync(
-        `INSERT OR REPLACE INTO notifications
-         (id, type, actor_id, actor_name, actor_avatar, target_id, body, read_at, created_at, cached_at)
+        `INSERT OR IGNORE INTO notifications
+         (id, type, actor_id, actor_name, actor_avatar, target_id, body, read_at, created_at, stored_at)
          VALUES (?,?,?,?,?,?,?,?,?,?)`,
         [
           n.id, n.type ?? "generic",
@@ -75,16 +98,6 @@ export async function saveNotifications(items: any[]): Promise<void> {
         ],
       );
     }
-    // Trim to MAX_NOTIFS
-    await db.runAsync(
-      `DELETE FROM notifications WHERE id NOT IN (
-         SELECT id FROM notifications ORDER BY created_at DESC LIMIT ?
-       )`,
-      [MAX_NOTIFS],
-    );
-    // Expire old
-    const expiry = Date.now() - NOTIF_TTL_MS;
-    await db.runAsync("DELETE FROM notifications WHERE cached_at < ?", [expiry]);
   } catch {}
 }
 
@@ -105,5 +118,13 @@ export async function markAllNotificationsRead(): Promise<void> {
       "UPDATE notifications SET read_at = ? WHERE read_at IS NULL",
       [new Date().toISOString()],
     );
+  } catch {}
+}
+
+/** User-initiated only: delete all notifications from device. */
+export async function clearAllNotifications(): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.runAsync("DELETE FROM notifications");
   } catch {}
 }

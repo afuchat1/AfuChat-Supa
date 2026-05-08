@@ -1,3 +1,11 @@
+// ─── Permanent Conversation Store ──────────────────────────────────────────────
+// Conversations are stored permanently on device. Metadata (last_message, unread)
+// is updated in-place. Conversations are never auto-deleted — only removed when
+// the user explicitly deletes the conversation.
+//
+// Delta sync: conversations track their own last_message_at so the UI can show
+// the correct sort order offline without any network call.
+
 import { getDB } from "./db";
 
 export type LocalConversation = {
@@ -20,10 +28,9 @@ export type LocalConversation = {
   is_organization_verified: boolean;
   other_last_seen: string | null;
   other_show_online: boolean;
-  cached_at: number;
+  stored_at: number;
 };
 
-// Convert server shape → local row
 export function mapConversation(item: any): LocalConversation {
   return {
     id: item.id,
@@ -45,11 +52,11 @@ export function mapConversation(item: any): LocalConversation {
     is_organization_verified: item.is_organization_verified ?? false,
     other_last_seen: item.other_last_seen ?? null,
     other_show_online: item.other_show_online ?? true,
-    cached_at: Date.now(),
+    stored_at: Date.now(),
   };
 }
 
-// ─── Reads ─────────────────────────────────────────────────────────────────────
+// ─── Reads ──────────────────────────────────────────────────────────────────────
 
 export async function getLocalConversations(includeArchived = false): Promise<LocalConversation[]> {
   try {
@@ -89,8 +96,27 @@ export async function hasLocalConversations(): Promise<boolean> {
   }
 }
 
-// ─── Writes ────────────────────────────────────────────────────────────────────
+/** Returns the newest last_message_at across all stored conversations.
+ *  Can be used for delta sync (only fetch chats updated after this). */
+export async function getNewestConversationUpdate(): Promise<string | null> {
+  try {
+    const db = await getDB();
+    const row = await db.getFirstAsync<{ last_message_at: string }>(
+      "SELECT last_message_at FROM conversations ORDER BY last_message_at DESC LIMIT 1",
+    );
+    return row?.last_message_at ?? null;
+  } catch {
+    return null;
+  }
+}
 
+// ─── Writes ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Upsert conversations permanently. Uses INSERT OR REPLACE so metadata
+ * (last_message, avatar, name) stays up to date from the server.
+ * Conversations are never deleted automatically.
+ */
 export async function saveConversations(items: any[]): Promise<void> {
   if (!items.length) return;
   try {
@@ -103,7 +129,7 @@ export async function saveConversations(items: any[]): Promise<void> {
          (id, name, is_group, is_channel, other_id, other_display_name, other_avatar,
           last_message, last_message_at, last_message_is_mine, last_message_status,
           is_pinned, is_archived, avatar_url, unread_count, is_verified,
-          is_organization_verified, other_last_seen, other_show_online, cached_at)
+          is_organization_verified, other_last_seen, other_show_online, stored_at)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           c.id, c.name, c.is_group ? 1 : 0, c.is_channel ? 1 : 0,
@@ -129,7 +155,7 @@ export async function updateConversationLastMessage(
     const db = await getDB();
     await db.runAsync(
       `UPDATE conversations SET last_message = ?, last_message_at = ?,
-       last_message_is_mine = ?, last_message_status = 'sent', cached_at = ?
+       last_message_is_mine = ?, last_message_status = 'sent', stored_at = ?
        WHERE id = ?`,
       [lastMessage, sentAt, isMine ? 1 : 0, Date.now(), id],
     );
@@ -156,6 +182,7 @@ export async function clearUnread(conversationId: string): Promise<void> {
   } catch {}
 }
 
+/** User-initiated: remove a conversation and all its messages from device. */
 export async function deleteLocalConversation(id: string): Promise<void> {
   try {
     const db = await getDB();
@@ -164,7 +191,7 @@ export async function deleteLocalConversation(id: string): Promise<void> {
   } catch {}
 }
 
-// ─── Internal ──────────────────────────────────────────────────────────────────
+// ─── Internal ───────────────────────────────────────────────────────────────────
 
 function rowToConv(r: any): LocalConversation {
   return {

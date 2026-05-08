@@ -48,7 +48,7 @@ import {
   isOnline,
   onConnectivityChange,
 } from "@/lib/offlineStore";
-import { getLocalMessages, saveMessages, savePendingMessage } from "@/lib/storage/localMessages";
+import { getLocalMessages, saveMessages, savePendingMessage, getNewestMessageDate } from "@/lib/storage/localMessages";
 import { clearUnread } from "@/lib/storage/localConversations";
 import { uploadChatMedia } from "@/lib/mediaUpload";
 import { syncPendingMessages } from "@/lib/offlineSync";
@@ -1374,12 +1374,20 @@ function ChatScreen() {
       return;
     }
 
-    const { data } = await supabase
+    // Delta sync: only fetch messages NEWER than what's already stored on device.
+    // Messages already on device are NEVER re-downloaded.
+    const newestStored = await getNewestMessageDate(chatId);
+    let msgQuery = supabase
       .from("messages")
       .select(`id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`)
       .eq("chat_id", chatId)
       .order("sent_at", { ascending: false })
       .limit(50);
+    if (newestStored) {
+      // Only fetch messages sent after the newest one we already have
+      msgQuery = msgQuery.gt("sent_at", newestStored);
+    }
+    const { data } = await msgQuery;
 
     if (data) {
       const msgIds = data.map((m: any) => m.id);

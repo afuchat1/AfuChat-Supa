@@ -1,12 +1,12 @@
 import { Platform } from "react-native";
 
-// ─── Local SQLite Database ─────────────────────────────────────────────────────
-// This is AfuChat's on-device relational store — exactly how WhatsApp/Telegram
-// keep messages available instantly without a network round-trip.
+// ─── AfuChat Local Database ────────────────────────────────────────────────────
+// Permanent on-device SQLite store — data lives here until the user explicitly
+// deletes it or uninstalls the app. Nothing is auto-expired or auto-pruned.
+// This is the same model WhatsApp / Telegram use: download once, keep forever.
 //
-// On native: uses expo-sqlite (SQLite3).
-// On web: expo-sqlite now ships a SQLite Wasm build, so the same code runs
-// everywhere, but we guard native-only APIs behind Platform checks.
+// On native: expo-sqlite (SQLite 3).
+// On web:    in-memory no-op stub (app is mobile-only; web preview doesn't persist data).
 
 export type DB = {
   execAsync(sql: string): Promise<void>;
@@ -20,19 +20,12 @@ let _initPromise: Promise<DB> | null = null;
 
 async function openDB(): Promise<DB> {
   if (Platform.OS === "web") {
-    const SQLite = await import("expo-sqlite/legacy");
-    const db = SQLite.openDatabase("afuchat_local.db");
+    // Web preview stub — app is mobile-only, no persistence on web
     return {
-      execAsync: (sql) => new Promise((res, rej) => db.exec([{ sql, args: [] }], false, (err) => (err ? rej(err) : res()))),
-      runAsync: (sql, params = []) => new Promise((res, rej) =>
-        db.transaction((tx) => tx.executeSql(sql, params, (_, r) => res({ lastInsertRowId: r.insertId ?? 0, changes: r.rowsAffected }), (_, e) => { rej(e); return true; }))
-      ),
-      getAllAsync: <T>(sql: string, params: any[] = []) => new Promise<T[]>((res, rej) =>
-        db.transaction((tx) => tx.executeSql(sql, params, (_, r) => res(r.rows._array as T[]), (_, e) => { rej(e); return true; }))
-      ),
-      getFirstAsync: <T>(sql: string, params: any[] = []) => new Promise<T | null>((res, rej) =>
-        db.transaction((tx) => tx.executeSql(sql, params, (_, r) => res((r.rows._array[0] as T) ?? null), (_, e) => { rej(e); return true; }))
-      ),
+      execAsync: async () => {},
+      runAsync: async () => ({ lastInsertRowId: 0, changes: 0 }),
+      getAllAsync: async () => [],
+      getFirstAsync: async () => null,
     };
   }
 
@@ -57,20 +50,18 @@ export async function getDB(): Promise<DB> {
   return _initPromise;
 }
 
-// ─── Schema migrations ─────────────────────────────────────────────────────────
+// ─── Schema migrations ──────────────────────────────────────────────────────────
+// RULE: Never DROP columns or tables — only ADD. Migrations are permanent.
 
 async function runMigrations(db: DB) {
-  // Version table
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
-  `);
-
+  await db.execAsync(`CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);`);
   const row = await db.getFirstAsync<{ version: number }>("SELECT version FROM schema_version LIMIT 1");
   const currentVersion = row?.version ?? 0;
 
+  // ── v1: Core tables ──────────────────────────────────────────────────────────
   if (currentVersion < 1) {
     await db.execAsync(`
-      -- Conversations (chat rooms)
+      -- Conversations (chat rooms) — permanent, never auto-deleted
       CREATE TABLE IF NOT EXISTS conversations (
         id TEXT PRIMARY KEY,
         name TEXT,
@@ -91,12 +82,11 @@ async function runMigrations(db: DB) {
         is_organization_verified INTEGER NOT NULL DEFAULT 0,
         other_last_seen TEXT,
         other_show_online INTEGER NOT NULL DEFAULT 1,
-        cached_at INTEGER NOT NULL
+        stored_at INTEGER NOT NULL
       );
-      CREATE INDEX IF NOT EXISTS idx_conversations_cached ON conversations(cached_at);
       CREATE INDEX IF NOT EXISTS idx_conversations_pinned ON conversations(is_pinned, last_message_at);
 
-      -- Messages
+      -- Messages — permanent, never auto-deleted, never re-downloaded
       CREATE TABLE IF NOT EXISTS messages (
         id TEXT PRIMARY KEY,
         conversation_id TEXT NOT NULL,
@@ -110,12 +100,12 @@ async function runMigrations(db: DB) {
         edited_at TEXT,
         is_pending INTEGER NOT NULL DEFAULT 0,
         synced INTEGER NOT NULL DEFAULT 1,
-        cached_at INTEGER NOT NULL
+        stored_at INTEGER NOT NULL
       );
-      CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, sent_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_messages_conv_sent ON messages(conversation_id, sent_at ASC);
       CREATE INDEX IF NOT EXISTS idx_messages_pending ON messages(is_pending) WHERE is_pending = 1;
 
-      -- Feed posts
+      -- Feed posts — permanent once viewed/downloaded; only new posts fetched
       CREATE TABLE IF NOT EXISTS feed_posts (
         id TEXT PRIMARY KEY,
         author_id TEXT NOT NULL,
@@ -138,12 +128,12 @@ async function runMigrations(db: DB) {
         is_org_verified INTEGER NOT NULL DEFAULT 0,
         tab TEXT NOT NULL DEFAULT 'for_you',
         score REAL NOT NULL DEFAULT 0,
-        cached_at INTEGER NOT NULL
+        stored_at INTEGER NOT NULL
       );
-      CREATE INDEX IF NOT EXISTS idx_feed_tab ON feed_posts(tab, score DESC);
+      CREATE INDEX IF NOT EXISTS idx_feed_tab_created ON feed_posts(tab, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_feed_created ON feed_posts(created_at DESC);
 
-      -- Notifications
+      -- Notifications — permanent
       CREATE TABLE IF NOT EXISTS notifications (
         id TEXT PRIMARY KEY,
         type TEXT NOT NULL,
@@ -154,12 +144,12 @@ async function runMigrations(db: DB) {
         body TEXT,
         read_at TEXT,
         created_at TEXT NOT NULL,
-        cached_at INTEGER NOT NULL
+        stored_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_notif_created ON notifications(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_notif_unread ON notifications(read_at) WHERE read_at IS NULL;
 
-      -- Offline action queue
+      -- Offline action queue (pending sync to server)
       CREATE TABLE IF NOT EXISTS offline_queue (
         id TEXT PRIMARY KEY,
         action_type TEXT NOT NULL,
@@ -176,16 +166,28 @@ async function runMigrations(db: DB) {
         used_at INTEGER NOT NULL
       );
 
-      -- Media cache registry (thumbnails, avatars)
+      -- Media registry: avatars + thumbnails stored permanently in documentDirectory
       CREATE TABLE IF NOT EXISTS media_cache (
         url_hash TEXT PRIMARY KEY,
         url TEXT NOT NULL,
         local_path TEXT NOT NULL,
         media_type TEXT NOT NULL DEFAULT 'image',
         file_size INTEGER NOT NULL DEFAULT 0,
-        cached_at INTEGER NOT NULL
+        stored_at INTEGER NOT NULL
       );
-      CREATE INDEX IF NOT EXISTS idx_media_cached ON media_cache(cached_at);
+      CREATE INDEX IF NOT EXISTS idx_media_stored ON media_cache(stored_at);
+
+      -- Video registry: watched videos stored permanently in documentDirectory
+      CREATE TABLE IF NOT EXISTS video_registry (
+        post_id TEXT PRIMARY KEY,
+        url TEXT NOT NULL,
+        file_uri TEXT NOT NULL,
+        file_size INTEGER NOT NULL DEFAULT 0,
+        title TEXT NOT NULL DEFAULT '',
+        thumbnail TEXT,
+        stored_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_video_stored ON video_registry(stored_at DESC);
     `);
 
     if (currentVersion === 0) {
@@ -193,5 +195,14 @@ async function runMigrations(db: DB) {
     } else {
       await db.runAsync("UPDATE schema_version SET version = 1");
     }
+  }
+
+  // ── v2: Add delta-sync helpers (newest_at columns for cursors) ───────────────
+  if (currentVersion < 2) {
+    // SQLite ignores "ADD COLUMN IF NOT EXISTS" — we catch errors instead
+    const safeAdd = async (sql: string) => { try { await db.execAsync(sql); } catch {} };
+    await safeAdd("ALTER TABLE feed_posts ADD COLUMN viewed_at INTEGER");
+    await safeAdd("ALTER TABLE feed_posts ADD COLUMN saved_to_tab TEXT");
+    await db.runAsync("UPDATE schema_version SET version = 2");
   }
 }

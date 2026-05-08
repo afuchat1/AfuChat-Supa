@@ -24,7 +24,7 @@ import { ThemeProvider, useThemeContext } from "@/context/ThemeContext";
 import { supabase } from "@/lib/supabase";
 import { registerAlertListener, unregisterAlertListener } from "@/lib/alert";
 import { setBaseUrl } from "@/lib/api-client-react/src";
-import { clearExpiredOfflineVideos, migrateOfflineCacheV2toV3 } from "@/lib/videoCache";
+import { migrateOfflineCacheV2toV3 } from "@/lib/videoCache";
 import { initDeviceStorage } from "@/lib/storage";
 import { AppLockGate } from "@/components/AppLockGate";
 import { ChatPreferencesProvider } from "@/context/ChatPreferencesContext";
@@ -203,7 +203,7 @@ export default function RootLayout() {
     // then run video cache housekeeping in parallel.
     initDeviceStorage().catch(() => {});
     migrateOfflineCacheV2toV3().catch(() => {});
-    clearExpiredOfflineVideos().catch(() => {});
+    // Videos are now stored permanently — no expiry to clear
   }, []);
 
   useEffect(() => {

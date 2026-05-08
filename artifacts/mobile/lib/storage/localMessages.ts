@@ -1,3 +1,13 @@
+// ─── Permanent Message Store ────────────────────────────────────────────────────
+// Messages are stored once and never re-downloaded.
+// Delta sync: we track the newest sent_at on device and only fetch from server
+// messages NEWER than that — exactly how WhatsApp / Telegram work.
+//
+// RULES:
+//   • INSERT OR IGNORE  — never overwrite an existing message row
+//   • No TTL, no auto-trim — messages live until the user deletes the conversation
+//   • getNewestMessageDate() → cursor for delta sync
+
 import { getDB } from "./db";
 
 export type LocalMessage = {
@@ -15,7 +25,6 @@ export type LocalMessage = {
   synced: boolean;
 };
 
-// Map from the Supabase shape to our local shape
 export function mapToLocal(msg: any, conversationId: string): LocalMessage {
   return {
     id: msg.id,
@@ -33,25 +42,68 @@ export function mapToLocal(msg: any, conversationId: string): LocalMessage {
   };
 }
 
-// ─── Reads ─────────────────────────────────────────────────────────────────────
+// ─── Reads ──────────────────────────────────────────────────────────────────────
 
-export async function getLocalMessages(conversationId: string, limit = 60): Promise<LocalMessage[]> {
+/** Load messages from device — newest N, in chronological order for display. */
+export async function getLocalMessages(
+  conversationId: string,
+  limit = 100,
+  beforeSentAt?: string,
+): Promise<LocalMessage[]> {
   try {
     const db = await getDB();
-    const rows = await db.getAllAsync<any>(
-      `SELECT * FROM messages
-       WHERE conversation_id = ?
-       ORDER BY sent_at ASC
-       LIMIT ?`,
-      [conversationId, limit],
-    );
-    return rows.map((r) => ({
-      ...r,
-      is_pending: r.is_pending === 1,
-      synced: r.synced === 1,
-    }));
+    let rows: any[];
+    if (beforeSentAt) {
+      rows = await db.getAllAsync<any>(
+        `SELECT * FROM messages
+         WHERE conversation_id = ? AND sent_at < ?
+         ORDER BY sent_at DESC LIMIT ?`,
+        [conversationId, beforeSentAt, limit],
+      );
+      rows.reverse();
+    } else {
+      rows = await db.getAllAsync<any>(
+        `SELECT * FROM (
+           SELECT * FROM messages
+           WHERE conversation_id = ?
+           ORDER BY sent_at DESC LIMIT ?
+         ) ORDER BY sent_at ASC`,
+        [conversationId, limit],
+      );
+    }
+    return rows.map(rowToMsg);
   } catch {
     return [];
+  }
+}
+
+/**
+ * Returns the sent_at of the newest message stored locally for this conversation.
+ * Used as the delta-sync cursor — only messages AFTER this are fetched from server.
+ */
+export async function getNewestMessageDate(conversationId: string): Promise<string | null> {
+  try {
+    const db = await getDB();
+    const row = await db.getFirstAsync<{ sent_at: string }>(
+      "SELECT sent_at FROM messages WHERE conversation_id = ? AND is_pending = 0 ORDER BY sent_at DESC LIMIT 1",
+      [conversationId],
+    );
+    return row?.sent_at ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getOldestMessageDate(conversationId: string): Promise<string | null> {
+  try {
+    const db = await getDB();
+    const row = await db.getFirstAsync<{ sent_at: string }>(
+      "SELECT sent_at FROM messages WHERE conversation_id = ? AND is_pending = 0 ORDER BY sent_at ASC LIMIT 1",
+      [conversationId],
+    );
+    return row?.sent_at ?? null;
+  } catch {
+    return null;
   }
 }
 
@@ -68,8 +120,12 @@ export async function getLocalMessageCount(conversationId: string): Promise<numb
   }
 }
 
-// ─── Writes ────────────────────────────────────────────────────────────────────
+// ─── Writes ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Persist messages permanently. Uses INSERT OR IGNORE — already-stored messages
+ * are never overwritten or re-downloaded. Only edited_at and status may be updated.
+ */
 export async function saveMessages(conversationId: string, messages: any[]): Promise<void> {
   if (!messages.length) return;
   try {
@@ -77,10 +133,11 @@ export async function saveMessages(conversationId: string, messages: any[]): Pro
     const now = Date.now();
     for (const msg of messages) {
       const local = mapToLocal(msg, conversationId);
+      // INSERT OR IGNORE: if the row already exists, skip it entirely — no re-download
       await db.runAsync(
-        `INSERT OR REPLACE INTO messages
+        `INSERT OR IGNORE INTO messages
          (id, conversation_id, sender_id, content, attachment_url, attachment_type,
-          reply_to_id, status, sent_at, edited_at, is_pending, synced, cached_at)
+          reply_to_id, status, sent_at, edited_at, is_pending, synced, stored_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           local.id,
@@ -98,25 +155,42 @@ export async function saveMessages(conversationId: string, messages: any[]): Pro
           now,
         ],
       );
+      // Allow status and edited_at to be updated on existing rows (delivery receipts)
+      if (msg.status || msg.edited_at) {
+        await db.runAsync(
+          `UPDATE messages SET
+             status = COALESCE(?, status),
+             edited_at = COALESCE(?, edited_at)
+           WHERE id = ?`,
+          [msg.status ?? null, msg.edited_at ?? null, local.id],
+        );
+      }
     }
   } catch {}
 }
 
+/** Save a locally composed message that hasn't been sent to the server yet. */
 export async function savePendingMessage(msg: {
   id: string;
   conversation_id: string;
   sender_id: string;
   content: string;
   sent_at: string;
+  attachment_url?: string | null;
+  attachment_type?: string | null;
 }): Promise<void> {
   try {
     const db = await getDB();
     await db.runAsync(
       `INSERT OR REPLACE INTO messages
        (id, conversation_id, sender_id, content, attachment_url, attachment_type,
-        reply_to_id, status, sent_at, edited_at, is_pending, synced, cached_at)
-       VALUES (?, ?, ?, ?, NULL, NULL, NULL, 'sending', ?, NULL, 1, 0, ?)`,
-      [msg.id, msg.conversation_id, msg.sender_id, msg.content, msg.sent_at, Date.now()],
+        reply_to_id, status, sent_at, edited_at, is_pending, synced, stored_at)
+       VALUES (?, ?, ?, ?, ?, ?, NULL, 'sending', ?, NULL, 1, 0, ?)`,
+      [
+        msg.id, msg.conversation_id, msg.sender_id, msg.content,
+        msg.attachment_url ?? null, msg.attachment_type ?? null,
+        msg.sent_at, Date.now(),
+      ],
     );
   } catch {}
 }
@@ -164,16 +238,20 @@ export async function getPendingLocalMessages(): Promise<LocalMessage[]> {
   }
 }
 
-// Trim old messages to keep storage lean — keep only the last N per conversation
-export async function trimMessages(conversationId: string, keep = 200): Promise<void> {
+/** User-initiated: delete ALL messages in a conversation from device. */
+export async function deleteAllLocalMessages(conversationId: string): Promise<void> {
   try {
     const db = await getDB();
-    await db.runAsync(
-      `DELETE FROM messages WHERE conversation_id = ? AND id NOT IN (
-         SELECT id FROM messages WHERE conversation_id = ?
-         ORDER BY sent_at DESC LIMIT ?
-       )`,
-      [conversationId, conversationId, keep],
-    );
+    await db.runAsync("DELETE FROM messages WHERE conversation_id = ?", [conversationId]);
   } catch {}
+}
+
+// ─── Internal ───────────────────────────────────────────────────────────────────
+
+function rowToMsg(r: any): LocalMessage {
+  return {
+    ...r,
+    is_pending: r.is_pending === 1,
+    synced: r.synced === 1,
+  };
 }
