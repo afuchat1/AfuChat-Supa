@@ -1441,17 +1441,31 @@ function ChatScreen() {
       });
 
       setMessages((prev) => {
-        const localOnly = prev.filter(
-          (m) => m.sender_id === AFUAI_BOT_ID || (typeof m.id === "string" && m.id.startsWith("msg_"))
+        // Nothing new from the server (delta sync found no newer messages).
+        // Keep existing state intact — the cached history is already displayed.
+        if (mapped.length === 0) return prev;
+
+        // Merge new server messages with any existing messages not covered by
+        // this fetch (older cached messages, pending local messages, etc.).
+        // Deduplication by ID prevents any duplicates.
+        const serverIds = new Set(mapped.map((m: any) => m.id));
+        const notInServer = prev.filter((m) => !serverIds.has(m.id));
+
+        // Sort newest-first: FlatList is inverted so index 0 appears at bottom.
+        return [...mapped, ...notInServer].sort(
+          (a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
         );
-        const dbIds = new Set(mapped.map((m: any) => m.id));
-        const extras = localOnly.filter((m) => !dbIds.has(m.id));
-        return extras.length > 0 ? [...extras, ...mapped] : mapped;
       });
       saveMessages(chatId, mapped).catch(() => {});
       clearUnread(chatId).catch(() => {});
-      oldestCursorRef.current = data.length > 0 ? data[data.length - 1].sent_at : null;
-      setHasMore(data.length >= 50);
+      // Only update the scroll cursor and pagination flag on a FULL load
+      // (newestStored === null). On a delta sync the cursor was already set on
+      // the first open and must not be reset — resetting it to null breaks
+      // "load older messages" because loadMoreMessages guards on the cursor.
+      if (!newestStored) {
+        oldestCursorRef.current = data.length > 0 ? data[data.length - 1].sent_at : null;
+        setHasMore(data.length >= 50);
+      }
 
       const unreadFromOthers = data.filter((m: any) => m.sender_id !== user.id);
       if (unreadFromOthers.length > 0) {
