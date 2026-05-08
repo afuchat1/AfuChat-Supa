@@ -44,12 +44,12 @@ import { showAlert } from "@/lib/alert";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { notifyNewMessage, notifyGiftReceived } from "@/lib/notifyUser";
 import {
-  cacheMessages,
-  getCachedMessages,
   queueMessage,
   isOnline,
   onConnectivityChange,
 } from "@/lib/offlineStore";
+import { getLocalMessages, saveMessages, savePendingMessage } from "@/lib/storage/localMessages";
+import { clearUnread } from "@/lib/storage/localConversations";
 import { uploadChatMedia } from "@/lib/mediaUpload";
 import { syncPendingMessages } from "@/lib/offlineSync";
 import OfflineBanner from "@/components/ui/OfflineBanner";
@@ -1357,9 +1357,15 @@ function ChatScreen() {
     const chatId = isDraft ? realChatId : id;
     if (!chatId || !user) return;
 
-    const cached = await getCachedMessages(chatId);
+    const cached = await getLocalMessages(chatId, 60);
     if (cached.length > 0) {
-      setMessages(cached);
+      setMessages(cached.map((m) => ({
+        id: m.id, chat_id: m.conversation_id, sender_id: m.sender_id,
+        encrypted_content: m.content ?? "", sent_at: m.sent_at,
+        reply_to_message_id: m.reply_to_id, attachment_url: m.attachment_url,
+        attachment_type: m.attachment_type, edited_at: m.edited_at,
+        status: m.status as any, reactions: [], _pending: m.is_pending,
+      })));
       setLoading(false);
     }
 
@@ -1434,7 +1440,8 @@ function ChatScreen() {
         const extras = localOnly.filter((m) => !dbIds.has(m.id));
         return extras.length > 0 ? [...extras, ...mapped] : mapped;
       });
-      cacheMessages(chatId, mapped);
+      saveMessages(chatId, mapped).catch(() => {});
+      clearUnread(chatId).catch(() => {});
       oldestCursorRef.current = data.length > 0 ? data[data.length - 1].sent_at : null;
       setHasMore(data.length >= 50);
 
@@ -1597,8 +1604,14 @@ function ChatScreen() {
 
     const loadCached = async () => {
       if (id) {
-        const cached = await getCachedMessages(id);
-        if (cached.length > 0) setMessages(cached);
+        const cached = await getLocalMessages(id, 60);
+        if (cached.length > 0) setMessages(cached.map((m) => ({
+          id: m.id, chat_id: m.conversation_id, sender_id: m.sender_id,
+          encrypted_content: m.content ?? "", sent_at: m.sent_at,
+          reply_to_message_id: m.reply_to_id, attachment_url: m.attachment_url,
+          attachment_type: m.attachment_type, edited_at: m.edited_at,
+          status: m.status as any, reactions: [], _pending: m.is_pending,
+        })));
       }
     };
     loadCached();
@@ -2473,7 +2486,11 @@ STRICT RULES:
 
     if (!isOnline()) {
       setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, status: "sending" as const, _pending: true } : m));
-      await queueMessage({ id: msgId, chat_id: activeChatId, sender_id: user.id, encrypted_content: text, created_at: now });
+      // Save to both legacy queue (AsyncStorage) and new SQLite pending table
+      await Promise.all([
+        queueMessage({ id: msgId, chat_id: activeChatId, sender_id: user.id, encrypted_content: text, created_at: now }),
+        savePendingMessage({ id: msgId, conversation_id: activeChatId, sender_id: user.id, content: text, sent_at: now }),
+      ]);
       return;
     }
 

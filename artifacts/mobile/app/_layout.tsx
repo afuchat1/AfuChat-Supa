@@ -25,6 +25,7 @@ import { supabase } from "@/lib/supabase";
 import { registerAlertListener, unregisterAlertListener } from "@/lib/alert";
 import { setBaseUrl } from "@/lib/api-client-react/src";
 import { clearExpiredOfflineVideos, migrateOfflineCacheV2toV3 } from "@/lib/videoCache";
+import { initDeviceStorage } from "@/lib/storage";
 import { AppLockGate } from "@/components/AppLockGate";
 import { ChatPreferencesProvider } from "@/context/ChatPreferencesContext";
 import { AppAccentProvider } from "@/context/AppAccentContext";
@@ -198,6 +199,9 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
+    // Initialize on-device storage (SQLite DB + MMKV + sync queue) first,
+    // then run video cache housekeeping in parallel.
+    initDeviceStorage().catch(() => {});
     migrateOfflineCacheV2toV3().catch(() => {});
     clearExpiredOfflineVideos().catch(() => {});
   }, []);

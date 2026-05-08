@@ -38,7 +38,9 @@ import {
   getPostUploadState,
   subscribePostUpload,
 } from "@/lib/postUploadStore";
-import { cacheMoments, getCachedMoments, cacheFeedTab, getCachedFeedTab, cacheFeedCursor, isOnline, onConnectivityChange } from "@/lib/offlineStore";
+import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
+import { getLocalFeedPosts, saveFeedPosts, type FeedTab as LocalFeedTab } from "@/lib/storage/localFeed";
+import { getCachedFeedTab, cacheFeedTab, getCachedMoments, cacheMoments, cacheFeedCursor } from "@/lib/offlineStore";
 import { notifyPostLike } from "@/lib/notifyUser";
 import { sharePost, shareVideo } from "@/lib/share";
 import { matchInterestsWeighted, recordInteraction, getLearnedInterestBoosts, computeFeedScore, diversifyFeed, type FeedSignals } from "@/lib/feedAlgorithm";
@@ -757,15 +759,32 @@ export default function DiscoverScreen() {
     if (!isOnline()) {
       if (!background) {
         if (isRefresh) {
-          const cached = await getCachedFeedTab(activeTab);
-          if (cached?.posts?.length) {
-            const p = cached.posts as PostItem[];
+          const localPosts = await getLocalFeedPosts(activeTab as LocalFeedTab, 30);
+          if (localPosts.length > 0) {
+            const p = localPosts.map(r => ({
+              ...r,
+              likeCount: r.like_count,
+              replyCount: r.reply_count,
+              is_organization_verified: r.is_org_verified,
+              profile: { display_name: r.author_name ?? "User", handle: r.author_handle ?? "user", avatar_url: r.author_avatar ?? null },
+              article_body: null,
+              duration_seconds: null,
+              isFollowing: activeTab === "following",
+            })) as unknown as PostItem[];
             setPosts(p);
             tabPostsCache.current[activeTab] = p;
-            tabCacheTimestamp.current[activeTab] = cached.cachedAt;
+            tabCacheTimestamp.current[activeTab] = localPosts[0]?.cached_at ?? Date.now();
           } else {
-            const legacyCached = await getCachedMoments();
-            if (legacyCached.length > 0) setPosts(legacyCached as PostItem[]);
+            const cached = await getCachedFeedTab(activeTab);
+            if (cached?.posts?.length) {
+              const p = cached.posts as PostItem[];
+              setPosts(p);
+              tabPostsCache.current[activeTab] = p;
+              tabCacheTimestamp.current[activeTab] = cached.cachedAt;
+            } else {
+              const legacyCached = await getCachedMoments();
+              if (legacyCached.length > 0) setPosts(legacyCached as PostItem[]);
+            }
           }
         }
         setLoading(false);
@@ -851,6 +870,7 @@ export default function DiscoverScreen() {
           tabPostsCache.current[activeTab] = mapped;
           tabCacheTimestamp.current[activeTab] = Date.now();
           cacheFeedTab(activeTab, mapped);
+          saveFeedPosts(mapped, activeTab as LocalFeedTab).catch(() => {});
         } else {
           setPosts((prev) => { const ids = new Set(prev.map((p) => p.id)); return [...prev, ...mapped.filter((i) => !ids.has(i.id))]; });
         }
@@ -1090,6 +1110,7 @@ export default function DiscoverScreen() {
         tabCacheTimestamp.current[activeTab] = Date.now();
         cacheFeedTab(activeTab, merged);
         cacheMoments(merged);
+        saveFeedPosts(merged, activeTab as LocalFeedTab).catch(() => {});
       } else {
         setPosts((prev) => {
           const existingIds = new Set(prev.map((p) => p.id));
@@ -1157,9 +1178,26 @@ export default function DiscoverScreen() {
     }
   }, [feedTab]);
 
-  // Mount: preload both tabs from AsyncStorage, then background-refresh For You
+  // Mount: preload both tabs from SQLite first (instant), then AsyncStorage fallback,
+  // then background-refresh For You from the network.
   useEffect(() => {
     (async () => {
+      const [fyLocal, flLocal] = await Promise.all([
+        getLocalFeedPosts("for_you", 30),
+        getLocalFeedPosts("following", 30),
+      ]);
+      if (fyLocal.length > 0) {
+        const toItem = (r: any) => ({ ...r, likeCount: r.like_count, replyCount: r.reply_count, is_organization_verified: r.is_org_verified, profile: { display_name: r.author_name ?? "User", handle: r.author_handle ?? "user", avatar_url: r.author_avatar ?? null }, article_body: null, duration_seconds: null, isFollowing: false }) as unknown as PostItem;
+        tabPostsCache.current.for_you = fyLocal.map(toItem);
+        tabCacheTimestamp.current.for_you = fyLocal[0]?.cached_at ?? Date.now();
+        if (feedTabRef.current === "for_you") { setPosts(tabPostsCache.current.for_you); setLoading(false); }
+      }
+      if (flLocal.length > 0) {
+        const toItem = (r: any) => ({ ...r, likeCount: r.like_count, replyCount: r.reply_count, is_organization_verified: r.is_org_verified, profile: { display_name: r.author_name ?? "User", handle: r.author_handle ?? "user", avatar_url: r.author_avatar ?? null }, article_body: null, duration_seconds: null, isFollowing: true }) as unknown as PostItem;
+        tabPostsCache.current.following = flLocal.map(toItem);
+        tabCacheTimestamp.current.following = flLocal[0]?.cached_at ?? Date.now();
+        if (feedTabRef.current === "following") { setPosts(tabPostsCache.current.following); setLoading(false); }
+      }
       const [fyCache, flCache] = await Promise.all([
         getCachedFeedTab("for_you"),
         getCachedFeedTab("following"),

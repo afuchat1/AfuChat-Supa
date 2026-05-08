@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -19,6 +20,10 @@ import {
   formatBytes,
   type StorageUsage,
 } from "@/lib/mediaUpload";
+import { useStorageStats } from "@/hooks/useStorageStats";
+import { formatBytes as fmtBytes } from "@/hooks/useStorageStats";
+import { clearMediaCache } from "@/lib/storage/mediaCache";
+import { clearAllOfflineVideos } from "@/lib/videoCache";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -55,6 +60,8 @@ export default function StorageSettingsScreen() {
   const [hydrated, setHydrated] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { stats: deviceStats, loading: deviceLoading, refresh: refreshDevice } = useStorageStats();
+  const [clearing, setClearing] = useState<"videos" | "media" | null>(null);
 
   // Instant first paint from disk cache.
   useEffect(() => {
@@ -93,7 +100,48 @@ export default function StorageSettingsScreen() {
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     load();
-  }, [load]);
+    refreshDevice();
+  }, [load, refreshDevice]);
+
+  const clearVideos = useCallback(() => {
+    Alert.alert(
+      "Clear Offline Videos",
+      `This will delete all ${deviceStats.videoCount} cached video${deviceStats.videoCount === 1 ? "" : "s"} (${fmtBytes(deviceStats.videoBytes)}) from your device. They'll re-download when watched online.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear",
+          style: "destructive",
+          onPress: async () => {
+            setClearing("videos");
+            await clearAllOfflineVideos();
+            await refreshDevice();
+            setClearing(null);
+          },
+        },
+      ],
+    );
+  }, [deviceStats, refreshDevice]);
+
+  const clearMedia = useCallback(() => {
+    Alert.alert(
+      "Clear Thumbnail Cache",
+      `This will delete ${deviceStats.mediaCount} cached thumbnail${deviceStats.mediaCount === 1 ? "" : "s"} (${fmtBytes(deviceStats.mediaBytes)}). They'll be re-downloaded as you browse.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear",
+          style: "destructive",
+          onPress: async () => {
+            setClearing("media");
+            await clearMediaCache();
+            await refreshDevice();
+            setClearing(null);
+          },
+        },
+      ],
+    );
+  }, [deviceStats, refreshDevice]);
 
   // Fixed bucket order so the list doesn't reshuffle as data refreshes.
   const orderedBuckets = Object.keys(BUCKET_META);
@@ -322,6 +370,117 @@ export default function StorageSettingsScreen() {
             <Text style={[styles.footnote, { color: colors.textMuted }]}>
               Tap a category to view individual files and free up space. Stories
               and disappearing chat media are auto-deleted after 30 days.
+            </Text>
+
+            {/* ── Device (on-phone) storage ─────────────────────────────── */}
+            <Text style={[styles.sectionTitle, { color: colors.textMuted, marginTop: 24 }]}>
+              ON-DEVICE STORAGE
+            </Text>
+            <View style={[styles.list, { backgroundColor: colors.surface, borderRadius: 14 }]}>
+              {/* SQLite (chats + feed cache) */}
+              <View style={styles.row}>
+                <View style={[styles.iconWrap, { backgroundColor: "#5856D6" }]}>
+                  <Ionicons name="server-outline" size={18} color="#fff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.rowLabel, { color: colors.text }]}>Chat & Feed Cache</Text>
+                  <Text style={[styles.rowSub, { color: colors.textMuted }]}>Messages, conversations, posts (SQLite)</Text>
+                </View>
+                {deviceLoading ? (
+                  <ActivityIndicator size="small" color={colors.textMuted} />
+                ) : (
+                  <Text style={[styles.rowSize, { color: colors.text }]}>{fmtBytes(deviceStats.sqliteBytes)}</Text>
+                )}
+              </View>
+
+              <Separator indent={54} />
+
+              {/* Offline video cache */}
+              <TouchableOpacity activeOpacity={0.6} style={styles.row} onPress={clearVideos}>
+                <View style={[styles.iconWrap, { backgroundColor: "#FF3B30" }]}>
+                  <Ionicons name="videocam-outline" size={18} color="#fff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.rowLabel, { color: colors.text }]}>Offline Videos</Text>
+                  <Text style={[styles.rowSub, { color: colors.textMuted }]}>
+                    {deviceLoading ? "Loading…" : `${deviceStats.videoCount} video${deviceStats.videoCount === 1 ? "" : "s"} cached`}
+                  </Text>
+                </View>
+                {clearing === "videos" ? (
+                  <ActivityIndicator size="small" color="#FF3B30" />
+                ) : deviceLoading ? (
+                  <ActivityIndicator size="small" color={colors.textMuted} />
+                ) : (
+                  <Text style={[styles.rowSize, { color: "#FF3B30" }]}>{fmtBytes(deviceStats.videoBytes)}</Text>
+                )}
+                {clearing !== "videos" && !deviceLoading && (
+                  <Ionicons name="trash-outline" size={18} color="#FF3B30" style={{ marginLeft: 4 }} />
+                )}
+              </TouchableOpacity>
+
+              <Separator indent={54} />
+
+              {/* Thumbnail / avatar cache */}
+              <TouchableOpacity activeOpacity={0.6} style={styles.row} onPress={clearMedia}>
+                <View style={[styles.iconWrap, { backgroundColor: "#FF9500" }]}>
+                  <Ionicons name="images-outline" size={18} color="#fff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.rowLabel, { color: colors.text }]}>Thumbnail Cache</Text>
+                  <Text style={[styles.rowSub, { color: colors.textMuted }]}>
+                    {deviceLoading ? "Loading…" : `${deviceStats.mediaCount} image${deviceStats.mediaCount === 1 ? "" : "s"} cached`}
+                  </Text>
+                </View>
+                {clearing === "media" ? (
+                  <ActivityIndicator size="small" color="#FF9500" />
+                ) : deviceLoading ? (
+                  <ActivityIndicator size="small" color={colors.textMuted} />
+                ) : (
+                  <Text style={[styles.rowSize, { color: "#FF9500" }]}>{fmtBytes(deviceStats.mediaBytes)}</Text>
+                )}
+                {clearing !== "media" && !deviceLoading && (
+                  <Ionicons name="trash-outline" size={18} color="#FF9500" style={{ marginLeft: 4 }} />
+                )}
+              </TouchableOpacity>
+
+              <Separator indent={54} />
+
+              {/* Pending sync queue */}
+              <View style={styles.row}>
+                <View style={[styles.iconWrap, { backgroundColor: "#32D74B" }]}>
+                  <Ionicons name="sync-outline" size={18} color="#fff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.rowLabel, { color: colors.text }]}>Pending Sync</Text>
+                  <Text style={[styles.rowSub, { color: colors.textMuted }]}>
+                    {deviceLoading ? "Loading…" : `${deviceStats.pendingActions} action${deviceStats.pendingActions === 1 ? "" : "s"} queued`}
+                  </Text>
+                </View>
+                {!deviceLoading && (
+                  <Text style={[styles.rowSize, { color: colors.text }]}>
+                    {deviceStats.pendingActions === 0 ? "All synced" : "Pending"}
+                  </Text>
+                )}
+              </View>
+            </View>
+
+            <Text style={[styles.sectionTitle, { color: colors.textMuted, marginTop: 4 }]}>
+              TOTAL ON-DEVICE
+            </Text>
+            <View style={[styles.summaryCard, { marginBottom: 0 }]}>
+              {deviceLoading ? (
+                <ActivityIndicator color={colors.accent} />
+              ) : (
+                <Text style={[styles.summaryValue, { color: colors.text, fontSize: 22 }]}>
+                  {fmtBytes(deviceStats.totalBytes)}
+                </Text>
+              )}
+              <Text style={[styles.summaryFooterText, { color: colors.textMuted, marginTop: 4 }]}>
+                Chat database + video cache + thumbnail cache
+              </Text>
+            </View>
+            <Text style={[styles.footnote, { color: colors.textMuted, marginTop: 8 }]}>
+              Offline videos and thumbnail cache are safe to clear — they'll be re-downloaded when you browse. Chat history is preserved separately.
             </Text>
           </>
         )}

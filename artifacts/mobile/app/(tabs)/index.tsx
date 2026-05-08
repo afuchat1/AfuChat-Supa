@@ -28,7 +28,8 @@ import Colors from "@/constants/colors";
 import { ChatRowSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import OfflineBanner from "@/components/ui/OfflineBanner";
-import { cacheConversations, getCachedConversations, isOnline } from "@/lib/offlineStore";
+import { isOnline } from "@/lib/offlineStore";
+import { getLocalConversations, saveConversations, hasLocalConversations } from "@/lib/storage/localConversations";
 import { addOnlineListener } from "@/lib/offlineSync";
 import { wasChatRecentlyVisited, clearChatVisited } from "@/lib/chatVisited";
 import { showAlert, confirmAlert } from "@/lib/alert";
@@ -510,9 +511,9 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
     if (!user) return;
 
     if (!background) {
-      const cached = await getCachedConversations();
+      const cached = await getLocalConversations();
       if (cached.length > 0) {
-        setChats(cached);
+        setChats(cached as any);
         setLoading(false);
       }
     }
@@ -661,7 +662,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
     });
 
     setChats(items);
-    cacheConversations(items);
+    saveConversations(items).catch(() => {});
     setLoading(false);
     setRefreshing(false);
   }, [user]);

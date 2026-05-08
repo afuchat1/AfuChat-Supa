@@ -5,6 +5,8 @@ import {
   onConnectivityChange,
   isOnline,
 } from "./offlineStore";
+import { drainQueue } from "./storage/syncQueue";
+import { getPendingLocalMessages, markMessageSynced } from "./storage/localMessages";
 
 let syncing = false;
 
@@ -13,19 +15,38 @@ export async function syncPendingMessages(): Promise<void> {
   syncing = true;
 
   try {
+    // 1. Sync legacy AsyncStorage pending messages
     const pending = await getPendingMessages();
-
     for (const msg of pending) {
       const { error } = await supabase.from("messages").insert({
         chat_id: msg.chat_id,
         sender_id: msg.sender_id,
         encrypted_content: msg.encrypted_content,
       });
-
       if (!error) {
         await removePendingMessage(msg.id);
       }
     }
+
+    // 2. Sync SQLite pending messages (new path)
+    const localPending = await getPendingLocalMessages();
+    for (const msg of localPending) {
+      const { data, error } = await supabase
+        .from("messages")
+        .insert({
+          chat_id: msg.conversation_id,
+          sender_id: msg.sender_id,
+          encrypted_content: msg.content,
+        })
+        .select("id")
+        .single();
+      if (!error && data?.id) {
+        await markMessageSynced(msg.id, data.id);
+      }
+    }
+
+    // 3. Drain offline action queue (likes, bookmarks, follows, etc.)
+    await drainQueue();
   } catch {}
 
   syncing = false;

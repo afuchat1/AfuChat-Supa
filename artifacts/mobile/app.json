@@ -135,7 +135,8 @@
             "./assets/sounds/notification.wav"
           ]
         }
-      ]
+      ],
+      "expo-sqlite"
     ],
     "updates": {
       "enabled": false

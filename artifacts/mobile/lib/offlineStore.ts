@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
+import { storage, KEYS } from "./storage/mmkv";
 
 const FEED_CACHE_TTL_MS = 30 * 60 * 1000;
 
@@ -77,17 +78,27 @@ export function onConnectivityChange(fn: (online: boolean) => void): () => void 
 
 export async function cacheProfile(profile: any): Promise<void> {
   try {
+    // Write to MMKV synchronously (fast, survives restarts) AND AsyncStorage (compat)
+    storage.setObject(KEYS.USER_PROFILE, profile);
     await AsyncStorage.setItem(CACHE_KEYS.PROFILE, JSON.stringify(profile));
   } catch {}
 }
 
 export async function getCachedProfile(): Promise<any | null> {
   try {
+    // MMKV is synchronous — read it first (zero I/O). Fall back to AsyncStorage.
+    const fast = storage.getObject<any>(KEYS.USER_PROFILE);
+    if (fast) return fast;
     const raw = await AsyncStorage.getItem(CACHE_KEYS.PROFILE);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
+}
+
+/** Synchronous (no await needed) — MMKV only, no I/O. Used for instant startup. */
+export function getCachedProfileSync(): any | null {
+  return storage.getObject<any>(KEYS.USER_PROFILE) ?? null;
 }
 
 export async function cacheConversations(conversations: any[]): Promise<void> {
