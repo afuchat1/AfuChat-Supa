@@ -76,9 +76,27 @@ function createWebStore(): MMKVLike {
 
 let _store: MMKVLike | null = null;
 
+/**
+ * Returns true when we're running inside Expo Go (the store client).
+ * react-native-mmkv v4 uses react-native-nitro-modules whose native code is
+ * NOT bundled in Expo Go — attempting to require it throws a fatal Hermes
+ * error that bypasses JavaScript try/catch. We detect this environment first
+ * so we can skip MMKV entirely and use the in-memory/localStorage fallback.
+ */
+function isExpoGo(): boolean {
+  try {
+    // expo-constants is always available in Expo projects.
+    // executionEnvironment is "storeClient" in Expo Go and "bare" in builds.
+    const Constants = require("expo-constants").default;
+    return Constants?.executionEnvironment === "storeClient";
+  } catch {
+    return false;
+  }
+}
+
 function getStore(): MMKVLike {
   if (_store) return _store;
-  if (Platform.OS === "web") {
+  if (Platform.OS === "web" || isExpoGo()) {
     _store = createWebStore();
   } else {
     try {
