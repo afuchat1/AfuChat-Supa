@@ -3679,11 +3679,7 @@ STRICT RULES:
               <Ionicons name="videocam-outline" size={23} color={colors.text} />
             </TouchableOpacity>
           </View>
-        ) : (
-          <TouchableOpacity onPress={() => router.push("/settings/chat")} style={st.headerAction} hitSlop={8}>
-            <Ionicons name="settings-outline" size={22} color={colors.text} />
-          </TouchableOpacity>
-        )}
+        ) : null}
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}>

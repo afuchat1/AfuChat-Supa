@@ -23,8 +23,6 @@ import {
   type OfflineVideoEntry,
 } from "@/lib/videoCache";
 
-const OFFLINE_TTL_MS = 24 * 60 * 60 * 1000;
-
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
   if (bytes < 1024) return `${bytes} B`;
@@ -33,17 +31,8 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-function timeUntilExpiry(cachedAt: number): string {
-  const remaining = OFFLINE_TTL_MS - (Date.now() - cachedAt);
-  if (remaining <= 0) return "Expired";
-  const h = Math.floor(remaining / 3_600_000);
-  const m = Math.floor((remaining % 3_600_000) / 60_000);
-  if (h >= 1) return `${h}h ${m}m left`;
-  if (m > 0) return `${m}m left`;
-  return "< 1m left";
-}
-
 export default function OfflineVideosScreen() {
+  if (Platform.OS === "web") return null;
   const { colors, accent } = useTheme();
   const insets = useSafeAreaInsets();
   const [videos, setVideos] = useState<OfflineVideoEntry[]>([]);
@@ -103,7 +92,7 @@ export default function OfflineVideosScreen() {
               {stats.count} {stats.count === 1 ? "video" : "videos"} · {formatBytes(stats.bytes)}
             </Text>
             <Text style={[styles.statsSub, { color: colors.textMuted }]}>
-              Auto-cleared 24h after watching
+              Saved permanently on this device
             </Text>
           </View>
           {stats.count > 0 && (
@@ -116,7 +105,7 @@ export default function OfflineVideosScreen() {
         <View style={[styles.infoBox, { backgroundColor: colors.backgroundSecondary }]}>
           <Ionicons name="information-circle-outline" size={15} color={colors.textMuted} />
           <Text style={[styles.infoText, { color: colors.textMuted }]}>
-            Videos are cached automatically when you watch them. Each video stays on your device for 24 hours, then is deleted automatically — no manual downloading needed.
+            Videos are saved automatically when you watch them. They stay on your device permanently until you delete them — no re-downloading needed, even without internet.
           </Text>
         </View>
       </View>
@@ -134,7 +123,7 @@ export default function OfflineVideosScreen() {
       </View>
       <Text style={[styles.emptyTitle, { color: colors.text }]}>No offline videos yet</Text>
       <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-        Videos you watch in the feed are automatically saved here for 24 hours so you can re-watch them without an internet connection.
+        Videos you watch in the feed are automatically saved here so you can re-watch them anytime without an internet connection.
       </Text>
     </View>
   );
@@ -189,8 +178,8 @@ export default function OfflineVideosScreen() {
                   </View>
                 )}
                 <View style={styles.expiryBadge}>
-                  <Ionicons name="time-outline" size={9} color="#fff" />
-                  <Text style={styles.expiryText}>{timeUntilExpiry(item.cachedAt)}</Text>
+                  <Ionicons name="checkmark-circle" size={9} color="#fff" />
+                  <Text style={styles.expiryText}>Saved</Text>
                 </View>
               </View>
 

@@ -177,13 +177,15 @@ export default function SettingsScreen() {
             label="Storage"
             onPress={() => router.push("/settings/storage")}
           />
-          <Separator indent={54} />
-          <MenuItem
-            icon="cloud-download-outline"
-            iconBg="#5AC8FA"
-            label="Offline Videos"
-            onPress={() => router.push("/settings/offline-videos" as any)}
-          />
+          {Platform.OS !== "web" && <Separator indent={54} />}
+          {Platform.OS !== "web" && (
+            <MenuItem
+              icon="cloud-download-outline"
+              iconBg="#5AC8FA"
+              label="Offline Videos"
+              onPress={() => router.push("/settings/offline-videos" as any)}
+            />
+          )}
         </Section>
 
         {/* Privacy & Security */}
