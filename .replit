@@ -33,6 +33,10 @@ args = "Start application"
 task = "workflow.run"
 args = "Mockup Preview Server"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start Backend"
+
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -42,7 +46,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd artifacts/mobile && EXPO_NO_TELEMETRY=1 EXPO_NO_LAZY=1 EXPO_PACKAGER_PROXY_URL=https://$REPLIT_EXPO_DEV_DOMAIN EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN EXPO_PUBLIC_REPL_ID=$REPL_ID REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_DEV_DOMAIN ./node_modules/.bin/expo start --port 5000 --offline"
+args = "cd artifacts/api-server && PORT=3000 node --enable-source-maps ./dist/index.mjs & cd artifacts/mobile && EXPO_NO_TELEMETRY=1 EXPO_NO_LAZY=1 EXPO_PACKAGER_PROXY_URL=https://$REPLIT_EXPO_DEV_DOMAIN EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN EXPO_PUBLIC_REPL_ID=$REPL_ID REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_DEV_DOMAIN ./node_modules/.bin/expo start --port 5000 --offline"
 waitForPort = 5000
 
 [[workflows.workflow]]
@@ -58,13 +62,25 @@ task = "shell.exec"
 args = "cd artifacts/mockup-sandbox && PORT=8000 BASE_PATH=/__mockup/ npx vite"
 waitForPort = 8000
 
+[[workflows.workflow]]
+name = "Start Backend"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd artifacts/api-server && PORT=3000 node --enable-source-maps ./dist/index.mjs"
+waitForPort = 3000
+
+[workflows.workflow.metadata]
+outputType = "console"
+
 [[ports]]
 localPort = 3000
 externalPort = 3000
 
 [[ports]]
 localPort = 5000
-externalPort = 5000
+externalPort = 80
 
 [[ports]]
 localPort = 5001
