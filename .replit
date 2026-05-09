@@ -66,21 +66,17 @@ waitForPort = 8000
 name = "Start Backend"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd artifacts/api-server && PORT=3000 node --enable-source-maps ./dist/index.mjs"
-waitForPort = 3000
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd artifacts/api-server && pnpm run build && PORT=3000 node --enable-source-maps ./dist/index.mjs"
+waitForPort = 3000
 
 [[ports]]
 localPort = 3000
 externalPort = 3000
-
-[[ports]]
-localPort = 5000
-externalPort = 80
 
 [[ports]]
 localPort = 5001
@@ -93,6 +89,10 @@ externalPort = 8000
 [[ports]]
 localPort = 8001
 externalPort = 3002
+
+[[ports]]
+localPort = 5000
+externalPort = 80
 
 [deployment]
 deploymentTarget = "autoscale"
