@@ -17,6 +17,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import Animated, { FadeIn, FadeInDown, FadeInRight } from "react-native-reanimated";
+import * as VideoThumbnails from "expo-video-thumbnails";
 import * as Haptics from "expo-haptics";
 
 import { useTheme } from "@/hooks/useTheme";
@@ -92,7 +93,7 @@ type EventResult   = { id:string; title:string; description:string|null; emoji:s
 type GiftResult    = { id:string; name:string; emoji:string; base_xp_cost:number; rarity:string; description:string|null };
 type MarketResult  = { id:string; kind:"product"|"freelance"|"community"; title:string; desc:string|null; emoji:string|null; image_url:string|null; price:number; badge:string|null; seller_name:string; route:string };
 type JobResult     = { id:string; title:string; job_type:string|null; location:string|null; description:string|null; apply_url:string|null; created_at:string; company_name:string; company_logo:string|null; company_slug:string|null };
-type AiInsight     = { summary:string; suggestions:string[] };
+type AiInsight     = { summary:string; suggestions:string[]; intent:string; bestCategory:string; keyTerms:string[]; explanation:string };
 
 type AllResults = {
   people:   (PersonResult|OrgPageResult)[];
@@ -146,7 +147,19 @@ async function fetchAiInsight(query: string): Promise<AiInsight | null> {
         messages: [
           {
             role: "system",
-            content: `You are AfuChat's search AI. Given a search query, reply ONLY with JSON in this exact format (no markdown, no extra text):\n{"summary":"one sentence describing what the user is likely looking for","suggestions":["related search 1","related search 2","related search 3"]}`,
+            content: `You are AfuChat's advanced search AI assistant. AfuChat is a social platform with: people/profiles, posts, videos, channels, events, gifts, marketplace (products/freelance/communities), and jobs.
+
+Given a search query, analyze it deeply and reply ONLY with valid JSON (no markdown, no code blocks, no extra text) in this exact format:
+{
+  "summary": "2-3 sentence description of what the user is looking for and why",
+  "intent": "one of: person | content | video | topic | product | event | job | mixed",
+  "bestCategory": "one of: people | posts | videos | channels | events | gifts | market | jobs | all",
+  "keyTerms": ["2-4 extracted core search keywords"],
+  "suggestions": ["refined search 1", "refined search 2", "related search 3"],
+  "explanation": "one sentence explaining which category will have the best results and why"
+}
+
+Be specific and insightful. For example, if someone searches 'react native tutorial', intent is 'content', bestCategory is 'videos', keyTerms are ['react native', 'tutorial', 'mobile', 'expo'].`,
           },
           { role: "user", content: `Search query: "${query}"` },
         ],
@@ -157,10 +170,46 @@ async function fetchAiInsight(query: string): Promise<AiInsight | null> {
     const content: string = data?.choices?.[0]?.message?.content ?? data?.content ?? data?.reply ?? "";
     const match = content.match(/\{[\s\S]*\}/);
     if (!match) return null;
-    return JSON.parse(match[0]) as AiInsight;
+    const parsed = JSON.parse(match[0]);
+    return {
+      summary: parsed.summary || "",
+      intent: parsed.intent || "mixed",
+      bestCategory: parsed.bestCategory || "all",
+      keyTerms: Array.isArray(parsed.keyTerms) ? parsed.keyTerms : [],
+      suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+      explanation: parsed.explanation || "",
+    } as AiInsight;
   } catch {
     return null;
   }
+}
+
+// ─── Video Thumbnail Cache ────────────────────────────────────────────────────
+const thumbCache = new Map<string, string>();
+
+function VideoThumbnailImage({ videoUrl, imageUrl, style }: { videoUrl: string; imageUrl: string | null; style: any }) {
+  const [thumbUri, setThumbUri] = useState<string | null>(imageUrl || null);
+  const [tried, setTried] = useState(false);
+
+  useEffect(() => {
+    if (thumbUri || tried) return;
+    setTried(true);
+    if (thumbCache.has(videoUrl)) {
+      setThumbUri(thumbCache.get(videoUrl)!);
+      return;
+    }
+    VideoThumbnails.getThumbnailAsync(videoUrl, { time: 1500 })
+      .then(({ uri }) => {
+        thumbCache.set(videoUrl, uri);
+        setThumbUri(uri);
+      })
+      .catch(() => {});
+  }, [videoUrl]);
+
+  if (thumbUri) {
+    return <Image source={{ uri: thumbUri }} style={style} resizeMode="cover" />;
+  }
+  return null;
 }
 
 // ─── Avatar Placeholder ───────────────────────────────────────────────────────
@@ -760,21 +809,38 @@ export default function SearchScreen() {
         onPress={() => router.push(`/video/${v.id}` as any)}
         activeOpacity={0.88}
       >
-        {v.image_url
-          ? <Image source={{ uri: v.image_url }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-          : (
-            <LinearGradient colors={["#1a1a2e", RED + "88"]} style={{ width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name="play-circle" size={36} color="#ffffff66" />
-            </LinearGradient>
-          )}
-        <LinearGradient colors={["transparent", "#00000088"]} style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: 8, paddingBottom: 10 }}>
+        {/* Gradient background always present as base layer */}
+        <LinearGradient colors={["#1a1a2e", RED + "88"]} style={{ position: "absolute", width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}>
+          <Ionicons name="play-circle" size={36} color="#ffffff44" />
+        </LinearGradient>
+        {/* Thumbnail: stored image_url or auto-generated from video */}
+        <VideoThumbnailImage
+          videoUrl={v.video_url}
+          imageUrl={v.image_url}
+          style={{ position: "absolute", width: "100%", height: "100%" }}
+        />
+        {/* Duration badge */}
+        {v.duration_seconds != null && (
+          <View style={{ position: "absolute", bottom: 44, right: 7, backgroundColor: "#000000bb", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 }}>
+            <Text style={{ color: "#fff", fontSize: 9, fontFamily: "Inter_700Bold" }}>
+              {Math.floor(v.duration_seconds / 60)}:{String(Math.floor(v.duration_seconds % 60)).padStart(2, "0")}
+            </Text>
+          </View>
+        )}
+        <LinearGradient colors={["transparent", "#00000099"]} style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: 8, paddingBottom: 10 }}>
           <Text style={{ color: "#fff", fontSize: 11, fontFamily: "Inter_500Medium", lineHeight: 15 }} numberOfLines={2}>{v.content || v.author_name}</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
             <Ionicons name="eye-outline" size={10} color="#ffffffaa" />
             <Text style={{ color: "#ffffffaa", fontSize: 10 }}>{fmtNum(v.view_count)}</Text>
+            {v.author_name ? (
+              <>
+                <Text style={{ color: "#ffffff55", fontSize: 10 }}>·</Text>
+                <Text style={{ color: "#ffffffaa", fontSize: 10 }} numberOfLines={1}>@{v.author_handle || v.author_name}</Text>
+              </>
+            ) : null}
           </View>
         </LinearGradient>
-        <View style={{ position: "absolute", top: 8, left: 8, backgroundColor: "#00000055", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2, flexDirection: "row", alignItems: "center", gap: 3 }}>
+        <View style={{ position: "absolute", top: 8, left: 8, backgroundColor: "#00000066", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2, flexDirection: "row", alignItems: "center", gap: 3 }}>
           <Ionicons name="play" size={8} color="#fff" />
           <Text style={{ color: "#fff", fontSize: 9, fontFamily: "Inter_700Bold" }}>VIDEO</Text>
         </View>
@@ -944,6 +1010,16 @@ export default function SearchScreen() {
 
   // ─── AI Insight card ─────────────────────────────────────────────────────────
 
+  const INTENT_ICONS: Record<string, string> = {
+    person: "person-outline", content: "document-text-outline", video: "videocam-outline",
+    topic: "pricetag-outline", product: "bag-outline", event: "calendar-outline",
+    job: "briefcase-outline", mixed: "search-outline",
+  };
+  const CAT_LABELS: Record<string, string> = {
+    people: "People", posts: "Posts", videos: "Videos", channels: "Channels",
+    events: "Events", gifts: "Gifts", market: "Market", jobs: "Jobs", all: "All",
+  };
+
   function AiCard() {
     if (aiLoading) {
       return (
@@ -956,26 +1032,79 @@ export default function SearchScreen() {
       );
     }
     if (!aiInsight) return null;
+
+    const intentIcon = (INTENT_ICONS[aiInsight.intent] || "search-outline") as any;
+    const catLabel   = CAT_LABELS[aiInsight.bestCategory] || aiInsight.bestCategory;
+
     return (
       <Animated.View entering={FadeInDown.duration(280)}>
         <LinearGradient
-          colors={isDark ? [PURPLE + "25", PURPLE + "0A"] : [PURPLE + "14", PURPLE + "05"]}
-          style={[ss.aiCard, { borderColor: PURPLE + "30" }]}
+          colors={isDark ? [PURPLE + "28", PURPLE + "0C"] : [PURPLE + "16", PURPLE + "06"]}
+          style={[ss.aiCard, { borderColor: PURPLE + "35" }]}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 9 }}>
-            <LinearGradient colors={[PURPLE, "#A855F7"]} style={{ width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name="sparkles" size={14} color="#fff" />
+          {/* Header row */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <LinearGradient colors={[PURPLE, "#A855F7"]} style={{ width: 30, height: 30, borderRadius: 9, alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="sparkles" size={15} color="#fff" />
             </LinearGradient>
-            <Text style={{ color: PURPLE, fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.8 }}>AI INSIGHT</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: PURPLE, fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.9 }}>AI SEARCH INSIGHT</Text>
+            </View>
+            {/* Intent + best category badges */}
+            <View style={{ flexDirection: "row", gap: 5 }}>
+              <View style={{ backgroundColor: PURPLE + "20", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, flexDirection: "row", alignItems: "center", gap: 3 }}>
+                <Ionicons name={intentIcon} size={10} color={PURPLE} />
+                <Text style={{ color: PURPLE, fontSize: 10, fontFamily: "Inter_600SemiBold" }}>{aiInsight.intent}</Text>
+              </View>
+            </View>
           </View>
-          <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20, marginBottom: 10 }}>{aiInsight.summary}</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}>
-            {aiInsight.suggestions.map((s, i) => (
-              <TouchableOpacity key={i} style={{ backgroundColor: PURPLE + "1A", borderRadius: 20, paddingHorizontal: 11, paddingVertical: 5 }} onPress={() => onHistoryPress(s)}>
-                <Text style={{ color: PURPLE, fontSize: 12, fontFamily: "Inter_500Medium" }}>{s}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+
+          {/* Summary */}
+          <Text style={{ color: colors.text, fontSize: 13, lineHeight: 19, marginBottom: 10 }}>{aiInsight.summary}</Text>
+
+          {/* Best category recommendation */}
+          {aiInsight.explanation ? (
+            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, backgroundColor: PURPLE + "12", borderRadius: 8, padding: 8, marginBottom: 10 }}>
+              <Ionicons name="bulb-outline" size={13} color={PURPLE} style={{ marginTop: 1 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: PURPLE, fontSize: 10, fontFamily: "Inter_700Bold", marginBottom: 2 }}>
+                  Best results in: <Text style={{ color: colors.text }}>{catLabel}</Text>
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 11, lineHeight: 16 }}>{aiInsight.explanation}</Text>
+              </View>
+            </View>
+          ) : null}
+
+          {/* Key terms */}
+          {aiInsight.keyTerms.length > 0 && (
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>
+              {aiInsight.keyTerms.map((term, i) => (
+                <TouchableOpacity
+                  key={i}
+                  style={{ backgroundColor: isDark ? "#ffffff14" : "#00000010", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, flexDirection: "row", alignItems: "center", gap: 4 }}
+                  onPress={() => onHistoryPress(term)}
+                >
+                  <Ionicons name="key-outline" size={9} color={colors.textMuted} />
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, fontFamily: "Inter_500Medium" }}>{term}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {/* Suggestions */}
+          {aiInsight.suggestions.length > 0 && (
+            <>
+              <Text style={{ color: colors.textMuted, fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5, marginBottom: 6 }}>TRY THESE SEARCHES</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}>
+                {aiInsight.suggestions.map((s, i) => (
+                  <TouchableOpacity key={i} style={{ backgroundColor: PURPLE + "1A", borderColor: PURPLE + "30", borderWidth: 1, borderRadius: 20, paddingHorizontal: 11, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 4 }} onPress={() => onHistoryPress(s)}>
+                    <Ionicons name="search-outline" size={10} color={PURPLE} />
+                    <Text style={{ color: PURPLE, fontSize: 12, fontFamily: "Inter_500Medium" }}>{s}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
         </LinearGradient>
       </Animated.View>
     );

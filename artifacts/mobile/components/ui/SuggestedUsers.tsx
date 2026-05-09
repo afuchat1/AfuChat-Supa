@@ -26,6 +26,7 @@ import {
 import { Image as ExpoImage } from "expo-image";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useHorizontalScrollLock } from "@/context/TabSwipeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
@@ -316,6 +317,8 @@ export function SuggestedUsers({
     await saveDismissed(next);
   }
 
+  const horizontalScrollActive = useHorizontalScrollLock();
+
   // Don't render until loaded; hide if no results
   if (!user) return null;
   if (loading) {
@@ -342,6 +345,9 @@ export function SuggestedUsers({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         ItemSeparatorComponent={() => <View style={{ width: 10 }} />}
+        onScrollBeginDrag={() => { horizontalScrollActive.value = true; }}
+        onScrollEndDrag={() => { horizontalScrollActive.value = false; }}
+        onMomentumScrollEnd={() => { horizontalScrollActive.value = false; }}
         renderItem={({ item }) => (
           <UserCard
             user={item}
