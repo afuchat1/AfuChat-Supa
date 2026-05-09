@@ -3,7 +3,7 @@ import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef } from "react";
 import { Image, Platform, StyleSheet, useColorScheme, View } from "react-native";
 import { router, usePathname } from "expo-router";
 import type { Session } from "@supabase/supabase-js";
@@ -30,6 +30,19 @@ const SWIPE_TAB_ROUTES = [
   "/(tabs)/me",
 ];
 
+/**
+ * Expo Router can return either the full grouped path "/(tabs)/discover"
+ * or the short path "/discover" depending on the version/platform.
+ * Normalise all variants to the canonical form used in SWIPE_TAB_ROUTES.
+ */
+function normalizeTabPath(p: string): string {
+  if (p === "/" || p === "/(tabs)" || p === "/(tabs)/index") return "/(tabs)";
+  if (p === "/discover"  || p === "/(tabs)/discover")  return "/(tabs)/discover";
+  if (p === "/apps"      || p === "/(tabs)/apps")      return "/(tabs)/apps";
+  if (p === "/me"        || p === "/(tabs)/me")        return "/(tabs)/me";
+  return p;
+}
+
 function navigateTo(route: string) {
   router.navigate(route as any);
 }
@@ -42,46 +55,40 @@ function SwipeTabsWrapper({
   isLoggedIn: boolean;
 }) {
   const pathname = usePathname();
-  // Prevent multiple navigations per single gesture
-  const firedRef = useRef(false);
 
-  const tryNavigate = useCallback(
-    (translationX: number, velocityX: number) => {
-      if (!isLoggedIn || firedRef.current) return;
+  // Keep a ref so the stable gesture closure always reads the latest pathname
+  // without needing to be recreated on every render.
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
+  const isLoggedInRef = useRef(isLoggedIn);
+  isLoggedInRef.current = isLoggedIn;
 
-      // Fire as soon as the swipe is decisive — low thresholds for snappiness
-      const isFling = Math.abs(velocityX) > 200;
-      const isFar   = Math.abs(translationX) > 40;
-      if (!isFling && !isFar) return;
+  // Build the gesture once — it reads from refs, so it never goes stale.
+  const swipeGesture = useRef(
+    Gesture.Pan()
+      // Only claim the gesture after clear horizontal intent
+      .activeOffsetX([-14, 14])
+      // Yield to vertical scrollers immediately
+      .failOffsetY([-12, 12])
+      .onEnd((e) => {
+        if (!isLoggedInRef.current) return;
 
-      const current = pathname === "/" ? "/(tabs)" : pathname;
-      const idx = SWIPE_TAB_ROUTES.indexOf(current);
-      if (idx === -1) return;
+        // A quick flick OR a deliberate drag — either triggers the switch
+        const isFling = Math.abs(e.velocityX) > 250;
+        const isFar   = Math.abs(e.translationX) > 50;
+        if (!isFling && !isFar) return;
 
-      if (translationX < 0 && idx < SWIPE_TAB_ROUTES.length - 1) {
-        firedRef.current = true;
-        navigateTo(SWIPE_TAB_ROUTES[idx + 1]);
-      } else if (translationX > 0 && idx > 0) {
-        firedRef.current = true;
-        navigateTo(SWIPE_TAB_ROUTES[idx - 1]);
-      }
-    },
-    [isLoggedIn, pathname]
-  );
+        const current = normalizeTabPath(pathnameRef.current);
+        const idx = SWIPE_TAB_ROUTES.indexOf(current);
+        if (idx === -1) return;
 
-  const swipeGesture = Gesture.Pan()
-    // Claim the gesture quickly — 10 px horizontal
-    .activeOffsetX([-10, 10])
-    // Hand off to the scrollable content if the user goes vertical first
-    .failOffsetY([-10, 10])
-    // Fire mid-swipe the instant the threshold is met (feels instant)
-    .onUpdate((e) => {
-      runOnJS(tryNavigate)(e.translationX, e.velocityX);
-    })
-    // Reset the guard when the finger lifts so the next gesture works
-    .onFinalize(() => {
-      firedRef.current = false;
-    });
+        if (e.translationX < 0 && idx < SWIPE_TAB_ROUTES.length - 1) {
+          runOnJS(navigateTo)(SWIPE_TAB_ROUTES[idx + 1]);
+        } else if (e.translationX > 0 && idx > 0) {
+          runOnJS(navigateTo)(SWIPE_TAB_ROUTES[idx - 1]);
+        }
+      })
+  ).current;
 
   // Web: pass through untouched — no swipe, no wrapping overhead
   if (Platform.OS === "web") return <>{children}</>;

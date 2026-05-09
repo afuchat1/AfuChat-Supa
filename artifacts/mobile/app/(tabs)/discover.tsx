@@ -17,6 +17,7 @@ import {
   ViewToken,
   useWindowDimensions,
 } from "react-native";
+import { ScrollView as GHScrollView } from "react-native-gesture-handler";
 import { Image as ExpoImage } from "expo-image";
 import { showAlert } from "@/lib/alert";
 import { useSafeAreaInsets, useSafeAreaInsets as useCardInsets } from "react-native-safe-area-context";
@@ -1581,7 +1582,7 @@ export default function DiscoverScreen() {
         </View>
 
         {/* ── Filter chips ── */}
-        <ScrollView
+        <GHScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterChipsRow}
@@ -1625,7 +1626,7 @@ export default function DiscoverScreen() {
               </TouchableOpacity>
             );
           })}
-        </ScrollView>
+        </GHScrollView>
 
         {/* New posts indicator — lives inside the animated block */}
         {newPostAuthors.length > 0 && (
