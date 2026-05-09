@@ -4,10 +4,12 @@ import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef } from "react";
-import { Image, Platform, StyleSheet, useColorScheme } from "react-native";
-import { router } from "expo-router";
+import { Image, Platform, StyleSheet, useColorScheme, View } from "react-native";
+import { router, usePathname } from "expo-router";
 import type { Session } from "@supabase/supabase-js";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { runOnJS } from "react-native-reanimated";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -19,6 +21,67 @@ try {
 } catch (_) {}
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
+
+// Ordered list of visible tab routes — must match the Tabs.Screen order below
+const SWIPE_TAB_ROUTES = [
+  "/(tabs)",
+  "/(tabs)/discover",
+  "/(tabs)/apps",
+  "/(tabs)/me",
+];
+
+function navigateTo(route: string) {
+  router.navigate(route as any);
+}
+
+function SwipeTabsWrapper({
+  children,
+  isLoggedIn,
+}: {
+  children: React.ReactNode;
+  isLoggedIn: boolean;
+}) {
+  const pathname = usePathname();
+
+  const swipeGesture = Gesture.Pan()
+    // Only claim the gesture after 20 px horizontal movement...
+    .activeOffsetX([-20, 20])
+    // ...and immediately fail if the user moves 12 px vertically first
+    // (hands off to ScrollView/FlatList).
+    .failOffsetY([-12, 12])
+    .onEnd((e) => {
+      if (!isLoggedIn) return;
+
+      // Require a meaningful swipe: either fast enough or far enough
+      const isFling = Math.abs(e.velocityX) > 400;
+      const isFar   = Math.abs(e.translationX) > 70;
+      if (!isFling && !isFar) return;
+
+      // Normalise pathname — index tab shows as "/" in some Expo Router builds
+      const current =
+        pathname === "/" ? "/(tabs)" : pathname;
+
+      const idx = SWIPE_TAB_ROUTES.indexOf(current);
+      if (idx === -1) return;
+
+      if (e.translationX < 0 && idx < SWIPE_TAB_ROUTES.length - 1) {
+        // Swipe left → next tab
+        runOnJS(navigateTo)(SWIPE_TAB_ROUTES[idx + 1]);
+      } else if (e.translationX > 0 && idx > 0) {
+        // Swipe right → previous tab
+        runOnJS(navigateTo)(SWIPE_TAB_ROUTES[idx - 1]);
+      }
+    });
+
+  // Web: pass through untouched — no swipe, no wrapping overhead
+  if (Platform.OS === "web") return <>{children}</>;
+
+  return (
+    <GestureDetector gesture={swipeGesture}>
+      <View style={{ flex: 1 }}>{children}</View>
+    </GestureDetector>
+  );
+}
 
 function NativeTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   return (
@@ -160,6 +223,7 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
 
 export default function TabLayout() {
   const { session, profile, loading } = useAuth();
+  const isLoggedIn = !!session;
   const prevSessionRef = useRef<Session | null>(null);
 
   useEffect(() => {
@@ -179,13 +243,13 @@ export default function TabLayout() {
     }
   }, [session, profile, loading]);
 
-  const layout = isLiquidGlassAvailable()
-    ? <NativeTabLayout isLoggedIn={!!session} />
-    : <ClassicTabLayout isLoggedIn={!!session} />;
+  const tabs = isLiquidGlassAvailable()
+    ? <NativeTabLayout isLoggedIn={isLoggedIn} />
+    : <ClassicTabLayout isLoggedIn={isLoggedIn} />;
 
   return (
-    <>
-      {layout}
-    </>
+    <SwipeTabsWrapper isLoggedIn={isLoggedIn}>
+      {tabs}
+    </SwipeTabsWrapper>
   );
 }
