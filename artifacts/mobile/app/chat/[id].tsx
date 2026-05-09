@@ -17,6 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { BlurView } from "expo-blur";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -3161,8 +3162,8 @@ STRICT RULES:
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 0.3, duration: 600, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 0.15, duration: 380, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 380, useNativeDriver: true }),
         ])
       ).start();
       recordingTimer.current = setInterval(() => {
@@ -3180,14 +3181,14 @@ STRICT RULES:
           const s = await recordingRef.current.getStatusAsync();
           if (s.isRecording && s.metering !== undefined) {
             const db = s.metering;
-            const normalized = Math.max(0.05, Math.min(1, (db + 60) / 55));
+            const normalized = Math.max(0.08, Math.min(1, (db + 55) / 50));
             setWaveformLevels((prev) => {
               const next = [...prev, normalized];
-              return next.length > 40 ? next.slice(-40) : next;
+              return next.length > 48 ? next.slice(-48) : next;
             });
           }
         } catch (_) {}
-      }, 100);
+      }, 80);
     } catch (err) {
       clearTimeout(safetyTimer);
       recPressActiveSV.value = false;
@@ -3884,156 +3885,289 @@ STRICT RULES:
         )}
 
         {messageLimited ? (
-          <View style={[st.limitedBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
-            <Ionicons name="lock-closed" size={16} color={colors.textMuted} style={{ marginRight: 8 }} />
-            <Text style={[st.limitedText, { color: colors.textSecondary }]}>
-              You can send more messages once {chatInfo?.other_name || "this user"} replies or follows you
-            </Text>
+          <View style={[st.inputFloatOuter, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+            <View style={[st.limitedGlass, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Ionicons name="lock-closed" size={15} color={colors.textMuted} style={{ marginRight: 8 }} />
+              <Text style={[st.limitedText, { color: colors.textSecondary }]}>
+                You can send more messages once {chatInfo?.other_name || "this user"} replies or follows you
+              </Text>
+            </View>
           </View>
         ) : isRecording && recLocked ? (
-          <View style={[st.inputBar, { paddingBottom: Math.max(insets.bottom, 4) }]}>
-            <View style={[st.recLockedBar, { backgroundColor: colors.inputBg }]}>
-              <TouchableOpacity onPress={cancelVoiceRecording} hitSlop={12} style={st.recLockedTrash}>
-                <Ionicons name="trash" size={22} color="#FF3B30" />
-              </TouchableOpacity>
-              <View style={st.recLockedWaveWrap}>
-                {waveformLevels.map((level, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      st.waveformBar,
-                      { height: Math.max(3, level * 24), backgroundColor: BRAND, opacity: 0.5 + level * 0.5 },
-                    ]}
-                  />
-                ))}
+          <View style={[st.inputFloatOuter, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+            {Platform.OS === "ios" ? (
+              <BlurView intensity={72} tint={colors.background === "#fff" || colors.background === "#FFFFFF" ? "light" : "dark"} style={st.inputGlassPill}>
+                <View style={st.recLockedInner}>
+                  <TouchableOpacity onPress={cancelVoiceRecording} hitSlop={12} style={st.recLockedTrash}>
+                    <Ionicons name="trash" size={20} color="#FF3B30" />
+                  </TouchableOpacity>
+                  <View style={st.recLockedWaveWrap}>
+                    {waveformLevels.map((level, i) => (
+                      <View key={i} style={[st.waveformBar, { height: Math.max(4, level * 28), backgroundColor: BRAND, opacity: 0.45 + level * 0.55 }]} />
+                    ))}
+                  </View>
+                  <View style={st.recLockedTime}>
+                    <Animated.View style={[st.recordingDot, { opacity: pulseAnim }]} />
+                    <Text style={[st.recordingText, { color: colors.text }]}>
+                      {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, "0")},{recordingTenths}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={stopVoiceRecording} style={[st.sendBtn, { backgroundColor: BRAND }]}>
+                    <Ionicons name="send" size={18} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              </BlurView>
+            ) : (
+              <View style={[st.inputGlassPill, { backgroundColor: colors.surface, borderColor: colors.border + "60" }]}>
+                <View style={st.recLockedInner}>
+                  <TouchableOpacity onPress={cancelVoiceRecording} hitSlop={12} style={st.recLockedTrash}>
+                    <Ionicons name="trash" size={20} color="#FF3B30" />
+                  </TouchableOpacity>
+                  <View style={st.recLockedWaveWrap}>
+                    {waveformLevels.map((level, i) => (
+                      <View key={i} style={[st.waveformBar, { height: Math.max(4, level * 28), backgroundColor: BRAND, opacity: 0.45 + level * 0.55 }]} />
+                    ))}
+                  </View>
+                  <View style={st.recLockedTime}>
+                    <Animated.View style={[st.recordingDot, { opacity: pulseAnim }]} />
+                    <Text style={[st.recordingText, { color: colors.text }]}>
+                      {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, "0")},{recordingTenths}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={stopVoiceRecording} style={[st.sendBtn, { backgroundColor: BRAND }]}>
+                    <Ionicons name="send" size={18} color="#fff" />
+                  </TouchableOpacity>
+                </View>
               </View>
-              <View style={st.recLockedTime}>
-                <Animated.View style={[st.recordingDot, { opacity: pulseAnim }]} />
-                <Text style={[st.recordingText, { color: colors.text }]}>
-                  {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, "0")},{recordingTenths}
-                </Text>
-              </View>
-            </View>
-            <TouchableOpacity onPress={stopVoiceRecording} style={[st.sendBtn, { backgroundColor: BRAND }]}>
-              <Ionicons name="send" size={18} color="#fff" />
-            </TouchableOpacity>
+            )}
           </View>
         ) : (
           <>
             {!isRecording && (chatInfo?.is_group || chatInfo?.is_channel) && (
               <SmartReplyBar messages={messages} myId={user?.id || ""} input={input} onSend={handleSmartReply} colors={colors} />
             )}
-            <View style={[st.inputBar, isRecording && !recLocked ? st.recHoldBar : undefined, { paddingBottom: Math.max(insets.bottom, 4) }]}>
-              <View style={st.inputBarLeft}>
-                {isRecording && !recLocked ? (
-                  <>
-                    <ReAnimated.View style={[st.recCancelZone, cancelZoneAnimStyle]}>
-                      <View style={st.recCancelCircle}>
-                        <Ionicons name="trash" size={18} color="#FF3B30" />
-                      </View>
-                    </ReAnimated.View>
-                    <View style={st.recHoldCenter}>
-                      <View style={st.recHoldTimerRow}>
-                        <Animated.View style={[st.recordingDot, { opacity: pulseAnim }]} />
-                        <Text style={[st.recordingText, { color: colors.text }]}>
-                          {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, "0")},{recordingTenths}
-                        </Text>
-                      </View>
-                      <ReAnimated.View style={slideHintAnimStyle}>
-                        <View style={st.recSlideHint}>
-                          <Ionicons name="chevron-back" size={14} color={colors.textMuted} />
-                          <Ionicons name="chevron-back" size={14} color={colors.textMuted} style={{ marginLeft: -8, opacity: 0.5 }} />
-                          <Text style={[st.recSlideText, { color: colors.textMuted }]}>Slide to cancel</Text>
-                        </View>
-                      </ReAnimated.View>
-                    </View>
-                  </>
-                ) : (
-                  <View style={[st.inputPill, { backgroundColor: colors.inputBg }]}>
-                    <TouchableOpacity hitSlop={8} style={st.pillIcon} onPress={() => {
-                      if (showEmojiStickerPicker) {
-                        setShowEmojiStickerPicker(false);
-                        setTimeout(() => chatInputRef.current?.focus(), 50);
-                      } else {
-                        chatInputRef.current?.blur();
-                        Keyboard.dismiss();
-                        setShowEmojiStickerPicker(true);
-                      }
-                    }}>
-                      <Ionicons name={showEmojiStickerPicker ? "keypad-outline" : "happy-outline"} size={24} color={colors.textMuted} />
-                    </TouchableOpacity>
-                    <TextInput
-                      ref={chatInputRef}
-                      style={[st.input, { color: colors.text }]}
-                      placeholder={attachmentPreview ? "Add a caption..." : "Message"}
-                      placeholderTextColor={colors.textMuted}
-                      value={input}
-                      onChangeText={(t) => { setInput(t); handleTyping(); saveDraft(t); }}
-                      onFocus={() => { if (showEmojiStickerPicker) setShowEmojiStickerPicker(false); }}
-                      multiline
-                      maxLength={4000}
-                      returnKeyType={chatPrefs.enter_to_send ? "send" : "default"}
-                      blurOnSubmit={false}
-                      onSubmitEditing={chatPrefs.enter_to_send ? () => sendMessage() : undefined}
-                    />
-                    {!input.trim() && (
+            <View style={[st.inputFloatOuter, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+              {Platform.OS === "ios" ? (
+                <BlurView intensity={72} tint={colors.background === "#fff" || colors.background === "#FFFFFF" ? "light" : "dark"} style={[st.inputGlassPill, isRecording && !recLocked ? st.recHoldGlass : undefined]}>
+                  <View style={st.inputBarRow}>
+                    {isRecording && !recLocked ? (
                       <>
-                        {!chatInfo?.is_group && !chatInfo?.is_channel && (
-                          <TouchableOpacity onPress={() => setShowGiftPicker(true)} hitSlop={8} style={st.pillIcon}>
-                            <Ionicons name="gift-outline" size={22} color={colors.textMuted} />
-                          </TouchableOpacity>
-                        )}
-                        {(chatInfo?.is_group || chatInfo?.is_channel) && (
-                          <TouchableOpacity onPress={() => setShowRedEnvelope(true)} hitSlop={8} style={st.pillIcon}>
-                            <Text style={{ fontSize: 20 }}>🧧</Text>
-                          </TouchableOpacity>
-                        )}
-                        <TouchableOpacity onPress={() => setShowAttachMenu(true)} hitSlop={8} style={st.pillIcon}>
-                          <Ionicons name="attach" size={22} color={colors.textMuted} style={{ transform: [{ rotate: "-45deg" }] }} />
-                        </TouchableOpacity>
+                        <ReAnimated.View style={[st.recCancelZone, cancelZoneAnimStyle]}>
+                          <View style={st.recCancelCircle}>
+                            <Ionicons name="trash" size={17} color="#FF3B30" />
+                          </View>
+                        </ReAnimated.View>
+                        <View style={st.recHoldCenter}>
+                          <View style={st.recHoldTimerRow}>
+                            <Animated.View style={[st.recordingDot, { opacity: pulseAnim }]} />
+                            <Text style={[st.recordingText, { color: colors.text }]}>
+                              {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, "0")},{recordingTenths}
+                            </Text>
+                          </View>
+                          <ReAnimated.View style={slideHintAnimStyle}>
+                            <View style={st.recSlideHint}>
+                              <Ionicons name="chevron-back" size={13} color={colors.textMuted} />
+                              <Ionicons name="chevron-back" size={13} color={colors.textMuted} style={{ marginLeft: -7, opacity: 0.45 }} />
+                              <Text style={[st.recSlideText, { color: colors.textMuted }]}>Slide to cancel</Text>
+                            </View>
+                          </ReAnimated.View>
+                        </View>
                       </>
+                    ) : (
+                      <View style={st.inputInnerRow}>
+                        <TouchableOpacity hitSlop={8} style={st.pillIcon} onPress={() => {
+                          if (showEmojiStickerPicker) {
+                            setShowEmojiStickerPicker(false);
+                            setTimeout(() => chatInputRef.current?.focus(), 50);
+                          } else {
+                            chatInputRef.current?.blur();
+                            Keyboard.dismiss();
+                            setShowEmojiStickerPicker(true);
+                          }
+                        }}>
+                          <Ionicons name={showEmojiStickerPicker ? "keypad-outline" : "happy-outline"} size={23} color={colors.textMuted} />
+                        </TouchableOpacity>
+                        <TextInput
+                          ref={chatInputRef}
+                          style={[st.input, { color: colors.text }]}
+                          placeholder={attachmentPreview ? "Add a caption..." : "Message"}
+                          placeholderTextColor={colors.textMuted}
+                          value={input}
+                          onChangeText={(t) => { setInput(t); handleTyping(); saveDraft(t); }}
+                          onFocus={() => { if (showEmojiStickerPicker) setShowEmojiStickerPicker(false); }}
+                          multiline
+                          maxLength={4000}
+                          returnKeyType={chatPrefs.enter_to_send ? "send" : "default"}
+                          blurOnSubmit={false}
+                          onSubmitEditing={chatPrefs.enter_to_send ? () => sendMessage() : undefined}
+                        />
+                        {!input.trim() && (
+                          <>
+                            {!chatInfo?.is_group && !chatInfo?.is_channel && (
+                              <TouchableOpacity onPress={() => setShowGiftPicker(true)} hitSlop={8} style={st.pillIcon}>
+                                <Ionicons name="gift-outline" size={21} color={colors.textMuted} />
+                              </TouchableOpacity>
+                            )}
+                            {(chatInfo?.is_group || chatInfo?.is_channel) && (
+                              <TouchableOpacity onPress={() => setShowRedEnvelope(true)} hitSlop={8} style={st.pillIcon}>
+                                <Text style={{ fontSize: 19 }}>🧧</Text>
+                              </TouchableOpacity>
+                            )}
+                            <TouchableOpacity onPress={() => setShowAttachMenu(true)} hitSlop={8} style={st.pillIcon}>
+                              <Ionicons name="attach" size={21} color={colors.textMuted} style={{ transform: [{ rotate: "-45deg" }] }} />
+                            </TouchableOpacity>
+                          </>
+                        )}
+                      </View>
+                    )}
+                    {(input.trim() || attachmentPreview) && !isRecording ? (
+                      <TouchableOpacity
+                        onPress={editingMessage ? saveEditMessage : attachmentPreview ? sendAttachment : () => sendMessage()}
+                        disabled={sending}
+                        style={[st.sendBtn, { backgroundColor: editingMessage ? "#FF9500" : BRAND }]}
+                      >
+                        {sending ? (
+                          <ActivityIndicator color="#fff" size="small" />
+                        ) : (
+                          <Ionicons name={editingMessage ? "checkmark" : "send"} size={18} color="#fff" />
+                        )}
+                      </TouchableOpacity>
+                    ) : Platform.OS === "web" ? (
+                      <TouchableOpacity onPress={startVoiceRecordingWeb} style={[st.sendBtn, { backgroundColor: BRAND }]} hitSlop={6}>
+                        <Ionicons name="mic" size={20} color="#fff" />
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={isRecording && !recLocked ? st.recMicWrap : undefined}>
+                        {isRecording && !recLocked && (
+                          <ReAnimated.View style={[st.recLockIndicator, lockIndicatorAnimStyle]}>
+                            <View style={[st.recLockPill, { backgroundColor: colors.inputBg }]}>
+                              <Ionicons name="lock-closed" size={13} color={colors.textMuted} />
+                              <Ionicons name="chevron-up" size={9} color={colors.textMuted} style={{ marginTop: -2 }} />
+                            </View>
+                          </ReAnimated.View>
+                        )}
+                        <GestureDetector gesture={micGesture}>
+                          <ReAnimated.View style={[
+                            isRecording && !recLocked ? [st.recMicBtn, { backgroundColor: BRAND, shadowColor: BRAND }] : [st.sendBtn, { backgroundColor: BRAND }],
+                            isRecording && !recLocked ? micBtnAnimStyle : undefined,
+                          ]}>
+                            <Ionicons name="mic" size={isRecording ? 24 : 20} color="#fff" />
+                          </ReAnimated.View>
+                        </GestureDetector>
+                      </View>
                     )}
                   </View>
-                )}
-              </View>
-              {(input.trim() || attachmentPreview) && !isRecording ? (
-                <TouchableOpacity
-                  onPress={editingMessage ? saveEditMessage : attachmentPreview ? sendAttachment : () => sendMessage()}
-                  disabled={sending}
-                  style={[st.sendBtn, { backgroundColor: editingMessage ? "#FF9500" : BRAND }]}
-                >
-                  {sending ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Ionicons name={editingMessage ? "checkmark" : "send"} size={18} color="#fff" />
-                  )}
-                </TouchableOpacity>
-              ) : Platform.OS === "web" ? (
-                <TouchableOpacity
-                  onPress={startVoiceRecordingWeb}
-                  style={[st.sendBtn, { backgroundColor: BRAND }]}
-                  hitSlop={6}
-                >
-                  <Ionicons name="mic" size={20} color="#fff" />
-                </TouchableOpacity>
+                </BlurView>
               ) : (
-                <View style={isRecording && !recLocked ? st.recMicWrap : undefined}>
-                  {isRecording && !recLocked && (
-                    <ReAnimated.View style={[st.recLockIndicator, lockIndicatorAnimStyle]}>
-                      <View style={[st.recLockPill, { backgroundColor: colors.inputBg }]}>
-                        <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
-                        <Ionicons name="chevron-up" size={10} color={colors.textMuted} style={{ marginTop: -2 }} />
+                <View style={[st.inputGlassPill, { backgroundColor: colors.surface, borderColor: colors.border + "80" }, isRecording && !recLocked ? st.recHoldGlass : undefined]}>
+                  <View style={st.inputBarRow}>
+                    {isRecording && !recLocked ? (
+                      <>
+                        <ReAnimated.View style={[st.recCancelZone, cancelZoneAnimStyle]}>
+                          <View style={st.recCancelCircle}>
+                            <Ionicons name="trash" size={17} color="#FF3B30" />
+                          </View>
+                        </ReAnimated.View>
+                        <View style={st.recHoldCenter}>
+                          <View style={st.recHoldTimerRow}>
+                            <Animated.View style={[st.recordingDot, { opacity: pulseAnim }]} />
+                            <Text style={[st.recordingText, { color: colors.text }]}>
+                              {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, "0")},{recordingTenths}
+                            </Text>
+                          </View>
+                          <ReAnimated.View style={slideHintAnimStyle}>
+                            <View style={st.recSlideHint}>
+                              <Ionicons name="chevron-back" size={13} color={colors.textMuted} />
+                              <Ionicons name="chevron-back" size={13} color={colors.textMuted} style={{ marginLeft: -7, opacity: 0.45 }} />
+                              <Text style={[st.recSlideText, { color: colors.textMuted }]}>Slide to cancel</Text>
+                            </View>
+                          </ReAnimated.View>
+                        </View>
+                      </>
+                    ) : (
+                      <View style={st.inputInnerRow}>
+                        <TouchableOpacity hitSlop={8} style={st.pillIcon} onPress={() => {
+                          if (showEmojiStickerPicker) {
+                            setShowEmojiStickerPicker(false);
+                            setTimeout(() => chatInputRef.current?.focus(), 50);
+                          } else {
+                            chatInputRef.current?.blur();
+                            Keyboard.dismiss();
+                            setShowEmojiStickerPicker(true);
+                          }
+                        }}>
+                          <Ionicons name={showEmojiStickerPicker ? "keypad-outline" : "happy-outline"} size={23} color={colors.textMuted} />
+                        </TouchableOpacity>
+                        <TextInput
+                          ref={chatInputRef}
+                          style={[st.input, { color: colors.text }]}
+                          placeholder={attachmentPreview ? "Add a caption..." : "Message"}
+                          placeholderTextColor={colors.textMuted}
+                          value={input}
+                          onChangeText={(t) => { setInput(t); handleTyping(); saveDraft(t); }}
+                          onFocus={() => { if (showEmojiStickerPicker) setShowEmojiStickerPicker(false); }}
+                          multiline
+                          maxLength={4000}
+                          returnKeyType={chatPrefs.enter_to_send ? "send" : "default"}
+                          blurOnSubmit={false}
+                          onSubmitEditing={chatPrefs.enter_to_send ? () => sendMessage() : undefined}
+                        />
+                        {!input.trim() && (
+                          <>
+                            {!chatInfo?.is_group && !chatInfo?.is_channel && (
+                              <TouchableOpacity onPress={() => setShowGiftPicker(true)} hitSlop={8} style={st.pillIcon}>
+                                <Ionicons name="gift-outline" size={21} color={colors.textMuted} />
+                              </TouchableOpacity>
+                            )}
+                            {(chatInfo?.is_group || chatInfo?.is_channel) && (
+                              <TouchableOpacity onPress={() => setShowRedEnvelope(true)} hitSlop={8} style={st.pillIcon}>
+                                <Text style={{ fontSize: 19 }}>🧧</Text>
+                              </TouchableOpacity>
+                            )}
+                            <TouchableOpacity onPress={() => setShowAttachMenu(true)} hitSlop={8} style={st.pillIcon}>
+                              <Ionicons name="attach" size={21} color={colors.textMuted} style={{ transform: [{ rotate: "-45deg" }] }} />
+                            </TouchableOpacity>
+                          </>
+                        )}
                       </View>
-                    </ReAnimated.View>
-                  )}
-                  <GestureDetector gesture={micGesture}>
-                    <ReAnimated.View style={[
-                      isRecording && !recLocked ? [st.recMicBtn, { backgroundColor: BRAND, shadowColor: BRAND }] : [st.sendBtn, { backgroundColor: BRAND }],
-                      isRecording && !recLocked ? micBtnAnimStyle : undefined,
-                    ]}>
-                      <Ionicons name="mic" size={isRecording ? 24 : 20} color="#fff" />
-                    </ReAnimated.View>
-                  </GestureDetector>
+                    )}
+                    {(input.trim() || attachmentPreview) && !isRecording ? (
+                      <TouchableOpacity
+                        onPress={editingMessage ? saveEditMessage : attachmentPreview ? sendAttachment : () => sendMessage()}
+                        disabled={sending}
+                        style={[st.sendBtn, { backgroundColor: editingMessage ? "#FF9500" : BRAND }]}
+                      >
+                        {sending ? (
+                          <ActivityIndicator color="#fff" size="small" />
+                        ) : (
+                          <Ionicons name={editingMessage ? "checkmark" : "send"} size={18} color="#fff" />
+                        )}
+                      </TouchableOpacity>
+                    ) : Platform.OS === "web" ? (
+                      <TouchableOpacity onPress={startVoiceRecordingWeb} style={[st.sendBtn, { backgroundColor: BRAND }]} hitSlop={6}>
+                        <Ionicons name="mic" size={20} color="#fff" />
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={isRecording && !recLocked ? st.recMicWrap : undefined}>
+                        {isRecording && !recLocked && (
+                          <ReAnimated.View style={[st.recLockIndicator, lockIndicatorAnimStyle]}>
+                            <View style={[st.recLockPill, { backgroundColor: colors.inputBg }]}>
+                              <Ionicons name="lock-closed" size={13} color={colors.textMuted} />
+                              <Ionicons name="chevron-up" size={9} color={colors.textMuted} style={{ marginTop: -2 }} />
+                            </View>
+                          </ReAnimated.View>
+                        )}
+                        <GestureDetector gesture={micGesture}>
+                          <ReAnimated.View style={[
+                            isRecording && !recLocked ? [st.recMicBtn, { backgroundColor: BRAND, shadowColor: BRAND }] : [st.sendBtn, { backgroundColor: BRAND }],
+                            isRecording && !recLocked ? micBtnAnimStyle : undefined,
+                          ]}>
+                            <Ionicons name="mic" size={isRecording ? 24 : 20} color="#fff" />
+                          </ReAnimated.View>
+                        </GestureDetector>
+                      </View>
+                    )}
+                  </View>
                 </View>
               )}
             </View>
@@ -4764,60 +4898,70 @@ const st = StyleSheet.create({
   attachPreviewName: { fontSize: 13, fontFamily: "Inter_500Medium", maxWidth: 160 },
   attachPreviewClose: { marginLeft: "auto" },
 
-  limitedBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
   limitedText: {
     fontSize: 13,
     fontFamily: "Inter_400Regular",
     flex: 1,
     lineHeight: 18,
   },
+  limitedGlass: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 26,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginHorizontal: 8,
+  },
 
-  inputBar: {
+  inputFloatOuter: {
+    paddingHorizontal: 8,
+    paddingTop: 4,
+  },
+  inputGlassPill: {
+    borderRadius: 28,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(120,120,128,0.22)",
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  inputBarRow: {
     flexDirection: "row",
     alignItems: "flex-end",
-    paddingHorizontal: 5,
-    paddingVertical: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
     gap: 5,
   },
-  inputBarLeft: {
+  inputInnerRow: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-  },
-  inputPill: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 22,
-    paddingHorizontal: 6,
-    minHeight: 48,
+    minHeight: 44,
   },
   pillIcon: { paddingHorizontal: 6 },
   input: { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 22, outlineStyle: "none" as any, paddingTop: 10, paddingBottom: 10, minHeight: 28, maxHeight: 120 },
   sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  recHoldBar: { alignItems: "center" },
+  recHoldGlass: { },
   recCancelZone: { width: 44, alignItems: "center", justifyContent: "center" },
   recCancelCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,59,48,0.1)", alignItems: "center", justifyContent: "center" },
   recHoldCenter: { flex: 1, alignItems: "center", justifyContent: "center", gap: 2 },
   recHoldTimerRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   recSlideHint: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 2, marginTop: 2 },
-  recSlideText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  recSlideText: { fontSize: 12, fontFamily: "Inter_400Regular" },
   recMicWrap: { alignItems: "center", justifyContent: "flex-end" },
-  recMicBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: BRAND_FALLBACK, alignItems: "center", justifyContent: "center", elevation: 6, shadowColor: BRAND_FALLBACK, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.5, shadowRadius: 8 },
+  recMicBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: BRAND_FALLBACK, alignItems: "center", justifyContent: "center", elevation: 8, shadowColor: BRAND_FALLBACK, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.55, shadowRadius: 10 },
   recLockIndicator: { alignItems: "center", marginBottom: 8 },
   recLockPill: { width: 32, borderRadius: 16, paddingVertical: 6, alignItems: "center", justifyContent: "center", elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 3 },
-  recLockedBar: { flex: 1, flexDirection: "row", alignItems: "center", borderRadius: 22, paddingHorizontal: 8, minHeight: 48, gap: 8 },
-  recLockedTrash: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,59,48,0.1)", alignItems: "center", justifyContent: "center" },
-  recLockedWaveWrap: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 2, height: 28, overflow: "hidden" },
-  recLockedTime: { flexDirection: "row", alignItems: "center", gap: 6, paddingRight: 4 },
-  waveformBar: { width: 3, borderRadius: 1.5, minHeight: 3 },
-  recordingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#FF3B30" },
+  recLockedInner: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8, gap: 8, minHeight: 56 },
+  recLockedTrash: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,59,48,0.12)", alignItems: "center", justifyContent: "center" },
+  recLockedWaveWrap: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 2, height: 30, overflow: "hidden" },
+  recLockedTime: { flexDirection: "row", alignItems: "center", gap: 6, paddingRight: 2 },
+  waveformBar: { width: 3, borderRadius: 1.5, minHeight: 4 },
+  recordingDot: { width: 9, height: 9, borderRadius: 4.5, backgroundColor: "#FF3B30" },
   recordingText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
 
   sheetOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
