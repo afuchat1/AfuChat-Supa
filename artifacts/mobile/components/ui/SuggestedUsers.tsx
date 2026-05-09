@@ -17,12 +17,12 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  FlatList,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { ScrollView as GHScrollView } from "react-native-gesture-handler";
 import { Image as ExpoImage } from "expo-image";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -330,17 +330,19 @@ export function SuggestedUsers({
   return (
     <View style={[styles.container, compact && styles.containerCompact]}>
       <SectionHeader compact={compact} colors={colors} accent={accent} loading={false} />
-      <GHScrollView
+      <FlatList
+        data={users}
+        keyExtractor={u => u.id}
         horizontal
+        nestedScrollEnabled
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={[styles.listContent, { gap: 10 }]}
+        contentContainerStyle={styles.listContent}
+        ItemSeparatorComponent={() => <View style={{ width: 10 }} />}
         onScrollBeginDrag={() => { horizontalScrollActive.value = true; }}
         onScrollEndDrag={() => { horizontalScrollActive.value = false; }}
         onMomentumScrollEnd={() => { horizontalScrollActive.value = false; }}
-      >
-        {users.map((item) => (
+        renderItem={({ item }) => (
           <UserCard
-            key={item.id}
             user={item}
             isFollowing={followingSet.has(item.id)}
             onFollow={handleFollow}
@@ -348,8 +350,8 @@ export function SuggestedUsers({
             accent={accent}
             colors={colors}
           />
-        ))}
-      </GHScrollView>
+        )}
+      />
     </View>
   );
 }

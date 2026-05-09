@@ -6,13 +6,13 @@ import {
   Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { ScrollView as GHScrollView } from "react-native-gesture-handler";
 import { Redirect, router, useFocusEffect, useNavigation, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -446,7 +446,7 @@ function StoriesBar({ userId, colors, isDesktop }: { userId: string; colors: any
   if (storyUsers.length === 0 && isDesktop) return null;
 
   return (
-    <GHScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={storyBarStyles.list}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={storyBarStyles.list} nestedScrollEnabled>
       {!isDesktop && (
         <TouchableOpacity
           style={storyBarStyles.item}
@@ -471,7 +471,7 @@ function StoriesBar({ userId, colors, isDesktop }: { userId: string; colors: any
           <Text style={[storyBarStyles.name, { color: colors.textSecondary }]} numberOfLines={1}>{u.displayName}</Text>
         </TouchableOpacity>
       ))}
-    </GHScrollView>
+    </ScrollView>
   );
 }
 
