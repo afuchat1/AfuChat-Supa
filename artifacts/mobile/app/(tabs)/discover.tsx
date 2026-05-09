@@ -1731,6 +1731,29 @@ export default function DiscoverScreen() {
               <View style={{ padding: 8, gap: 8 }}>
                 {[1, 2, 3].map(i => <PostSkeleton key={i} />)}
               </View>
+            ) : !hasMore && filteredPosts.length > 0 ? (
+              <View style={[styles.endOfFeed, { borderTopColor: colors.border }]}>
+                <View style={[styles.endOfFeedDot, { backgroundColor: colors.border }]} />
+                <Text style={[styles.endOfFeedText, { color: colors.textMuted }]}>You're all caught up</Text>
+                <View style={[styles.endOfFeedDot, { backgroundColor: colors.border }]} />
+              </View>
+            ) : null
+          }
+          ListEmptyComponent={
+            !loading && posts.length > 0 && filteredPosts.length === 0 ? (
+              <View style={[styles.center, { paddingTop: 60 }]}>
+                <Ionicons name="funnel-outline" size={40} color={colors.textMuted} />
+                <Text style={[styles.emptyTitle, { color: colors.text, fontSize: 16 }]}>No results</Text>
+                <Text style={[styles.emptySub, { color: colors.textSecondary, textAlign: "center" }]}>
+                  No posts match this filter yet.{"\n"}Try a different one or check back later.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.createBtn, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}
+                  onPress={() => setPostTypeFilter("all")}
+                >
+                  <Text style={[styles.createBtnText, { color: colors.text }]}>Show all posts</Text>
+                </TouchableOpacity>
+              </View>
             ) : null
           }
         />
@@ -1843,6 +1866,27 @@ const styles = StyleSheet.create({
   },
   filterChipText: {
     fontSize: 12,
+  },
+  endOfFeed: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    paddingVertical: 28,
+    paddingHorizontal: 24,
+    marginTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  endOfFeedDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    opacity: 0.5,
+  },
+  endOfFeedText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    letterSpacing: 0.1,
   },
   tabPill: { paddingVertical: 12, paddingHorizontal: 16, alignItems: "center", borderBottomWidth: 3 },
   tabPillText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
