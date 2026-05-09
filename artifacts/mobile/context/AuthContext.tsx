@@ -63,6 +63,7 @@ type AuthContextType = {
   linkedAccounts: StoredAccount[];
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  patchProfile: (patch: Partial<Profile>) => void;
   signInWithTelegram: (initData: string) => Promise<{ success: boolean; error?: string }>;
   addAccount: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   switchAccount: (userId: string) => Promise<{ success: boolean; error?: string }>;
@@ -80,6 +81,7 @@ const AuthContext = createContext<AuthContextType>({
   linkedAccounts: [],
   signOut: async () => {},
   refreshProfile: async () => {},
+  patchProfile: () => {},
   signInWithTelegram: async () => ({ success: false }),
   addAccount: async () => ({ success: false }),
   switchAccount: async () => ({ success: false }),
@@ -154,6 +156,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function refreshProfile() {
     if (user) await fetchProfile(user.id);
+  }
+
+  // Instant local patch — merges fields into profile state + cache immediately.
+  // Used for optimistic updates (e.g. avatar change) before the DB confirms.
+  function patchProfile(patch: Partial<Profile>) {
+    setProfile((prev) => {
+      if (!prev) return prev;
+      const merged = { ...prev, ...patch };
+      cacheProfile(merged);
+      return merged;
+    });
   }
 
   async function refreshLinkedAccounts() {
@@ -361,6 +374,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return unsub;
   }, [user]);
 
+  // ── Real-time profile subscription ─────────────────────────────────────────
+  // Any UPDATE to this user's profile row (avatar, balance, display_name, etc.)
+  // is merged directly into state — no manual refreshProfile() needed.
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`profile-rt:${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "profiles",
+          filter: `id=eq.${user.id}`,
+        },
+        (payload) => {
+          const incoming = payload.new as Partial<Profile>;
+          setProfile((prev) => {
+            if (!prev) return prev;
+            const merged = { ...prev, ...incoming };
+            cacheProfile(merged);
+            return merged;
+          });
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id]);
+
   const signInWithTelegram = useCallback(async (initData: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -400,7 +442,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const contextValue = useMemo(() => ({
     session, user, profile, subscription, isPremium, loading, linkedAccounts,
-    signOut, refreshProfile, signInWithTelegram, addAccount, switchAccount, removeAccount: handleRemoveAccount, refreshLinkedAccounts,
+    signOut, refreshProfile, patchProfile, signInWithTelegram, addAccount, switchAccount, removeAccount: handleRemoveAccount, refreshLinkedAccounts,
   }), [session, user, profile, subscription, isPremium, loading, linkedAccounts, signOut, signInWithTelegram]);
 
   return (

@@ -27,7 +27,7 @@ import { aiGenerateBio } from "@/lib/aiHelper";
 
 export default function EditProfileScreen() {
   const { colors } = useTheme();
-  const { profile, refreshProfile } = useAuth();
+  const { profile, refreshProfile, patchProfile } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [displayName, setDisplayName] = useState(profile?.display_name || "");
@@ -112,7 +112,10 @@ export default function EditProfileScreen() {
     if (error) {
       showAlert("Error", error.message);
     } else {
-      await refreshProfile();
+      // Instantly reflect changes in every screen that reads profile —
+      // the real-time subscription in AuthContext will also fire, but
+      // patchProfile guarantees zero-delay even before that arrives.
+      patchProfile({ ...updateData, ...(newAvatarUrl ? { avatar_url: newAvatarUrl } : {}) });
       router.back();
     }
     setLoading(false);

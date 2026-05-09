@@ -12,8 +12,18 @@ function bytesToHex(bytes: number[]): string {
   return bytes.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// Hermes does not support BigInt("0x...") hex-string syntax.
+// Accumulate digit-by-digit using only BigInt(number) which is safe everywhere.
+function hexToBigInt(hex: string): bigint {
+  let result = 0n;
+  for (let i = 0; i < hex.length; i++) {
+    result = result * 16n + BigInt(parseInt(hex[i], 16));
+  }
+  return result;
+}
+
 function bytesToBase62(bytes: number[]): string {
-  let num = BigInt("0x" + bytesToHex(bytes));
+  let num = hexToBigInt(bytesToHex(bytes));
   if (num === 0n) return CHARS[0];
   let result = "";
   const base = BigInt(CHARS.length);

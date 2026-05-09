@@ -79,7 +79,7 @@ function RootLayoutNav() {
       screenOptions={{
         headerShown: false,
         animation: Platform.OS === "web" ? "none" : "slide_from_right",
-        animationDuration: Platform.OS === "web" ? 0 : 250,
+        animationDuration: Platform.OS === "web" ? 0 : 180,
         gestureEnabled: Platform.OS !== "web",
         gestureDirection: "horizontal",
         contentStyle: { backgroundColor: colors.background },

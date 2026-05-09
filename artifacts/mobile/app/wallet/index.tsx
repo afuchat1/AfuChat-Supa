@@ -544,12 +544,14 @@ export default function WalletScreen() {
     if (!user) return;
     const ch = supabase
       .channel(`wallet-realtime:${user.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "acoin_transactions", filter: `user_id=eq.${user.id}` }, () => { loadData(); refreshProfile(); })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "xp_transfers", filter: `receiver_id=eq.${user.id}` }, () => { loadData(); refreshProfile(); })
+      // refreshProfile() removed — AuthContext's profile-rt channel now pushes
+      // balance/XP changes instantly via postgres_changes on the profiles row.
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "acoin_transactions", filter: `user_id=eq.${user.id}` }, () => { loadData(); })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "xp_transfers", filter: `receiver_id=eq.${user.id}` }, () => { loadData(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "transaction_requests", filter: `owner_id=eq.${user.id}` }, () => loadPendingCount())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [user, loadData, loadPendingCount, refreshProfile]);
+  }, [user, loadData, loadPendingCount]);
 
   // ── Filtering ───────────────────────────────────────────────────────────────
 
