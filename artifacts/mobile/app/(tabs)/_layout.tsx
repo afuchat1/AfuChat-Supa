@@ -3,13 +3,18 @@ import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useRef } from "react";
-import { Image, Platform, StyleSheet, useColorScheme, View } from "react-native";
+import React, { useCallback, useEffect, useRef } from "react";
+import { Dimensions, Image, Platform, StyleSheet, useColorScheme, View } from "react-native";
 import { router, usePathname } from "expo-router";
 import type { Session } from "@supabase/supabase-js";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { runOnJS } from "react-native-reanimated";
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -43,9 +48,13 @@ function normalizeTabPath(p: string): string {
   return p;
 }
 
-function navigateTo(route: string) {
-  router.navigate(route as any);
+// Navigate by index — receives only a plain number from the UI thread.
+function navigateToIdx(idx: number) {
+  router.navigate(SWIPE_TAB_ROUTES[idx] as any);
 }
+
+// How much the screen follows the finger — 0.28 keeps it subtle.
+const DRAG_RATIO = 0.28;
 
 function SwipeTabsWrapper({
   children,
@@ -56,46 +65,64 @@ function SwipeTabsWrapper({
 }) {
   const pathname = usePathname();
 
-  // Keep a ref so the stable gesture closure always reads the latest pathname
-  // without needing to be recreated on every render.
-  const pathnameRef = useRef(pathname);
-  pathnameRef.current = pathname;
-  const isLoggedInRef = useRef(isLoggedIn);
-  isLoggedInRef.current = isLoggedIn;
+  // Shared values are safe to both capture in worklets AND update from JS.
+  // Never use plain refs in worklet closures — they get serialised and frozen.
+  const translateX    = useSharedValue(0);
+  const isLoggedInSV  = useSharedValue(isLoggedIn);
+  const tabIdxSV      = useSharedValue(SWIPE_TAB_ROUTES.indexOf(normalizeTabPath(pathname)));
 
-  // Build the gesture once — it reads from refs, so it never goes stale.
+  // Keep shared values current every render (lightweight — no re-render triggered).
+  isLoggedInSV.value = isLoggedIn;
+  tabIdxSV.value     = SWIPE_TAB_ROUTES.indexOf(normalizeTabPath(pathname));
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
+
+  // Gesture created once. Everything it touches is worklet-safe:
+  //   translateX, isLoggedInSV, tabIdxSV  →  shared values (UI-thread native)
+  //   DRAG_RATIO, SWIPE_TAB_ROUTES        →  module-level constants
+  //   navigateToIdx                        →  module-level JS function (runOnJS)
   const swipeGesture = useRef(
     Gesture.Pan()
-      // Only claim the gesture after clear horizontal intent
       .activeOffsetX([-14, 14])
-      // Yield to vertical scrollers immediately
       .failOffsetY([-12, 12])
+      // Follow the finger with dampening — physical "push" feel on the UI thread.
+      .onUpdate((e) => {
+        translateX.value = e.translationX * DRAG_RATIO;
+      })
       .onEnd((e) => {
-        if (!isLoggedInRef.current) return;
-
-        // A quick flick OR a deliberate drag — either triggers the switch
         const isFling = Math.abs(e.velocityX) > 250;
         const isFar   = Math.abs(e.translationX) > 50;
-        if (!isFling && !isFar) return;
 
-        const current = normalizeTabPath(pathnameRef.current);
-        const idx = SWIPE_TAB_ROUTES.indexOf(current);
-        if (idx === -1) return;
-
-        if (e.translationX < 0 && idx < SWIPE_TAB_ROUTES.length - 1) {
-          runOnJS(navigateTo)(SWIPE_TAB_ROUTES[idx + 1]);
-        } else if (e.translationX > 0 && idx > 0) {
-          runOnJS(navigateTo)(SWIPE_TAB_ROUTES[idx - 1]);
+        if ((isFling || isFar) && isLoggedInSV.value) {
+          const idx = tabIdxSV.value;
+          if (e.translationX < 0 && idx < SWIPE_TAB_ROUTES.length - 1) {
+            runOnJS(navigateToIdx)(idx + 1);
+          } else if (e.translationX > 0 && idx > 0) {
+            runOnJS(navigateToIdx)(idx - 1);
+          }
         }
+
+        // Spring back to centre — new content slides in if we navigated,
+        // or the screen bounces back if we didn't hit the threshold.
+        translateX.value = withSpring(0, {
+          damping: 20,
+          stiffness: 220,
+          mass: 0.8,
+          overshootClamping: true,
+        });
       })
   ).current;
 
-  // Web: pass through untouched — no swipe, no wrapping overhead
+  // Web: pass through untouched — no swipe, no animation overhead.
   if (Platform.OS === "web") return <>{children}</>;
 
   return (
     <GestureDetector gesture={swipeGesture}>
-      <View style={{ flex: 1 }}>{children}</View>
+      <Animated.View style={[{ flex: 1 }, animatedStyle]}>
+        {children}
+      </Animated.View>
     </GestureDetector>
   );
 }
