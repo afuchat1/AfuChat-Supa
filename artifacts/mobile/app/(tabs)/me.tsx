@@ -354,12 +354,6 @@ export default function MeScreen() {
         </View>
         <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
         <View style={styles.statItem}>
-          <Ionicons name="diamond" size={20} color="#FF9500" />
-          <Text style={[styles.statValue, { color: colors.text }]}>{profile?.acoin || 0}</Text>
-          <Text style={[styles.statLabel, { color: colors.textMuted }]}>ACoin</Text>
-        </View>
-        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.statItem}>
           <Ionicons name={gradeIcon as any} size={20} color={colors.accent} />
           <Text style={[styles.statValue, { color: colors.text }]}>{profile?.current_grade || "Newcomer"}</Text>
           <Text style={[styles.statLabel, { color: colors.textMuted }]}>Grade</Text>
