@@ -193,13 +193,13 @@ function CardDetailModal({
 
         {/* Action buttons */}
         <View style={[detailStyles.actions, { paddingBottom: insets.bottom + 16, backgroundColor: colors.background }]}>
-          <Pressable style={[detailStyles.actionBtn, detailStyles.nopeBtn]} onPress={() => { onClose(); onNope(); }}>
+          <Pressable style={[detailStyles.actionBtn, detailStyles.nopeBtn, { backgroundColor: colors.surface }]} onPress={() => { onClose(); onNope(); }}>
             <Ionicons name="close" size={28} color="#FF3B30" />
           </Pressable>
-          <Pressable style={[detailStyles.actionBtn, detailStyles.superBtn]} onPress={() => { onClose(); onSuperLike(); }}>
+          <Pressable style={[detailStyles.actionBtn, detailStyles.superBtn, { backgroundColor: colors.surface }]} onPress={() => { onClose(); onSuperLike(); }}>
             <Ionicons name="star" size={22} color="#007AFF" />
           </Pressable>
-          <Pressable style={[detailStyles.actionBtn, detailStyles.likeBtn]} onPress={() => { onClose(); onLike(); }}>
+          <Pressable style={[detailStyles.actionBtn, detailStyles.likeBtn, { backgroundColor: colors.surface }]} onPress={() => { onClose(); onLike(); }}>
             <Ionicons name="heart" size={26} color={BRAND} />
           </Pressable>
         </View>
@@ -510,7 +510,7 @@ function MatchesTab() {
         return (
           <Pressable
             key={m.id}
-            style={[styles.matchRow, { backgroundColor: "#fff" }]}
+            style={[styles.matchRow, { backgroundColor: colors.surface }]}
             onPress={() => router.push(`/match/${m.id}` as any)}
           >
             <View style={styles.matchAvatarWrap}>
@@ -889,19 +889,19 @@ export default function MatchScreen() {
           {/* Action buttons */}
           {!loading && displayStack.length > 0 && (
             <View style={[styles.actions, { paddingBottom: insets.bottom + 12 }]}>
-              <Pressable style={[styles.actionBtn, styles.undoBtn]} onPress={handleUndo}>
+              <Pressable style={[styles.actionBtn, styles.undoBtn, { backgroundColor: colors.surface }]} onPress={handleUndo}>
                 <Ionicons name="arrow-undo" size={20} color="#FF9500" />
               </Pressable>
-              <Pressable style={[styles.actionBtn, styles.nopeBtn]} onPress={handleSwipeLeft}>
+              <Pressable style={[styles.actionBtn, styles.nopeBtn, { backgroundColor: colors.surface }]} onPress={handleSwipeLeft}>
                 <Ionicons name="close" size={32} color="#FF3B30" />
               </Pressable>
-              <Pressable style={[styles.actionBtn, styles.superBtn]} onPress={handleSuperLike}>
+              <Pressable style={[styles.actionBtn, styles.superBtn, { backgroundColor: colors.surface }]} onPress={handleSuperLike}>
                 <Ionicons name="star" size={22} color="#007AFF" />
               </Pressable>
-              <Pressable style={[styles.actionBtn, styles.likeBtn]} onPress={handleSwipeRight}>
+              <Pressable style={[styles.actionBtn, styles.likeBtn, { backgroundColor: colors.surface }]} onPress={handleSwipeRight}>
                 <Ionicons name="heart" size={28} color={BRAND} />
               </Pressable>
-              <Pressable style={[styles.actionBtn, styles.boostBtn]} onPress={handleBoost}>
+              <Pressable style={[styles.actionBtn, styles.boostBtn, { backgroundColor: colors.surface }]} onPress={handleBoost}>
                 <Ionicons name="flash" size={20} color="#AF52DE" />
               </Pressable>
             </View>

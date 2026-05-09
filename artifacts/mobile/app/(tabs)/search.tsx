@@ -686,7 +686,7 @@ export default function SearchScreen() {
               ? <Image source={{ uri: per.avatar_url }} style={{ width: 48, height: 48, borderRadius: per.is_organization_verified ? 12 : 24 }} />
               : <AvatarPlaceholder name={per.display_name} size={48} color={BRAND} />}
             {per.is_verified && (
-              <View style={ss.verifyBadge}>
+              <View style={[ss.verifyBadge, { backgroundColor: colors.background }]}>
                 <Ionicons name="checkmark-circle" size={14} color={per.is_organization_verified ? GOLD : BRAND} />
               </View>
             )}

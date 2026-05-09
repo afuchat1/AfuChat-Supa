@@ -51,17 +51,17 @@ type Message = {
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  open: { label: "Open", color: "#1a7f1a", bg: "#e3f9e5" },
-  in_progress: { label: "In Progress", color: "#0066cc", bg: "#e5f5ff" },
-  resolved: { label: "Resolved", color: "#888", bg: "#f0f0f0" },
-  closed: { label: "Closed", color: "#555", bg: "#e0e0e0" },
+  open:        { label: "Open",        color: "#34C759", bg: "#34C75920" },
+  in_progress: { label: "In Progress", color: "#007AFF", bg: "#007AFF20" },
+  resolved:    { label: "Resolved",    color: "#8E8E93", bg: "#8E8E9320" },
+  closed:      { label: "Closed",      color: "#636366", bg: "#63636620" },
 };
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
-  low: { label: "Low", color: "#8a8a8a", icon: "arrow-down-outline" },
-  normal: { label: "Normal", color: "#444", icon: "remove-outline" },
-  high: { label: "High", color: "#FF9500", icon: "arrow-up-outline" },
-  urgent: { label: "Urgent", color: "#FF3B30", icon: "alert-circle-outline" },
+  low:    { label: "Low",    color: "#8E8E93", icon: "arrow-down-outline"    },
+  normal: { label: "Normal", color: "#8E8E93", icon: "remove-outline"        },
+  high:   { label: "High",   color: "#FF9500", icon: "arrow-up-outline"      },
+  urgent: { label: "Urgent", color: "#FF3B30", icon: "alert-circle-outline"  },
 };
 
 function timeAgo(dateStr: string): string {
@@ -449,13 +449,13 @@ export default function SupportDashboard() {
                       style={[
                         st.bubble,
                         item.is_internal
-                          ? { backgroundColor: "#FFFBEB", borderColor: "#FFC107", borderWidth: 1 }
+                          ? { backgroundColor: "#FFC10720", borderColor: "#FFC10780", borderWidth: 1 }
                           : isUser
                           ? { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth }
                           : { backgroundColor: BRAND + "18", borderColor: BRAND + "30", borderWidth: StyleSheet.hairlineWidth },
                       ]}
                     >
-                      <Text style={[st.bubbleText, { color: item.is_internal ? "#5a4000" : colors.text }]}>{item.message}</Text>
+                      <Text style={[st.bubbleText, { color: item.is_internal ? "#F59E0B" : colors.text }]}>{item.message}</Text>
                     </View>
                   </View>
                 </View>
@@ -685,10 +685,10 @@ const st = StyleSheet.create({
   msgSender: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   internalBadge: {
     flexDirection: "row", alignItems: "center", gap: 3,
-    backgroundColor: "#FFF3CD", borderRadius: 8,
+    backgroundColor: "#F59E0B20", borderRadius: 8,
     paddingHorizontal: 6, paddingVertical: 2,
   },
-  internalBadgeText: { fontSize: 10, color: "#856404", fontFamily: "Inter_600SemiBold" },
+  internalBadgeText: { fontSize: 10, color: "#F59E0B", fontFamily: "Inter_600SemiBold" },
   msgTime: { fontSize: 10, fontFamily: "Inter_400Regular" },
   bubble: { borderRadius: 14, padding: 12 },
   bubbleText: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 21 },

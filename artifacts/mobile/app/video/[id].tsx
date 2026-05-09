@@ -85,7 +85,7 @@ const SOCIAL_PLATFORMS = [
   { id: "twitter",   label: "X",         icon: "logo-twitter",   color: "#000",    scheme: (u: string) => `https://x.com/intent/tweet?text=${encodeURIComponent(u)}` },
   { id: "facebook",  label: "Facebook",  icon: "logo-facebook",  color: "#1877F2", scheme: (u: string) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(u)}` },
   { id: "instagram", label: "Instagram", icon: "logo-instagram", color: "#E1306C", scheme: (_: string) => `instagram://app` },
-  { id: "copy",      label: "Copy link", icon: "link-outline",   color: "#555",    scheme: null },
+  { id: "copy",      label: "Copy link", icon: "link-outline",   color: "#8E8E93", scheme: null },
   { id: "more",      label: "More",      icon: "share-social",   color: "#00BCD4", scheme: null },
 ];
 

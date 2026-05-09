@@ -44,10 +44,10 @@ type Message = {
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  open: { label: "Open", color: "#1a7f1a", bg: "#e3f9e5" },
-  in_progress: { label: "In Progress", color: "#0066cc", bg: "#e5f5ff" },
-  resolved: { label: "Resolved", color: "#888", bg: "#f0f0f0" },
-  closed: { label: "Closed", color: "#555", bg: "#e0e0e0" },
+  open:        { label: "Open",        color: "#34C759", bg: "#34C75920" },
+  in_progress: { label: "In Progress", color: "#007AFF", bg: "#007AFF20" },
+  resolved:    { label: "Resolved",    color: "#8E8E93", bg: "#8E8E9320" },
+  closed:      { label: "Closed",      color: "#636366", bg: "#63636620" },
 };
 
 export default function TicketDetail() {

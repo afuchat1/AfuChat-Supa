@@ -47,9 +47,9 @@ function PhoneIllustration() {
       </View>
 
       {/* Views badge (bottom-right overlap) */}
-      <View style={styles.viewsBadge}>
-        <Ionicons name="eye-outline" size={14} color="#555" />
-        <Text style={styles.viewsBadgeText}>1K</Text>
+      <View style={[styles.viewsBadge, { backgroundColor: colors.surface }]}>
+        <Ionicons name="eye-outline" size={14} color={colors.textMuted} />
+        <Text style={[styles.viewsBadgeText, { color: colors.text }]}>1K</Text>
       </View>
     </View>
   );
@@ -212,7 +212,6 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: "#fff",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -223,7 +222,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
   },
-  viewsBadgeText: { fontSize: 14, fontFamily: "Inter_700Bold", color: "#333" },
+  viewsBadgeText: { fontSize: 14, fontFamily: "Inter_700Bold" },
 
   textSection: {
     paddingHorizontal: 32,

@@ -743,7 +743,7 @@ export default function ContactProfileScreen() {
               onPress={() => { setOptionsVisible(false); reportUser(); }}
               activeOpacity={0.65}
             >
-              <View style={[st.optionIconWrap, { backgroundColor: "#FEF3C7" }]}>
+              <View style={[st.optionIconWrap, { backgroundColor: "#F59E0B20" }]}>
                 <Ionicons name="flag-outline" size={19} color="#F59E0B" />
               </View>
               <Text style={[st.optionLabel, { color: "#F59E0B" }]}>Report</Text>
