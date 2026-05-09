@@ -3661,6 +3661,7 @@ STRICT RULES:
   // activeOffsetX: only fires on rightward swipes (threshold 15px).
   // failOffsetY:   vertical scroll takes priority — FlatList never blocked.
   // Threshold 80px: comfortable swipe without accidental triggers.
+  const chatGoBack = useCallback(() => router.back(), []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const backSwipeGesture = useRef(
     Gesture.Pan()
