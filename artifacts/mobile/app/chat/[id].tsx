@@ -70,6 +70,7 @@ import { getDailyUsage, recordDailyUsage } from "@/lib/featureUsage";
 import { EmojiKeyboard } from "rn-emoji-keyboard";
 import GiftPickerSheet, { DbGift } from "@/components/gifts/GiftPickerSheet";
 import MiniProfilePopup from "@/components/chat/MiniProfilePopup";
+import StickerPicker from "@/components/chat/StickerPicker";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import ReAnimated, {
   useSharedValue,
@@ -707,7 +708,8 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   const isGiftMsg = msg.encrypted_content?.startsWith("🎁") ?? false;
   const meBubbleColor = BRAND;
   const otherBubbleColor = colors.bubbleIncoming;
-  const bubbleColor = isMe ? meBubbleColor : otherBubbleColor;
+  const isSticker = msg.attachment_type === "sticker";
+  const bubbleColor = isSticker ? "transparent" : (isMe ? meBubbleColor : otherBubbleColor);
   const textColor = isMe ? "#FFFFFF" : colors.bubbleIncomingText;
   const isPending = msg._pending || msg.status === "sending";
 
@@ -933,6 +935,10 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
                 </TouchableOpacity>
               );
             })()
+          ) : msg.attachment_type === "sticker" ? (
+            <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.8}>
+              <Text style={{ fontSize: 64, lineHeight: 74 }}>{msg.encrypted_content}</Text>
+            </TouchableOpacity>
           ) : (
             <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
               {msg._isAi
@@ -1423,6 +1429,7 @@ function ChatScreen() {
   }));
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
   const [gifSearch, setGifSearch] = useState("");
   const [attachmentPreview, setAttachmentPreview] = useState<{ uri: string; type: string; name?: string; mimeType?: string } | null>(null);
   const [networkOnline, setNetworkOnline] = useState(isOnline());
@@ -1507,6 +1514,26 @@ function ChatScreen() {
         attachment_type: m.attachment_type,
         encrypted_content: m.content ?? "",
       })));
+
+      // Fix: refresh reactions for cached messages so they reappear after navigation
+      const cachedIds = cached.map((m) => m.id).filter((cid) => !cid.startsWith("pending"));
+      if (cachedIds.length > 0) {
+        supabase.from("message_reactions").select("message_id, reaction, user_id").in("message_id", cachedIds).then(({ data: cacheReactions }) => {
+          if (!cacheReactions || cacheReactions.length === 0) return;
+          const reactionMap: Record<string, { emoji: string; count: number; myReaction: boolean }[]> = {};
+          for (const r of cacheReactions as any[]) {
+            if (!reactionMap[r.message_id]) reactionMap[r.message_id] = [];
+            const existing = reactionMap[r.message_id].find((x) => x.emoji === r.reaction);
+            if (existing) { existing.count++; if (r.user_id === user.id) existing.myReaction = true; }
+            else reactionMap[r.message_id].push({ emoji: r.reaction, count: 1, myReaction: r.user_id === user.id });
+          }
+          const cachedIdSet = new Set(cachedIds);
+          setMessages((prev) => prev.map((m) => {
+            if (!cachedIdSet.has(m.id) || !reactionMap[m.id]) return m;
+            return { ...m, reactions: reactionMap[m.id] };
+          }));
+        }).catch(() => {});
+      }
     }
 
     if (!isOnline()) {
@@ -3020,6 +3047,43 @@ STRICT RULES:
     }
   }
 
+  async function sendStickerMessage(emoji: string) {
+    if (!user) return;
+    if (messageLimited) {
+      showAlert("Message limit", `You can only send one message until ${chatInfo?.other_name || "this user"} replies or follows you.`);
+      return;
+    }
+    setShowStickerPicker(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    const activeChatId = await getOrCreateChatId();
+    if (!activeChatId) return;
+
+    const tempId = `sticker_${Date.now()}`;
+    const now = new Date().toISOString();
+    setMessages((prev) => [{
+      id: tempId,
+      chat_id: activeChatId,
+      sender_id: user.id,
+      encrypted_content: emoji,
+      sent_at: now,
+      sender: { display_name: profile?.display_name || "You", avatar_url: profile?.avatar_url || null, handle: profile?.handle || "" },
+      attachment_type: "sticker",
+      reactions: [],
+    }, ...prev]);
+
+    const { data: inserted } = await supabase.from("messages").insert({
+      chat_id: activeChatId,
+      sender_id: user.id,
+      encrypted_content: emoji,
+      attachment_type: "sticker",
+    }).select("id").single();
+
+    if (inserted) {
+      setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, id: inserted.id } : m));
+    }
+  }
+
   async function sendGifMessage(gifUrl: string) {
     if (!user) return;
     if (messageLimited) {
@@ -3890,6 +3954,7 @@ STRICT RULES:
                       } else {
                         chatInputRef.current?.blur();
                         Keyboard.dismiss();
+                        setShowStickerPicker(false);
                         setShowEmojiPicker(true);
                       }
                     }}>
@@ -3902,7 +3967,7 @@ STRICT RULES:
                       placeholderTextColor={colors.textMuted}
                       value={input}
                       onChangeText={(t) => { setInput(t); handleTyping(); saveDraft(t); }}
-                      onFocus={() => { if (showEmojiPicker) setShowEmojiPicker(false); }}
+                      onFocus={() => { if (showEmojiPicker) setShowEmojiPicker(false); if (showStickerPicker) setShowStickerPicker(false); }}
                       multiline
                       maxLength={4000}
                       returnKeyType={chatPrefs.enter_to_send ? "send" : "default"}
@@ -3921,6 +3986,23 @@ STRICT RULES:
                             <Text style={{ fontSize: 20 }}>🧧</Text>
                           </TouchableOpacity>
                         )}
+                        <TouchableOpacity
+                          onPress={() => {
+                            if (showStickerPicker) {
+                              setShowStickerPicker(false);
+                              setTimeout(() => chatInputRef.current?.focus(), 50);
+                            } else {
+                              chatInputRef.current?.blur();
+                              Keyboard.dismiss();
+                              setShowEmojiPicker(false);
+                              setShowStickerPicker(true);
+                            }
+                          }}
+                          hitSlop={8}
+                          style={st.pillIcon}
+                        >
+                          <Text style={{ fontSize: 20, opacity: showStickerPicker ? 1 : 0.6 }}>🎨</Text>
+                        </TouchableOpacity>
                         <TouchableOpacity onPress={() => setShowAttachMenu(true)} hitSlop={8} style={st.pillIcon}>
                           <Ionicons name="attach" size={22} color={colors.textMuted} style={{ transform: [{ rotate: "-45deg" }] }} />
                         </TouchableOpacity>
@@ -3992,6 +4074,11 @@ STRICT RULES:
                 emoji: { selected: colors.inputBg },
               }}
             />
+          </View>
+        )}
+        {showStickerPicker && (
+          <View style={{ height: emojiKeyboardHeight, backgroundColor: colors.surface }}>
+            <StickerPicker onSendSticker={sendStickerMessage} />
           </View>
         )}
       </KeyboardAvoidingView>
