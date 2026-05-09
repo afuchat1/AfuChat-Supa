@@ -517,6 +517,8 @@ function ProfileDropdown({
   const handle = profile?.handle || "";
   const initial = (displayName || "U").trim().slice(0, 1).toUpperCase();
   const otherAccounts = linkedAccounts.filter((a) => a.userId !== currentUserId);
+  const isAdmin = (profile as any)?.is_admin ?? false;
+  const atAccountLimit = !isAdmin && linkedAccounts.length >= 2;
 
   function renderAvatar(uri: string | null | undefined, name: string | null | undefined, size: number) {
     if (uri) {
@@ -636,16 +638,18 @@ function ProfileDropdown({
           ) : null}
 
           {/* Account / profile actions */}
-          <Pressable
-            onPress={() => navigate("/linked-accounts?addNew=1")}
-            style={({ hovered }: any) => [
-              styles.profileItem,
-              { backgroundColor: hovered ? theme.hoverBg : "transparent" },
-            ]}
-          >
-            <Ionicons name="person-add-outline" size={16} color={theme.text} />
-            <Text style={[styles.profileItemText, { color: theme.text }]}>Add another account</Text>
-          </Pressable>
+          {!atAccountLimit && (
+            <Pressable
+              onPress={() => navigate("/linked-accounts?addNew=1")}
+              style={({ hovered }: any) => [
+                styles.profileItem,
+                { backgroundColor: hovered ? theme.hoverBg : "transparent" },
+              ]}
+            >
+              <Ionicons name="person-add-outline" size={16} color={theme.text} />
+              <Text style={[styles.profileItemText, { color: theme.text }]}>Add another account</Text>
+            </Pressable>
+          )}
 
           <Pressable
             onPress={() => navigate("/linked-accounts")}

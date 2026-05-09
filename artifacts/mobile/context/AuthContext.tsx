@@ -4,7 +4,8 @@ import { AppState } from "react-native";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { getStoredAccounts, storeAccount, removeStoredAccount, updateAccountTokens, type StoredAccount } from "@/lib/accountStore";
-import { cacheProfile, getCachedProfile, getCachedProfileSync, isOnline, onConnectivityChange } from "@/lib/offlineStore";
+import { cacheProfile, getCachedProfile, getCachedProfileSync, clearAccountCache, isOnline, onConnectivityChange } from "@/lib/offlineStore";
+import { clearProfileCache } from "@/lib/profileCache";
 import { startOfflineSync } from "@/lib/offlineSync";
 import { clearPushToken } from "@/lib/pushNotifications";
 import { registerDeviceSession } from "@/lib/deviceSession";
@@ -191,6 +192,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function addAccount(email: string, password: string): Promise<{ success: boolean; error?: string }> {
+    // Non-admins are limited to 2 linked accounts total (current + 1 other).
+    if (!profile?.is_admin) {
+      const current = await getStoredAccounts();
+      if (current.length >= 2) {
+        return { success: false, error: "You can link at most 2 accounts. Upgrade to a higher plan for more." };
+      }
+    }
+
     const { data: { session: currentSession } } = await supabase.auth.getSession();
     const currentTokens = currentSession ? {
       access: currentSession.access_token,
@@ -238,7 +247,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const target = accounts.find((a) => a.userId === userId);
     if (!target) return { success: false, error: "Account not found" };
 
+    // 1. Persist the current session's tokens before leaving it.
     await saveCurrentSession();
+
+    // 2. Wipe every user-specific cache so the incoming account starts clean.
+    //    This must happen before setSession() so that no old data can appear
+    //    in the brief window between session swap and the new profile arriving.
+    await clearAccountCache();
+    clearProfileCache();
+
+    // 3. Drop React state immediately so screens show skeletons, not stale data.
+    setProfile(null);
+    setSubscription(null);
 
     const { data, error } = await supabase.auth.setSession({
       access_token: target.accessToken,
@@ -434,6 +454,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (user) {
       await clearPushToken(user.id);
     }
+    // Clear all local caches before signing out so the next account (or a fresh
+    // login) never sees data from the previous session.
+    await clearAccountCache();
+    clearProfileCache();
     await supabase.auth.signOut();
     router.replace("/discover");
   }, [user]);

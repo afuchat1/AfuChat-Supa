@@ -260,3 +260,39 @@ export async function getFeedCursor(tab: "for_you" | "following"): Promise<strin
     return null;
   }
 }
+
+/**
+ * Wipes all user-specific cache data so that switching accounts never leaks
+ * one account's data into another. Call this BEFORE setting the new session.
+ */
+export async function clearAccountCache(): Promise<void> {
+  try {
+    // Clear synchronous MMKV profile slot immediately — this prevents the
+    // new account from seeing the old account's profile on first render.
+    storage.delete(KEYS.USER_PROFILE);
+    storage.delete(KEYS.USER_ID);
+    storage.delete(KEYS.FEED_CURSOR_FOR_YOU);
+    storage.delete(KEYS.FEED_CURSOR_FOLLOWING);
+    storage.delete(KEYS.FEED_SCROLL_OFFSET);
+    storage.delete(KEYS.VIEWED_POST_IDS);
+    storage.delete(KEYS.UNREAD_NOTIF_COUNT);
+    storage.delete(KEYS.WALLET_BALANCE);
+    storage.delete(KEYS.WALLET_CACHED_AT);
+    storage.delete(KEYS.SEARCH_HISTORY);
+
+    // Clear all AsyncStorage user-data buckets.
+    await AsyncStorage.multiRemove([
+      CACHE_KEYS.PROFILE,
+      CACHE_KEYS.CONVERSATIONS,
+      CACHE_KEYS.CONTACTS,
+      CACHE_KEYS.MOMENTS,
+      CACHE_KEYS.NOTIFICATIONS,
+      CACHE_KEYS.PENDING_MESSAGES,
+      CACHE_KEYS.FEED_FOR_YOU,
+      CACHE_KEYS.FEED_FOLLOWING,
+      CACHE_KEYS.FEED_CURSOR_FOR_YOU,
+      CACHE_KEYS.FEED_CURSOR_FOLLOWING,
+      CACHE_KEYS.WALLET,
+    ]);
+  } catch {}
+}

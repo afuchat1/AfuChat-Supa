@@ -21,6 +21,8 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { showAlert } from "@/lib/alert";
 
+const MAX_ACCOUNTS_NON_ADMIN = 2;
+
 export default function LinkedAccountsScreen() {
   const { colors } = useTheme();
   const { user, profile, linkedAccounts, addAccount, switchAccount, removeAccount } = useAuth();
@@ -114,6 +116,9 @@ export default function LinkedAccountsScreen() {
     ? [{ userId: user.id, displayName: profile.display_name, handle: profile.handle, avatarUrl: profile.avatar_url, email: "", accessToken: "", refreshToken: "" }]
     : linkedAccounts;
 
+  const isAdmin = profile?.is_admin ?? false;
+  const atLimit = !isAdmin && linkedAccounts.length >= MAX_ACCOUNTS_NON_ADMIN;
+
   const formTranslateY = formAnim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] });
   const formOpacity = formAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
 
@@ -196,8 +201,8 @@ export default function LinkedAccountsScreen() {
           })}
         </View>
 
-        {/* Add account button */}
-        {!showAdd && (
+        {/* Add account button — hidden when at the limit for non-admins */}
+        {!showAdd && !atLimit && (
           <TouchableOpacity
             style={[styles.addRow, { backgroundColor: colors.surface }]}
             onPress={openForm}
@@ -209,6 +214,16 @@ export default function LinkedAccountsScreen() {
             <Text style={[styles.addRowText, { color: colors.text }]}>Add Account</Text>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} style={{ marginLeft: "auto" }} />
           </TouchableOpacity>
+        )}
+
+        {/* Limit notice for non-admin users who have reached the cap */}
+        {atLimit && !showAdd && (
+          <View style={[styles.limitNotice, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Ionicons name="lock-closed-outline" size={16} color={colors.textMuted} />
+            <Text style={[styles.limitNoticeText, { color: colors.textMuted }]}>
+              Non-admin accounts can link up to {MAX_ACCOUNTS_NON_ADMIN} accounts.
+            </Text>
+          </View>
         )}
 
         {/* Add account form */}
@@ -375,6 +390,17 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   submitBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+
+  limitNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  limitNoticeText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
 
   hint: {
     fontSize: 12,
