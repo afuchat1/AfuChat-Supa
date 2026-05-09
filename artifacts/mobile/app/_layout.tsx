@@ -88,62 +88,25 @@ function RootLayoutNav() {
       <Stack.Screen name="index" options={{ animation: Platform.OS === "web" ? "none" : "fade" }} />
       <Stack.Screen name="(auth)" options={{ animation: Platform.OS === "web" ? "none" : "fade" }} />
       <Stack.Screen name="(tabs)" options={{ animation: Platform.OS === "web" ? "none" : "fade" }} />
-      <Stack.Screen name="chat/[id]" />
-      <Stack.Screen name="contact/[id]" />
       <Stack.Screen name="moments/index" options={{ headerShown: false }} />
       <Stack.Screen name="moments/create" options={bottomSheetAnim} />
       <Stack.Screen name="profile/edit" options={bottomSheetAnim} />
       <Stack.Screen name="group/create" options={bottomSheetAnim} />
-      <Stack.Screen name="group/[id]" />
-      <Stack.Screen name="ai/index" />
-      <Stack.Screen name="post/[id]" />
-      <Stack.Screen name="my-posts/index" />
-      <Stack.Screen name="wallet/index" />
-      <Stack.Screen name="gifts/index" />
-      <Stack.Screen name="games/index" />
-      <Stack.Screen name="games/snake" />
-      <Stack.Screen name="games/game-2048" />
-      <Stack.Screen name="games/tetris" />
-      <Stack.Screen name="games/flappy" />
-      <Stack.Screen name="games/space-shooter" />
-      <Stack.Screen name="games/brick-breaker" />
-      <Stack.Screen name="games/minesweeper" />
-      <Stack.Screen name="games/memory-match" />
-      <Stack.Screen name="mini-programs/index" />
-      <Stack.Screen name="mini-programs/airtime" />
-      <Stack.Screen name="mini-programs/data-bundles" />
-      <Stack.Screen name="mini-programs/bills" />
-      <Stack.Screen name="mini-programs/hotels" />
-      <Stack.Screen name="mini-programs/tickets" />
-      <Stack.Screen name="mini-programs/transfer" />
-      <Stack.Screen name="mini-programs/fee-details" />
-      <Stack.Screen name="notifications" />
       <Stack.Screen name="stories/camera" options={{ headerShown: false, animation: "slide_from_bottom" }} />
       <Stack.Screen name="stories/create" options={bottomSheetAnim} />
       <Stack.Screen name="stories/view" options={{ animation: "fade" }} />
       <Stack.Screen name="red-envelope/[id]" options={bottomSheetAnim} />
       <Stack.Screen name="settings/index" options={{ headerShown: false }} />
       <Stack.Screen name="settings/offline-videos" options={{ headerShown: false }} />
-      <Stack.Screen name="settings/privacy" />
-      <Stack.Screen name="settings/notifications" />
-      <Stack.Screen name="settings/chat" />
-      <Stack.Screen name="settings/blocked" />
-      <Stack.Screen name="admin/index" />
       <Stack.Screen name="admin/support-dashboard" options={{ headerShown: false }} />
       <Stack.Screen name="support/index" options={{ headerShown: false }} />
       <Stack.Screen name="support/ticket/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding/index" options={{ animation: "fade", gestureEnabled: false }} />
-      <Stack.Screen name="referral" />
       <Stack.Screen name="qr-scanner" options={{ headerShown: false, animation: "slide_from_bottom" }} />
-      <Stack.Screen name="language-settings" />
-      <Stack.Screen name="linked-accounts" />
       <Stack.Screen name="terms" options={bottomSheetAnim} />
       <Stack.Screen name="privacy" options={bottomSheetAnim} />
       <Stack.Screen name="video/[id]" options={{ headerShown: false, animation: "fade", contentStyle: { backgroundColor: "#000" } }} />
-      <Stack.Screen name="company/index" />
-      <Stack.Screen name="company/[slug]" />
       <Stack.Screen name="company/create" options={bottomSheetAnim} />
-      <Stack.Screen name="company/manage" />
       <Stack.Screen name="[handle]" options={{ animation: "fade" }} />
       <Stack.Screen name="call/[id]" options={{ headerShown: false, animation: "fade", gestureEnabled: false, contentStyle: { backgroundColor: "#1a1a2e" } }} />
     </Stack>

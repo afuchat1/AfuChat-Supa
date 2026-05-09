@@ -20,25 +20,27 @@ try {
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
-function NativeTabLayout() {
+function NativeTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   return (
     <NativeTabs>
-      <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: "message.fill", selected: "message.fill" }} />
-        <Label>AfuChat</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="discover">
-        <Icon sf={{ default: "location" as any, selected: "location.fill" as any }} />
-        <Label>Discover</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="apps">
-        <Icon sf={{ default: "square.grid.2x2", selected: "square.grid.2x2.fill" }} />
-        <Label>Apps</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="me">
-        <Icon sf={{ default: "person.circle", selected: "person.circle.fill" }} />
-        <Label>Me</Label>
-      </NativeTabs.Trigger>
+      {isLoggedIn && (
+        <NativeTabs.Trigger name="index">
+          <Icon sf={{ default: "message.fill", selected: "message.fill" }} />
+          <Label>AfuChat</Label>
+        </NativeTabs.Trigger>
+      )}
+      {isLoggedIn && (
+        <NativeTabs.Trigger name="apps">
+          <Icon sf={{ default: "square.grid.2x2", selected: "square.grid.2x2.fill" }} />
+          <Label>Apps</Label>
+        </NativeTabs.Trigger>
+      )}
+      {isLoggedIn && (
+        <NativeTabs.Trigger name="me">
+          <Icon sf={{ default: "person.circle", selected: "person.circle.fill" }} />
+          <Label>Me</Label>
+        </NativeTabs.Trigger>
+      )}
     </NativeTabs>
   );
 }
@@ -163,7 +165,7 @@ export default function TabLayout() {
   }, [session, profile, loading]);
 
   const layout = isLiquidGlassAvailable()
-    ? <NativeTabLayout />
+    ? <NativeTabLayout isLoggedIn={!!session} />
     : <ClassicTabLayout isLoggedIn={!!session} />;
 
   return (
