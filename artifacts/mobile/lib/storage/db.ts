@@ -246,4 +246,22 @@ async function runMigrations(db: DB) {
     await safeAdd("ALTER TABLE media_cache ADD COLUMN saved_to_device INTEGER NOT NULL DEFAULT 0");
     await db.runAsync("UPDATE schema_version SET version = 5");
   }
+
+  // ── v6: Add last_accessed for LRU tracking + owner/message metadata ───────
+  if (currentVersion < 6) {
+    const safeAdd = async (sql: string) => { try { await db.execAsync(sql); } catch {} };
+    // last_accessed: updated each time a cached file is served (for LRU eviction)
+    await safeAdd("ALTER TABLE media_cache ADD COLUMN last_accessed INTEGER");
+    // owner_id: user_id or conversation_id that owns this file
+    await safeAdd("ALTER TABLE media_cache ADD COLUMN owner_id TEXT");
+    // message_id: links a chat attachment to its originating message
+    await safeAdd("ALTER TABLE media_cache ADD COLUMN message_id TEXT");
+    // mime_type: stored once so we never have to guess from extension again
+    await safeAdd("ALTER TABLE media_cache ADD COLUMN mime_type TEXT");
+    // Backfill last_accessed = stored_at for existing rows
+    await safeAdd("UPDATE media_cache SET last_accessed = stored_at WHERE last_accessed IS NULL");
+    // Index for LRU queries (evict least-recently-accessed first)
+    await safeAdd("CREATE INDEX IF NOT EXISTS idx_media_last_accessed ON media_cache(last_accessed)");
+    await db.runAsync("UPDATE schema_version SET version = 6");
+  }
 }

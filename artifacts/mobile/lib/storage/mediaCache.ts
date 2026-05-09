@@ -74,6 +74,11 @@ export async function getCachedImageUri(
       const info = await FileSystem.getInfoAsync(row.local_path);
       if (info.exists && (info as any).size > 0) {
         _memCache.set(url, row.local_path);
+        // Touch last_accessed for LRU tracking (fire-and-forget)
+        db.runAsync(
+          "UPDATE media_cache SET last_accessed = ? WHERE url_hash = ?",
+          [Date.now(), urlHash(url)],
+        ).catch(() => {});
         return row.local_path;
       }
       // File was deleted (e.g. user cleared storage) — re-download it once
