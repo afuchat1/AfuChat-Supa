@@ -77,25 +77,27 @@ function FloatingTabBar() {
   const bottomOffset = (insets.bottom > 0 ? insets.bottom : 14) + 6;
   const active       = normalizeTabPath(pathname);
 
-  // ── Animated highlight pill ─────────────────────────────────────────────────
-  const TAB_WIDTH    = (SCREEN_WIDTH - PILL_H_MARGIN * 2) / TABS.length;
-  const PILL_W       = TAB_WIDTH * 0.78;
-  const PILL_H_INNER = PILL_HEIGHT - 20;  // 44px tall capsule
+  // ── Animated highlight — rounded rectangle containing icon + label ──────────
+  const TAB_WIDTH     = (SCREEN_WIDTH - PILL_H_MARGIN * 2) / TABS.length;
+  const H_PADDING     = 6;   // space on each side of the highlight within the tab slot
+  const HIGHLIGHT_W   = TAB_WIDTH - H_PADDING * 2;
+  const HIGHLIGHT_H   = PILL_HEIGHT - 16;  // 48px — tall enough to enclose icon + label
+  const HIGHLIGHT_R   = 14;                // rounded rectangle, not a capsule
 
   function pillLeft(idx: number) {
-    return idx * TAB_WIDTH + (TAB_WIDTH - PILL_W) / 2;
+    return idx * TAB_WIDTH + H_PADDING;
   }
 
-  const activeIdx   = TABS.findIndex((t) => t.route === active);
-  const pillX       = useSharedValue(pillLeft(activeIdx === -1 ? 0 : activeIdx));
+  const activeIdx = TABS.findIndex((t) => t.route === active);
+  const pillX     = useSharedValue(pillLeft(activeIdx === -1 ? 0 : activeIdx));
 
   useEffect(() => {
     const idx = TABS.findIndex((t) => t.route === active);
     if (idx !== -1) {
       pillX.value = withSpring(pillLeft(idx), {
-        damping: 24,
-        stiffness: 340,
-        mass: 0.75,
+        damping: 26,
+        stiffness: 360,
+        mass: 0.7,
         overshootClamping: false,
       });
     }
@@ -139,23 +141,27 @@ function FloatingTabBar() {
         />
       )}
 
-      {/* Sliding highlight capsule */}
+      {/* Sliding highlight — rounded rectangle behind icon + label */}
       <Animated.View
         style={[
           {
             position: "absolute",
-            top: (PILL_HEIGHT - PILL_H_INNER) / 2,
+            top: (PILL_HEIGHT - HIGHLIGHT_H) / 2,
             left: 0,
-            width: PILL_W,
-            height: PILL_H_INNER,
-            borderRadius: PILL_H_INNER / 2,
-            backgroundColor: colors.accent + "1E",
+            width: HIGHLIGHT_W,
+            height: HIGHLIGHT_H,
+            borderRadius: HIGHLIGHT_R,
+            backgroundColor: isDark
+              ? colors.accent + "2A"
+              : colors.accent + "20",
+            borderWidth: 1,
+            borderColor: colors.accent + "30",
           },
           pillAnimStyle,
         ]}
       />
 
-      {/* Tab items */}
+      {/* Tab items — each slot is exactly TAB_WIDTH so content aligns over highlight */}
       <View style={{ flex: 1, flexDirection: "row" }}>
         {TABS.map((tab) => {
           const isFocused = active === tab.route;
@@ -164,22 +170,35 @@ function FloatingTabBar() {
           return (
             <TouchableOpacity
               key={tab.route}
-              style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 3 }}
+              style={{
+                width: TAB_WIDTH,
+                height: PILL_HEIGHT,
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 2,
+              }}
               onPress={() => router.navigate(tab.route as any)}
-              activeOpacity={0.65}
+              activeOpacity={0.7}
             >
               {tab.route === "/(tabs)" ? (
                 <Image
                   source={afuSymbol}
-                  style={{ width: 24, height: 24, tintColor: color }}
+                  style={{ width: 22, height: 22, tintColor: color }}
                   resizeMode="contain"
                 />
               ) : isIOS ? (
-                <SymbolView name={isFocused ? tab.sfOn : tab.sfOff} tintColor={color} size={22} />
+                <SymbolView name={isFocused ? tab.sfOn : tab.sfOff} tintColor={color} size={21} />
               ) : (
-                <Ionicons name={(isFocused ? tab.mdOn : tab.mdOff) as any} size={22} color={color} />
+                <Ionicons name={(isFocused ? tab.mdOn : tab.mdOff) as any} size={21} color={color} />
               )}
-              <Text style={{ fontSize: 10, fontFamily: "Inter_500Medium", color, letterSpacing: 0.1 }}>
+              <Text
+                style={{
+                  fontSize: 10,
+                  fontFamily: isFocused ? "Inter_600SemiBold" : "Inter_400Regular",
+                  color,
+                  letterSpacing: 0.1,
+                }}
+              >
                 {tab.label}
               </Text>
             </TouchableOpacity>
