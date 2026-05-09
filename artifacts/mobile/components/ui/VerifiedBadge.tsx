@@ -8,45 +8,27 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import Svg, { Circle, Path } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { useTheme } from "@/hooks/useTheme";
 
-// ─── Badge shape paths (20×20 viewBox) ───────────────────────────────────────
-//
-// 12-pointed star/seal — the classic modern verification badge shape used by
-// Twitter, Telegram Premium, and Meta. NOT a circle/ring.
-//
-// Outer radius 9.2, inner radius 5.5, 24 alternating points (12 outer + 12 inner).
-const SEAL_PATH =
-  "M10,0.8 L11.42,4.69 L14.6,2.03 L13.89,6.11 L17.97,5.4 L15.31,8.58 " +
-  "L19.2,10 L15.31,11.42 L17.97,14.6 L13.89,13.89 L14.6,17.97 L11.42,15.31 " +
-  "L10,19.2 L8.58,15.31 L5.4,17.97 L6.11,13.89 L2.03,14.6 L4.69,11.42 " +
-  "L0.8,10 L4.69,8.58 L2.03,5.4 L6.11,6.11 L5.4,2.03 L8.58,4.69 Z";
+// ─── Badge shape ──────────────────────────────────────────────────────────────
+// Filled circle + white checkmark — same shape as Facebook and Twitter/X.
+// Personal = accent colour (blue by default).
+// Organisation = gold (#F5A623), immediately distinguishable but still familiar.
 
-// White checkmark centred within the seal (fits the ~5.5-unit inner circle).
-const CHECK_PATH = "M5.8,10.4 L8.6,13.3 L14.2,7.2";
-
-// ─── Organisation variant: shield shape ──────────────────────────────────────
-//
-// A pentagon shield — immediately reads as "official/org" rather than personal.
-const SHIELD_PATH =
-  "M10,1 L18.5,4.8 L18.5,11 C18.5,15.5 14.5,18.5 10,19.5 " +
-  "C5.5,18.5 1.5,15.5 1.5,11 L1.5,4.8 Z";
-
-type BadgeProps = { size: number; color: string; isOrg?: boolean };
-
-function BadgeShape({ size, color, isOrg = false }: BadgeProps) {
-  const checkStroke = size * 0.115;       // scales cleanly from 12px to 40px
+function BadgeShape({ size, color }: { size: number; color: string }) {
+  const r = size / 2;
+  const sw = size * 0.13; // checkmark stroke width scales with size
   return (
     <Svg width={size} height={size} viewBox="0 0 20 20">
-      <Path d={isOrg ? SHIELD_PATH : SEAL_PATH} fill={color} />
+      <Circle cx="10" cy="10" r="9.2" fill={color} />
       <Path
-        d={CHECK_PATH}
+        d="M5.8,10.2 L8.6,13 L14.2,7"
         stroke="#fff"
-        strokeWidth={checkStroke}
+        strokeWidth={sw}
         strokeLinecap="round"
         strokeLinejoin="round"
         fill="none"
@@ -76,18 +58,19 @@ export default function VerifiedBadge({
 
   if (!isVerif) return null;
 
-  const badgeColor = isOrg ? "#D4A853" : accent;
+  // Gold for organisations (matches Meta's gold org badge), accent for personal
+  const badgeColor = isOrg ? "#F5A623" : accent;
 
   const REASONS: { icon: string; label: string; premiumLink?: boolean }[] = isOrg
     ? [
-        { icon: "business-outline",       label: "Confirmed authentic business, brand, or organization" },
+        { icon: "business-outline",        label: "Confirmed authentic business, brand, or organization" },
         { icon: "shield-checkmark-outline", label: "Notable presence in its industry or community", premiumLink: true },
-        { icon: "document-text-outline",  label: "Compliant with AfuChat's community guidelines" },
+        { icon: "document-text-outline",   label: "Compliant with AfuChat's community guidelines" },
       ]
     : [
-        { icon: "person-circle-outline",  label: "Confirmed authentic identity as a real person" },
-        { icon: "star-outline",           label: "Notable creator, public figure, or professional", premiumLink: true },
-        { icon: "checkmark-done-outline", label: "Compliant with AfuChat's community guidelines" },
+        { icon: "person-circle-outline",   label: "Confirmed authentic identity as a real person" },
+        { icon: "star-outline",            label: "Notable creator, public figure, or professional", premiumLink: true },
+        { icon: "checkmark-done-outline",  label: "Compliant with AfuChat's community guidelines" },
       ];
 
   return (
@@ -98,7 +81,7 @@ export default function VerifiedBadge({
         hitSlop={10}
         style={{ marginLeft: 2 }}
       >
-        <BadgeShape size={size} color={badgeColor} isOrg={isOrg} />
+        <BadgeShape size={size} color={badgeColor} />
       </TouchableOpacity>
 
       <Modal
@@ -112,13 +95,11 @@ export default function VerifiedBadge({
 
         <View style={s.sheet}>
           <View style={[s.card, { backgroundColor: colors.surface }]}>
-            {/* Drag handle */}
             <View style={[s.handle, { backgroundColor: colors.border }]} />
 
-            {/* Badge + title */}
             <View style={s.header}>
               <View style={[s.iconWrap, { backgroundColor: badgeColor + "18" }]}>
-                <BadgeShape size={44} color={badgeColor} isOrg={isOrg} />
+                <BadgeShape size={44} color={badgeColor} />
               </View>
               <Text style={[s.title, { color: colors.text }]}>
                 {isOrg ? "Verified Organization" : "Verified Account"}
@@ -230,7 +211,7 @@ const s = StyleSheet.create({
   iconWrap: {
     width: 76,
     height: 76,
-    borderRadius: 20,
+    borderRadius: 38,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
