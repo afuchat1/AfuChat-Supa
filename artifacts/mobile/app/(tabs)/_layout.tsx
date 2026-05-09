@@ -236,7 +236,7 @@ function SwipeTabsWrapper({ children, isLoggedIn }: { children: React.ReactNode;
   const swipeGesture = useRef(
     Gesture.Pan()
       .activeOffsetX([-10, 10])
-      .failOffsetY([-14, 14])
+      .failOffsetY([-20, 20])
       .onBegin(() => {
         "worklet";
         cancelAnimation(translateX);
