@@ -1,78 +1,36 @@
-# AfuChat
+# AfuChat — Project Overview
 
-A full-featured social chat mobile platform with posts, shops, video, push notifications, AI chat, and in-app payments.
+## What this is
+AfuChat is a social mobile app (React Native/Expo) with an Express API backend. The app includes messaging, posts, stories, video, payments (Pesapal), AI chat, and more.
 
-## Run & Operate
+## Architecture
+- **`artifacts/mobile`** — Expo/React Native mobile app (runs on port 5000 in dev, scannable with Expo Go)
+- **`artifacts/api-server`** — Express API server (runs on port 3000)
+- **`lib/db`** — Drizzle ORM + Replit PostgreSQL (for app-level data)
+- **`lib/api-spec`, `lib/api-zod`, `lib/api-client-react`** — shared types and API client
+- **`supabase/`** — Supabase Edge Functions + migrations (auth, realtime, AI)
 
-```bash
-pnpm install          # install all workspace deps (run from workspace root)
-```
+## How to run
+- **Start Backend** workflow: starts the Express API server on port 3000
+- **Start application** workflow: starts Expo Metro bundler on port 5000 (scan QR in Expo Go or open web)
+- Both workflows run together via the **Project** workflow
 
-**Workflows (auto-started by Replit):**
-| Name | Port | Purpose |
-|------|------|---------|
-| Start application | 5000 | Expo web preview + Metro bundler |
-| Mockup Preview Server | 8000 | Canvas mockup previews |
+## Key services used
+- **Supabase** — auth, realtime subscriptions, storage (videos), edge functions (AI chat)
+- **Cloudflare R2** — media storage (avatars, posts, stories, chat media)
+- **Pesapal** — payments gateway (Africa-focused)
+- **Resend** — transactional email
+- **Replit PostgreSQL** — Drizzle ORM schema (DATABASE_URL auto-provisioned)
 
-**Required secrets (add via Replit Secrets):**
-- `SUPABASE_ACCESS_TOKEN` — deploy Edge Functions via CLI (`npx supabase functions deploy --project-ref rhnsjqqtdzlkvqazfcbg`)
-- `SUPABASE_SERVICE_ROLE_KEY` — needed by Edge Functions for admin operations (set in Supabase Dashboard → Project Settings → Edge Functions secrets, NOT Replit secrets)
-
-**Public env vars (already in `.replit`):**
-- `SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_URL`
-- `SUPABASE_ANON_KEY` / `EXPO_PUBLIC_SUPABASE_ANON_KEY`
-
-## Stack
-
-- **Mobile**: Expo 54 (React Native + Expo Router), Metro bundler, port 5000
-- **Backend**: Supabase Edge Functions (Deno) — all API logic lives here
-- **Auth**: Supabase Auth (anon key client-side, service-role key in Edge Functions)
-- **DB**: Supabase Postgres
-- **Storage**: Cloudflare R2 (S3-compatible), credentials from `app_settings` table
-- **Payments**: Pesapal — Google Pay, Card, MTN MoMo, Airtel Money via custom in-app checkout
-- **Email**: Resend API (credentials from `app_settings`)
-- **Realtime/Push**: Supabase Realtime channels + Expo Push Notifications
-
-## Where things live
-
-```
-artifacts/mobile/          Expo React Native app
-  app/                     Expo Router screens
-  lib/                     Client-side helpers, Supabase client
-  metro.config.js          Metro bundler config
-artifacts/mockup-sandbox/  Vite canvas mockup preview server (port 8000)
-supabase/functions/        All 19 Edge Functions (ai-chat, pesapal-*, uploads, videos, …)
-supabase/migrations/       SQL migrations
-```
-
-**Edge Functions (Supabase project: rhnsjqqtdzlkvqazfcbg):**
-account-purge, admin-broadcast-push, ai-chat, auth-resolve-identifier, chats-create, generate-ai-image, pesapal-initiate, pesapal-ipn, register-push-token, send-marketing-email, send-password-reset, send-push-notification, status, support, telegram-auth, transcribe-audio, uploads, videos
-
-## Architecture decisions
-
-- **Supabase is the ONLY backend** — no Express server, no Replit Auth/DB. All API logic in Supabase Edge Functions.
-- **R2 is the ONLY storage backend** — Cloudflare R2 (S3-compatible), credentials from Supabase `app_settings` table.
-- **Custom in-app checkout** — Pesapal handles all payment methods. No hosted redirects.
-- **R2 + Pesapal + Resend credentials are runtime-injected** — fetched from Supabase `app_settings` table inside Edge Functions, so Replit secrets stay minimal.
-- **`EXPO_NO_LAZY=1`** prevents Metro multipart streaming crashes through the Replit proxy tunnel.
-
-## Product
-
-Social chat app: profiles, posts/feed, group chats, voice messages, video, stories, shop/marketplace with ACoin escrow, push notifications, AI chat assistant, admin/support ticketing, in-app ACoin top-up via Google Pay / Card / MTN / Airtel.
-
-**Offline video cache (TikTok-style):** Videos are auto-cached to `afuchat_offline/` when watched. 24h TTL, auto-expired on app launch. Registry stored in AsyncStorage (`afu_offline_video_registry_v2`). Managed via Settings → Offline Videos.
+## Required secrets
+- `SUPABASE_SERVICE_ROLE_KEY` — enables admin features, video processing, email watcher
+- `RESEND_API_KEY` — transactional email notifications
+- `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY` — media uploads
+- `R2_BUCKET`, `R2_PUBLIC_BASE_URL` — R2 bucket name and public URL
+- `PESAPAL_CONSUMER_KEY`, `PESAPAL_CONSUMER_SECRET`, `PESAPAL_IPN_ID` — payments
 
 ## User preferences
-
-- Keep Supabase as the auth and primary database provider — do not migrate to Replit Auth or Neon.
-- R2 (Cloudflare) is the ONLY storage backend — do not add other storage providers.
-- Google Pay is the PRIMARY (first/most prominent) payment method in the checkout UI.
-- All payments stay in-app — no Pesapal hosted checkout redirects.
-
-## Gotchas
-
-- Run `pnpm install` from the **workspace root**, not from individual packages.
-- The Supabase URL is intentionally hard-coded in client constants (it's a public project identifier, not a secret).
-- `SUPABASE_SERVICE_ROLE_KEY` must be set in the **Supabase Dashboard** (Edge Function secrets), not Replit secrets — Edge Functions read it from their own secret store.
-- To redeploy Edge Functions after changes: `SUPABASE_ACCESS_TOKEN=$SUPABASE_ACCESS_TOKEN npx supabase functions deploy --project-ref rhnsjqqtdzlkvqazfcbg`
-- EAS APK builds: run from `artifacts/mobile/` with `EXPO_TOKEN` set. Latest build: v2.0.57, build ID b5d9d436.
+- Use pnpm for package management (enforced by preinstall hook)
+- API server must be built before starting (`pnpm run build` in `artifacts/api-server`)
+- The mobile app uses Expo Router (file-based routing under `artifacts/mobile/app/`)
+- Never expose Supabase service role key to the client/mobile app
