@@ -6,6 +6,7 @@ import {
   StyleSheet,
   GestureResponderEvent,
   LayoutChangeEvent,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Audio, AVPlaybackStatus } from "expo-av";
@@ -54,13 +55,15 @@ export default function AudioPlayer({ uri, tintColor = "#FFFFFF", waveColor }: A
 
     async function loadSound() {
       try {
-        await Audio.setAudioModeAsync({
-          playsInSilentModeIOS: true,
-          allowsRecordingIOS: false,
-          shouldDuckAndroid: false,
-          staysActiveInBackground: false,
-          playThroughEarpieceAndroid: false,
-        });
+        if (Platform.OS !== "web") {
+          await Audio.setAudioModeAsync({
+            playsInSilentModeIOS: true,
+            allowsRecordingIOS: false,
+            shouldDuckAndroid: false,
+            staysActiveInBackground: false,
+            playThroughEarpieceAndroid: false,
+          });
+        }
 
         const { sound, status: initialStatus } = await Audio.Sound.createAsync(
           { uri },

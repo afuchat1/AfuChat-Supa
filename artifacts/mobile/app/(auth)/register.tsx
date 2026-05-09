@@ -276,8 +276,29 @@ export default function RegisterScreen() {
     setOauthLoading("google");
     const result = await googleSignIn();
     if (!result.ok) {
+      if (result.cancelled) { setOauthLoading(null); return; }
+      if (result.error === "DEVELOPER_ERROR") {
+        // Native Google Sign-In isn't configured for this build (SHA-1 not
+        // registered). Fall back to the in-app WebView OAuth flow seamlessly.
+        const { data: oauthData, error: oauthErr } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: "https://afuchat.com/",
+            skipBrowserRedirect: true,
+            queryParams: { prompt: "select_account" },
+          },
+        });
+        if (oauthErr || !oauthData?.url) {
+          setOauthLoading(null);
+          showAlert("Sign-in Error", "Could not start Google sign-in. Please try again.");
+          return;
+        }
+        oauthHandledRef.current = false;
+        setOauthModalUrl(oauthData.url);
+        return;
+      }
       setOauthLoading(null);
-      if (!result.cancelled) showAlert("Error", result.error);
+      showAlert("Error", result.error);
       return;
     }
     const uid = result.userId;

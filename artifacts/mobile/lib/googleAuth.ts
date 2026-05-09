@@ -70,6 +70,15 @@ async function googleSignInNative(): Promise<GoogleSignInResult> {
       ) {
         return { ok: false, cancelled: true };
       }
+      // DEVELOPER_ERROR (code 10): SHA-1 not registered in Google Cloud Console.
+      // Signal the caller to fall back to in-app WebView OAuth.
+      if (err.code === 10 || err.code === "10") {
+        return { ok: false, cancelled: false, error: "DEVELOPER_ERROR" };
+      }
+    }
+    // Also catch DEVELOPER_ERROR from plain Error objects (some library versions)
+    if (err?.code === 10 || err?.code === "10") {
+      return { ok: false, cancelled: false, error: "DEVELOPER_ERROR" };
     }
     return {
       ok: false,

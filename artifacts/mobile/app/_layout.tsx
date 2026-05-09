@@ -105,6 +105,7 @@ function RootLayoutNav() {
       <Stack.Screen name="qr-scanner" options={{ headerShown: false, animation: "slide_from_bottom" }} />
       <Stack.Screen name="terms" options={bottomSheetAnim} />
       <Stack.Screen name="privacy" options={bottomSheetAnim} />
+      <Stack.Screen name="chat/[id]" options={{ animation: Platform.OS === "web" ? "none" : "slide_from_right" }} />
       <Stack.Screen name="video/[id]" options={{ headerShown: false, animation: "fade", contentStyle: { backgroundColor: "#000" } }} />
       <Stack.Screen name="company/create" options={bottomSheetAnim} />
       <Stack.Screen name="[handle]" options={{ animation: "fade" }} />
