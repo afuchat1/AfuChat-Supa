@@ -53,6 +53,7 @@ import { encodeId } from "@/lib/shortId";
 import { useVideoProgress } from "@/hooks/useVideoProgress";
 import SignInPromptModal from "@/components/ui/SignInPromptModal";
 import { TrendingSoundsSection } from "@/components/TrendingSoundsSection";
+import { SuggestedUsers } from "@/components/ui/SuggestedUsers";
 import { PostShareCaptureModal, type ShareablePost } from "@/components/ui/PostShareCard";
 import { DiscoverCommentsSheet } from "@/components/ui/DiscoverComments";
 
@@ -1762,7 +1763,12 @@ export default function DiscoverScreen() {
               tintColor={colors.accent}
             />
           }
-          ListHeaderComponent={feedTab === "for_you" ? <TrendingSoundsSection /> : null}
+          ListHeaderComponent={feedTab === "for_you" ? (
+            <View>
+              <TrendingSoundsSection />
+              {user && <SuggestedUsers />}
+            </View>
+          ) : null}
           ListFooterComponent={
             loadingMore ? (
               <View style={{ padding: 8, gap: 8 }}>

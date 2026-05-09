@@ -29,6 +29,7 @@ import { ChatRowSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { HomeBanner } from "@/components/ui/HomeBanner";
+import { SuggestedUsers } from "@/components/ui/SuggestedUsers";
 import { isOnline } from "@/lib/offlineStore";
 import { getLocalConversations, saveConversations, hasLocalConversations } from "@/lib/storage/localConversations";
 import { addOnlineListener } from "@/lib/offlineSync";
@@ -1203,6 +1204,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                 <>
                   <StoryUploadBanner colors={colors} />
                   <StoriesBar userId={user.id} colors={colors} isDesktop={isDesktop} />
+                  {chats.length < 8 && <SuggestedUsers compact maxCards={10} />}
                 </>
               ) : null}
               refreshControl={
