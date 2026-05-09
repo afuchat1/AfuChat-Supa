@@ -24,10 +24,8 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
-  withTiming,
 } from "react-native-reanimated";
 
-import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
@@ -44,13 +42,15 @@ const PILL_HEIGHT = 64;
 const PILL_RADIUS = 34;
 const PILL_H_MARGIN = 36;
 
-// Ordered list of visible tab routes — must match the Tabs.Screen order below
-const SWIPE_TAB_ROUTES = [
-  "/(tabs)",
-  "/(tabs)/discover",
-  "/(tabs)/apps",
-  "/(tabs)/me",
-];
+// Tab definitions — used by both FloatingTabBar and SwipeTabsWrapper
+const TABS = [
+  { route: "/(tabs)",          label: "AfuChat",  sfOn: "message.fill",        sfOff: "message",         mdOn: "chatbubble",  mdOff: "chatbubble-outline" },
+  { route: "/(tabs)/discover", label: "Discover", sfOn: "safari.fill",          sfOff: "safari",          mdOn: "compass",     mdOff: "compass-outline"    },
+  { route: "/(tabs)/apps",     label: "Apps",     sfOn: "square.grid.2x2.fill", sfOff: "square.grid.2x2", mdOn: "grid",        mdOff: "grid-outline"       },
+  { route: "/(tabs)/me",       label: "Me",       sfOn: "person.circle.fill",   sfOff: "person.circle",   mdOn: "person",      mdOff: "person-outline"     },
+] as const;
+
+const SWIPE_TAB_ROUTES = TABS.map((t) => t.route);
 
 function normalizeTabPath(p: string): string {
   if (p === "/" || p === "/(tabs)" || p === "/(tabs)/index") return "/(tabs)";
@@ -60,29 +60,50 @@ function normalizeTabPath(p: string): string {
   return p;
 }
 
-// Called on JS thread — navigate by tab index.
 function navigateToIdx(idx: number) {
   router.navigate(SWIPE_TAB_ROUTES[idx] as any);
 }
 
-// ─── Floating pill tab bar — rendered OUTSIDE the swipe animation ─────────────
+// ─── Floating pill tab bar ────────────────────────────────────────────────────
+// Rendered OUTSIDE SwipeTabsWrapper so it never moves during page swipes.
 function FloatingTabBar() {
-  const pathname = usePathname();
+  const pathname   = usePathname();
   const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-  const isIOS = Platform.OS === "ios";
-  const insets = useSafeAreaInsets();
+  const isDark     = colorScheme === "dark";
+  const isIOS      = Platform.OS === "ios";
+  const insets     = useSafeAreaInsets();
   const { colors } = useTheme();
 
   const bottomOffset = (insets.bottom > 0 ? insets.bottom : 14) + 6;
-  const active = normalizeTabPath(pathname);
+  const active       = normalizeTabPath(pathname);
 
-  const TABS = [
-    { route: "/(tabs)",          label: "AfuChat",  sfOn: "message.fill",         sfOff: "message",         mdOn: "chatbubble",       mdOff: "chatbubble-outline" },
-    { route: "/(tabs)/discover", label: "Discover", sfOn: "safari.fill",           sfOff: "safari",           mdOn: "compass",          mdOff: "compass-outline" },
-    { route: "/(tabs)/apps",     label: "Apps",     sfOn: "square.grid.2x2.fill",  sfOff: "square.grid.2x2",  mdOn: "grid",             mdOff: "grid-outline" },
-    { route: "/(tabs)/me",       label: "Me",       sfOn: "person.circle.fill",    sfOff: "person.circle",    mdOn: "person",           mdOff: "person-outline" },
-  ];
+  // ── Animated highlight pill ─────────────────────────────────────────────────
+  const TAB_WIDTH    = (SCREEN_WIDTH - PILL_H_MARGIN * 2) / TABS.length;
+  const PILL_W       = TAB_WIDTH * 0.78;
+  const PILL_H_INNER = PILL_HEIGHT - 20;  // 44px tall capsule
+
+  function pillLeft(idx: number) {
+    return idx * TAB_WIDTH + (TAB_WIDTH - PILL_W) / 2;
+  }
+
+  const activeIdx   = TABS.findIndex((t) => t.route === active);
+  const pillX       = useSharedValue(pillLeft(activeIdx === -1 ? 0 : activeIdx));
+
+  useEffect(() => {
+    const idx = TABS.findIndex((t) => t.route === active);
+    if (idx !== -1) {
+      pillX.value = withSpring(pillLeft(idx), {
+        damping: 24,
+        stiffness: 340,
+        mass: 0.75,
+        overshootClamping: false,
+      });
+    }
+  }, [active]);
+
+  const pillAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: pillX.value }],
+  }));
 
   return (
     <View
@@ -102,6 +123,7 @@ function FloatingTabBar() {
         elevation: 20,
       }}
     >
+      {/* Background */}
       {isIOS ? (
         <BlurView
           intensity={isDark ? 72 : 88}
@@ -117,10 +139,27 @@ function FloatingTabBar() {
         />
       )}
 
+      {/* Sliding highlight capsule */}
+      <Animated.View
+        style={[
+          {
+            position: "absolute",
+            top: (PILL_HEIGHT - PILL_H_INNER) / 2,
+            left: 0,
+            width: PILL_W,
+            height: PILL_H_INNER,
+            borderRadius: PILL_H_INNER / 2,
+            backgroundColor: colors.accent + "1E",
+          },
+          pillAnimStyle,
+        ]}
+      />
+
+      {/* Tab items */}
       <View style={{ flex: 1, flexDirection: "row" }}>
         {TABS.map((tab) => {
           const isFocused = active === tab.route;
-          const color = isFocused ? colors.accent : colors.tabIconDefault;
+          const color     = isFocused ? colors.accent : colors.tabIconDefault;
 
           return (
             <TouchableOpacity
@@ -136,26 +175,11 @@ function FloatingTabBar() {
                   resizeMode="contain"
                 />
               ) : isIOS ? (
-                <SymbolView
-                  name={isFocused ? tab.sfOn : tab.sfOff}
-                  tintColor={color}
-                  size={22}
-                />
+                <SymbolView name={isFocused ? tab.sfOn : tab.sfOff} tintColor={color} size={22} />
               ) : (
-                <Ionicons
-                  name={(isFocused ? tab.mdOn : tab.mdOff) as any}
-                  size={22}
-                  color={color}
-                />
+                <Ionicons name={(isFocused ? tab.mdOn : tab.mdOff) as any} size={22} color={color} />
               )}
-              <Text
-                style={{
-                  fontSize: 10,
-                  fontFamily: "Inter_500Medium",
-                  color,
-                  letterSpacing: 0.1,
-                }}
-              >
+              <Text style={{ fontSize: 10, fontFamily: "Inter_500Medium", color, letterSpacing: 0.1 }}>
                 {tab.label}
               </Text>
             </TouchableOpacity>
@@ -166,21 +190,15 @@ function FloatingTabBar() {
   );
 }
 
-// ─── Swipe wrapper — true pager feel ─────────────────────────────────────────
-function SwipeTabsWrapper({
-  children,
-  isLoggedIn,
-}: {
-  children: React.ReactNode;
-  isLoggedIn: boolean;
-}) {
+// ─── Swipe wrapper ────────────────────────────────────────────────────────────
+// Early-nav fires at 8% so destination content slides in almost immediately.
+// No opacity flash — the new screen is positioned at its entry edge and glides in.
+function SwipeTabsWrapper({ children, isLoggedIn }: { children: React.ReactNode; isLoggedIn: boolean }) {
   const pathname = usePathname();
 
   const translateX   = useSharedValue(0);
-  const opacity      = useSharedValue(1);
   const isLoggedInSV = useSharedValue(isLoggedIn);
   const tabIdxSV     = useSharedValue(SWIPE_TAB_ROUTES.indexOf(normalizeTabPath(pathname)));
-
   const earlyNavDone = useSharedValue(false);
   const earlyNavEdge = useSharedValue(0);
   const originalIdx  = useSharedValue(0);
@@ -192,7 +210,6 @@ function SwipeTabsWrapper({
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
-    opacity: opacity.value,
   }));
 
   const swipeGesture = useRef(
@@ -202,11 +219,9 @@ function SwipeTabsWrapper({
       .onBegin(() => {
         "worklet";
         cancelAnimation(translateX);
-        cancelAnimation(opacity);
         earlyNavDone.value = false;
         earlyNavEdge.value = 0;
         originalIdx.value  = tabIdxSV.value;
-        opacity.value      = 1;
       })
       .onUpdate((e) => {
         "worklet";
@@ -219,20 +234,21 @@ function SwipeTabsWrapper({
           return;
         }
 
+        // ── Early navigation at just 8% — content appears almost immediately ──
         if (!earlyNavDone.value) {
-          const EARLY    = SCREEN_WIDTH * 0.20;
+          const EARLY    = SCREEN_WIDTH * 0.08;
           const canGoNext = e.translationX < -EARLY && !atEnd;
           const canGoPrev = e.translationX > +EARLY && !atStart;
 
           if (canGoNext || canGoPrev) {
             earlyNavDone.value = true;
             const newIdx = canGoNext ? idx + 1 : idx - 1;
+            // Position the new screen at its natural entry edge — no flash needed
             const edge = canGoNext ? SCREEN_WIDTH : -SCREEN_WIDTH;
             earlyNavEdge.value = edge;
             runOnJS(navigateToIdx)(newIdx);
-            opacity.value = 0;
+            // Place new content at entry edge + current finger offset immediately
             translateX.value = edge + e.translationX;
-            opacity.value = withTiming(1, { duration: 60 });
             return;
           }
         }
@@ -242,6 +258,7 @@ function SwipeTabsWrapper({
           return;
         }
 
+        // Rubber-band at first / last tab
         if ((atStart && e.translationX > 0) || (atEnd && e.translationX < 0)) {
           translateX.value = e.translationX * 0.15;
         } else {
@@ -250,39 +267,23 @@ function SwipeTabsWrapper({
       })
       .onEnd((e) => {
         "worklet";
-        opacity.value = 1;
 
         if (!isLoggedInSV.value || !earlyNavDone.value) {
-          translateX.value = withSpring(0, {
-            velocity: e.velocityX,
-            damping: 22,
-            stiffness: 280,
-            mass: 0.8,
-          });
+          translateX.value = withSpring(0, { velocity: e.velocityX, damping: 22, stiffness: 280, mass: 0.8 });
           return;
         }
 
         const isFling  = Math.abs(e.velocityX) > 300;
-        const isFar    = Math.abs(e.translationX) > SCREEN_WIDTH * 0.32;
-        const dirMatch = earlyNavEdge.value > 0
-          ? e.translationX < 0
-          : e.translationX > 0;
+        const isFar    = Math.abs(e.translationX) > SCREEN_WIDTH * 0.28;
+        const dirMatch = earlyNavEdge.value > 0 ? e.translationX < 0 : e.translationX > 0;
 
         if ((isFling || isFar) && dirMatch) {
-          translateX.value = withSpring(0, {
-            damping: 26,
-            stiffness: 320,
-            mass: 0.85,
-            overshootClamping: true,
-          });
+          // Committed — spring to centre
+          translateX.value = withSpring(0, { damping: 26, stiffness: 320, mass: 0.85, overshootClamping: true });
         } else {
+          // Cancelled — navigate back, bounce off entry edge
           runOnJS(navigateToIdx)(originalIdx.value);
-          translateX.value = withSpring(earlyNavEdge.value, {
-            velocity: e.velocityX,
-            damping: 22,
-            stiffness: 280,
-            mass: 0.8,
-          }, () => {
+          translateX.value = withSpring(earlyNavEdge.value, { velocity: e.velocityX, damping: 22, stiffness: 280, mass: 0.8 }, () => {
             translateX.value = 0;
           });
         }
@@ -302,48 +303,27 @@ function SwipeTabsWrapper({
   );
 }
 
+// ─── Native tab layout (iOS Liquid Glass only) ────────────────────────────────
 function NativeTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   return (
     <NativeTabs>
-      {isLoggedIn && (
-        <NativeTabs.Trigger name="index">
-          <Icon sf={{ default: "message.fill", selected: "message.fill" }} />
-          <Label>AfuChat</Label>
-        </NativeTabs.Trigger>
-      )}
-      {isLoggedIn && (
-        <NativeTabs.Trigger name="discover">
-          <Icon sf={{ default: "safari", selected: "safari.fill" }} />
-          <Label>Discover</Label>
-        </NativeTabs.Trigger>
-      )}
-      {isLoggedIn && (
-        <NativeTabs.Trigger name="apps">
-          <Icon sf={{ default: "square.grid.2x2", selected: "square.grid.2x2.fill" }} />
-          <Label>Apps</Label>
-        </NativeTabs.Trigger>
-      )}
-      {isLoggedIn && (
-        <NativeTabs.Trigger name="me">
-          <Icon sf={{ default: "person.circle", selected: "person.circle.fill" }} />
-          <Label>Me</Label>
-        </NativeTabs.Trigger>
-      )}
+      {isLoggedIn && (<NativeTabs.Trigger name="index"><Icon sf={{ default: "message.fill", selected: "message.fill" }} /><Label>AfuChat</Label></NativeTabs.Trigger>)}
+      {isLoggedIn && (<NativeTabs.Trigger name="discover"><Icon sf={{ default: "safari", selected: "safari.fill" }} /><Label>Discover</Label></NativeTabs.Trigger>)}
+      {isLoggedIn && (<NativeTabs.Trigger name="apps"><Icon sf={{ default: "square.grid.2x2", selected: "square.grid.2x2.fill" }} /><Label>Apps</Label></NativeTabs.Trigger>)}
+      {isLoggedIn && (<NativeTabs.Trigger name="me"><Icon sf={{ default: "person.circle", selected: "person.circle.fill" }} /><Label>Me</Label></NativeTabs.Trigger>)}
     </NativeTabs>
   );
 }
 
-// Screen-only layout — tab bar is rendered separately outside the swipe layer
+// ─── Classic tab layout — built-in tab bar hidden; FloatingTabBar used instead ─
 function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   const { colors } = useTheme();
-
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         lazy: false,
         ...(({ contentStyle: { backgroundColor: colors.background } }) as any),
-        // Hide the built-in tab bar entirely — FloatingTabBar handles it
         tabBarStyle: { display: "none" },
       }}
     >
@@ -358,19 +338,18 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   );
 }
 
+// ─── Root layout ──────────────────────────────────────────────────────────────
 export default function TabLayout() {
   const { session, profile, loading } = useAuth();
   const { isDesktop } = useIsDesktop();
-  const isLoggedIn = !!session;
+  const isLoggedIn     = !!session;
   const prevSessionRef = useRef<Session | null>(null);
 
   useEffect(() => {
     if (loading) return;
     const hadSession = prevSessionRef.current !== null;
     const hasSession = session !== null;
-    if (hadSession && !hasSession) {
-      router.replace("/discover");
-    }
+    if (hadSession && !hasSession) router.replace("/discover");
     prevSessionRef.current = session;
   }, [session, loading]);
 
