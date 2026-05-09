@@ -77,12 +77,12 @@ function FloatingTabBar() {
   const bottomOffset = (insets.bottom > 0 ? insets.bottom : 14) + 6;
   const active       = normalizeTabPath(pathname);
 
-  // ── Animated highlight — rounded rectangle containing icon + label ──────────
+  // ── Animated highlight — squircle-style continuous-curve rounded rect ───────
   const TAB_WIDTH     = (SCREEN_WIDTH - PILL_H_MARGIN * 2) / TABS.length;
-  const H_PADDING     = 6;   // space on each side of the highlight within the tab slot
+  const H_PADDING     = 4;   // space on each side of the highlight within the tab slot
   const HIGHLIGHT_W   = TAB_WIDTH - H_PADDING * 2;
-  const HIGHLIGHT_H   = PILL_HEIGHT - 16;  // 48px — tall enough to enclose icon + label
-  const HIGHLIGHT_R   = 14;                // rounded rectangle, not a capsule
+  const HIGHLIGHT_H   = PILL_HEIGHT - 14;  // 50px — tall enough to enclose icon + label
+  const HIGHLIGHT_R   = 20;               // squircle-style: ~40% of height for continuous curve feel
 
   function pillLeft(idx: number) {
     return idx * TAB_WIDTH + H_PADDING;
@@ -244,67 +244,64 @@ function SwipeTabsWrapper({ children, isLoggedIn }: { children: React.ReactNode;
       })
       .onUpdate((e) => {
         "worklet";
-        const idx     = tabIdxSV.value;
-        const atStart = idx === 0;
-        const atEnd   = idx === SWIPE_TAB_ROUTES.length - 1;
 
         if (!isLoggedInSV.value) {
           translateX.value = e.translationX * 0.08;
           return;
         }
 
-        // ── Early navigation at just 8% — content appears almost immediately ──
-        if (!earlyNavDone.value) {
-          const EARLY    = SCREEN_WIDTH * 0.08;
-          const canGoNext = e.translationX < -EARLY && !atEnd;
-          const canGoPrev = e.translationX > +EARLY && !atStart;
-
-          if (canGoNext || canGoPrev) {
-            earlyNavDone.value = true;
-            const newIdx = canGoNext ? idx + 1 : idx - 1;
-            // Position the new screen at its natural entry edge — no flash needed
-            const edge = canGoNext ? SCREEN_WIDTH : -SCREEN_WIDTH;
-            earlyNavEdge.value = edge;
-            runOnJS(navigateToIdx)(newIdx);
-            // Place new content at entry edge + current finger offset immediately
-            translateX.value = edge + e.translationX;
-            return;
-          }
-        }
-
+        // After early nav we keep tracking the finger without jumping —
+        // the new screen is already mounted (lazy:false) at translateX, so it
+        // slides in seamlessly with no blank-flash.
         if (earlyNavDone.value) {
-          translateX.value = earlyNavEdge.value + e.translationX;
+          translateX.value = e.translationX;
           return;
         }
+
+        const idx     = tabIdxSV.value;
+        const atStart = idx === 0;
+        const atEnd   = idx === SWIPE_TAB_ROUTES.length - 1;
 
         // Rubber-band at first / last tab
         if ((atStart && e.translationX > 0) || (atEnd && e.translationX < 0)) {
           translateX.value = e.translationX * 0.15;
-        } else {
-          translateX.value = e.translationX;
+          return;
+        }
+
+        translateX.value = e.translationX;
+
+        // ── Early navigation at 8% — fire-and-forget, no position jump ────────
+        const EARLY     = SCREEN_WIDTH * 0.08;
+        const canGoNext = e.translationX < -EARLY && !atEnd;
+        const canGoPrev = e.translationX > +EARLY && !atStart;
+
+        if (canGoNext || canGoPrev) {
+          earlyNavDone.value  = true;
+          earlyNavEdge.value  = canGoNext ? 1 : -1;   // +1 = went next, -1 = went prev
+          runOnJS(navigateToIdx)(canGoNext ? idx + 1 : idx - 1);
         }
       })
       .onEnd((e) => {
         "worklet";
 
         if (!isLoggedInSV.value || !earlyNavDone.value) {
+          // No nav happened — bounce back
           translateX.value = withSpring(0, { velocity: e.velocityX, damping: 22, stiffness: 280, mass: 0.8 });
           return;
         }
 
         const isFling  = Math.abs(e.velocityX) > 300;
         const isFar    = Math.abs(e.translationX) > SCREEN_WIDTH * 0.28;
+        // dirMatch: finger is still moving in the direction the nav went
         const dirMatch = earlyNavEdge.value > 0 ? e.translationX < 0 : e.translationX > 0;
 
         if ((isFling || isFar) && dirMatch) {
-          // Committed — spring to centre
-          translateX.value = withSpring(0, { damping: 26, stiffness: 320, mass: 0.85, overshootClamping: true });
+          // Committed — new content is already on-screen, spring it to centre
+          translateX.value = withSpring(0, { velocity: e.velocityX, damping: 26, stiffness: 320, mass: 0.85, overshootClamping: true });
         } else {
-          // Cancelled — navigate back, bounce off entry edge
+          // Cancelled — go back and spring to rest (0)
           runOnJS(navigateToIdx)(originalIdx.value);
-          translateX.value = withSpring(earlyNavEdge.value, { velocity: e.velocityX, damping: 22, stiffness: 280, mass: 0.8 }, () => {
-            translateX.value = 0;
-          });
+          translateX.value = withSpring(0, { velocity: e.velocityX, damping: 22, stiffness: 280, mass: 0.8 });
         }
       })
   ).current;
