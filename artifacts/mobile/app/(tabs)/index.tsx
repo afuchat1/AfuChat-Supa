@@ -34,6 +34,7 @@ import { getLocalConversations, saveConversations, hasLocalConversations } from 
 import { addOnlineListener } from "@/lib/offlineSync";
 import { wasChatRecentlyVisited, clearChatVisited } from "@/lib/chatVisited";
 import { showAlert, confirmAlert } from "@/lib/alert";
+import { useChatPreferences } from "@/context/ChatPreferencesContext";
 import {
   getStoryUploadState,
   subscribeStoryUpload,
@@ -75,6 +76,43 @@ type ChatItem = {
   other_show_online: boolean;
 };
 
+function TypingDots({ color }: { color: string }) {
+  const dots = [useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current];
+
+  useEffect(() => {
+    const animations = dots.map((dot, i) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(i * 150),
+          Animated.timing(dot, { toValue: -4, duration: 280, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0,  duration: 280, useNativeDriver: true }),
+          Animated.delay(300),
+        ])
+      )
+    );
+    animations.forEach((a) => a.start());
+    return () => animations.forEach((a) => a.stop());
+  }, []);
+
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 3, paddingVertical: 2 }}>
+      {dots.map((dot, i) => (
+        <Animated.View
+          key={i}
+          style={{
+            width: 5,
+            height: 5,
+            borderRadius: 2.5,
+            backgroundColor: color,
+            opacity: 0.75,
+            transform: [{ translateY: dot }],
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
 function formatTime(iso: string): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -97,6 +135,7 @@ function ChatRow({
   onPress,
   onAction,
   isActive,
+  isTyping,
 }: {
   item: ChatItem;
   onPress: () => void;
@@ -105,6 +144,7 @@ function ChatRow({
     item: ChatItem,
   ) => void;
   isActive?: boolean;
+  isTyping?: boolean;
 }) {
   const { colors } = useTheme();
   // Lazy import to avoid touching native paths.
@@ -209,12 +249,21 @@ function ChatRow({
           </View>
         </View>
         <View style={styles.rowBottom}>
+          {isTyping ? (
+            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Text style={[styles.preview, { color: colors.accent, fontFamily: "Inter_500Medium" }]}>
+                typing
+              </Text>
+              <TypingDots color={colors.accent} />
+            </View>
+          ) : (
           <Text
             style={[styles.preview, { color: hasUnread ? colors.text : colors.textSecondary, fontFamily: hasUnread ? "Inter_500Medium" : "Inter_400Regular", flex: 1 }]}
             numberOfLines={1}
           >
             {item.last_message || "No messages yet"}
           </Text>
+          )}
           {hasUnread && (
             <Animated.View style={[styles.unreadBadge, { backgroundColor: colors.accent, transform: [{ scale: pulse }] }]}>
               <Text style={styles.unreadBadgeText}>
@@ -462,6 +511,9 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [tabFilter, setTabFilter] = useState<ChatTabKey>("all");
+  const [typingChatIds, setTypingChatIds] = useState<Record<string, boolean>>({});
+  const typingTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const { prefs: chatPrefs } = useChatPreferences();
 
   const fetchUnreadCount = useCallback(async () => {
     if (!user) return;
@@ -820,6 +872,37 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
     };
   }, [user, chatIdsKey, loadChats]);
 
+  useEffect(() => {
+    if (!user || !chatIdsKey || !chatPrefs.typing_indicators) return;
+    const chatIds = chatIdsKey.split(",");
+    const channels = chatIds.map((chatId) => {
+      const ch = supabase.channel(`typing:${chatId}`, { config: { broadcast: { self: false } } });
+      ch.on("broadcast", { event: "typing" }, (payload) => {
+        const { user_id: uid, is_typing } = (payload.payload || {}) as any;
+        if (!uid || uid === user.id) return;
+        if (is_typing) {
+          if (typingTimersRef.current[chatId]) clearTimeout(typingTimersRef.current[chatId]);
+          setTypingChatIds((prev) => ({ ...prev, [chatId]: true }));
+          typingTimersRef.current[chatId] = setTimeout(() => {
+            setTypingChatIds((prev) => { const next = { ...prev }; delete next[chatId]; return next; });
+          }, 6000);
+        } else {
+          if (typingTimersRef.current[chatId]) { clearTimeout(typingTimersRef.current[chatId]); delete typingTimersRef.current[chatId]; }
+          setTypingChatIds((prev) => { const next = { ...prev }; delete next[chatId]; return next; });
+        }
+      });
+      ch.subscribe();
+      return ch;
+    });
+
+    return () => {
+      channels.forEach((ch) => supabase.removeChannel(ch));
+      Object.values(typingTimersRef.current).forEach((t) => clearTimeout(t));
+      typingTimersRef.current = {};
+      setTypingChatIds({});
+    };
+  }, [user, chatIdsKey, chatPrefs.typing_indicators]);
+
   const tabFiltered = chats.filter((c) => {
     if (tabFilter === "unread") return c.unread_count > 0;
     if (tabFilter === "personal") return !c.is_group && !c.is_channel;
@@ -1076,6 +1159,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                 <ChatRow
                   item={item}
                   isActive={panelMode && item.id === activeChatId}
+                  isTyping={chatPrefs.typing_indicators && !!typingChatIds[item.id]}
                   onPress={() => {
                     Haptics.selectionAsync();
                     router.push({
