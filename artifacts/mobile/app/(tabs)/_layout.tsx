@@ -29,6 +29,7 @@ import Animated, {
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
+import { TabSwipeContext, TabSwipeProvider } from "@/context/TabSwipeContext";
 
 let isLiquidGlassAvailable: () => boolean = () => false;
 try {
@@ -214,6 +215,7 @@ function FloatingTabBar() {
 // No opacity flash — the new screen is positioned at its entry edge and glides in.
 function SwipeTabsWrapper({ children, isLoggedIn }: { children: React.ReactNode; isLoggedIn: boolean }) {
   const pathname = usePathname();
+  const { horizontalScrollActive } = React.useContext(TabSwipeContext);
 
   const translateX   = useSharedValue(0);
   const isLoggedInSV = useSharedValue(isLoggedIn);
@@ -244,6 +246,17 @@ function SwipeTabsWrapper({ children, isLoggedIn }: { children: React.ReactNode;
       })
       .onUpdate((e) => {
         "worklet";
+
+        // Non-tab screen (search, contacts, etc.) — completely block swipe
+        if (tabIdxSV.value === -1) {
+          translateX.value = 0;
+          return;
+        }
+
+        // A child horizontal scroll is currently active — don't intercept
+        if (horizontalScrollActive.value) {
+          return;
+        }
 
         if (!isLoggedInSV.value) {
           translateX.value = e.translationX * 0.08;
@@ -283,6 +296,12 @@ function SwipeTabsWrapper({ children, isLoggedIn }: { children: React.ReactNode;
       })
       .onEnd((e) => {
         "worklet";
+
+        // Non-tab screen — always spring back to zero
+        if (tabIdxSV.value === -1) {
+          translateX.value = withSpring(0, { velocity: 0, damping: 22, stiffness: 280, mass: 0.8 });
+          return;
+        }
 
         if (!isLoggedInSV.value || !earlyNavDone.value) {
           // No nav happened — bounce back
@@ -378,20 +397,24 @@ export default function TabLayout() {
 
   if (isLiquidGlassAvailable()) {
     return (
-      <SwipeTabsWrapper isLoggedIn={isLoggedIn}>
-        <NativeTabLayout isLoggedIn={isLoggedIn} />
-      </SwipeTabsWrapper>
+      <TabSwipeProvider>
+        <SwipeTabsWrapper isLoggedIn={isLoggedIn}>
+          <NativeTabLayout isLoggedIn={isLoggedIn} />
+        </SwipeTabsWrapper>
+      </TabSwipeProvider>
     );
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      <SwipeTabsWrapper isLoggedIn={isLoggedIn}>
-        <ClassicTabLayout isLoggedIn={isLoggedIn} />
-      </SwipeTabsWrapper>
-      {isLoggedIn && !isDesktop && Platform.OS !== "web" && (
-        <FloatingTabBar />
-      )}
-    </View>
+    <TabSwipeProvider>
+      <View style={{ flex: 1 }}>
+        <SwipeTabsWrapper isLoggedIn={isLoggedIn}>
+          <ClassicTabLayout isLoggedIn={isLoggedIn} />
+        </SwipeTabsWrapper>
+        {isLoggedIn && !isDesktop && Platform.OS !== "web" && (
+          <FloatingTabBar />
+        )}
+      </View>
+    </TabSwipeProvider>
   );
 }

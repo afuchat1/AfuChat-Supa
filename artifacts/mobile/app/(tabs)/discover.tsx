@@ -18,6 +18,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { ScrollView as GHScrollView } from "react-native-gesture-handler";
+import { TabSwipeContext } from "@/context/TabSwipeContext";
 import { Image as ExpoImage } from "expo-image";
 import { showAlert } from "@/lib/alert";
 import { useSafeAreaInsets, useSafeAreaInsets as useCardInsets } from "react-native-safe-area-context";
@@ -224,6 +225,7 @@ function BookmarkButton({ bookmarked, onPress }: { bookmarked: boolean; onPress:
 }
 
 const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBookmark, onToggleFollow, onImagePress, onRequireAuth, colWidth, onOpenComments }: { item: PostItem; onToggleLike: (postId: string) => void; onToggleBookmark: (postId: string) => void; onToggleFollow: (authorId: string) => void; onImagePress?: (images: string[], index: number) => void; onRequireAuth?: () => void; colWidth?: number; onOpenComments: (postId: string, authorId: string) => void }) {
+  const { horizontalScrollActive } = React.useContext(TabSwipeContext);
   const { colors } = useTheme();
   const { preferredLang } = useLanguage();
   const { width: screenW } = useWindowDimensions();
@@ -497,6 +499,9 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
                   showsHorizontalScrollIndicator={false}
                   style={{ marginTop: 6 }}
                   contentContainerStyle={{ gap: 6, paddingHorizontal: 16 }}
+                  onScrollBeginDrag={() => { horizontalScrollActive.value = true; }}
+                  onScrollEndDrag={() => { horizontalScrollActive.value = false; }}
+                  onMomentumScrollEnd={() => { horizontalScrollActive.value = false; }}
                 >
                   {allImages.slice(1).map((uri, i) => (
                     <TouchableOpacity
@@ -618,6 +623,7 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
 
 export default function DiscoverScreen() {
   "use no memo";
+  const { horizontalScrollActive } = React.useContext(TabSwipeContext);
   const { colors } = useTheme();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
@@ -1624,6 +1630,9 @@ export default function DiscoverScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterChipsRow}
           style={{ marginTop: 2, marginBottom: 4 }}
+          onScrollBeginDrag={() => { horizontalScrollActive.value = true; }}
+          onScrollEndDrag={() => { horizontalScrollActive.value = false; }}
+          onMomentumScrollEnd={() => { horizontalScrollActive.value = false; }}
         >
           {([
             { key: "all",     label: "All",      icon: "apps-outline" },
