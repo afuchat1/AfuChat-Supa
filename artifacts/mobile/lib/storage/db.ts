@@ -239,4 +239,11 @@ async function runMigrations(db: DB) {
     await safeAdd("ALTER TABLE media_cache ADD COLUMN file_name TEXT");
     await db.runAsync("UPDATE schema_version SET version = 4");
   }
+
+  // ── v5: Track which attachments have been mirrored to device storage ───────
+  if (currentVersion < 5) {
+    const safeAdd = async (sql: string) => { try { await db.execAsync(sql); } catch {} };
+    await safeAdd("ALTER TABLE media_cache ADD COLUMN saved_to_device INTEGER NOT NULL DEFAULT 0");
+    await db.runAsync("UPDATE schema_version SET version = 5");
+  }
 }

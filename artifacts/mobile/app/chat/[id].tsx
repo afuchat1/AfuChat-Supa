@@ -50,7 +50,7 @@ import {
 } from "@/lib/offlineStore";
 import { getLocalMessages, saveMessages, savePendingMessage, getNewestMessageDate } from "@/lib/storage/localMessages";
 import { clearUnread, getLocalConversation } from "@/lib/storage/localConversations";
-import { getLocalAttachmentUri, ensureChatAttachmentDownloaded, autoDownloadChatAttachments, openChatFile } from "@/lib/storage/chatAttachmentCache";
+import { getLocalAttachmentUri, ensureChatAttachmentDownloaded, autoDownloadChatAttachments, openChatFile, saveAttachmentToGallery } from "@/lib/storage/chatAttachmentCache";
 import { uploadChatMedia } from "@/lib/mediaUpload";
 import { syncPendingMessages } from "@/lib/offlineSync";
 import OfflineBanner from "@/components/ui/OfflineBanner";
@@ -2380,6 +2380,28 @@ STRICT RULES:
     ]);
   }
 
+  async function handleSaveToPhone(msg: Message) {
+    setShowReactions(null);
+    setAiResult(null);
+    setAiResultType(null);
+    setAiReplies([]);
+    const url  = msg.attachment_url;
+    const type = msg.attachment_type;
+    if (!url || !type) return;
+    if (type === "file") {
+      // Documents: open share sheet so the user can save to Files / Drive
+      const local = getLocalAttachmentUri(url) ?? await ensureChatAttachmentDownloaded(url, type);
+      if (local) openChatFile(local);
+      return;
+    }
+    const saved = await saveAttachmentToGallery(url);
+    if (saved) {
+      showAlert("Saved", "File saved to your device gallery (AfuChat album).");
+    } else {
+      showAlert("Permission needed", "Please allow media access in your device settings so AfuChat can save files.");
+    }
+  }
+
   function startEditMessage(msg: Message) {
     setShowReactions(null);
     setAiResult(null);
@@ -4026,6 +4048,15 @@ STRICT RULES:
               <Ionicons name="arrow-redo" size={20} color={colors.text} />
               <Text style={[st.reactModalActionText, { color: colors.text }]}>Forward</Text>
             </TouchableOpacity>
+            {showReactions && showReactions.attachment_url && showReactions.attachment_type !== "video" && Platform.OS !== "web" && (
+              <TouchableOpacity
+                style={st.reactModalAction}
+                onPress={() => { if (showReactions) handleSaveToPhone(showReactions); }}
+              >
+                <Ionicons name="download-outline" size={20} color={colors.text} />
+                <Text style={[st.reactModalActionText, { color: colors.text }]}>Save to Phone</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={st.reactModalAction}
               onPress={() => { if (showReactions) openTranslatePicker(showReactions); }}

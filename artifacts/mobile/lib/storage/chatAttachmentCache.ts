@@ -3,11 +3,14 @@
 // documentDirectory and kept permanently — the same model as WhatsApp / Telegram.
 //
 // RULES:
-//   • Files go to documentDirectory (permanent), never cacheDirectory (volatile)
+//   • Files go to documentDirectory (permanent user data), never cacheDirectory
+//   • Downloaded images/gifs/audio are also mirrored to the device media library
+//     (silently, if permissions are already granted) so they appear in the Gallery
 //   • If a file is already on disk → return it instantly, no network call
 //   • If the file was deleted from the device → re-download transparently
 //   • Video attachments are NOT auto-downloaded (too large) — they stream from URL
 //   • openChatFile() opens the local copy with the device's native file viewer
+//   • saveAttachmentToGallery(url) saves to the device gallery from user interaction
 //
 // All metadata (url → local path) is stored in the existing `media_cache` SQLite
 // table using media_type values: chat_image, chat_gif, chat_audio, chat_file.
@@ -99,6 +102,58 @@ export async function openChatFile(localPath: string): Promise<void> {
   } catch {}
 }
 
+/**
+ * Save a received chat attachment to the device's media gallery.
+ * Requests MediaLibrary permissions if not yet granted.
+ * Call this from user interaction (long-press → Save to Phone).
+ * Returns true if saved successfully, false otherwise.
+ */
+export async function saveAttachmentToGallery(url: string): Promise<boolean> {
+  if (Platform.OS === "web") return false;
+  try {
+    const ML = await import("expo-media-library");
+
+    // Resolve local path from memory or SQLite
+    let localPath: string | null = _mem.get(url) ?? null;
+    if (!localPath) {
+      const hash = _urlHash(url);
+      const db = await getDB();
+      const row = await db.getFirstAsync<{ local_path: string }>(
+        "SELECT local_path FROM media_cache WHERE url_hash = ?",
+        [hash],
+      );
+      if (row) localPath = row.local_path;
+    }
+    if (!localPath) return false;
+
+    // Request permissions — this CAN show a dialog, called from user action
+    const { status } = await ML.requestPermissionsAsync();
+    if (status !== "granted") return false;
+
+    const asset = await ML.createAssetAsync(localPath);
+    try {
+      const album = await ML.getAlbumAsync("AfuChat");
+      if (album) {
+        await ML.addAssetsToAlbumAsync([asset], album, false);
+      } else {
+        await ML.createAlbumAsync("AfuChat", asset, false);
+      }
+    } catch {}
+
+    // Mark saved in SQLite
+    const hash = _urlHash(url);
+    const db = await getDB();
+    await db.runAsync(
+      "UPDATE media_cache SET saved_to_device = 1 WHERE url_hash = ?",
+      [hash],
+    );
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ─── Internal ──────────────────────────────────────────────────────────────
 
 function _urlHash(url: string): string {
@@ -149,9 +204,47 @@ async function _registerDB(
     const db = await getDB();
     await db.runAsync(
       `INSERT OR REPLACE INTO media_cache
-       (url_hash, url, local_path, media_type, file_size, stored_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+       (url_hash, url, local_path, media_type, file_size, stored_at, saved_to_device)
+       VALUES (?, ?, ?, ?, ?, ?, 0)`,
       [hash, url, localPath, `chat_${type}`, fileSize, Date.now()],
+    );
+  } catch {}
+}
+
+/**
+ * Silently mirror an attachment to the device media library after download.
+ * Only runs if MediaLibrary permissions are ALREADY granted — no popup here.
+ * Handles image, gif, audio, and story_reply types.
+ */
+async function _saveToDeviceLibrary(
+  localPath: string,
+  type: string,
+  urlHash: string,
+): Promise<void> {
+  if (Platform.OS === "web") return;
+  if (!["image", "gif", "audio", "story_reply"].includes(type)) return;
+  try {
+    const ML = await import("expo-media-library");
+
+    // Check permission WITHOUT requesting — no dialog during background download
+    const { status } = await ML.getPermissionsAsync();
+    if (status !== "granted") return;
+
+    const asset = await ML.createAssetAsync(localPath);
+    try {
+      const album = await ML.getAlbumAsync("AfuChat");
+      if (album) {
+        await ML.addAssetsToAlbumAsync([asset], album, false);
+      } else {
+        await ML.createAlbumAsync("AfuChat", asset, false);
+      }
+    } catch {}
+
+    // Mark saved in SQLite
+    const db = await getDB();
+    await db.runAsync(
+      "UPDATE media_cache SET saved_to_device = 1 WHERE url_hash = ?",
+      [urlHash],
     );
   } catch {}
 }
@@ -185,16 +278,20 @@ async function _download(url: string, type: string): Promise<string | null> {
     if (existing.exists && (existing as any).size > 0) {
       _mem.set(url, localPath);
       await _registerDB(url, hash, localPath, type, (existing as any).size);
+      // Mirror to device library if permissions allow (fire-and-forget)
+      _saveToDeviceLibrary(localPath, type, hash).catch(() => {});
       return localPath;
     }
 
-    // 3. First time — download permanently
+    // 3. First time — download permanently to documentDirectory (user data)
     const result = await FileSystem.downloadAsync(url, localPath);
     const verify = await FileSystem.getInfoAsync(result.uri);
     if (!verify.exists || (verify as any).size === 0) return null;
 
     _mem.set(url, result.uri);
     await _registerDB(url, hash, result.uri, type, (verify as any).size);
+    // Mirror to device media library — silent, no popup (background behaviour)
+    _saveToDeviceLibrary(result.uri, type, hash).catch(() => {});
     return result.uri;
   } catch {
     return null;
