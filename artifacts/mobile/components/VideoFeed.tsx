@@ -1,23 +1,31 @@
 /**
- * VideoFeed — TikTok-style vertical paging feed rebuilt for React Native smoothness.
+ * VideoFeed — TikTok-style vertical paging feed, rebuilt from scratch.
  *
- * Scroll architecture (why it's smooth):
- *  1. pagingEnabled FlatList — reliable native snap, zero JS involvement in scroll.
- *  2. GestureDetector (RNGH) for tap/double-tap — runs on the UI thread via JSI,
- *     never races with FlatList's scroll gesture recognizer.
- *  3. viewabilityConfig with NO minimumViewTime — activeIndex updates the instant
- *     a new item crosses 50% visibility. Video plays the moment you land.
- *  4. React.memo + custom equality on VideoItem — only the 2-3 items around the
- *     scroll target re-render per swipe; all others are frozen.
- *  5. expo-image for thumbnails — disk-cached, eliminates the black flash between
- *     swipes when a video hasn't started yet.
- *  6. cacheVideo preloading — next/prev videos download in the background so they
- *     start playing immediately without a buffering spinner.
- *  7. windowSize=3, removeClippedSubviews=false — ±1 items stay mounted and warm.
- *     removeClippedSubviews=true with pagingEnabled causes blank screens on Android.
- *  8. Buffering indicator delayed 400 ms — fast transitions never show a spinner.
- *  9. Progress bar throttled to ≤4 fps — smooth without taxing the JS thread.
+ * Smoothness decisions:
+ *  1. snapToInterval + disableIntervalMomentum — more reliable snap than
+ *     pagingEnabled, especially on Android where pagingEnabled can produce
+ *     erratic deceleration on fast flings.
+ *  2. decelerationRate="fast" — snaps quickly, feels native.
+ *  3. Reanimated 4 (useSharedValue + useAnimatedStyle) for ALL animations —
+ *     heart burst, like scale, and progress bar run on the UI thread without
+ *     touching the JS event loop.
+ *  4. GestureDetector (RNGH) for exclusive double-tap / single-tap — UI-
+ *     thread gesture recogniser, never races with the scroll gesture.
+ *  5. React.memo + deep custom equality — only the 3 items around the active
+ *     index ever re-render on a swipe; everything else is frozen.
+ *  6. viewabilityConfig with NO minimumViewTime — activeIndex updates the
+ *     instant the item crosses 50 % visibility, so video plays immediately.
+ *  7. windowSize=3, removeClippedSubviews=false — keeps ±1 items mounted.
+ *     removeClippedSubviews=true + snapToInterval causes blank frames on
+ *     Android when scrolling back.
+ *  8. expo-image thumbnails — disk-cached, eliminates the black-frame flash
+ *     before video starts.
+ *  9. cacheVideo preload (500 ms delayed) — next/prev items download in
+ *     background so they start instantly when scrolled to.
+ * 10. Buffering spinner delayed 400 ms — fast swipes never flash it.
+ * 11. Progress bar driven by a Reanimated shared value — zero JS-thread cost.
  */
+
 import React, {
   useCallback,
   useEffect,
@@ -26,7 +34,6 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
-  Animated,
   FlatList,
   Platform,
   StyleSheet,
@@ -36,6 +43,15 @@ import {
   ViewToken,
   useWindowDimensions,
 } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withSequence,
+  withDelay,
+  runOnJS,
+} from "react-native-reanimated";
 import { Image as ExpoImage } from "expo-image";
 import { Video, ResizeMode, AVPlaybackStatus } from "expo-av";
 import { LinearGradient } from "expo-linear-gradient";
@@ -78,7 +94,7 @@ export type VideoPost = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatCount(n: number): string {
+function fmt(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
@@ -90,14 +106,20 @@ function GradientOverlay() {
   if (Platform.OS === "web") {
     return (
       <View
-        style={styles.webGradient as any}
+        style={[
+          styles.gradient,
+          {
+            background: "linear-gradient(to top, rgba(0,0,0,0.92) 0%, transparent 100%)",
+          } as any,
+        ]}
         pointerEvents="none"
       />
     );
   }
   return (
     <LinearGradient
-      colors={["transparent", "rgba(0,0,0,0.88)"]}
+      colors={["transparent", "rgba(0,0,0,0.92)"]}
+      locations={[0, 1]}
       style={styles.gradient}
       pointerEvents="none"
     />
@@ -133,43 +155,42 @@ const VideoItem = React.memo(
     const { accent } = useAppAccent();
     const videoRef = useRef<Video>(null);
 
-    // ── UI state ──────────────────────────────────────────────────────────────
+    // ── UI state (minimal — heavy work stays in refs) ──────────────────────
     const [paused, setPaused] = useState(false);
     const [showBuffering, setShowBuffering] = useState(false);
     const [videoStarted, setVideoStarted] = useState(false);
     const [cachedUri, setCachedUri] = useState<string | null>(null);
-    const [progress, setProgress] = useState(0);
     const [videoError, setVideoError] = useState(false);
 
-    // Heart / double-tap animation
-    const heartScale = useRef(new Animated.Value(1)).current;
-    const dtOpacity = useRef(new Animated.Value(0)).current;
-    const dtScale = useRef(new Animated.Value(0.3)).current;
+    // ── Reanimated shared values — run on UI thread ────────────────────────
+    const heartScale = useSharedValue(1);
+    const dtOpacity = useSharedValue(0);
+    const dtScale = useSharedValue(0.3);
+    const progressFill = useSharedValue(0);
 
-    // ── Performance refs — avoid setState on every frame ──────────────────────
+    // ── Performance refs — avoid setState per frame ────────────────────────
     const bufferingRef = useRef(false);
-    const bufferingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const bufferingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const videoStartedRef = useRef(false);
-    const lastProgressRef = useRef(0);
-    const viewRecordedRef = useRef(false);
+    const lastProgressTs = useRef(0);
+    const viewRecorded = useRef(false);
     const cacheAttempted = useRef(false);
-    const cacheDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const watchSavedRef = useRef(false);
+    const cacheDelayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const watchSaved = useRef(false);
 
-    // ── Network-aware manifest resolution ────────────────────────────────────
+    // ── Network-aware source resolution ───────────────────────────────────
     const resolved = useResolvedVideoSource(item.id, item.video_url, {
       targetHeight: getPreferredVideoHeight(),
     });
     const playUri = videoError
       ? item.video_url
-      : (cachedUri || resolved.uri || item.video_url);
+      : (cachedUri ?? resolved.uri ?? item.video_url);
 
-    // ── Preload into local cache once video enters the ±1 window ─────────────
-    // Delayed 500 ms so the download doesn't compete with the swipe animation.
+    // ── Preload into local cache once item enters the ±1 window ───────────
     useEffect(() => {
       if (!isNearActive || cacheAttempted.current || !item.video_url) return;
       cacheAttempted.current = true;
-      cacheDelayRef.current = setTimeout(() => {
+      cacheDelayTimer.current = setTimeout(() => {
         getCachedVideoUri(item.video_url).then((existing) => {
           if (existing) {
             setCachedUri(existing);
@@ -181,136 +202,155 @@ const VideoItem = React.memo(
         });
       }, 500);
       return () => {
-        if (cacheDelayRef.current) {
-          clearTimeout(cacheDelayRef.current);
-          cacheDelayRef.current = null;
+        if (cacheDelayTimer.current) {
+          clearTimeout(cacheDelayTimer.current);
+          cacheDelayTimer.current = null;
         }
       };
     }, [isNearActive, item.video_url]);
 
-    // ── Reset state when scrolled away; record view + offline save on arrival ─
+    // ── Reset when scrolled away; record view on arrival ──────────────────
     useEffect(() => {
       if (!isActive) {
         setPaused(false);
         setVideoStarted(false);
         setShowBuffering(false);
-        setProgress(0);
-        setVideoError(false);
+        progressFill.value = 0;
+        videoError && setVideoError(false);
         bufferingRef.current = false;
         videoStartedRef.current = false;
-        lastProgressRef.current = 0;
-        watchSavedRef.current = false;
-        if (bufferingTimerRef.current) {
-          clearTimeout(bufferingTimerRef.current);
-          bufferingTimerRef.current = null;
+        lastProgressTs.current = 0;
+        watchSaved.current = false;
+        if (bufferingTimer.current) {
+          clearTimeout(bufferingTimer.current);
+          bufferingTimer.current = null;
         }
       } else {
-        if (!viewRecordedRef.current) {
-          viewRecordedRef.current = true;
+        if (!viewRecorded.current) {
+          viewRecorded.current = true;
           onView(item.id);
         }
-        if (!watchSavedRef.current) {
-          watchSavedRef.current = true;
+        if (!watchSaved.current) {
+          watchSaved.current = true;
           markVideoWatched(item.id, item.video_url, {
             title: `${item.profile.display_name}${item.content ? `: ${item.content.slice(0, 60)}` : ""}`,
             thumbnail: item.image_url,
-          }).catch(() => { watchSavedRef.current = false; });
+          }).catch(() => { watchSaved.current = false; });
         }
       }
     }, [isActive]);
 
-    // ── Stop video completely when far from viewport ───────────────────────────
+    // ── Stop video when far from viewport ─────────────────────────────────
     useEffect(() => {
       if (!isNearActive && videoRef.current) {
         videoRef.current.stopAsync().catch(() => {});
       }
     }, [isNearActive]);
 
-    // ── Gestures — UI thread, never race with FlatList scroll ─────────────────
+    // ── Animated styles ───────────────────────────────────────────────────
+    const heartAnimStyle = useAnimatedStyle(() => ({
+      transform: [{ scale: heartScale.value }],
+    }));
+    const dtAnimStyle = useAnimatedStyle(() => ({
+      opacity: dtOpacity.value,
+      transform: [{ scale: dtScale.value }],
+    }));
+    const progressBarStyle = useAnimatedStyle(() => ({
+      width: `${progressFill.value * 100}%` as any,
+    }));
+
+    // ── Gesture handlers — UI thread, never races with scroll ─────────────
+    function triggerLike() {
+      onLike(item.id, item.liked);
+    }
+    function triggerPause() {
+      setPaused((p) => !p);
+    }
+
     const doubleTap = Gesture.Tap()
       .numberOfTaps(2)
       .maxDuration(250)
-      .maxDistance(10)
-      .runOnJS(true)
+      .maxDistance(12)
       .onEnd(() => {
-        if (!item.liked) onLike(item.id, false);
-        Animated.sequence([
-          Animated.parallel([
-            Animated.timing(dtOpacity, { toValue: 1, duration: 100, useNativeDriver: USE_NATIVE }),
-            Animated.spring(dtScale, { toValue: 1, tension: 200, friction: 8, useNativeDriver: USE_NATIVE }),
-          ]),
-          Animated.delay(500),
-          Animated.parallel([
-            Animated.timing(dtOpacity, { toValue: 0, duration: 250, useNativeDriver: USE_NATIVE }),
-            Animated.timing(dtScale, { toValue: 0.3, duration: 250, useNativeDriver: USE_NATIVE }),
-          ]),
-        ]).start();
+        "worklet";
+        if (!item.liked) runOnJS(triggerLike)();
+        // Heart burst animation — UI thread
+        dtOpacity.value = withSequence(
+          withTiming(1, { duration: 80 }),
+          withDelay(450, withTiming(0, { duration: 220 })),
+        );
+        dtScale.value = withSequence(
+          withSpring(1, { damping: 10, stiffness: 280 }),
+          withDelay(450, withTiming(0.3, { duration: 220 })),
+        );
       });
 
     const singleTap = Gesture.Tap()
       .maxDuration(300)
-      .maxDistance(10)
-      .runOnJS(true)
-      .onEnd(() => { setPaused((p) => !p); });
+      .maxDistance(12)
+      .onEnd(() => {
+        "worklet";
+        runOnJS(triggerPause)();
+      });
 
-    // Exclusive: double-tap wins, single-tap waits to confirm no second tap
+    // Exclusive: double-tap wins; single-tap waits to confirm no second tap
     const composed = Gesture.Exclusive(doubleTap, singleTap);
 
-    // ── Playback status callback ───────────────────────────────────────────────
+    // ── Like button press ─────────────────────────────────────────────────
+    function handleLikeTap() {
+      heartScale.value = withSequence(
+        withTiming(0.62, { duration: 75 }),
+        withSpring(1, { damping: 8, stiffness: 320 }),
+      );
+      onLike(item.id, item.liked);
+    }
+
+    // ── Playback status ────────────────────────────────────────────────────
     function onPlaybackStatus(status: AVPlaybackStatus) {
       if (!status.isLoaded) return;
 
-      // Buffering — only update state when value actually changes (avoid cascade renders)
-      const nowBuffering = status.isBuffering;
-      if (nowBuffering !== bufferingRef.current) {
-        bufferingRef.current = nowBuffering;
-        if (nowBuffering) {
-          if (!bufferingTimerRef.current) {
-            // 400 ms delay: fast swipes never flash the spinner
-            bufferingTimerRef.current = setTimeout(() => {
+      // Buffering — gate behind ref to skip redundant setState calls
+      const buffering = status.isBuffering;
+      if (buffering !== bufferingRef.current) {
+        bufferingRef.current = buffering;
+        if (buffering) {
+          if (!bufferingTimer.current) {
+            bufferingTimer.current = setTimeout(() => {
               setShowBuffering(true);
-              bufferingTimerRef.current = null;
+              bufferingTimer.current = null;
             }, 400);
           }
         } else {
-          if (bufferingTimerRef.current) {
-            clearTimeout(bufferingTimerRef.current);
-            bufferingTimerRef.current = null;
+          if (bufferingTimer.current) {
+            clearTimeout(bufferingTimer.current);
+            bufferingTimer.current = null;
           }
           setShowBuffering(false);
         }
       }
 
-      // Video started — fire once
+      // Started
       if (status.isPlaying && !videoStartedRef.current) {
         videoStartedRef.current = true;
         setVideoStarted(true);
       }
 
-      // Progress — throttle to ≤4 fps so the JS thread isn't saturated
+      // Progress — throttle to ≤4 fps; drive shared value, not state
       if (status.durationMillis && status.durationMillis > 0) {
         const now = Date.now();
-        if (now - lastProgressRef.current >= 250) {
-          lastProgressRef.current = now;
-          setProgress(status.positionMillis / status.durationMillis);
+        if (now - lastProgressTs.current >= 250) {
+          lastProgressTs.current = now;
+          progressFill.value = status.positionMillis / status.durationMillis;
         }
       }
     }
 
-    function handleLike() {
-      Animated.sequence([
-        Animated.timing(heartScale, { toValue: 0.6, duration: 80, useNativeDriver: USE_NATIVE }),
-        Animated.spring(heartScale, { toValue: 1, tension: 300, friction: 7, useNativeDriver: USE_NATIVE }),
-      ]).start();
-      onLike(item.id, item.liked);
-    }
-
-    const isOwnVideo = currentUserId === item.author_id;
+    const isOwn = currentUserId === item.author_id;
 
     return (
       <View style={[styles.item, { width: screenW, height: screenH }]}>
 
-        {/* ── Thumbnail poster — expo-image with disk cache, no black flash ─── */}
+        {/* Thumbnail poster — no black flash before video starts */}
         {item.image_url && !videoStarted ? (
           <ExpoImage
             source={{ uri: item.image_url }}
@@ -320,7 +360,7 @@ const VideoItem = React.memo(
           />
         ) : null}
 
-        {/* ── Video — only mounted when ±1 of active to conserve memory ─────── */}
+        {/* Video — native */}
         {isNearActive && Platform.OS !== "web" && (
           <Video
             ref={videoRef}
@@ -336,13 +376,12 @@ const VideoItem = React.memo(
               setVideoStarted(true);
             }}
             onError={() => {
-              if (!videoError) {
-                setCachedUri(null);
-                setVideoError(true);
-              }
+              if (!videoError) { setCachedUri(null); setVideoError(true); }
             }}
           />
         )}
+
+        {/* Video — web */}
         {isNearActive && Platform.OS === "web" && (
           // @ts-ignore
           <video
@@ -351,7 +390,8 @@ const VideoItem = React.memo(
             loop
             playsInline
             style={{
-              position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
+              position: "absolute", top: 0, left: 0,
+              width: "100%", height: "100%",
               objectFit: "cover", backgroundColor: "#000",
             }}
             onPlaying={() => { videoStartedRef.current = true; setVideoStarted(true); setShowBuffering(false); }}
@@ -360,48 +400,46 @@ const VideoItem = React.memo(
           />
         )}
 
-        {/* ── Tap handler — UI thread, never fights scroll ────────────────── */}
+        {/* Gesture handler — UI thread, sits above video */}
         <GestureDetector gesture={composed}>
           <View style={StyleSheet.absoluteFill} />
         </GestureDetector>
 
-        {/* ── Double-tap heart burst ─────────────────────────────────────── */}
+        {/* Double-tap heart burst */}
         <Animated.View
-          style={[styles.centerOverlay, { opacity: dtOpacity, transform: [{ scale: dtScale }] }]}
+          style={[styles.centerOverlay, dtAnimStyle]}
           pointerEvents="none"
         >
-          <Ionicons name="heart" size={90} color="#FF3B30" />
+          <Ionicons name="heart" size={96} color="#FF2D55" />
         </Animated.View>
 
-        {/* ── Pause indicator ────────────────────────────────────────────── */}
+        {/* Pause indicator */}
         {paused && isActive && (
           <View style={styles.centerOverlay} pointerEvents="none">
             <View style={styles.pauseCircle}>
-              <Ionicons name="play" size={32} color="#fff" style={{ marginLeft: 3 }} />
+              <Ionicons name="play" size={30} color="#fff" style={{ marginLeft: 3 }} />
             </View>
           </View>
         )}
 
-        {/* ── Buffering — delayed 400 ms, never flashes on fast swipes ────── */}
+        {/* Buffering — delayed 400 ms */}
         {showBuffering && isActive && !paused && (
           <View style={styles.centerOverlay} pointerEvents="none">
-            <ActivityIndicator size="large" color="rgba(255,255,255,0.85)" />
+            <ActivityIndicator size="large" color="rgba(255,255,255,0.8)" />
           </View>
         )}
 
-        {/* ── Bottom gradient ──────────────────────────────────────────────── */}
+        {/* Bottom gradient */}
         <GradientOverlay />
 
-        {/* ── Author + caption ─────────────────────────────────────────────── */}
+        {/* Author row + caption */}
         <View style={styles.bottomArea} pointerEvents="box-none">
           <TouchableOpacity
-            onPress={() =>
-              router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })
-            }
+            onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}
             style={styles.authorRow}
             activeOpacity={0.8}
           >
-            <View style={[styles.avatarWrap, { borderColor: accent }]}>
+            <View style={[styles.avatarRing, { borderColor: accent }]}>
               <Avatar
                 uri={item.profile.avatar_url}
                 name={item.profile.display_name}
@@ -410,9 +448,9 @@ const VideoItem = React.memo(
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.handle}>@{item.profile.handle}</Text>
-              <Text style={styles.displayName}>{item.profile.display_name}</Text>
+              <Text style={styles.displayName} numberOfLines={1}>{item.profile.display_name}</Text>
             </View>
-            {!isOwnVideo && !item.following && (
+            {!isOwn && !item.following && (
               <TouchableOpacity
                 onPress={() => onFollow(item.author_id)}
                 style={styles.followBtn}
@@ -424,56 +462,50 @@ const VideoItem = React.memo(
           </TouchableOpacity>
 
           {item.content ? (
-            <Text style={styles.caption} numberOfLines={2}>
-              {item.content}
-            </Text>
+            <Text style={styles.caption} numberOfLines={2}>{item.content}</Text>
           ) : null}
 
           {item.view_count > 0 && (
             <View style={styles.viewRow}>
-              <Ionicons name="eye-outline" size={11} color="rgba(255,255,255,0.45)" />
-              <Text style={styles.viewText}>{formatCount(item.view_count)} views</Text>
+              <Ionicons name="eye-outline" size={11} color="rgba(255,255,255,0.4)" />
+              <Text style={styles.viewText}>{fmt(item.view_count)} views</Text>
             </View>
           )}
         </View>
 
-        {/* ── Right action rail ─────────────────────────────────────────────── */}
+        {/* Right action rail */}
         <View style={styles.rightCol} pointerEvents="box-none">
           {/* Like */}
           <View style={styles.actionItem}>
-            <Animated.View style={{ transform: [{ scale: heartScale }] }}>
-              <TouchableOpacity onPress={handleLike} hitSlop={10} activeOpacity={0.8}>
+            <Animated.View style={heartAnimStyle}>
+              <TouchableOpacity onPress={handleLikeTap} hitSlop={12} activeOpacity={0.8}>
                 <Ionicons
                   name={item.liked ? "heart" : "heart-outline"}
-                  size={30}
-                  color={item.liked ? "#FF3B30" : "#fff"}
+                  size={32}
+                  color={item.liked ? "#FF2D55" : "#fff"}
                 />
               </TouchableOpacity>
             </Animated.View>
-            <Text style={styles.actionLabel}>{formatCount(item.likeCount)}</Text>
+            <Text style={styles.actionLabel}>{fmt(item.likeCount)}</Text>
           </View>
 
           {/* Comment */}
           <View style={styles.actionItem}>
             <TouchableOpacity
-              onPress={() =>
-                router.push({ pathname: "/video/[id]", params: { id: item.id } })
-              }
-              hitSlop={10}
+              onPress={() => router.push({ pathname: "/video/[id]", params: { id: item.id } })}
+              hitSlop={12}
               activeOpacity={0.8}
             >
               <Ionicons name="chatbubble-ellipses" size={28} color="#fff" />
             </TouchableOpacity>
-            <Text style={styles.actionLabel}>{formatCount(item.replyCount)}</Text>
+            <Text style={styles.actionLabel}>{fmt(item.replyCount)}</Text>
           </View>
 
-          {/* Share / open full screen */}
+          {/* Share */}
           <View style={styles.actionItem}>
             <TouchableOpacity
-              onPress={() =>
-                router.push({ pathname: "/video/[id]", params: { id: item.id } })
-              }
-              hitSlop={10}
+              onPress={() => router.push({ pathname: "/video/[id]", params: { id: item.id } })}
+              hitSlop={12}
               activeOpacity={0.8}
             >
               <Ionicons name="arrow-redo-outline" size={28} color="#fff" />
@@ -481,17 +513,13 @@ const VideoItem = React.memo(
           </View>
         </View>
 
-        {/* ── Progress bar — throttled to ≤4 fps ───────────────────────────── */}
-        <View style={styles.progressBar} pointerEvents="none">
-          <View style={[styles.progressFill, { width: `${progress * 100}%` as any }]} />
+        {/* Progress bar — driven by Reanimated shared value */}
+        <View style={styles.progressTrack} pointerEvents="none">
+          <Animated.View style={[styles.progressFill, progressBarStyle]} />
         </View>
       </View>
     );
   },
-  // Custom equality — only re-render when these props actually change.
-  // isActive / isNearActive change on scroll (necessary).
-  // Item fields change on interaction (necessary).
-  // Everything else is stable.
   (prev, next) =>
     prev.isActive === next.isActive &&
     prev.isNearActive === next.isNearActive &&
@@ -502,14 +530,12 @@ const VideoItem = React.memo(
     prev.item.likeCount === next.item.likeCount &&
     prev.item.replyCount === next.item.replyCount &&
     prev.item.following === next.item.following &&
-    prev.item.view_count === next.item.view_count
+    prev.item.view_count === next.item.view_count,
 );
 
 // ─── VideoFeed ────────────────────────────────────────────────────────────────
 
-type Props = {
-  tabBarHeight?: number;
-};
+type Props = { tabBarHeight?: number };
 
 export default function VideoFeed({ tabBarHeight = 52 }: Props) {
   const { user, profile } = useAuth();
@@ -517,7 +543,7 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
   const insets = useSafeAreaInsets();
   const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
 
-  const ITEM_HEIGHT = SCREEN_H - tabBarHeight;
+  const ITEM_H = SCREEN_H - tabBarHeight;
 
   const [posts, setPosts] = useState<VideoPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -529,14 +555,12 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
   const loadingMoreRef = useRef(false);
   const hasMoreRef = useRef(true);
   const postsLenRef = useRef(0);
-
-  // Stable ref for active index — lets renderItem read it without being in its deps
   const activeIndexRef = useRef(0);
 
   useEffect(() => { hasMoreRef.current = hasMore; }, [hasMore]);
   useEffect(() => { postsLenRef.current = posts.length; }, [posts.length]);
 
-  // ── Data fetching ────────────────────────────────────────────────────────────
+  // ── Data ──────────────────────────────────────────────────────────────────
 
   const enrichPosts = useCallback(
     async (rawPosts: any[]): Promise<VideoPost[]> => {
@@ -553,18 +577,12 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
         supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds),
         supabase.from("post_replies").select("post_id").in("post_id", postIds),
         user
-          ? supabase
-              .from("post_acknowledgments")
-              .select("post_id")
-              .in("post_id", postIds)
-              .eq("user_id", user.id)
+          ? supabase.from("post_acknowledgments").select("post_id")
+              .in("post_id", postIds).eq("user_id", user.id)
           : Promise.resolve({ data: [] }),
         user
-          ? supabase
-              .from("follows")
-              .select("following_id")
-              .eq("follower_id", user.id)
-              .in("following_id", authorIds)
+          ? supabase.from("follows").select("following_id")
+              .eq("follower_id", user.id).in("following_id", authorIds)
           : Promise.resolve({ data: [] }),
       ]);
 
@@ -573,28 +591,24 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
       const replyMap: Record<string, number> = {};
       for (const r of repliesData || []) replyMap[r.post_id] = (replyMap[r.post_id] || 0) + 1;
       const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
-      const followingSet = new Set((myFollows || []).map((f: any) => f.following_id as string));
+      const followSet = new Set((myFollows || []).map((f: any) => f.following_id));
 
-      return rawPosts.map((p) => ({
+      return rawPosts.map((p: any) => ({
         id: p.id,
         author_id: p.author_id,
         content: p.content || "",
         video_url: p.video_url,
-        image_url: p.image_url ?? null,
+        image_url: p.image_url,
         created_at: p.created_at,
         view_count: p.view_count || 0,
-        profile: {
-          display_name: p.profiles?.display_name || "User",
-          handle: p.profiles?.handle || "user",
-          avatar_url: p.profiles?.avatar_url || null,
-        },
+        profile: p.profiles ?? { display_name: "User", handle: "user", avatar_url: null },
         liked: myLikeSet.has(p.id),
         likeCount: likeMap[p.id] || 0,
         replyCount: replyMap[p.id] || 0,
-        following: followingSet.has(p.author_id),
+        following: followSet.has(p.author_id),
       }));
     },
-    [user]
+    [user],
   );
 
   const fetchVideos = useCallback(
@@ -610,10 +624,8 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
 
       let query = supabase
         .from("posts")
-        .select(
-          `id, author_id, content, video_url, image_url, created_at, view_count,
-           profiles!posts_author_id_fkey(display_name, handle, avatar_url)`
-        )
+        .select(`id, author_id, content, video_url, image_url, created_at, view_count,
+                 profiles!posts_author_id_fkey(display_name, handle, avatar_url)`)
         .eq("post_type", "video")
         .eq("visibility", "public")
         .not("video_url", "is", null)
@@ -627,8 +639,9 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
       if (data && data.length > 0) {
         const enriched = await enrichPosts(data);
         cursorRef.current = data[data.length - 1].created_at;
-        setHasMore(data.length === PAGE_SIZE);
-        hasMoreRef.current = data.length === PAGE_SIZE;
+        const more = data.length === PAGE_SIZE;
+        setHasMore(more);
+        hasMoreRef.current = more;
         if (cursor) {
           setPosts((prev) => {
             const seen = new Set(prev.map((p) => p.id));
@@ -650,39 +663,29 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
         setLoading(false);
       }
     },
-    [enrichPosts]
+    [enrichPosts],
   );
 
-  useEffect(() => {
-    fetchVideos();
-  }, [fetchVideos]);
+  useEffect(() => { fetchVideos(); }, [fetchVideos]);
 
-  // ── Interactions ─────────────────────────────────────────────────────────────
+  // ── Interactions ──────────────────────────────────────────────────────────
 
   const handleLike = useCallback(
     async (postId: string, currentlyLiked: boolean) => {
-      if (!user) {
-        router.push("/(auth)/login" as any);
-        return;
-      }
+      if (!user) { router.push("/(auth)/login" as any); return; }
       const post = posts.find((p) => p.id === postId);
       if (!post) return;
 
       if (currentlyLiked) {
-        await supabase
-          .from("post_acknowledgments")
-          .delete()
-          .eq("post_id", postId)
-          .eq("user_id", user.id);
+        await supabase.from("post_acknowledgments").delete()
+          .eq("post_id", postId).eq("user_id", user.id);
         setPosts((prev) =>
           prev.map((p) =>
             p.id === postId ? { ...p, liked: false, likeCount: Math.max(0, p.likeCount - 1) } : p
           )
         );
       } else {
-        await supabase
-          .from("post_acknowledgments")
-          .insert({ post_id: postId, user_id: user.id });
+        await supabase.from("post_acknowledgments").insert({ post_id: postId, user_id: user.id });
         setPosts((prev) =>
           prev.map((p) =>
             p.id === postId ? { ...p, liked: true, likeCount: p.likeCount + 1 } : p
@@ -698,32 +701,25 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
         }
       }
     },
-    [user, profile, posts]
+    [user, profile, posts],
   );
 
   const handleFollow = useCallback(
     async (authorId: string) => {
-      if (!user) {
-        router.push("/(auth)/login" as any);
-        return;
-      }
+      if (!user) { router.push("/(auth)/login" as any); return; }
       setPosts((prev) =>
         prev.map((p) => (p.author_id === authorId ? { ...p, following: true } : p))
       );
       await supabase.from("follows").insert({ follower_id: user.id, following_id: authorId });
       try {
-        notifyNewFollow({
-          targetUserId: authorId,
-          followerName: profile?.display_name || "Someone",
-          followerUserId: user.id,
-        });
+        notifyNewFollow({ targetUserId: authorId, followerName: profile?.display_name || "Someone", followerUserId: user.id });
       } catch (_) {}
       try {
         const { rewardXp } = await import("../lib/rewardXp");
         rewardXp("follow_user");
       } catch (_) {}
     },
-    [user, profile]
+    [user, profile],
   );
 
   const recordedViews = useRef(new Set<string>());
@@ -731,65 +727,49 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
     async (postId: string) => {
       if (!user || recordedViews.current.has(postId)) return;
       recordedViews.current.add(postId);
-      supabase
-        .from("post_views")
+      supabase.from("post_views")
         .upsert({ post_id: postId, viewer_id: user.id }, { onConflict: "post_id,viewer_id" })
         .then(null, () => {});
       setPosts((prev) =>
         prev.map((p) => (p.id === postId ? { ...p, view_count: p.view_count + 1 } : p))
       );
     },
-    [user]
+    [user],
   );
 
-  // ── FlatList config ──────────────────────────────────────────────────────────
+  // ── FlatList config ───────────────────────────────────────────────────────
 
-  // Stable ref — FlatList must never see a new function reference for this.
-  // Setting activeIndexRef synchronously (before setState) ensures renderItem
-  // reads the correct value when FlatList re-renders due to extraData change.
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       if (viewableItems.length > 0 && viewableItems[0].index !== null) {
         const idx = viewableItems[0].index;
-        activeIndexRef.current = idx;   // synchronous — read by renderItem
-        setActiveIndex(idx);            // triggers extraData → FlatList update
+        activeIndexRef.current = idx;
+        setActiveIndex(idx);
 
-        // Load more when 3 items from the end
+        // Pre-fetch next page when 3 from the end
         if (
           idx >= postsLenRef.current - 3 &&
           !loadingMoreRef.current &&
           hasMoreRef.current &&
           cursorRef.current
         ) {
-          // fetchVideos is stable (deps: [enrichPosts] which is stable once user is loaded)
+          // call handled in onEndReached
         }
       }
     }
   ).current;
 
-  // No minimumViewTime — activeIndex updates the instant the item crosses 50%.
-  // This makes video playback start immediately when landing on a new item.
-  const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 50,
-  }).current;
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
 
   const getItemLayout = useCallback(
-    (_: any, index: number) => ({
-      length: ITEM_HEIGHT,
-      offset: ITEM_HEIGHT * index,
-      index,
-    }),
-    [ITEM_HEIGHT]
+    (_: any, index: number) => ({ length: ITEM_H, offset: ITEM_H * index, index }),
+    [ITEM_H],
   );
 
-  // Stable callbacks passed to VideoItem — wrapped in useCallback with stable deps
   const stableOnLike = useCallback(handleLike, [handleLike]);
   const stableOnFollow = useCallback(handleFollow, [handleFollow]);
   const stableOnView = useCallback(handleView, [handleView]);
 
-  // renderItem reads activeIndex from the ref (set synchronously before setState).
-  // This means renderItem itself has NO activeIndex dep — it never recreates on scroll.
-  // FlatList's extraData triggers the re-render, and the ref has the correct value.
   const renderItem = useCallback(
     ({ item, index }: { item: VideoPost; index: number }) => (
       <VideoItem
@@ -797,16 +777,16 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
         isActive={index === activeIndexRef.current}
         isNearActive={Math.abs(index - activeIndexRef.current) <= 1}
         screenW={SCREEN_W}
-        screenH={ITEM_HEIGHT}
+        screenH={ITEM_H}
         onLike={stableOnLike}
         onFollow={stableOnFollow}
         onView={stableOnView}
         currentUserId={user?.id}
       />
     ),
-    // activeIndex intentionally omitted — read from activeIndexRef
+    // activeIndex intentionally omitted — read from ref
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [SCREEN_W, ITEM_HEIGHT, stableOnLike, stableOnFollow, stableOnView, user?.id]
+    [SCREEN_W, ITEM_H, stableOnLike, stableOnFollow, stableOnView, user?.id],
   );
 
   const onEndReached = useCallback(() => {
@@ -815,11 +795,9 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
     }
   }, [hasMore, fetchVideos]);
 
-  // ── Render ───────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
 
-  if (loading) {
-    return <VideoFeedSkeleton />;
-  }
+  if (loading) return <VideoFeedSkeleton />;
 
   if (posts.length === 0) {
     return (
@@ -846,36 +824,32 @@ export default function VideoFeed({ tabBarHeight = 52 }: Props) {
       data={posts}
       keyExtractor={(p) => p.id}
       renderItem={renderItem}
-      // extraData triggers re-render when active index changes,
-      // while renderItem itself stays stable (no activeIndex dep).
       extraData={activeIndex}
-      // ── Scroll config ──────────────────────────────────────────────────────
-      pagingEnabled
-      showsVerticalScrollIndicator={false}
+      // ── Snap config — more reliable than pagingEnabled on Android ────────
+      snapToInterval={ITEM_H}
+      snapToAlignment="start"
+      disableIntervalMomentum
       decelerationRate="fast"
-      // ── Viewability ────────────────────────────────────────────────────────
+      showsVerticalScrollIndicator={false}
+      // ── Viewability ───────────────────────────────────────────────────────
       onViewableItemsChanged={onViewableItemsChanged}
       viewabilityConfig={viewabilityConfig}
-      // ── Performance ────────────────────────────────────────────────────────
+      // ── Performance ───────────────────────────────────────────────────────
       getItemLayout={getItemLayout}
       windowSize={3}
       initialNumToRender={1}
       maxToRenderPerBatch={2}
-      // removeClippedSubviews=false: turning it on with pagingEnabled causes
-      // blank screens on Android when scrolling back to a previous item.
+      updateCellsBatchingPeriod={50}
       removeClippedSubviews={false}
-      // ── Pagination ─────────────────────────────────────────────────────────
+      // ── Pagination ────────────────────────────────────────────────────────
       onEndReached={onEndReached}
       onEndReachedThreshold={2}
-      onScrollToIndexFailed={(info) => {
-        setTimeout(() => {}, 300);
-      }}
-      // ── Style ──────────────────────────────────────────────────────────────
+      // ── Style ─────────────────────────────────────────────────────────────
       style={{ flex: 1, backgroundColor: "#000" }}
       contentContainerStyle={{ backgroundColor: "#000" }}
       ListFooterComponent={
         loadingMore ? (
-          <View style={[styles.center, { height: ITEM_HEIGHT, backgroundColor: "#000" }]}>
+          <View style={[styles.center, { height: ITEM_H, backgroundColor: "#000" }]}>
             <ActivityIndicator size="large" color="rgba(255,255,255,0.4)" />
           </View>
         ) : null
@@ -895,6 +869,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#000",
+  },
+  centerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyIcon: {
     width: 80,
@@ -928,18 +907,13 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     fontSize: 15,
   },
-  centerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   pauseCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: "rgba(0,0,0,0.38)",
     borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.2)",
+    borderColor: "rgba(255,255,255,0.18)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -948,21 +922,13 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 360,
-  },
-  webGradient: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 360,
-    background: "linear-gradient(to top, rgba(0,0,0,0.88) 0%, transparent 100%)",
+    height: 380,
   },
   bottomArea: {
     position: "absolute",
-    bottom: 68,
+    bottom: 70,
     left: 16,
-    right: 80,
+    right: 82,
     gap: 6,
   },
   authorRow: {
@@ -970,21 +936,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  avatarWrap: {
+  avatarRing: {
     borderWidth: 2,
-    borderRadius: 23,
+    borderRadius: 24,
     padding: 1,
   },
   handle: {
     color: "#fff",
     fontSize: 14,
     fontFamily: "Inter_700Bold",
-    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowColor: "rgba(0,0,0,0.6)",
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    textShadowRadius: 4,
   },
   displayName: {
-    color: "rgba(255,255,255,0.6)",
+    color: "rgba(255,255,255,0.58)",
     fontSize: 12,
     fontFamily: "Inter_400Regular",
     marginTop: 1,
@@ -993,9 +959,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 99,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.5)",
-    backgroundColor: "rgba(255,255,255,0.1)",
+    borderWidth: 1.2,
+    borderColor: "rgba(255,255,255,0.55)",
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   followBtnText: {
     color: "#fff",
@@ -1003,58 +969,58 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
   },
   caption: {
-    color: "rgba(255,255,255,0.88)",
+    color: "rgba(255,255,255,0.9)",
     fontSize: 13,
     fontFamily: "Inter_400Regular",
     lineHeight: 19,
-    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowColor: "rgba(0,0,0,0.6)",
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    textShadowRadius: 4,
   },
   viewRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    marginTop: 2,
+    marginTop: 1,
   },
   viewText: {
-    color: "rgba(255,255,255,0.4)",
+    color: "rgba(255,255,255,0.38)",
     fontSize: 11,
     fontFamily: "Inter_400Regular",
   },
   rightCol: {
     position: "absolute",
-    bottom: 80,
+    bottom: 82,
     right: 12,
-    gap: 22,
+    gap: 24,
     alignItems: "center",
   },
   actionItem: {
     alignItems: "center",
-    gap: 3,
+    gap: 4,
   },
   actionLabel: {
     color: "#fff",
     fontSize: 12,
     fontFamily: "Inter_700Bold",
-    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowColor: "rgba(0,0,0,0.6)",
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    textShadowRadius: 3,
   },
-  progressBar: {
+  progressTrack: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
     height: 2,
-    backgroundColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.14)",
   },
   progressFill: {
     position: "absolute",
     left: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: "rgba(255,255,255,0.85)",
+    backgroundColor: "rgba(255,255,255,0.82)",
     borderRadius: 1,
   },
 });

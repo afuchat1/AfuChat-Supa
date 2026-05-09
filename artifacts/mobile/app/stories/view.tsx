@@ -13,6 +13,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { BlurView } from "expo-blur";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -34,8 +35,15 @@ type Story = {
   caption: string | null;
   created_at: string;
   view_count: number;
+  like_count: number;
   user_id: string;
-  profile: { display_name: string; avatar_url: string | null; handle: string; is_verified?: boolean; is_organization_verified?: boolean };
+  profile: {
+    display_name: string;
+    avatar_url: string | null;
+    handle: string;
+    is_verified?: boolean;
+    is_organization_verified?: boolean;
+  };
 };
 
 type Viewer = {
@@ -52,27 +60,215 @@ export default function ViewStoryScreen() {
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const { height: screenH } = useWindowDimensions();
+  const { isDesktop } = useIsDesktop();
+
   const [stories, setStories] = useState<Story[]>([]);
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+
+  // Viewers sheet
   const [showViewers, setShowViewers] = useState(false);
   const [viewers, setViewers] = useState<Viewer[]>([]);
   const [loadingViewers, setLoadingViewers] = useState(false);
-  const progressAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 
-  const { isDesktop } = useIsDesktop();
-  const isOwner = user?.id === userId;
-  const [commentText, setCommentText] = useState("");
-  const [sendingComment, setSendingComment] = useState(false);
+  // Share sheet
   const [showShareSheet, setShowShareSheet] = useState(false);
   const [chatList, setChatList] = useState<{ id: string; name: string; avatar_url: string | null }[]>([]);
+
+  // Comment
+  const [commentText, setCommentText] = useState("");
+  const [sendingComment, setSendingComment] = useState(false);
+
+  // Like state — per story id: { liked: boolean, count: number }
+  const [likeState, setLikeState] = useState<Record<string, { liked: boolean; count: number }>>({});
+  const likeInFlight = useRef(new Set<string>());
+
+  // Progress animation
+  const progressAnim = useRef(new Animated.Value(0)).current;
+
+  const isOwner = user?.id === userId;
 
   useEffect(() => {
     if (isDesktop) router.replace("/");
   }, [isDesktop]);
   if (isDesktop) return null;
 
+  // ── Load stories ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!userId) return;
+    supabase
+      .from("stories")
+      .select("id, media_url, media_type, caption, privacy, created_at, view_count, user_id, profiles!stories_user_id_fkey(display_name, avatar_url, handle, is_verified, is_organization_verified)")
+      .eq("user_id", userId)
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: true })
+      .then(({ data }) => {
+        if (data) {
+          const visible = data.filter((s: any) => {
+            const p = s.privacy || "everyone";
+            if (p === "only_me" && s.user_id !== user?.id) return false;
+            if (p === "close_friends" && s.user_id !== user?.id) return false;
+            return true;
+          });
+          const mapped = visible.map((s: any) => ({
+            ...s,
+            profile: s.profiles,
+            like_count: 0,
+          }));
+          setStories(mapped);
+
+          // Initialise like state for each story
+          const storyIds = mapped.map((s: any) => s.id);
+          if (storyIds.length > 0) loadLikeState(storyIds);
+        }
+      });
+  }, [userId]);
+
+  // ── Fetch like counts + my likes for all stories ────────────────────────────
+  async function loadLikeState(storyIds: string[]) {
+    try {
+      const [{ data: counts }, { data: myLikes }] = await Promise.all([
+        supabase
+          .from("story_likes")
+          .select("story_id")
+          .in("story_id", storyIds),
+        user
+          ? supabase
+              .from("story_likes")
+              .select("story_id")
+              .in("story_id", storyIds)
+              .eq("user_id", user.id)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      const countMap: Record<string, number> = {};
+      for (const l of counts || []) {
+        countMap[l.story_id] = (countMap[l.story_id] || 0) + 1;
+      }
+      const likedSet = new Set((myLikes || []).map((l: any) => l.story_id));
+
+      const next: Record<string, { liked: boolean; count: number }> = {};
+      for (const id of storyIds) {
+        next[id] = { liked: likedSet.has(id), count: countMap[id] || 0 };
+      }
+      setLikeState(next);
+    } catch {
+      // story_likes table may not exist yet — graceful no-op
+    }
+  }
+
+  // ── Navigation ──────────────────────────────────────────────────────────────
+  const story = stories[index];
+  const isVideoStory = story?.media_type === "video";
+
+  const goNext = useCallback(() => {
+    if (index < stories.length - 1) {
+      setIndex((i) => i + 1);
+    } else {
+      router.back();
+    }
+  }, [index, stories.length]);
+
+  const goPrev = useCallback(() => {
+    if (index > 0) setIndex((i) => i - 1);
+  }, [index]);
+
+  // ── Progress bar animation ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (stories.length === 0 || paused || isVideoStory || showViewers) return;
+
+    progressAnim.setValue(0);
+    const anim = Animated.timing(progressAnim, {
+      toValue: 1,
+      duration: STORY_DURATION,
+      useNativeDriver: false,
+    });
+    anim.start(({ finished }) => {
+      if (finished) goNext();
+    });
+    return () => anim.stop();
+  }, [index, stories.length, paused, isVideoStory, showViewers, goNext, progressAnim]);
+
+  // ── Record view ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const s = stories[index];
+    if (!s) return;
+
+    if (user && s.user_id !== user.id) {
+      supabase
+        .from("story_views")
+        .select("id")
+        .eq("story_id", s.id)
+        .eq("viewer_id", user.id)
+        .maybeSingle()
+        .then(({ data: existing }) => {
+          if (!existing) {
+            supabase.from("story_views").insert({ story_id: s.id, viewer_id: user.id }).then(() => {
+              supabase.from("stories").update({ view_count: (s.view_count || 0) + 1 }).eq("id", s.id);
+              setStories((prev) =>
+                prev.map((st) =>
+                  st.id === s.id ? { ...st, view_count: (st.view_count || 0) + 1 } : st
+                )
+              );
+              import("../../lib/rewardXp").then(({ rewardXp }) => rewardXp("story_viewed")).catch(() => {});
+            });
+          }
+        });
+      markStoriesViewed(s.user_id);
+    }
+    if (user && s.user_id === user.id) {
+      markStoriesViewed(s.user_id);
+    }
+  }, [index, stories.length]);
+
+  // ── Like a story ────────────────────────────────────────────────────────────
+  const handleLike = useCallback(async () => {
+    if (!user || !story) {
+      if (!user) router.push("/(auth)/login" as any);
+      return;
+    }
+    const storyId = story.id;
+    if (likeInFlight.current.has(storyId)) return;
+    likeInFlight.current.add(storyId);
+
+    const current = likeState[storyId] ?? { liked: false, count: 0 };
+    const nextLiked = !current.liked;
+    const nextCount = nextLiked
+      ? current.count + 1
+      : Math.max(0, current.count - 1);
+
+    // Optimistic update
+    setLikeState((prev) => ({
+      ...prev,
+      [storyId]: { liked: nextLiked, count: nextCount },
+    }));
+
+    try {
+      if (nextLiked) {
+        await supabase
+          .from("story_likes")
+          .insert({ story_id: storyId, user_id: user.id });
+      } else {
+        await supabase
+          .from("story_likes")
+          .delete()
+          .eq("story_id", storyId)
+          .eq("user_id", user.id);
+      }
+    } catch {
+      // Revert on failure
+      setLikeState((prev) => ({
+        ...prev,
+        [storyId]: current,
+      }));
+    } finally {
+      likeInFlight.current.delete(storyId);
+    }
+  }, [user, story, likeState]);
+
+  // ── Comment ─────────────────────────────────────────────────────────────────
   const sendComment = useCallback(async () => {
     const s = stories[index];
     if (!s || !user || !commentText.trim()) return;
@@ -80,7 +276,6 @@ export default function ViewStoryScreen() {
     setPaused(true);
 
     const trimmed = commentText.trim();
-
     await supabase.from("story_replies").insert({
       story_id: s.id,
       user_id: user.id,
@@ -107,84 +302,11 @@ export default function ViewStoryScreen() {
     setPaused(false);
   }, [index, stories, user, commentText]);
 
-  useEffect(() => {
-    if (!userId) return;
-    supabase
-      .from("stories")
-      .select("id, media_url, media_type, caption, privacy, created_at, view_count, user_id, profiles!stories_user_id_fkey(display_name, avatar_url, handle, is_verified, is_organization_verified)")
-      .eq("user_id", userId)
-      .gt("expires_at", new Date().toISOString())
-      .order("created_at", { ascending: true })
-      .then(({ data }) => {
-        if (data) {
-          const visible = data.filter((s: any) => {
-            const p = s.privacy || "everyone";
-            if (p === "only_me" && s.user_id !== user?.id) return false;
-            if (p === "close_friends" && s.user_id !== user?.id) return false;
-            return true;
-          });
-          setStories(visible.map((s: any) => ({ ...s, profile: s.profiles })));
-        }
-      });
-  }, [userId]);
-
-  const goNext = useCallback(() => {
-    if (index < stories.length - 1) {
-      setIndex((i) => i + 1);
-    } else {
-      router.back();
-    }
-  }, [index, stories.length]);
-
-  const goPrev = useCallback(() => {
-    if (index > 0) setIndex((i) => i - 1);
-  }, [index]);
-
-  const story = stories[index];
-  const isVideoStory = story?.media_type === "video";
-
-  useEffect(() => {
-    if (stories.length === 0 || paused || isVideoStory || showViewers) return;
-
-    progressAnim.setValue(0);
-    const anim = Animated.timing(progressAnim, {
-      toValue: 1,
-      duration: STORY_DURATION,
-      useNativeDriver: false,
-    });
-
-    anim.start(({ finished }) => {
-      if (finished) goNext();
-    });
-
-    return () => anim.stop();
-  }, [index, stories.length, paused, isVideoStory, showViewers, goNext, progressAnim]);
-
-  useEffect(() => {
-    const s = stories[index];
-    if (s && user && s.user_id !== user.id) {
-      supabase.from("story_views").select("id").eq("story_id", s.id).eq("viewer_id", user.id).maybeSingle().then(({ data: existing }) => {
-        if (!existing) {
-          supabase.from("story_views").insert({ story_id: s.id, viewer_id: user.id }).then(() => {
-            supabase.from("stories").update({ view_count: (s.view_count || 0) + 1 }).eq("id", s.id);
-            import("../../lib/rewardXp").then(({ rewardXp }) => rewardXp("story_viewed")).catch(() => {});
-          });
-        }
-      });
-      // Notify StoriesBar to refresh the ring immediately
-      markStoriesViewed(s.user_id);
-    }
-    // Own stories: mark viewed so ring shows as read
-    if (s && user && s.user_id === user.id) {
-      markStoriesViewed(s.user_id);
-    }
-  }, [index, stories]);
-
+  // ── Share sheet ─────────────────────────────────────────────────────────────
   const openShareSheet = useCallback(async () => {
     if (!story) return;
     setPaused(true);
     setShowShareSheet(true);
-    // Load recent chats for "send to" list
     const { data } = await supabase
       .from("chats")
       .select("id, is_group, is_channel, name, chat_members!inner(user_id, profiles!chat_members_user_id_fkey(display_name, avatar_url))")
@@ -193,9 +315,7 @@ export default function ViewStoryScreen() {
       .limit(20);
     if (data) {
       const items = (data as any[]).map((c) => {
-        if (c.is_group) {
-          return { id: c.id, name: c.name || "Group", avatar_url: null };
-        }
+        if (c.is_group) return { id: c.id, name: c.name || "Group", avatar_url: null };
         const other = (c.chat_members || []).find((m: any) => m.user_id !== user?.id);
         return {
           id: c.id,
@@ -215,16 +335,17 @@ export default function ViewStoryScreen() {
   const sendStoryToChat = useCallback(async (chatId: string) => {
     if (!story || !user) return;
     closeShareSheet();
-    const displayCaption = story.caption ? `"${story.caption}"` : "Shared a story";
+    const caption = story.caption ? `"${story.caption}"` : "Shared a story";
     await supabase.from("messages").insert({
       chat_id: chatId,
       sender_id: user.id,
-      encrypted_content: `storyUserId:${story.user_id}|${displayCaption}`,
+      encrypted_content: `storyUserId:${story.user_id}|${caption}`,
       attachment_url: story.media_url,
       attachment_type: "story_reply",
     });
   }, [story, user, closeShareSheet]);
 
+  // ── Viewers sheet ────────────────────────────────────────────────────────────
   const openViewers = useCallback(async () => {
     if (!story || !isOwner) return;
     setPaused(true);
@@ -258,22 +379,26 @@ export default function ViewStoryScreen() {
     });
   }, [slideAnim]);
 
-  const { height: screenH } = useWindowDimensions();
-
   if (!story) return <View style={[styles.root, { backgroundColor: "#0D0D0D" }]} />;
 
   const elapsed = Math.floor((Date.now() - new Date(story.created_at).getTime()) / 3600000);
   const timeLabel = elapsed < 1 ? "just now" : `${elapsed}h ago`;
 
-  const panelHeight = screenH * 0.45;
+  const panelH = screenH * 0.52;
   const translateY = slideAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [panelHeight, 0],
+    outputRange: [panelH, 0],
   });
 
+  const storyLike = likeState[story.id] ?? { liked: false, count: 0 };
+
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[styles.root, { backgroundColor: "#0D0D0D" }]}>
-      {story.media_type === "video" ? (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={[styles.root, { backgroundColor: "#0D0D0D" }]}
+    >
+      {/* ── Media ─────────────────────────────────────────────────────────── */}
+      {isVideoStory ? (
         <Video
           source={{ uri: story.media_url }}
           style={styles.media}
@@ -292,46 +417,58 @@ export default function ViewStoryScreen() {
         <Image source={{ uri: story.media_url }} style={styles.media} resizeMode="contain" />
       )}
 
+      {/* ── Progress segments ────────────────────────────────────────────── */}
       <View style={[styles.progressBar, { top: insets.top + 8 }]}>
         {stories.map((_, i) => (
           <View key={i} style={styles.progressSegment}>
-            <View style={[styles.progressBg]} />
+            <View style={styles.progressBg} />
             <Animated.View
               style={[
                 styles.progressFill,
                 i < index
                   ? { width: "100%" }
                   : i === index
-                    ? {
-                        width: progressAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ["0%", "100%"],
-                        }),
-                      }
-                    : { width: "0%" },
+                  ? {
+                      width: progressAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ["0%", "100%"],
+                      }),
+                    }
+                  : { width: "0%" },
               ]}
             />
           </View>
         ))}
       </View>
 
+      {/* ── Top bar — avatar, name, time, share, close ───────────────────── */}
       <View style={[styles.topBar, { top: insets.top + 20 }]}>
-        <Avatar uri={story.profile.avatar_url} name={story.profile.display_name} size={36} />
+        <TouchableOpacity
+          onPress={() => router.push({ pathname: "/contact/[id]", params: { id: story.user_id } })}
+          activeOpacity={0.8}
+        >
+          <Avatar uri={story.profile.avatar_url} name={story.profile.display_name} size={36} />
+        </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
             <Text style={styles.storyName}>{story.profile.display_name}</Text>
-            <VerifiedBadge isVerified={story.profile.is_verified} isOrganizationVerified={story.profile.is_organization_verified} size={14} />
+            <VerifiedBadge
+              isVerified={story.profile.is_verified}
+              isOrganizationVerified={story.profile.is_organization_verified}
+              size={14}
+            />
           </View>
           <Text style={styles.storyTime}>{timeLabel}</Text>
         </View>
-        <TouchableOpacity style={styles.topActionBtn} onPress={openShareSheet}>
-          <Ionicons name="share-social-outline" size={22} color="#fff" />
+        <TouchableOpacity style={styles.topBtn} onPress={openShareSheet} activeOpacity={0.8}>
+          <Ionicons name="share-social-outline" size={20} color="#fff" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.topActionBtn} onPress={() => router.back()}>
-          <Ionicons name="close" size={24} color="#fff" />
+        <TouchableOpacity style={styles.topBtn} onPress={() => router.back()} activeOpacity={0.8}>
+          <Ionicons name="close" size={22} color="#fff" />
         </TouchableOpacity>
       </View>
 
+      {/* ── Tap zones — prev / next ──────────────────────────────────────── */}
       {!showViewers && (
         <View style={styles.tapZones}>
           <TouchableOpacity
@@ -351,69 +488,113 @@ export default function ViewStoryScreen() {
         </View>
       )}
 
+      {/* ── Caption ──────────────────────────────────────────────────────── */}
       {story.caption ? (
-        <View style={[styles.captionBar, { paddingBottom: insets.bottom + (isOwner ? 56 : 56) }]}>
+        <View style={styles.captionBar}>
           <Text style={styles.captionText}>{story.caption}</Text>
         </View>
       ) : null}
 
-      {isOwner ? (
-        <TouchableOpacity
-          style={[styles.viewersTrigger, { bottom: insets.bottom + 52 }]}
-          onPress={openViewers}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="eye-outline" size={18} color="#fff" />
-          <Text style={styles.viewersTriggerText}>{story.view_count || 0}</Text>
-          <Ionicons name="chevron-up" size={16} color="rgba(255,255,255,0.6)" />
-        </TouchableOpacity>
-      ) : null}
-
+      {/* ── Bottom action row — always visible ───────────────────────────── */}
       {!showViewers && !showShareSheet && (
-        <View style={[styles.commentBar, { paddingBottom: insets.bottom + 8 }]}>
-          <TextInput
-            style={styles.commentInput}
-            placeholder={isOwner ? "Your story…" : "Send a comment…"}
-            placeholderTextColor="rgba(255,255,255,0.4)"
-            value={commentText}
-            onChangeText={setCommentText}
-            onFocus={() => setPaused(true)}
-            onBlur={() => { if (!commentText.trim()) setPaused(false); }}
-            returnKeyType="send"
-            onSubmitEditing={sendComment}
-            maxLength={500}
-            editable={!isOwner}
-          />
-          {!isOwner && (
+        <View style={[styles.bottomRow, { paddingBottom: insets.bottom + 12 }]}>
+
+          {/* Owner: viewer pill + count (tappable to open sheet) */}
+          {isOwner ? (
             <TouchableOpacity
-              onPress={sendComment}
-              disabled={!commentText.trim() || sendingComment}
-              style={[styles.commentSendBtn, (!commentText.trim() || sendingComment) && { opacity: 0.4 }]}
+              style={styles.viewerPill}
+              onPress={openViewers}
+              activeOpacity={0.75}
             >
-              <Ionicons name="send" size={18} color="#fff" />
+              <Ionicons name="eye" size={15} color="rgba(255,255,255,0.85)" />
+              <Text style={styles.viewerPillCount}>{story.view_count || 0}</Text>
+              {storyLike.count > 0 && (
+                <>
+                  <View style={styles.pillDivider} />
+                  <Ionicons name="heart" size={13} color="#FF2D55" />
+                  <Text style={styles.viewerPillCount}>{storyLike.count}</Text>
+                </>
+              )}
+              <Ionicons name="chevron-up" size={13} color="rgba(255,255,255,0.45)" />
             </TouchableOpacity>
+          ) : (
+            /* Non-owner: viewer count display (read-only) */
+            <View style={styles.viewerPill} pointerEvents="none">
+              <Ionicons name="eye" size={15} color="rgba(255,255,255,0.65)" />
+              <Text style={styles.viewerPillCount}>{story.view_count || 0}</Text>
+            </View>
           )}
-          {/* Share button always visible at bottom right */}
-          <TouchableOpacity style={styles.shareBtn} onPress={openShareSheet} activeOpacity={0.8}>
-            <Ionicons name="share-social" size={20} color="#fff" />
+
+          {/* Spacer */}
+          <View style={{ flex: 1 }} />
+
+          {/* Like button — all users (owner can like their own story too) */}
+          <TouchableOpacity
+            style={[styles.actionBtn, storyLike.liked && styles.actionBtnActive]}
+            onPress={handleLike}
+            activeOpacity={0.75}
+          >
+            <Ionicons
+              name={storyLike.liked ? "heart" : "heart-outline"}
+              size={22}
+              color={storyLike.liked ? "#FF2D55" : "#fff"}
+            />
+            {storyLike.count > 0 && (
+              <Text style={[styles.actionBtnLabel, storyLike.liked && { color: "#FF2D55" }]}>
+                {storyLike.count}
+              </Text>
+            )}
           </TouchableOpacity>
+
+          {/* Comment input — non-owners only */}
+          {!isOwner && (
+            <>
+              <View style={styles.commentInputWrap}>
+                <TextInput
+                  style={styles.commentInput}
+                  placeholder="Reply…"
+                  placeholderTextColor="rgba(255,255,255,0.38)"
+                  value={commentText}
+                  onChangeText={setCommentText}
+                  onFocus={() => setPaused(true)}
+                  onBlur={() => { if (!commentText.trim()) setPaused(false); }}
+                  returnKeyType="send"
+                  onSubmitEditing={sendComment}
+                  maxLength={500}
+                />
+              </View>
+              {commentText.trim() ? (
+                <TouchableOpacity
+                  onPress={sendComment}
+                  disabled={sendingComment}
+                  style={[styles.actionBtn, { opacity: sendingComment ? 0.4 : 1 }]}
+                >
+                  <Ionicons name="send" size={20} color="#fff" />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={styles.actionBtn} onPress={openShareSheet} activeOpacity={0.8}>
+                  <Ionicons name="share-social" size={20} color="#fff" />
+                </TouchableOpacity>
+              )}
+            </>
+          )}
         </View>
       )}
 
+      {/* ── Share sheet ──────────────────────────────────────────────────── */}
       {showShareSheet && (
         <>
           <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeShareSheet} />
-          <View style={[styles.sharePanel, { paddingBottom: insets.bottom + 8 }]}>
-            <View style={styles.viewersPanelHandle} />
-            <View style={styles.viewersHeader}>
-              <Text style={styles.viewersTitle}>Share Story</Text>
+          <View style={[styles.panel, { paddingBottom: insets.bottom + 8 }]}>
+            <View style={styles.panelHandle} />
+            <View style={styles.panelHeader}>
+              <Text style={styles.panelTitle}>Share Story</Text>
               <View style={{ flex: 1 }} />
               <TouchableOpacity onPress={closeShareSheet}>
-                <Ionicons name="close-circle" size={26} color="rgba(255,255,255,0.5)" />
+                <Ionicons name="close-circle" size={26} color="rgba(255,255,255,0.45)" />
               </TouchableOpacity>
             </View>
 
-            {/* Native share link row */}
             <TouchableOpacity
               style={styles.shareOptionRow}
               activeOpacity={0.75}
@@ -432,7 +613,6 @@ export default function ViewStoryScreen() {
               <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.3)" />
             </TouchableOpacity>
 
-            {/* Send to contact rows */}
             {chatList.length > 0 && (
               <>
                 <Text style={styles.shareContactsLabel}>Send to a contact</Text>
@@ -458,31 +638,45 @@ export default function ViewStoryScreen() {
         </>
       )}
 
+      {/* ── Viewers sheet — owner only ────────────────────────────────────── */}
       {showViewers && (
         <>
           <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeViewers} />
           <Animated.View
             style={[
               styles.viewersPanel,
-              { height: panelHeight, paddingBottom: insets.bottom, transform: [{ translateY }] },
+              { height: panelH, paddingBottom: insets.bottom, transform: [{ translateY }] },
             ]}
           >
-            <View style={styles.viewersPanelHandle} />
-            <View style={styles.viewersHeader}>
-              <Text style={styles.viewersTitle}>Viewers</Text>
-              <Text style={styles.viewersCount}>{viewers.length}</Text>
+            <View style={styles.panelHandle} />
+            <View style={styles.panelHeader}>
+              <Ionicons name="eye" size={18} color="rgba(255,255,255,0.7)" />
+              <Text style={styles.panelTitle}>
+                Viewers · {story.view_count || 0}
+              </Text>
+              {storyLike.count > 0 && (
+                <>
+                  <View style={styles.pillDivider} />
+                  <Ionicons name="heart" size={15} color="#FF2D55" />
+                  <Text style={[styles.panelTitle, { color: "#FF2D55" }]}>
+                    {storyLike.count}
+                  </Text>
+                </>
+              )}
               <View style={{ flex: 1 }} />
               <TouchableOpacity onPress={closeViewers}>
-                <Ionicons name="close-circle" size={26} color="rgba(255,255,255,0.5)" />
+                <Ionicons name="close-circle" size={26} color="rgba(255,255,255,0.45)" />
               </TouchableOpacity>
             </View>
+
             {loadingViewers ? (
-              <View style={styles.viewersLoading}>
-                <Text style={styles.viewersLoadingText}>Loading...</Text>
+              <View style={styles.centeredMsg}>
+                <Text style={styles.mutedText}>Loading…</Text>
               </View>
             ) : viewers.length === 0 ? (
-              <View style={styles.viewersLoading}>
-                <Text style={styles.viewersLoadingText}>No viewers yet</Text>
+              <View style={styles.centeredMsg}>
+                <Ionicons name="eye-off-outline" size={36} color="rgba(255,255,255,0.2)" />
+                <Text style={[styles.mutedText, { marginTop: 8 }]}>No viewers yet</Text>
               </View>
             ) : (
               <FlatList
@@ -490,19 +684,23 @@ export default function ViewStoryScreen() {
                 keyExtractor={(v) => v.id}
                 contentContainerStyle={{ paddingHorizontal: 16 }}
                 renderItem={({ item }) => {
-                  const viewedAgo = Math.floor((Date.now() - new Date(item.viewed_at).getTime()) / 60000);
-                  const viewedLabel = viewedAgo < 1 ? "just now" : viewedAgo < 60 ? `${viewedAgo}m ago` : `${Math.floor(viewedAgo / 60)}h ago`;
+                  const ago = Math.floor((Date.now() - new Date(item.viewed_at).getTime()) / 60000);
+                  const label = ago < 1 ? "just now" : ago < 60 ? `${ago}m ago` : `${Math.floor(ago / 60)}h ago`;
                   return (
                     <View style={styles.viewerRow}>
                       <Avatar uri={item.avatar_url} name={item.display_name} size={40} />
                       <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center" }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                           <Text style={styles.viewerName}>{item.display_name}</Text>
-                          <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={13} />
+                          <VerifiedBadge
+                            isVerified={item.is_verified}
+                            isOrganizationVerified={item.is_organization_verified}
+                            size={13}
+                          />
                         </View>
                         <Text style={styles.viewerHandle}>@{item.handle}</Text>
                       </View>
-                      <Text style={styles.viewerTime}>{viewedLabel}</Text>
+                      <Text style={styles.viewerTime}>{label}</Text>
                     </View>
                   );
                 }}
@@ -518,71 +716,96 @@ export default function ViewStoryScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   media: { ...StyleSheet.absoluteFillObject },
-  progressBar: { flexDirection: "row", gap: 3, paddingHorizontal: 8, position: "absolute", left: 0, right: 0 },
-  progressSegment: { flex: 1, height: 3, borderRadius: 1.5, overflow: "hidden" },
-  progressBg: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(255,255,255,0.3)", borderRadius: 1.5 },
-  progressFill: { position: "absolute", top: 0, left: 0, bottom: 0, backgroundColor: "#fff", borderRadius: 1.5 },
-  topBar: { position: "absolute", left: 16, right: 16, flexDirection: "row", alignItems: "center", gap: 8 },
-  topActionBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(0,0,0,0.35)", alignItems: "center", justifyContent: "center" },
-  storyName: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  storyTime: { color: "rgba(255,255,255,0.7)", fontSize: 11, fontFamily: "Inter_400Regular" },
-  tapZones: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, flexDirection: "row" },
-  tapLeft: { flex: 1 },
-  tapRight: { flex: 2 },
-  captionBar: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.4)", padding: 16 },
-  captionText: { color: "#fff", fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "center" },
-  viewersTrigger: {
+
+  // Progress
+  progressBar: {
+    flexDirection: "row",
+    gap: 3,
+    paddingHorizontal: 8,
     position: "absolute",
     left: 0,
     right: 0,
+  },
+  progressSegment: {
+    flex: 1,
+    height: 3,
+    borderRadius: 1.5,
+    overflow: "hidden",
+  },
+  progressBg: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255,255,255,0.28)",
+    borderRadius: 1.5,
+  },
+  progressFill: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    bottom: 0,
+    backgroundColor: "#fff",
+    borderRadius: 1.5,
+  },
+
+  // Top bar
+  topBar: {
+    position: "absolute",
+    left: 12,
+    right: 12,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
+    gap: 8,
   },
-  viewersTriggerText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  viewersPanel: {
+  storyName: {
+    color: "#fff",
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+  },
+  storyTime: {
+    color: "rgba(255,255,255,0.65)",
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+  },
+  topBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.3)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // Tap zones
+  tapZones: {
     position: "absolute",
+    top: 0,
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "rgba(30,30,30,0.97)",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-  },
-  viewersPanelHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "rgba(255,255,255,0.3)",
-    alignSelf: "center",
-    marginTop: 10,
-    marginBottom: 6,
-  },
-  viewersHeader: {
     flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 8,
   },
-  viewersTitle: { color: "#fff", fontSize: 17, fontFamily: "Inter_700Bold" },
-  viewersCount: { color: "rgba(255,255,255,0.5)", fontSize: 15, fontFamily: "Inter_400Regular" },
-  viewersLoading: { flex: 1, alignItems: "center", justifyContent: "center" },
-  viewersLoadingText: { color: "rgba(255,255,255,0.5)", fontSize: 14, fontFamily: "Inter_400Regular" },
-  viewerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(255,255,255,0.08)",
+  tapLeft: { flex: 1 },
+  tapRight: { flex: 2 },
+
+  // Caption
+  captionBar: {
+    position: "absolute",
+    bottom: 100,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(0,0,0,0.42)",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
   },
-  viewerName: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  viewerHandle: { color: "rgba(255,255,255,0.5)", fontSize: 13, fontFamily: "Inter_400Regular" },
-  viewerTime: { color: "rgba(255,255,255,0.4)", fontSize: 12, fontFamily: "Inter_400Regular" },
-  commentBar: {
+  captionText: {
+    color: "#fff",
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    lineHeight: 21,
+  },
+
+  // Bottom action row — always visible
+  bottomRow: {
     position: "absolute",
     bottom: 0,
     left: 0,
@@ -593,47 +816,154 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     gap: 8,
   },
-  commentInput: {
+
+  // Viewer pill — inline count visible without opening sheet
+  viewerPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+  },
+  viewerPillCount: {
+    color: "#fff",
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+  },
+  pillDivider: {
+    width: 1,
+    height: 12,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    marginHorizontal: 2,
+  },
+
+  // Action buttons (like, send, share)
+  actionBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(0,0,0,0.42)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    flexDirection: "row",
+    gap: 4,
+  },
+  actionBtnActive: {
+    borderColor: "rgba(255,45,85,0.4)",
+    backgroundColor: "rgba(255,45,85,0.12)",
+  },
+  actionBtnLabel: {
+    color: "#fff",
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
+
+  // Comment input
+  commentInputWrap: {
     flex: 1,
     height: 40,
-    backgroundColor: "rgba(255,255,255,0.15)",
     borderRadius: 20,
-    paddingHorizontal: 16,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  commentInput: {
     color: "#fff",
     fontSize: 14,
     fontFamily: "Inter_400Regular",
   },
-  commentSendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#00BCD4",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  shareBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sharePanel: {
+
+  // Shared panel styles
+  panel: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "rgba(24,24,28,0.98)",
+    backgroundColor: "rgba(20,20,20,0.97)",
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
   },
+  viewersPanel: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(20,20,20,0.97)",
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+  },
+  panelHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.28)",
+    alignSelf: "center",
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  panelHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  panelTitle: {
+    color: "#fff",
+    fontSize: 17,
+    fontFamily: "Inter_700Bold",
+  },
+
+  // Viewers
+  viewerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(255,255,255,0.07)",
+  },
+  viewerName: {
+    color: "#fff",
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+  },
+  viewerHandle: {
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+  },
+  viewerTime: {
+    color: "rgba(255,255,255,0.35)",
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+  },
+  centeredMsg: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mutedText: {
+    color: "rgba(255,255,255,0.4)",
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+  },
+
+  // Share sheet
   shareOptionRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "rgba(255,255,255,0.07)",
   },
@@ -644,36 +974,45 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  shareOptionLabel: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  shareOptionSub: { color: "rgba(255,255,255,0.45)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  shareContactsLabel: {
+  shareOptionLabel: {
+    color: "#fff",
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+  },
+  shareOptionSub: {
     color: "rgba(255,255,255,0.45)",
     fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    marginTop: 1,
+  },
+  shareContactsLabel: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 12,
     fontFamily: "Inter_600SemiBold",
+    textTransform: "uppercase",
     letterSpacing: 0.5,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 6,
-    textTransform: "uppercase",
   },
   shareContactRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 10,
   },
   shareContactName: {
     flex: 1,
     color: "#fff",
     fontSize: 15,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Inter_400Regular",
   },
   shareContactSend: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#00BCD4",
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(255,255,255,0.1)",
     alignItems: "center",
     justifyContent: "center",
   },
