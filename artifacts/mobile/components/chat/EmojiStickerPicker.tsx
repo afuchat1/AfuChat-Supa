@@ -149,7 +149,7 @@ export default function EmojiStickerPicker({ height, onEmojiSelected, onSendStic
           onEmojiSelected={(emojiObject: { emoji: string }) => onEmojiSelected(emojiObject.emoji)}
           enableRecentlyUsed
           enableSearchBar
-          enableCategoryChangeGesture
+          enableCategoryChangeGesture={false}
           categoryPosition="top"
           theme={emojiTheme}
         />
