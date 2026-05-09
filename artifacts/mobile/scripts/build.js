@@ -55,20 +55,30 @@ function stripProtocol(domain) {
 }
 
 function getDeploymentDomain() {
+  // Generic: set APP_DOMAIN to any host when running outside Replit
+  if (process.env.APP_DOMAIN) {
+    return stripProtocol(process.env.APP_DOMAIN);
+  }
+
+  // Replit deployment domain (available inside a Replit deployment)
   if (process.env.REPLIT_INTERNAL_APP_DOMAIN) {
     return stripProtocol(process.env.REPLIT_INTERNAL_APP_DOMAIN);
   }
 
+  // Replit dev domain (available inside the Replit editor)
   if (process.env.REPLIT_DEV_DOMAIN) {
     return stripProtocol(process.env.REPLIT_DEV_DOMAIN);
   }
 
+  // Explicit public domain (set manually or via CI)
   if (process.env.EXPO_PUBLIC_DOMAIN) {
     return stripProtocol(process.env.EXPO_PUBLIC_DOMAIN);
   }
 
   console.error(
-    "ERROR: No deployment domain found. Set REPLIT_INTERNAL_APP_DOMAIN, REPLIT_DEV_DOMAIN, or EXPO_PUBLIC_DOMAIN",
+    "ERROR: No deployment domain found. " +
+    "Set APP_DOMAIN (e.g. 'api.afuchat.com'), or EXPO_PUBLIC_DOMAIN, " +
+    "or run inside Replit where REPLIT_DEV_DOMAIN is auto-set.",
   );
   process.exit(1);
 }
