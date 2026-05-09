@@ -201,7 +201,7 @@ export default function LinkedAccountsScreen() {
           })}
         </View>
 
-        {/* Add account button — hidden when at the limit for non-admins */}
+        {/* Add account button — hidden when at the limit */}
         {!showAdd && !atLimit && (
           <TouchableOpacity
             style={[styles.addRow, { backgroundColor: colors.surface }]}
@@ -216,12 +216,12 @@ export default function LinkedAccountsScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Limit notice for non-admin users who have reached the cap */}
+        {/* Limit notice when user has reached the cap */}
         {atLimit && !showAdd && (
           <View style={[styles.limitNotice, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Ionicons name="lock-closed-outline" size={16} color={colors.textMuted} />
             <Text style={[styles.limitNoticeText, { color: colors.textMuted }]}>
-              Non-admin accounts can link up to {MAX_ACCOUNTS_NON_ADMIN} accounts.
+              You've reached the maximum of {MAX_ACCOUNTS_NON_ADMIN} linked accounts.
             </Text>
           </View>
         )}

@@ -192,11 +192,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function addAccount(email: string, password: string): Promise<{ success: boolean; error?: string }> {
-    // Non-admins are limited to 2 linked accounts total (current + 1 other).
     if (!profile?.is_admin) {
       const current = await getStoredAccounts();
       if (current.length >= 2) {
-        return { success: false, error: "You can link at most 2 accounts. Upgrade to a higher plan for more." };
+        return { success: false, error: "You've reached the maximum of 2 linked accounts." };
       }
     }
 

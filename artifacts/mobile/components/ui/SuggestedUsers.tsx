@@ -161,23 +161,15 @@ function UserCard({
         @{user.handle}
       </Text>
 
-      {/* Shared interests badge */}
-      <View style={[styles.interestBadge, {
-        backgroundColor: user.sharedCount > 0 ? accent + "18" : colors.backgroundTertiary,
-      }]}>
-        <Ionicons
-          name={user.sharedCount > 0 ? "people-outline" : "star-outline"}
-          size={10}
-          color={user.sharedCount > 0 ? accent : colors.textMuted}
-        />
-        <Text style={[styles.interestBadgeText, {
-          color: user.sharedCount > 0 ? accent : colors.textMuted,
-        }]}>
-          {user.sharedCount > 0
-            ? `${user.sharedCount} shared interest${user.sharedCount > 1 ? "s" : ""}`
-            : "Popular"}
-        </Text>
-      </View>
+      {/* Shared interests badge — only shown when there is a real match */}
+      {user.sharedCount > 0 && (
+        <View style={[styles.interestBadge, { backgroundColor: accent + "18" }]}>
+          <Ionicons name="people-outline" size={10} color={accent} />
+          <Text style={[styles.interestBadgeText, { color: accent }]}>
+            {user.sharedCount} shared interest{user.sharedCount > 1 ? "s" : ""}
+          </Text>
+        </View>
+      )}
 
       {/* Follow button */}
       <TouchableOpacity
