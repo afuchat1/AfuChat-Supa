@@ -114,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const [{ data: profileData }, { data: subData }] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, handle, display_name, avatar_url, banner_url, bio, phone_number, xp, acoin, current_grade, is_verified, is_private, show_online_status, country, website_url, language, tipping_enabled, is_admin, is_support_staff, is_organization_verified, gender, date_of_birth, region, interests, onboarding_completed, scheduled_deletion_at, created_at")
+          .select("id, handle, display_name, avatar_url, banner_url, bio, phone_number, xp, acoin, current_grade, is_verified, is_private, show_online_status, country, website_url, language, tipping_enabled, is_admin, is_support_staff, is_organization_verified, is_business_mode, gender, date_of_birth, region, interests, onboarding_completed, scheduled_deletion_at, created_at")
           .eq("id", userId)
           .single(),
         supabase
