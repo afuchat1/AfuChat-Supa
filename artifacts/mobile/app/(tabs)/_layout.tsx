@@ -3,7 +3,7 @@ import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useCallback } from "react";
 import { Image, Platform, StyleSheet, useColorScheme, View } from "react-native";
 import { router, usePathname } from "expo-router";
 import type { Session } from "@supabase/supabase-js";
@@ -42,35 +42,45 @@ function SwipeTabsWrapper({
   isLoggedIn: boolean;
 }) {
   const pathname = usePathname();
+  // Prevent multiple navigations per single gesture
+  const firedRef = useRef(false);
 
-  const swipeGesture = Gesture.Pan()
-    // Only claim the gesture after 20 px horizontal movement...
-    .activeOffsetX([-20, 20])
-    // ...and immediately fail if the user moves 12 px vertically first
-    // (hands off to ScrollView/FlatList).
-    .failOffsetY([-12, 12])
-    .onEnd((e) => {
-      if (!isLoggedIn) return;
+  const tryNavigate = useCallback(
+    (translationX: number, velocityX: number) => {
+      if (!isLoggedIn || firedRef.current) return;
 
-      // Require a meaningful swipe: either fast enough or far enough
-      const isFling = Math.abs(e.velocityX) > 400;
-      const isFar   = Math.abs(e.translationX) > 70;
+      // Fire as soon as the swipe is decisive — low thresholds for snappiness
+      const isFling = Math.abs(velocityX) > 200;
+      const isFar   = Math.abs(translationX) > 40;
       if (!isFling && !isFar) return;
 
-      // Normalise pathname — index tab shows as "/" in some Expo Router builds
-      const current =
-        pathname === "/" ? "/(tabs)" : pathname;
-
+      const current = pathname === "/" ? "/(tabs)" : pathname;
       const idx = SWIPE_TAB_ROUTES.indexOf(current);
       if (idx === -1) return;
 
-      if (e.translationX < 0 && idx < SWIPE_TAB_ROUTES.length - 1) {
-        // Swipe left → next tab
-        runOnJS(navigateTo)(SWIPE_TAB_ROUTES[idx + 1]);
-      } else if (e.translationX > 0 && idx > 0) {
-        // Swipe right → previous tab
-        runOnJS(navigateTo)(SWIPE_TAB_ROUTES[idx - 1]);
+      if (translationX < 0 && idx < SWIPE_TAB_ROUTES.length - 1) {
+        firedRef.current = true;
+        navigateTo(SWIPE_TAB_ROUTES[idx + 1]);
+      } else if (translationX > 0 && idx > 0) {
+        firedRef.current = true;
+        navigateTo(SWIPE_TAB_ROUTES[idx - 1]);
       }
+    },
+    [isLoggedIn, pathname]
+  );
+
+  const swipeGesture = Gesture.Pan()
+    // Claim the gesture quickly — 10 px horizontal
+    .activeOffsetX([-10, 10])
+    // Hand off to the scrollable content if the user goes vertical first
+    .failOffsetY([-10, 10])
+    // Fire mid-swipe the instant the threshold is met (feels instant)
+    .onUpdate((e) => {
+      runOnJS(tryNavigate)(e.translationX, e.velocityX);
+    })
+    // Reset the guard when the finger lifts so the next gesture works
+    .onFinalize(() => {
+      firedRef.current = false;
     });
 
   // Web: pass through untouched — no swipe, no wrapping overhead
