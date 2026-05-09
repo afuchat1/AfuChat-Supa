@@ -5,7 +5,6 @@
  *  • xp_transfers         — Nexa sent / received
  *  • acoin_transactions   — ACoin: topup, conversion, subscription, marketplace, game, etc.
  *  • gift_transactions    — gifts sent / received
- *  • xp_activity_log      — XP earned from activities
  *
  * Realtime subscriptions on acoin_transactions + xp_transfers.
  */
@@ -52,7 +51,7 @@ type Transaction = {
   label: string;
   icon: string;
   color: string;
-  currency: "nexa" | "acoin" | "gift" | "points";
+  currency: "nexa" | "acoin" | "gift";
   metadata?: Record<string, any>;
   fee?: number;
   nexaSpent?: number;
@@ -67,8 +66,8 @@ type CurrencySettings = {
   p2p_fee_percent: number;
 };
 
-type TabKey = "all" | "acoin" | "nexa" | "gifts" | "points";
-type BalanceCurrency = "acoin" | "nexa" | "xp";
+type TabKey = "all" | "acoin" | "nexa" | "gifts";
+type BalanceCurrency = "acoin" | "nexa";
 
 // ─── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -446,15 +445,6 @@ export default function WalletScreen() {
 
     if (settings) setCurrencySettings(settings as CurrencySettings);
 
-    let activityRows: any[] = [];
-    try {
-      const { data } = await supabase
-        .from("xp_activity_log")
-        .select("id, activity_type, xp_amount, created_at, metadata")
-        .eq("user_id", user.id).order("created_at", { ascending: false }).limit(200);
-      activityRows = data || [];
-    } catch {}
-
     const all: Transaction[] = [];
 
     (xpSent || []).forEach((t: any) => {
@@ -533,36 +523,6 @@ export default function WalletScreen() {
       });
     });
 
-    const activityLabelMap: Record<string, { label: string; icon: string }> = {
-      profile_completed:      { label: "Profile Completed",      icon: "person-circle"  },
-      referral:               { label: "Referral Reward",         icon: "people"         },
-      daily_login:            { label: "Daily Login Bonus",       icon: "calendar"       },
-      post_created:           { label: "Posted Content",          icon: "create"         },
-      post_reply:             { label: "Posted a Reply",          icon: "chatbubble"     },
-      post_liked:             { label: "Liked a Post",            icon: "heart"          },
-      follow_user:            { label: "Followed Someone",        icon: "person-add"     },
-      message_sent:           { label: "Sent a Message",          icon: "paper-plane"    },
-      story_created:          { label: "Created a Story",         icon: "camera"         },
-      story_viewed:           { label: "Story View Reward",       icon: "eye"            },
-      gift_sent:              { label: "Sent a Gift",             icon: "gift"           },
-      group_created:          { label: "Created a Group",         icon: "people-circle"  },
-      channel_created:        { label: "Created a Channel",       icon: "megaphone"      },
-      red_envelope_sent:      { label: "Sent Red Envelope",       icon: "gift"           },
-      red_envelope_claimed:   { label: "Claimed Red Envelope",    icon: "gift"           },
-      nexa_transfer_received: { label: "Nexa Transfer",           icon: "flash"          },
-    };
-    activityRows.forEach((t: any) => {
-      const mapped = activityLabelMap[t.activity_type];
-      all.push({
-        id: "xa_" + t.id, type: "xp_activity", amount: t.xp_amount || 0, created_at: t.created_at,
-        label: mapped?.label || t.activity_type.replace(/_/g, " "),
-        icon: (mapped?.icon || "star") as any,
-        color: "#FF9500", currency: "points",
-        metadata: { ...(t.metadata || {}), activity_type: t.activity_type },
-        status: "completed",
-      });
-    });
-
     all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     setTransactions(all);
     cacheWallet({ acoin: profile?.acoin ?? 0, transactions: all });
@@ -595,7 +555,6 @@ export default function WalletScreen() {
 
   const filteredTx = activeTab === "all" ? transactions
     : activeTab === "gifts" ? transactions.filter((t) => ["gift_sent", "gift_received", "gift_conversion", "marketplace_purchase", "marketplace_sale"].includes(t.type))
-    : activeTab === "points" ? transactions.filter((t) => t.currency === "points")
     : transactions.filter((t) => t.currency === activeTab);
 
   const groups = groupByDate(filteredTx);
@@ -607,21 +566,18 @@ export default function WalletScreen() {
 
   const acoin = profile?.acoin || 0;
   const nexa = profile?.xp || 0;
-  const pointsCount = transactions.filter((t) => t.currency === "points").length;
 
   const tabs: { key: TabKey; label: string }[] = [
     { key: "all", label: "All" },
     { key: "acoin", label: "ACoin" },
     { key: "nexa", label: "Nexa" },
     { key: "gifts", label: "Gifts" },
-    ...(pointsCount > 0 ? [{ key: "points" as TabKey, label: "XP" }] : []),
   ];
 
   // Hero card config
   const balanceConfig = {
     acoin: { label: "ACoin", value: acoin, icon: "diamond" as const, color: Colors.brand, gradient: ["#003D44", "#001A1F"] as [string, string] },
     nexa:  { label: "Nexa",  value: nexa,  icon: "flash"   as const, color: "#FF9500",    gradient: ["#3D1F00", "#1F0E00"] as [string, string] },
-    xp:    { label: "XP Points", value: nexa, icon: "star" as const, color: "#FFD60A",    gradient: ["#2B2600", "#141200"] as [string, string] },
   };
   const bc = balanceConfig[balanceCurrency];
 
@@ -667,7 +623,7 @@ export default function WalletScreen() {
 
               {/* Currency tabs */}
               <View style={s.currencyTabs}>
-                {(["acoin", "nexa", "xp"] as BalanceCurrency[]).map((c) => {
+                {(["acoin", "nexa"] as BalanceCurrency[]).map((c) => {
                   const conf = balanceConfig[c];
                   const active = balanceCurrency === c;
                   return (
@@ -702,16 +658,10 @@ export default function WalletScreen() {
                     <Text style={[s.heroMiniText, { color: Colors.brand }]}>{acoin.toLocaleString()} ACoin</Text>
                   </View>
                 )}
-                {balanceCurrency !== "nexa" && balanceCurrency !== "xp" && (
+                {balanceCurrency !== "nexa" && (
                   <View style={[s.heroMiniPill, { borderColor: "#FF950040" }]}>
                     <Ionicons name="flash" size={11} color="#FF9500" />
                     <Text style={[s.heroMiniText, { color: "#FF9500" }]}>{nexa.toLocaleString()} Nexa</Text>
-                  </View>
-                )}
-                {balanceCurrency === "acoin" && (
-                  <View style={[s.heroMiniPill, { borderColor: "#FFD60A40" }]}>
-                    <Ionicons name="star" size={11} color="#FFD60A" />
-                    <Text style={[s.heroMiniText, { color: "#FFD60A" }]}>{nexa.toLocaleString()} XP</Text>
                   </View>
                 )}
               </View>

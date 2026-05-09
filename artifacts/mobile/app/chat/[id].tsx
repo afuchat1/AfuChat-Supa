@@ -821,10 +821,6 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
                 >
                   <View>
                     <Image source={{ uri: attachUri || msg.attachment_url! }} style={st.attachImage} resizeMode="cover" />
-                    <View style={{ position: "absolute", bottom: 6, right: 6, backgroundColor: "rgba(0,0,0,0.42)", borderRadius: 10, paddingHorizontal: 6, paddingVertical: 3, flexDirection: "row", alignItems: "center", gap: 3 }}>
-                      <Ionicons name="expand-outline" size={11} color="#fff" />
-                      <Text style={{ color: "#fff", fontSize: 10, fontFamily: "Inter_400Regular" }}>Tap to zoom</Text>
-                    </View>
                   </View>
                 </TouchableOpacity>
               {hasTextContent && (
@@ -3575,7 +3571,23 @@ STRICT RULES:
     );
   }, [messages, user, colors, highlightedMsgId, scrollToMessage, advancedFeatures.mini_profile_popup]);
 
+  // ── Swipe right anywhere in the chat to go back (like iOS native push) ──────
+  // activeOffsetX: only fires on rightward swipes (threshold 15px).
+  // failOffsetY:   vertical scroll takes priority — FlatList never blocked.
+  // Threshold 80px: comfortable swipe without accidental triggers.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const backSwipeGesture = useRef(
+    Gesture.Pan()
+      .activeOffsetX([15, 999])
+      .failOffsetY([-20, 20])
+      .onEnd((e) => {
+        "worklet";
+        if (e.translationX > 80) runOnJS(chatGoBack)();
+      })
+  ).current;
+
   return (
+    <GestureDetector gesture={backSwipeGesture}>
     <View style={[st.root, { backgroundColor: colors.background }]}>
       <OfflineBanner />
       <View style={[st.header, { backgroundColor: colors.surface, paddingTop: insets.top + 4, borderBottomColor: colors.border }]}>
@@ -4464,6 +4476,7 @@ STRICT RULES:
         </Modal>
       )}
     </View>
+    </GestureDetector>
   );
 }
 
