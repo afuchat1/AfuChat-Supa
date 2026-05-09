@@ -123,6 +123,7 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
         name="apps"
         options={{
           title: "Apps",
+          href: isLoggedIn ? undefined : null,
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
               <SymbolView name={focused ? "square.grid.2x2.fill" : "square.grid.2x2"} tintColor={color} size={22} />

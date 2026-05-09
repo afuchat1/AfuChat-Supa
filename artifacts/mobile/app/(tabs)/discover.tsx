@@ -753,6 +753,13 @@ export default function DiscoverScreen() {
   useEffect(() => { postsRef.current = posts; }, [posts]);
   useEffect(() => { feedTabRef.current = feedTab; }, [feedTab]);
 
+  // If the user logs out while on the Following tab, snap back to For You
+  useEffect(() => {
+    if (!user && feedTabRef.current === "following") {
+      setFeedTab("for_you");
+    }
+  }, [user]);
+
   useEffect(() => {
     getLearnedInterestBoosts().then((w) => { learnedWeightsRef.current = w; });
   }, []);
@@ -1527,12 +1534,10 @@ export default function DiscoverScreen() {
                 For You
               </Text>
             </TouchableOpacity>
+            {user && (
             <TouchableOpacity
               style={[styles.tabPill, { borderBottomColor: feedTab === "following" ? colors.text : "transparent" }]}
-              onPress={() => {
-                if (!user) { router.push("/(auth)/login"); return; }
-                setFeedTab("following");
-              }}
+              onPress={() => setFeedTab("following")}
             >
               <Text style={[
                 styles.tabPillText,
@@ -1542,6 +1547,7 @@ export default function DiscoverScreen() {
                 Following
               </Text>
             </TouchableOpacity>
+            )}
             <TouchableOpacity
                 style={styles.tabPill}
                 onPress={() => router.push("/shorts" as any)}
