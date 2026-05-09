@@ -81,8 +81,8 @@ function FloatingTabBar() {
   const TAB_WIDTH     = (SCREEN_WIDTH - PILL_H_MARGIN * 2) / TABS.length;
   const H_PADDING     = 4;   // space on each side of the highlight within the tab slot
   const HIGHLIGHT_W   = TAB_WIDTH - H_PADDING * 2;
-  const HIGHLIGHT_H   = PILL_HEIGHT - 14;  // 50px — tall enough to enclose icon + label
-  const HIGHLIGHT_R   = 20;               // squircle-style: ~40% of height for continuous curve feel
+  const HIGHLIGHT_H   = PILL_HEIGHT - 16;  // 48px — tall enough to enclose icon + label
+  const HIGHLIGHT_R   = HIGHLIGHT_H / 2;  // true oval/capsule — fully rounded short ends
 
   function pillLeft(idx: number) {
     return idx * TAB_WIDTH + H_PADDING;

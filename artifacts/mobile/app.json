@@ -14,7 +14,7 @@
       "iosDisplayInForeground": true
     },
     "splash": {
-      "image": "./assets/images/icon.png",
+      "image": "./assets/images/afu-symbol.png",
       "resizeMode": "contain",
       "backgroundColor": "#00BCD4"
     },
