@@ -28,6 +28,7 @@ import Colors from "@/constants/colors";
 import { ChatRowSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import OfflineBanner from "@/components/ui/OfflineBanner";
+import { HomeBanner } from "@/components/ui/HomeBanner";
 import { isOnline } from "@/lib/offlineStore";
 import { getLocalConversations, saveConversations, hasLocalConversations } from "@/lib/storage/localConversations";
 import { addOnlineListener } from "@/lib/offlineSync";
@@ -975,6 +976,8 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
         </TouchableOpacity>
       </View>
       )}
+
+      {!panelMode && <HomeBanner />}
 
       <View style={[styles.searchWrap, { backgroundColor: colors.background }]}>
         <View style={[
