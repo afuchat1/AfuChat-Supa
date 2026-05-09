@@ -4,7 +4,16 @@ import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef } from "react";
-import { Dimensions, Image, Platform, StyleSheet, useColorScheme, View } from "react-native";
+import {
+  Dimensions,
+  Image,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useColorScheme,
+  View,
+} from "react-native";
 import { router, usePathname } from "expo-router";
 import type { Session } from "@supabase/supabase-js";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -31,6 +40,10 @@ try {
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
+const PILL_HEIGHT = 64;
+const PILL_RADIUS = 34;
+const PILL_H_MARGIN = 36;
+
 // Ordered list of visible tab routes — must match the Tabs.Screen order below
 const SWIPE_TAB_ROUTES = [
   "/(tabs)",
@@ -52,18 +65,108 @@ function navigateToIdx(idx: number) {
   router.navigate(SWIPE_TAB_ROUTES[idx] as any);
 }
 
-// ─── Swipe wrapper — true pager feel ─────────────────────────────────────────
-//
-// Design:
-//   • Drag 0–20%: content follows finger 1:1 (shows intent).
-//   • At 20% threshold: navigate to destination tab IMMEDIATELY so its content
-//     is already mounted; position it at the entry edge and let it slide in as
-//     the finger continues — user sees real next-tab content while still dragging.
-//   • 60 ms opacity fade at the navigation instant masks any layout jump.
-//   • On release (committed ≥ 32% or fling): spring new tab to centre.
-//   • On release (cancelled): navigate back, bounce new tab off the edge.
-//   • Rubber-band at first / last tab (15% damping).
+// ─── Floating pill tab bar — rendered OUTSIDE the swipe animation ─────────────
+function FloatingTabBar() {
+  const pathname = usePathname();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === "dark";
+  const isIOS = Platform.OS === "ios";
+  const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
 
+  const bottomOffset = (insets.bottom > 0 ? insets.bottom : 14) + 6;
+  const active = normalizeTabPath(pathname);
+
+  const TABS = [
+    { route: "/(tabs)",          label: "AfuChat",  sfOn: "message.fill",         sfOff: "message",         mdOn: "chatbubble",       mdOff: "chatbubble-outline" },
+    { route: "/(tabs)/discover", label: "Discover", sfOn: "safari.fill",           sfOff: "safari",           mdOn: "compass",          mdOff: "compass-outline" },
+    { route: "/(tabs)/apps",     label: "Apps",     sfOn: "square.grid.2x2.fill",  sfOff: "square.grid.2x2",  mdOn: "grid",             mdOff: "grid-outline" },
+    { route: "/(tabs)/me",       label: "Me",       sfOn: "person.circle.fill",    sfOff: "person.circle",    mdOn: "person",           mdOff: "person-outline" },
+  ];
+
+  return (
+    <View
+      pointerEvents="box-none"
+      style={{
+        position: "absolute",
+        left: PILL_H_MARGIN,
+        right: PILL_H_MARGIN,
+        bottom: bottomOffset,
+        height: PILL_HEIGHT,
+        borderRadius: PILL_RADIUS,
+        overflow: "hidden",
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: isDark ? 0.5 : 0.14,
+        shadowRadius: 28,
+        elevation: 20,
+      }}
+    >
+      {isIOS ? (
+        <BlurView
+          intensity={isDark ? 72 : 88}
+          tint={isDark ? "systemChromeMaterialDark" : "systemChromeMaterialLight"}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : (
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: isDark ? "rgba(26,26,28,0.97)" : "rgba(255,255,255,0.97)" },
+          ]}
+        />
+      )}
+
+      <View style={{ flex: 1, flexDirection: "row" }}>
+        {TABS.map((tab) => {
+          const isFocused = active === tab.route;
+          const color = isFocused ? colors.accent : colors.tabIconDefault;
+
+          return (
+            <TouchableOpacity
+              key={tab.route}
+              style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 3 }}
+              onPress={() => router.navigate(tab.route as any)}
+              activeOpacity={0.65}
+            >
+              {tab.route === "/(tabs)" ? (
+                <Image
+                  source={afuSymbol}
+                  style={{ width: 24, height: 24, tintColor: color }}
+                  resizeMode="contain"
+                />
+              ) : isIOS ? (
+                <SymbolView
+                  name={isFocused ? tab.sfOn : tab.sfOff}
+                  tintColor={color}
+                  size={22}
+                />
+              ) : (
+                <Ionicons
+                  name={(isFocused ? tab.mdOn : tab.mdOff) as any}
+                  size={22}
+                  color={color}
+                />
+              )}
+              <Text
+                style={{
+                  fontSize: 10,
+                  fontFamily: "Inter_500Medium",
+                  color,
+                  letterSpacing: 0.1,
+                }}
+              >
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+// ─── Swipe wrapper — true pager feel ─────────────────────────────────────────
 function SwipeTabsWrapper({
   children,
   isLoggedIn,
@@ -78,9 +181,8 @@ function SwipeTabsWrapper({
   const isLoggedInSV = useSharedValue(isLoggedIn);
   const tabIdxSV     = useSharedValue(SWIPE_TAB_ROUTES.indexOf(normalizeTabPath(pathname)));
 
-  // Per-gesture state (reset in onBegin).
   const earlyNavDone = useSharedValue(false);
-  const earlyNavEdge = useSharedValue(0);   // ±SCREEN_WIDTH
+  const earlyNavEdge = useSharedValue(0);
   const originalIdx  = useSharedValue(0);
 
   useEffect(() => { isLoggedInSV.value = isLoggedIn; }, [isLoggedIn]);
@@ -117,7 +219,6 @@ function SwipeTabsWrapper({
           return;
         }
 
-        // ── Early navigation at 20% ────────────────────────────────────────
         if (!earlyNavDone.value) {
           const EARLY    = SCREEN_WIDTH * 0.20;
           const canGoNext = e.translationX < -EARLY && !atEnd;
@@ -126,14 +227,9 @@ function SwipeTabsWrapper({
           if (canGoNext || canGoPrev) {
             earlyNavDone.value = true;
             const newIdx = canGoNext ? idx + 1 : idx - 1;
-            // New tab enters from this edge (right for goNext, left for goPrev).
             const edge = canGoNext ? SCREEN_WIDTH : -SCREEN_WIDTH;
             earlyNavEdge.value = edge;
-
-            // Switch tab immediately — new content is now active at translateX=0.
             runOnJS(navigateToIdx)(newIdx);
-
-            // Briefly drop opacity to hide the position jump, then fade back in.
             opacity.value = 0;
             translateX.value = edge + e.translationX;
             opacity.value = withTiming(1, { duration: 60 });
@@ -142,12 +238,10 @@ function SwipeTabsWrapper({
         }
 
         if (earlyNavDone.value) {
-          // New tab slides in from its entry edge as finger continues.
           translateX.value = earlyNavEdge.value + e.translationX;
           return;
         }
 
-        // Rubber-band at first / last tab (no early nav possible).
         if ((atStart && e.translationX > 0) || (atEnd && e.translationX < 0)) {
           translateX.value = e.translationX * 0.15;
         } else {
@@ -156,11 +250,9 @@ function SwipeTabsWrapper({
       })
       .onEnd((e) => {
         "worklet";
-
         opacity.value = 1;
 
         if (!isLoggedInSV.value || !earlyNavDone.value) {
-          // No early nav — spring back.
           translateX.value = withSpring(0, {
             velocity: e.velocityX,
             damping: 22,
@@ -172,13 +264,11 @@ function SwipeTabsWrapper({
 
         const isFling  = Math.abs(e.velocityX) > 300;
         const isFar    = Math.abs(e.translationX) > SCREEN_WIDTH * 0.32;
-        // Direction must still match: goNext→translationX<0, goPrev→translationX>0.
         const dirMatch = earlyNavEdge.value > 0
           ? e.translationX < 0
           : e.translationX > 0;
 
         if ((isFling || isFar) && dirMatch) {
-          // ── Committed: spring new tab to centre ───────────────────────────
           translateX.value = withSpring(0, {
             damping: 26,
             stiffness: 320,
@@ -186,7 +276,6 @@ function SwipeTabsWrapper({
             overshootClamping: true,
           });
         } else {
-          // ── Cancelled: navigate back, bounce new tab off its entry edge ───
           runOnJS(navigateToIdx)(originalIdx.value);
           translateX.value = withSpring(earlyNavEdge.value, {
             velocity: e.velocityX,
@@ -194,14 +283,12 @@ function SwipeTabsWrapper({
             stiffness: 280,
             mass: 0.8,
           }, () => {
-            // Reset invisibly — original tab is now active at centre.
             translateX.value = 0;
           });
         }
       })
   ).current;
 
-  // Web — no swipe needed.
   if (Platform.OS === "web") return <>{children}</>;
 
   return (
@@ -246,134 +333,34 @@ function NativeTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   );
 }
 
+// Screen-only layout — tab bar is rendered separately outside the swipe layer
 function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-  const isIOS = Platform.OS === "ios";
-  const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const { isDesktop } = useIsDesktop();
-
-  const hideTabs = isDesktop || (!isLoggedIn && Platform.OS === "web");
-
-  const PILL_HEIGHT = 62;
-  const PILL_RADIUS = 32;
-  const PILL_H_MARGIN = 24;
-  const bottomOffset = (insets.bottom > 0 ? insets.bottom : 12) + 4;
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.tabIconDefault,
         headerShown: false,
         lazy: false,
         ...(({ contentStyle: { backgroundColor: colors.background } }) as any),
-        tabBarStyle: hideTabs
-          ? { display: "none" }
-          : {
-              position: "absolute",
-              left: PILL_H_MARGIN,
-              right: PILL_H_MARGIN,
-              bottom: bottomOffset,
-              height: PILL_HEIGHT,
-              borderRadius: PILL_RADIUS,
-              backgroundColor: isIOS ? "transparent" : isDark ? "rgba(30,30,32,0.97)" : "rgba(255,255,255,0.97)",
-              borderTopWidth: 0,
-              elevation: 16,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: isDark ? 0.45 : 0.13,
-              shadowRadius: 24,
-              paddingBottom: 0,
-              overflow: "hidden",
-            },
-        tabBarItemStyle: {
-          paddingTop: 4,
-          paddingBottom: 4,
-        },
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontFamily: "Inter_500Medium",
-          marginTop: 2,
-        },
-        tabBarBackground: () =>
-          isIOS ? (
-            <BlurView
-              intensity={isDark ? 70 : 85}
-              tint={isDark ? "systemChromeMaterialDark" : "systemChromeMaterialLight"}
-              style={[StyleSheet.absoluteFill, { borderRadius: PILL_RADIUS, overflow: "hidden" }]}
-            />
-          ) : null,
+        // Hide the built-in tab bar entirely — FloatingTabBar handles it
+        tabBarStyle: { display: "none" },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "AfuChat",
-          href: isLoggedIn ? undefined : null,
-          tabBarIcon: ({ color }) => (
-            <Image source={afuSymbol} style={{ width: 26, height: 26, tintColor: color }} resizeMode="contain" />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="discover"
-        options={{
-          title: "Discover",
-          href: isLoggedIn ? undefined : null,
-          tabBarIcon: ({ color, focused }) =>
-            isIOS ? (
-              <SymbolView name={focused ? "safari.fill" : "safari"} tintColor={color} size={22} />
-            ) : (
-              <Ionicons name={focused ? "compass" : "compass-outline"} size={22} color={color} />
-            ),
-        }}
-      />
-      <Tabs.Screen
-        name="search"
-        options={{ href: null }}
-      />
-      <Tabs.Screen
-        name="contacts"
-        options={{ href: null }}
-      />
-      <Tabs.Screen
-        name="communities"
-        options={{ href: null }}
-      />
-      <Tabs.Screen
-        name="apps"
-        options={{
-          title: "Apps",
-          href: isLoggedIn ? undefined : null,
-          tabBarIcon: ({ color, focused }) =>
-            isIOS ? (
-              <SymbolView name={focused ? "square.grid.2x2.fill" : "square.grid.2x2"} tintColor={color} size={22} />
-            ) : (
-              <Ionicons name={focused ? "grid" : "grid-outline"} size={22} color={color} />
-            ),
-        }}
-      />
-      <Tabs.Screen
-        name="me"
-        options={{
-          title: "Me",
-          href: isLoggedIn ? undefined : null,
-          tabBarIcon: ({ color, focused }) =>
-            isIOS ? (
-              <SymbolView name={focused ? "person.circle.fill" : "person.circle"} tintColor={color} size={22} />
-            ) : (
-              <Ionicons name={focused ? "person" : "person-outline"} size={22} color={color} />
-            ),
-        }}
-      />
+      <Tabs.Screen name="index"       options={{ href: isLoggedIn ? undefined : null }} />
+      <Tabs.Screen name="discover"    options={{ href: isLoggedIn ? undefined : null }} />
+      <Tabs.Screen name="search"      options={{ href: null }} />
+      <Tabs.Screen name="contacts"    options={{ href: null }} />
+      <Tabs.Screen name="communities" options={{ href: null }} />
+      <Tabs.Screen name="apps"        options={{ href: isLoggedIn ? undefined : null }} />
+      <Tabs.Screen name="me"          options={{ href: isLoggedIn ? undefined : null }} />
     </Tabs>
   );
 }
 
 export default function TabLayout() {
   const { session, profile, loading } = useAuth();
+  const { isDesktop } = useIsDesktop();
   const isLoggedIn = !!session;
   const prevSessionRef = useRef<Session | null>(null);
 
@@ -394,13 +381,22 @@ export default function TabLayout() {
     }
   }, [session, profile, loading]);
 
-  const tabs = isLiquidGlassAvailable()
-    ? <NativeTabLayout isLoggedIn={isLoggedIn} />
-    : <ClassicTabLayout isLoggedIn={isLoggedIn} />;
+  if (isLiquidGlassAvailable()) {
+    return (
+      <SwipeTabsWrapper isLoggedIn={isLoggedIn}>
+        <NativeTabLayout isLoggedIn={isLoggedIn} />
+      </SwipeTabsWrapper>
+    );
+  }
 
   return (
-    <SwipeTabsWrapper isLoggedIn={isLoggedIn}>
-      {tabs}
-    </SwipeTabsWrapper>
+    <View style={{ flex: 1 }}>
+      <SwipeTabsWrapper isLoggedIn={isLoggedIn}>
+        <ClassicTabLayout isLoggedIn={isLoggedIn} />
+      </SwipeTabsWrapper>
+      {isLoggedIn && !isDesktop && Platform.OS !== "web" && (
+        <FloatingTabBar />
+      )}
+    </View>
   );
 }
