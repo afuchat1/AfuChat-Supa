@@ -683,6 +683,8 @@ export default function DiscoverScreen() {
   // different older content.
   const throwbackOffsetRef = useRef(0);
   const throwbackExhaustedRef = useRef(false);
+  const midOffsetRef = useRef(0);
+  const midExhaustedRef = useRef(false);
   const flatListRef = useRef<FlatList>(null);
   const recordedViewsRef = useRef<Set<string>>(new Set());
 
@@ -916,15 +918,16 @@ export default function DiscoverScreen() {
     const userInterests: string[] = profile?.interests || [];
     const userCountry: string = profile?.country || "";
 
-    // Two-stream feed:
-    //  1. RECENT  — newest ~20 posts (cursor-based, newest-first)
-    //  2. THROWBACK — high-engagement posts older than 30 days
-    //     Uses a random session offset so each refresh surfaces different old gems.
-    //     Offset resets on every full refresh; increments on load-more.
-    const RECENT_SIZE = 20;
-    const THROWBACK_SIZE = 10;
+    // Three-stream feed — each refresh delivers a unique mix of time ranges:
+    //  1. RECENT    — newest posts (last 4 days)
+    //  2. MID       — posts 4–30 days old, random window per session
+    //  3. THROWBACK — posts older than 30 days, random window per session
+    // Streams are shuffled before scoring so every pull-to-refresh feels different.
+    const RECENT_SIZE = 12;
+    const MID_SIZE = 10;
+    const THROWBACK_SIZE = 8;
 
-    // 30 days ago threshold for the throwback stream
+    const fourDaysAgo = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     const fyOlderThan =
@@ -943,26 +946,50 @@ export default function DiscoverScreen() {
     // Delta sync: on refresh, only fetch posts NEWER than newest stored
     const fyNewerThan = isRefresh ? await getNewestFeedPostDate("for_you") : null;
 
-    // On refresh, reset throwback pagination to a random offset (0–100) so
-    // the feed always shows different older content each session.
+    // On refresh, reset all stream offsets to new random positions so every
+    // session surfaces a completely different combination of content.
     if (isRefresh) {
-      throwbackOffsetRef.current = Math.floor(Math.random() * 100);
+      throwbackOffsetRef.current = Math.floor(Math.random() * 120);
       throwbackExhaustedRef.current = false;
+      midOffsetRef.current = Math.floor(Math.random() * 80);
+      midExhaustedRef.current = false;
     }
 
-    // ── Stream 1: Recent posts ──
+    // ── Stream 1: Recent posts (last 4 days) ──
     let fyQ: any = supabase.from("posts").select(fySelect).eq("visibility", "public")
       .order("created_at", { ascending: false });
     if (fyOlderThan) {
       fyQ = fyQ.lt("created_at", fyOlderThan);
     } else if (fyNewerThan) {
       fyQ = fyQ.gt("created_at", fyNewerThan);
+    } else {
+      fyQ = fyQ.gte("created_at", fourDaysAgo);
     }
     fyQ = fyQ.limit(RECENT_SIZE);
 
-    // ── Stream 2: Throwback posts (older than 30 days, high engagement) ──
+    // ── Stream 2: Mid posts (4–30 days old, random window) ──
+    const mdOffset = midOffsetRef.current;
+    const midPromise = midExhaustedRef.current || fyOlderThan
+      ? Promise.resolve({ data: [] as any[] })
+      : supabase.from("posts")
+          .select(fySelect)
+          .eq("visibility", "public")
+          .lt("created_at", fourDaysAgo)
+          .gte("created_at", thirtyDaysAgo)
+          .order("view_count", { ascending: false })
+          .range(mdOffset, mdOffset + MID_SIZE - 1)
+          .then((res) => {
+            if (!res.data || res.data.length === 0) {
+              midExhaustedRef.current = true;
+            } else {
+              midOffsetRef.current += MID_SIZE;
+            }
+            return res;
+          });
+
+    // ── Stream 3: Throwback posts (older than 30 days, high engagement) ──
     const tbOffset = throwbackOffsetRef.current;
-    const throwbackPromise = throwbackExhaustedRef.current
+    const throwbackPromise = throwbackExhaustedRef.current || fyOlderThan
       ? Promise.resolve({ data: [] as any[] })
       : supabase.from("posts")
           .select(fySelect)
@@ -974,27 +1001,36 @@ export default function DiscoverScreen() {
             if (!res.data || res.data.length === 0) {
               throwbackExhaustedRef.current = true;
             } else {
-              // Advance cursor for next load-more
               throwbackOffsetRef.current += THROWBACK_SIZE;
             }
             return res;
           });
 
-    const [{ data: recentData }, { data: throwbackData }] = await Promise.all([fyQ, throwbackPromise]);
+    const [{ data: recentData }, { data: midData }, { data: throwbackData }] = await Promise.all([fyQ, midPromise, throwbackPromise]);
 
-    // Merge and deduplicate — recent posts take priority
+    // Merge all streams, deduplicate, then Fisher-Yates shuffle so the scoring
+    // algorithm picks the best content from a randomly ordered pool — making
+    // every refresh feel genuinely different rather than always newest-first.
     const existingIds = new Set((postsRef.current || []).map((p) => p.id));
-    const allRaw = [
-      ...(recentData || []),
-      ...(throwbackData || []).filter((p: any) => !existingIds.has(p.id)),
-    ];
+    const seenInBatch = new Set<string>();
+    const allRaw: any[] = [];
+    for (const item of [...(recentData || []), ...(midData || []), ...(throwbackData || [])]) {
+      if (!seenInBatch.has(item.id) && !existingIds.has(item.id)) {
+        seenInBatch.add(item.id);
+        allRaw.push(item);
+      }
+    }
+    // Fisher-Yates shuffle — seeded by Math.random() so each refresh is unique
+    for (let i = allRaw.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [allRaw[i], allRaw[j]] = [allRaw[j], allRaw[i]];
+    }
     const data = allRaw;
 
     if (data) {
-      // hasMore is true if recent stream is still full (more new pages exist)
-      // OR if the throwback stream hasn't been exhausted yet
+      // hasMore if any stream still has content to page through
       const recentFull = (recentData || []).length >= RECENT_SIZE;
-      setHasMore(recentFull || !throwbackExhaustedRef.current);
+      setHasMore(recentFull || !midExhaustedRef.current || !throwbackExhaustedRef.current);
 
       const postIds = data.map((p: any) => p.id);
       const authorIds = [...new Set(data.map((p: any) => p.author_id))];
