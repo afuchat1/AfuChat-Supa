@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -651,8 +651,15 @@ export default function DiscoverScreen() {
   const [bgRefreshing, setBgRefreshing] = useState(false);
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [commentPostAuthorId, setCommentPostAuthorId] = useState<string>("");
+  const [postTypeFilter, setPostTypeFilter] = useState<"all" | "post" | "video" | "article" | "photo">("all");
   const PAGE_SIZE = 30;
   const imgViewer = useImageViewer();
+
+  const filteredPosts = useMemo(() => {
+    if (postTypeFilter === "all") return posts;
+    if (postTypeFilter === "photo") return posts.filter(p => p.post_type !== "video" && p.post_type !== "article" && (p.images.length > 0 || !!p.image_url));
+    return posts.filter(p => p.post_type === postTypeFilter);
+  }, [posts, postTypeFilter]);
 
   const onOpenComments = useCallback((postId: string, authorId: string) => {
     setCommentPostId(postId);
@@ -1251,6 +1258,7 @@ export default function DiscoverScreen() {
     setHasMore(true);
     setFollowingEmpty(false);
     setNewPostAuthors([]);
+    setPostTypeFilter("all");
     newPostAuthorIdsRef.current.clear();
 
     if (cached.length > 0) {
@@ -1572,6 +1580,53 @@ export default function DiscoverScreen() {
           )}
         </View>
 
+        {/* ── Filter chips ── */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterChipsRow}
+          style={{ marginTop: 2, marginBottom: 4 }}
+        >
+          {([
+            { key: "all",     label: "All",      icon: "apps-outline" },
+            { key: "post",    label: "Posts",    icon: "create-outline" },
+            { key: "video",   label: "Videos",   icon: "videocam-outline" },
+            { key: "article", label: "Articles", icon: "document-text-outline" },
+            { key: "photo",   label: "Photos",   icon: "image-outline" },
+          ] as const).map(({ key, label, icon }) => {
+            const active = postTypeFilter === key;
+            return (
+              <TouchableOpacity
+                key={key}
+                style={[
+                  styles.filterChip,
+                  {
+                    backgroundColor: active ? colors.accent : colors.surface,
+                    borderColor: active ? colors.accent : colors.border,
+                  },
+                ]}
+                onPress={() => setPostTypeFilter(key)}
+                activeOpacity={0.75}
+              >
+                <Ionicons
+                  name={icon}
+                  size={13}
+                  color={active ? "#fff" : colors.textMuted}
+                />
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    { color: active ? "#fff" : colors.textSecondary,
+                      fontFamily: active ? "Inter_600SemiBold" : "Inter_500Medium" },
+                  ]}
+                >
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
         {/* New posts indicator — lives inside the animated block */}
         {newPostAuthors.length > 0 && (
           <TouchableOpacity
@@ -1624,7 +1679,7 @@ export default function DiscoverScreen() {
       ) : (
         <FlatList
           ref={flatListRef}
-          data={posts}
+          data={filteredPosts}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <PostCard
@@ -1771,6 +1826,24 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   tabRow: { flexDirection: "row", flex: 1, gap: 8 },
+  filterChipsRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  filterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  filterChipText: {
+    fontSize: 12,
+  },
   tabPill: { paddingVertical: 12, paddingHorizontal: 16, alignItems: "center", borderBottomWidth: 3 },
   tabPillText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   card: {
