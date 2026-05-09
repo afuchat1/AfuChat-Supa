@@ -67,10 +67,9 @@ import {
 } from "@/lib/soundManager";
 import { AFUAI_BOT_ID } from "@/lib/afuAiBot";
 import { getDailyUsage, recordDailyUsage } from "@/lib/featureUsage";
-import { EmojiKeyboard } from "rn-emoji-keyboard";
+import EmojiStickerPicker from "@/components/chat/EmojiStickerPicker";
 import GiftPickerSheet, { DbGift } from "@/components/gifts/GiftPickerSheet";
 import MiniProfilePopup from "@/components/chat/MiniProfilePopup";
-import StickerPicker from "@/components/chat/StickerPicker";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import ReAnimated, {
   useSharedValue,
@@ -1199,7 +1198,7 @@ function ChatScreen() {
   const [envelopeAmount, setEnvelopeAmount] = useState("");
   const [envelopeMsg, setEnvelopeMsg] = useState("");
   const [envelopeCount, setEnvelopeCount] = useState("1");
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showEmojiStickerPicker, setShowEmojiStickerPicker] = useState(false);
   const [miniProfileUserId, setMiniProfileUserId] = useState<string | null>(null);
   const [emojiKeyboardHeight, setEmojiKeyboardHeight] = useState(280);
   const [reminderMsg, setReminderMsg] = useState<Message | null>(null);
@@ -1429,7 +1428,6 @@ function ChatScreen() {
   }));
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
-  const [showStickerPicker, setShowStickerPicker] = useState(false);
   const [gifSearch, setGifSearch] = useState("");
   const [attachmentPreview, setAttachmentPreview] = useState<{ uri: string; type: string; name?: string; mimeType?: string } | null>(null);
   const [networkOnline, setNetworkOnline] = useState(isOnline());
@@ -2701,6 +2699,10 @@ STRICT RULES:
       reactions: [],
     };
     setMessages((prev) => [userMsg, ...prev]);
+    // Always snap to the newest message when the user sends — even if they
+    // were scrolled up reading history. offset 0 = bottom on an inverted list.
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    setNewMsgCount(0);
     setReplyTo(null);
     setSending(false);
 
@@ -3053,7 +3055,7 @@ STRICT RULES:
       showAlert("Message limit", `You can only send one message until ${chatInfo?.other_name || "this user"} replies or follows you.`);
       return;
     }
-    setShowStickerPicker(false);
+    setShowEmojiStickerPicker(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const activeChatId = await getOrCreateChatId();
@@ -3766,7 +3768,7 @@ STRICT RULES:
         ) : null}
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}>
         {loading ? (
           <ChatLoadingSkeleton />
         ) : messages.length === 0 ? (
@@ -3949,17 +3951,16 @@ STRICT RULES:
                 ) : (
                   <View style={[st.inputPill, { backgroundColor: colors.inputBg }]}>
                     <TouchableOpacity hitSlop={8} style={st.pillIcon} onPress={() => {
-                      if (showEmojiPicker) {
-                        setShowEmojiPicker(false);
+                      if (showEmojiStickerPicker) {
+                        setShowEmojiStickerPicker(false);
                         setTimeout(() => chatInputRef.current?.focus(), 50);
                       } else {
                         chatInputRef.current?.blur();
                         Keyboard.dismiss();
-                        setShowStickerPicker(false);
-                        setShowEmojiPicker(true);
+                        setShowEmojiStickerPicker(true);
                       }
                     }}>
-                      <Ionicons name={showEmojiPicker ? "keypad-outline" : "happy-outline"} size={24} color={colors.textMuted} />
+                      <Ionicons name={showEmojiStickerPicker ? "keypad-outline" : "happy-outline"} size={24} color={colors.textMuted} />
                     </TouchableOpacity>
                     <TextInput
                       ref={chatInputRef}
@@ -3968,7 +3969,7 @@ STRICT RULES:
                       placeholderTextColor={colors.textMuted}
                       value={input}
                       onChangeText={(t) => { setInput(t); handleTyping(); saveDraft(t); }}
-                      onFocus={() => { if (showEmojiPicker) setShowEmojiPicker(false); if (showStickerPicker) setShowStickerPicker(false); }}
+                      onFocus={() => { if (showEmojiStickerPicker) setShowEmojiStickerPicker(false); }}
                       multiline
                       maxLength={4000}
                       returnKeyType={chatPrefs.enter_to_send ? "send" : "default"}
@@ -3987,23 +3988,6 @@ STRICT RULES:
                             <Text style={{ fontSize: 20 }}>🧧</Text>
                           </TouchableOpacity>
                         )}
-                        <TouchableOpacity
-                          onPress={() => {
-                            if (showStickerPicker) {
-                              setShowStickerPicker(false);
-                              setTimeout(() => chatInputRef.current?.focus(), 50);
-                            } else {
-                              chatInputRef.current?.blur();
-                              Keyboard.dismiss();
-                              setShowEmojiPicker(false);
-                              setShowStickerPicker(true);
-                            }
-                          }}
-                          hitSlop={8}
-                          style={st.pillIcon}
-                        >
-                          <Text style={{ fontSize: 20, opacity: showStickerPicker ? 1 : 0.6 }}>🎨</Text>
-                        </TouchableOpacity>
                         <TouchableOpacity onPress={() => setShowAttachMenu(true)} hitSlop={8} style={st.pillIcon}>
                           <Ionicons name="attach" size={22} color={colors.textMuted} style={{ transform: [{ rotate: "-45deg" }] }} />
                         </TouchableOpacity>
@@ -4055,32 +4039,12 @@ STRICT RULES:
             </View>
           </>
         )}
-        {showEmojiPicker && (
-          <View style={{ height: emojiKeyboardHeight, backgroundColor: colors.surface }}>
-            <EmojiKeyboard
-              onEmojiSelected={(emojiObject: { emoji: string }) => {
-                setInput((prev) => prev + emojiObject.emoji);
-              }}
-              enableRecentlyUsed
-              enableSearchBar
-              enableCategoryChangeGesture
-              categoryPosition="top"
-              theme={{
-                knob: colors.textMuted,
-                container: colors.surface,
-                header: colors.text,
-                skinTonesContainer: colors.surface,
-                category: { icon: colors.textMuted, iconActive: BRAND, container: colors.surface, containerActive: colors.inputBg },
-                search: { text: colors.text, placeholder: colors.textMuted, icon: colors.textMuted, background: colors.inputBg },
-                emoji: { selected: colors.inputBg },
-              }}
-            />
-          </View>
-        )}
-        {showStickerPicker && (
-          <View style={{ height: emojiKeyboardHeight, backgroundColor: colors.surface }}>
-            <StickerPicker onSendSticker={sendStickerMessage} />
-          </View>
+        {showEmojiStickerPicker && (
+          <EmojiStickerPicker
+            height={emojiKeyboardHeight}
+            onEmojiSelected={(emoji) => setInput((prev) => prev + emoji)}
+            onSendSticker={sendStickerMessage}
+          />
         )}
       </KeyboardAvoidingView>
 
