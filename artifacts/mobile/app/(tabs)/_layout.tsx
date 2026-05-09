@@ -71,9 +71,12 @@ function SwipeTabsWrapper({
   const isLoggedInSV  = useSharedValue(isLoggedIn);
   const tabIdxSV      = useSharedValue(SWIPE_TAB_ROUTES.indexOf(normalizeTabPath(pathname)));
 
-  // Keep shared values current every render (lightweight — no re-render triggered).
-  isLoggedInSV.value = isLoggedIn;
-  tabIdxSV.value     = SWIPE_TAB_ROUTES.indexOf(normalizeTabPath(pathname));
+  // Keep shared values in sync whenever the JS-side props change.
+  // Must be in useEffect — mutating shared values during render causes crashes.
+  useEffect(() => { isLoggedInSV.value = isLoggedIn; }, [isLoggedIn]);
+  useEffect(() => {
+    tabIdxSV.value = SWIPE_TAB_ROUTES.indexOf(normalizeTabPath(pathname));
+  }, [pathname]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
