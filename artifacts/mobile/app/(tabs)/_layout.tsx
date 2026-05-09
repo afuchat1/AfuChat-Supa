@@ -10,13 +10,14 @@ import type { Session } from "@supabase/supabase-js";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
-  Easing,
+  cancelAnimation,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -51,15 +52,17 @@ function navigateToIdx(idx: number) {
   router.navigate(SWIPE_TAB_ROUTES[idx] as any);
 }
 
-// ─── Swipe wrapper — full-width native-feel pager ─────────────────────────────
+// ─── Swipe wrapper — true pager feel ─────────────────────────────────────────
 //
 // Design:
-//   • Drag ratio 1:1 — finger and content move together, no damping.
-//   • Rubber-band at first/last tab (15% movement, springs back).
-//   • On release above threshold: slide content off screen (200ms ease-out),
-//     navigate, then slide in from the opposite edge (spring). Because tabs use
-//     lazy:false all screens are pre-rendered so the switch is instant.
-//   • On cancel: spring back with the gesture's own velocity — feels physical.
+//   • Drag 0–20%: content follows finger 1:1 (shows intent).
+//   • At 20% threshold: navigate to destination tab IMMEDIATELY so its content
+//     is already mounted; position it at the entry edge and let it slide in as
+//     the finger continues — user sees real next-tab content while still dragging.
+//   • 60 ms opacity fade at the navigation instant masks any layout jump.
+//   • On release (committed ≥ 32% or fling): spring new tab to centre.
+//   • On release (cancelled): navigate back, bounce new tab off the edge.
+//   • Rubber-band at first / last tab (15% damping).
 
 function SwipeTabsWrapper({
   children,
@@ -71,10 +74,15 @@ function SwipeTabsWrapper({
   const pathname = usePathname();
 
   const translateX   = useSharedValue(0);
+  const opacity      = useSharedValue(1);
   const isLoggedInSV = useSharedValue(isLoggedIn);
   const tabIdxSV     = useSharedValue(SWIPE_TAB_ROUTES.indexOf(normalizeTabPath(pathname)));
 
-  // Sync shared values from JS — must be in useEffect, never in render body.
+  // Per-gesture state (reset in onBegin).
+  const earlyNavDone = useSharedValue(false);
+  const earlyNavEdge = useSharedValue(0);   // ±SCREEN_WIDTH
+  const originalIdx  = useSharedValue(0);
+
   useEffect(() => { isLoggedInSV.value = isLoggedIn; }, [isLoggedIn]);
   useEffect(() => {
     tabIdxSV.value = SWIPE_TAB_ROUTES.indexOf(normalizeTabPath(pathname));
@@ -82,26 +90,64 @@ function SwipeTabsWrapper({
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
+    opacity: opacity.value,
   }));
 
   const swipeGesture = useRef(
     Gesture.Pan()
-      // Activate only on horizontal intent, fail on vertical scroll.
       .activeOffsetX([-10, 10])
       .failOffsetY([-14, 14])
+      .onBegin(() => {
+        "worklet";
+        cancelAnimation(translateX);
+        cancelAnimation(opacity);
+        earlyNavDone.value = false;
+        earlyNavEdge.value = 0;
+        originalIdx.value  = tabIdxSV.value;
+        opacity.value      = 1;
+      })
       .onUpdate((e) => {
         "worklet";
-        const idx = tabIdxSV.value;
+        const idx     = tabIdxSV.value;
         const atStart = idx === 0;
         const atEnd   = idx === SWIPE_TAB_ROUTES.length - 1;
 
         if (!isLoggedInSV.value) {
-          // Not logged in — tiny rubber-band only.
           translateX.value = e.translationX * 0.08;
           return;
         }
 
-        // Rubber-band at edges (15%), full 1:1 in the middle.
+        // ── Early navigation at 20% ────────────────────────────────────────
+        if (!earlyNavDone.value) {
+          const EARLY    = SCREEN_WIDTH * 0.20;
+          const canGoNext = e.translationX < -EARLY && !atEnd;
+          const canGoPrev = e.translationX > +EARLY && !atStart;
+
+          if (canGoNext || canGoPrev) {
+            earlyNavDone.value = true;
+            const newIdx = canGoNext ? idx + 1 : idx - 1;
+            // New tab enters from this edge (right for goNext, left for goPrev).
+            const edge = canGoNext ? SCREEN_WIDTH : -SCREEN_WIDTH;
+            earlyNavEdge.value = edge;
+
+            // Switch tab immediately — new content is now active at translateX=0.
+            runOnJS(navigateToIdx)(newIdx);
+
+            // Briefly drop opacity to hide the position jump, then fade back in.
+            opacity.value = 0;
+            translateX.value = edge + e.translationX;
+            opacity.value = withTiming(1, { duration: 60 });
+            return;
+          }
+        }
+
+        if (earlyNavDone.value) {
+          // New tab slides in from its entry edge as finger continues.
+          translateX.value = earlyNavEdge.value + e.translationX;
+          return;
+        }
+
+        // Rubber-band at first / last tab (no early nav possible).
         if ((atStart && e.translationX > 0) || (atEnd && e.translationX < 0)) {
           translateX.value = e.translationX * 0.15;
         } else {
@@ -110,43 +156,46 @@ function SwipeTabsWrapper({
       })
       .onEnd((e) => {
         "worklet";
-        const isFling = Math.abs(e.velocityX) > 300;
-        const isFar   = Math.abs(e.translationX) > SCREEN_WIDTH * 0.32;
-        const idx     = tabIdxSV.value;
 
-        const goNext = e.translationX < 0 && idx < SWIPE_TAB_ROUTES.length - 1;
-        const goPrev = e.translationX > 0 && idx > 0;
+        opacity.value = 1;
 
-        if (isLoggedInSV.value && (isFling || isFar) && (goNext || goPrev)) {
-          const newIdx  = goNext ? idx + 1 : idx - 1;
-          // Slide current content fully off screen, then navigate + slide in.
-          const exitX   = goNext ? -SCREEN_WIDTH : SCREEN_WIDTH;
-          const entryX  = goNext ?  SCREEN_WIDTH : -SCREEN_WIDTH;
-
-          translateX.value = withTiming(
-            exitX,
-            { duration: 200, easing: Easing.out(Easing.cubic) },
-            () => {
-              // Navigate on JS thread — lazy:false means new tab is already mounted.
-              runOnJS(navigateToIdx)(newIdx);
-              // Jump to the entry edge, then spring into view.
-              translateX.value = entryX;
-              translateX.value = withSpring(0, {
-                damping: 26,
-                stiffness: 320,
-                mass: 0.85,
-                overshootClamping: true,
-              });
-            },
-          );
-        } else {
-          // Didn't cross threshold — spring back using gesture velocity (physical).
+        if (!isLoggedInSV.value || !earlyNavDone.value) {
+          // No early nav — spring back.
           translateX.value = withSpring(0, {
             velocity: e.velocityX,
             damping: 22,
             stiffness: 280,
             mass: 0.8,
-            overshootClamping: false,
+          });
+          return;
+        }
+
+        const isFling  = Math.abs(e.velocityX) > 300;
+        const isFar    = Math.abs(e.translationX) > SCREEN_WIDTH * 0.32;
+        // Direction must still match: goNext→translationX<0, goPrev→translationX>0.
+        const dirMatch = earlyNavEdge.value > 0
+          ? e.translationX < 0
+          : e.translationX > 0;
+
+        if ((isFling || isFar) && dirMatch) {
+          // ── Committed: spring new tab to centre ───────────────────────────
+          translateX.value = withSpring(0, {
+            damping: 26,
+            stiffness: 320,
+            mass: 0.85,
+            overshootClamping: true,
+          });
+        } else {
+          // ── Cancelled: navigate back, bounce new tab off its entry edge ───
+          runOnJS(navigateToIdx)(originalIdx.value);
+          translateX.value = withSpring(earlyNavEdge.value, {
+            velocity: e.velocityX,
+            damping: 22,
+            stiffness: 280,
+            mass: 0.8,
+          }, () => {
+            // Reset invisibly — original tab is now active at centre.
+            translateX.value = 0;
           });
         }
       })
@@ -157,9 +206,11 @@ function SwipeTabsWrapper({
 
   return (
     <GestureDetector gesture={swipeGesture}>
-      <Animated.View style={[{ flex: 1 }, animatedStyle]}>
-        {children}
-      </Animated.View>
+      <View style={{ flex: 1, overflow: "hidden" }}>
+        <Animated.View style={[{ flex: 1 }, animatedStyle]}>
+          {children}
+        </Animated.View>
+      </View>
     </GestureDetector>
   );
 }

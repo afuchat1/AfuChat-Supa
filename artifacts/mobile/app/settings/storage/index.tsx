@@ -24,6 +24,7 @@ import { useStorageStats } from "@/hooks/useStorageStats";
 import { formatBytes as fmtBytes } from "@/hooks/useStorageStats";
 import { clearMediaCache } from "@/lib/storage/mediaCache";
 import { clearAllOfflineVideos } from "@/lib/videoCache";
+import { Image as ExpoImage } from "expo-image";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -61,7 +62,7 @@ export default function StorageSettingsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { stats: deviceStats, loading: deviceLoading, refresh: refreshDevice } = useStorageStats();
-  const [clearing, setClearing] = useState<"videos" | "media" | null>(null);
+  const [clearing, setClearing] = useState<"videos" | "media" | "imgcache" | null>(null);
 
   // Instant first paint from disk cache.
   useEffect(() => {
@@ -142,6 +143,29 @@ export default function StorageSettingsScreen() {
       ],
     );
   }, [deviceStats, refreshDevice]);
+
+  const clearImageCache = useCallback(() => {
+    Alert.alert(
+      "Clear App Image Cache",
+      "This will remove profile photos, post thumbnails, and other images stored by the app. They'll be re-downloaded automatically as you browse. Your chat attachments and offline videos are not affected.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear",
+          style: "destructive",
+          onPress: async () => {
+            setClearing("imgcache");
+            try {
+              await ExpoImage.clearDiskCache();
+              await ExpoImage.clearMemoryCache();
+            } catch (_) {}
+            await refreshDevice();
+            setClearing(null);
+          },
+        },
+      ],
+    );
+  }, [refreshDevice]);
 
   // Fixed bucket order so the list doesn't reshuffle as data refreshes.
   const orderedBuckets = Object.keys(BUCKET_META);
@@ -445,6 +469,26 @@ export default function StorageSettingsScreen() {
 
               <Separator indent={54} />
 
+              {/* App image cache (expo-image disk cache — counts as Android "Cache") */}
+              <TouchableOpacity activeOpacity={0.6} style={styles.row} onPress={clearImageCache}>
+                <View style={[styles.iconWrap, { backgroundColor: "#007AFF" }]}>
+                  <Ionicons name="cloud-download-outline" size={18} color="#fff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.rowLabel, { color: colors.text }]}>App Image Cache</Text>
+                  <Text style={[styles.rowSub, { color: colors.textMuted }]}>
+                    Profile photos, post thumbnails · tap to clear
+                  </Text>
+                </View>
+                {clearing === "imgcache" ? (
+                  <ActivityIndicator size="small" color="#007AFF" />
+                ) : (
+                  <Ionicons name="trash-outline" size={18} color="#007AFF" style={{ marginLeft: 4 }} />
+                )}
+              </TouchableOpacity>
+
+              <Separator indent={54} />
+
               {/* Pending sync queue */}
               <View style={styles.row}>
                 <View style={[styles.iconWrap, { backgroundColor: "#32D74B" }]}>
@@ -480,7 +524,7 @@ export default function StorageSettingsScreen() {
               </Text>
             </View>
             <Text style={[styles.footnote, { color: colors.textMuted, marginTop: 8 }]}>
-              Offline videos and thumbnail cache are safe to clear — they'll be re-downloaded as you watch and browse. Chat messages and feed posts are stored permanently in the local database and are unaffected by clearing this cache.
+              Offline videos, thumbnail cache, and app image cache are safe to clear — content re-downloads automatically. Chat attachments and messages are stored as permanent user data and are never affected by clearing cache.{"\n\n"}The "App Image Cache" is what Android reports under Cache in system storage settings. Clearing it reduces that number.
             </Text>
           </>
         )}
