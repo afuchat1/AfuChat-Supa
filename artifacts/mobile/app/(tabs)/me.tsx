@@ -142,48 +142,6 @@ function ProfileCompletionBar({ profile, isPremium }: { profile: ProfileFields |
   );
 }
 
-function XpLevelBar({ xp }: { xp: number }) {
-  const { colors } = useTheme();
-  const level = Math.floor(Math.sqrt(xp / 100)) + 1;
-  const xpForLevel = (level - 1) * (level - 1) * 100;
-  const xpForNext = level * level * 100;
-  const progress = Math.min((xp - xpForLevel) / (xpForNext - xpForLevel), 1);
-  const fillAnim = useSharedValue(0);
-
-  useEffect(() => {
-    fillAnim.value = withDelay(300, withTiming(progress, { duration: 1000, easing: Easing.out(Easing.cubic) }));
-  }, [xp]);
-
-  const fillStyle = useAnimatedStyle(() => ({
-    width: `${fillAnim.value * 100}%` as any,
-  }));
-
-  return (
-    <View style={[styles.xpBar, { backgroundColor: colors.surface }]}>
-      <View style={styles.xpRow}>
-        <View style={[styles.xpLevelBadge, { backgroundColor: colors.accent }]}>
-          <Text style={styles.xpLevelText}>Lv.{level}</Text>
-        </View>
-        <View style={{ flex: 1 }}>
-          <View style={[styles.xpTrack, { backgroundColor: colors.backgroundTertiary }]}>
-            <Animated.View style={[styles.xpFill, fillStyle]}>
-              <LinearGradient
-                colors={[colors.accent, "#AF52DE"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={StyleSheet.absoluteFill}
-              />
-            </Animated.View>
-          </View>
-          <Text style={[styles.xpSubLabel, { color: colors.textMuted }]}>
-            {xp.toLocaleString()} / {xpForNext.toLocaleString()} XP to Level {level + 1}
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
 function fmtCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
@@ -236,8 +194,6 @@ export default function MeScreen() {
     setVerifyBannerDismissed(true);
     AsyncStorage.setItem("afu_verify_business_banner_dismissed", "1");
   }, []);
-
-  const gradeIcon = profile?.current_grade === "Newcomer" ? "leaf-outline" : "star-outline";
 
   if (!loading && !profile) {
     return <Redirect href="/discover" />;
@@ -346,21 +302,6 @@ export default function MeScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={[styles.statsRow, { backgroundColor: colors.surface }]}>
-        <View style={styles.statItem}>
-          <Ionicons name="flash" size={20} color="#FFD60A" />
-          <Text style={[styles.statValue, { color: colors.text }]}>{profile?.xp || 0}</Text>
-          <Text style={[styles.statLabel, { color: colors.textMuted }]}>Nexa</Text>
-        </View>
-        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.statItem}>
-          <Ionicons name={gradeIcon as any} size={20} color={colors.accent} />
-          <Text style={[styles.statValue, { color: colors.text }]}>{profile?.current_grade || "Newcomer"}</Text>
-          <Text style={[styles.statLabel, { color: colors.textMuted }]}>Grade</Text>
-        </View>
-      </View>
-
-      <XpLevelBar xp={profile?.xp || 0} />
 
       <ProfileCompletionBar profile={profile} isPremium={isPremium} />
 
@@ -561,28 +502,7 @@ const styles = StyleSheet.create({
   socialCell: { flex: 1, alignItems: "center", gap: 3 },
   socialValue: { fontSize: 20, fontFamily: "Inter_700Bold" },
   socialLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  statsRow: {
-    flexDirection: "row",
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-  },
-  statItem: { flex: 1, alignItems: "center", gap: 4 },
-  statValue: { fontSize: 16, fontWeight: "700" },
-  statLabel: { fontSize: 11 },
   statDivider: { width: StyleSheet.hairlineWidth, marginVertical: 4 },
-  xpBar: { borderRadius: 14, padding: 12 },
-  xpRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  xpLevelBadge: {
-    backgroundColor: Colors.brand,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  xpLevelText: { color: "#fff", fontSize: 12, fontFamily: "Inter_700Bold" },
-  xpTrack: { height: 6, borderRadius: 3, overflow: "hidden", marginBottom: 4 },
-  xpFill: { height: "100%", borderRadius: 3, overflow: "hidden" },
-  xpSubLabel: { fontSize: 10, fontFamily: "Inter_400Regular" },
   premiumBanner: {
     flexDirection: "row",
     alignItems: "center",
