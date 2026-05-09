@@ -252,7 +252,6 @@ export default function SearchScreen() {
 
   const inputRef    = useRef<TextInput>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const suggestRef  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const searchIdRef = useRef(0);
 
   const [query,        setQuery]        = useState("");
@@ -269,8 +268,6 @@ export default function SearchScreen() {
 
   const [history,     setHistory]     = useState<string[]>([]);
   const [saved,       setSaved]       = useState<SavedSearch[]>([]);
-  const [suggestions, setSuggestions] = useState<PersonResult[]>([]);
-  const [showSuggest, setShowSuggest] = useState(false);
 
   const [trendingPeople,   setTrendingPeople]   = useState<PersonResult[]>([]);
   const [trendingHashtags, setTrendingHashtags] = useState<{ tag: string; count: number }[]>([]);
@@ -300,7 +297,6 @@ export default function SearchScreen() {
     loadInitial();
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      if (suggestRef.current)  clearTimeout(suggestRef.current);
     };
   }, []);
 
@@ -376,21 +372,6 @@ export default function SearchScreen() {
         };
       }));
     } catch {}
-  }
-
-  async function fetchSuggestions(text: string) {
-    if (text.length < 2) { setSuggestions([]); setShowSuggest(false); return; }
-    const { data } = await supabase.from("profiles")
-      .select("id, handle, display_name, avatar_url, is_verified, is_organization_verified, current_grade, country, bio, xp")
-      .or(`handle.ilike.%${text}%,display_name.ilike.%${text}%`)
-      .order("xp", { ascending: false })
-      .limit(6);
-    if (data && data.length > 0) {
-      setSuggestions(data.map((p: any) => ({ ...p, kind: "profile" })));
-      setShowSuggest(true);
-    } else {
-      setSuggestions([]); setShowSuggest(false);
-    }
   }
 
   // ── Main search ─────────────────────────────────────────────────────────────
@@ -609,20 +590,15 @@ export default function SearchScreen() {
   function onChangeText(t: string) {
     setQuery(t);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (suggestRef.current)  clearTimeout(suggestRef.current);
     if (t.trim().length === 0) {
-      setResults(EMPTY); setHasSearched(false); setTotalCount(0);
-      setSuggestions([]); setShowSuggest(false); return;
+      setResults(EMPTY); setHasSearched(false); setTotalCount(0); return;
     }
-    suggestRef.current  = setTimeout(() => fetchSuggestions(t), 200);
     debounceRef.current = setTimeout(() => {
       performSearch(t, tab, verifiedOnly, sortMode, dateRange);
-      setShowSuggest(false);
     }, 520);
   }
 
   function onSubmit() {
-    setShowSuggest(false);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     performSearch(query, tab, verifiedOnly, sortMode, dateRange);
     inputRef.current?.blur();
@@ -630,19 +606,19 @@ export default function SearchScreen() {
 
   function clearSearch() {
     setQuery(""); setResults(EMPTY); setHasSearched(false);
-    setTotalCount(0); setSuggestions([]); setShowSuggest(false);
+    setTotalCount(0);
     inputRef.current?.focus();
   }
 
   function onHistoryPress(term: string) {
-    setQuery(term); setShowSuggest(false);
+    setQuery(term);
     performSearch(term, tab, verifiedOnly, sortMode, dateRange);
     inputRef.current?.blur();
   }
 
   function onTagPress(tag: string) {
     const q = `#${tag}`;
-    setQuery(q); setTab("posts"); setShowSuggest(false);
+    setQuery(q); setTab("posts");
     performSearch(q, "posts", verifiedOnly, sortMode, dateRange);
     inputRef.current?.blur();
   }
@@ -1482,28 +1458,6 @@ export default function SearchScreen() {
           ))}
         </ScrollView>
 
-        {/* Live suggestion dropdown */}
-        {showSuggest && suggestions.length > 0 && (
-          <View style={[ss.suggestBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            {suggestions.map((s) => (
-              <TouchableOpacity
-                key={s.id}
-                style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 11, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}
-                onPress={() => { setQuery(s.display_name); setShowSuggest(false); performSearch(s.display_name, tab, verifiedOnly, sortMode, dateRange); }}
-                activeOpacity={0.75}
-              >
-                {s.avatar_url
-                  ? <Image source={{ uri: s.avatar_url }} style={{ width: 32, height: 32, borderRadius: 16 }} />
-                  : <AvatarPlaceholder name={s.display_name} size={32} color={BRAND} />}
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.text }}>{s.display_name}</Text>
-                  <Text style={{ fontSize: 11, color: colors.textMuted }}>@{s.handle}</Text>
-                </View>
-                {s.is_verified && <Ionicons name="checkmark-circle" size={14} color={s.is_organization_verified ? GOLD : BRAND} />}
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
       </View>
 
       {/* Tab bar — only shown when results are present */}
@@ -1608,24 +1562,6 @@ const ss = StyleSheet.create({
     paddingVertical: 5,
     borderWidth: 1,
     borderColor: "transparent",
-  },
-
-  suggestBox: {
-    position: "absolute" as any,
-    top: "100%",
-    left: 0,
-    right: 0,
-    borderWidth: 1,
-    borderTopWidth: 0,
-    borderBottomLeftRadius: 14,
-    borderBottomRightRadius: 14,
-    overflow: "hidden",
-    zIndex: 100,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 10,
   },
 
   tabBar: {
