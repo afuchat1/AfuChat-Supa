@@ -256,6 +256,11 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
 
   const hideTabs = isDesktop || (!isLoggedIn && Platform.OS === "web");
 
+  const PILL_HEIGHT = 62;
+  const PILL_RADIUS = 32;
+  const PILL_H_MARGIN = 24;
+  const bottomOffset = (insets.bottom > 0 ? insets.bottom : 12) + 4;
+
   return (
     <Tabs
       screenOptions={{
@@ -268,22 +273,36 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
           ? { display: "none" }
           : {
               position: "absolute",
-              backgroundColor: isIOS ? "transparent" : colors.surface,
+              left: PILL_H_MARGIN,
+              right: PILL_H_MARGIN,
+              bottom: bottomOffset,
+              height: PILL_HEIGHT,
+              borderRadius: PILL_RADIUS,
+              backgroundColor: isIOS ? "transparent" : isDark ? "rgba(30,30,32,0.97)" : "rgba(255,255,255,0.97)",
               borderTopWidth: 0,
-              elevation: 0,
-              height: 52 + (insets.bottom > 0 ? insets.bottom : 8),
-              paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
+              elevation: 16,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: isDark ? 0.45 : 0.13,
+              shadowRadius: 24,
+              paddingBottom: 0,
+              overflow: "hidden",
             },
+        tabBarItemStyle: {
+          paddingTop: 4,
+          paddingBottom: 4,
+        },
         tabBarLabelStyle: {
           fontSize: 10,
           fontFamily: "Inter_500Medium",
+          marginTop: 2,
         },
         tabBarBackground: () =>
           isIOS ? (
             <BlurView
-              intensity={80}
-              tint={isDark ? "dark" : "light"}
-              style={StyleSheet.absoluteFill}
+              intensity={isDark ? 70 : 85}
+              tint={isDark ? "systemChromeMaterialDark" : "systemChromeMaterialLight"}
+              style={[StyleSheet.absoluteFill, { borderRadius: PILL_RADIUS, overflow: "hidden" }]}
             />
           ) : null,
       }}
