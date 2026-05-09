@@ -30,6 +30,12 @@ function NativeTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
         </NativeTabs.Trigger>
       )}
       {isLoggedIn && (
+        <NativeTabs.Trigger name="discover">
+          <Icon sf={{ default: "safari", selected: "safari.fill" }} />
+          <Label>Discover</Label>
+        </NativeTabs.Trigger>
+      )}
+      {isLoggedIn && (
         <NativeTabs.Trigger name="apps">
           <Icon sf={{ default: "square.grid.2x2", selected: "square.grid.2x2.fill" }} />
           <Label>Apps</Label>
@@ -99,7 +105,16 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
       />
       <Tabs.Screen
         name="discover"
-        options={{ href: null }}
+        options={{
+          title: "Discover",
+          href: isLoggedIn ? undefined : null,
+          tabBarIcon: ({ color, focused }) =>
+            isIOS ? (
+              <SymbolView name={focused ? "safari.fill" : "safari"} tintColor={color} size={22} />
+            ) : (
+              <Ionicons name={focused ? "compass" : "compass-outline"} size={22} color={color} />
+            ),
+        }}
       />
       <Tabs.Screen
         name="search"
