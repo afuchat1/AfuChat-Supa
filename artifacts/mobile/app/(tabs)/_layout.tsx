@@ -97,15 +97,7 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
       />
       <Tabs.Screen
         name="discover"
-        options={{
-          title: "Discover",
-          tabBarIcon: ({ color, focused }) =>
-            isIOS ? (
-              <SymbolView name={(focused ? "location.fill" : "location") as any} tintColor={color} size={22} />
-            ) : (
-              <Ionicons name={focused ? "compass" : "compass-outline"} size={22} color={color} />
-            ),
-        }}
+        options={{ href: null }}
       />
       <Tabs.Screen
         name="search"
