@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -34,6 +34,7 @@ import { encodeId } from "@/lib/shortId";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { VideoThumbnail } from "@/components/ui/VideoThumbnail";
 import * as Clipboard from "expo-clipboard";
+import { getProfileCache, setProfileCache } from "@/lib/profileCache";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const GRID_GAP = 6;
@@ -97,14 +98,70 @@ function fmtJoinDate(iso: string): string {
 }
 
 export default function ContactProfileScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{
+    id: string;
+    init_name?: string;
+    init_handle?: string;
+    init_avatar?: string;
+    init_verified?: string;
+    init_org_verified?: string;
+  }>();
+  const { id } = params;
   const { colors } = useTheme();
   const { user, profile: myProfile } = useAuth();
   const insets = useSafeAreaInsets();
   const { isDesktop } = useIsDesktop();
 
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Build an initial profile snapshot from route params or the in-memory cache
+  // so we can render the header immediately without waiting for a network round-trip.
+  const initialProfile = useMemo<Profile | null>(() => {
+    if (!id) return null;
+    const cached = getProfileCache(id);
+    if (cached) {
+      return {
+        id: cached.id,
+        display_name: cached.display_name,
+        handle: cached.handle,
+        avatar_url: cached.avatar_url ?? null,
+        bio: cached.bio ?? null,
+        is_verified: cached.is_verified ?? false,
+        is_organization_verified: cached.is_organization_verified ?? false,
+        is_business_mode: cached.is_business_mode ?? false,
+        xp: cached.xp ?? 0,
+        current_grade: cached.current_grade ?? "",
+        website_url: cached.website_url ?? null,
+        country: cached.country ?? null,
+        created_at: cached.created_at ?? null,
+        last_seen: cached.last_seen ?? null,
+        show_online_status: cached.show_online_status ?? false,
+        acoin: cached.acoin ?? 0,
+      } as Profile;
+    }
+    if (params.init_name) {
+      return {
+        id: id as string,
+        display_name: params.init_name,
+        handle: params.init_handle ?? "",
+        avatar_url: params.init_avatar ?? null,
+        bio: null,
+        is_verified: params.init_verified === "1",
+        is_organization_verified: params.init_org_verified === "1",
+        is_business_mode: false,
+        xp: 0,
+        current_grade: "",
+        website_url: null,
+        country: null,
+        created_at: null,
+        last_seen: null,
+        show_online_status: false,
+        acoin: 0,
+      } as Profile;
+    }
+    return null;
+  }, [id]);
+
+  const [profile, setProfile] = useState<Profile | null>(initialProfile);
+  const [loading, setLoading] = useState(!initialProfile);
   const [isFollowing, setIsFollowing] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [followerCount, setFollowerCount] = useState(0);
@@ -143,7 +200,13 @@ export default function ContactProfileScreen() {
       .select("id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified, is_business_mode, xp, current_grade, website_url, country, created_at, last_seen, show_online_status, acoin")
       .eq("id", id)
       .single()
-      .then(({ data }) => { setProfile(data as Profile); setLoading(false); });
+      .then(({ data }) => {
+        if (data) {
+          setProfile(data as Profile);
+          setProfileCache(id as string, data as any);
+        }
+        setLoading(false);
+      });
 
     supabase.from("shops").select("id, pin_to_profile").eq("seller_id", id).eq("is_active", true).eq("pin_to_profile", true).maybeSingle().then(({ data }) => setHasShop(!!data));
 

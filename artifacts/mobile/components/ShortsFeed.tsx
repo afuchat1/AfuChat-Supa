@@ -342,7 +342,7 @@ function ShortCard({
         {/* TikTok-style right-side action rail, overlaid on the video */}
         <View style={[styles.fullRail, { bottom: bottomInset + 90 }]} pointerEvents="box-none">
           <Pressable
-            onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } } as any)}
+            onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id, init_name: item.profile.display_name, init_handle: item.profile.handle, init_avatar: item.profile.avatar_url ?? "" } } as any)}
             style={styles.fullAvatarWrap}
           >
             <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={44} />
@@ -401,7 +401,7 @@ function ShortCard({
         {/* Bottom-left: author + caption + audio source */}
         <View style={[styles.fullBottomInfo, { bottom: bottomInset + 14 }]} pointerEvents="box-none">
           <Pressable
-            onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } } as any)}
+            onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id, init_name: item.profile.display_name, init_handle: item.profile.handle, init_avatar: item.profile.avatar_url ?? "" } } as any)}
             style={styles.fullAuthorRow}
           >
             <Text style={styles.fullHandle} numberOfLines={1}>@{item.profile.handle}</Text>
@@ -459,7 +459,7 @@ function ShortCard({
         {/* Bottom info overlay */}
         <View style={styles.bottomInfo} pointerEvents="box-none">
           <Pressable
-            onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } } as any)}
+            onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id, init_name: item.profile.display_name, init_handle: item.profile.handle, init_avatar: item.profile.avatar_url ?? "" } } as any)}
             style={styles.authorRow}
           >
             <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={36} />

@@ -191,12 +191,12 @@ function ArticleReplyCard({
             backgroundColor: threadColor + "50",
           }} />
         )}
-        <TouchableOpacity onPress={() => router.push(`/contact/${item.author.id}` as any)} activeOpacity={0.8} style={{ marginRight: 10, marginTop: 2 }}>
+        <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author.id, init_name: item.author.display_name, init_handle: item.author.handle, init_avatar: item.author.avatar_url ?? "", init_verified: item.author.is_verified ? "1" : "0", init_org_verified: item.author.is_organization_verified ? "1" : "0" } })} activeOpacity={0.8} style={{ marginRight: 10, marginTop: 2 }}>
           <Avatar uri={item.author.avatar_url} name={item.author.display_name} size={avatarSize} square={!!(item.author.is_organization_verified)} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flexWrap: "wrap", marginBottom: 3 }}>
-            <TouchableOpacity onPress={() => router.push(`/contact/${item.author.id}` as any)} activeOpacity={0.8}>
+            <TouchableOpacity onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author.id, init_name: item.author.display_name, init_handle: item.author.handle, init_avatar: item.author.avatar_url ?? "", init_verified: item.author.is_verified ? "1" : "0", init_org_verified: item.author.is_organization_verified ? "1" : "0" } })} activeOpacity={0.8}>
               <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_700Bold" }}>
                 {item.author.display_name}
               </Text>
@@ -495,7 +495,7 @@ export default function ArticleDetailScreen() {
             )}
             <TouchableOpacity
               style={styles.magazineAuthorRow}
-              onPress={() => router.push({ pathname: "/contact/[id]", params: { id: article.author.id } })}
+              onPress={() => router.push({ pathname: "/contact/[id]", params: { id: article.author.id, init_name: article.author.display_name, init_handle: article.author.handle, init_avatar: article.author.avatar_url ?? "", init_verified: article.author.is_verified ? "1" : "0", init_org_verified: article.author.is_organization_verified ? "1" : "0" } })}
               activeOpacity={0.8}
             >
               <Avatar uri={article.author.avatar_url} name={article.author.display_name} size={32} square={!!(article.author.is_organization_verified)} />
@@ -545,7 +545,7 @@ export default function ArticleDetailScreen() {
             <View style={[styles.authorSection, { borderColor: colors.border }]}>
               <TouchableOpacity
                 style={styles.authorRow}
-                onPress={() => router.push({ pathname: "/contact/[id]", params: { id: article.author.id } })}
+                onPress={() => router.push({ pathname: "/contact/[id]", params: { id: article.author.id, init_name: article.author.display_name, init_handle: article.author.handle, init_avatar: article.author.avatar_url ?? "", init_verified: article.author.is_verified ? "1" : "0", init_org_verified: article.author.is_organization_verified ? "1" : "0" } })}
                 activeOpacity={0.7}
               >
                 <Avatar uri={article.author.avatar_url} name={article.author.display_name} size={40} square={!!(article.author.is_organization_verified)} />

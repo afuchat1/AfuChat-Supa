@@ -321,7 +321,7 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
-                onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}
+                onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id, init_name: item.profile.display_name, init_handle: item.profile.handle, init_avatar: item.profile.avatar_url ?? "" } })}
                 activeOpacity={0.8}
               >
                 <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={isDesktop ? 44 : 40} square={!!(item.is_organization_verified)} />

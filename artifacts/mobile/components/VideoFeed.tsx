@@ -435,7 +435,7 @@ const VideoItem = React.memo(
         {/* Author row + caption */}
         <View style={styles.bottomArea} pointerEvents="box-none">
           <TouchableOpacity
-            onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id } })}
+            onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id, init_name: item.profile.display_name, init_handle: item.profile.handle, init_avatar: item.profile.avatar_url ?? "" } })}
             style={styles.authorRow}
             activeOpacity={0.8}
           >

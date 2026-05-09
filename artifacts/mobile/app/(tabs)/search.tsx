@@ -680,7 +680,7 @@ export default function SearchScreen() {
     const per = p as PersonResult;
     return (
       <Animated.View entering={FadeInDown.delay(i * 30).duration(200)}>
-        <TouchableOpacity style={[ss.listRow, { backgroundColor: colors.surface }]} onPress={() => router.push(`/contact/${per.id}` as any)} activeOpacity={0.75}>
+        <TouchableOpacity style={[ss.listRow, { backgroundColor: colors.surface }]} onPress={() => router.push({ pathname: "/contact/[id]", params: { id: per.id, init_name: per.display_name, init_handle: per.handle, init_avatar: per.avatar_url ?? "", init_verified: per.is_verified ? "1" : "0", init_org_verified: per.is_organization_verified ? "1" : "0" } } as any)} activeOpacity={0.75}>
           <View style={{ position: "relative" }}>
             {per.avatar_url
               ? <Image source={{ uri: per.avatar_url }} style={{ width: 48, height: 48, borderRadius: per.is_organization_verified ? 12 : 24 }} />
@@ -1186,7 +1186,7 @@ export default function SearchScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingHorizontal: 16, paddingBottom: 4 }}>
               {trendingPeople.map((p, i) => (
                 <Animated.View key={p.id} entering={FadeInRight.delay(i * 28).duration(200)}>
-                  <TouchableOpacity style={{ alignItems: "center", width: 70, gap: 6 }} onPress={() => router.push(`/contact/${p.id}` as any)} activeOpacity={0.78}>
+                  <TouchableOpacity style={{ alignItems: "center", width: 70, gap: 6 }} onPress={() => router.push({ pathname: "/contact/[id]", params: { id: p.id, init_name: p.display_name, init_handle: p.handle, init_avatar: p.avatar_url ?? "", init_verified: p.is_verified ? "1" : "0", init_org_verified: p.is_organization_verified ? "1" : "0" } } as any)} activeOpacity={0.78}>
                     <View style={{ position: "relative" }}>
                       {p.avatar_url
                         ? <Image source={{ uri: p.avatar_url }} style={{ width: 56, height: 56, borderRadius: p.is_organization_verified ? 14 : 28, borderWidth: 2, borderColor: p.is_organization_verified ? GOLD : BRAND }} />

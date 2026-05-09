@@ -264,7 +264,7 @@ export default function MeScreen() {
         <TouchableOpacity
           style={[styles.viewProfileBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
           activeOpacity={0.75}
-          onPress={() => router.push({ pathname: "/contact/[id]", params: { id: profile.id } })}
+          onPress={() => router.push({ pathname: "/contact/[id]", params: { id: profile.id, init_name: profile.display_name ?? "", init_handle: profile.handle ?? "", init_avatar: profile.avatar_url ?? "" } })}
         >
           <Ionicons name="person-circle-outline" size={17} color={colors.accent} />
           <Text style={[styles.viewProfileText, { color: colors.accent }]}>View public profile</Text>
@@ -295,7 +295,7 @@ export default function MeScreen() {
         <TouchableOpacity
           style={styles.socialCell}
           activeOpacity={0.7}
-          onPress={() => profile?.id && router.push({ pathname: "/contact/[id]", params: { id: profile.id } })}
+          onPress={() => profile?.id && router.push({ pathname: "/contact/[id]", params: { id: profile.id, init_name: profile.display_name ?? "", init_handle: profile.handle ?? "", init_avatar: profile.avatar_url ?? "" } })}
         >
           <Text style={[styles.socialValue, { color: colors.text }]}>{fmtCount(postCount)}</Text>
           <Text style={[styles.socialLabel, { color: colors.textMuted }]}>Posts</Text>

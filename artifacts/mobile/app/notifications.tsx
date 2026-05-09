@@ -472,7 +472,7 @@ export default function NotificationsScreen() {
     } else if (item.post_id) {
       router.push({ pathname: "/p/[id]", params: { id: encodeId(item.post_id) } });
     } else if (item.actor?.id) {
-      router.push({ pathname: "/contact/[id]", params: { id: item.actor.id } });
+      router.push({ pathname: "/contact/[id]", params: { id: item.actor.id, init_name: item.actor.display_name, init_handle: item.actor.handle, init_avatar: item.actor.avatar_url ?? "" } });
     }
   }
 

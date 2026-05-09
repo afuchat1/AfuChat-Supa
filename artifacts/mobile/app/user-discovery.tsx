@@ -303,7 +303,7 @@ export default function UserDiscoveryScreen() {
     return (
       <TouchableOpacity
         style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.id } })}
+        onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.id, init_name: item.display_name, init_handle: item.handle, init_avatar: item.avatar_url ?? "" } })}
         activeOpacity={0.92}
       >
         <View style={styles.cardRow}>

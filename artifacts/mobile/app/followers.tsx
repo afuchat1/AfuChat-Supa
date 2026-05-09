@@ -172,7 +172,7 @@ export default function FollowersScreen() {
           if (isMe) {
             router.push("/(tabs)/me");
           } else {
-            router.push({ pathname: "/contact/[id]", params: { id: item.id } });
+            router.push({ pathname: "/contact/[id]", params: { id: item.id, init_name: item.display_name, init_handle: item.handle, init_avatar: item.avatar_url ?? "", init_verified: item.is_verified ? "1" : "0", init_org_verified: item.is_organization_verified ? "1" : "0" } });
           }
         }}
       >

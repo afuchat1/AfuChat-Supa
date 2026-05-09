@@ -235,7 +235,7 @@ function CommentRow({
         {/* Avatar */}
         <TouchableOpacity
           onPress={() =>
-            router.push({ pathname: "/contact/[id]", params: { id: c.author_id } })
+            router.push({ pathname: "/contact/[id]", params: { id: c.author_id, init_name: c.profile.display_name, init_handle: c.profile.handle, init_avatar: c.profile.avatar_url ?? "" } })
           }
           activeOpacity={0.8}
           style={{ marginTop: 2 }}

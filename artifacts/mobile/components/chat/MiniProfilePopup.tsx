@@ -17,6 +17,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import SwipeableBottomSheet from "@/components/SwipeableBottomSheet";
+import { setProfileCache } from "@/lib/profileCache";
 
 type MiniProfile = {
   id: string;
@@ -141,8 +142,13 @@ export default function MiniProfilePopup({ userId, visible, onClose, currentChat
   const handleViewProfile = useCallback(() => {
     if (!userId) return;
     onClose();
-    router.push({ pathname: "/contact/[id]", params: { id: userId } });
-  }, [userId, onClose]);
+    if (profile) {
+      setProfileCache(userId, profile as any);
+      router.push({ pathname: "/contact/[id]", params: { id: userId, init_name: profile.display_name, init_handle: profile.handle, init_avatar: profile.avatar_url ?? "", init_verified: profile.is_verified ? "1" : "0", init_org_verified: profile.is_organization_verified ? "1" : "0" } });
+    } else {
+      router.push({ pathname: "/contact/[id]", params: { id: userId } });
+    }
+  }, [userId, onClose, profile]);
 
   const ls = profile ? formatLastSeen(profile.last_seen, profile.show_online_status) : null;
 

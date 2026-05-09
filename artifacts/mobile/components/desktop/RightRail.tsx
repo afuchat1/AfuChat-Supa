@@ -225,7 +225,7 @@ export function RightRail() {
             return (
               <Pressable
                 key={p.id}
-                onPress={() => router.push({ pathname: "/contact/[id]", params: { id: p.id } } as any)}
+                onPress={() => router.push({ pathname: "/contact/[id]", params: { id: p.id, init_name: p.display_name, init_handle: p.handle, init_avatar: p.avatar_url ?? "" } } as any)}
                 style={({ hovered }: any) => [
                   styles.suggestRow,
                   { backgroundColor: hovered ? colors.backgroundTertiary : "transparent" },
