@@ -515,6 +515,25 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
   const typingTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const { prefs: chatPrefs } = useChatPreferences();
 
+  // ── FAB hide-on-scroll ──────────────────────────────────────────────────────
+  const fabAnim     = useRef(new Animated.Value(1)).current;
+  const lastScrollY = useRef(0);
+  const fabHidden   = useRef(false);
+
+  const handleFabScroll = useCallback((e: any) => {
+    const y  = e.nativeEvent.contentOffset.y;
+    const dy = y - lastScrollY.current;
+    lastScrollY.current = y;
+
+    if (dy > 6 && y > 60 && !fabHidden.current) {
+      fabHidden.current = true;
+      Animated.spring(fabAnim, { toValue: 0, useNativeDriver: true, speed: 24, bounciness: 0 }).start();
+    } else if (dy < -4 && fabHidden.current) {
+      fabHidden.current = false;
+      Animated.spring(fabAnim, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 6 }).start();
+    }
+  }, [fabAnim]);
+
   const fetchUnreadCount = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase
@@ -1195,6 +1214,8 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
               }
               contentContainerStyle={{ paddingBottom: insets.bottom + 52 + 80 + 50 }}
               showsVerticalScrollIndicator={false}
+              onScroll={handleFabScroll}
+              scrollEventThrottle={16}
             />
           )}
         </View>
@@ -1211,13 +1232,32 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
       )}
 
       {user && !panelMode && (
-        <TouchableOpacity
-          style={[styles.fab, { backgroundColor: colors.accent, bottom: insets.bottom + 52 + 16 }]}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/contacts"); }}
-          activeOpacity={0.85}
+        <Animated.View
+          style={[
+            styles.fab,
+            {
+              backgroundColor: colors.accent,
+              bottom: (insets.bottom > 0 ? insets.bottom : 14) + 6 + 64 + 20,
+              opacity: fabAnim,
+              transform: [
+                {
+                  translateY: fabAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [28, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
         >
-          <Ionicons name="create-outline" size={24} color="#fff" />
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={{ width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/contacts"); }}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="create-outline" size={24} color="#fff" />
+          </TouchableOpacity>
+        </Animated.View>
       )}
     </View>
   );
