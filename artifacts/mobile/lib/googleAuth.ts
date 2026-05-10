@@ -1,12 +1,9 @@
+import Constants from "expo-constants";
 import { supabase } from "./supabase";
 
-// Web client ID from google-services.json (client_type: 3).
-// Used by the native SDK to obtain an ID token that Supabase can verify.
 const WEB_CLIENT_ID =
   "148957999957-i5pgudckm6c9sc8pthqr2cl918nd3153.apps.googleusercontent.com";
 
-// Load the native module once at module load time so any
-// TurboModuleRegistry error surfaces immediately.
 let _GoogleSignin: any = null;
 let _isErrorWithCode: any = null;
 let _statusCodes: any = null;
@@ -20,26 +17,33 @@ try {
 export type GoogleSignInResult =
   | { ok: true; userId: string }
   | { ok: false; cancelled: true }
-  | { ok: false; cancelled: false; error: string };
+  | { ok: false; cancelled: false; error: "EXPO_GO" | "SHA1_MISMATCH" | "NO_MODULE" | string };
+
+/** True when running inside Expo Go (not a compiled APK/IPA). */
+function isExpoGo(): boolean {
+  return (Constants as any).appOwnership === "expo";
+}
 
 /**
  * Trigger the native Google account picker.
  *
- * Requirements for the native flow to succeed:
- *   - Production / EAS build of com.afuchat.app (not Expo Go)
- *   - The build's SHA-1 fingerprint registered as an Android OAuth client
- *     (client_type 1) in the Google Cloud Console project 148957999957
+ * Works on full EAS/APK builds where:
+ *  - The APK's SHA-1 fingerprint is registered as an Android OAuth client
+ *    (client_type 1) in Google Cloud Console project 148957999957
+ *  - google-services.json is bundled with package com.afuchat.app
  *
- * Returns { ok: false, error: "EXPO_GO" } when called inside Expo Go so the
- * caller can show a friendly message without opening any browser.
+ * Returns specific error codes so callers can show the right message:
+ *  - "EXPO_GO"       → running in Expo Go, native SDK won't work
+ *  - "SHA1_MISMATCH" → real APK but SHA-1 not registered in Cloud Console
+ *  - "NO_MODULE"     → native module not linked (shouldn't happen in EAS builds)
  */
 export async function googleSignIn(): Promise<GoogleSignInResult> {
+  if (isExpoGo()) {
+    return { ok: false, cancelled: false, error: "EXPO_GO" };
+  }
+
   if (!_GoogleSignin) {
-    return {
-      ok: false,
-      cancelled: false,
-      error: "Google Sign-In is not available on this device.",
-    };
+    return { ok: false, cancelled: false, error: "NO_MODULE" };
   }
 
   try {
@@ -48,24 +52,18 @@ export async function googleSignIn(): Promise<GoogleSignInResult> {
 
     let idToken: string | null = null;
 
-    // Try silent sign-in first — instant for returning users.
     try {
       const silent = await _GoogleSignin.signInSilently();
       idToken = silent?.data?.idToken ?? null;
     } catch (_) {}
 
-    // Show the native account picker if silent sign-in didn't return a token.
     if (!idToken) {
       const resp = await _GoogleSignin.signIn();
       idToken = resp?.data?.idToken ?? null;
     }
 
     if (!idToken) {
-      return {
-        ok: false,
-        cancelled: false,
-        error: "No ID token received from Google.",
-      };
+      return { ok: false, cancelled: false, error: "No ID token received from Google." };
     }
 
     const { data, error } = await supabase.auth.signInWithIdToken({
@@ -77,19 +75,16 @@ export async function googleSignIn(): Promise<GoogleSignInResult> {
     return { ok: true, userId: data.user?.id ?? "" };
   } catch (err: any) {
     if (_isErrorWithCode?.(err)) {
-      if (
-        err.code === _statusCodes?.SIGN_IN_CANCELLED ||
-        err.code === _statusCodes?.IN_PROGRESS
-      ) {
+      const code = err.code;
+      if (code === _statusCodes?.SIGN_IN_CANCELLED || code === _statusCodes?.IN_PROGRESS) {
         return { ok: false, cancelled: true };
       }
-      // Code 10 = DEVELOPER_ERROR: SHA-1 not registered, or running in Expo Go.
-      if (err.code === 10 || err.code === "10") {
-        return { ok: false, cancelled: false, error: "EXPO_GO" };
+      if (code === 10 || code === "10") {
+        return { ok: false, cancelled: false, error: "SHA1_MISMATCH" };
       }
     }
     if (err?.code === 10 || err?.code === "10") {
-      return { ok: false, cancelled: false, error: "EXPO_GO" };
+      return { ok: false, cancelled: false, error: "SHA1_MISMATCH" };
     }
     return {
       ok: false,

@@ -428,13 +428,28 @@ export default function LoginScreen() {
     setOauthLoading("google");
     const result = await googleSignIn();
     if (!result.ok) {
-      if (result.cancelled) { setOauthLoading(null); return; }
+      setOauthLoading(null);
+      if (result.cancelled) return;
       if (result.error === "EXPO_GO") {
-        setOauthLoading(null);
-        showAlert("Native Sign-In Unavailable", "Google Sign-In requires the full AfuChat app build. Install AfuChat from the Play Store or build with EAS to enable this.");
+        showAlert(
+          "Testing with Expo Go",
+          "Google Sign-In requires a compiled APK build. Open the app from your installed APK (built with EAS) to use Google Sign-In. Use email/password to sign in here."
+        );
         return;
       }
-      setOauthLoading(null); showAlert("Error", result.error); return;
+      if (result.error === "SHA1_MISMATCH") {
+        showAlert(
+          "Google Sign-In Setup Needed",
+          "This APK's signing fingerprint (SHA-1) is not registered in Google Cloud Console. Go to Cloud Console → Credentials → your Android OAuth client and add the SHA-1 for this build."
+        );
+        return;
+      }
+      if (result.error === "NO_MODULE") {
+        showAlert("Not Available", "The Google Sign-In module is not linked in this build.");
+        return;
+      }
+      showAlert("Google Sign-In Failed", result.error);
+      return;
     }
     const uid = result.userId;
     if (uid) {
