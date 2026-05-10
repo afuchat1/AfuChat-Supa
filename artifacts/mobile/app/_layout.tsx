@@ -187,8 +187,11 @@ export default function RootLayout() {
     function handleDeepLink(url: string | null) {
       if (!url) return;
 
-      // OAuth callback — custom scheme from WebBrowser.openAuthSessionAsync
-      if (url.startsWith("afuchat://") && url.includes("code=")) {
+      // OAuth callback from login/register — custom scheme with (auth) path.
+      // The settings/oauth-providers screen handles its own identity-linking
+      // codes inline via WebBrowser.openAuthSessionAsync, so we only intercept
+      // auth-screen callbacks here to avoid double-processing.
+      if (url.startsWith("afuchat://") && url.includes("(auth)") && url.includes("code=")) {
         handleOAuthCallback(url);
         return;
       }

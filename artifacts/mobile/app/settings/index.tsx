@@ -205,6 +205,13 @@ export default function SettingsScreen() {
           />
           <Separator indent={54} />
           <MenuItem
+            icon="link-outline"
+            iconBg="#5856D6"
+            label="Linked Accounts"
+            onPress={() => router.push("/settings/oauth-providers")}
+          />
+          <Separator indent={54} />
+          <MenuItem
             icon="ban-outline"
             iconBg="#8E8E93"
             label="Blocked Users"
