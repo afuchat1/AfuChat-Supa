@@ -17,10 +17,7 @@ import {
 import { router, usePathname } from "expo-router";
 import type { Session } from "@supabase/supabase-js";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
-  cancelAnimation,
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -29,7 +26,7 @@ import Animated, {
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
-import { TabSwipeContext, TabSwipeProvider } from "@/context/TabSwipeContext";
+import { TabSwipeProvider } from "@/context/TabSwipeContext";
 
 let isLiquidGlassAvailable: () => boolean = () => false;
 try {
@@ -43,15 +40,12 @@ const PILL_HEIGHT = 64;
 const PILL_RADIUS = 34;
 const PILL_H_MARGIN = 36;
 
-// Tab definitions — used by both FloatingTabBar and SwipeTabsWrapper
 const TABS = [
   { route: "/(tabs)",          label: "AfuChat",  sfOn: "message.fill",        sfOff: "message",         mdOn: "chatbubble",  mdOff: "chatbubble-outline" },
   { route: "/(tabs)/discover", label: "Discover", sfOn: "safari.fill",          sfOff: "safari",          mdOn: "compass",     mdOff: "compass-outline"    },
   { route: "/(tabs)/apps",     label: "Apps",     sfOn: "square.grid.2x2.fill", sfOff: "square.grid.2x2", mdOn: "grid",        mdOff: "grid-outline"       },
   { route: "/(tabs)/me",       label: "Me",       sfOn: "person.circle.fill",   sfOff: "person.circle",   mdOn: "person",      mdOff: "person-outline"     },
 ] as const;
-
-const SWIPE_TAB_ROUTES = TABS.map((t) => t.route);
 
 function normalizeTabPath(p: string): string {
   if (p === "/" || p === "/(tabs)" || p === "/(tabs)/index") return "/(tabs)";
@@ -61,29 +55,23 @@ function normalizeTabPath(p: string): string {
   return p;
 }
 
-function navigateToIdx(idx: number) {
-  router.navigate(SWIPE_TAB_ROUTES[idx] as any);
-}
-
 // ─── Floating pill tab bar ────────────────────────────────────────────────────
-// Rendered OUTSIDE SwipeTabsWrapper so it never moves during page swipes.
 function FloatingTabBar() {
-  const pathname   = usePathname();
+  const pathname    = usePathname();
   const colorScheme = useColorScheme();
-  const isDark     = colorScheme === "dark";
-  const isIOS      = Platform.OS === "ios";
-  const insets     = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const isDark      = colorScheme === "dark";
+  const isIOS       = Platform.OS === "ios";
+  const insets      = useSafeAreaInsets();
+  const { colors }  = useTheme();
 
   const bottomOffset = (insets.bottom > 0 ? insets.bottom : 14) + 6;
   const active       = normalizeTabPath(pathname);
 
-  // ── Animated highlight — squircle-style continuous-curve rounded rect ───────
-  const TAB_WIDTH     = (SCREEN_WIDTH - PILL_H_MARGIN * 2) / TABS.length;
-  const H_PADDING     = 4;   // space on each side of the highlight within the tab slot
-  const HIGHLIGHT_W   = TAB_WIDTH - H_PADDING * 2;
-  const HIGHLIGHT_H   = PILL_HEIGHT - 16;  // 48px — tall enough to enclose icon + label
-  const HIGHLIGHT_R   = HIGHLIGHT_H / 2;  // true oval/capsule — fully rounded short ends
+  const TAB_WIDTH   = (SCREEN_WIDTH - PILL_H_MARGIN * 2) / TABS.length;
+  const H_PADDING   = 4;
+  const HIGHLIGHT_W = TAB_WIDTH - H_PADDING * 2;
+  const HIGHLIGHT_H = PILL_HEIGHT - 16;
+  const HIGHLIGHT_R = HIGHLIGHT_H / 2;
 
   function pillLeft(idx: number) {
     return idx * TAB_WIDTH + H_PADDING;
@@ -126,7 +114,6 @@ function FloatingTabBar() {
         elevation: 20,
       }}
     >
-      {/* Background */}
       {isIOS ? (
         <BlurView
           intensity={isDark ? 72 : 88}
@@ -142,7 +129,6 @@ function FloatingTabBar() {
         />
       )}
 
-      {/* Sliding highlight — rounded rectangle behind icon + label */}
       <Animated.View
         style={[
           {
@@ -152,9 +138,7 @@ function FloatingTabBar() {
             width: HIGHLIGHT_W,
             height: HIGHLIGHT_H,
             borderRadius: HIGHLIGHT_R,
-            backgroundColor: isDark
-              ? colors.accent + "2A"
-              : colors.accent + "20",
+            backgroundColor: isDark ? colors.accent + "2A" : colors.accent + "20",
             borderWidth: 1,
             borderColor: colors.accent + "30",
           },
@@ -162,7 +146,6 @@ function FloatingTabBar() {
         ]}
       />
 
-      {/* Tab items — each slot is exactly TAB_WIDTH so content aligns over highlight */}
       <View style={{ flex: 1, flexDirection: "row" }}>
         {TABS.map((tab) => {
           const isFocused = active === tab.route;
@@ -210,134 +193,6 @@ function FloatingTabBar() {
   );
 }
 
-// ─── Swipe wrapper ────────────────────────────────────────────────────────────
-// Early-nav fires at 8% so destination content slides in almost immediately.
-// No opacity flash — the new screen is positioned at its entry edge and glides in.
-function SwipeTabsWrapper({ children, isLoggedIn }: { children: React.ReactNode; isLoggedIn: boolean }) {
-  const pathname = usePathname();
-  const { horizontalScrollActive } = React.useContext(TabSwipeContext);
-
-  const translateX   = useSharedValue(0);
-  const isLoggedInSV = useSharedValue(isLoggedIn);
-  const tabIdxSV     = useSharedValue(SWIPE_TAB_ROUTES.indexOf(normalizeTabPath(pathname)));
-  const earlyNavDone = useSharedValue(false);
-  const earlyNavEdge = useSharedValue(0);
-  const originalIdx  = useSharedValue(0);
-
-  useEffect(() => { isLoggedInSV.value = isLoggedIn; }, [isLoggedIn]);
-  useEffect(() => {
-    tabIdxSV.value = SWIPE_TAB_ROUTES.indexOf(normalizeTabPath(pathname));
-  }, [pathname]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-  }));
-
-  const swipeGesture = useRef(
-    Gesture.Pan()
-      .activeOffsetX([-10, 10])
-      .failOffsetY([-20, 20])
-      .onBegin(() => {
-        "worklet";
-        cancelAnimation(translateX);
-        earlyNavDone.value = false;
-        earlyNavEdge.value = 0;
-        originalIdx.value  = tabIdxSV.value;
-      })
-      .onUpdate((e) => {
-        "worklet";
-
-        // Non-tab screen (search, contacts, etc.) — completely block swipe
-        if (tabIdxSV.value === -1) {
-          translateX.value = 0;
-          return;
-        }
-
-        // A child horizontal scroll is currently active — don't intercept
-        if (horizontalScrollActive.value) {
-          return;
-        }
-
-        if (!isLoggedInSV.value) {
-          translateX.value = e.translationX * 0.08;
-          return;
-        }
-
-        // After early nav we keep tracking the finger without jumping —
-        // the new screen is already mounted (lazy:false) at translateX, so it
-        // slides in seamlessly with no blank-flash.
-        if (earlyNavDone.value) {
-          translateX.value = e.translationX;
-          return;
-        }
-
-        const idx     = tabIdxSV.value;
-        const atStart = idx === 0;
-        const atEnd   = idx === SWIPE_TAB_ROUTES.length - 1;
-
-        // Rubber-band at first / last tab
-        if ((atStart && e.translationX > 0) || (atEnd && e.translationX < 0)) {
-          translateX.value = e.translationX * 0.15;
-          return;
-        }
-
-        translateX.value = e.translationX;
-
-        // ── Early navigation at 8% — fire-and-forget, no position jump ────────
-        const EARLY     = SCREEN_WIDTH * 0.08;
-        const canGoNext = e.translationX < -EARLY && !atEnd;
-        const canGoPrev = e.translationX > +EARLY && !atStart;
-
-        if (canGoNext || canGoPrev) {
-          earlyNavDone.value  = true;
-          earlyNavEdge.value  = canGoNext ? 1 : -1;   // +1 = went next, -1 = went prev
-          runOnJS(navigateToIdx)(canGoNext ? idx + 1 : idx - 1);
-        }
-      })
-      .onEnd((e) => {
-        "worklet";
-
-        // Non-tab screen — always spring back to zero
-        if (tabIdxSV.value === -1) {
-          translateX.value = withSpring(0, { velocity: 0, damping: 22, stiffness: 280, mass: 0.8 });
-          return;
-        }
-
-        if (!isLoggedInSV.value || !earlyNavDone.value) {
-          // No nav happened — bounce back
-          translateX.value = withSpring(0, { velocity: e.velocityX, damping: 22, stiffness: 280, mass: 0.8 });
-          return;
-        }
-
-        const isFling  = Math.abs(e.velocityX) > 300;
-        const isFar    = Math.abs(e.translationX) > SCREEN_WIDTH * 0.28;
-        // dirMatch: finger is still moving in the direction the nav went
-        const dirMatch = earlyNavEdge.value > 0 ? e.translationX < 0 : e.translationX > 0;
-
-        if ((isFling || isFar) && dirMatch) {
-          // Committed — new content is already on-screen, spring it to centre
-          translateX.value = withSpring(0, { velocity: e.velocityX, damping: 26, stiffness: 320, mass: 0.85, overshootClamping: true });
-        } else {
-          // Cancelled — go back and spring to rest (0)
-          runOnJS(navigateToIdx)(originalIdx.value);
-          translateX.value = withSpring(0, { velocity: e.velocityX, damping: 22, stiffness: 280, mass: 0.8 });
-        }
-      })
-  ).current;
-
-  if (Platform.OS === "web") return <>{children}</>;
-
-  return (
-    <GestureDetector gesture={swipeGesture}>
-      <View style={{ flex: 1, overflow: "hidden" }}>
-        <Animated.View style={[{ flex: 1 }, animatedStyle]}>
-          {children}
-        </Animated.View>
-      </View>
-    </GestureDetector>
-  );
-}
-
 // ─── Native tab layout (iOS Liquid Glass only) ────────────────────────────────
 function NativeTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   return (
@@ -350,7 +205,7 @@ function NativeTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   );
 }
 
-// ─── Classic tab layout — built-in tab bar hidden; FloatingTabBar used instead ─
+// ─── Classic tab layout ───────────────────────────────────────────────────────
 function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   const { colors } = useTheme();
   return (
@@ -398,9 +253,7 @@ export default function TabLayout() {
   if (isLiquidGlassAvailable()) {
     return (
       <TabSwipeProvider>
-        <SwipeTabsWrapper isLoggedIn={isLoggedIn}>
-          <NativeTabLayout isLoggedIn={isLoggedIn} />
-        </SwipeTabsWrapper>
+        <NativeTabLayout isLoggedIn={isLoggedIn} />
       </TabSwipeProvider>
     );
   }
@@ -408,9 +261,7 @@ export default function TabLayout() {
   return (
     <TabSwipeProvider>
       <View style={{ flex: 1 }}>
-        <SwipeTabsWrapper isLoggedIn={isLoggedIn}>
-          <ClassicTabLayout isLoggedIn={isLoggedIn} />
-        </SwipeTabsWrapper>
+        <ClassicTabLayout isLoggedIn={isLoggedIn} />
         {isLoggedIn && !isDesktop && Platform.OS !== "web" && (
           <FloatingTabBar />
         )}
