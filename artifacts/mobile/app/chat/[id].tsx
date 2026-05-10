@@ -3785,7 +3785,7 @@ STRICT RULES:
               extraData={highlightedMsgId}
               renderItem={renderMessage}
               inverted
-              contentContainerStyle={[st.listContent, { paddingBottom: floatingInputHeight + 8 }]}
+              contentContainerStyle={[st.listContent, { paddingBottom: floatingInputHeight + (keyboardHeight > 0 ? keyboardHeight : insets.bottom) + 16 }]}
               showsVerticalScrollIndicator={false}
               onScroll={handleScroll}
               scrollEventThrottle={16}
