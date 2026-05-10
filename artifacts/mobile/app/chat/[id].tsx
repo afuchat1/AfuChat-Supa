@@ -4185,6 +4185,7 @@ STRICT RULES:
             height={emojiKeyboardHeight}
             onEmojiSelected={(emoji) => setInput((prev) => prev + emoji)}
             onSendSticker={sendStickerMessage}
+            onClose={() => setShowEmojiStickerPicker(false)}
           />
         )}
       </KeyboardAvoidingView>

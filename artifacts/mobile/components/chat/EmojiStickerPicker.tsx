@@ -92,9 +92,10 @@ interface Props {
   height: number;
   onEmojiSelected: (emoji: string) => void;
   onSendSticker: (emoji: string) => void;
+  onClose?: () => void;
 }
 
-export default function EmojiStickerPicker({ height, onEmojiSelected, onSendSticker }: Props) {
+export default function EmojiStickerPicker({ height, onEmojiSelected, onSendSticker, onClose }: Props) {
   const { colors } = useTheme();
   const [tab, setTab] = useState<Tab>("emoji");
   const [activeCat, setActiveCat] = useState(0);
@@ -147,6 +148,7 @@ export default function EmojiStickerPicker({ height, onEmojiSelected, onSendStic
       {tab === "emoji" && (
         <EmojiKeyboard
           onEmojiSelected={(emojiObject: { emoji: string }) => onEmojiSelected(emojiObject.emoji)}
+          onClose={onClose ?? (() => {})}
           enableRecentlyUsed
           enableSearchBar
           enableCategoryChangeGesture={false}
