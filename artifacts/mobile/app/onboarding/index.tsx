@@ -1045,8 +1045,7 @@ const st = StyleSheet.create({
   pagerOuter: { flex: 1, overflow: "hidden" },
   pagerStrip: {
     flexDirection: "row",
-    // total width = SCREEN_WIDTH * TOTAL_STEPS, implied by children
-    flex: 1,
+    width: SCREEN_WIDTH * TOTAL_STEPS,
   },
 
   // Per-step scroll

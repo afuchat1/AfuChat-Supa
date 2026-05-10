@@ -507,11 +507,14 @@ export default function LoginScreen() {
       if (result.cancelled) { setOauthLoading(null); return; }
       if (result.error === "DEVELOPER_ERROR") {
         // Native Google Sign-In isn't configured for this build (SHA-1 not
-        // registered). Fall back to the in-app WebView OAuth flow seamlessly.
+        // registered). Fall back to the system browser OAuth flow — this is
+        // required because Google blocks OAuth inside embedded WebViews
+        // (Error 403: disallowed_useragent).
+        const redirectUrl = makeRedirectUri({ native: "afuchat://(auth)/login" });
         const { data: oauthData, error: oauthErr } = await supabase.auth.signInWithOAuth({
           provider: "google",
           options: {
-            redirectTo: "https://afuchat.com/",
+            redirectTo: redirectUrl,
             skipBrowserRedirect: true,
             queryParams: { prompt: "select_account" },
           },
@@ -521,8 +524,24 @@ export default function LoginScreen() {
           showAlert("Sign-in Error", "Could not start Google sign-in. Please try again.");
           return;
         }
-        oauthHandledRef.current = false;
-        setOauthModalUrl(oauthData.url);
+        const browserResult = await WebBrowser.openAuthSessionAsync(oauthData.url, redirectUrl, { showInRecents: false });
+        if (browserResult.type === "success" && browserResult.url) {
+          const url = new URL(browserResult.url);
+          const code = url.searchParams.get("code");
+          if (code) {
+            const { data: sd, error: e } = await supabase.auth.exchangeCodeForSession(code);
+            if (e) { showAlert("Error", e.message); }
+            else {
+              const uid = sd.user?.id;
+              if (uid) {
+                const { data: prof } = await supabase.from("profiles").select("onboarding_completed").eq("id", uid).maybeSingle();
+                if (!prof?.onboarding_completed) { setOauthLoading(null); router.replace({ pathname: "/onboarding", params: { userId: uid } } as any); return; }
+              }
+              setOauthLoading(null); router.replace("/(tabs)"); return;
+            }
+          }
+        }
+        setOauthLoading(null);
         return;
       }
       setOauthLoading(null);
