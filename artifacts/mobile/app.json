@@ -55,6 +55,7 @@
         "android.permission.READ_MEDIA_VIDEO",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.READ_MEDIA_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_CONNECT"
@@ -136,7 +137,15 @@
           ]
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "AfuChat uses your photo library to let you save and share media.",
+          "savePhotosPermission": "AfuChat saves media to your photo library.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ]
     ],
     "updates": {
       "enabled": false
