@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import EmojiKeyboard from "rn-emoji-keyboard";
+import { EmojiKeyboard } from "rn-emoji-keyboard";
 import { useTheme } from "@/hooks/useTheme";
 
 const BRAND = "#00BCD4";
@@ -146,15 +146,19 @@ export default function EmojiStickerPicker({ height, onEmojiSelected, onSendStic
 
       {/* ── Emoji panel ── */}
       {tab === "emoji" && (
-        <EmojiKeyboard
-          onEmojiSelected={(emojiObject: { emoji: string }) => onEmojiSelected(emojiObject.emoji)}
-          onClose={onClose ?? (() => {})}
-          enableRecentlyUsed
-          enableSearchBar
-          enableCategoryChangeGesture={false}
-          categoryPosition="top"
-          theme={emojiTheme}
-        />
+        <View style={styles.emojiPanel}>
+          <EmojiKeyboard
+            onEmojiSelected={(emojiObject: { emoji: string }) => onEmojiSelected(emojiObject.emoji)}
+            enableRecentlyUsed
+            enableSearchBar
+            enableCategoryChangeGesture={false}
+            categoryPosition="top"
+            disableSafeArea
+            expandable={false}
+            theme={emojiTheme}
+            styles={{ container: { flex: 1, borderRadius: 0, shadowOpacity: 0, elevation: 0 } }}
+          />
+        </View>
       )}
 
       {/* ── Stickers panel ── */}
@@ -221,6 +225,10 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontSize: 13,
     fontFamily: "Inter_600SemiBold",
+  },
+
+  emojiPanel: {
+    flex: 1,
   },
 
   stickerPanel: { flex: 1 },
