@@ -97,6 +97,7 @@ function RootLayoutNav() {
       <Stack.Screen name="stories/view" options={{ animation: "fade" }} />
       <Stack.Screen name="red-envelope/[id]" options={bottomSheetAnim} />
       <Stack.Screen name="settings/index" options={{ headerShown: false }} />
+      <Stack.Screen name="settings/two-factor" options={{ headerShown: false }} />
       <Stack.Screen name="settings/offline-videos" options={{ headerShown: false }} />
       <Stack.Screen name="admin/support-dashboard" options={{ headerShown: false }} />
       <Stack.Screen name="support/index" options={{ headerShown: false }} />

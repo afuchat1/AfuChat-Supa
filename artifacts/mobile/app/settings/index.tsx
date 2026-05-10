@@ -18,13 +18,19 @@ import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
 import { Separator } from "@/components/ui/Separator";
 
-const THEME_LABELS: Record<string, string> = { dark: "Dark", light: "Light", system: "System" };
+// ─── Theme labels/icons ───────────────────────────────────────────────────────
+const THEME_LABELS: Record<string, string> = {
+  dark: "Dark",
+  light: "Light",
+  system: "System",
+};
 const THEME_ICONS: Record<string, React.ComponentProps<typeof Ionicons>["name"]> = {
   dark: "moon",
   light: "sunny",
   system: "phone-portrait-outline",
 };
 
+// ─── Sub-components ───────────────────────────────────────────────────────────
 type MenuItemProps = {
   icon: React.ComponentProps<typeof Ionicons>["name"];
   iconBg: string;
@@ -45,45 +51,18 @@ function MenuItem({ icon, iconBg, label, value, onPress, danger }: MenuItemProps
       <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
         <Ionicons name={icon} size={18} color="#fff" />
       </View>
-      <Text style={[styles.label, { flex: 1, color: danger ? "#FF3B30" : colors.text }]}>{label}</Text>
+      <Text style={[styles.label, { flex: 1, color: danger ? "#FF3B30" : colors.text }]}>
+        {label}
+      </Text>
       <View style={styles.right}>
-        {value ? <Text style={[styles.value, { color: colors.textMuted }]}>{value}</Text> : null}
-        {!danger && <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />}
+        {value ? (
+          <Text style={[styles.value, { color: colors.textMuted }]}>{value}</Text>
+        ) : null}
+        {!danger && (
+          <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+        )}
       </View>
     </TouchableOpacity>
-  );
-}
-
-type ToggleItemProps = {
-  icon: React.ComponentProps<typeof Ionicons>["name"];
-  iconBg: string;
-  label: string;
-  subtitle?: string;
-  value: boolean;
-  onValueChange: (v: boolean) => void;
-};
-
-function ToggleItem({ icon, iconBg, label, subtitle, value, onValueChange }: ToggleItemProps) {
-  const { colors } = useTheme();
-  return (
-    <View style={[styles.item, { backgroundColor: colors.surface }]}>
-      <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
-        <Ionicons name={icon} size={18} color="#fff" />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
-        {subtitle ? (
-          <Text style={[styles.subtitle, { color: colors.textMuted }]}>{subtitle}</Text>
-        ) : null}
-      </View>
-      <Switch
-        value={value}
-        onValueChange={(v) => { Haptics.selectionAsync(); onValueChange(v); }}
-        trackColor={{ false: colors.border, true: colors.accent }}
-        thumbColor="#fff"
-        ios_backgroundColor={colors.border}
-      />
-    </View>
   );
 }
 
@@ -99,6 +78,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+// ─── Screen ───────────────────────────────────────────────────────────────────
 export default function SettingsScreen() {
   const { colors, themeMode, setThemeMode } = useTheme();
   const { langLabel } = useLanguage();
@@ -106,7 +86,8 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
 
   function cycleTheme() {
-    const next = themeMode === "dark" ? "light" : themeMode === "light" ? "system" : "dark";
+    const next =
+      themeMode === "dark" ? "light" : themeMode === "light" ? "system" : "dark";
     Haptics.selectionAsync();
     setThemeMode(next);
   }
@@ -114,19 +95,28 @@ export default function SettingsScreen() {
   function handleSignOut() {
     showAlert("Sign Out", "Are you sure you want to sign out?", [
       { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign Out",
-        style: "destructive",
-        onPress: () => signOut(),
-      },
+      { text: "Sign Out", style: "destructive", onPress: () => signOut() },
     ]);
   }
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 10, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}>
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: insets.top + 10,
+            backgroundColor: colors.surface,
+            borderBottomColor: colors.border,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => router.back()}
+          hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
+        >
           <Ionicons name="chevron-back" size={26} color={colors.accent} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Settings</Text>
@@ -137,7 +127,7 @@ export default function SettingsScreen() {
         contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Preferences */}
+        {/* ── Preferences ─────────────────────────────────────────────────── */}
         <Section title="PREFERENCES">
           <MenuItem
             icon={THEME_ICONS[themeMode] ?? "phone-portrait-outline"}
@@ -154,14 +144,16 @@ export default function SettingsScreen() {
             value={langLabel}
             onPress={() => router.push("/language-settings")}
           />
-          {Platform.OS !== "web" && <Separator indent={54} />}
           {Platform.OS !== "web" && (
-            <MenuItem
-              icon="notifications-outline"
-              iconBg="#5856D6"
-              label="Notifications"
-              onPress={() => router.push("/settings/notifications")}
-            />
+            <>
+              <Separator indent={54} />
+              <MenuItem
+                icon="notifications-outline"
+                iconBg="#5856D6"
+                label="Notifications"
+                onPress={() => router.push("/settings/notifications")}
+              />
+            </>
           )}
           <Separator indent={54} />
           <MenuItem
@@ -177,18 +169,20 @@ export default function SettingsScreen() {
             label="Storage"
             onPress={() => router.push("/settings/storage")}
           />
-          {Platform.OS !== "web" && <Separator indent={54} />}
           {Platform.OS !== "web" && (
-            <MenuItem
-              icon="cloud-download-outline"
-              iconBg="#5AC8FA"
-              label="Offline Videos"
-              onPress={() => router.push("/settings/offline-videos" as any)}
-            />
+            <>
+              <Separator indent={54} />
+              <MenuItem
+                icon="cloud-download-outline"
+                iconBg="#5AC8FA"
+                label="Offline Videos"
+                onPress={() => router.push("/settings/offline-videos" as any)}
+              />
+            </>
           )}
         </Section>
 
-        {/* Privacy & Security */}
+        {/* ── Privacy & Security ───────────────────────────────────────────── */}
         <Section title="PRIVACY & SECURITY">
           <MenuItem
             icon="shield-checkmark-outline"
@@ -210,27 +204,9 @@ export default function SettingsScreen() {
             label="Linked Accounts"
             onPress={() => router.push("/settings/oauth-providers")}
           />
-          <Separator indent={54} />
-          <MenuItem
-            icon="ban-outline"
-            iconBg="#8E8E93"
-            label="Blocked Users"
-            onPress={() => router.push("/settings/blocked")}
-          />
-          {Platform.OS !== "web" && (
-            <>
-              <Separator indent={54} />
-              <MenuItem
-                icon="shield-half-outline"
-                iconBg="#FF3B30"
-                label="Device Security"
-                onPress={() => router.push("/device-security")}
-              />
-            </>
-          )}
         </Section>
 
-        {/* Help */}
+        {/* ── Help & About ─────────────────────────────────────────────────── */}
         <Section title="HELP & ABOUT">
           <MenuItem
             icon="help-buoy-outline"
@@ -247,7 +223,7 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        {/* Account */}
+        {/* ── Account ──────────────────────────────────────────────────────── */}
         <Section title="ACCOUNT">
           <MenuItem
             icon="log-out-outline"
@@ -262,6 +238,7 @@ export default function SettingsScreen() {
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: {
@@ -299,7 +276,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   label: { fontSize: 16, fontFamily: "Inter_400Regular" },
-  subtitle: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
   right: { flexDirection: "row", alignItems: "center", gap: 6 },
   value: { fontSize: 14, fontFamily: "Inter_400Regular" },
 });
