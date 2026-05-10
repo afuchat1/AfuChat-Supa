@@ -1052,7 +1052,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
         <View style={[styles.panelHeader, { backgroundColor: colors.background }]}>
           <Text style={[styles.panelTitle, { color: colors.text }]}>Chats</Text>
           <TouchableOpacity
-            onPress={() => router.push("/(tabs)/contacts")}
+            onPress={() => router.push("/chat/new" as any)}
             style={[styles.panelHeaderBtn, { backgroundColor: colors.backgroundSecondary }]}
             activeOpacity={0.7}
           >
@@ -1498,7 +1498,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
       {user && panelMode && (
         <TouchableOpacity
           style={[styles.fab, { backgroundColor: colors.accent, bottom: 24, right: 24 }]}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/contacts"); }}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/chat/new" as any); }}
           activeOpacity={0.85}
         >
           <Ionicons name="create-outline" size={24} color="#fff" />
@@ -1526,7 +1526,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
         >
           <TouchableOpacity
             style={{ width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/contacts"); }}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/chat/new" as any); }}
             activeOpacity={0.85}
           >
             <Ionicons name="create-outline" size={24} color="#fff" />
