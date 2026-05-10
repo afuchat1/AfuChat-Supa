@@ -139,8 +139,7 @@ const CATEGORIES: Category[] = [
         icon: "folder",
         gradient: ["#5856D6", "#6E6CD3"],
         route: "/file-manager",
-        featuredSub: "Store and share your files securely.",
-        adminOnly: true,
+        featuredSub: "Browse device files, transfer offline via Nearby Share, and manage your storage.",
       },
       {
         id: "digitalid",
