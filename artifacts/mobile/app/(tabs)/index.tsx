@@ -14,7 +14,6 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { Redirect, router, useFocusEffect, useNavigation, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -1079,11 +1078,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
           { paddingTop: insets.top + 8 },
         ]}
       >
-        {Platform.OS === "ios" ? (
-          <BlurView intensity={80} tint={isDark ? "systemChromeMaterialDark" : "systemChromeMaterialLight"} style={[StyleSheet.absoluteFill, { zIndex: 0 }]} />
-        ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, opacity: 0.96, zIndex: 0 }]} />
-        )}
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, zIndex: 0 }]} />
         {/* Account avatar stack — left side */}
         {(() => {
           const others = linkedAccounts.filter(a => a.userId !== user?.id);

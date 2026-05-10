@@ -17,7 +17,6 @@ import {
   ViewToken,
   useWindowDimensions,
 } from "react-native";
-import { BlurView } from "expo-blur";
 import { ScrollView as GHScrollView } from "react-native-gesture-handler";
 import { TabSwipeContext } from "@/context/TabSwipeContext";
 import { Image as ExpoImage } from "expo-image";
@@ -1566,16 +1565,8 @@ export default function DiscoverScreen() {
           },
         ]}
       >
-        {/* Glass background for header */}
-        {Platform.OS === "ios" ? (
-          <BlurView
-            intensity={80}
-            tint={isDark ? "systemChromeMaterialDark" : "systemChromeMaterialLight"}
-            style={[StyleSheet.absoluteFill, { zIndex: 0 }]}
-          />
-        ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? "rgba(10,10,10,0.95)" : "rgba(245,240,232,0.95)", zIndex: 0 }]} />
-        )}
+        {/* Flat header background */}
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? "#0F0F0F" : "#F5F0E8", zIndex: 0 }]} />
 
         {/* Tab switcher — YouTube-style underline tabs */}
         <View

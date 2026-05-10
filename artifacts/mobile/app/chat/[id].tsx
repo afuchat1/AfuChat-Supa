@@ -19,7 +19,6 @@ import {
   View,
 } from "react-native";
 
-import { BlurView } from "expo-blur";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -3991,8 +3990,8 @@ STRICT RULES:
           </View>
         ) : isRecording && recLocked ? (
           <View style={[st.inputFloatOuter, { paddingBottom: 8 }]}>
-            {Platform.OS === "ios" ? (
-              <BlurView intensity={72} tint={colors.background === "#fff" || colors.background === "#FFFFFF" ? "light" : "dark"} style={st.inputGlassPill}>
+            {true ? (
+              <View style={[st.inputGlassPill, { backgroundColor: colors.surface, borderColor: colors.border + "60" }]}>
                 <View style={st.recLockedInner}>
                   <TouchableOpacity onPress={cancelVoiceRecording} hitSlop={12} style={st.recLockedTrash}>
                     <Ionicons name="trash" size={20} color="#FF3B30" />
@@ -4012,7 +4011,7 @@ STRICT RULES:
                     <Ionicons name="send" size={18} color="#fff" />
                   </TouchableOpacity>
                 </View>
-              </BlurView>
+              </View>
             ) : (
               <View style={[st.inputGlassPill, { backgroundColor: colors.surface, borderColor: colors.border + "60" }]}>
                 <View style={st.recLockedInner}>
@@ -4043,8 +4042,8 @@ STRICT RULES:
               <SmartReplyBar messages={messages} myId={user?.id || ""} input={input} onSend={handleSmartReply} colors={colors} />
             )}
             <View style={[st.inputFloatOuter, { paddingBottom: 8 }]}>
-              {Platform.OS === "ios" ? (
-                <BlurView intensity={72} tint={colors.background === "#fff" || colors.background === "#FFFFFF" ? "light" : "dark"} style={[st.inputGlassPill, isRecording && !recLocked ? st.recHoldGlass : undefined]}>
+              {true ? (
+                <View style={[st.inputGlassPill, { backgroundColor: colors.surface, borderColor: colors.border + "80" }, isRecording && !recLocked ? st.recHoldGlass : undefined]}>
                   <View style={st.inputBarRow}>
                     {isRecording && !recLocked ? (
                       <>
@@ -4149,7 +4148,7 @@ STRICT RULES:
                       </View>
                     )}
                   </View>
-                </BlurView>
+                </View>
               ) : (
                 <View style={[st.inputGlassPill, { backgroundColor: colors.surface, borderColor: colors.border + "80" }, isRecording && !recLocked ? st.recHoldGlass : undefined]}>
                   <View style={st.inputBarRow}>

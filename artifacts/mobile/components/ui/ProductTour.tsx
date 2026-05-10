@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTour } from "@/context/TourContext";
@@ -222,20 +221,7 @@ export default function ProductTour() {
   const isLast = stepIndex === totalSteps - 1;
 
   const TooltipWrapper =
-    Platform.OS === "ios"
-      ? ({ children }: { children: React.ReactNode }) => (
-          <BlurView
-            intensity={78}
-            tint={isDark ? "dark" : "light"}
-            style={[
-              styles.tooltip,
-              { borderColor: tooltipBorder, overflow: "hidden" },
-            ]}
-          >
-            {children}
-          </BlurView>
-        )
-      : ({ children }: { children: React.ReactNode }) => (
+    ({ children }: { children: React.ReactNode }) => (
           <View
             style={[
               styles.tooltip,

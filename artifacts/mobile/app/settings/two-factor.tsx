@@ -24,7 +24,6 @@ import * as Haptics from "@/lib/haptics";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { GlassMenuSection, GlassMenuItem, GlassMenuSeparator } from "@/components/ui/GlassMenuItem";
-import { GLASS } from "@/constants/glass";
 
 // ─── Step machine ─────────────────────────────────────────────────────────────
 type Step =

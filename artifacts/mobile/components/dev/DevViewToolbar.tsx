@@ -154,8 +154,7 @@ const styles = StyleSheet.create({
     zIndex: 99999,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255, 255, 255, 0.08)",
-    // @ts-expect-error -- web-only
-    backdropFilter: "saturate(180%) blur(8px)",
+    backgroundColor: "rgba(20, 20, 24, 0.97)",
     // @ts-expect-error -- web-only
     fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, system-ui",
   },

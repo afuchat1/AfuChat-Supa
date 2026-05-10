@@ -1,10 +1,3 @@
-/**
- * GlassMenuItem — a liquid glass settings row component.
- *
- * Replaces the plain-background menu items used across all settings screens
- * with a glass surface that supports icons, labels, values, badges, and chevrons.
- * Also exports GlassMenuSection which wraps a group of rows in a glass card.
- */
 import React from "react";
 import {
   ActivityIndicator,
@@ -16,8 +9,6 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { GlassCard } from "@/components/ui/GlassCard";
-import { GLASS, glassSeparator } from "@/constants/glass";
 import { useTheme } from "@/hooks/useTheme";
 import * as Haptics from "@/lib/haptics";
 
@@ -29,32 +20,42 @@ interface GlassMenuSectionProps {
 }
 
 export function GlassMenuSection({ title, children, style }: GlassMenuSectionProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   return (
     <View style={[styles.sectionWrap, style]}>
       {title ? (
         <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>{title}</Text>
       ) : null}
-      <GlassCard style={styles.sectionCard} noBorder={false} noShadow={false} variant="medium">
+      <View
+        style={[
+          styles.sectionCard,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderWidth: StyleSheet.hairlineWidth,
+          },
+        ]}
+      >
         {children}
-      </GlassCard>
+      </View>
     </View>
   );
 }
 
 // ─── GlassMenuSeparator ───────────────────────────────────────────────────────
 export function GlassMenuSeparator({ indent = 54 }: { indent?: number }) {
-  const { isDark } = useTheme();
-  const sep = glassSeparator(isDark);
+  const { colors } = useTheme();
   return (
-    <View style={[sep, { marginLeft: indent }]} pointerEvents="none" />
+    <View
+      style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: indent }}
+      pointerEvents="none"
+    />
   );
 }
 
 // ─── GlassMenuItem ────────────────────────────────────────────────────────────
 export interface GlassMenuItemProps {
   icon: React.ComponentProps<typeof Ionicons>["name"];
-  /** Gradient colors for icon background [from, to] or a single color string */
   iconBg: string | [string, string];
   label: string;
   value?: string;
@@ -65,9 +66,7 @@ export interface GlassMenuItemProps {
   danger?: boolean;
   disabled?: boolean;
   loading?: boolean;
-  /** Hide the right chevron */
   noChevron?: boolean;
-  /** Render a right accessory element instead of value/chevron */
   rightElement?: React.ReactNode;
 }
 
@@ -103,7 +102,6 @@ export const GlassMenuItem = React.memo(function GlassMenuItem({
       activeOpacity={0.65}
       disabled={disabled || loading}
     >
-      {/* Icon */}
       <View style={styles.iconWrap}>
         <LinearGradient
           colors={iconBgColors}
@@ -115,7 +113,6 @@ export const GlassMenuItem = React.memo(function GlassMenuItem({
         </LinearGradient>
       </View>
 
-      {/* Label + subtitle */}
       <View style={styles.labelWrap}>
         <Text
           style={[styles.label, { color: danger ? "#FF3B30" : colors.text }]}
@@ -130,7 +127,6 @@ export const GlassMenuItem = React.memo(function GlassMenuItem({
         ) : null}
       </View>
 
-      {/* Right side */}
       {rightElement ?? (
         <View style={styles.right}>
           {loading ? (
@@ -160,8 +156,6 @@ export const GlassMenuItem = React.memo(function GlassMenuItem({
   );
 });
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-/** Lighten (+) or darken (-) a hex color for a subtle gradient */
 function adjustLightness(hex: string, delta: number): string {
   const n = parseInt(hex.replace("#", ""), 16);
   const r = Math.min(255, Math.max(0, (n >> 16) + Math.round(delta * 80)));
@@ -170,7 +164,6 @@ function adjustLightness(hex: string, delta: number): string {
   return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   sectionWrap: { gap: 8 },
   sectionLabel: {
@@ -179,7 +172,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     marginLeft: 4,
   },
-  sectionCard: { borderRadius: GLASS.radius.lg, overflow: "hidden" },
+  sectionCard: { borderRadius: 16, overflow: "hidden" },
 
   row: {
     flexDirection: "row",

@@ -21,7 +21,6 @@ import { GlassHeader } from "@/components/ui/GlassHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { GlassMenuSeparator } from "@/components/ui/GlassMenuItem";
 import { LinearGradient } from "expo-linear-gradient";
-import { GLASS } from "@/constants/glass";
 
 // ─── Provider config ──────────────────────────────────────────────────────────
 type Provider = {
@@ -111,7 +110,7 @@ export default function OAuthProvidersScreen() {
       >
         <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>SOCIAL SIGN-IN</Text>
 
-        <GlassCard style={{ borderRadius: GLASS.radius.lg, overflow: "hidden" }} variant="medium">
+        <GlassCard style={{ borderRadius: 20, overflow: "hidden" }} variant="medium">
           {loading ? (
             <View style={styles.loadingRow}>
               <ActivityIndicator color={colors.accent} size="large" />

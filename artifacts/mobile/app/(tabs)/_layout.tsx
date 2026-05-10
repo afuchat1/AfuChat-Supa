@@ -1,4 +1,3 @@
-import { BlurView } from "expo-blur";
 import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
@@ -11,17 +10,11 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  useColorScheme,
   View,
 } from "react-native";
 import { router, usePathname } from "expo-router";
 import type { Session } from "@supabase/supabase-js";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from "react-native-reanimated";
 
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -34,11 +27,8 @@ try {
 } catch (_) {}
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
-const SCREEN_WIDTH = Dimensions.get("window").width;
 
-const PILL_HEIGHT = 64;
-const PILL_RADIUS = 34;
-const PILL_H_MARGIN = 36;
+const TAB_BAR_HEIGHT = 56;
 
 const TABS = [
   { route: "/(tabs)",          label: "AfuChat",  sfOn: "message.fill",        sfOff: "message",         mdOn: "chatbubble",  mdOff: "chatbubble-outline" },
@@ -55,140 +45,63 @@ function normalizeTabPath(p: string): string {
   return p;
 }
 
-// ─── Floating pill tab bar ────────────────────────────────────────────────────
-function FloatingTabBar() {
-  const pathname    = usePathname();
-  const colorScheme = useColorScheme();
-  const isDark      = colorScheme === "dark";
-  const isIOS       = Platform.OS === "ios";
-  const insets      = useSafeAreaInsets();
-  const { colors }  = useTheme();
+// ─── Flat bottom tab bar ──────────────────────────────────────────────────────
+function FlatTabBar() {
+  const pathname   = usePathname();
+  const insets     = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const isIOS      = Platform.OS === "ios";
 
-  const bottomOffset = (insets.bottom > 0 ? insets.bottom : 14) + 6;
-  const active       = normalizeTabPath(pathname);
-
-  const TAB_WIDTH   = (SCREEN_WIDTH - PILL_H_MARGIN * 2) / TABS.length;
-  const H_PADDING   = 4;
-  const HIGHLIGHT_W = TAB_WIDTH - H_PADDING * 2;
-  const HIGHLIGHT_H = PILL_HEIGHT - 16;
-  const HIGHLIGHT_R = HIGHLIGHT_H / 2;
-
-  function pillLeft(idx: number) {
-    return idx * TAB_WIDTH + H_PADDING;
-  }
-
-  const activeIdx = TABS.findIndex((t) => t.route === active);
-  const pillX     = useSharedValue(pillLeft(activeIdx === -1 ? 0 : activeIdx));
-
-  useEffect(() => {
-    const idx = TABS.findIndex((t) => t.route === active);
-    if (idx !== -1) {
-      pillX.value = withSpring(pillLeft(idx), {
-        damping: 26,
-        stiffness: 360,
-        mass: 0.7,
-        overshootClamping: false,
-      });
-    }
-  }, [active]);
-
-  const pillAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: pillX.value }],
-  }));
+  const active = normalizeTabPath(pathname);
 
   return (
     <View
-      pointerEvents="box-none"
-      style={{
-        position: "absolute",
-        left: PILL_H_MARGIN,
-        right: PILL_H_MARGIN,
-        bottom: bottomOffset,
-        height: PILL_HEIGHT,
-        borderRadius: PILL_RADIUS,
-        overflow: "hidden",
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: isDark ? 0.5 : 0.14,
-        shadowRadius: 28,
-        elevation: 20,
-      }}
+      style={[
+        styles.tabBar,
+        {
+          height: TAB_BAR_HEIGHT + insets.bottom,
+          paddingBottom: insets.bottom,
+          backgroundColor: colors.background,
+          borderTopColor: colors.border,
+        },
+      ]}
     >
-      {isIOS ? (
-        <BlurView
-          intensity={isDark ? 72 : 88}
-          tint={isDark ? "systemChromeMaterialDark" : "systemChromeMaterialLight"}
-          style={StyleSheet.absoluteFill}
-        />
-      ) : (
-        <View
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: isDark ? "rgba(26,26,28,0.97)" : "rgba(245,240,232,0.97)" },
-          ]}
-        />
-      )}
+      {TABS.map((tab) => {
+        const isFocused = active === tab.route;
+        const color     = isFocused ? colors.accent : colors.tabIconDefault;
 
-      <Animated.View
-        style={[
-          {
-            position: "absolute",
-            top: (PILL_HEIGHT - HIGHLIGHT_H) / 2,
-            left: 0,
-            width: HIGHLIGHT_W,
-            height: HIGHLIGHT_H,
-            borderRadius: HIGHLIGHT_R,
-            backgroundColor: isDark ? colors.accent + "2A" : colors.accent + "20",
-            borderWidth: 1,
-            borderColor: colors.accent + "30",
-          },
-          pillAnimStyle,
-        ]}
-      />
-
-      <View style={{ flex: 1, flexDirection: "row" }}>
-        {TABS.map((tab) => {
-          const isFocused = active === tab.route;
-          const color     = isFocused ? colors.accent : colors.tabIconDefault;
-
-          return (
-            <TouchableOpacity
-              key={tab.route}
+        return (
+          <TouchableOpacity
+            key={tab.route}
+            style={styles.tabItem}
+            onPress={() => router.navigate(tab.route as any)}
+            activeOpacity={0.7}
+          >
+            {tab.route === "/(tabs)" ? (
+              <Image
+                source={afuSymbol}
+                style={{ width: 22, height: 22, tintColor: color }}
+                resizeMode="contain"
+              />
+            ) : isIOS ? (
+              <SymbolView name={isFocused ? tab.sfOn : tab.sfOff} tintColor={color} size={21} />
+            ) : (
+              <Ionicons name={(isFocused ? tab.mdOn : tab.mdOff) as any} size={21} color={color} />
+            )}
+            <Text
               style={{
-                width: TAB_WIDTH,
-                height: PILL_HEIGHT,
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 2,
+                fontSize: 10,
+                fontFamily: isFocused ? "Inter_600SemiBold" : "Inter_400Regular",
+                color,
+                letterSpacing: 0.1,
+                marginTop: 2,
               }}
-              onPress={() => router.navigate(tab.route as any)}
-              activeOpacity={0.7}
             >
-              {tab.route === "/(tabs)" ? (
-                <Image
-                  source={afuSymbol}
-                  style={{ width: 22, height: 22, tintColor: color }}
-                  resizeMode="contain"
-                />
-              ) : isIOS ? (
-                <SymbolView name={isFocused ? tab.sfOn : tab.sfOff} tintColor={color} size={21} />
-              ) : (
-                <Ionicons name={(isFocused ? tab.mdOn : tab.mdOff) as any} size={21} color={color} />
-              )}
-              <Text
-                style={{
-                  fontSize: 10,
-                  fontFamily: isFocused ? "Inter_600SemiBold" : "Inter_400Regular",
-                  color,
-                  letterSpacing: 0.1,
-                }}
-              >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
@@ -260,12 +173,27 @@ export default function TabLayout() {
 
   return (
     <TabSwipeProvider>
-      <View style={{ flex: 1 }}>
-        <ClassicTabLayout isLoggedIn={isLoggedIn} />
+      <View style={{ flex: 1, flexDirection: "column" }}>
+        <View style={{ flex: 1 }}>
+          <ClassicTabLayout isLoggedIn={isLoggedIn} />
+        </View>
         {isLoggedIn && !isDesktop && Platform.OS !== "web" && (
-          <FloatingTabBar />
+          <FlatTabBar />
         )}
       </View>
     </TabSwipeProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    flexDirection: "row",
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 8,
+  },
+});

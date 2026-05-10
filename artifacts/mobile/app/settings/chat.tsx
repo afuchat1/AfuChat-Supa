@@ -14,7 +14,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { GLASS } from "@/constants/glass";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";

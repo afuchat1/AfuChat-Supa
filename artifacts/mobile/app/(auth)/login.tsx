@@ -21,7 +21,6 @@ import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
 import { supabase } from "@/lib/supabase";
 
 import { useAuth } from "@/context/AuthContext";
@@ -30,8 +29,6 @@ import { useAppAccent } from "@/context/AppAccentContext";
 import { showAlert } from "@/lib/alert";
 import { GoogleLogo, GitHubLogo, XLogo, GitLabLogo } from "@/components/ui/OAuthLogos";
 import { googleSignIn } from "@/lib/googleAuth";
-import { GlassCard } from "@/components/ui/GlassCard";
-import { GLASS, glassTokens } from "@/constants/glass";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -53,15 +50,15 @@ function AuthInput({
 }: any) {
   const [focused, setFocused] = useState(false);
   const { accent } = useAppAccent();
-  const g = glassTokens(isDark);
+  const borderColor = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)";
 
   return (
     <View
       style={[
         inputSt.wrap,
         {
-          backgroundColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.04)",
-          borderColor: focused ? accent + "70" : g.border,
+          backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+          borderColor: focused ? accent + "70" : borderColor,
           borderWidth: 1,
         },
       ]}
@@ -97,7 +94,7 @@ const inputSt = StyleSheet.create({
   wrap: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: GLASS.radius.sm,
+    borderRadius: 12,
     paddingHorizontal: 14,
     height: 52,
   },
@@ -117,14 +114,18 @@ function OrDivider({ isDark }: { isDark: boolean }) {
   );
 }
 
-// ─── Glass OAuth button ────────────────────────────────────────────────────────
+// ─── OAuth button ─────────────────────────────────────────────────────────────
 function OAuthBtn({ label, logo, onPress, loading, isDark }: any) {
-  const g = glassTokens(isDark);
   return (
-    <GlassCard
-      style={oauthSt.card}
-      variant="subtle"
-      noShadow
+    <View
+      style={[
+        oauthSt.card,
+        {
+          backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)",
+        },
+      ]}
     >
       <TouchableOpacity
         accessibilityLabel={`Continue with ${label}`}
@@ -135,11 +136,11 @@ function OAuthBtn({ label, logo, onPress, loading, isDark }: any) {
       >
         {loading ? <ActivityIndicator size="small" color={isDark ? "#fff" : "#333"} /> : logo}
       </TouchableOpacity>
-    </GlassCard>
+    </View>
   );
 }
 const oauthSt = StyleSheet.create({
-  card: { borderRadius: 26, overflow: "hidden", width: 52, height: 52 },
+  card: { borderRadius: 14, overflow: "hidden", width: 52, height: 52 },
   btn: { width: 52, height: 52, alignItems: "center", justifyContent: "center" },
 });
 
@@ -154,9 +155,18 @@ function GlassModal({ visible, onClose, isDark, children }: { visible: boolean; 
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <Animated.View style={[modalSt.overlay, { opacity, backgroundColor: isDark ? "rgba(0,0,0,0.72)" : "rgba(0,0,0,0.48)" }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <GlassCard style={modalSt.card} variant="strong">
+        <View
+          style={[
+            modalSt.card,
+            {
+              backgroundColor: isDark ? "#1C1C1E" : "#FFFFFF",
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)",
+            },
+          ]}
+        >
           {children}
-        </GlassCard>
+        </View>
       </Animated.View>
     </Modal>
   );
@@ -471,20 +481,8 @@ export default function LoginScreen() {
   const identifierType = detectIdentifierType(identifier);
   const identifierIcon = identifierType === "email" ? "mail-outline" : identifierType === "phone" ? "call-outline" : "at-outline";
 
-  // ─── Background gradient ────────────────────────────────────────────────
-  const bgColors: [string, string, string] = isDark
-    ? ["#040B1A", "#071828", "#031014"]
-    : ["#E0F7FA", "#B2EBF2", "#FFFFFF"];
-
   return (
-    <View style={{ flex: 1 }}>
-      {/* Full-screen gradient background */}
-      <LinearGradient colors={bgColors} start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }} style={StyleSheet.absoluteFill} />
-
-      {/* Ambient glow orbs */}
-      <View style={[styles.orb, styles.orbTop, { opacity: isDark ? 0.35 : 0.25 }]} />
-      <View style={[styles.orb, styles.orbBottom, { opacity: isDark ? 0.20 : 0.15 }]} />
-
+    <View style={{ flex: 1, backgroundColor: isDark ? "#0F0F0F" : "#F5F0E8" }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <ScrollView
           contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 32 }]}
@@ -493,12 +491,15 @@ export default function LoginScreen() {
         >
           {/* Logo */}
           <View style={styles.logoWrap}>
-            <View style={styles.logoCircle}>
-              {Platform.OS === "ios" ? (
-                <BlurView intensity={60} tint={isDark ? "systemChromeMaterialDark" : "systemChromeMaterialLight"} style={StyleSheet.absoluteFill} />
-              ) : (
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? "rgba(0,188,212,0.15)" : "rgba(0,188,212,0.12)" }]} />
-              )}
+            <View
+              style={[
+                styles.logoCircle,
+                {
+                  backgroundColor: isDark ? "rgba(0,188,212,0.15)" : "rgba(0,188,212,0.10)",
+                  borderColor: isDark ? "rgba(0,188,212,0.30)" : "rgba(0,188,212,0.20)",
+                },
+              ]}
+            >
               <Image source={afuSymbol} style={styles.logoImg} resizeMode="contain" tintColor={accent} />
             </View>
             <Text style={[styles.appName, { color: isDark ? "#F1F1F1" : "#0F0F0F" }]}>AfuChat</Text>
@@ -507,8 +508,17 @@ export default function LoginScreen() {
             </Text>
           </View>
 
-          {/* Glass form card */}
-          <GlassCard style={styles.formCard} variant="medium">
+          {/* Form card */}
+          <View
+            style={[
+              styles.formCard,
+              {
+                backgroundColor: isDark ? "#1C1C1E" : "#FFFFFF",
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.08)",
+              },
+            ]}
+          >
             <View style={styles.formInner}>
               {/* Fields */}
               <View style={{ gap: 10 }}>
@@ -583,7 +593,7 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          </GlassCard>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -598,30 +608,24 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 20, gap: 32 },
 
-  // ambient glow orbs
-  orb: { position: "absolute", borderRadius: 999 },
-  orbTop: { width: 320, height: 320, top: -80, left: -80, backgroundColor: "#00BCD4" },
-  orbBottom: { width: 260, height: 260, bottom: 60, right: -60, backgroundColor: "#5856D6" },
-
   // logo section
   logoWrap: { alignItems: "center", gap: 8 },
   logoCircle: {
     width: 80, height: 80, borderRadius: 24,
     alignItems: "center", justifyContent: "center",
     overflow: "hidden",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.20)",
+    borderWidth: 1,
   },
   logoImg: { width: 46, height: 46 },
   appName: { fontSize: 30, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
   tagline: { fontSize: 14, fontFamily: "Inter_400Regular" },
 
   // form card
-  formCard: { borderRadius: GLASS.radius.xl, overflow: "hidden" },
+  formCard: { borderRadius: 24, overflow: "hidden" },
   formInner: { padding: 24, gap: 16 },
 
   // sign-in button
-  signInBtn: { borderRadius: GLASS.radius.sm, overflow: "hidden" },
+  signInBtn: { borderRadius: 12, overflow: "hidden" },
   signInGrad: { height: 52, alignItems: "center", justifyContent: "center" },
   signInText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold", letterSpacing: 0.2 },
 

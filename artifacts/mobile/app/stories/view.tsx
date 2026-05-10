@@ -13,7 +13,6 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { BlurView } from "expo-blur";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";

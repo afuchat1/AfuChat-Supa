@@ -18,7 +18,6 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
 import { Redirect, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -34,7 +33,6 @@ import OfflineBanner from "@/components/ui/OfflineBanner";
 import { PrestigeBadge } from "@/components/ui/PrestigeBadge";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { GlassMenuSection, GlassMenuItem, GlassMenuSeparator } from "@/components/ui/GlassMenuItem";
-import { GLASS } from "@/constants/glass";
 
 // ─── Profile completion bar ───────────────────────────────────────────────────
 type ProfileFields = {
@@ -65,7 +63,7 @@ function ProfileCompletionBar({ profile, isPremium }: { profile: ProfileFields |
   if (score === checks.length) return null;
 
   return (
-    <GlassCard style={{ borderRadius: GLASS.radius.md, overflow: "hidden" }} variant="subtle" noShadow>
+    <GlassCard style={{ borderRadius: 16, overflow: "hidden" }} variant="subtle" noShadow>
       <TouchableOpacity
         style={{ padding: 16 }}
         onPress={() => router.push("/profile/edit")}
@@ -354,7 +352,7 @@ export default function MeScreen() {
 const styles = StyleSheet.create({
   content: { gap: 14, paddingHorizontal: 16 },
 
-  profileCard: { borderRadius: GLASS.radius.lg, overflow: "hidden" },
+  profileCard: { borderRadius: 20, overflow: "hidden" },
   profileCardInner: { flexDirection: "row", alignItems: "center", padding: 16, gap: 14 },
   profileName: { fontSize: 20, fontFamily: "Inter_700Bold" },
   profileHandle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 1 },
@@ -363,11 +361,11 @@ const styles = StyleSheet.create({
   businessTag: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: Colors.gold, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, marginTop: 4, alignSelf: "flex-start" },
   businessTagText: { color: "#fff", fontSize: 10, fontFamily: "Inter_600SemiBold" },
 
-  viewProfileBtn: { borderRadius: GLASS.radius.sm, overflow: "hidden" },
+  viewProfileBtn: { borderRadius: 12, overflow: "hidden" },
   viewProfileInner: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 11 },
   viewProfileText: { fontSize: 14, fontFamily: "Inter_500Medium" },
 
-  statsCard: { borderRadius: GLASS.radius.md, overflow: "hidden", flexDirection: "row", paddingVertical: 16, paddingHorizontal: 8 },
+  statsCard: { borderRadius: 16, overflow: "hidden", flexDirection: "row", paddingVertical: 16, paddingHorizontal: 8 },
   statCell: { flex: 1, alignItems: "center", gap: 3 },
   statValue: { fontSize: 22, fontFamily: "Inter_700Bold" },
   statLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },

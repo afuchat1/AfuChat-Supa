@@ -9,7 +9,6 @@ import {
   StyleSheet,
   View,
 } from "react-native";
-import { BlurView } from "expo-blur";
 
 const SCREEN_H = Dimensions.get("window").height;
 const CLOSE_THRESHOLD = 100;
@@ -82,9 +81,7 @@ export default function SwipeableBottomSheet({
             { maxHeight: maxHeight as any, transform: [{ translateY }] },
           ]}
         >
-          {isIOS && useGlass ? (
-            <BlurView intensity={85} tint="dark" style={[StyleSheet.absoluteFill, styles.blurSheet]} />
-          ) : (
+          {false ? null : (
             <View
               style={[
                 StyleSheet.absoluteFill,

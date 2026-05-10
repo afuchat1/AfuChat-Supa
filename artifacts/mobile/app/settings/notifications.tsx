@@ -20,7 +20,6 @@ import { useTheme } from "@/hooks/useTheme";
 import { getSoundMode, setSoundMode, playNotificationSound, SoundMode } from "@/lib/soundManager";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { GLASS } from "@/constants/glass";
 
 type Prefs = {
   push_enabled: boolean;
@@ -131,7 +130,7 @@ export default function NotificationSettingsScreen() {
 
       {/* ── Notification Sound ─────────────────────────────────────── */}
       <Text style={[st.section, { color: colors.textMuted }]}>NOTIFICATION SOUND</Text>
-      <GlassCard style={{ marginHorizontal: 16, borderRadius: GLASS.radius.lg, overflow: "hidden" }} variant="medium">
+      <GlassCard style={{ marginHorizontal: 16, borderRadius: 20, overflow: "hidden" }} variant="medium">
       <View style={st.soundGrid}>
         {SOUND_OPTIONS.map((opt) => {
           const active = soundMode === opt.value;
@@ -162,7 +161,7 @@ export default function NotificationSettingsScreen() {
       </GlassCard>
 
       {/* Test sound + system settings */}
-      <GlassCard style={{ marginHorizontal: 16, borderRadius: GLASS.radius.md, overflow: "hidden" }} variant="subtle" noShadow>
+      <GlassCard style={{ marginHorizontal: 16, borderRadius: 16, overflow: "hidden" }} variant="subtle" noShadow>
       <View style={st.soundActions}>
         <TouchableOpacity
           style={[st.testBtn, { backgroundColor: accent + "15", borderColor: accent + "50" }]}
@@ -191,7 +190,7 @@ export default function NotificationSettingsScreen() {
 
       {/* ── Push Notification Prefs ───────────────────────────────── */}
       <Text style={[st.section, { color: colors.textMuted }]}>PUSH NOTIFICATIONS</Text>
-      <GlassCard style={{ marginHorizontal: 16, borderRadius: GLASS.radius.lg, overflow: "hidden" }} variant="medium">
+      <GlassCard style={{ marginHorizontal: 16, borderRadius: 20, overflow: "hidden" }} variant="medium">
         <PrefRow label="Enable Push Notifications" field="push_enabled" sub="Master toggle for all push alerts" />
         <PrefRow label="Messages"      field="push_messages" sub="Chat messages from your contacts" />
         <PrefRow label="Likes"         field="push_likes"    sub="When someone likes your post" />
@@ -203,13 +202,13 @@ export default function NotificationSettingsScreen() {
 
       {/* ── Quiet Hours ───────────────────────────────────────────── */}
       <Text style={[st.section, { color: colors.textMuted }]}>QUIET HOURS</Text>
-      <GlassCard style={{ marginHorizontal: 16, borderRadius: GLASS.radius.lg, overflow: "hidden" }} variant="medium">
+      <GlassCard style={{ marginHorizontal: 16, borderRadius: 20, overflow: "hidden" }} variant="medium">
         <PrefRow label="Enable Quiet Hours" field="quiet_hours_enabled" sub="Silence notifications 10 PM – 8 AM" />
       </GlassCard>
 
       {/* ── Interactive Actions Info ──────────────────────────────── */}
       <Text style={[st.section, { color: colors.textMuted }]}>QUICK ACTIONS</Text>
-      <GlassCard style={{ marginHorizontal: 16, borderRadius: GLASS.radius.lg, overflow: "hidden", padding: 14 }} variant="subtle" noShadow>
+      <GlassCard style={{ marginHorizontal: 16, borderRadius: 20, overflow: "hidden", padding: 14 }} variant="subtle" noShadow>
       <View style={[st.infoCard, { borderColor: accent + "30" }]}>
         <View style={[st.infoIconWrap, { backgroundColor: accent + "15" }]}>
           <Ionicons name="flash" size={20} color={accent} />
