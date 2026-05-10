@@ -84,7 +84,7 @@ export default function GiftsScreen() {
   const { user, profile, refreshProfile } = useAuth();
   const insets = useSafeAreaInsets();
   const { statsMap, getDynamicPrice, refreshStats } = useGiftPrices();
-  const params = useLocalSearchParams<{ userId?: string; userName?: string }>();
+  const params = useLocalSearchParams<{ userId?: string; userName?: string; recipientHandle?: string; recipientName?: string }>();
   const viewUserId = params.userId || user?.id;
   const viewUserName = params.userName;
   const isOwnProfile = !params.userId || params.userId === user?.id;
@@ -95,12 +95,18 @@ export default function GiftsScreen() {
   const [confirmConvert, setConfirmConvert] = useState(false);
   const [converting, setConverting] = useState(false);
   const [sendGift, setSendGift] = useState<OwnedGift | null>(null);
-  const [sendHandle, setSendHandle] = useState("");
+  const [sendHandle, setSendHandle] = useState(params.recipientHandle ?? "");
   const [sendMsg, setSendMsg] = useState("");
+
   const [sending, setSending] = useState(false);
   const [listPrice, setListPrice] = useState("");
   const [showListModal, setShowListModal] = useState(false);
   const [listing, setListing] = useState(false);
+
+  // Auto-fill handle when arriving from the holiday banner contact picker
+  useEffect(() => {
+    if (params.recipientHandle) setSendHandle(params.recipientHandle);
+  }, [params.recipientHandle]);
 
   const loadOwned = useCallback(async () => {
     if (!viewUserId) return;
@@ -400,6 +406,20 @@ export default function GiftsScreen() {
         </View>
       </View>
 
+      {/* "Sending to" pill — shown when arriving from the banner contact picker */}
+      {isOwnProfile && !!params.recipientHandle && (
+        <View style={[styles.recipientPill, { backgroundColor: colors.surface, borderColor: colors.accent }]}>
+          <Ionicons name="gift-outline" size={14} color={colors.accent} />
+          <Text style={[styles.recipientPillText, { color: colors.text }]}>
+            Sending to{" "}
+            <Text style={{ color: colors.accent, fontFamily: "Inter_700Bold" }}>
+              {params.recipientName || `@${params.recipientHandle}`}
+            </Text>
+            {" "}— tap a gift below
+          </Text>
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.skeletonGrid}>
           {[1, 2, 3, 4, 5, 6].map((i) => <GiftCardSkeleton key={i} />)}
@@ -511,7 +531,14 @@ export default function GiftsScreen() {
 
                 <TouchableOpacity
                   style={[styles.sendGiftBtn, { borderColor: colors.accent }]}
-                  onPress={() => { setSendGift(selectedGift); setSelectedGift(null); }}
+                  onPress={() => {
+                    setSendGift(selectedGift);
+                    setSelectedGift(null);
+                    // If we arrived from the banner picker, keep the pre-filled handle
+                    if (params.recipientHandle && !sendHandle) {
+                      setSendHandle(params.recipientHandle);
+                    }
+                  }}
                 >
                   <Ionicons name="send" size={16} color={colors.accent} />
                   <Text style={[styles.sendGiftBtnText, { color: colors.accent }]}>Send</Text>
@@ -723,6 +750,13 @@ const styles = StyleSheet.create({
   sendGiftBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   pinRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 4 },
   pinLink: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  recipientPill: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    marginHorizontal: 12, marginTop: 8, marginBottom: 4,
+    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
+    borderWidth: 1,
+  },
+  recipientPillText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   modalTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   sendGiftPreview: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 14, padding: 12 },
