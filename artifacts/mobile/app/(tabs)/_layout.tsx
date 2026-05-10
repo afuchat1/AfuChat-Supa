@@ -4,6 +4,7 @@ import { SymbolView } from "expo-symbols";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef } from "react";
 import {
+  Animated,
   Dimensions,
   Image,
   Platform,
@@ -28,8 +29,6 @@ try {
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
-const TAB_BAR_HEIGHT = 56;
-
 const TABS = [
   { route: "/(tabs)",          label: "AfuChat",  sfOn: "message.fill",        sfOff: "message",         mdOn: "chatbubble",  mdOff: "chatbubble-outline" },
   { route: "/(tabs)/discover", label: "Discover", sfOn: "safari.fill",          sfOff: "safari",          mdOn: "compass",     mdOff: "compass-outline"    },
@@ -45,66 +44,205 @@ function normalizeTabPath(p: string): string {
   return p;
 }
 
-// ─── Flat bottom tab bar ──────────────────────────────────────────────────────
-function FlatTabBar() {
-  const pathname   = usePathname();
-  const insets     = useSafeAreaInsets();
-  const { colors } = useTheme();
-  const isIOS      = Platform.OS === "ios";
+// ─── Single animated tab item ──────────────────────────────────────────────────
+function TabItem({
+  tab,
+  isFocused,
+  colors,
+}: {
+  tab: (typeof TABS)[number];
+  isFocused: boolean;
+  colors: any;
+}) {
+  const isIOS = Platform.OS === "ios";
+
+  // Animated values
+  const pillWidth   = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
+  const iconScale   = useRef(new Animated.Value(isFocused ? 1.1 : 1)).current;
+  const labelOpacity = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
+  const labelWidth   = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(pillWidth, {
+        toValue: isFocused ? 1 : 0,
+        useNativeDriver: false,
+        speed: 18,
+        bounciness: 4,
+      }),
+      Animated.spring(iconScale, {
+        toValue: isFocused ? 1.12 : 1,
+        useNativeDriver: true,
+        speed: 20,
+        bounciness: 6,
+      }),
+      Animated.timing(labelOpacity, {
+        toValue: isFocused ? 1 : 0,
+        duration: isFocused ? 180 : 80,
+        useNativeDriver: true,
+      }),
+      Animated.spring(labelWidth, {
+        toValue: isFocused ? 1 : 0,
+        useNativeDriver: false,
+        speed: 18,
+        bounciness: 2,
+      }),
+    ]).start();
+  }, [isFocused]);
+
+  const iconColor = isFocused ? colors.accent : colors.tabIconDefault;
+
+  const pillBg = pillWidth.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["rgba(0,0,0,0)", colors.accent + "22"],
+  });
+
+  const pillPaddingH = pillWidth.interpolate({
+    inputRange: [0, 1],
+    outputRange: [10, 14],
+  });
+
+  const labelMaxWidth = labelWidth.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 72],
+  });
+
+  return (
+    <TouchableOpacity
+      style={tabItemStyles.wrapper}
+      onPress={() => router.navigate(tab.route as any)}
+      activeOpacity={0.75}
+    >
+      <Animated.View
+        style={[
+          tabItemStyles.pill,
+          {
+            backgroundColor: pillBg,
+            paddingHorizontal: pillPaddingH,
+          },
+        ]}
+      >
+        <Animated.View style={{ transform: [{ scale: iconScale }] }}>
+          {tab.route === "/(tabs)" ? (
+            <Image
+              source={afuSymbol}
+              style={{ width: 22, height: 22, tintColor: iconColor }}
+              resizeMode="contain"
+            />
+          ) : isIOS ? (
+            <SymbolView
+              name={isFocused ? tab.sfOn : tab.sfOff}
+              tintColor={iconColor}
+              size={22}
+            />
+          ) : (
+            <Ionicons
+              name={(isFocused ? tab.mdOn : tab.mdOff) as any}
+              size={22}
+              color={iconColor}
+            />
+          )}
+        </Animated.View>
+
+        <Animated.View
+          style={{ overflow: "hidden", maxWidth: labelMaxWidth, opacity: labelOpacity }}
+        >
+          <Text
+            style={[tabItemStyles.label, { color: colors.accent }]}
+            numberOfLines={1}
+          >
+            {tab.label}
+          </Text>
+        </Animated.View>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}
+
+const tabItemStyles = StyleSheet.create({
+  wrapper: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 24,
+    paddingVertical: 9,
+    gap: 6,
+  },
+  label: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.1,
+    marginLeft: 2,
+  },
+});
+
+// ─── Floating bottom tab bar ──────────────────────────────────────────────────
+function FloatingTabBar() {
+  const pathname = usePathname();
+  const insets   = useSafeAreaInsets();
+  const { colors, isDark } = useTheme();
 
   const active = normalizeTabPath(pathname);
+
+  const barBg = isDark ? "rgba(30,30,32,0.92)" : "rgba(255,255,255,0.94)";
 
   return (
     <View
       style={[
-        styles.tabBar,
-        {
-          height: TAB_BAR_HEIGHT + insets.bottom,
-          paddingBottom: insets.bottom,
-          backgroundColor: colors.background,
-          borderTopColor: colors.border,
-        },
+        floatStyles.container,
+        { bottom: (insets.bottom > 0 ? insets.bottom : 12) + 4 },
       ]}
+      pointerEvents="box-none"
     >
-      {TABS.map((tab) => {
-        const isFocused = active === tab.route;
-        const color     = isFocused ? colors.accent : colors.tabIconDefault;
-
-        return (
-          <TouchableOpacity
+      <View
+        style={[
+          floatStyles.bar,
+          {
+            backgroundColor: barBg,
+            borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)",
+          },
+        ]}
+      >
+        {TABS.map((tab) => (
+          <TabItem
             key={tab.route}
-            style={styles.tabItem}
-            onPress={() => router.navigate(tab.route as any)}
-            activeOpacity={0.7}
-          >
-            {tab.route === "/(tabs)" ? (
-              <Image
-                source={afuSymbol}
-                style={{ width: 22, height: 22, tintColor: color }}
-                resizeMode="contain"
-              />
-            ) : isIOS ? (
-              <SymbolView name={isFocused ? tab.sfOn : tab.sfOff} tintColor={color} size={21} />
-            ) : (
-              <Ionicons name={(isFocused ? tab.mdOn : tab.mdOff) as any} size={21} color={color} />
-            )}
-            <Text
-              style={{
-                fontSize: 10,
-                fontFamily: isFocused ? "Inter_600SemiBold" : "Inter_400Regular",
-                color,
-                letterSpacing: 0.1,
-                marginTop: 2,
-              }}
-            >
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
+            tab={tab}
+            isFocused={active === tab.route}
+            colors={colors}
+          />
+        ))}
+      </View>
     </View>
   );
 }
+
+const floatStyles = StyleSheet.create({
+  container: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    alignItems: "stretch",
+    zIndex: 100,
+  },
+  bar: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 36,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 24,
+    elevation: 16,
+  },
+});
 
 // ─── Native tab layout (iOS Liquid Glass only) ────────────────────────────────
 function NativeTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
@@ -173,27 +311,12 @@ export default function TabLayout() {
 
   return (
     <TabSwipeProvider>
-      <View style={{ flex: 1, flexDirection: "column" }}>
-        <View style={{ flex: 1 }}>
-          <ClassicTabLayout isLoggedIn={isLoggedIn} />
-        </View>
+      <View style={{ flex: 1 }}>
+        <ClassicTabLayout isLoggedIn={isLoggedIn} />
         {isLoggedIn && !isDesktop && Platform.OS !== "web" && (
-          <FlatTabBar />
+          <FloatingTabBar />
         )}
       </View>
     </TabSwipeProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  tabBar: {
-    flexDirection: "row",
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  tabItem: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: 8,
-  },
-});

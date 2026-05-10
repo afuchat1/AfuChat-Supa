@@ -1153,9 +1153,6 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
               </View>
             )}
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push("/settings/chat")} style={styles.headerIcon}>
-            <Ionicons name="settings-outline" size={22} color={colors.text} />
-          </TouchableOpacity>
         </View>
       </View>
       )}
