@@ -11,6 +11,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Redirect, router, useFocusEffect, useNavigation, usePathname } from "expo-router";
@@ -36,6 +37,15 @@ import { addOnlineListener } from "@/lib/offlineSync";
 import { wasChatRecentlyVisited, clearChatVisited } from "@/lib/chatVisited";
 import { showAlert, confirmAlert } from "@/lib/alert";
 import { useChatPreferences } from "@/context/ChatPreferencesContext";
+import { useAdvancedFeatures } from "@/context/AdvancedFeaturesContext";
+import {
+  loadFolders,
+  createFolder,
+  updateFolder,
+  deleteFolder,
+  type ChatFolder,
+} from "@/lib/storage/chatFolders";
+import { FolderModal } from "@/components/chat/FolderModal";
 import {
   getStoryUploadState,
   subscribeStoryUpload,
@@ -515,6 +525,15 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
   const [typingChatIds, setTypingChatIds] = useState<Record<string, boolean>>({});
   const typingTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const { prefs: chatPrefs } = useChatPreferences();
+  const { features: advancedFeatures } = useAdvancedFeatures();
+  const { width: windowWidth } = useWindowDimensions();
+
+  // ── Folder state ────────────────────────────────────────────────────────────
+  const [folders, setFolders]           = useState<ChatFolder[]>([]);
+  const [showFolderModal, setShowFolderModal] = useState(false);
+  const [editingFolder, setEditingFolder]     = useState<ChatFolder | null>(null);
+  const [pageIdx, setPageIdx]           = useState(0);
+  const pagerRef = useRef<FlatList<any>>(null);
 
   // ── FAB hide-on-scroll ──────────────────────────────────────────────────────
   const fabAnim     = useRef(new Animated.Value(1)).current;
@@ -951,6 +970,39 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
     { key: "channels", label: "Channels", icon: "megaphone-outline", count: channelsCount },
   ];
 
+  // ── Folder system ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    loadFolders().then(setFolders);
+  }, [user?.id]);
+
+  // Show the folder tab bar on mobile only when the feature is enabled or
+  // the user already has folders (so their data is never hidden).
+  const showFolderUI = !panelMode && !isDesktop && (advancedFeatures.chat_folders || folders.length > 0);
+  const hasFolders   = folders.length > 0;
+
+  type AllPage = { key: "all" };
+  const pages: (AllPage | ChatFolder)[] = [{ key: "all" }, ...folders];
+
+  const getPageChats = useCallback(
+    (page: AllPage | ChatFolder): ChatItem[] => {
+      let result = chats;
+      if ("filter" in page) {
+        if (page.filter === "unread")   result = chats.filter((c) => c.unread_count > 0);
+        else if (page.filter === "personal") result = chats.filter((c) => !c.is_group && !c.is_channel);
+        else if (page.filter === "groups")   result = chats.filter((c) => c.is_group && !c.is_channel);
+        else if (page.filter === "channels") result = chats.filter((c) => c.is_channel);
+      }
+      if (search) {
+        result = result.filter((c) => {
+          const name = c.is_group || c.is_channel ? c.name : c.other_display_name;
+          return name?.toLowerCase().includes(search.toLowerCase());
+        });
+      }
+      return result;
+    },
+    [chats, search],
+  );
+
   useEffect(() => {
     if (panelMode) return;
     navigation.setOptions({
@@ -1114,6 +1166,90 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
         </View>
       </View>
 
+      {/* ── Mobile folder tab bar ─────────────────────────────────────────── */}
+      {showFolderUI && (
+        <View style={[styles.folderTabBar, { borderBottomColor: colors.border }]}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.folderTabBarContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            {pages.map((page, idx) => {
+              const isAll    = !("filter" in page);
+              const label    = isAll ? "All" : page.name;
+              const icon     = isAll ? null : page.icon;
+              const active   = pageIdx === idx;
+              const count    = isAll
+                ? chats.length
+                : getPageChats(page).length;
+              return (
+                <TouchableOpacity
+                  key={isAll ? "all" : page.id}
+                  style={styles.folderTab}
+                  onPress={() => {
+                    setPageIdx(idx);
+                    if (hasFolders) {
+                      pagerRef.current?.scrollToIndex({ index: idx, animated: true });
+                    }
+                  }}
+                  onLongPress={() => {
+                    if (!isAll) {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      setEditingFolder(page as ChatFolder);
+                      setShowFolderModal(true);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.folderTabInner}>
+                    {icon && <Text style={styles.folderTabIcon}>{icon}</Text>}
+                    <Text
+                      style={[
+                        styles.folderTabLabel,
+                        { color: active ? colors.accent : colors.textMuted,
+                          fontFamily: active ? "Inter_700Bold" : "Inter_500Medium" },
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                    {count > 0 && (
+                      <View
+                        style={[
+                          styles.folderTabBadge,
+                          { backgroundColor: active ? colors.accent + "22" : colors.backgroundSecondary },
+                        ]}
+                      >
+                        <Text style={[styles.folderTabBadgeText, { color: active ? colors.accent : colors.textMuted }]}>
+                          {count > 99 ? "99+" : count}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  {active && (
+                    <View style={[styles.folderTabUnderline, { backgroundColor: colors.accent }]} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+
+            {/* ── Add folder button ── */}
+            {advancedFeatures.chat_folders && (
+              <TouchableOpacity
+                style={[styles.folderAddBtn, { backgroundColor: colors.backgroundSecondary }]}
+                onPress={() => {
+                  setEditingFolder(null);
+                  setShowFolderModal(true);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="add" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </View>
+      )}
+
       <View style={[styles.body, isDesktop && styles.bodyRow]}>
         {isDesktop && (
           <View style={styles.rail}>
@@ -1158,70 +1294,194 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
           </View>
         )}
 
-        <View style={{ flex: 1 }}>
-          {loading ? (
-            <View style={{ padding: 8 }}>{[1,2,3,4,5,6].map(i => <ChatRowSkeleton key={i} />)}</View>
-          ) : filtered.length === 0 ? (
-            <View style={styles.center}>
-              <Ionicons name="chatbubbles-outline" size={64} color={colors.textMuted} />
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                {tabFilter === "all" ? "No chats yet" : `No ${TABS.find(t => t.key === tabFilter)?.label.toLowerCase()}`}
-              </Text>
-              <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                {tabFilter === "all" ? "Start a conversation from Contacts" : "Try another filter"}
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              data={filtered}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <ChatRow
-                  item={item}
-                  isActive={panelMode && item.id === activeChatId}
-                  isTyping={chatPrefs.typing_indicators && !!typingChatIds[item.id]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    router.push({
-                      pathname: "/chat/[id]",
-                      params: {
-                        id: item.id,
-                        otherName: item.other_display_name || "",
-                        otherAvatar: item.other_avatar || "",
-                        otherId: item.other_id || "",
-                        isGroup: item.is_group ? "true" : "false",
-                        isChannel: item.is_channel ? "true" : "false",
-                        chatName: item.name || "",
-                        chatAvatar: item.avatar_url || "",
-                      },
-                    });
-                  }}
-                  onAction={handleChatAction}
-                />
-              )}
-              ItemSeparatorComponent={() => <Separator indent={74} />}
-              ListHeaderComponent={user && tabFilter === "all" && !search ? (
-                <>
-                  <StoryUploadBanner colors={colors} />
-                  <StoriesBar userId={user.id} colors={colors} isDesktop={isDesktop} />
-                  {chats.length < 8 && <SuggestedUsers compact maxCards={10} />}
-                </>
-              ) : null}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={() => { setRefreshing(true); loadChats(); }}
-                  tintColor={colors.accent}
-                />
-              }
-              contentContainerStyle={{ paddingBottom: insets.bottom + 52 + 80 + 50 }}
-              showsVerticalScrollIndicator={false}
-              onScroll={handleFabScroll}
-              scrollEventThrottle={16}
-            />
-          )}
-        </View>
+        {/* ── Mobile swipeable pager (only when folders exist) ──────────── */}
+        {showFolderUI && hasFolders ? (
+          <FlatList
+            ref={pagerRef}
+            data={pages}
+            keyExtractor={(p) => ("filter" in p ? p.id : "all")}
+            horizontal
+            pagingEnabled
+            scrollEnabled
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            getItemLayout={(_, index) => ({
+              length: windowWidth,
+              offset: windowWidth * index,
+              index,
+            })}
+            onMomentumScrollEnd={(e) => {
+              const idx = Math.round(e.nativeEvent.contentOffset.x / windowWidth);
+              setPageIdx(idx);
+            }}
+            renderItem={({ item: page }) => {
+              const isAll      = !("filter" in page);
+              const pageChats  = getPageChats(page);
+              return (
+                <View style={{ width: windowWidth, flex: 1 }}>
+                  {loading ? (
+                    <View style={{ padding: 8 }}>{[1,2,3,4,5,6].map(i => <ChatRowSkeleton key={i} />)}</View>
+                  ) : pageChats.length === 0 ? (
+                    <View style={styles.center}>
+                      <Ionicons name="chatbubbles-outline" size={64} color={colors.textMuted} />
+                      <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                        {isAll ? "No chats yet" : `No ${"filter" in page ? page.name : ""} chats`}
+                      </Text>
+                      <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                        {isAll ? "Start a conversation from Contacts" : "Try another filter"}
+                      </Text>
+                    </View>
+                  ) : (
+                    <FlatList
+                      data={pageChats}
+                      keyExtractor={(item) => item.id}
+                      nestedScrollEnabled
+                      renderItem={({ item }) => (
+                        <ChatRow
+                          item={item}
+                          isTyping={chatPrefs.typing_indicators && !!typingChatIds[item.id]}
+                          onPress={() => {
+                            Haptics.selectionAsync();
+                            router.push({
+                              pathname: "/chat/[id]",
+                              params: {
+                                id: item.id,
+                                otherName: item.other_display_name || "",
+                                otherAvatar: item.other_avatar || "",
+                                otherId: item.other_id || "",
+                                isGroup: item.is_group ? "true" : "false",
+                                isChannel: item.is_channel ? "true" : "false",
+                                chatName: item.name || "",
+                                chatAvatar: item.avatar_url || "",
+                              },
+                            });
+                          }}
+                          onAction={handleChatAction}
+                        />
+                      )}
+                      ItemSeparatorComponent={() => <Separator indent={74} />}
+                      ListHeaderComponent={isAll && !search && user ? (
+                        <>
+                          <StoryUploadBanner colors={colors} />
+                          <StoriesBar userId={user.id} colors={colors} isDesktop={isDesktop} />
+                          {chats.length < 8 && <SuggestedUsers compact maxCards={10} />}
+                        </>
+                      ) : null}
+                      refreshControl={
+                        <RefreshControl
+                          refreshing={refreshing}
+                          onRefresh={() => { setRefreshing(true); loadChats(); }}
+                          tintColor={colors.accent}
+                        />
+                      }
+                      contentContainerStyle={{ paddingBottom: insets.bottom + 52 + 80 + 50 }}
+                      showsVerticalScrollIndicator={false}
+                      onScroll={handleFabScroll}
+                      scrollEventThrottle={16}
+                    />
+                  )}
+                </View>
+              );
+            }}
+          />
+        ) : (
+          /* ── Single-page list (no folders, or desktop/panel mode) ──── */
+          <View style={{ flex: 1 }}>
+            {loading ? (
+              <View style={{ padding: 8 }}>{[1,2,3,4,5,6].map(i => <ChatRowSkeleton key={i} />)}</View>
+            ) : filtered.length === 0 ? (
+              <View style={styles.center}>
+                <Ionicons name="chatbubbles-outline" size={64} color={colors.textMuted} />
+                <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                  {tabFilter === "all" ? "No chats yet" : `No ${TABS.find(t => t.key === tabFilter)?.label.toLowerCase()}`}
+                </Text>
+                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                  {tabFilter === "all" ? "Start a conversation from Contacts" : "Try another filter"}
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={filtered}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <ChatRow
+                    item={item}
+                    isActive={panelMode && item.id === activeChatId}
+                    isTyping={chatPrefs.typing_indicators && !!typingChatIds[item.id]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      router.push({
+                        pathname: "/chat/[id]",
+                        params: {
+                          id: item.id,
+                          otherName: item.other_display_name || "",
+                          otherAvatar: item.other_avatar || "",
+                          otherId: item.other_id || "",
+                          isGroup: item.is_group ? "true" : "false",
+                          isChannel: item.is_channel ? "true" : "false",
+                          chatName: item.name || "",
+                          chatAvatar: item.avatar_url || "",
+                        },
+                      });
+                    }}
+                    onAction={handleChatAction}
+                  />
+                )}
+                ItemSeparatorComponent={() => <Separator indent={74} />}
+                ListHeaderComponent={user && tabFilter === "all" && !search ? (
+                  <>
+                    <StoryUploadBanner colors={colors} />
+                    <StoriesBar userId={user.id} colors={colors} isDesktop={isDesktop} />
+                    {chats.length < 8 && <SuggestedUsers compact maxCards={10} />}
+                  </>
+                ) : null}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={() => { setRefreshing(true); loadChats(); }}
+                    tintColor={colors.accent}
+                  />
+                }
+                contentContainerStyle={{ paddingBottom: insets.bottom + 52 + 80 + 50 }}
+                showsVerticalScrollIndicator={false}
+                onScroll={handleFabScroll}
+                scrollEventThrottle={16}
+              />
+            )}
+          </View>
+        )}
       </View>
+
+      {/* ── Folder create / edit modal ────────────────────────────────────── */}
+      <FolderModal
+        visible={showFolderModal}
+        initial={editingFolder}
+        onClose={() => { setShowFolderModal(false); setEditingFolder(null); }}
+        onSave={async (data) => {
+          if (editingFolder) {
+            await updateFolder(editingFolder.id, data);
+          } else {
+            await createFolder(data);
+          }
+          const updated = await loadFolders();
+          setFolders(updated);
+          setShowFolderModal(false);
+          setEditingFolder(null);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }}
+        onDelete={editingFolder ? async () => {
+          await deleteFolder(editingFolder.id);
+          const updated = await loadFolders();
+          setFolders(updated);
+          const newIdx = Math.min(pageIdx, updated.length);
+          setPageIdx(newIdx);
+          if (newIdx < updated.length + 1) {
+            pagerRef.current?.scrollToIndex({ index: newIdx, animated: false });
+          }
+          setShowFolderModal(false);
+          setEditingFolder(null);
+        } : undefined}
+      />
 
       {user && panelMode && (
         <TouchableOpacity
@@ -1301,6 +1561,66 @@ const styles = StyleSheet.create({
   },
   body: { flex: 1 },
   bodyRow: { flexDirection: "row" },
+
+  // ── Folder tab bar ──────────────────────────────────────────────────────
+  folderTabBar: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  folderTabBarContent: {
+    paddingHorizontal: 8,
+    paddingBottom: 0,
+    alignItems: "stretch",
+    gap: 2,
+  },
+  folderTab: {
+    paddingHorizontal: 10,
+    alignItems: "center",
+    minWidth: 52,
+  },
+  folderTabInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingVertical: 10,
+  },
+  folderTabIcon: {
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  folderTabLabel: {
+    fontSize: 14,
+    letterSpacing: 0.1,
+  },
+  folderTabBadge: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+  },
+  folderTabBadgeText: {
+    fontSize: 10,
+    fontFamily: "Inter_700Bold",
+    lineHeight: 12,
+  },
+  folderTabUnderline: {
+    position: "absolute",
+    bottom: 0,
+    left: 10,
+    right: 10,
+    height: 2.5,
+    borderRadius: 2,
+  },
+  folderAddBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+    marginHorizontal: 6,
+  },
   rail: {
     width: 88,
     paddingTop: 4,
