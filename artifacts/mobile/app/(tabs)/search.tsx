@@ -89,6 +89,7 @@ type OrgPageResult = { id:string; name:string; slug:string; logo_url:string|null
 type PostResult    = { id:string; content:string; image_url:string|null; author_id:string; author_handle:string; author_name:string; author_avatar:string|null; view_count:number; created_at:string; post_type:string; article_title:string|null };
 type VideoResult   = { id:string; content:string; video_url:string; image_url:string|null; author_id:string; author_handle:string; author_name:string; author_avatar:string|null; view_count:number; created_at:string; audio_name:string|null; duration_seconds:number|null };
 type ChannelResult = { id:string; name:string; description:string|null; avatar_url:string|null; subscriber_count:number };
+type GroupResult   = { id:string; name:string; description:string|null; avatar_url:string|null; member_count:number };
 type EventResult   = { id:string; title:string; description:string|null; emoji:string; price:number; event_date:string; capacity:number; tickets_sold:number; category:string|null; creator_name:string; creator_handle:string };
 type GiftResult    = { id:string; name:string; emoji:string; base_xp_cost:number; rarity:string; description:string|null };
 type MarketResult  = { id:string; kind:"product"|"freelance"|"community"; title:string; desc:string|null; emoji:string|null; image_url:string|null; price:number; badge:string|null; seller_name:string; route:string };
@@ -100,13 +101,14 @@ type AllResults = {
   posts:    PostResult[];
   videos:   VideoResult[];
   channels: ChannelResult[];
+  groups:   GroupResult[];
   events:   EventResult[];
   gifts:    GiftResult[];
   market:   MarketResult[];
   jobs:     JobResult[];
 };
 
-const EMPTY: AllResults = { people:[], posts:[], videos:[], channels:[], events:[], gifts:[], market:[], jobs:[] };
+const EMPTY: AllResults = { people:[], posts:[], videos:[], channels:[], groups:[], events:[], gifts:[], market:[], jobs:[] };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -451,7 +453,7 @@ export default function SearchScreen() {
       const wantsMarket   = all || currentTab === "market";
       const wantsJobs     = all || currentTab === "jobs";
 
-      const [peopleRes, orgPageRes, postsRes, videosRes, channelsRes, eventsRes, giftsRes, jobsRes] =
+      const [peopleRes, orgPageRes, postsRes, videosRes, channelsRes, groupsRes, eventsRes, giftsRes, jobsRes] =
         await Promise.all([
           wantsPeople
             ? (() => {
@@ -503,6 +505,15 @@ export default function SearchScreen() {
                 .select("id, name, description, avatar_url, subscriber_count")
                 .or(`name.ilike.${pat},description.ilike.${pat}`)
                 .order("subscriber_count", { ascending: false })
+                .limit(all ? 4 : 20)
+            : Promise.resolve({ data: [] }),
+
+          wantsChannels && trimmed.length >= 1
+            ? supabase.from("chats")
+                .select("id, name, description, avatar_url, chat_members(count)")
+                .eq("is_group", true)
+                .eq("is_public", true)
+                .ilike("name", pat)
                 .limit(all ? 4 : 20)
             : Promise.resolve({ data: [] }),
 
@@ -594,6 +605,12 @@ export default function SearchScreen() {
 
       const channels: ChannelResult[] = (channelsRes.data || []) as any[];
 
+      const groups: GroupResult[] = ((groupsRes.data || []) as any[]).map((c: any) => {
+        const countArr = c.chat_members;
+        const member_count = Array.isArray(countArr) && countArr[0]?.count != null ? Number(countArr[0].count) : 0;
+        return { id: c.id, name: c.name || "Unnamed", description: c.description || null, avatar_url: c.avatar_url || null, member_count };
+      });
+
       const events: EventResult[] = ((eventsRes.data || []) as any[]).map((e: any) => {
         const cr = (e.profiles as any) || {};
         return {
@@ -615,11 +632,11 @@ export default function SearchScreen() {
         };
       });
 
-      const finalResults: AllResults = { people, posts, videos, channels, events, gifts, market: marketItems, jobs };
+      const finalResults: AllResults = { people, posts, videos, channels, groups, events, gifts, market: marketItems, jobs };
       if (id !== searchIdRef.current) return;
 
       setResults(finalResults);
-      const total = people.length + posts.length + videos.length + channels.length
+      const total = people.length + posts.length + videos.length + channels.length + groups.length
         + events.length + gifts.length + marketItems.length + jobs.length;
       setTotalCount(total);
       setLoading(false);
@@ -865,6 +882,31 @@ export default function SearchScreen() {
           <Text style={{ color: "#fff", fontSize: 9, fontFamily: "Inter_700Bold" }}>VIDEO</Text>
         </View>
       </TouchableOpacity>
+    );
+  }
+
+  // ─── GroupCard ────────────────────────────────────────────────────────────────
+
+  function GroupCard({ gr, i }: { gr: GroupResult; i: number }) {
+    return (
+      <Animated.View entering={FadeInDown.delay(i * 25).duration(200)}>
+        <TouchableOpacity style={[ss.listRow, { backgroundColor: colors.surface }]} onPress={() => router.push(`/group/${gr.id}` as any)} activeOpacity={0.75}>
+          <View style={{ width: 48, height: 48, borderRadius: 14, overflow: "hidden" }}>
+            {gr.avatar_url
+              ? <Image source={{ uri: gr.avatar_url }} style={{ width: 48, height: 48 }} />
+              : <LinearGradient colors={[BRAND, "#0097A7"]} style={{ width: 48, height: 48, alignItems: "center", justifyContent: "center" }}><Ionicons name="people" size={22} color="#fff" /></LinearGradient>}
+          </View>
+          <View style={{ flex: 1, gap: 3 }}>
+            <Text style={[ss.rowTitle, { color: colors.text }]} numberOfLines={1}>{gr.name}</Text>
+            {gr.description ? <Text style={[ss.rowSub, { color: colors.textMuted }]} numberOfLines={1}>{gr.description}</Text> : null}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Ionicons name="people-outline" size={11} color={BRAND} />
+              <Text style={{ color: BRAND, fontSize: 11, fontFamily: "Inter_600SemiBold" }}>{fmtNum(gr.member_count)} members</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+        </TouchableOpacity>
+      </Animated.View>
     );
   }
 

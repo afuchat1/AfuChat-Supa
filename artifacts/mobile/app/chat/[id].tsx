@@ -3729,6 +3729,8 @@ STRICT RULES:
           onPress={() => {
             if (chatInfo && !chatInfo.is_group && !chatInfo.is_channel && chatInfo.other_id) {
               router.push({ pathname: "/contact/[id]", params: { id: chatInfo.other_id } });
+            } else if (chatInfo && (chatInfo.is_group || chatInfo.is_channel) && id) {
+              router.push({ pathname: "/group/[id]", params: { id: id as string } });
             }
           }}
         >
@@ -3758,6 +3760,14 @@ STRICT RULES:
         </TouchableOpacity>
         {chatInfo?.other_id === AFUAI_BOT_ID ? (
           <TouchableOpacity onPress={() => setShowAfuAiMenu(true)} style={st.headerAction} hitSlop={8}>
+            <Ionicons name="ellipsis-vertical" size={22} color={colors.text} />
+          </TouchableOpacity>
+        ) : (chatInfo?.is_group || chatInfo?.is_channel) ? (
+          <TouchableOpacity
+            style={st.headerAction}
+            hitSlop={8}
+            onPress={() => router.push({ pathname: "/group/[id]", params: { id: id as string } })}
+          >
             <Ionicons name="ellipsis-vertical" size={22} color={colors.text} />
           </TouchableOpacity>
         ) : chatInfo && !chatInfo.is_group && !chatInfo.is_channel && chatInfo.other_id ? (
