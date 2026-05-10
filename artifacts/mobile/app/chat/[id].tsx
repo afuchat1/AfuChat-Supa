@@ -3661,19 +3661,24 @@ STRICT RULES:
   }, [messages, user, colors, highlightedMsgId, scrollToMessage, advancedFeatures.mini_profile_popup]);
 
   // ── Swipe right anywhere in the chat to go back (like iOS native push) ──────
-  // activeOffsetX: only fires on rightward swipes (threshold 15px).
-  // failOffsetY:   vertical scroll takes priority — FlatList never blocked.
-  // Threshold 80px: comfortable swipe without accidental triggers.
+  // RNGH v2 fix: use Gesture.Simultaneous(pan, Gesture.Native()) so the
+  // FlatList's native scroll is NEVER blocked during the gesture's undecided
+  // phase. Without this, failOffsetY causes the FlatList to freeze until the
+  // pan fails — which users experience as a completely broken scroll.
   const chatGoBack = useCallback(() => router.back(), []);
+  const flatListNative = useRef(Gesture.Native()).current;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const backSwipeGesture = useRef(
+  const backSwipePan = useRef(
     Gesture.Pan()
-      .activeOffsetX([15, 999])
-      .failOffsetY([-20, 20])
+      .activeOffsetX([20, 999])
+      .failOffsetY([-6, 6])
       .onEnd((e) => {
         "worklet";
         if (e.translationX > 80) runOnJS(chatGoBack)();
       })
+  ).current;
+  const backSwipeGesture = useRef(
+    Gesture.Simultaneous(backSwipePan, flatListNative)
   ).current;
 
   return (
@@ -3783,6 +3788,7 @@ STRICT RULES:
             </Text>
           </View>
         ) : (
+          <GestureDetector gesture={flatListNative}>
           <View style={{ flex: 1 }}>
             <FlatList
               ref={flatListRef}
@@ -3834,6 +3840,7 @@ STRICT RULES:
               </TouchableOpacity>
             </Animated.View>
           </View>
+          </GestureDetector>
         )}
 
         {editingMessage && (
