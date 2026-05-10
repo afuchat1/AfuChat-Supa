@@ -82,6 +82,7 @@ function shuffle<T>(arr: T[]): T[] {
 function UserCard({
   user,
   isFollowing,
+  theyFollowMe,
   onFollow,
   onDismiss,
   accent,
@@ -89,6 +90,7 @@ function UserCard({
 }: {
   user: SuggestedUser;
   isFollowing: boolean;
+  theyFollowMe: boolean;
   onFollow: (id: string) => void;
   onDismiss: (id: string) => void;
   accent: string;
@@ -171,24 +173,28 @@ function UserCard({
         </View>
       )}
 
-      {/* Follow button */}
-      <TouchableOpacity
-        style={[styles.followBtn, {
-          backgroundColor: localFollow ? colors.backgroundTertiary : accent,
-          borderColor: localFollow ? colors.border : accent,
-        }]}
-        onPress={handleFollow}
-        disabled={localFollow || loading}
-        activeOpacity={0.8}
-      >
-        {loading ? (
-          <ActivityIndicator size="small" color={localFollow ? colors.textMuted : "#fff"} />
-        ) : (
-          <Text style={[styles.followBtnText, { color: localFollow ? colors.textMuted : "#fff" }]}>
-            {localFollow ? "Following" : "Follow"}
-          </Text>
-        )}
-      </TouchableOpacity>
+      {/* Follow button — shows Follow / Follow Back / Following */}
+      {(() => {
+        const _fs = localFollow ? "following" : theyFollowMe ? "follow_back" : "follow";
+        const _bg = _fs === "follow" ? accent : _fs === "follow_back" ? "#FF9500" : colors.backgroundTertiary;
+        const _bc = _fs === "following" ? colors.border : _fs === "follow_back" ? "#FF9500" : accent;
+        const _tc = _fs === "following" ? colors.textMuted : "#fff";
+        const _label = _fs === "follow" ? "Follow" : _fs === "follow_back" ? "Follow Back" : "Following";
+        return (
+          <TouchableOpacity
+            style={[styles.followBtn, { backgroundColor: _bg, borderColor: _bc }]}
+            onPress={handleFollow}
+            disabled={localFollow || loading}
+            activeOpacity={0.8}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color={_tc} />
+            ) : (
+              <Text style={[styles.followBtnText, { color: _tc }]}>{_label}</Text>
+            )}
+          </TouchableOpacity>
+        );
+      })()}
     </TouchableOpacity>
   );
 }
@@ -206,6 +212,7 @@ export function SuggestedUsers({
   const [users, setUsers] = useState<SuggestedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [followingSet, setFollowingSet] = useState<Set<string>>(new Set());
+  const [followersSet, setFollowersSet] = useState<Set<string>>(new Set());
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const mountedRef = useRef(true);
 
@@ -218,9 +225,10 @@ export function SuggestedUsers({
     if (!user) { setLoading(false); return; }
     setLoading(true);
 
-    const [dis, followRes] = await Promise.all([
+    const [dis, followRes, followersRes] = await Promise.all([
       loadDismissed(),
       supabase.from("follows").select("following_id").eq("follower_id", user.id),
+      supabase.from("follows").select("follower_id").eq("following_id", user.id),
     ]);
 
     if (!mountedRef.current) return;
@@ -281,6 +289,7 @@ export function SuggestedUsers({
     }
 
     setFollowingSet(followingSetLocal);
+    setFollowersSet(new Set((followersRes.data || []).map((f: any) => f.follower_id as string)));
     setDismissed(dis);
     setLoading(false);
   }, [user, profile?.interests, maxCards]);
@@ -345,6 +354,7 @@ export function SuggestedUsers({
           <UserCard
             user={item}
             isFollowing={followingSet.has(item.id)}
+            theyFollowMe={followersSet.has(item.id)}
             onFollow={handleFollow}
             onDismiss={handleDismiss}
             accent={accent}

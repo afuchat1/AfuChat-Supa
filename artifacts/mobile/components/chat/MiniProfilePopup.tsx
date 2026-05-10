@@ -77,6 +77,7 @@ export default function MiniProfilePopup({ userId, visible, onClose, currentChat
   const [followingCount, setFollowingCount] = useState<number | null>(null);
   const [postCount, setPostCount] = useState<number | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [theyFollowMe, setTheyFollowMe] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
 
   const isSelf = user?.id === userId;
@@ -93,6 +94,7 @@ export default function MiniProfilePopup({ userId, visible, onClose, currentChat
     setFollowingCount(null);
     setPostCount(null);
     setIsFollowing(false);
+    setTheyFollowMe(false);
 
     Promise.all([
       supabase
@@ -106,12 +108,16 @@ export default function MiniProfilePopup({ userId, visible, onClose, currentChat
       user
         ? supabase.from("follows").select("id").eq("follower_id", user.id).eq("following_id", userId).maybeSingle()
         : Promise.resolve({ data: null }),
-    ]).then(([profileRes, followersRes, followingRes, postsRes, followingMeRes]) => {
+      user
+        ? supabase.from("follows").select("id").eq("follower_id", userId).eq("following_id", user.id).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]).then(([profileRes, followersRes, followingRes, postsRes, followingMeRes, theyFollowMeRes]) => {
       if (profileRes.data) setProfile(profileRes.data as MiniProfile);
       setFollowerCount(followersRes.count ?? 0);
       setFollowingCount(followingRes.count ?? 0);
       setPostCount(postsRes.count ?? 0);
       setIsFollowing(!!(followingMeRes as any)?.data);
+      setTheyFollowMe(!!(theyFollowMeRes as any)?.data);
       setLoading(false);
     });
   }, [visible, userId, user?.id]);
@@ -247,34 +253,32 @@ export default function MiniProfilePopup({ userId, visible, onClose, currentChat
 
             {/* ── Action buttons ───────────────────────────── */}
             <View style={styles.actions}>
-              {!isSelf && user && (
-                <TouchableOpacity
-                  style={[
-                    styles.followBtn,
-                    isFollowing
-                      ? { backgroundColor: colors.inputBg, borderColor: colors.border, borderWidth: 1 }
-                      : { backgroundColor: accent },
-                  ]}
-                  onPress={handleFollow}
-                  activeOpacity={0.82}
-                  disabled={followLoading}
-                >
-                  {followLoading ? (
-                    <ActivityIndicator size="small" color={isFollowing ? colors.textMuted : "#fff"} />
-                  ) : (
-                    <>
-                      <Ionicons
-                        name={isFollowing ? "person-remove-outline" : "person-add-outline"}
-                        size={15}
-                        color={isFollowing ? colors.textMuted : "#fff"}
-                      />
-                      <Text style={[styles.followBtnText, { color: isFollowing ? colors.textMuted : "#fff" }]}>
-                        {isFollowing ? "Unfollow" : "Follow"}
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              )}
+              {!isSelf && user && (() => {
+                const _fs = isFollowing && theyFollowMe ? "friends" : !isFollowing && theyFollowMe ? "follow_back" : isFollowing ? "following" : "follow";
+                const _bg = _fs === "follow" ? accent : _fs === "follow_back" ? "#FF9500" : colors.inputBg;
+                const _bc = _fs === "friends" ? "#34C759" : _fs === "following" ? colors.border : undefined;
+                const _bw = _fs === "following" || _fs === "friends" ? 1 : 0;
+                const _tc = _fs === "follow" || _fs === "follow_back" ? "#fff" : _fs === "friends" ? "#34C759" : colors.textMuted;
+                const _label = _fs === "follow" ? "Follow" : _fs === "follow_back" ? "Follow Back" : _fs === "following" ? "Following" : "Friends";
+                const _icon: any = _fs === "follow" ? "person-add-outline" : _fs === "follow_back" ? "person-add" : _fs === "following" ? "checkmark" : "heart";
+                return (
+                  <TouchableOpacity
+                    style={[styles.followBtn, { backgroundColor: _bg, borderColor: _bc, borderWidth: _bw }]}
+                    onPress={handleFollow}
+                    activeOpacity={0.82}
+                    disabled={followLoading}
+                  >
+                    {followLoading ? (
+                      <ActivityIndicator size="small" color={_tc} />
+                    ) : (
+                      <>
+                        <Ionicons name={_icon} size={15} color={_tc} />
+                        <Text style={[styles.followBtnText, { color: _tc }]}>{_label}</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                );
+              })()}
 
               {!isSelf && !currentChatId && user && (
                 <TouchableOpacity

@@ -165,6 +165,7 @@ export default function ContactProfileScreen() {
   const [loading, setLoading] = useState(!initialProfile);
   const [phonebookName, setPhonebookName] = useState<string | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [theyFollowMe, setTheyFollowMe] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [followerCount, setFollowerCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
@@ -222,6 +223,7 @@ export default function ContactProfileScreen() {
 
     if (user) {
       supabase.from("follows").select("id").eq("follower_id", user.id).eq("following_id", id).maybeSingle().then(({ data }) => setIsFollowing(!!data));
+      supabase.from("follows").select("id").eq("follower_id", id).eq("following_id", user.id).maybeSingle().then(({ data }) => setTheyFollowMe(!!data));
       supabase.from("blocked_users").select("id").eq("blocker_id", user.id).eq("blocked_id", id).maybeSingle().then(({ data }) => setIsBlocked(!!data));
     }
     supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", id).then(({ count }) => setFollowerCount(count || 0));
@@ -493,16 +495,25 @@ export default function ContactProfileScreen() {
       {/* ── CTA row ─── */}
       {!isOwnProfile && (
         <View style={st.ctaRow}>
-          <TouchableOpacity
-            style={[st.ctaFollow, { backgroundColor: isFollowing ? "transparent" : colors.accent, borderColor: colors.accent, borderWidth: isFollowing ? 1.5 : 0 }]}
-            onPress={toggleFollow}
-            activeOpacity={0.75}
-          >
-            <Ionicons name={isFollowing ? "checkmark" : "person-add-outline"} size={14} color={isFollowing ? colors.accent : "#fff"} />
-            <Text style={[st.ctaFollowText, { color: isFollowing ? colors.accent : "#fff" }]}>
-              {isFollowing ? "Following" : "Follow"}
-            </Text>
-          </TouchableOpacity>
+          {(() => {
+            const _fs = isFollowing && theyFollowMe ? "friends" : !isFollowing && theyFollowMe ? "follow_back" : isFollowing ? "following" : "follow";
+            const _bg = _fs === "follow" ? colors.accent : _fs === "follow_back" ? "#FF9500" : "transparent";
+            const _bw = _fs === "following" || _fs === "friends" ? 1.5 : 0;
+            const _bc = _fs === "friends" ? "#34C759" : colors.accent;
+            const _tc = _fs === "follow" || _fs === "follow_back" ? "#fff" : _fs === "friends" ? "#34C759" : colors.accent;
+            const _label = _fs === "follow" ? "Follow" : _fs === "follow_back" ? "Follow Back" : _fs === "following" ? "Following" : "Friends";
+            const _icon: any = _fs === "follow" ? "person-add-outline" : _fs === "follow_back" ? "person-add" : _fs === "following" ? "checkmark" : "heart";
+            return (
+              <TouchableOpacity
+                style={[st.ctaFollow, { backgroundColor: _bg, borderColor: _bc, borderWidth: _bw }]}
+                onPress={toggleFollow}
+                activeOpacity={0.75}
+              >
+                <Ionicons name={_icon} size={14} color={_tc} />
+                <Text style={[st.ctaFollowText, { color: _tc }]}>{_label}</Text>
+              </TouchableOpacity>
+            );
+          })()}
 
           <TouchableOpacity
             style={[st.ctaMessage, { borderColor: colors.accent }]}

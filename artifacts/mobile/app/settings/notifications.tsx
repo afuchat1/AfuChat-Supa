@@ -42,8 +42,8 @@ const defaults: Prefs = {
 };
 
 const SOUND_OPTIONS: { value: SoundMode; icon: string; label: string; sub: string }[] = [
-  { value: "afuchat", icon: "musical-notes",  label: "AfuChat Sound",   sub: "Branded tune — our signature sound" },
-  { value: "device",  icon: "phone-portrait",  label: "Device Default",  sub: "Your system notification sound" },
+  { value: "device",  icon: "phone-portrait",  label: "Device Default",  sub: "Your system notification sound (recommended)" },
+  { value: "afuchat", icon: "musical-notes",   label: "AfuChat Sound",   sub: "Branded in-app tune (active chats only)" },
   { value: "silent",  icon: "volume-mute",     label: "Silent",          sub: "Vibrate only — no sound" },
 ];
 
@@ -55,7 +55,7 @@ export default function NotificationSettingsScreen() {
   const insets = useSafeAreaInsets();
 
   const [prefs, setPrefs]           = useState<Prefs>(defaults);
-  const [soundMode, setSoundModeState] = useState<SoundMode>("afuchat");
+  const [soundMode, setSoundModeState] = useState<SoundMode>("device");
   const [testingSound, setTestingSound] = useState(false);
 
   // Load prefs from DB

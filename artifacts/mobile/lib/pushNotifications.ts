@@ -2,12 +2,13 @@
 import { Platform } from "react-native";
 import { router } from "expo-router";
 import { supabase, supabaseUrl, supabaseAnonKey } from "@/lib/supabase";
-import { playNotificationSound } from "@/lib/soundManager";
+import { getPushSoundToken } from "@/lib/soundManager";
 import { handleNotificationAction } from "@/lib/notificationActions";
 
 const EAS_PROJECT_ID = "b55c5d92-7a83-472f-b660-d1838efba5fe";
 
-// AfuChat branded notification sound file (registered in app.json expo-notifications plugin).
+// AfuChat branded sound — kept for reference (used only in call ringtone flow).
+// Android notification channels use device default sound instead.
 const AFUCHAT_SOUND = "notification.wav";
 
 // ── Notification Category IDs ─────────────────────────────────────────
@@ -160,7 +161,7 @@ export async function setupNotificationChannels(): Promise<void> {
   if (Platform.OS !== "android" || !Notifications) return;
   try {
     const base = {
-      sound: AFUCHAT_SOUND,
+      sound: "default",
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       showBadge: true,
       enableVibrate: true,
@@ -301,14 +302,47 @@ export async function clearPushToken(userId: string): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Linked-account session registry
+// Call registerSwitchAccount + setCurrentUserId from AuthContext on mount
+// so notification taps can switch to the correct linked account first.
+// ─────────────────────────────────────────────────────────────────────
+
+let _switchAccount: ((userId: string) => Promise<{ success: boolean; error?: string }>) | null = null;
+let _currentUserId: string | null = null;
+
+export function registerSwitchAccount(
+  fn: (userId: string) => Promise<{ success: boolean; error?: string }>
+) {
+  _switchAccount = fn;
+}
+
+export function setCurrentUserId(id: string | null) {
+  _currentUserId = id;
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Notification response routing (tap on notification body)
 // ─────────────────────────────────────────────────────────────────────
 
-function routeNotificationResponse(response: any) {
+async function routeNotificationResponse(response: any) {
   const id = response.notification.request.identifier;
   if (alreadyHandled(id)) return;
 
   const data = (response.notification.request.content.data || {}) as Record<string, string>;
+
+  // If this notification was sent to a linked account that is not currently
+  // active, switch to it before navigating so the right data loads.
+  if (
+    data.recipientUserId &&
+    data.recipientUserId !== _currentUserId &&
+    _switchAccount
+  ) {
+    try {
+      await _switchAccount(data.recipientUserId);
+      // Brief pause for React state + navigation stack to settle.
+      await new Promise<void>((resolve) => setTimeout(resolve, 350));
+    } catch {}
+  }
 
   // Explicit view actions from action buttons
   if (response.actionIdentifier === "view_post" && data.postId) {
@@ -384,10 +418,9 @@ export function setupNotificationListeners() {
     }
   }).catch(() => {});
 
-  // Play AfuChat sound when notification arrives while app is foregrounded
-  const receivedSubscription = Notifications.addNotificationReceivedListener(() => {
-    playNotificationSound();
-  });
+  // OS plays the channel sound for push notifications automatically.
+  // In-app sound is handled per-screen (e.g. the active open chat).
+  const receivedSubscription = Notifications.addNotificationReceivedListener(() => {});
 
   // Handle action button taps AND notification taps
   const responseSubscription = Notifications.addNotificationResponseReceivedListener(
@@ -440,7 +473,6 @@ export async function sendPushNotification(params: {
 
     if (!profile?.expo_push_token) return;
 
-    const { getPushSoundToken } = await import("@/lib/soundManager");
     const soundToken = await getPushSoundToken();
 
     const channelId =
@@ -458,7 +490,9 @@ export async function sendPushNotification(params: {
       to: profile.expo_push_token,
       title: params.title,
       body: params.body,
-      data: params.data || {},
+      // Always embed the intended recipient so the tap handler can switch
+      // to the correct linked account before navigating.
+      data: { recipientUserId: params.userId, ...(params.data || {}) },
       badge: 1,
       priority: "high",
       channelId,

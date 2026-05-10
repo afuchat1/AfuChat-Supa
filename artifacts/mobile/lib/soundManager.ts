@@ -72,9 +72,9 @@ export async function getSoundMode(): Promise<SoundMode> {
   if (_cachedMode) return _cachedMode;
   try {
     const stored = await AsyncStorage.getItem(SOUND_MODE_KEY);
-    _cachedMode = (stored as SoundMode) || "afuchat";
+    _cachedMode = (stored as SoundMode) || "device";
   } catch {
-    _cachedMode = "afuchat";
+    _cachedMode = "device";
   }
   return _cachedMode!;
 }

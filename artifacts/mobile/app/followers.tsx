@@ -47,6 +47,7 @@ export default function FollowersScreen() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+  const [myFollowerIds, setMyFollowerIds] = useState<Set<string>>(new Set());
   const [togglingFollow, setTogglingFollow] = useState<string | null>(null);
 
   const isOwnProfile = user?.id === userId;
@@ -128,6 +129,23 @@ export default function FollowersScreen() {
       if (myFollowing) {
         setFollowingIds(new Set(myFollowing.map((f: any) => f.following_id)));
       }
+
+      // For the "following" list we also need to know which of those users
+      // follow us back, so we can show "Friends" vs "Following".
+      // For "followers" list they all follow us by definition.
+      if (type === "following") {
+        const { data: theyFollow } = await supabase
+          .from("follows")
+          .select("follower_id")
+          .eq("following_id", user.id)
+          .in("follower_id", visibleIds);
+        if (theyFollow) {
+          setMyFollowerIds(new Set(theyFollow.map((f: any) => f.follower_id)));
+        }
+      } else {
+        // "followers" list — every entry is someone who follows us
+        setMyFollowerIds(new Set(visibleIds));
+      }
     }
 
     setLoading(false);
@@ -163,6 +181,15 @@ export default function FollowersScreen() {
   const renderUser = useCallback(({ item }: { item: FollowUser }) => {
     const isMe = item.id === user?.id;
     const amFollowing = followingIds.has(item.id);
+    const theyFollowMe = myFollowerIds.has(item.id);
+
+    // Derive 4-state follow button appearance
+    const _fs = amFollowing && theyFollowMe ? "friends" : !amFollowing && theyFollowMe ? "follow_back" : amFollowing ? "following" : "follow";
+    const _bg = _fs === "follow" ? colors.accent : _fs === "follow_back" ? "#FF9500" : "transparent";
+    const _bw = _fs === "following" || _fs === "friends" ? 1 : 0;
+    const _bc = _fs === "friends" ? "#34C759" : _fs === "following" ? colors.border : colors.accent;
+    const _tc = _fs === "follow" || _fs === "follow_back" ? "#fff" : _fs === "friends" ? "#34C759" : colors.text;
+    const _label = _fs === "follow" ? "Follow" : _fs === "follow_back" ? "Follow Back" : _fs === "following" ? "Following" : "Friends";
 
     return (
       <TouchableOpacity
@@ -203,9 +230,7 @@ export default function FollowersScreen() {
           <TouchableOpacity
             style={[
               styles.followBtn,
-              amFollowing
-                ? [styles.followBtnFollowing, { borderColor: colors.border }]
-                : { backgroundColor: colors.accent },
+              { backgroundColor: _bg, borderColor: _bc, borderWidth: _bw },
             ]}
             onPress={(e) => {
               e.stopPropagation?.();
@@ -214,22 +239,17 @@ export default function FollowersScreen() {
             disabled={togglingFollow === item.id}
           >
             {togglingFollow === item.id ? (
-              <ActivityIndicator size="small" color={amFollowing ? colors.text : "#fff"} />
+              <ActivityIndicator size="small" color={_tc} />
             ) : (
-              <Text
-                style={[
-                  styles.followBtnText,
-                  { color: amFollowing ? colors.text : "#fff" },
-                ]}
-              >
-                {amFollowing ? "Following" : "Follow"}
+              <Text style={[styles.followBtnText, { color: _tc }]}>
+                {_label}
               </Text>
             )}
           </TouchableOpacity>
         )}
       </TouchableOpacity>
     );
-  }, [colors, user, followingIds, togglingFollow, toggleFollow]);
+  }, [colors, user, followingIds, myFollowerIds, togglingFollow, toggleFollow]);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>

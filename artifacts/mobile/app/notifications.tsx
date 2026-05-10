@@ -24,7 +24,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { clearBadge } from "@/lib/pushNotifications";
-import { playNotificationSound, preloadNotificationSound } from "@/lib/soundManager";
+import { preloadNotificationSound } from "@/lib/soundManager";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { NotificationSkeleton } from "@/components/ui/Skeleton";
 import OfflineBanner from "@/components/ui/OfflineBanner";
@@ -161,10 +161,12 @@ type NotifRowProps = {
   isExpanded: boolean;
   replyText: string;
   sendingReply: boolean;
+  isFollowingActor?: boolean;
   onPress: () => void;
   onToggleReply: () => void;
   onReplyChange: (text: string) => void;
   onReplySend: () => void;
+  onFollowBack?: () => void;
 };
 
 function NotifRow({
@@ -172,10 +174,12 @@ function NotifRow({
   isExpanded,
   replyText,
   sendingReply,
+  isFollowingActor,
   onPress,
   onToggleReply,
   onReplyChange,
   onReplySend,
+  onFollowBack,
 }: NotifRowProps) {
   const { colors, accent } = useTheme();
   const cfg = TYPE_CONFIG[item.type] || getFallbackConfig(item.type);
@@ -268,10 +272,40 @@ function NotifRow({
           </View>
         </View>
 
-        {/* Right: unread dot + reply button */}
+        {/* Right: unread dot + follow-back / reply button */}
         <View style={st.rightCol}>
           {!item.is_read && (
             <View style={[st.unreadDot, { backgroundColor: accent }]} />
+          )}
+          {item.type === "new_follower" && item.actor && onFollowBack && (
+            <TouchableOpacity
+              style={[
+                st.followBackBtn,
+                isFollowingActor
+                  ? { backgroundColor: "transparent", borderWidth: 1, borderColor: "#34C759" }
+                  : { backgroundColor: "#FF9500" },
+              ]}
+              onPress={(e) => {
+                e.stopPropagation();
+                if (!isFollowingActor) onFollowBack();
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              disabled={isFollowingActor}
+            >
+              <Ionicons
+                name={isFollowingActor ? "heart" : "person-add"}
+                size={11}
+                color={isFollowingActor ? "#34C759" : "#fff"}
+              />
+              <Text
+                style={[
+                  st.followBackBtnText,
+                  { color: isFollowingActor ? "#34C759" : "#fff" },
+                ]}
+              >
+                {isFollowingActor ? "Friends" : "Follow Back"}
+              </Text>
+            </TouchableOpacity>
           )}
           {cfg.canReply && item.post_id && (
             <TouchableOpacity
@@ -353,6 +387,7 @@ export default function NotificationsScreen() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [sendingReply, setSendingReply] = useState(false);
+  const [followedActors, setFollowedActors] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     preloadNotificationSound();
@@ -411,6 +446,23 @@ export default function NotificationsScreen() {
         setItems(deduped);
         // Save permanently to SQLite so they're available offline.
         saveNotifications(deduped).catch(() => {});
+
+        // Load which new_follower actors the current user already follows back
+        const followerActorIds = deduped
+          .filter((n) => n.type === "new_follower" && n.actor?.id)
+          .map((n) => n.actor!.id);
+        if (followerActorIds.length > 0) {
+          supabase
+            .from("follows")
+            .select("following_id")
+            .eq("follower_id", user.id)
+            .in("following_id", followerActorIds)
+            .then(({ data: fData }) => {
+              if (fData) {
+                setFollowedActors(new Set(fData.map((f: any) => f.following_id)));
+              }
+            });
+        }
       }
     } catch (e) {
       console.warn("[Notifications] Load failed:", e);
@@ -436,7 +488,6 @@ export default function NotificationsScreen() {
         { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
         () => {
           if (isFirstLoad.current) { isFirstLoad.current = false; return; }
-          playNotificationSound();
           load(true);
         }
       )
@@ -447,6 +498,16 @@ export default function NotificationsScreen() {
   useEffect(() => {
     isFirstLoad.current = false;
   }, []);
+
+  async function handleFollowBack(actorId: string) {
+    if (!user) return;
+    setFollowedActors((prev) => new Set([...prev, actorId]));
+    await supabase.from("follows").insert({ follower_id: user.id, following_id: actorId });
+    try {
+      const { rewardXp } = await import("../lib/rewardXp");
+      rewardXp("follow_user");
+    } catch {}
+  }
 
   async function markRead(id: string) {
     supabase.from("notifications").update({ is_read: true }).eq("id", id).then(() => {});
@@ -572,10 +633,12 @@ export default function NotificationsScreen() {
                 isExpanded={expandedId === item.id}
                 replyText={expandedId === item.id ? replyText : ""}
                 sendingReply={sendingReply}
+                isFollowingActor={item.actor ? followedActors.has(item.actor.id) : false}
                 onPress={() => handlePress(item)}
                 onToggleReply={() => handleToggleReply(item)}
                 onReplyChange={setReplyText}
                 onReplySend={() => handleReplySend(item)}
+                onFollowBack={item.actor ? () => handleFollowBack(item.actor!.id) : undefined}
               />
             ))}
           </View>
@@ -747,6 +810,11 @@ const st = StyleSheet.create({
   // Right column
   rightCol: { alignItems: "center", gap: 8, paddingTop: 2 },
   unreadDot: { width: 9, height: 9, borderRadius: 5 },
+  followBackBtn: {
+    flexDirection: "row", alignItems: "center", gap: 3,
+    borderRadius: 12, paddingHorizontal: 7, paddingVertical: 4,
+  },
+  followBackBtnText: { fontSize: 10, fontWeight: "600" },
   replyBtn: {
     width: 28, height: 28, borderRadius: 14,
     alignItems: "center", justifyContent: "center",

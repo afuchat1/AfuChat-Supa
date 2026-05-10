@@ -7,7 +7,7 @@ import { getStoredAccounts, storeAccount, removeStoredAccount, updateAccountToke
 import { cacheProfile, getCachedProfile, getCachedProfileSync, clearAccountCache, isOnline, onConnectivityChange, setCachedUserId, getCachedUserId, clearCachedUserId } from "@/lib/offlineStore";
 import { clearProfileCache } from "@/lib/profileCache";
 import { startOfflineSync } from "@/lib/offlineSync";
-import { clearPushToken } from "@/lib/pushNotifications";
+import { clearPushToken, registerSwitchAccount, setCurrentUserId } from "@/lib/pushNotifications";
 import { registerDeviceSession } from "@/lib/deviceSession";
 import { ensureAfuAiChat } from "@/lib/afuAiBot";
 
@@ -429,6 +429,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       saveCurrentSession();
     }
   }, [session, profile]);
+
+  // Keep the push notification router aware of the current user so it can
+  // switch linked accounts when a notification tap targets a different one.
+  useEffect(() => { setCurrentUserId(user?.id ?? null); }, [user?.id]);
+  useEffect(() => { registerSwitchAccount(switchAccount); }, []); // stable ref
 
   useEffect(() => {
     if (!user) return;
