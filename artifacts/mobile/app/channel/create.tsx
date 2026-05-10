@@ -175,8 +175,6 @@ export default function CreateChannelScreen() {
           </TouchableOpacity>
         }
       />
-        </TouchableOpacity>
-      </View>
 
       <View style={[styles.nameSection, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity style={[styles.avatarBtn, { backgroundColor: colors.accent }]} onPress={pickAvatar} activeOpacity={0.8}>
