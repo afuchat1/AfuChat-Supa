@@ -540,7 +540,7 @@ function AiConfirmationCard({ exec: ea, colors: c, onConfirm, onCancel }: { exec
 
 const SWIPE_THRESHOLD = 60;
 
-function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, replyPreview, onTapReply, isHighlighted, onTapEnvelope, onTapGift, onImageTap, isPremiumSender, onConfirmExec, onCancelExec, onSuggestionTap, onSenderPress }: {
+function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, replyPreview, onTapReply, isHighlighted, onTapEnvelope, onTapGift, onImageTap, isPremiumSender, onConfirmExec, onCancelExec, onSuggestionTap, onSenderPress, onReactionPress }: {
   msg: Message;
   isMe: boolean;
   showTail: boolean;
@@ -558,6 +558,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   onCancelExec?: (msgId: string) => void;
   onSuggestionTap?: (text: string) => void;
   onSenderPress?: (senderId: string) => void;
+  onReactionPress?: (msg: Message, emoji: string) => void;
 }) {
   const { colors } = useTheme();
   const BRAND = colors.accent;
@@ -1034,7 +1035,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
               <TouchableOpacity
                 key={i}
                 style={[st.reactionPill, r.myReaction && { borderColor: BRAND, borderWidth: 1.5 }]}
-                onPress={() => addReaction(msg, r.emoji)}
+                onPress={() => onReactionPress?.(msg, r.emoji)}
                 activeOpacity={0.7}
               >
                 <Text style={st.reactionEmoji}>{r.emoji}</Text>
@@ -1520,7 +1521,7 @@ function ChatScreen() {
         // Background: refresh reactions for cached messages so they reappear after navigation.
         const cachedIds = cached.map((m) => m.id).filter((cid) => !cid.startsWith("pending"));
         if (cachedIds.length > 0) {
-          supabase.from("message_reactions").select("message_id, reaction, user_id").in("message_id", cachedIds).then(({ data: cacheReactions }) => {
+          void supabase.from("message_reactions").select("message_id, reaction, user_id").in("message_id", cachedIds).then(({ data: cacheReactions }) => {
             if (!cacheReactions || cacheReactions.length === 0) return;
             const reactionMap: Record<string, { emoji: string; count: number; myReaction: boolean }[]> = {};
             for (const r of cacheReactions as any[]) {
@@ -1534,7 +1535,7 @@ function ChatScreen() {
               if (!cachedIdSet.has(m.id) || !reactionMap[m.id]) return m;
               return { ...m, reactions: reactionMap[m.id] };
             }));
-          }).catch(() => {});
+          });
         }
       }
 
@@ -1668,7 +1669,7 @@ function ChatScreen() {
               ).then(() => {});
               typingChannelRef.current?.send({ type: "broadcast", event: "read", payload: { reader_id: user.id, message_ids: toMark.map((m: any) => m.id) } });
             }
-          }).catch(() => {});
+          });
       }
     }
     setLoading(false);
@@ -2791,6 +2792,7 @@ STRICT RULES:
         notifyNewMessage({
           recipientIds,
           senderName: profile?.display_name || "Someone",
+          senderUserId: user.id,
           messageText: text,
           chatId: activeChatId,
           isGroup: chatInfo.is_group,
@@ -3662,6 +3664,7 @@ STRICT RULES:
           onCancelExec={handleCancelAiExec}
           onSuggestionTap={(text) => sendMessage(text)}
           onSenderPress={advancedFeatures.mini_profile_popup && !isMe ? (id) => setMiniProfileUserId(id) : undefined}
+          onReactionPress={addReaction}
         />
       </View>
     );
@@ -3786,7 +3789,7 @@ STRICT RULES:
         {loading ? (
           <ChatLoadingSkeleton />
         ) : messages.length === 0 ? (
-          <View style={st.emptyState}>
+          <View style={[st.emptyState, { paddingBottom: floatingInputHeight + 16 }]}>
             <View style={[st.emptyIconWrap, { backgroundColor: BRAND + "14" }]}>
               <Ionicons name="chatbubbles-outline" size={48} color={BRAND} />
             </View>
@@ -4053,10 +4056,6 @@ STRICT RULES:
                         ) : (
                           <Ionicons name={editingMessage ? "checkmark" : "send"} size={18} color="#fff" />
                         )}
-                      </TouchableOpacity>
-                    ) : Platform.OS === "web" ? (
-                      <TouchableOpacity onPress={startVoiceRecordingWeb} style={[st.sendBtn, { backgroundColor: BRAND }]} hitSlop={6}>
-                        <Ionicons name="mic" size={20} color="#fff" />
                       </TouchableOpacity>
                     ) : (
                       <View style={isRecording && !recLocked ? st.recMicWrap : undefined}>
