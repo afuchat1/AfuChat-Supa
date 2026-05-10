@@ -180,6 +180,7 @@ export default function ContactProfileScreen() {
   const [lightboxImgIdx, setLightboxImgIdx] = useState(0);
   const [optionsVisible, setOptionsVisible] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [ownedUsernames, setOwnedUsernames] = useState<string[]>([]);
 
   // Load phone-book name for this user (native only).
   useEffect(() => {
@@ -218,6 +219,11 @@ export default function ContactProfileScreen() {
       });
 
     supabase.from("shops").select("id, pin_to_profile").eq("seller_id", id).eq("is_active", true).eq("pin_to_profile", true).maybeSingle().then(({ data }) => setHasShop(!!data));
+
+    // Load all owned usernames (aliases) for this profile
+    supabase.from("owned_usernames").select("handle").eq("owner_id", id).order("acquired_at", { ascending: true }).then(({ data: aliases }) => {
+      if (aliases && aliases.length > 0) setOwnedUsernames(aliases.map((a: any) => a.handle));
+    });
 
     supabase.from("posts").select("id", { count: "exact", head: true }).eq("author_id", id).in("visibility", ["public", "followers"]).then(({ count }) => setPostCount(count || 0));
 
@@ -491,6 +497,26 @@ export default function ContactProfileScreen() {
           </View>
         )}
       </View>
+
+      {/* ── Owned usernames ─── */}
+      {ownedUsernames.length > 0 && (
+        <View style={st.ownedUsernamesRow}>
+          <Ionicons name="at-circle-outline" size={13} color={colors.textMuted} />
+          <Text style={[st.ownedUsernamesLabel, { color: colors.textMuted }]}>Also known as:</Text>
+          <View style={st.ownedUsernamesList}>
+            {ownedUsernames.map((h) => (
+              <TouchableOpacity
+                key={h}
+                style={[st.ownedUsernamePill, { backgroundColor: colors.backgroundSecondary }]}
+                onPress={() => Clipboard.setStringAsync(`@${h}`)}
+                hitSlop={4}
+              >
+                <Text style={[st.ownedUsernamePillText, { color: colors.textSecondary }]}>@{h}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
 
       {/* ── CTA row ─── */}
       {!isOwnProfile && (
@@ -1043,6 +1069,11 @@ const st = StyleSheet.create({
   metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 16, marginBottom: 10 },
   metaChip: { flexDirection: "row", alignItems: "center", gap: 4 },
   metaChipText: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  ownedUsernamesRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6, paddingHorizontal: 16, marginBottom: 10 },
+  ownedUsernamesLabel: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  ownedUsernamesList: { flexDirection: "row", flexWrap: "wrap", gap: 5 },
+  ownedUsernamePill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
+  ownedUsernamePillText: { fontSize: 11, fontFamily: "Inter_500Medium" },
 
   ctaRow: { flexDirection: "row", gap: 7, paddingHorizontal: 16, marginBottom: 12 },
   ctaFollow: {

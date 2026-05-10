@@ -73,14 +73,37 @@ function PublicProfileScreen({ handle }: { handle: string }) {
 
   useEffect(() => {
     async function load() {
-      const { data, error } = await supabase
+      // Try primary handle first, then alias table
+      let profileData: PubProfile | null = null;
+
+      const { data: primary } = await supabase
         .from("profiles")
         .select("id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified, xp, current_grade, country")
         .eq("handle", handle)
         .maybeSingle();
 
-      if (error || !data) { setNotFound(true); setLoading(false); return; }
-      setProfile(data as PubProfile);
+      if (primary) {
+        profileData = primary as PubProfile;
+      } else {
+        // Try owned_usernames alias
+        const { data: alias } = await supabase
+          .from("owned_usernames")
+          .select("owner_id")
+          .eq("handle", handle)
+          .maybeSingle();
+        if (alias?.owner_id) {
+          const { data: byId } = await supabase
+            .from("profiles")
+            .select("id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified, xp, current_grade, country")
+            .eq("id", alias.owner_id)
+            .maybeSingle();
+          profileData = byId as PubProfile | null;
+        }
+      }
+
+      if (!profileData) { setNotFound(true); setLoading(false); return; }
+      setProfile(profileData);
+      const data = profileData;
 
       const [{ count: followers }, { count: following }, { count: posts }] = await Promise.all([
         supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", data.id),
@@ -275,20 +298,36 @@ export default function HandleScreen() {
   // Conditional returns are at the BOTTOM, after every hook.
 
   // Effect 1: resolve handle → profile ID (skipped in public-profile mode)
+  // Checks primary handle first, then owned_usernames aliases so ALL handles a
+  // user owns always route to the same profile.
   useEffect(() => {
     // Public profile mode (/@handle + guest): PublicProfileScreen fetches its own data.
     if (isAtHandle && !authLoading && !session) return;
     if (!cleanHandle || !isValidHandle) { setDataReady(true); return; }
-    supabase
-      .from("profiles")
-      .select("id")
-      .eq("handle", cleanHandle)
-      .single()
-      .then(({ data }) => {
-        if (data?.id) setProfileId(data.id);
-        else setProfileNotFound(true);
-        setDataReady(true);
-      }, () => { setProfileNotFound(true); setDataReady(true); });
+
+    async function resolve() {
+      // 1. Try the primary handle stored on the profile
+      const { data: primary } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("handle", cleanHandle)
+        .maybeSingle();
+
+      if (primary?.id) { setProfileId(primary.id); setDataReady(true); return; }
+
+      // 2. Fall back to owned_usernames alias table
+      const { data: alias } = await supabase
+        .from("owned_usernames")
+        .select("owner_id")
+        .eq("handle", cleanHandle)
+        .maybeSingle();
+
+      if (alias?.owner_id) { setProfileId(alias.owner_id); setDataReady(true); return; }
+
+      setProfileNotFound(true);
+      setDataReady(true);
+    }
+    resolve();
   }, [cleanHandle, isValidHandle, isAtHandle, authLoading, session]);
 
   // Effect 2: navigate once data is ready
