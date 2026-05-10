@@ -23,6 +23,7 @@ import {
 } from "@/lib/mediaUpload";
 import { bucketMeta } from "./index";
 import { ListRowSkeleton } from "@/components/ui/Skeleton";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 
 const VIDEO_BUCKETS = new Set(["videos", "stories"]);
 const IMAGE_BUCKETS = new Set([
@@ -358,31 +359,7 @@ export default function StorageBucketScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View
-        style={[
-          styles.topbar,
-          {
-            paddingTop: insets.top + 10,
-            backgroundColor: colors.surface,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => router.back()}
-          hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
-        >
-          <Ionicons name="chevron-back" size={26} color={colors.accent} />
-        </TouchableOpacity>
-        <Text
-          style={[styles.topbarTitle, { color: colors.text }]}
-          numberOfLines={1}
-        >
-          {meta.label}
-        </Text>
-        <View style={styles.backBtn} />
-      </View>
+      <GlassHeader title={meta.label} />
 
       {loading && files.length === 0 && !error ? (
         <>

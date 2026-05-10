@@ -22,6 +22,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useLanguage } from "@/context/LanguageContext";
@@ -229,30 +230,22 @@ export default function CreatePostScreen() {
       behavior="padding"
       keyboardVerticalOffset={0}
     >
-      <View
-        style={[
-          styles.header,
-          { paddingTop: insets.top + 4, backgroundColor: colors.surface, borderBottomColor: colors.border },
-        ]}
-      >
-        <TouchableOpacity onPress={() => router.back()} style={styles.cancelBtn} hitSlop={12}>
-          <Ionicons name="close" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <View style={{ flex: 1 }} />
-        <Animated.View style={{ transform: [{ scale: postBtnScale }] }}>
-          <TouchableOpacity
-            style={[
-              styles.postBtn,
-              { backgroundColor: colors.accent, opacity: isOverLimit || (!content.trim() && images.length === 0) ? 0.5 : 1 },
-            ]}
-            onPress={handlePost}
-            disabled={isOverLimit}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.postBtnText}>Post</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
+      <GlassHeader
+        title="New Post"
+        onBack={() => router.back()}
+        right={
+          <Animated.View style={{ transform: [{ scale: postBtnScale }] }}>
+            <TouchableOpacity
+              style={[styles.postBtn, { backgroundColor: colors.accent, opacity: isOverLimit || (!content.trim() && images.length === 0) ? 0.5 : 1 }]}
+              onPress={handlePost}
+              disabled={isOverLimit}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.postBtnText}>Post</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        }
+      />
 
       <ScrollView
         contentContainerStyle={styles.body}

@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { PostDetailSkeleton } from "@/components/ui/Skeleton";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -351,11 +352,7 @@ export default function PostShortLinkScreen() {
 
   if (loading) return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color={colors.text} /></TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Post</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <GlassHeader title="Post" />
       <PostDetailSkeleton />
     </View>
   );
@@ -424,11 +421,14 @@ export default function PostShortLinkScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={8}><Ionicons name="arrow-back" size={24} color={colors.text} /></TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>{post.post_type === "article" ? "Article" : "Post"}</Text>
-        <TouchableOpacity onPress={() => setMenuVisible(true)} hitSlop={8}><Ionicons name="ellipsis-horizontal" size={22} color={colors.text} /></TouchableOpacity>
-      </View>
+      <GlassHeader
+        title={post.post_type === "article" ? "Article" : "Post"}
+        right={
+          <TouchableOpacity onPress={() => setMenuVisible(true)} hitSlop={8}>
+            <Ionicons name="ellipsis-horizontal" size={22} color={colors.text} />
+          </TouchableOpacity>
+        }
+      />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 52 : 0}>
         <FlatList

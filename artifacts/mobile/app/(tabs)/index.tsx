@@ -14,6 +14,8 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
 import { Redirect, router, useFocusEffect, useNavigation, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -511,7 +513,7 @@ type ChatTabKey = "all" | "unread" | "personal" | "groups" | "channels";
  * full route width as usual.
  */
 function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { user, profile, linkedAccounts, switchAccount } = useAuth();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
@@ -1063,9 +1065,14 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
       <View
         style={[
           styles.header,
-          { paddingTop: insets.top + 8, backgroundColor: colors.background },
+          { paddingTop: insets.top + 8 },
         ]}
       >
+        {Platform.OS === "ios" ? (
+          <BlurView intensity={80} tint={isDark ? "systemChromeMaterialDark" : "systemChromeMaterialLight"} style={[StyleSheet.absoluteFill, { zIndex: 0 }]} />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, opacity: 0.96, zIndex: 0 }]} />
+        )}
         {/* Account avatar stack — left side */}
         {(() => {
           const others = linkedAccounts.filter(a => a.userId !== user?.id);
@@ -1144,10 +1151,10 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
 
       {!panelMode && <HomeBanner />}
 
-      <View style={[styles.searchWrap, { backgroundColor: colors.background }]}>
+      <View style={styles.searchWrap}>
         <View style={[
           styles.searchBox,
-          { backgroundColor: colors.backgroundSecondary },
+          { backgroundColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.06)", borderWidth: StyleSheet.hairlineWidth, borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)" },
         ]}>
           <Ionicons
             name="search-outline"

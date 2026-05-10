@@ -12,6 +12,9 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassHeader } from "@/components/ui/GlassHeader";
+import { GlassCard } from "@/components/ui/GlassCard";
+import { GLASS } from "@/constants/glass";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -159,25 +162,18 @@ export default function ChatSettingsScreen() {
   }
 
   return (
+    <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
+      <GlassHeader title="Chat Settings" />
     <ScrollView
-      style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 48 }}
+      contentContainerStyle={{ paddingBottom: insets.bottom + 48, paddingTop: 8 }}
       showsVerticalScrollIndicator={false}
     >
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Chat Settings</Text>
-        <View style={{ width: 24 }} />
-      </View>
 
       {/* ── APPEARANCE ─────────────────────────────── */}
       <Section title="APPEARANCE" />
 
       {/* Bubble Style */}
-      <View style={[styles.card, { backgroundColor: colors.surface, marginTop: 10 }]}>
+      <GlassCard style={[styles.card, { marginTop: 10 }]} variant="medium">
         <View style={styles.cardHeader}>
           <View style={[styles.iconBadge, { backgroundColor: "#AF52DE" }]}>
             <Ionicons name="chatbubble" size={16} color="#fff" />
@@ -203,10 +199,10 @@ export default function ChatSettingsScreen() {
             </TouchableOpacity>
           ))}
         </View>
-      </View>
+      </GlassCard>
 
       {/* Font Size */}
-      <View style={[styles.card, { backgroundColor: colors.surface, marginTop: 10 }]}>
+      <GlassCard style={[styles.card, { marginTop: 10 }]} variant="medium">
         <View style={styles.cardHeader}>
           <View style={[styles.iconBadge, { backgroundColor: "#FF9500" }]}>
             <Ionicons name="text" size={16} color="#fff" />
@@ -233,11 +229,11 @@ export default function ChatSettingsScreen() {
             </TouchableOpacity>
           ))}
         </View>
-      </View>
+      </GlassCard>
 
       {/* ── MESSAGES ─────────────────────────────────── */}
       <Section title="MESSAGES" />
-      <View style={[styles.group, { backgroundColor: colors.surface }]}>
+      <GlassCard style={styles.group} variant="medium">
         <ToggleRow icon="volume-high" iconColor="#007AFF" label="Sound Effects" desc="Play sounds for sent and received messages" field="sounds_enabled" />
         <Separator />
         <ToggleRow icon="checkmark-done" iconColor="#34C759" label="Read Receipts" desc="Let others see when you've read their messages" field="read_receipts" />
@@ -249,11 +245,11 @@ export default function ChatSettingsScreen() {
             <ToggleRow icon="return-down-back" iconColor="#64748B" label="Enter Key to Send" desc="Use Enter to send instead of adding a new line" field="enter_to_send" />
           </>
         )}
-      </View>
+      </GlassCard>
 
       {/* ── MEDIA ──────────────────────────────────── */}
       <Section title="MEDIA" />
-      <View style={[styles.group, { backgroundColor: colors.surface }]}>
+      <GlassCard style={styles.group} variant="medium">
         <ToggleRow icon="cloud-download" iconColor="#007AFF" label="Auto-Download Media" desc="Automatically download photos and videos" field="auto_download" />
         <Separator />
         {/* Media Quality picker */}
@@ -283,19 +279,19 @@ export default function ChatSettingsScreen() {
             <ToggleRow icon="download" iconColor="#34C759" label="Save to Gallery" desc="Auto-save received photos and videos to your camera roll" field="save_to_gallery" />
           </>
         )}
-      </View>
+      </GlassCard>
 
       {/* ── SECURITY ─────────────────────────────── */}
       <Section title="SECURITY" />
-      <View style={[styles.group, { backgroundColor: colors.surface }]}>
+      <GlassCard style={styles.group} variant="medium">
         <ToggleRow icon="lock-closed" iconColor="#FF3B30" label="Chat Lock" desc="Require Face ID / fingerprint to open chats" field="chat_lock" />
         <Separator />
         <ToggleRow icon="archive" iconColor="#FF9500" label="Archive on Delete" desc="Move messages to archive instead of deleting" field="archive_on_delete" />
-      </View>
+      </GlassCard>
 
       {/* ── BACKUP ─────────────────────────────── */}
       <Section title="BACKUP" />
-      <View style={[styles.group, { backgroundColor: colors.surface }]}>
+      <GlassCard style={styles.group} variant="medium">
         <ToggleRow icon="cloud-upload" iconColor="#5856D6" label="Auto Chat Backup" desc="Automatically back up your chats to the cloud" field="chat_backup" />
         {prefs.chat_backup && (
           <>
@@ -314,13 +310,13 @@ export default function ChatSettingsScreen() {
             </TouchableOpacity>
           </>
         )}
-      </View>
+      </GlassCard>
 
       {/* ── DANGER ZONE ─────────────────────────── */}
       <Section title="DANGER ZONE" />
-      <View style={[styles.group, { backgroundColor: colors.surface }]}>
+      <GlassCard style={styles.group} variant="medium">
         <TouchableOpacity
-          style={[styles.row, { backgroundColor: colors.surface }]}
+          style={styles.row}
           activeOpacity={0.7}
           onPress={handleClearAllChats}
           disabled={clearing}
@@ -338,7 +334,7 @@ export default function ChatSettingsScreen() {
           </View>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
-      </View>
+      </GlassCard>
 
       {/* Info footer */}
       <View style={styles.footer}>
@@ -348,6 +344,7 @@ export default function ChatSettingsScreen() {
         </Text>
       </View>
     </ScrollView>
+    </View>
   );
 }
 

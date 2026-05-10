@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { ComingSoonView } from "@/components/ui/ComingSoonView";
 import Colors from "@/constants/colors";
 
@@ -92,15 +93,14 @@ export default function PayAndServicesScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Pay and Services</Text>
-        <TouchableOpacity hitSlop={12} onPress={() => router.push({ pathname: "/mini-programs/fee-details" as any, params: { service: "airtime", amount: "100", fee: "2", total: "102" } })}>
-          <Ionicons name="ellipsis-horizontal" size={22} color={colors.text} />
-        </TouchableOpacity>
-      </View>
+      <GlassHeader
+        title="Pay and Services"
+        right={
+          <TouchableOpacity hitSlop={12} onPress={() => router.push({ pathname: "/mini-programs/fee-details" as any, params: { service: "airtime", amount: "100", fee: "2", total: "102" } })}>
+            <Ionicons name="ellipsis-horizontal" size={22} color={colors.text} />
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
         <View style={[styles.topBanner, { backgroundColor: colors.accent }]}>

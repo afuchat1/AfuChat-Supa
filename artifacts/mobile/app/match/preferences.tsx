@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
@@ -64,13 +65,7 @@ export default function MatchPreferencesScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Match Preferences</Text>
-        {saving ? <ActivityIndicator size="small" color={colors.accent} /> : <View style={{ width: 24 }} />}
-      </View>
+      <GlassHeader title="Match Preferences" right={saving ? <ActivityIndicator size="small" color={colors.accent} /> : undefined} />
 
       {loading ? <View style={{ padding: 16, gap: 10 }}>{[1,2,3,4,5].map(i => <ListRowSkeleton key={i} />)}</View> : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>

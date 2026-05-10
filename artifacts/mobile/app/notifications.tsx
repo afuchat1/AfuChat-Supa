@@ -24,6 +24,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { clearBadge } from "@/lib/pushNotifications";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { preloadNotificationSound } from "@/lib/soundManager";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { NotificationSkeleton } from "@/components/ui/Skeleton";
@@ -652,40 +653,18 @@ export default function NotificationsScreen() {
     <View style={[st.root, { backgroundColor: colors.backgroundSecondary }]}>
       <OfflineBanner />
 
-      {/* Header */}
-      <View
-        style={[
-          st.header,
-          { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border },
-        ]}
-      >
-        <TouchableOpacity onPress={() => router.back()} style={st.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-
-        <View style={st.headerCenter}>
-          <View style={st.headerTitleRow}>
-            <Text style={[st.headerTitle, { color: colors.text }]}>Notifications</Text>
-            {unreadCount > 0 && (
-              <View style={[st.headerBadge, { backgroundColor: accent }]}>
-                <Text style={st.headerBadgeText}>{unreadCount > 99 ? "99+" : unreadCount}</Text>
-              </View>
-            )}
-          </View>
-          {unreadCount > 0 && (
-            <Text style={[st.unreadSub, { color: colors.textMuted }]}>
-              {unreadCount} unread
-            </Text>
-          )}
-        </View>
-
-        {unreadCount > 0 && (
-          <TouchableOpacity onPress={markAllRead} style={[st.readAllBtn, { backgroundColor: accent + "15", borderColor: accent + "40" }]}>
-            <Ionicons name="checkmark-done-outline" size={14} color={accent} />
-            <Text style={[st.readAllText, { color: accent }]}>Read all</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      <GlassHeader
+        title="Notifications"
+        subtitle={unreadCount > 0 ? `${unreadCount} unread` : undefined}
+        right={
+          unreadCount > 0 ? (
+            <TouchableOpacity onPress={markAllRead} style={[st.readAllBtn, { backgroundColor: accent + "15", borderColor: accent + "40" }]}>
+              <Ionicons name="checkmark-done-outline" size={14} color={accent} />
+              <Text style={[st.readAllText, { color: accent }]}>Read all</Text>
+            </TouchableOpacity>
+          ) : undefined
+        }
+      />
 
       {/* AfuChat accent line under header */}
       <View style={[st.accentLine, { backgroundColor: accent }]} />

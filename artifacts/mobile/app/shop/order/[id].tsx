@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { supabase } from "@/lib/supabase";
 import {
   ShopOrder,
@@ -251,12 +252,7 @@ export default function OrderDetailScreen() {
   if (loading) {
     return (
       <View style={[st.root, { backgroundColor: colors.backgroundSecondary }]}>
-        <View style={[st.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} style={st.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[st.headerTitle, { color: colors.text }]}>Order Detail</Text>
-        </View>
+        <GlassHeader title="Order Detail" />
         <ActivityIndicator color={BRAND} style={{ marginTop: 60 }} />
       </View>
     );
@@ -284,23 +280,16 @@ export default function OrderDetailScreen() {
 
   return (
     <View style={[st.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View style={[st.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={st.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
-        </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <Text style={[st.headerTitle, { color: colors.text }]} numberOfLines={1}>
-            {order.shop?.name || "Order"}
-          </Text>
-          <Text style={[{ color: colors.textMuted, fontSize: 11, fontFamily: "Inter_400Regular" }]}>
-            #{order.id.slice(0, 8).toUpperCase()}
-          </Text>
-        </View>
-        <View style={[st.statusChip, { backgroundColor: statusMeta.color + "15" }]}>
-          <Ionicons name={statusMeta.icon as any} size={13} color={statusMeta.color} />
-          <Text style={{ color: statusMeta.color, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>{statusMeta.label}</Text>
-        </View>
-      </View>
+      <GlassHeader
+        title={order.shop?.name || "Order"}
+        subtitle={`#${order.id.slice(0, 8).toUpperCase()}`}
+        right={
+          <View style={[st.statusChip, { backgroundColor: statusMeta.color + "15" }]}>
+            <Ionicons name={statusMeta.icon as any} size={13} color={statusMeta.color} />
+            <Text style={{ color: statusMeta.color, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>{statusMeta.label}</Text>
+          </View>
+        }
+      />
 
       {/* Tab bar */}
       <View style={[st.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>

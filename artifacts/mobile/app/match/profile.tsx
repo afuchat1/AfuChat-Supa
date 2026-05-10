@@ -22,6 +22,7 @@ import * as ImagePicker from "expo-image-picker";
 import { supabase } from "@/lib/supabase";
 import { uploadToStorage } from "@/lib/mediaUpload";
 import { useAuth } from "@/context/AuthContext";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { useTheme } from "@/hooks/useTheme";
 import { ProfileSkeleton } from "@/components/ui/Skeleton";
 import { showAlert } from "@/lib/alert";
@@ -245,15 +246,14 @@ export default function MatchProfileEditScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Edit Dating Profile</Text>
-        <TouchableOpacity onPress={save} disabled={saving}>
-          {saving ? <ActivityIndicator size="small" color={BRAND} /> : <Text style={[styles.saveBtn, { color: BRAND }]}>Save</Text>}
-        </TouchableOpacity>
-      </View>
+      <GlassHeader
+        title="Edit Dating Profile"
+        right={
+          <TouchableOpacity onPress={save} disabled={saving}>
+            {saving ? <ActivityIndicator size="small" color={BRAND} /> : <Text style={[styles.saveBtn, { color: BRAND }]}>Save</Text>}
+          </TouchableOpacity>
+        }
+      />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView

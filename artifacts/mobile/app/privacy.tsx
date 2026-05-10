@@ -11,6 +11,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 
 const LAST_UPDATED = "April 21, 2026";
 
@@ -83,13 +84,7 @@ export default function PrivacyScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/")}>
-          <Ionicons name={Platform.OS === "web" ? "arrow-back" : "close"} size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Privacy Policy</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <GlassHeader title="Privacy Policy" onBack={() => router.canGoBack() ? router.back() : router.replace("/")} />
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}>
         <Text style={[styles.pageTitle, { color: colors.text }]}>Privacy Policy</Text>

@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import * as Clipboard from "expo-clipboard";
 import { supabase } from "@/lib/supabase";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
@@ -346,15 +347,14 @@ export default function ReferralScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
       {/* ── Header ── */}
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Referral Rewards</Text>
-        <TouchableOpacity onPress={loadReferrals}>
-          <Ionicons name="refresh-outline" size={20} color={colors.textMuted} />
-        </TouchableOpacity>
-      </View>
+      <GlassHeader
+        title="Referral Rewards"
+        right={
+          <TouchableOpacity onPress={loadReferrals} hitSlop={{ top: 8, left: 8, right: 8, bottom: 8 }}>
+            <Ionicons name="refresh-outline" size={20} color={colors.textMuted} />
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 36 }]} showsVerticalScrollIndicator={false}>
 

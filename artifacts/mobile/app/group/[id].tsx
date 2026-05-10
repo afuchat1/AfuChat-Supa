@@ -22,6 +22,7 @@ import * as ImagePicker from "expo-image-picker";
 
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { supabase } from "@/lib/supabase";
 import { uploadToStorage } from "@/lib/mediaUpload";
 import { Avatar } from "@/components/ui/Avatar";
@@ -442,13 +443,7 @@ export default function GroupManageScreen() {
   if (loading) {
     return (
       <View style={[s.root, { backgroundColor: colors.background }]}>
-        <View style={[s.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[s.headerTitle, { color: colors.text }]}>{typeLabel} Info</Text>
-          <View style={{ width: 24 }} />
-        </View>
+        <GlassHeader title={`${typeLabel} Info`} />
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator color={colors.accent} />
         </View>
@@ -459,13 +454,7 @@ export default function GroupManageScreen() {
   if (!group) {
     return (
       <View style={[s.root, { backgroundColor: colors.background }]}>
-        <View style={[s.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[s.headerTitle, { color: colors.text }]}>Not found</Text>
-          <View style={{ width: 24 }} />
-        </View>
+        <GlassHeader title="Not found" />
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <Text style={{ color: colors.textMuted }}>Group not found</Text>
         </View>
@@ -477,18 +466,7 @@ export default function GroupManageScreen() {
 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[s.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[s.headerTitle, { color: colors.text }]}>{typeLabel} Info</Text>
-        {saving ? (
-          <ActivityIndicator color={colors.accent} size="small" />
-        ) : (
-          <View style={{ width: 24 }} />
-        )}
-      </View>
+      <GlassHeader title={`${typeLabel} Info`} right={saving ? <ActivityIndicator color={colors.accent} size="small" /> : undefined} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}

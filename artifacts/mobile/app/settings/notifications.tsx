@@ -18,6 +18,9 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { getSoundMode, setSoundMode, playNotificationSound, SoundMode } from "@/lib/soundManager";
+import { GlassHeader } from "@/components/ui/GlassHeader";
+import { GlassCard } from "@/components/ui/GlassCard";
+import { GLASS } from "@/constants/glass";
 
 type Prefs = {
   push_enabled: boolean;
@@ -103,7 +106,7 @@ export default function NotificationSettingsScreen() {
 
   function PrefRow({ label, field, sub }: { label: string; field: keyof Prefs; sub?: string }) {
     return (
-      <View style={[st.row, { backgroundColor: colors.surface }]}>
+      <View style={st.row}>
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={[st.rowLabel, { color: colors.text }]}>{label}</Text>
           {sub && <Text style={[st.rowSub, { color: colors.textMuted }]}>{sub}</Text>}
@@ -119,24 +122,17 @@ export default function NotificationSettingsScreen() {
   }
 
   return (
-    <ScrollView
-      style={[st.root, { backgroundColor: colors.backgroundSecondary }]}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Header */}
-      <View style={[st.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[st.headerTitle, { color: colors.text }]}>Notifications</Text>
-        <View style={{ width: 24 }} />
-      </View>
-      <View style={[st.accentLine, { backgroundColor: accent }]} />
+    <View style={[st.root, { backgroundColor: colors.backgroundSecondary }]}>
+      <GlassHeader title="Notifications" />
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: insets.bottom + 32, paddingTop: 16 }}
+        showsVerticalScrollIndicator={false}
+      >
 
       {/* ── Notification Sound ─────────────────────────────────────── */}
-      <Text style={[st.section, { color: colors.textSecondary }]}>Notification Sound</Text>
-      <View style={[st.soundGrid, { backgroundColor: colors.surface }]}>
+      <Text style={[st.section, { color: colors.textMuted }]}>NOTIFICATION SOUND</Text>
+      <GlassCard style={{ marginHorizontal: 16, borderRadius: GLASS.radius.lg, overflow: "hidden" }} variant="medium">
+      <View style={st.soundGrid}>
         {SOUND_OPTIONS.map((opt) => {
           const active = soundMode === opt.value;
           return (
@@ -163,9 +159,11 @@ export default function NotificationSettingsScreen() {
           );
         })}
       </View>
+      </GlassCard>
 
       {/* Test sound + system settings */}
-      <View style={[st.soundActions, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <GlassCard style={{ marginHorizontal: 16, borderRadius: GLASS.radius.md, overflow: "hidden" }} variant="subtle" noShadow>
+      <View style={st.soundActions}>
         <TouchableOpacity
           style={[st.testBtn, { backgroundColor: accent + "15", borderColor: accent + "50" }]}
           onPress={testSound}
@@ -189,24 +187,30 @@ export default function NotificationSettingsScreen() {
           </Text>
         </TouchableOpacity>
       </View>
+      </GlassCard>
 
       {/* ── Push Notification Prefs ───────────────────────────────── */}
-      <Text style={[st.section, { color: colors.textSecondary }]}>Push Notifications</Text>
-      <PrefRow label="Enable Push Notifications" field="push_enabled" sub="Master toggle for all push alerts" />
-      <PrefRow label="Messages"      field="push_messages" sub="Chat messages from your contacts" />
-      <PrefRow label="Likes"         field="push_likes"    sub="When someone likes your post" />
-      <PrefRow label="New Followers" field="push_follows"  sub="When someone starts following you" />
-      <PrefRow label="Gifts"         field="push_gifts"    sub="When someone sends you a gift" />
-      <PrefRow label="Mentions"      field="push_mentions" sub="When you're mentioned in a post" />
-      <PrefRow label="Replies"       field="push_replies"  sub="When someone replies to your post" />
+      <Text style={[st.section, { color: colors.textMuted }]}>PUSH NOTIFICATIONS</Text>
+      <GlassCard style={{ marginHorizontal: 16, borderRadius: GLASS.radius.lg, overflow: "hidden" }} variant="medium">
+        <PrefRow label="Enable Push Notifications" field="push_enabled" sub="Master toggle for all push alerts" />
+        <PrefRow label="Messages"      field="push_messages" sub="Chat messages from your contacts" />
+        <PrefRow label="Likes"         field="push_likes"    sub="When someone likes your post" />
+        <PrefRow label="New Followers" field="push_follows"  sub="When someone starts following you" />
+        <PrefRow label="Gifts"         field="push_gifts"    sub="When someone sends you a gift" />
+        <PrefRow label="Mentions"      field="push_mentions" sub="When you're mentioned in a post" />
+        <PrefRow label="Replies"       field="push_replies"  sub="When someone replies to your post" />
+      </GlassCard>
 
       {/* ── Quiet Hours ───────────────────────────────────────────── */}
-      <Text style={[st.section, { color: colors.textSecondary }]}>Quiet Hours</Text>
-      <PrefRow label="Enable Quiet Hours" field="quiet_hours_enabled" sub="Silence notifications 10 PM – 8 AM" />
+      <Text style={[st.section, { color: colors.textMuted }]}>QUIET HOURS</Text>
+      <GlassCard style={{ marginHorizontal: 16, borderRadius: GLASS.radius.lg, overflow: "hidden" }} variant="medium">
+        <PrefRow label="Enable Quiet Hours" field="quiet_hours_enabled" sub="Silence notifications 10 PM – 8 AM" />
+      </GlassCard>
 
       {/* ── Interactive Actions Info ──────────────────────────────── */}
-      <Text style={[st.section, { color: colors.textSecondary }]}>Quick Actions</Text>
-      <View style={[st.infoCard, { backgroundColor: colors.surface, borderColor: accent + "30" }]}>
+      <Text style={[st.section, { color: colors.textMuted }]}>QUICK ACTIONS</Text>
+      <GlassCard style={{ marginHorizontal: 16, borderRadius: GLASS.radius.lg, overflow: "hidden", padding: 14 }} variant="subtle" noShadow>
+      <View style={[st.infoCard, { borderColor: accent + "30" }]}>
         <View style={[st.infoIconWrap, { backgroundColor: accent + "15" }]}>
           <Ionicons name="flash" size={20} color={accent} />
         </View>
@@ -224,8 +228,10 @@ export default function NotificationSettingsScreen() {
           </View>
         </View>
       </View>
+      </GlassCard>
 
     </ScrollView>
+    </View>
   );
 }
 

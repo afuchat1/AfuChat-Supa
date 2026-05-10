@@ -3,12 +3,12 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { router } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
@@ -16,78 +16,31 @@ import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
-import { Separator } from "@/components/ui/Separator";
+import { GlassHeader } from "@/components/ui/GlassHeader";
+import { GlassMenuSection, GlassMenuItem, GlassMenuSeparator } from "@/components/ui/GlassMenuItem";
 
-// ─── Theme labels/icons ───────────────────────────────────────────────────────
+// ─── Theme helpers ────────────────────────────────────────────────────────────
 const THEME_LABELS: Record<string, string> = {
-  dark: "Dark",
-  light: "Light",
-  system: "System",
+  dark: "Dark", light: "Light", system: "System",
 };
 const THEME_ICONS: Record<string, React.ComponentProps<typeof Ionicons>["name"]> = {
-  dark: "moon",
-  light: "sunny",
-  system: "phone-portrait-outline",
+  dark: "moon", light: "sunny", system: "phone-portrait-outline",
 };
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-type MenuItemProps = {
-  icon: React.ComponentProps<typeof Ionicons>["name"];
-  iconBg: string;
-  label: string;
-  value?: string;
-  onPress: () => void;
-  danger?: boolean;
+const THEME_GRADIENTS: Record<string, [string, string]> = {
+  dark:   ["#1C1C2E", "#2D2D3E"],
+  light:  ["#F5C542", "#F5A623"],
+  system: ["#636366", "#48484A"],
 };
-
-function MenuItem({ icon, iconBg, label, value, onPress, danger }: MenuItemProps) {
-  const { colors } = useTheme();
-  return (
-    <TouchableOpacity
-      style={[styles.item, { backgroundColor: colors.surface }]}
-      onPress={() => { Haptics.selectionAsync(); onPress(); }}
-      activeOpacity={0.7}
-    >
-      <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
-        <Ionicons name={icon} size={18} color="#fff" />
-      </View>
-      <Text style={[styles.label, { flex: 1, color: danger ? "#FF3B30" : colors.text }]}>
-        {label}
-      </Text>
-      <View style={styles.right}>
-        {value ? (
-          <Text style={[styles.value, { color: colors.textMuted }]}>{value}</Text>
-        ) : null}
-        {!danger && (
-          <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
-        )}
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  const { colors } = useTheme();
-  return (
-    <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{title}</Text>
-      <View style={[styles.sectionBody, { borderRadius: 14, overflow: "hidden" }]}>
-        {children}
-      </View>
-    </View>
-  );
-}
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function SettingsScreen() {
-  const { colors, themeMode, setThemeMode } = useTheme();
+  const { colors, isDark, themeMode, setThemeMode } = useTheme();
   const { langLabel } = useLanguage();
   const { signOut } = useAuth();
   const insets = useSafeAreaInsets();
 
   function cycleTheme() {
-    const next =
-      themeMode === "dark" ? "light" : themeMode === "light" ? "system" : "dark";
+    const next = themeMode === "dark" ? "light" : themeMode === "light" ? "system" : "dark";
     Haptics.selectionAsync();
     setThemeMode(next);
   }
@@ -101,138 +54,119 @@ export default function SettingsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      {/* Header */}
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + 10,
-            backgroundColor: colors.surface,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => router.back()}
-          hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
-        >
-          <Ionicons name="chevron-back" size={26} color={colors.accent} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Settings</Text>
-        <View style={styles.backBtn} />
-      </View>
+      <GlassHeader title="Settings" />
 
       <ScrollView
-        contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 48 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Preferences ─────────────────────────────────────────────────── */}
-        <Section title="PREFERENCES">
-          <MenuItem
+        {/* ── PREFERENCES ─────────────────────────────────────────────── */}
+        <GlassMenuSection title="PREFERENCES">
+          <GlassMenuItem
             icon={THEME_ICONS[themeMode] ?? "phone-portrait-outline"}
-            iconBg="#1C1C1E"
+            iconBg={THEME_GRADIENTS[themeMode] ?? ["#636366", "#48484A"]}
             label="Appearance"
             value={THEME_LABELS[themeMode] ?? "System"}
             onPress={cycleTheme}
           />
-          <Separator indent={54} />
-          <MenuItem
+          <GlassMenuSeparator />
+          <GlassMenuItem
             icon="language-outline"
-            iconBg="#007AFF"
+            iconBg={["#007AFF", "#0055FF"]}
             label="Language"
             value={langLabel}
             onPress={() => router.push("/language-settings")}
           />
           {Platform.OS !== "web" && (
             <>
-              <Separator indent={54} />
-              <MenuItem
+              <GlassMenuSeparator />
+              <GlassMenuItem
                 icon="notifications-outline"
-                iconBg="#5856D6"
+                iconBg={["#BF5AF2", "#9B59B6"]}
                 label="Notifications"
                 onPress={() => router.push("/settings/notifications")}
               />
             </>
           )}
-          <Separator indent={54} />
-          <MenuItem
+          <GlassMenuSeparator />
+          <GlassMenuItem
             icon="chatbubbles-outline"
-            iconBg="#32D74B"
+            iconBg={["#32D74B", "#25A83A"]}
             label="Chats"
             onPress={() => router.push("/settings/chat")}
           />
-          <Separator indent={54} />
-          <MenuItem
+          <GlassMenuSeparator />
+          <GlassMenuItem
             icon="cloud-outline"
-            iconBg="#0A84FF"
+            iconBg={["#0A84FF", "#0060CC"]}
             label="Storage"
             onPress={() => router.push("/settings/storage")}
           />
           {Platform.OS !== "web" && (
             <>
-              <Separator indent={54} />
-              <MenuItem
+              <GlassMenuSeparator />
+              <GlassMenuItem
                 icon="cloud-download-outline"
-                iconBg="#5AC8FA"
+                iconBg={["#5AC8FA", "#3BA0D6"]}
                 label="Offline Videos"
                 onPress={() => router.push("/settings/offline-videos" as any)}
               />
             </>
           )}
-        </Section>
+        </GlassMenuSection>
 
-        {/* ── Privacy & Security ───────────────────────────────────────────── */}
-        <Section title="PRIVACY & SECURITY">
-          <MenuItem
+        {/* ── PRIVACY & SECURITY ──────────────────────────────────────── */}
+        <GlassMenuSection title="PRIVACY & SECURITY">
+          <GlassMenuItem
             icon="shield-checkmark-outline"
-            iconBg="#30D158"
+            iconBg={["#30D158", "#22A040"]}
             label="Privacy"
             onPress={() => router.push("/settings/privacy")}
           />
-          <Separator indent={54} />
-          <MenuItem
+          <GlassMenuSeparator />
+          <GlassMenuItem
             icon="lock-closed-outline"
-            iconBg="#FF3B30"
+            iconBg={["#FF3B30", "#CC2B22"]}
             label="Security & Data"
             onPress={() => router.push("/settings/security")}
           />
-          <Separator indent={54} />
-          <MenuItem
+          <GlassMenuSeparator />
+          <GlassMenuItem
             icon="link-outline"
-            iconBg="#5856D6"
+            iconBg={["#5856D6", "#3D3BAA"]}
             label="Linked Accounts"
             onPress={() => router.push("/settings/oauth-providers")}
           />
-        </Section>
+        </GlassMenuSection>
 
-        {/* ── Help & About ─────────────────────────────────────────────────── */}
-        <Section title="HELP & ABOUT">
-          <MenuItem
+        {/* ── HELP & ABOUT ─────────────────────────────────────────────── */}
+        <GlassMenuSection title="HELP & ABOUT">
+          <GlassMenuItem
             icon="help-buoy-outline"
-            iconBg="#5856D6"
+            iconBg={["#5856D6", "#3D3BAA"]}
             label="Support Center"
             onPress={() => router.push("/support" as any)}
           />
-          <Separator indent={54} />
-          <MenuItem
+          <GlassMenuSeparator />
+          <GlassMenuItem
             icon="information-circle-outline"
-            iconBg="#007AFF"
+            iconBg={["#007AFF", "#0055FF"]}
             label="About AfuChat"
             onPress={() => router.push("/about" as any)}
           />
-        </Section>
+        </GlassMenuSection>
 
-        {/* ── Account ──────────────────────────────────────────────────────── */}
-        <Section title="ACCOUNT">
-          <MenuItem
+        {/* ── ACCOUNT ──────────────────────────────────────────────────── */}
+        <GlassMenuSection title="ACCOUNT">
+          <GlassMenuItem
             icon="log-out-outline"
-            iconBg="#FF3B30"
+            iconBg={["#FF3B30", "#CC2B22"]}
             label="Sign Out"
-            onPress={handleSignOut}
             danger
+            noChevron
+            onPress={handleSignOut}
           />
-        </Section>
+        </GlassMenuSection>
       </ScrollView>
     </View>
   );
@@ -241,41 +175,9 @@ export default function SettingsScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    paddingHorizontal: 8,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+  body: {
+    gap: 28,
+    paddingTop: 24,
+    paddingHorizontal: 16,
   },
-  backBtn: { width: 44, alignItems: "center" },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  body: { gap: 0, paddingTop: 24, paddingHorizontal: 16 },
-  section: { marginBottom: 32 },
-  sectionTitle: {
-    fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: 0.6,
-    marginBottom: 8,
-    paddingLeft: 4,
-  },
-  sectionBody: { gap: 0 },
-  item: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    gap: 14,
-  },
-  iconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  label: { fontSize: 16, fontFamily: "Inter_400Regular" },
-  right: { flexDirection: "row", alignItems: "center", gap: 6 },
-  value: { fontSize: 14, fontFamily: "Inter_400Regular" },
 });

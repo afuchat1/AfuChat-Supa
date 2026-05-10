@@ -12,6 +12,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { GlassHeader } from "@/components/ui/GlassHeader";
+import { GlassCard } from "@/components/ui/GlassCard";
 
 const DATA_TYPES = [
   { id: "profile", icon: "person-circle" as const, iconBg: Colors.brand, label: "Profile Data", description: "Your display name, bio, settings, and account info" },
@@ -50,13 +52,7 @@ export default function PrivacyDownloadScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Download My Data</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <GlassHeader title="Download My Data" />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
         {requested ? (
@@ -74,7 +70,8 @@ export default function PrivacyDownloadScreen() {
           </View>
         ) : (
           <>
-            <View style={[styles.infoCard, { backgroundColor: colors.surface, marginHorizontal: 16, marginTop: 20 }]}>
+            <GlassCard style={{ marginHorizontal: 16, marginTop: 20, borderRadius: 14, overflow: "hidden" }} variant="subtle" noShadow>
+            <View style={styles.infoCard}>
               <Ionicons name="shield-checkmark" size={22} color={colors.accent} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.infoTitle, { color: colors.text }]}>Your data is yours</Text>
@@ -83,9 +80,10 @@ export default function PrivacyDownloadScreen() {
                 </Text>
               </View>
             </View>
+            </GlassCard>
 
             <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>SELECT DATA TO INCLUDE</Text>
-            <View style={styles.group}>
+            <GlassCard style={styles.group} variant="medium">
               {DATA_TYPES.map((item, i) => {
                 const isSelected = selected.has(item.id);
                 return (
@@ -110,7 +108,7 @@ export default function PrivacyDownloadScreen() {
                   </View>
                 );
               })}
-            </View>
+            </GlassCard>
 
             <Text style={[styles.hint, { color: colors.textMuted }]}>
               Your data will be compiled into a ZIP file sent to your registered email address. This may take up to 48 hours.

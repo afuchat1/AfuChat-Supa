@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { MarketplaceCardSkeleton } from "@/components/ui/Skeleton";
 import { supabase } from "@/lib/supabase";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
@@ -321,18 +322,17 @@ export default function GiftMarketplaceScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Gift Marketplace</Text>
-        <TouchableOpacity onPress={() => router.push("/wallet")}>
-          <View style={styles.acoinBadge}>
-            <Ionicons name="diamond" size={14} color="#fff" />
-            <Text style={styles.acoinText}>{profile?.acoin || 0}</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
+      <GlassHeader
+        title="Gift Marketplace"
+        right={
+          <TouchableOpacity onPress={() => router.push("/wallet")}>
+            <View style={styles.acoinBadge}>
+              <Ionicons name="diamond" size={14} color="#fff" />
+              <Text style={styles.acoinText}>{profile?.acoin || 0}</Text>
+            </View>
+          </TouchableOpacity>
+        }
+      />
 
       <View style={[styles.infoBanner, { backgroundColor: "rgba(255,149,0,0.08)" }]}>
         <Ionicons name="sparkles" size={16} color="#FF9500" />

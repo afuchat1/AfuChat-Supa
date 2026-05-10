@@ -19,6 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { uploadAvatarWithError, uploadToStorage } from "@/lib/mediaUpload";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -299,22 +300,21 @@ export default function EditProfileScreen() {
       style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}
       keyboardVerticalOffset={0}
     >
-      {/* ── Sticky header ── */}
-      <View style={[styles.header, { paddingTop: insets.top + 6, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()}>
-          <Text style={[styles.cancelText, { color: colors.text }]}>Cancel</Text>
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Edit Profile</Text>
-        <TouchableOpacity style={styles.headerBtn} onPress={save} disabled={saving}>
-          {saving ? (
-            <ActivityIndicator size="small" color={accent} />
-          ) : (
-            <View style={[styles.saveChip, { backgroundColor: accent }]}>
-              <Text style={styles.saveChipText}>Save</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
+      <GlassHeader
+        title="Edit Profile"
+        onBack={() => router.back()}
+        right={
+          <TouchableOpacity onPress={save} disabled={saving}>
+            {saving ? (
+              <ActivityIndicator size="small" color={accent} />
+            ) : (
+              <View style={[styles.saveChip, { backgroundColor: accent }]}>
+                <Text style={styles.saveChipText}>Save</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView
         contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 40 }]}

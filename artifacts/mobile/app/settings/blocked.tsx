@@ -18,6 +18,7 @@ import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { ContactRowSkeleton } from "@/components/ui/Skeleton";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 
 type BlockedItem = {
   id: string;
@@ -57,11 +58,7 @@ export default function BlockedUsersScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color={colors.text} /></TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Blocked Users</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <GlassHeader title="Blocked Users" />
 
       {loading ? <View style={{ padding: 8 }}>{[1,2,3,4].map(i => <ContactRowSkeleton key={i} />)}</View> : (
         <FlatList

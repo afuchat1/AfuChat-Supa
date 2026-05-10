@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { RichText } from "@/components/ui/RichText";
@@ -427,20 +428,15 @@ export default function SavedScreen() {
 
   return (
     <View style={[st.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View style={[st.header, { paddingTop: insets.top + 6, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="chevron-back" size={26} color={colors.text} />
-        </TouchableOpacity>
-        <View>
-          <Text style={[st.headerTitle, { color: colors.text }]}>Saved</Text>
-          {!loading && totalCount > 0 && (
-            <Text style={[st.headerSub, { color: colors.textMuted }]}>{totalCount} item{totalCount !== 1 ? "s" : ""}</Text>
-          )}
-        </View>
-        <TouchableOpacity onPress={() => router.push("/collections")} hitSlop={12}>
-          <Ionicons name="add-circle-outline" size={24} color={colors.accent} />
-        </TouchableOpacity>
-      </View>
+      <GlassHeader
+        title="Saved"
+        subtitle={!loading && totalCount > 0 ? `${totalCount} item${totalCount !== 1 ? "s" : ""}` : undefined}
+        right={
+          <TouchableOpacity onPress={() => router.push("/collections")} hitSlop={12}>
+            <Ionicons name="add-circle-outline" size={24} color={colors.accent} />
+          </TouchableOpacity>
+        }
+      />
 
       <View style={[st.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.tabBarInner}>

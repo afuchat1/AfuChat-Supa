@@ -16,6 +16,8 @@ import { useTheme } from "@/hooks/useTheme";
 import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { GlassHeader } from "@/components/ui/GlassHeader";
+import { GlassCard } from "@/components/ui/GlassCard";
 
 type PrivacyLevel = "everyone" | "followers" | "nobody";
 
@@ -94,13 +96,7 @@ export default function PrivacyInteractionsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Reactions & Tags</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <GlassHeader title="Reactions & Tags" />
       {loading ? <View style={{ padding: 16, gap: 10 }}>{[1,2,3,4,5].map(i => <ListRowSkeleton key={i} />)}</View> : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>INTERACTIONS</Text>

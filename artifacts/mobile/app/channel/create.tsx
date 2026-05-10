@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "@/lib/haptics";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 
 import Colors from "@/constants/colors";
 import { useTheme } from "@/hooks/useTheme";
@@ -161,30 +162,19 @@ export default function CreateChannelScreen() {
       style={[styles.root, { backgroundColor: colors.background }]}
       behavior="padding"
     >
-      <View
-        style={[
-          styles.header,
-          { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border },
-        ]}
-      >
-        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>New Channel</Text>
-        <TouchableOpacity
-          onPress={createChannel}
-          disabled={creating || !channelName.trim()}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          {creating ? (
-            <ActivityIndicator color={colors.accent} size="small" />
-          ) : (
-            <Ionicons
-              name="checkmark"
-              size={24}
-              color={channelName.trim() ? colors.accent : colors.textMuted}
-            />
-          )}
+      <GlassHeader
+        title="New Channel"
+        onBack={() => router.back()}
+        right={
+          <TouchableOpacity onPress={createChannel} disabled={creating || !channelName.trim()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            {creating ? (
+              <ActivityIndicator color={colors.accent} size="small" />
+            ) : (
+              <Ionicons name="checkmark" size={24} color={channelName.trim() ? colors.accent : colors.textMuted} />
+            )}
+          </TouchableOpacity>
+        }
+      />
         </TouchableOpacity>
       </View>
 

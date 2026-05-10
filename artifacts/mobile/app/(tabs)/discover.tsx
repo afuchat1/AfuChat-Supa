@@ -17,6 +17,7 @@ import {
   ViewToken,
   useWindowDimensions,
 } from "react-native";
+import { BlurView } from "expo-blur";
 import { ScrollView as GHScrollView } from "react-native-gesture-handler";
 import { TabSwipeContext } from "@/context/TabSwipeContext";
 import { Image as ExpoImage } from "expo-image";
@@ -624,7 +625,7 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
 export default function DiscoverScreen() {
   "use no memo";
   const { horizontalScrollActive } = React.useContext(TabSwipeContext);
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
@@ -1561,11 +1562,21 @@ export default function DiscoverScreen() {
         style={[
           styles.headerBlock,
           {
-            backgroundColor: colors.background,
             transform: [{ translateY: headerOffset }],
           },
         ]}
       >
+        {/* Glass background for header */}
+        {Platform.OS === "ios" ? (
+          <BlurView
+            intensity={80}
+            tint={isDark ? "systemChromeMaterialDark" : "systemChromeMaterialLight"}
+            style={[StyleSheet.absoluteFill, { zIndex: 0 }]}
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? "rgba(10,10,10,0.95)" : "rgba(255,255,255,0.95)", zIndex: 0 }]} />
+        )}
+
         {/* Tab switcher — YouTube-style underline tabs */}
         <View
           style={[
@@ -1891,6 +1902,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 20,
+    overflow: "hidden",
   },
   header: {
     flexDirection: "row",

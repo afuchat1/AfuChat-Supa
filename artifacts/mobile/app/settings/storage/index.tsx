@@ -26,6 +26,7 @@ import { clearMediaCache } from "@/lib/storage/mediaCache";
 import { clearAllOfflineVideos } from "@/lib/videoCache";
 import { clearTempCache } from "@/lib/storage/tempCache";
 import { Image as ExpoImage } from "expo-image";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -205,26 +206,7 @@ export default function StorageSettingsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + 10,
-            backgroundColor: colors.surface,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => router.back()}
-          hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
-        >
-          <Ionicons name="chevron-back" size={26} color={colors.accent} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Storage</Text>
-        <View style={styles.backBtn} />
-      </View>
+      <GlassHeader title="Storage" />
 
       <ScrollView
         contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 40 }]}

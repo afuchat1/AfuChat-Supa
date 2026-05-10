@@ -9,7 +9,6 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
 import type { UserIdentity } from "@supabase/supabase-js";
@@ -18,34 +17,24 @@ import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
 import { GitHubLogo, XLogo, GitLabLogo } from "@/components/ui/OAuthLogos";
 import * as Haptics from "@/lib/haptics";
+import { GlassHeader } from "@/components/ui/GlassHeader";
+import { GlassCard } from "@/components/ui/GlassCard";
+import { GlassMenuSeparator } from "@/components/ui/GlassMenuItem";
+import { LinearGradient } from "expo-linear-gradient";
+import { GLASS } from "@/constants/glass";
 
 // ─── Provider config ──────────────────────────────────────────────────────────
 type Provider = {
   id: string;
   label: string;
-  iconBg: string;
+  iconGradient: [string, string];
   renderLogo: (isDark: boolean) => React.ReactNode;
 };
 
 const PROVIDERS: Provider[] = [
-  {
-    id: "github",
-    label: "GitHub",
-    iconBg: "#24292E",
-    renderLogo: () => <GitHubLogo size={18} color="#fff" />,
-  },
-  {
-    id: "twitter",
-    label: "X (Twitter)",
-    iconBg: "#000000",
-    renderLogo: () => <XLogo size={18} color="#fff" />,
-  },
-  {
-    id: "gitlab",
-    label: "GitLab",
-    iconBg: "#FC6D26",
-    renderLogo: () => <GitLabLogo size={18} />,
-  },
+  { id: "github",  label: "GitHub",      iconGradient: ["#24292E", "#404040"], renderLogo: () => <GitHubLogo size={18} color="#fff" /> },
+  { id: "twitter", label: "X (Twitter)", iconGradient: ["#1a1a1a", "#333333"], renderLogo: () => <XLogo size={18} color="#fff" /> },
+  { id: "gitlab",  label: "GitLab",      iconGradient: ["#FC6D26", "#E24329"], renderLogo: () => <GitLabLogo size={18} /> },
 ];
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -60,15 +49,11 @@ export default function OAuthProvidersScreen() {
   const fetchIdentities = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase.auth.getUserIdentities();
-    if (!error && data?.identities) {
-      setIdentities(data.identities);
-    }
+    if (!error && data?.identities) setIdentities(data.identities);
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    fetchIdentities();
-  }, [fetchIdentities]);
+  useEffect(() => { fetchIdentities(); }, [fetchIdentities]);
 
   async function handleConnect(providerId: string) {
     setActionLoading(providerId);
@@ -77,20 +62,9 @@ export default function OAuthProvidersScreen() {
       provider: providerId,
       options: { redirectTo: redirectUrl, skipBrowserRedirect: true },
     });
-    if (error) {
-      setActionLoading(null);
-      showAlert("Error", error.message);
-      return;
-    }
-    if (!data?.url) {
-      setActionLoading(null);
-      return;
-    }
-
-    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {
-      showInRecents: false,
-    });
-
+    if (error) { setActionLoading(null); showAlert("Error", error.message); return; }
+    if (!data?.url) { setActionLoading(null); return; }
+    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, { showInRecents: false });
     if (result.type === "success" && result.url) {
       try {
         const qIndex = result.url.indexOf("?");
@@ -103,80 +77,44 @@ export default function OAuthProvidersScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       await fetchIdentities();
     }
-
     setActionLoading(null);
   }
 
   function handleDisconnect(identity: UserIdentity) {
     if (identities.length <= 1) {
-      showAlert(
-        "Cannot Disconnect",
-        "You need at least one sign-in method. Add another one first."
-      );
+      showAlert("Cannot Disconnect", "You need at least one sign-in method. Add another one first.");
       return;
     }
-    const providerName =
-      PROVIDERS.find((p) => p.id === identity.provider)?.label ?? identity.provider;
-    showAlert(
-      `Disconnect ${providerName}?`,
-      `You won't be able to sign in with ${providerName} anymore.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Disconnect",
-          style: "destructive",
-          onPress: async () => {
-            setActionLoading(identity.provider);
-            const { error } = await supabase.auth.unlinkIdentity(identity);
-            if (error) {
-              showAlert("Error", error.message);
-            } else {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              await fetchIdentities();
-            }
-            setActionLoading(null);
-          },
+    const providerName = PROVIDERS.find((p) => p.id === identity.provider)?.label ?? identity.provider;
+    showAlert(`Disconnect ${providerName}?`, `You won't be able to sign in with ${providerName} anymore.`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Disconnect", style: "destructive",
+        onPress: async () => {
+          setActionLoading(identity.provider);
+          const { error } = await supabase.auth.unlinkIdentity(identity);
+          if (error) showAlert("Error", error.message);
+          else { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); await fetchIdentities(); }
+          setActionLoading(null);
         },
-      ]
-    );
+      },
+    ]);
   }
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      {/* Header */}
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + 8,
-            backgroundColor: colors.surface,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.headerBtn}
-          onPress={() => router.back()}
-          hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
-        >
-          <Ionicons name="chevron-back" size={26} color={colors.accent} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Linked Accounts</Text>
-        <View style={styles.headerBtn} />
-      </View>
+      <GlassHeader title="Linked Accounts" subtitle="Manage social sign-in methods" />
 
       <ScrollView
-        contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 48 }]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
-          SOCIAL SIGN-IN
-        </Text>
+        <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>SOCIAL SIGN-IN</Text>
 
-        <View style={[styles.section, { backgroundColor: colors.surface }]}>
+        <GlassCard style={{ borderRadius: GLASS.radius.lg, overflow: "hidden" }} variant="medium">
           {loading ? (
             <View style={styles.loadingRow}>
-              <ActivityIndicator color={colors.accent} />
+              <ActivityIndicator color={colors.accent} size="large" />
             </View>
           ) : (
             PROVIDERS.map((provider, index) => {
@@ -189,22 +127,19 @@ export default function OAuthProvidersScreen() {
                 <View key={provider.id}>
                   <View style={styles.row}>
                     {/* Icon */}
-                    <View style={[styles.iconWrap, { backgroundColor: provider.iconBg }]}>
+                    <LinearGradient
+                      colors={provider.iconGradient}
+                      start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }}
+                      style={styles.iconWrap}
+                    >
                       {provider.renderLogo(isDark)}
-                    </View>
+                    </LinearGradient>
 
                     {/* Label + status */}
                     <View style={styles.rowMeta}>
-                      <Text style={[styles.rowLabel, { color: colors.text }]}>
-                        {provider.label}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.rowStatus,
-                          { color: isConnected ? colors.accent : colors.textMuted },
-                        ]}
-                      >
-                        {isConnected ? "Connected" : "Not connected"}
+                      <Text style={[styles.rowLabel, { color: colors.text }]}>{provider.label}</Text>
+                      <Text style={[styles.rowStatus, { color: isConnected ? "#30D158" : colors.textMuted }]}>
+                        {isConnected ? "● Connected" : "Not connected"}
                       </Text>
                     </View>
 
@@ -218,33 +153,26 @@ export default function OAuthProvidersScreen() {
                         activeOpacity={0.7}
                         disabled={!!actionLoading}
                       >
-                        <Text style={styles.disconnectText}>Disconnect</Text>
+                        <Text style={styles.disconnectText}>Remove</Text>
                       </TouchableOpacity>
                     ) : (
                       <TouchableOpacity
-                        style={[styles.connectBtn, { backgroundColor: colors.accent }]}
+                        style={[styles.connectBtn, { borderColor: colors.accent + "40" }]}
                         onPress={() => handleConnect(provider.id)}
                         activeOpacity={0.7}
                         disabled={!!actionLoading}
                       >
-                        <Text style={styles.connectText}>Connect</Text>
+                        <Text style={[styles.connectText, { color: colors.accent }]}>Connect</Text>
                       </TouchableOpacity>
                     )}
                   </View>
 
-                  {!isLast && (
-                    <View
-                      style={[
-                        styles.sep,
-                        { backgroundColor: colors.border, marginLeft: 60 },
-                      ]}
-                    />
-                  )}
+                  {!isLast && <GlassMenuSeparator indent={62} />}
                 </View>
               );
             })
           )}
-        </View>
+        </GlassCard>
 
         <Text style={[styles.hint, { color: colors.textMuted }]}>
           Connected accounts let you sign in with that service.{"\n"}
@@ -258,75 +186,29 @@ export default function OAuthProvidersScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    paddingHorizontal: 8,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerBtn: { width: 44, alignItems: "center" },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  body: { paddingHorizontal: 16, paddingTop: 24, gap: 16 },
 
-  body: { paddingHorizontal: 16, paddingTop: 24, gap: 12 },
+  sectionLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", letterSpacing: 0.6, marginLeft: 4 },
 
-  sectionLabel: {
-    fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: 0.6,
-    marginLeft: 4,
-  },
+  loadingRow: { paddingVertical: 44, alignItems: "center" },
 
-  section: { borderRadius: 14, overflow: "hidden" },
-
-  loadingRow: { paddingVertical: 36, alignItems: "center" },
-
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    gap: 14,
-  },
-  iconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  row: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 16, gap: 14 },
+  iconWrap: { width: 38, height: 38, borderRadius: 11, alignItems: "center", justifyContent: "center" },
   rowMeta: { flex: 1, gap: 3 },
   rowLabel: { fontSize: 16, fontFamily: "Inter_400Regular" },
-  rowStatus: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  rowStatus: { fontSize: 12, fontFamily: "Inter_500Medium" },
 
   connectBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 8,
+    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10,
+    borderWidth: 1,
   },
-  connectText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#fff" },
+  connectText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
 
   disconnectBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#FF3B30",
+    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10,
+    borderWidth: 1, borderColor: "#FF3B30",
   },
-  disconnectText: {
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-    color: "#FF3B30",
-  },
+  disconnectText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#FF3B30" },
 
-  sep: { height: StyleSheet.hairlineWidth },
-
-  hint: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-    textAlign: "center",
-    lineHeight: 18,
-    paddingHorizontal: 8,
-  },
+  hint: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 18, paddingHorizontal: 8 },
 });

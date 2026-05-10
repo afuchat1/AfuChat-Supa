@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { sharePost, shareVideo } from "@/lib/share";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
@@ -167,15 +168,14 @@ export default function MyPostsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>My Posts</Text>
-        <TouchableOpacity onPress={() => router.push("/moments/create")}>
-          <Ionicons name="add-circle-outline" size={24} color={colors.accent} />
-        </TouchableOpacity>
-      </View>
+      <GlassHeader
+        title="My Posts"
+        right={
+          <TouchableOpacity onPress={() => router.push("/moments/create")} hitSlop={{ top: 8, left: 8, right: 8, bottom: 8 }}>
+            <Ionicons name="add-circle-outline" size={24} color={colors.accent} />
+          </TouchableOpacity>
+        }
+      />
 
       {loading ? (
         <View style={{ gap: 8, paddingVertical: 8 }}>{[1, 2, 3].map((i) => <PostSkeleton key={i} />)}</View>

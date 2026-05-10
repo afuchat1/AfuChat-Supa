@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import * as Haptics from "@/lib/haptics";
 
 const EMOJIS = ["🎸", "🌺", "🦋", "🍕", "🎨", "🚀", "🌈", "🎪"];
@@ -97,11 +98,7 @@ export default function MemoryMatchScreen() {
   if (gameOver) {
     return (
       <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-        <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color={colors.text} /></TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Memory Match</Text>
-          <View style={{ width: 24 }} />
-        </View>
+        <GlassHeader title="Memory Match" />
         <View style={styles.resultContainer}>
           <Text style={styles.resultStars}>{"⭐".repeat(stars)}</Text>
           <Text style={[styles.resultTitle, { color: colors.text }]}>Complete!</Text>
@@ -117,11 +114,7 @@ export default function MemoryMatchScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color={colors.text} /></TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Memory Match</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <GlassHeader title="Memory Match" />
 
       <View style={styles.statsRow}>
         <View style={[styles.statChip, { backgroundColor: colors.surface }]}>

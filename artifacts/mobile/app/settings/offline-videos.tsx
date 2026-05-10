@@ -14,6 +14,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import {
   getOfflineVideos,
   getOfflineCacheStats,
@@ -130,18 +131,7 @@ export default function OfflineVideosScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      {/* Header */}
-      <View style={[styles.header, {
-        paddingTop: insets.top + 10,
-        backgroundColor: colors.surface,
-        borderBottomColor: colors.border,
-      }]}>
-        <TouchableOpacity style={styles.headerSide} onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="chevron-back" size={26} color={accent} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Offline Videos</Text>
-        <View style={styles.headerSide} />
-      </View>
+      <GlassHeader title="Offline Videos" />
 
       {loading ? (
         <View style={styles.centerLoader}>

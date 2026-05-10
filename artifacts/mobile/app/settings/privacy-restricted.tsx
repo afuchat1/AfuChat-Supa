@@ -18,6 +18,8 @@ import { ContactRowSkeleton } from "@/components/ui/Skeleton";
 import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { GlassHeader } from "@/components/ui/GlassHeader";
+import { GlassCard } from "@/components/ui/GlassCard";
 
 type RestrictedUser = {
   id: string;
@@ -68,22 +70,19 @@ export default function PrivacyRestrictedScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Restricted Accounts</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <GlassHeader title="Restricted Accounts" />
 
-      <View style={[styles.infoCard, { backgroundColor: colors.surface, marginHorizontal: 16, marginTop: 16 }]}>
+      <GlassCard style={{ marginHorizontal: 16, marginTop: 16, borderRadius: 14, overflow: "hidden" }} variant="subtle" noShadow>
+      <View style={[styles.infoCard, { marginHorizontal: 0 }]}>
         <Ionicons name="information-circle" size={20} color={colors.accent} />
         <Text style={[styles.infoText, { color: colors.textSecondary }]}>
           Restricted accounts can still see your posts but their comments are only visible to them. They can't see when you're online or when you've read their messages.
         </Text>
       </View>
+      </GlassCard>
 
-      <View style={[styles.searchBar, { backgroundColor: colors.surface, marginHorizontal: 16, marginTop: 12 }]}>
+      <GlassCard style={{ marginHorizontal: 16, marginTop: 12, borderRadius: 12, overflow: "hidden" }} variant="subtle" noShadow>
+      <View style={[styles.searchBar, { marginHorizontal: 0 }]}>
         <Ionicons name="search" size={16} color={colors.textMuted} />
         <TextInput
           style={[styles.searchInput, { color: colors.text }]}
@@ -94,6 +93,7 @@ export default function PrivacyRestrictedScreen() {
           autoCapitalize="none"
         />
       </View>
+      </GlassCard>
 
       {loading ? (
         <View style={{ padding: 8, gap: 2 }}>{[1,2,3,4,5].map(i => <ContactRowSkeleton key={i} />)}</View>

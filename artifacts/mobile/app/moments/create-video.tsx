@@ -43,6 +43,7 @@ import * as FileSystem from "expo-file-system";
 import { Video, ResizeMode } from "expo-av";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { useTheme } from "@/hooks/useTheme";
 import * as Haptics from "@/lib/haptics";
 import { showAlert } from "@/lib/alert";
@@ -1539,13 +1540,7 @@ function WebPickerScreen({ onPick }: { onPick: () => void }) {
   const insets = useSafeAreaInsets();
   return (
     <View style={[{ flex: 1, backgroundColor: colors.background }]}>
-      <View style={[{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 14, flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
-          <Ionicons name="close" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={{ flex: 1, textAlign: "center", fontSize: 16, fontFamily: "Inter_600SemiBold", color: colors.text }}>New Video</Text>
-        <View style={{ width: 30 }} />
-      </View>
+      <GlassHeader title="New Video" />
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 16, padding: 32 }}>
         <View style={[{ width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center", backgroundColor: accent + "20" }]}>
           <Ionicons name="videocam" size={40} color={accent} />

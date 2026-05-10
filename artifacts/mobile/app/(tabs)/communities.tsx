@@ -17,6 +17,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { Avatar } from "@/components/ui/Avatar";
 import { showAlert } from "@/lib/alert";
 import { isOnline } from "@/lib/offlineStore";
@@ -231,18 +232,20 @@ export default function CommunitiesScreen() {
 
   return (
     <View style={[ss.root, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[ss.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <Text style={[ss.headerTitle, { color: colors.text }]}>Communities</Text>
-        <TouchableOpacity
-          style={[ss.createBtn, { backgroundColor: colors.accent }]}
-          onPress={() => router.push("/group/create" as any)}
-          hitSlop={8}
-        >
-          <Ionicons name="add" size={18} color="#fff" />
-          <Text style={ss.createBtnText}>New Group</Text>
-        </TouchableOpacity>
-      </View>
+      <GlassHeader
+        title="Communities"
+        showBack={false}
+        right={
+          <TouchableOpacity
+            style={[ss.createBtn, { backgroundColor: colors.accent }]}
+            onPress={() => router.push("/group/create" as any)}
+            hitSlop={8}
+          >
+            <Ionicons name="add" size={18} color="#fff" />
+            <Text style={ss.createBtnText}>New Group</Text>
+          </TouchableOpacity>
+        }
+      />
 
       {/* Tab bar */}
       <View style={[ss.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>

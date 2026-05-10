@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { showAlert } from "@/lib/alert";
 import { ListRowSkeleton } from "@/components/ui/Skeleton";
 
@@ -112,16 +113,7 @@ export default function MatchSettingsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <View style={styles.headerIcon}><Ionicons name="heart" size={14} color="#fff" /></View>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>AfuMatch Settings</Text>
-        </View>
-        <View style={{ width: 24 }} />
-      </View>
+      <GlassHeader title="AfuMatch Settings" />
 
       {loading ? (
         <View style={{ padding: 16, gap: 10 }}>{[1,2,3,4,5].map(i => <ListRowSkeleton key={i} />)}</View>

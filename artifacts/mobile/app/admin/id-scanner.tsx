@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { DesktopCameraFallback } from "@/components/desktop/DesktopCameraFallback";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -347,26 +348,14 @@ function IdScannerScreenMobile() {
   return (
     <View style={[st.root, { backgroundColor: colors.background }]}>
 
-      {/* ── Header ── */}
-      <View style={[
-        st.header,
-        { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border },
-      ]}>
-        <TouchableOpacity onPress={() => router.back()} style={st.backBtn}>
-          <Ionicons name="chevron-back" size={22} color={colors.text} />
-        </TouchableOpacity>
-        <View style={st.headerCenter}>
-          <Ionicons name="scan" size={18} color={BRAND} />
-          <Text style={[st.headerTitle, { color: colors.text }]}>ID Scanner</Text>
-        </View>
-        {record ? (
-          <TouchableOpacity style={st.headerAction} onPress={() => downloadJson(record)}>
+      <GlassHeader
+        title="ID Scanner"
+        right={record ? (
+          <TouchableOpacity onPress={() => downloadJson(record)} hitSlop={8}>
             <Ionicons name="download-outline" size={20} color={BRAND} />
           </TouchableOpacity>
-        ) : (
-          <View style={{ width: 40 }} />
-        )}
-      </View>
+        ) : undefined}
+      />
 
       {/* ── Scanner view ── */}
       {!scanned && (

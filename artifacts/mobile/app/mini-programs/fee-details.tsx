@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { SERVICE_FEES, SERVICE_LABELS, type ServiceType } from "@/lib/serviceTransactions";
 
 const FEE_ICON_MAP: Record<string, keyof typeof Ionicons.glyphMap> = {
@@ -39,13 +40,7 @@ export default function FeeDetailsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Fee Details</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <GlassHeader title="Fee Details" />
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
         {hasTransaction && (

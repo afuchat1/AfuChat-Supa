@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { showAlert } from "@/lib/alert";
@@ -138,24 +139,15 @@ export default function CreateGroupScreen() {
 
   return (
     <KeyboardAvoidingView style={[styles.root, { backgroundColor: colors.background }]} behavior="padding" keyboardVerticalOffset={0}>
-      <View
-        style={[
-          styles.header,
-          { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border },
-        ]}
-      >
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={[styles.cancelText, { color: colors.text }]}>Cancel</Text>
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>New Group</Text>
-        <TouchableOpacity onPress={createGroup} disabled={creating}>
-          {creating ? (
-            <ActivityIndicator color={colors.accent} />
-          ) : (
-            <Text style={[styles.createText, { color: colors.accent }]}>Create</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+      <GlassHeader
+        title="New Group"
+        onBack={() => router.back()}
+        right={
+          <TouchableOpacity onPress={createGroup} disabled={creating}>
+            {creating ? <ActivityIndicator size="small" color={colors.accent} /> : <Text style={[styles.createText, { color: colors.accent }]}>Create</Text>}
+          </TouchableOpacity>
+        }
+      />
 
       <View style={[styles.nameRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <View style={[styles.groupIconWrap, { backgroundColor: colors.inputBg }]}>

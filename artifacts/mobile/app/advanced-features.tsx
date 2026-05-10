@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "@/lib/haptics";
 import { useTheme } from "@/hooks/useTheme";
 import { useAdvancedFeatures, type ActivityStatus } from "@/context/AdvancedFeaturesContext";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { useChatPreferences, CHAT_THEME_COLORS, type ChatTheme } from "@/context/ChatPreferencesContext";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { useTier, TIER_COLORS, TIER_LABELS, type Tier } from "@/hooks/useTier";
@@ -212,15 +213,7 @@ export default function AdvancedFeaturesScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()} hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}>
-          <Ionicons name="chevron-back" size={26} color={accent} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Advanced Features</Text>
-        <View style={styles.headerBtn}>
-          {saving && <ActivityIndicator size="small" color={accent} />}
-        </View>
-      </View>
+      <GlassHeader title="Advanced Features" right={saving ? <ActivityIndicator size="small" color={accent} /> : undefined} />
 
       <ScrollView
         contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 40 }]}

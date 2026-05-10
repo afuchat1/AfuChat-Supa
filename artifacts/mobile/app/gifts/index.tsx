@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { notifyGiftReceived } from "@/lib/notifyUser";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useGiftPrices } from "@/hooks/useGiftPrices";
@@ -368,10 +369,9 @@ export default function GiftsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color={colors.text} /></TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>{isOwnProfile ? "My Gifts" : `${viewUserName || "User"}'s Gifts`}</Text>
-        {isOwnProfile ? (
+      <GlassHeader
+        title={isOwnProfile ? "My Gifts" : `${viewUserName || "User"}'s Gifts`}
+        right={isOwnProfile ? (
           <View style={{ flexDirection: "row", gap: 8 }}>
             <TouchableOpacity onPress={() => router.push("/gifts/marketplace")} style={styles.marketplaceBtn}>
               <Ionicons name="storefront" size={14} color="#FF9500" />
@@ -384,10 +384,8 @@ export default function GiftsScreen() {
               </View>
             </TouchableOpacity>
           </View>
-        ) : (
-          <View style={{ width: 24 }} />
-        )}
-      </View>
+        ) : undefined}
+      />
 
       <View style={[styles.statsBar, { backgroundColor: colors.surface }]}>
         <View style={styles.statItem}>

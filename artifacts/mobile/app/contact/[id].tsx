@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
@@ -596,20 +597,14 @@ export default function ContactProfileScreen() {
   return (
     <View style={[st.root, { backgroundColor: colors.background }]}>
 
-      {/* ── Fixed nav bar ─── */}
-      <View style={[st.navBar, { paddingTop: insets.top, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <TouchableOpacity style={st.navBtn} onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
-        </TouchableOpacity>
-
-        <Text style={[st.navTitle, { color: colors.text }]} numberOfLines={1}>
-          {profile?.handle ? `@${profile.handle}` : profile?.display_name || ""}
-        </Text>
-
-        <TouchableOpacity style={st.navBtn} onPress={showOptionsMenu} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="ellipsis-horizontal" size={22} color={colors.text} />
-        </TouchableOpacity>
-      </View>
+      <GlassHeader
+        title={profile?.handle ? `@${profile.handle}` : profile?.display_name || ""}
+        right={
+          <TouchableOpacity onPress={showOptionsMenu} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name="ellipsis-horizontal" size={22} color={colors.text} />
+          </TouchableOpacity>
+        }
+      />
 
       {/* ── Photos tab (default) ─── */}
       {activeTab === "photos" && (

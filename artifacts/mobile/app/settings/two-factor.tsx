@@ -14,12 +14,17 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import QRCode from "react-native-qrcode-svg";
+import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
 import { TwoFactorGate } from "@/components/ui/TwoFactorGate";
 import * as Haptics from "@/lib/haptics";
+import { GlassHeader } from "@/components/ui/GlassHeader";
+import { GlassCard } from "@/components/ui/GlassCard";
+import { GlassMenuSection, GlassMenuItem, GlassMenuSeparator } from "@/components/ui/GlassMenuItem";
+import { GLASS } from "@/constants/glass";
 
 // ─── Step machine ─────────────────────────────────────────────────────────────
 type Step =
@@ -181,46 +186,20 @@ export default function TwoFactorScreen() {
 
   // ─── Render helpers ──────────────────────────────────────────────────────────
   function renderHeader(title: string) {
+    const isSubStep =
+      step.id === "enroll-verify" ||
+      step.id === "enroll-qr" ||
+      step.id === "recovery-email" ||
+      step.id === "recovery-otp";
     return (
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + 8,
-            backgroundColor: colors.surface,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.headerBtn}
-          onPress={() => {
-            if (step.id === "enroll-verify" || step.id === "enroll-qr") {
-              loadStatus();
-            } else if (step.id === "recovery-email" || step.id === "recovery-otp") {
-              setStep({ id: "status", enrolled: false });
-            } else {
-              router.back();
-            }
-          }}
-          hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
-        >
-          <Ionicons
-            name={
-              step.id === "enroll-verify" ||
-              step.id === "enroll-qr" ||
-              step.id === "recovery-email" ||
-              step.id === "recovery-otp"
-                ? "chevron-back"
-                : "chevron-back"
-            }
-            size={26}
-            color={colors.accent}
-          />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>{title}</Text>
-        <View style={styles.headerBtn} />
-      </View>
+      <GlassHeader
+        title={title}
+        onBack={() => {
+          if (step.id === "enroll-verify" || step.id === "enroll-qr") loadStatus();
+          else if (step.id === "recovery-email" || step.id === "recovery-otp") setStep({ id: "status", enrolled: false });
+          else router.back();
+        }}
+      />
     );
   }
 
@@ -247,7 +226,7 @@ export default function TwoFactorScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Status card */}
-          <View style={[styles.statusCard, { backgroundColor: colors.surface }]}>
+          <GlassCard style={styles.statusCard} variant={enrolled ? "medium" : "subtle"}>
             <View
               style={[
                 styles.statusIcon,
@@ -272,13 +251,13 @@ export default function TwoFactorScreen() {
                 ? "Your account requires a verification code for sensitive changes."
                 : "Add an extra layer of security using an authenticator app."}
             </Text>
-          </View>
+          </GlassCard>
 
           {/* Actions */}
           {enrolled ? (
             <>
               <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>MANAGE</Text>
-              <View style={[styles.section, { backgroundColor: colors.surface }]}>
+              <GlassCard style={styles.section} variant="medium">
                 <TouchableOpacity
                   style={styles.row}
                   onPress={() => setShowDisableGate(true)}
@@ -287,21 +266,15 @@ export default function TwoFactorScreen() {
                     <Ionicons name="shield-off-outline" size={18} color="#fff" />
                   </View>
                   <View style={styles.rowMeta}>
-                    <Text style={[styles.rowLabel, { color: colors.text }]}>
-                      Disable Two-Factor Auth
-                    </Text>
-                    <Text style={[styles.rowSub, { color: colors.textMuted }]}>
-                      Requires your authenticator code
-                    </Text>
+                    <Text style={[styles.rowLabel, { color: colors.text }]}>Disable Two-Factor Auth</Text>
+                    <Text style={[styles.rowSub, { color: colors.textMuted }]}>Requires your authenticator code</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
                 </TouchableOpacity>
-              </View>
+              </GlassCard>
 
-              <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
-                RECOVERY OPTIONS
-              </Text>
-              <View style={[styles.section, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>RECOVERY OPTIONS</Text>
+              <GlassCard style={styles.section} variant="medium">
                 <TouchableOpacity
                   style={styles.row}
                   onPress={() => {
@@ -314,12 +287,8 @@ export default function TwoFactorScreen() {
                     <Ionicons name="mail-outline" size={18} color="#fff" />
                   </View>
                   <View style={styles.rowMeta}>
-                    <Text style={[styles.rowLabel, { color: colors.text }]}>
-                      Reset via Email
-                    </Text>
-                    <Text style={[styles.rowSub, { color: colors.textMuted }]}>
-                      Verify your identity by email OTP
-                    </Text>
+                    <Text style={[styles.rowLabel, { color: colors.text }]}>Reset via Email</Text>
+                    <Text style={[styles.rowSub, { color: colors.textMuted }]}>Verify your identity by email OTP</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
                 </TouchableOpacity>
@@ -331,18 +300,14 @@ export default function TwoFactorScreen() {
                     <Ionicons name="phone-portrait-outline" size={18} color="#fff" />
                   </View>
                   <View style={styles.rowMeta}>
-                    <Text style={[styles.rowLabel, { color: colors.text }]}>
-                      Reset via Phone
-                    </Text>
-                    <Text style={[styles.rowSub, { color: colors.textMuted }]}>
-                      SMS recovery — coming soon
-                    </Text>
+                    <Text style={[styles.rowLabel, { color: colors.text }]}>Reset via Phone</Text>
+                    <Text style={[styles.rowSub, { color: colors.textMuted }]}>SMS recovery — coming soon</Text>
                   </View>
                   <View style={[styles.badge, { backgroundColor: colors.inputBg }]}>
                     <Text style={[styles.badgeText, { color: colors.textMuted }]}>SOON</Text>
                   </View>
                 </View>
-              </View>
+              </GlassCard>
 
               <Text style={[styles.infoText, { color: colors.textMuted }]}>
                 Use recovery options only if you have permanently lost access to your
@@ -352,22 +317,18 @@ export default function TwoFactorScreen() {
           ) : (
             <>
               <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>SET UP</Text>
-              <View style={[styles.section, { backgroundColor: colors.surface }]}>
+              <GlassCard style={styles.section} variant="medium">
                 <TouchableOpacity style={styles.row} onPress={startEnroll}>
                   <View style={[styles.rowIcon, { backgroundColor: "#5856D6" }]}>
                     <Ionicons name="qr-code-outline" size={18} color="#fff" />
                   </View>
                   <View style={styles.rowMeta}>
-                    <Text style={[styles.rowLabel, { color: colors.text }]}>
-                      Enable Two-Factor Auth
-                    </Text>
-                    <Text style={[styles.rowSub, { color: colors.textMuted }]}>
-                      Scan a QR code with any authenticator app
-                    </Text>
+                    <Text style={[styles.rowLabel, { color: colors.text }]}>Enable Two-Factor Auth</Text>
+                    <Text style={[styles.rowSub, { color: colors.textMuted }]}>Scan a QR code with any authenticator app</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
                 </TouchableOpacity>
-              </View>
+              </GlassCard>
 
               <Text style={[styles.infoText, { color: colors.textMuted }]}>
                 Compatible with Google Authenticator, Authy, 1Password, and any TOTP app.
@@ -411,22 +372,17 @@ export default function TwoFactorScreen() {
             <QRCode value={step.uri} size={200} />
           </View>
 
-          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
-            OR ENTER MANUALLY
-          </Text>
-          <View style={[styles.section, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>OR ENTER MANUALLY</Text>
+          <GlassCard style={styles.section} variant="medium">
             <View style={styles.secretRow}>
-              <Text
-                style={[styles.secretKey, { color: colors.text }]}
-                selectable
-              >
+              <Text style={[styles.secretKey, { color: colors.text }]} selectable>
                 {step.secret.match(/.{1,4}/g)?.join(" ") ?? step.secret}
               </Text>
             </View>
-          </View>
+          </GlassCard>
 
           <TouchableOpacity
-            style={[styles.primaryBtn, { backgroundColor: colors.accent }]}
+            style={styles.primaryBtn}
             onPress={() => {
               setVerifyCode("");
               setVerifyError("");
@@ -434,7 +390,9 @@ export default function TwoFactorScreen() {
               setTimeout(() => verifyRef.current?.focus(), 300);
             }}
           >
-            <Text style={styles.primaryBtnText}>I've scanned it — Next</Text>
+            <LinearGradient colors={[colors.accent, "#0097A7"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.primaryBtnGrad}>
+              <Text style={styles.primaryBtnText}>I've scanned it — Next</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -492,19 +450,13 @@ export default function TwoFactorScreen() {
             ) : null}
 
             <TouchableOpacity
-              style={[
-                styles.primaryBtn,
-                { backgroundColor: colors.accent },
-                (verifyBusy || verifyCode.length !== 6) && { opacity: 0.45 },
-              ]}
+              style={[(verifyBusy || verifyCode.length !== 6) && { opacity: 0.45 }, styles.primaryBtn]}
               onPress={() => confirmEnroll(factorId)}
               disabled={verifyBusy || verifyCode.length !== 6}
             >
-              {verifyBusy ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.primaryBtnText}>Enable Two-Factor Auth</Text>
-              )}
+              <LinearGradient colors={[colors.accent, "#0097A7"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.primaryBtnGrad}>
+                {verifyBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Enable Two-Factor Auth</Text>}
+              </LinearGradient>
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -565,19 +517,13 @@ export default function TwoFactorScreen() {
             ) : null}
 
             <TouchableOpacity
-              style={[
-                styles.primaryBtn,
-                { backgroundColor: "#007AFF" },
-                (recoveryBusy || !recoveryEmail.trim()) && { opacity: 0.45 },
-              ]}
+              style={[(recoveryBusy || !recoveryEmail.trim()) && { opacity: 0.45 }, styles.primaryBtn]}
               onPress={sendRecoveryOtp}
               disabled={recoveryBusy || !recoveryEmail.trim()}
             >
-              {recoveryBusy ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.primaryBtnText}>Send Recovery Code</Text>
-              )}
+              <LinearGradient colors={["#007AFF", "#0055CC"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.primaryBtnGrad}>
+                {recoveryBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Send Recovery Code</Text>}
+              </LinearGradient>
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -643,19 +589,13 @@ export default function TwoFactorScreen() {
             ) : null}
 
             <TouchableOpacity
-              style={[
-                styles.primaryBtn,
-                { backgroundColor: "#007AFF" },
-                (recoveryBusy || recoveryOtp.length < 6) && { opacity: 0.45 },
-              ]}
+              style={[(recoveryBusy || recoveryOtp.length < 6) && { opacity: 0.45 }, styles.primaryBtn]}
               onPress={() => verifyRecoveryOtp(email)}
               disabled={recoveryBusy || recoveryOtp.length < 6}
             >
-              {recoveryBusy ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.primaryBtnText}>Verify &amp; Remove 2FA</Text>
-              )}
+              <LinearGradient colors={["#007AFF", "#0055CC"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.primaryBtnGrad}>
+                {recoveryBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Verify & Remove 2FA</Text>}
+              </LinearGradient>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -806,6 +746,9 @@ const styles = StyleSheet.create({
 
   primaryBtn: {
     borderRadius: 14,
+    overflow: "hidden",
+  },
+  primaryBtnGrad: {
     paddingVertical: 16,
     alignItems: "center",
   },

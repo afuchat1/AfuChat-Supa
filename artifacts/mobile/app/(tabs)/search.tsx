@@ -23,6 +23,7 @@ import * as Haptics from "expo-haptics";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { supabase } from "@/lib/supabase";
 import {
   getSearchHistory,
@@ -1480,7 +1481,7 @@ export default function SearchScreen() {
     <View style={[ss.root, { backgroundColor: colors.backgroundSecondary }]}>
 
       {/* Header */}
-      <View style={[ss.header, { paddingTop: isDesktop ? 12 : insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <View style={[ss.header, { paddingTop: isDesktop ? 12 : insets.top + 8, backgroundColor: colors.surface + "CC", borderBottomColor: colors.border }]}>
 
         {/* Title + AI toggle */}
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>

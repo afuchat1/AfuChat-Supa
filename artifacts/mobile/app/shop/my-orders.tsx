@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { GlassHeader } from "@/components/ui/GlassHeader";
 import { supabase } from "@/lib/supabase";
 import { ShopOrder, ORDER_STATUS_LABELS, ESCROW_STATUS_LABELS, getBuyerOrders, formatShopAcoin } from "@/lib/shop";
 const BRAND = "#00BCD4";
@@ -184,12 +185,7 @@ export default function MyOrdersScreen() {
   if (loading) {
     return (
       <View style={[st.root, { backgroundColor: colors.backgroundSecondary }]}>
-        <View style={[st.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} style={st.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[st.headerTitle, { color: colors.text }]}>My Orders</Text>
-        </View>
+        <GlassHeader title="My Orders" />
         <ActivityIndicator color={BRAND} style={{ marginTop: 60 }} />
       </View>
     );
@@ -197,15 +193,14 @@ export default function MyOrdersScreen() {
 
   return (
     <View style={[st.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <View style={[st.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={st.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[st.headerTitle, { color: colors.text }]}>My Orders</Text>
-        <TouchableOpacity onPress={() => router.push("/store" as any)} style={st.shopBtn}>
-          <Ionicons name="storefront-outline" size={20} color={BRAND} />
-        </TouchableOpacity>
-      </View>
+      <GlassHeader
+        title="My Orders"
+        right={
+          <TouchableOpacity onPress={() => router.push("/store" as any)} hitSlop={8}>
+            <Ionicons name="storefront-outline" size={20} color={BRAND} />
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
