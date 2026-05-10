@@ -619,7 +619,15 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   const swipeTriggered = useRef(false);
   const swipePan = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 10 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
+      // Bubble phase — claim clearly-horizontal swipes when nothing else has
+      onMoveShouldSetPanResponder: (_, gs) =>
+        Math.abs(gs.dx) > 8 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
+      // Capture phase — runs BEFORE the FlatList/ScrollView sees the event.
+      // This is the key fix: when the keyboard is open the scroll view normally
+      // wins in the bubble phase; capture lets us intercept horizontal gestures
+      // first, regardless of keyboard state.
+      onMoveShouldSetPanResponderCapture: (_, gs) =>
+        Math.abs(gs.dx) > 10 && Math.abs(gs.dx) > Math.abs(gs.dy) * 2.5,
       onPanResponderMove: (_, gs) => {
         const dx = isMe ? Math.min(0, gs.dx) : Math.max(0, gs.dx);
         swipeX.setValue(dx);
