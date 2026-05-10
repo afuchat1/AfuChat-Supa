@@ -59,7 +59,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useChatPreferences, CHAT_THEME_COLORS, BUBBLE_RADIUS } from "@/context/ChatPreferencesContext";
 import { useAdvancedFeatures } from "@/context/AdvancedFeaturesContext";
 import { useDataMode } from "@/context/DataModeContext";
-import { markChatVisited } from "@/lib/chatVisited";
+import { markChatVisited, setActiveChatId, clearActiveChatId } from "@/lib/chatVisited";
 import { askAi, aiSuggestReply, transcribeAudio } from "@/lib/aiHelper";
 import {
   playNotificationSound as playMgrSound,
@@ -1605,7 +1605,10 @@ function ChatScreen() {
         oldestCursorRef.current = data.length > 0 ? data[data.length - 1].sent_at : null;
         setHasMore(data.length >= 50);
       }
-      if (chatId) markChatVisited(chatId);
+      if (chatId) {
+        markChatVisited(chatId);
+        setActiveChatId(chatId);
+      }
 
       // ── Background: enrich with reactions + delivery status ──────────────────
       // Fired after the UI already shows the messages — zero perceived latency.
@@ -1914,6 +1917,7 @@ function ChatScreen() {
       .subscribe();
 
     return () => {
+      clearActiveChatId();
       supabase.removeChannel(msgSub);
       supabase.removeChannel(typingChannel);
       typingChannelRef.current = null;

@@ -34,7 +34,7 @@ import { SuggestedUsers } from "@/components/ui/SuggestedUsers";
 import { isOnline } from "@/lib/offlineStore";
 import { getLocalConversations, saveConversations, hasLocalConversations } from "@/lib/storage/localConversations";
 import { addOnlineListener } from "@/lib/offlineSync";
-import { wasChatRecentlyVisited, clearChatVisited } from "@/lib/chatVisited";
+import { wasChatRecentlyVisited, clearChatVisited, getActiveChatId } from "@/lib/chatVisited";
 import { showAlert, confirmAlert } from "@/lib/alert";
 import { useChatPreferences } from "@/context/ChatPreferencesContext";
 import { useAdvancedFeatures } from "@/context/AdvancedFeaturesContext";
@@ -710,8 +710,9 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
     }
 
     const unreadMap: Record<string, number> = {};
+    const activeChatId = getActiveChatId();
     for (const msg of unreadMsgRows) {
-      if (!readSet.has(msg.id)) {
+      if (!readSet.has(msg.id) && msg.chat_id !== activeChatId) {
         unreadMap[msg.chat_id] = (unreadMap[msg.chat_id] || 0) + 1;
       }
     }
