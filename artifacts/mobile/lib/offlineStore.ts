@@ -302,8 +302,15 @@ export async function clearAccountCache(): Promise<void> {
     storage.delete(KEYS.WALLET_BALANCE);
     storage.delete(KEYS.WALLET_CACHED_AT);
     storage.delete(KEYS.SEARCH_HISTORY);
+    storage.delete(KEYS.PUSH_TOKEN);
+    storage.delete(KEYS.INTERESTS);
 
-    // Clear all AsyncStorage user-data buckets.
+    // Build list of AsyncStorage keys to remove, including all per-chat message caches.
+    const allKeys = await AsyncStorage.getAllKeys();
+    const messageCacheKeys = allKeys.filter((k) =>
+      k.startsWith(CACHE_KEYS.MESSAGES_PREFIX)
+    );
+
     await AsyncStorage.multiRemove([
       CACHE_KEYS.PROFILE,
       CACHE_KEYS.CONVERSATIONS,
@@ -316,6 +323,9 @@ export async function clearAccountCache(): Promise<void> {
       CACHE_KEYS.FEED_CURSOR_FOR_YOU,
       CACHE_KEYS.FEED_CURSOR_FOLLOWING,
       CACHE_KEYS.WALLET,
+      // Suggested users dismissed list — account-specific preference
+      "suggested_users_dismissed_v1",
+      ...messageCacheKeys,
     ]);
   } catch {}
 }

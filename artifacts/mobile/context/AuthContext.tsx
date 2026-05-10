@@ -5,6 +5,7 @@ import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { getStoredAccounts, storeAccount, removeStoredAccount, updateAccountTokens, type StoredAccount } from "@/lib/accountStore";
 import { cacheProfile, getCachedProfile, getCachedProfileSync, clearAccountCache, isOnline, onConnectivityChange, setCachedUserId, getCachedUserId, clearCachedUserId } from "@/lib/offlineStore";
+import { clearAllConversations } from "@/lib/storage/localConversations";
 import { clearProfileCache } from "@/lib/profileCache";
 import { startOfflineSync } from "@/lib/offlineSync";
 import { clearPushToken, registerSwitchAccount, setCurrentUserId } from "@/lib/pushNotifications";
@@ -252,7 +253,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // 2. Wipe every user-specific cache so the incoming account starts clean.
     //    This must happen before setSession() so that no old data can appear
     //    in the brief window between session swap and the new profile arriving.
-    await clearAccountCache();
+    await Promise.all([
+      clearAccountCache(),
+      clearAllConversations(),
+    ]);
     clearProfileCache();
 
     // 3. Drop React state immediately so screens show skeletons, not stale data.
@@ -521,10 +525,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (user) {
       await clearPushToken(user.id);
     }
+    // Drop React state immediately so no screen can flash stale data
+    // in the window between clearing caches and the Supabase SIGNED_OUT event.
+    setProfile(null);
+    setSubscription(null);
+    setUser(null);
+    setSession(null);
+
     // Clear all local caches before signing out so the next account (or a fresh
     // login) never sees data from the previous session.
     clearCachedUserId();
-    await clearAccountCache();
+    await Promise.all([
+      clearAccountCache(),
+      clearAllConversations(),
+    ]);
     clearProfileCache();
     await supabase.auth.signOut();
     router.replace("/discover");

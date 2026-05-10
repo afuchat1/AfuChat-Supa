@@ -52,6 +52,18 @@ const CARD_WIDTH     = 148;
 const POOL_SIZE      = 40;
 const DISPLAY_SIZE   = 12;
 
+// ─── Module-level result cache (survives tab switches, expires after 5 min) ───
+type CachedResult = {
+  users: SuggestedUser[];
+  followingSet: Set<string>;
+  followersSet: Set<string>;
+  dismissed: Set<string>;
+  userId: string;
+  expiresAt: number;
+};
+let _cachedResult: CachedResult | null = null;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 async function loadDismissed(): Promise<Set<string>> {
   try {
@@ -221,8 +233,25 @@ export function SuggestedUsers({
     return () => { mountedRef.current = false; };
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     if (!user) { setLoading(false); return; }
+
+    // Serve from module-level cache when still valid and same user — avoids
+    // redundant network calls every time the tab is focused.
+    if (
+      !force &&
+      _cachedResult &&
+      _cachedResult.userId === user.id &&
+      Date.now() < _cachedResult.expiresAt
+    ) {
+      setUsers(shuffle(_cachedResult.users).slice(0, maxCards));
+      setFollowingSet(new Set(_cachedResult.followingSet));
+      setFollowersSet(new Set(_cachedResult.followersSet));
+      setDismissed(new Set(_cachedResult.dismissed));
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
 
     const [dis, followRes, followersRes] = await Promise.all([
@@ -270,6 +299,8 @@ export function SuggestedUsers({
     // Shuffle top pool for variety
     const pool = shuffle(candidates.slice(0, Math.min(POOL_SIZE, candidates.length)));
 
+    let finalUsers: SuggestedUser[];
+
     // If we got nothing with interests, fall back to top users globally
     if (pool.length === 0 && userInterests.length > 0) {
       const { data: fallback } = await supabase
@@ -283,23 +314,31 @@ export function SuggestedUsers({
       const fallbackFiltered = (fallback || [])
         .filter((u: any) => !excludeIds.has(u.id))
         .map((u: any) => ({ ...u, interests: u.interests || [], sharedCount: 0 } as SuggestedUser));
-      setUsers(shuffle(fallbackFiltered).slice(0, maxCards));
+      finalUsers = shuffle(fallbackFiltered);
     } else {
-      setUsers(pool.slice(0, maxCards));
+      finalUsers = pool;
     }
 
+    const followersSetLocal = new Set((followersRes.data || []).map((f: any) => f.follower_id as string));
+
+    // Store in module-level cache so the next tab focus skips the network call.
+    _cachedResult = {
+      users: finalUsers,
+      followingSet: followingSetLocal,
+      followersSet: followersSetLocal,
+      dismissed: dis,
+      userId: user.id,
+      expiresAt: Date.now() + CACHE_TTL_MS,
+    };
+
+    setUsers(finalUsers.slice(0, maxCards));
     setFollowingSet(followingSetLocal);
-    setFollowersSet(new Set((followersRes.data || []).map((f: any) => f.follower_id as string)));
+    setFollowersSet(followersSetLocal);
     setDismissed(dis);
     setLoading(false);
   }, [user, profile?.interests, maxCards]);
 
   useEffect(() => { load(); }, [load]);
-
-  // Re-shuffle on each mount so the cards feel fresh
-  useEffect(() => {
-    setUsers(prev => shuffle(prev));
-  }, []);
 
   async function handleFollow(targetId: string) {
     if (!user) return;
@@ -315,6 +354,15 @@ export function SuggestedUsers({
     setUsers(prev => prev.filter(u => u.id !== targetId));
     const next = new Set([...dismissed, targetId]);
     setDismissed(next);
+    // Keep module-level cache in sync so the dismissed card stays gone
+    // if the component remounts before the 5-min TTL expires.
+    if (_cachedResult && _cachedResult.userId === user?.id) {
+      _cachedResult = {
+        ..._cachedResult,
+        users: _cachedResult.users.filter(u => u.id !== targetId),
+        dismissed: next,
+      };
+    }
     await saveDismissed(next);
   }
 

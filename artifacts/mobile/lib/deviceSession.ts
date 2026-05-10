@@ -1,6 +1,7 @@
 import { Platform } from "react-native";
 import { supabase } from "./supabase";
 import * as Device from "expo-device";
+import { sendPushNotification } from "./pushNotifications";
 
 /**
  * Registers the current device in user_device_sessions.
@@ -42,6 +43,18 @@ export async function registerDeviceSession(userId: string): Promise<void> {
         created_at: now,
         last_seen_at: now,
       });
+
+      // Also fire a push notification so the user knows immediately,
+      // even if they're on a different device when this login happens.
+      sendPushNotification({
+        userId,
+        title: "New device signed in",
+        body: `${deviceName} (${deviceOs}) just signed into your AfuChat account. If this wasn't you, secure your account immediately.`,
+        data: {
+          type: "security",
+          url: "/settings/devices",
+        },
+      }).catch(() => {});
     }
   } catch (err) {
     // Non-critical — don't throw

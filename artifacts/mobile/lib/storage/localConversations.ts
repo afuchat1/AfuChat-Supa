@@ -191,6 +191,18 @@ export async function deleteLocalConversation(id: string): Promise<void> {
   } catch {}
 }
 
+/**
+ * Wipe all locally-stored conversations and messages.
+ * Called during account switch / sign-out to prevent data leakage.
+ */
+export async function clearAllConversations(): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.runAsync("DELETE FROM conversations");
+    await db.runAsync("DELETE FROM messages");
+  } catch {}
+}
+
 // ─── Internal ───────────────────────────────────────────────────────────────────
 
 function rowToConv(r: any): LocalConversation {
