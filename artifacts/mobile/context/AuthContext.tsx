@@ -4,7 +4,7 @@ import { AppState } from "react-native";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { getStoredAccounts, storeAccount, removeStoredAccount, updateAccountTokens, type StoredAccount } from "@/lib/accountStore";
-import { cacheProfile, getCachedProfile, getCachedProfileSync, clearAccountCache, isOnline, onConnectivityChange } from "@/lib/offlineStore";
+import { cacheProfile, getCachedProfile, getCachedProfileSync, clearAccountCache, isOnline, onConnectivityChange, setCachedUserId, getCachedUserId, clearCachedUserId } from "@/lib/offlineStore";
 import { clearProfileCache } from "@/lib/profileCache";
 import { startOfflineSync } from "@/lib/offlineSync";
 import { clearPushToken } from "@/lib/pushNotifications";
@@ -290,9 +290,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
       if (session?.user) {
+        // ── Happy path: valid session found ────────────────────────────────────
+        setSession(session);
+        setUser(session.user);
+        setCachedUserId(session.user.id);
         // Show cached profile immediately — no network wait needed for initial render.
         const cached = await getCachedProfile();
         if (cached) setProfile(cached as Profile);
@@ -304,9 +306,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ensureAfuAiChat(session.user.id, data?.display_name).catch(() => {});
         });
       } else {
-        const cached = await getCachedProfile();
-        if (cached) setProfile(cached as Profile);
-        setLoading(false);
+        // ── No live session returned ────────────────────────────────────────────
+        // This happens when the access token has already expired by the time the
+        // app opens. Supabase will fire a background refresh; if the device is
+        // offline that refresh fails and a SIGNED_OUT event is emitted (handled
+        // below). In the meantime, keep the user "soft logged in" by restoring
+        // their identity from our local stores so screens never redirect to login.
+        const cachedUserId = getCachedUserId();
+        const accounts = await getStoredAccounts();
+        const primaryAccount = accounts[0] ?? null;
+
+        if (cachedUserId && primaryAccount) {
+          // We know who this user is. Load their cached profile immediately.
+          const cached = await getCachedProfile();
+          if (cached) setProfile(cached as Profile);
+
+          if (isOnline()) {
+            // Online but session null: try an explicit refresh using the stored
+            // refresh token. If it works, onAuthStateChange will pick it up and
+            // update session/user; we don't need to do it here.
+            supabase.auth.refreshSession({ refresh_token: primaryAccount.refreshToken })
+              .catch(() => {});
+          } else {
+            // Offline: create a minimal user object from stored account data so
+            // every screen that checks `user?.id` keeps working. The real session
+            // is re-established via onAuthStateChange once connectivity returns.
+            const syntheticUser = {
+              id: primaryAccount.userId,
+              email: primaryAccount.email,
+              app_metadata: {},
+              user_metadata: {},
+              aud: "authenticated",
+              created_at: "",
+            } as User;
+            setUser(syntheticUser);
+            startOfflineSync();
+          }
+          setLoading(false);
+        } else {
+          // Genuinely not logged in — show cached profile if any (guest view).
+          const cached = await getCachedProfile();
+          if (cached) setProfile(cached as Profile);
+          setLoading(false);
+        }
       }
     });
 
@@ -333,6 +375,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               expires_in: newSession.expires_in,
             });
           });
+          if (newSession?.user) {
+            setUser((prev) => prev ?? newSession.user);
+            setCachedUserId(newSession.user.id);
+          }
+          return;
+        }
+
+        // ── SIGNED_OUT while offline ────────────────────────────────────────────
+        // When the device has no network, Supabase cannot refresh an expired
+        // access token and fires SIGNED_OUT. This must NOT clear auth state —
+        // the user is still the same person; they just have no connectivity.
+        // The session will be re-established as soon as the network returns and
+        // supabase auto-refreshes (or we call refreshSession on reconnect).
+        if (!newSession?.user && !isOnline()) {
           return;
         }
 
@@ -342,6 +398,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // the active user hasn't actually changed.
         setSession((prev) => (prev?.user?.id === newUserId ? prev : newSession));
         setUser((prev) => (prev?.id === newUserId ? prev : newSession?.user ?? null));
+
+        if (newSession?.user) {
+          setCachedUserId(newSession.user.id);
+        }
 
         if (!newSession?.user) {
           setProfile(null);
@@ -388,6 +448,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsub = onConnectivityChange((online) => {
       if (online) {
         fetchProfile(user.id);
+        // Proactively refresh the JWT when connectivity is restored so Supabase
+        // gets fresh tokens and stops treating the session as expired.
+        supabase.auth.refreshSession().catch(() => {});
       }
     });
     return unsub;
@@ -455,6 +518,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     // Clear all local caches before signing out so the next account (or a fresh
     // login) never sees data from the previous session.
+    clearCachedUserId();
     await clearAccountCache();
     clearProfileCache();
     await supabase.auth.signOut();

@@ -261,6 +261,28 @@ export async function getFeedCursor(tab: "for_you" | "following"): Promise<strin
   }
 }
 
+// ─── Cached user identity ──────────────────────────────────────────────────────
+// Persisted in MMKV (survives app restarts, synchronous read). Used to detect
+// "was this user previously logged in?" on offline startup before the Supabase
+// session can be validated with the network.
+
+const LAST_USER_KEY = "last_authed_user_id";
+
+/** Persist the authenticated user's ID synchronously. Call whenever user changes. */
+export function setCachedUserId(userId: string): void {
+  try { storage.setString(LAST_USER_KEY, userId); } catch {}
+}
+
+/** Read the last authenticated user's ID instantly (no I/O). */
+export function getCachedUserId(): string | null {
+  try { return storage.getString(LAST_USER_KEY) ?? null; } catch { return null; }
+}
+
+/** Erase the cached user ID on explicit sign-out. */
+export function clearCachedUserId(): void {
+  try { storage.delete(LAST_USER_KEY); } catch {}
+}
+
 /**
  * Wipes all user-specific cache data so that switching accounts never leaks
  * one account's data into another. Call this BEFORE setting the new session.
@@ -271,6 +293,7 @@ export async function clearAccountCache(): Promise<void> {
     // new account from seeing the old account's profile on first render.
     storage.delete(KEYS.USER_PROFILE);
     storage.delete(KEYS.USER_ID);
+    storage.delete(LAST_USER_KEY);
     storage.delete(KEYS.FEED_CURSOR_FOR_YOU);
     storage.delete(KEYS.FEED_CURSOR_FOLLOWING);
     storage.delete(KEYS.FEED_SCROLL_OFFSET);

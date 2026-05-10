@@ -49,6 +49,7 @@ import { notifyNewMessage, notifyGiftReceived } from "@/lib/notifyUser";
 import {
   queueMessage,
   isOnline,
+  getCachedUserId,
   onConnectivityChange,
 } from "@/lib/offlineStore";
 import { getLocalMessages, saveMessages, savePendingMessage, getNewestMessageDate } from "@/lib/storage/localMessages";
@@ -1107,7 +1108,13 @@ export default function ChatScreenRoute() {
   // Don't block on loading — if there's no user yet but loading is still in
   // progress, render the screen optimistically. The inner ChatScreen will
   // redirect to login if user turns out to be null once loading finishes.
-  if (!loading && !user) {
+  //
+  // Offline guard: if the device has no network AND we have a cached user ID,
+  // the user is simply offline — not logged out. Keep them on the screen.
+  // Redirecting to login when offline and then back here on reconnect would be
+  // jarring and wrong. We only redirect when we're certain they're signed out
+  // (i.e. they explicitly signed out OR we're online and have no session).
+  if (!loading && !user && (isOnline() || !getCachedUserId())) {
     return <Redirect href="/(auth)/login" />;
   }
 
