@@ -14,6 +14,13 @@
       },
       "oauth_client": [
         {
+          "client_id": "528657994783-vancb50a5v4539fecpkr13o4jgvv7tib.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.afuchat.app"
+          }
+        },
+        {
           "client_id": "148957999957-i5pgudckm6c9sc8pthqr2cl918nd3153.apps.googleusercontent.com",
           "client_type": 3
         }
