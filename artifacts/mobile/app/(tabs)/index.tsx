@@ -1149,14 +1149,19 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
         })()}
 
         <Text style={[styles.headerTitle, { color: colors.text, textAlign: "center", flex: 1 }]}>AfuChat</Text>
-        <TouchableOpacity onPress={() => router.push("/notifications")} style={styles.headerIcon}>
-          <Ionicons name="notifications-outline" size={22} color={colors.text} />
-          {unreadNotifCount > 0 && (
-            <View style={styles.notifBadge}>
-              <Text style={styles.notifBadgeText}>{unreadNotifCount > 99 ? "99+" : unreadNotifCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <TouchableOpacity onPress={() => router.push("/notifications")} style={styles.headerIcon}>
+            <Ionicons name="notifications-outline" size={22} color={colors.text} />
+            {unreadNotifCount > 0 && (
+              <View style={styles.notifBadge}>
+                <Text style={styles.notifBadgeText}>{unreadNotifCount > 99 ? "99+" : unreadNotifCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push("/settings/chat")} style={styles.headerIcon}>
+            <Ionicons name="settings-outline" size={22} color={colors.text} />
+          </TouchableOpacity>
+        </View>
       </View>
       )}
 
