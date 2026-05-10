@@ -49,6 +49,7 @@ import {
   onConnectivityChange,
 } from "@/lib/offlineStore";
 import { getLocalMessages, saveMessages, savePendingMessage, getNewestMessageDate } from "@/lib/storage/localMessages";
+import { getPhonebookName } from "@/lib/storage/localContacts";
 import { clearUnread, getLocalConversation } from "@/lib/storage/localConversations";
 import { getLocalAttachmentUri, ensureChatAttachmentDownloaded, autoDownloadChatAttachments, openChatFile, saveAttachmentToGallery } from "@/lib/storage/chatAttachmentCache";
 import { uploadChatMedia } from "@/lib/mediaUpload";
@@ -1184,6 +1185,7 @@ function ChatScreen() {
   };
 
   const [chatInfo, setChatInfo] = useState<ChatInfo | null>(buildInitialChatInfo);
+  const [phonebookName, setPhonebookName] = useState<string | null>(null);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const typingMapRef = useRef<Map<string, string>>(new Map());
   const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -3626,7 +3628,16 @@ STRICT RULES:
     highlightTimerRef.current = setTimeout(() => setHighlightedMsgId(null), 1500);
   }, [messages]);
 
-  const headerTitle = chatInfo?.is_group || chatInfo?.is_channel ? chatInfo.name || "Group" : chatInfo?.other_name || "Chat";
+  // Load phone-book name once we know who the other person is.
+  useEffect(() => {
+    const otherId = chatInfo?.other_id;
+    if (!otherId || chatInfo?.is_group || chatInfo?.is_channel || Platform.OS === "web") return;
+    getPhonebookName(otherId).then(setPhonebookName).catch(() => {});
+  }, [chatInfo?.other_id, chatInfo?.is_group, chatInfo?.is_channel]);
+
+  const headerTitle = chatInfo?.is_group || chatInfo?.is_channel
+    ? chatInfo.name || "Group"
+    : (phonebookName || chatInfo?.other_name || "Chat");
   const headerAvatar = chatInfo?.is_group || chatInfo?.is_channel ? chatInfo?.avatar_url : chatInfo?.other_avatar;
 
   const getMessageSpacing = useCallback((index: number): number => {

@@ -264,4 +264,19 @@ async function runMigrations(db: DB) {
     await safeAdd("CREATE INDEX IF NOT EXISTS idx_media_last_accessed ON media_cache(last_accessed)");
     await db.runAsync("UPDATE schema_version SET version = 6");
   }
+
+  // ── v7: Phone book name overrides ────────────────────────────────────────
+  // Maps app user IDs to the name the current user saved them as in their
+  // phone contacts. Used to show the phone-book name in chats and a
+  // "Saved as …" label everywhere else.
+  if (currentVersion < 7) {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS phone_contact_names (
+        user_id TEXT PRIMARY KEY,
+        phonebook_name TEXT NOT NULL,
+        stored_at INTEGER NOT NULL
+      );
+    `);
+    await db.runAsync("UPDATE schema_version SET version = 7");
+  }
 }

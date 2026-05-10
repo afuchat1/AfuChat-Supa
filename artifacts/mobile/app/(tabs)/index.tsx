@@ -54,6 +54,7 @@ import {
   getViewedUserIds,
   subscribeStoryViewed,
 } from "@/lib/storyViewedStore";
+import { usePhonebookNames } from "@/hooks/usePhonebookNames";
 
 type StoryUser = {
   userId: string;
@@ -147,6 +148,7 @@ function ChatRow({
   onAction,
   isActive,
   isTyping,
+  phonebookName,
 }: {
   item: ChatItem;
   onPress: () => void;
@@ -156,6 +158,7 @@ function ChatRow({
   ) => void;
   isActive?: boolean;
   isTyping?: boolean;
+  phonebookName?: string;
 }) {
   const { colors } = useTheme();
   // Lazy import to avoid touching native paths.
@@ -192,7 +195,9 @@ function ChatRow({
       },
     ],
   ]);
-  const displayName = item.is_group || item.is_channel ? item.name : item.other_display_name;
+  const displayName = item.is_group || item.is_channel
+    ? item.name
+    : (phonebookName || item.other_display_name);
   const avatar = item.is_group || item.is_channel ? item.avatar_url : item.other_avatar;
   const hasUnread = item.unread_count > 0 && !wasChatRecentlyVisited(item.id);
   const isOnlineDot = !item.is_group && !item.is_channel && isUserOnline(item.other_last_seen, item.other_show_online);
@@ -514,6 +519,10 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
   const pathname = usePathname() || "/";
   const activeChatMatch = pathname.match(/^\/chat\/([^/]+)/);
   const activeChatId = activeChatMatch ? activeChatMatch[1] : null;
+
+  // Phone-book name overrides: show the name the user saved in their contacts
+  // inside chat rows instead of the registered display_name.
+  const phonebookNames = usePhonebookNames();
 
   const [chats, setChats] = useState<ChatItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1340,6 +1349,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                       renderItem={({ item }) => (
                         <ChatRow
                           item={item}
+                          phonebookName={!item.is_group && !item.is_channel ? phonebookNames.get(item.other_id) : undefined}
                           isTyping={chatPrefs.typing_indicators && !!typingChatIds[item.id]}
                           onPress={() => {
                             Haptics.selectionAsync();
@@ -1347,7 +1357,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                               pathname: "/chat/[id]",
                               params: {
                                 id: item.id,
-                                otherName: item.other_display_name || "",
+                                otherName: (!item.is_group && !item.is_channel && phonebookNames.get(item.other_id)) || item.other_display_name || "",
                                 otherAvatar: item.other_avatar || "",
                                 otherId: item.other_id || "",
                                 isGroup: item.is_group ? "true" : "false",
@@ -1407,6 +1417,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                 renderItem={({ item }) => (
                   <ChatRow
                     item={item}
+                    phonebookName={!item.is_group && !item.is_channel ? phonebookNames.get(item.other_id) : undefined}
                     isActive={panelMode && item.id === activeChatId}
                     isTyping={chatPrefs.typing_indicators && !!typingChatIds[item.id]}
                     onPress={() => {
@@ -1415,7 +1426,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                         pathname: "/chat/[id]",
                         params: {
                           id: item.id,
-                          otherName: item.other_display_name || "",
+                          otherName: (!item.is_group && !item.is_channel && phonebookNames.get(item.other_id)) || item.other_display_name || "",
                           otherAvatar: item.other_avatar || "",
                           otherId: item.other_id || "",
                           isGroup: item.is_group ? "true" : "false",

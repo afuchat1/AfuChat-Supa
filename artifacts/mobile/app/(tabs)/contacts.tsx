@@ -26,7 +26,7 @@ import { ContactRowSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { isOnline } from "@/lib/offlineStore";
-import { getLocalContacts, saveLocalContacts } from "@/lib/storage/localContacts";
+import { getLocalContacts, saveLocalContacts, getAllPhonebookNames } from "@/lib/storage/localContacts";
 
 type Contact = {
   id: string;
@@ -52,7 +52,7 @@ function groupByLetter(contacts: Contact[]): Section[] {
     .map(([title, data]) => ({ title, data }));
 }
 
-function ContactRow({ item }: { item: Contact }) {
+function ContactRow({ item, phonebookName }: { item: Contact; phonebookName?: string }) {
   const { colors } = useTheme();
   const { user } = useAuth();
 
@@ -69,6 +69,8 @@ function ContactRow({ item }: { item: Contact }) {
     router.push({ pathname: "/chat/[id]", params: { id: chatId } });
   }
 
+  const savedAs = phonebookName && phonebookName !== item.display_name ? phonebookName : null;
+
   return (
     <TouchableOpacity
       style={[styles.row, { backgroundColor: colors.surface }]}
@@ -84,6 +86,11 @@ function ContactRow({ item }: { item: Contact }) {
         <Text style={[styles.handle, { color: colors.textSecondary }]} numberOfLines={1}>
           @{item.handle}
         </Text>
+        {!!savedAs && (
+          <Text style={[styles.savedAs, { color: colors.textMuted }]} numberOfLines={1}>
+            Saved as "{savedAs}"
+          </Text>
+        )}
       </View>
       <Ionicons name="chatbubble-outline" size={18} color={colors.accent} />
     </TouchableOpacity>
@@ -102,6 +109,12 @@ export default function ContactsScreen() {
   const [addQuery, setAddQuery] = useState("");
   const [addResult, setAddResult] = useState<Contact | null>(null);
   const [addLoading, setAddLoading] = useState(false);
+  const [phonebookNames, setPhonebookNames] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    getAllPhonebookNames().then(setPhonebookNames).catch(() => {});
+  }, []);
 
   const loadContacts = useCallback(async (background = false) => {
     if (!user) return;
@@ -352,7 +365,9 @@ export default function ContactsScreen() {
             )}
           </View>
         }
-        renderItem={({ item }) => <ContactRow item={item} />}
+        renderItem={({ item }) => (
+          <ContactRow item={item} phonebookName={phonebookNames.get(item.id)} />
+        )}
         renderSectionHeader={({ section: { title } }) => (
           <View style={[styles.sectionHeader, { backgroundColor: colors.backgroundSecondary }]}>
             <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{title}</Text>
@@ -424,6 +439,7 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: "row", alignItems: "center" },
   name: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
   handle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
+  savedAs: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   sectionHeader: { paddingHorizontal: 16, paddingVertical: 6 },
   sectionTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   emptyCenter: { alignItems: "center", paddingVertical: 48, gap: 12 },

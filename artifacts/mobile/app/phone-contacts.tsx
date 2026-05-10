@@ -19,6 +19,7 @@ import { supabase } from "@/lib/supabase";
 import { Avatar } from "@/components/ui/Avatar";
 import { PrestigeBadge } from "@/components/ui/PrestigeBadge";
 import Colors from "@/constants/colors";
+import { saveAllPhonebookNames } from "@/lib/storage/localContacts";
 
 type FoundContact = {
   id: string;
@@ -95,6 +96,12 @@ export default function PhoneContactsScreen() {
       phone_number: p.phone_number,
       phonebook_name: phoneMap.get(p.phone_number) || p.display_name,
     }));
+
+    // Persist phone-book name mappings so the rest of the app (chat list,
+    // contact profiles) can show them without re-scanning contacts.
+    saveAllPhonebookNames(
+      found.map((c) => ({ userId: c.id, name: c.phonebook_name })),
+    ).catch(() => {});
 
     setContacts(found);
     setState("done");

@@ -35,6 +35,7 @@ import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { VideoThumbnail } from "@/components/ui/VideoThumbnail";
 import * as Clipboard from "expo-clipboard";
 import { getProfileCache, setProfileCache } from "@/lib/profileCache";
+import { getPhonebookName } from "@/lib/storage/localContacts";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const GRID_GAP = 6;
@@ -162,6 +163,7 @@ export default function ContactProfileScreen() {
 
   const [profile, setProfile] = useState<Profile | null>(initialProfile);
   const [loading, setLoading] = useState(!initialProfile);
+  const [phonebookName, setPhonebookName] = useState<string | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [followerCount, setFollowerCount] = useState(0);
@@ -177,6 +179,12 @@ export default function ContactProfileScreen() {
   const [lightboxImgIdx, setLightboxImgIdx] = useState(0);
   const [optionsVisible, setOptionsVisible] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+
+  // Load phone-book name for this user (native only).
+  useEffect(() => {
+    if (!id || Platform.OS === "web") return;
+    getPhonebookName(id as string).then(setPhonebookName).catch(() => {});
+  }, [id]);
 
   // Non-logged-in users should see the public profile page, not this screen.
   // Redirect them to /@handle once we know the handle (and there's no session).
@@ -424,6 +432,12 @@ export default function ContactProfileScreen() {
         <VerifiedBadge isVerified={profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={16} />
         <PrestigeBadge acoin={profile?.acoin || 0} size="sm" showLabel />
       </View>
+      {/* Show phone-book name when the user has this person saved differently */}
+      {!!phonebookName && phonebookName !== profile?.display_name && (
+        <Text style={[st.savedAsLabel, { color: colors.textMuted }]}>
+          Saved as "{phonebookName}"
+        </Text>
+      )}
 
       {/* ── Bio ─── */}
       {!!profile?.bio && (
@@ -1011,6 +1025,7 @@ const st = StyleSheet.create({
 
   nameBadgeRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, marginBottom: 3 },
   displayName: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  savedAsLabel: { fontSize: 12, fontFamily: "Inter_400Regular", paddingHorizontal: 16, marginBottom: 4 },
 
   bio: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19, paddingHorizontal: 16, marginBottom: 6 },
 
