@@ -22,6 +22,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
 import { supabase } from "@/lib/supabase";
+
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useAppAccent } from "@/context/AppAccentContext";
@@ -30,8 +31,6 @@ import { GoogleLogo, GitHubLogo, XLogo, GitLabLogo } from "@/components/ui/OAuth
 import { googleSignIn } from "@/lib/googleAuth";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
-
-WebBrowser.maybeCompleteAuthSession();
 
 // ─── Focused input ────────────────────────────────────────────────────────────
 function AuthInput({ icon, placeholder, value, onChangeText, secureTextEntry, keyboardType, autoCapitalize, autoComplete, colors, isDark, rightElement, onSubmitEditing, returnKeyType, inputRef }: any) {
@@ -105,8 +104,7 @@ function VerifyEmailModal({
   }
 
   async function resend() {
-    const redirect = Platform.OS === "web" && typeof window !== "undefined" ? window.location.origin + "/" : "https://afuchat.com/";
-    const { error } = await supabase.auth.resend({ type: "signup", email, options: { emailRedirectTo: redirect } });
+    const { error } = await supabase.auth.resend({ type: "signup", email, options: { emailRedirectTo: "https://afuchat.com/" } });
     if (error) showAlert("Error", error.message);
     else showAlert("Code resent", "A new code has been sent to your email.");
   }
@@ -227,32 +225,6 @@ export default function RegisterScreen() {
     router.replace({ pathname: "/onboarding", params: { userId: signupUserId || uid || "" } });
   }
 
-  function isOAuthRedirect(url: string) {
-    try {
-      const p = new URL(url); const h = p.hostname.toLowerCase();
-      return (h === "afuchat.com" || h === "www.afuchat.com") && (p.pathname === "/" || p.pathname === "") && (p.searchParams.has("code") || p.hash.includes("access_token"));
-    } catch { return false; }
-  }
-
-  async function handleOAuthRedirect(url: string) {
-    if (oauthHandledRef.current) return; oauthHandledRef.current = true;
-    try {
-      const code = new URL(url).searchParams.get("code");
-      if (!code) { showAlert("Error", "No code received."); setOauthLoading(null); return; }
-      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-      if (error) { showAlert("Error", error.message); setOauthLoading(null); }
-      else {
-        setOauthLoading(null);
-        const uid = data.user?.id;
-        if (uid) {
-          const { data: prof } = await supabase.from("profiles").select("onboarding_completed").eq("id", uid).maybeSingle();
-          if (!prof?.onboarding_completed) { router.replace({ pathname: "/onboarding", params: { userId: uid } } as any); return; }
-        }
-        router.replace("/(tabs)"); return;
-      }
-    } catch { showAlert("Error", "Could not complete sign up."); setOauthLoading(null); }
-  }
-
   async function nativeGoogleSignIn() {
     setOauthLoading("google");
     const result = await googleSignIn();
@@ -286,30 +258,13 @@ export default function RegisterScreen() {
 
   async function signInWithProvider(provider: string, useNativeFlow = true) {
     try {
-      if (useNativeFlow && provider === "google" && Platform.OS !== "web") return nativeGoogleSignIn();
+      if (useNativeFlow && provider === "google") return nativeGoogleSignIn();
       setOauthLoading(provider);
-      const redirectUrl = Platform.OS === "web"
-        ? (typeof window !== "undefined" ? window.location.origin + "/" : "https://afuchat.com/")
-        : makeRedirectUri({ native: "afuchat://(auth)/register" });
+      const redirectUrl = makeRedirectUri({ native: "afuchat://(auth)/register" });
       const { data, error } = await supabase.auth.signInWithOAuth({ provider: provider as any, options: { redirectTo: redirectUrl, skipBrowserRedirect: true, queryParams: { prompt: "select_account" } } });
       if (error) { showAlert("Error", error.message); setOauthLoading(null); return; }
       if (!data?.url) { setOauthLoading(null); return; }
       oauthHandledRef.current = false;
-      if (Platform.OS === "web") {
-        const w = 500, h = 650;
-        const left = window.screenX + (window.innerWidth - w) / 2;
-        const top = window.screenY + (window.innerHeight - h) / 2;
-        const popup = window.open(data.url, "oauth_popup", `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no`);
-        if (!popup) { window.location.href = data.url; return; }
-        const timer = setInterval(async () => {
-          try {
-            if (popup.closed) { clearInterval(timer); setOauthLoading(null); return; }
-            const u = popup.location.href;
-            if (u && isOAuthRedirect(u)) { clearInterval(timer); popup.close(); await handleOAuthRedirect(u); }
-          } catch (_) {}
-        }, 300);
-        return;
-      }
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, { showInRecents: false });
       if (result.type === "success" && result.url) {
         const url = new URL(result.url);
