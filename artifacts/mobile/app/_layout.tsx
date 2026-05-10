@@ -151,8 +151,49 @@ export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS === "web") return;
 
+    // Prevent the same OAuth code from being exchanged twice if both the
+    // inline WebBrowser result handler and this Linking listener fire.
+    const handledCodes = new Set<string>();
+
+    async function handleOAuthCallback(url: string) {
+      // afuchat://(auth)/login?code=xxx  or  afuchat://(auth)/register?code=xxx
+      // Use string-based parsing — new URL() chokes on parentheses in the host.
+      const qIndex = url.indexOf("?");
+      if (qIndex === -1) return;
+      const params = new URLSearchParams(url.slice(qIndex + 1));
+      const code = params.get("code");
+      if (!code || handledCodes.has(code)) return;
+      handledCodes.add(code);
+
+      try {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) return;
+        const uid = data.user?.id;
+        if (uid) {
+          const { data: prof } = await supabase
+            .from("profiles")
+            .select("onboarding_completed")
+            .eq("id", uid)
+            .maybeSingle();
+          if (!prof?.onboarding_completed) {
+            router.replace({ pathname: "/onboarding", params: { userId: uid } } as any);
+            return;
+          }
+        }
+        router.replace("/(tabs)");
+      } catch (_) {}
+    }
+
     function handleDeepLink(url: string | null) {
       if (!url) return;
+
+      // OAuth callback — custom scheme from WebBrowser.openAuthSessionAsync
+      if (url.startsWith("afuchat://") && url.includes("code=")) {
+        handleOAuthCallback(url);
+        return;
+      }
+
+      // HTTPS deep link — profile handles on afuchat.com
       try {
         const parsed = new URL(url);
         if (parsed.hostname !== "afuchat.com" && parsed.hostname !== "www.afuchat.com") return;
