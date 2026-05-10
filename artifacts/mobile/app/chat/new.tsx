@@ -331,56 +331,61 @@ export default function NewChatScreen() {
       {/* ── "To:" field ── */}
       <View
         style={[
-          styles.toRow,
+          styles.toWrap,
           {
-            backgroundColor: colors.surface,
+            backgroundColor: colors.background,
             borderBottomColor: colors.separator,
           },
         ]}
       >
         <Text style={[styles.toLabel, { color: colors.textMuted }]}>To:</Text>
 
-        {/* Selected chips */}
-        {selected.size > 0 && (
-          <FlatList
-            horizontal
-            data={Array.from(selected.values())}
-            keyExtractor={(c) => c.id}
-            showsHorizontalScrollIndicator={false}
-            style={styles.chipList}
-            contentContainerStyle={{ gap: 6, paddingRight: 6 }}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[styles.chip, { backgroundColor: accent + "22" }]}
-                onPress={() => toggleSelect(item)}
-                activeOpacity={0.75}
-              >
-                <Avatar uri={item.avatar_url} name={item.display_name} size={20} />
-                <Text style={[styles.chipText, { color: accent }]} numberOfLines={1}>
-                  {item.display_name}
-                </Text>
-                <Ionicons name="close-circle" size={14} color={accent} />
-              </TouchableOpacity>
-            )}
-          />
-        )}
+        <View style={[styles.toPill, { backgroundColor: colors.backgroundSecondary }]}>
+          {/* Selected chips */}
+          {selected.size > 0 && (
+            <FlatList
+              horizontal
+              data={Array.from(selected.values())}
+              keyExtractor={(c) => c.id}
+              showsHorizontalScrollIndicator={false}
+              style={styles.chipList}
+              contentContainerStyle={{ gap: 6, paddingRight: 4 }}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[styles.chip, { backgroundColor: accent + "22" }]}
+                  onPress={() => toggleSelect(item)}
+                  activeOpacity={0.75}
+                >
+                  <Avatar uri={item.avatar_url} name={item.display_name} size={18} />
+                  <Text style={[styles.chipText, { color: accent }]} numberOfLines={1}>
+                    {item.display_name}
+                  </Text>
+                  <Ionicons name="close-circle" size={13} color={accent} />
+                </TouchableOpacity>
+              )}
+            />
+          )}
 
-        <TextInput
-          ref={inputRef}
-          style={[styles.toInput, { color: colors.text, minWidth: 80 }]}
-          placeholder={selected.size === 0 ? "Search name or @handle…" : ""}
-          placeholderTextColor={colors.textMuted}
-          value={query}
-          onChangeText={setQuery}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-        />
-        {query.length > 0 && (
-          <Pressable onPress={() => setQuery("")} hitSlop={8}>
-            <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-          </Pressable>
-        )}
+          <TextInput
+            ref={inputRef}
+            style={[styles.toInput, { color: colors.text }]}
+            placeholder={selected.size === 0 ? "Search name or @handle…" : ""}
+            placeholderTextColor={colors.textMuted}
+            value={query}
+            onChangeText={setQuery}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+          />
+
+          {query.length > 0 && (
+            <Pressable onPress={() => setQuery("")} hitSlop={8}>
+              <View style={[styles.clearBtn, { backgroundColor: colors.textMuted + "28" }]}>
+                <Ionicons name="close" size={13} color={colors.textMuted} />
+              </View>
+            </Pressable>
+          )}
+        </View>
       </View>
 
       <View style={styles.body}>
@@ -873,26 +878,33 @@ const styles = StyleSheet.create({
   backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
 
-  toRow: {
+  toWrap: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 14,
     paddingVertical: 10,
-    gap: 8,
+    gap: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: 52,
-    flexWrap: "wrap",
   },
   toLabel: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  chipList: { maxHeight: 32 },
+  toPill: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    height: 40,
+    gap: 9,
+  },
+  chipList: { maxHeight: 28 },
   chip: {
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 20,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
     gap: 5,
-    height: 30,
+    height: 26,
   },
   chipText: {
     fontSize: 13,
@@ -901,9 +913,17 @@ const styles = StyleSheet.create({
   },
   toInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: "Inter_400Regular",
-    height: 36,
+    height: 40,
+    letterSpacing: 0.1,
+  },
+  clearBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   body: { flex: 1, position: "relative" },
