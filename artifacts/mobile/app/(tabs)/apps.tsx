@@ -165,7 +165,7 @@ const CATEGORIES: Category[] = [
         icon: "bookmark",
         gradient: ["#FF6B35", "#FF8C00"],
         route: "/saved-posts",
-        featuredSub: "All your bookmarked posts in one place.",
+        featuredSub: "Saved posts, starred messages, and your collections — all in one place.",
       },
       {
         id: "collections",

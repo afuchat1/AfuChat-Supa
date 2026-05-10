@@ -2549,6 +2549,36 @@ STRICT RULES:
     ]);
   }
 
+  async function handleStarMessage(msg: Message) {
+    if (!user) return;
+    setShowReactions(null);
+    setAiResult(null);
+    setAiResultType(null);
+    setAiReplies([]);
+    const isSpecial = !msg.encrypted_content ||
+      ["📷 Photo", "🎥 Video", "GIF"].includes(msg.encrypted_content) ||
+      msg.encrypted_content.startsWith("🎁 ") ||
+      msg.encrypted_content.startsWith("🧧");
+    const senderProfile = msg.sender;
+    const { error } = await supabase
+      .from("starred_messages")
+      .upsert({
+        user_id: user.id,
+        message_id: msg.id,
+        chat_id: msg.chat_id,
+        content: isSpecial ? (msg.attachment_type === "audio" ? "🎤 Voice message" : msg.encrypted_content) : msg.encrypted_content,
+        sender_id: msg.sender_id,
+        sender_name: senderProfile?.display_name || "Unknown",
+        sender_avatar: senderProfile?.avatar_url || null,
+        attachment_url: msg.attachment_url || null,
+        attachment_type: msg.attachment_type || null,
+      }, { onConflict: "user_id,message_id" });
+    if (!error) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showAlert("Starred", "Message saved to your Saved tab.");
+    }
+  }
+
   async function handleTranslateToLang(langCode: string) {
     if (!translateMsg || translatingLang) return;
     setTranslatingLang(true);
@@ -4297,6 +4327,20 @@ STRICT RULES:
               <Ionicons name="arrow-redo" size={20} color={colors.text} />
               <Text style={[st.reactModalActionText, { color: colors.text }]}>Forward</Text>
             </TouchableOpacity>
+            {showReactions && (() => {
+              const txt = showReactions.encrypted_content?.trim();
+              const isGift = !txt || txt.startsWith("🎁 ") || txt.startsWith("🧧") || txt.includes("|giftId:");
+              if (isGift) return null;
+              return (
+                <TouchableOpacity
+                  style={st.reactModalAction}
+                  onPress={() => { if (showReactions) handleStarMessage(showReactions); }}
+                >
+                  <Ionicons name="star-outline" size={20} color={Colors.gold} />
+                  <Text style={[st.reactModalActionText, { color: colors.text }]}>Star Message</Text>
+                </TouchableOpacity>
+              );
+            })()}
             {showReactions && showReactions.attachment_url && showReactions.attachment_type !== "video" && Platform.OS !== "web" && (
               <TouchableOpacity
                 style={st.reactModalAction}
