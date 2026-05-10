@@ -275,8 +275,7 @@ const st = StyleSheet.create({
   },
 
   soundActions: {
-    marginHorizontal: 16, borderRadius: 14, borderWidth: 1,
-    padding: 14, gap: 12, marginTop: 2,
+    padding: 14, gap: 12,
   },
   testBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
@@ -297,7 +296,6 @@ const st = StyleSheet.create({
 
   // Quick actions info card
   infoCard: {
-    marginHorizontal: 16, borderRadius: 14, borderWidth: 1,
     padding: 14, flexDirection: "row", gap: 12, alignItems: "flex-start",
   },
   infoIconWrap: {

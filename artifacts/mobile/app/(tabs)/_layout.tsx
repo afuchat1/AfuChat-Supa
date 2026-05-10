@@ -124,7 +124,7 @@ function FloatingTabBar() {
         <View
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: isDark ? "rgba(26,26,28,0.97)" : "rgba(255,255,255,0.97)" },
+            { backgroundColor: isDark ? "rgba(26,26,28,0.97)" : "rgba(245,240,232,0.97)" },
           ]}
         />
       )}

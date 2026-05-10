@@ -18,6 +18,8 @@ import { useTheme } from "@/hooks/useTheme";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
+import { GlassCard } from "@/components/ui/GlassCard";
+import { GLASS } from "@/constants/glass";
 
 const USAGE_KEY = "afu_app_usage";
 const { width: SW } = Dimensions.get("window");
@@ -322,7 +324,7 @@ function TrendingSection({
         </Text>
         <Text style={{ fontSize: 14 }}>🔥</Text>
       </View>
-      <View style={[styles.categoryCard, { marginHorizontal: 16 }]}>
+      <GlassCard style={[styles.categoryCard, { marginHorizontal: 16, borderRadius: GLASS.radius.lg, overflow: "hidden" }]} variant="medium">
         <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
           {apps.map((app) => (
             <View key={app.id} style={{ width: TILE_WIDTH, alignItems: "center" }}>
@@ -334,7 +336,7 @@ function TrendingSection({
               <View key={`pad-${i}`} style={{ width: TILE_WIDTH }} />
             ))}
         </View>
-      </View>
+      </GlassCard>
     </View>
   );
 }
@@ -461,7 +463,7 @@ export default function AppsScreen() {
             <Text style={[styles.categoryTitle, { color: colors.textSecondary }]}>
               {cat.title.toUpperCase()}
             </Text>
-            <View style={styles.categoryCard}>
+            <GlassCard style={[styles.categoryCard, { borderRadius: GLASS.radius.lg, overflow: "hidden" }]} variant="medium">
               <View style={styles.appGrid}>
                 {cat.apps.map((app) => (
                   <AppTile key={app.id} app={app} onTap={trackTap} />
@@ -471,7 +473,7 @@ export default function AppsScreen() {
                     <View key={`pad-${i}`} style={{ width: TILE_WIDTH }} />
                   ))}
               </View>
-            </View>
+            </GlassCard>
           </View>
         ))}
       </ScrollView>

@@ -1574,7 +1574,7 @@ export default function DiscoverScreen() {
             style={[StyleSheet.absoluteFill, { zIndex: 0 }]}
           />
         ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? "rgba(10,10,10,0.95)" : "rgba(255,255,255,0.95)", zIndex: 0 }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? "rgba(10,10,10,0.95)" : "rgba(245,240,232,0.95)", zIndex: 0 }]} />
         )}
 
         {/* Tab switcher — YouTube-style underline tabs */}

@@ -641,6 +641,14 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
 
     const chatIds = memberRows.map((m: any) => m.chat_id);
 
+    // Pre-compute which chats need unread counting — skip currently-open and recently-visited chats.
+    // This resolves the race condition where mark-as-read writes from the chat screen haven't
+    // landed in message_status yet by the time loadChats(true) fires.
+    const activeChatId = getActiveChatId();
+    const unreadCheckIds = chatIds.filter(
+      (id) => id !== activeChatId && !wasChatRecentlyVisited(id),
+    );
+
     const [chatResult, lastMsgsResult, unreadMsgsResult] = await Promise.all([
       supabase
         .from("chats")
@@ -657,13 +665,15 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
         .in("chat_id", chatIds)
         .order("sent_at", { ascending: false })
         .limit(chatIds.length * 3),
-      supabase
-        .from("messages")
-        .select("id, chat_id")
-        .in("chat_id", chatIds)
-        .neq("sender_id", user.id)
-        .order("sent_at", { ascending: false })
-        .limit(500),
+      unreadCheckIds.length > 0
+        ? supabase
+            .from("messages")
+            .select("id, chat_id")
+            .in("chat_id", unreadCheckIds)
+            .neq("sender_id", user.id)
+            .order("sent_at", { ascending: false })
+            .limit(2000)
+        : Promise.resolve({ data: [] }),
     ]);
 
     const chatRows = chatResult.data;
@@ -720,10 +730,11 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
       }
     }
 
+    // unreadMsgRows is already pre-filtered to only non-visited, non-active chats
+    // (see unreadCheckIds above) — no need to re-check activeChatId here.
     const unreadMap: Record<string, number> = {};
-    const activeChatId = getActiveChatId();
     for (const msg of unreadMsgRows) {
-      if (!readSet.has(msg.id) && msg.chat_id !== activeChatId) {
+      if (!readSet.has(msg.id)) {
         unreadMap[msg.chat_id] = (unreadMap[msg.chat_id] || 0) + 1;
       }
     }
