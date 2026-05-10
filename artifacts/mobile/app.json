@@ -39,7 +39,7 @@
     "android": {
       "package": "com.afuchat.app",
       "googleServicesFile": "./google-services.json",
-      "softwareKeyboardLayoutMode": "resize",
+      "softwareKeyboardLayoutMode": "pan",
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",

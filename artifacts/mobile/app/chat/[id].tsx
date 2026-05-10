@@ -5,6 +5,7 @@ import {
   FlatList,
   Image,
   Keyboard,
+  LayoutAnimation,
   Modal,
   PanResponder,
   Platform,
@@ -12,10 +13,12 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  UIManager,
   useWindowDimensions,
   TouchableOpacity,
   View,
 } from "react-native";
+
 import { BlurView } from "expo-blur";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -139,6 +142,11 @@ type ChatInfo = {
   other_last_seen?: string | null;
   other_show_online_status?: boolean;
 };
+
+// Enable LayoutAnimation on Android so keyboard show/hide transitions are smooth.
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 const BRAND_FALLBACK = Colors.brand;
@@ -1232,14 +1240,30 @@ function ChatScreen() {
 
   useEffect(() => {
     if (Platform.OS === "web") return;
+    // iOS: use Will events for zero-lag animation in sync with the keyboard.
+    // Android (pan mode): use Did events; animate layout changes manually.
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
     const onShow = Keyboard.addListener(showEvent, (e) => {
       const h = e.endCoordinates.height;
+      if (Platform.OS === "android") {
+        LayoutAnimation.configureNext({
+          duration: 180,
+          update: { type: LayoutAnimation.Types.easeInEaseOut },
+        });
+      }
       setKeyboardHeight(h);
       if (h > 100) setEmojiKeyboardHeight(h);
     });
-    const onHide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    const onHide = Keyboard.addListener(hideEvent, () => {
+      if (Platform.OS === "android") {
+        LayoutAnimation.configureNext({
+          duration: 180,
+          update: { type: LayoutAnimation.Types.easeInEaseOut },
+        });
+      }
+      setKeyboardHeight(0);
+    });
     return () => { onShow.remove(); onHide.remove(); };
   }, []);
   const [showGiftPicker, setShowGiftPicker] = useState(false);
@@ -3800,7 +3824,7 @@ STRICT RULES:
               extraData={highlightedMsgId}
               renderItem={renderMessage}
               inverted
-              contentContainerStyle={[st.listContent, { paddingBottom: floatingInputHeight + (keyboardHeight > 0 ? keyboardHeight : insets.bottom) + 16 }]}
+              contentContainerStyle={[st.listContent, { paddingTop: floatingInputHeight + (keyboardHeight > 0 ? keyboardHeight : insets.bottom) + 16 }]}
               showsVerticalScrollIndicator={false}
               onScroll={handleScroll}
               scrollEventThrottle={16}
@@ -3830,7 +3854,7 @@ STRICT RULES:
               }
             />
             <Animated.View
-              style={[st.scrollFab, { opacity: scrollBtnOpacity, backgroundColor: colors.surface, bottom: floatingInputHeight + 8 }]}
+              style={[st.scrollFab, { opacity: scrollBtnOpacity, backgroundColor: colors.surface, bottom: floatingInputHeight + (keyboardHeight > 0 ? keyboardHeight : insets.bottom) + 8 }]}
               pointerEvents={showScrollBtn ? "auto" : "none"}
             >
               <TouchableOpacity onPress={scrollToBottom} style={st.scrollFabBtn} activeOpacity={0.7}>
