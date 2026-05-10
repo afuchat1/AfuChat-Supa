@@ -315,10 +315,6 @@ export default function MeScreen() {
                 </View>
               )}
             </View>
-            <View style={[s.editChip, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
-              <Ionicons name="pencil" size={13} color={colors.textMuted} />
-              <Text style={[s.editChipText, { color: colors.textMuted }]}>Edit</Text>
-            </View>
           </TouchableOpacity>
 
           {/* Bio */}
@@ -376,7 +372,6 @@ export default function MeScreen() {
           {[
             { icon: "person-circle-outline", label: "View Profile", color: accent, onPress: () => profile?.id && router.push({ pathname: "/contact/[id]", params: { id: profile.id, init_name: profile.display_name ?? "", init_handle: profile.handle ?? "", init_avatar: profile.avatar_url ?? "" } }) },
             { icon: "pencil-outline",        label: "Edit Profile", color: "#007AFF", onPress: () => router.push("/profile/edit") },
-            { icon: "people-outline",        label: "Find People",  color: "#34C759", onPress: () => router.push("/user-discovery") },
             { icon: "at-outline",            label: "Usernames",    color: "#5856D6", onPress: () => router.push("/username-market") },
           ].map((a, i) => (
             <TouchableOpacity key={a.label} style={s.quickBtn} onPress={a.onPress} activeOpacity={0.75}>
@@ -529,8 +524,6 @@ const s = StyleSheet.create({
   heroHandle: { fontSize: 13, fontFamily: "Inter_400Regular" },
   heroBio: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19, paddingHorizontal: 16, paddingBottom: 12, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 10 },
   premiumDot: { position: "absolute", bottom: -2, right: -2, width: 18, height: 18, borderRadius: 9, backgroundColor: "#FFD60A", alignItems: "center", justifyContent: "center" },
-  editChip: { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, alignSelf: "flex-start", marginTop: 2 },
-  editChipText: { fontSize: 12, fontFamily: "Inter_500Medium" },
   businessChip: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3, alignSelf: "flex-start", marginTop: 3 },
   businessChipText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
 
