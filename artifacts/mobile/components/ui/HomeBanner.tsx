@@ -232,7 +232,16 @@ function ContactPickerSheet({ visible, gradient, eventName, onClose, onSelect }:
       Animated.spring(slideAnim, { toValue: 0, tension: 65, friction: 12, useNativeDriver: true }).start();
 
       getLocalContacts().then((local) => {
-        if (local.length > 0) { setContacts(local); setLoading(false); }
+        if (local.length > 0) {
+          const seen = new Set<string>();
+          const deduped = local.filter((c) => {
+            if (seen.has(c.id)) return false;
+            seen.add(c.id);
+            return true;
+          });
+          setContacts(deduped);
+          setLoading(false);
+        }
       });
 
       if (isOnline()) {
@@ -241,9 +250,15 @@ function ContactPickerSheet({ visible, gradient, eventName, onClose, onSelect }:
           .select("following_id, profiles!follows_following_id_fkey(id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified)")
           .then(({ data: rows }) => {
             if (rows) {
+              const seen = new Set<string>();
               const list = rows
                 .map((r: any) => r.profiles)
                 .filter(Boolean)
+                .filter((p: any) => {
+                  if (seen.has(p.id)) return false;
+                  seen.add(p.id);
+                  return true;
+                })
                 .sort((a: any, b: any) => a.display_name.localeCompare(b.display_name));
               setContacts(list);
             }
@@ -257,13 +272,21 @@ function ContactPickerSheet({ visible, gradient, eventName, onClose, onSelect }:
     }
   }, [visible]);
 
-  const filtered = search.trim()
-    ? contacts.filter(
-        (c) =>
-          c.display_name.toLowerCase().includes(search.toLowerCase()) ||
-          c.handle.toLowerCase().includes(search.toLowerCase()),
-      )
-    : contacts;
+  const filtered = (() => {
+    const base = search.trim()
+      ? contacts.filter(
+          (c) =>
+            c.display_name.toLowerCase().includes(search.toLowerCase()) ||
+            c.handle.toLowerCase().includes(search.toLowerCase()),
+        )
+      : contacts;
+    const seen = new Set<string>();
+    return base.filter((c) => {
+      if (seen.has(c.id)) return false;
+      seen.add(c.id);
+      return true;
+    });
+  })();
 
   if (!visible) return null;
 
