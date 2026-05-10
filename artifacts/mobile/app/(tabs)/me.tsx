@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
 import {
+  Animated,
   Platform,
   ScrollView,
   StyleSheet,
@@ -10,20 +11,11 @@ import {
   View,
 } from "react-native";
 import { MeTabSkeleton } from "@/components/ui/Skeleton";
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withTiming,
-} from "react-native-reanimated";
-import { LinearGradient } from "expo-linear-gradient";
 import { Redirect, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { useAuth } from "@/context/AuthContext";
-import { showAlert } from "@/lib/alert";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { AvatarViewer } from "@/components/ui/AvatarViewer";
@@ -31,21 +23,127 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import Colors from "@/constants/colors";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { PrestigeBadge } from "@/components/ui/PrestigeBadge";
-import { GlassCard } from "@/components/ui/GlassCard";
-import { GlassMenuSection, GlassMenuItem, GlassMenuSeparator } from "@/components/ui/GlassMenuItem";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmtCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
+function fmtAcoin(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
+// ─── Flat Menu Item ───────────────────────────────────────────────────────────
+
+type MenuItemProps = {
+  icon: string;
+  iconColor: string;
+  label: string;
+  value?: string;
+  badge?: string;
+  badgeColor?: string;
+  onPress: () => void;
+  showSeparator?: boolean;
+  colors: any;
+  destructive?: boolean;
+};
+
+function MenuItem({ icon, iconColor, label, value, badge, badgeColor, onPress, showSeparator, colors, destructive }: MenuItemProps) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  function onPressIn() {
+    Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, speed: 60, bounciness: 0 }).start();
+  }
+  function onPressOut() {
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 40, bounciness: 4 }).start();
+  }
+
+  return (
+    <>
+      <Animated.View style={{ transform: [{ scale }] }}>
+        <TouchableOpacity
+          style={mi.row}
+          onPress={() => { Haptics.selectionAsync(); onPress(); }}
+          onPressIn={onPressIn}
+          onPressOut={onPressOut}
+          activeOpacity={1}
+        >
+          <View style={[mi.iconWrap, { backgroundColor: iconColor + "18" }]}>
+            <Ionicons name={icon as any} size={19} color={iconColor} />
+          </View>
+          <Text style={[mi.label, { color: destructive ? "#FF3B30" : colors.text }]} numberOfLines={1}>
+            {label}
+          </Text>
+          <View style={mi.right}>
+            {!!value && (
+              <Text style={[mi.value, { color: colors.textMuted }]} numberOfLines={1}>{value}</Text>
+            )}
+            {!!badge && (
+              <View style={[mi.badge, { backgroundColor: (badgeColor || colors.accent) + "20" }]}>
+                <Text style={[mi.badgeText, { color: badgeColor || colors.accent }]}>{badge}</Text>
+              </View>
+            )}
+            <Ionicons name="chevron-forward" size={15} color={colors.textMuted + "80"} />
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
+      {showSeparator && <View style={[mi.sep, { backgroundColor: colors.border }]} />}
+    </>
+  );
+}
+
+const mi = StyleSheet.create({
+  row: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12, gap: 12 },
+  iconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  label: { flex: 1, fontSize: 15, fontFamily: "Inter_500Medium" },
+  right: { flexDirection: "row", alignItems: "center", gap: 6 },
+  value: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  badge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 20 },
+  badgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  sep: { height: StyleSheet.hairlineWidth, marginLeft: 62 },
+});
+
+// ─── Section Label ────────────────────────────────────────────────────────────
+
+function SectionLabel({ label, colors }: { label: string; colors: any }) {
+  return (
+    <Text style={[sl.text, { color: colors.textMuted }]}>{label.toUpperCase()}</Text>
+  );
+}
+const sl = StyleSheet.create({
+  text: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.8, marginBottom: 6, marginLeft: 4 },
+});
+
+// ─── Menu Card ────────────────────────────────────────────────────────────────
+
+function MenuCard({ children, colors }: { children: React.ReactNode; colors: any }) {
+  return (
+    <View style={[mc.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      {children}
+    </View>
+  );
+}
+const mc = StyleSheet.create({
+  card: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden" },
+});
 
 // ─── Profile completion bar ───────────────────────────────────────────────────
+
 type ProfileFields = {
   avatar_url?: string | null; bio?: string | null; country?: string | null;
   website_url?: string | null; display_name?: string | null; handle?: string | null;
 };
 
-function ProfileCompletionBar({ profile, isPremium }: { profile: ProfileFields | null; isPremium: boolean }) {
-  const { colors, isDark } = useTheme();
-  const fillAnim = useSharedValue(0);
+function ProfileCompletionBar({ profile, isPremium, colors, accent }: { profile: ProfileFields | null; isPremium: boolean; colors: any; accent: string }) {
+  const fillAnim = useRef(new Animated.Value(0)).current;
 
   const checks = [
-    { label: "Avatar",  done: !!profile?.avatar_url },
+    { label: "Photo",   done: !!profile?.avatar_url },
     { label: "Bio",     done: !!profile?.bio },
     { label: "Country", done: !!profile?.country },
     { label: "Website", done: !!profile?.website_url },
@@ -55,49 +153,59 @@ function ProfileCompletionBar({ profile, isPremium }: { profile: ProfileFields |
   const pct   = score / checks.length;
 
   useEffect(() => {
-    fillAnim.value = withDelay(400, withTiming(pct, { duration: 900, easing: Easing.out(Easing.cubic) }));
+    Animated.timing(fillAnim, { toValue: pct, duration: 900, delay: 400, useNativeDriver: false }).start();
   }, [pct]);
-
-  const fillStyle = useAnimatedStyle(() => ({ width: `${fillAnim.value * 100}%` as any }));
 
   if (score === checks.length) return null;
 
   return (
-    <GlassCard style={{ borderRadius: 16, overflow: "hidden" }} variant="subtle" noShadow>
-      <TouchableOpacity
-        style={{ padding: 16 }}
-        onPress={() => router.push("/profile/edit")}
-        activeOpacity={0.8}
-      >
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>Profile Completion</Text>
-          <Text style={{ color: colors.accent, fontFamily: "Inter_700Bold", fontSize: 13 }}>{Math.round(pct * 100)}%</Text>
-        </View>
-        <View style={{ height: 5, borderRadius: 3, backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)", overflow: "hidden" }}>
-          <Animated.View style={[{ height: "100%", borderRadius: 3, overflow: "hidden" }, fillStyle]}>
-            <LinearGradient colors={[colors.accent, Colors.gold]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
-          </Animated.View>
-        </View>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
-          {checks.map((c) => (
-            <View key={c.label} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <Ionicons name={c.done ? "checkmark-circle" : "ellipse-outline"} size={13} color={c.done ? "#34C759" : colors.textMuted} />
-              <Text style={{ color: c.done ? colors.textSecondary : colors.textMuted, fontSize: 11, fontFamily: "Inter_400Regular" }}>{c.label}</Text>
+    <View>
+      <SectionLabel label="Profile" colors={colors} />
+      <MenuCard colors={colors}>
+        <TouchableOpacity style={pc.wrap} onPress={() => router.push("/profile/edit")} activeOpacity={0.8}>
+          <View style={pc.topRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={[pc.title, { color: colors.text }]}>Complete your profile</Text>
+              <Text style={[pc.sub, { color: colors.textMuted }]}>{score} of {checks.length} steps done</Text>
             </View>
-          ))}
-        </View>
-      </TouchableOpacity>
-    </GlassCard>
+            <View style={[pc.pctBubble, { backgroundColor: accent + "18" }]}>
+              <Text style={[pc.pctText, { color: accent }]}>{Math.round(pct * 100)}%</Text>
+            </View>
+          </View>
+          <View style={[pc.track, { backgroundColor: colors.border }]}>
+            <Animated.View
+              style={[pc.fill, { backgroundColor: accent, width: fillAnim.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]}
+            />
+          </View>
+          <View style={pc.checks}>
+            {checks.map((c) => (
+              <View key={c.label} style={pc.checkItem}>
+                <Ionicons name={c.done ? "checkmark-circle" : "ellipse-outline"} size={14} color={c.done ? "#34C759" : colors.border} />
+                <Text style={[pc.checkLabel, { color: c.done ? colors.textSecondary : colors.textMuted }]}>{c.label}</Text>
+              </View>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </MenuCard>
+    </View>
   );
 }
-
-function fmtCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
+const pc = StyleSheet.create({
+  wrap: { padding: 14, gap: 10 },
+  topRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  title: { fontSize: 14, fontFamily: "Inter_600SemiBold", marginBottom: 1 },
+  sub: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  pctBubble: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  pctText: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  track: { height: 4, borderRadius: 2, overflow: "hidden" },
+  fill: { height: "100%", borderRadius: 2 },
+  checks: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  checkItem: { flexDirection: "row", alignItems: "center", gap: 4 },
+  checkLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
+});
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
+
 export default function MeScreen() {
   const { colors, isDark, accent } = useTheme();
   const { profile, isPremium, subscription, loading, user } = useAuth();
@@ -149,238 +257,317 @@ export default function MeScreen() {
     );
   }
 
+  const acoin = profile?.acoin || 0;
+  const showBusinessBanner = hasCompanyPage && !profile?.is_organization_verified && !isOrgPageVerified && !hasVerifApp && !verifyBannerDismissed;
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.backgroundSecondary }}>
       <OfflineBanner />
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 88 }]}
+        contentContainerStyle={[s.content, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 96 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Profile card ──────────────────────────────────────────────── */}
-        <GlassCard style={styles.profileCard} variant="medium">
+
+        {/* ── Profile Hero Card ──────────────────────────────────────── */}
+        <View style={[s.heroCard, { backgroundColor: colors.surface, borderColor: colors.border, borderTopColor: accent }]}>
+
+          {/* Top row: avatar + info */}
           <TouchableOpacity
-            style={styles.profileCardInner}
+            style={s.heroTop}
             onPress={() => router.push("/profile/edit")}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
           >
-            <TouchableOpacity activeOpacity={0.85} onPress={() => setAvatarOpen(true)}>
+            <TouchableOpacity activeOpacity={0.9} onPress={() => setAvatarOpen(true)} style={{ position: "relative" }}>
               <Avatar
-                uri={profile?.avatar_url} name={profile?.display_name} size={70}
-                premium={isPremium} square={!!(profile?.is_organization_verified || profile?.is_business_mode)}
+                uri={profile?.avatar_url}
+                name={profile?.display_name}
+                size={76}
+                premium={isPremium}
+                square={!!(profile?.is_organization_verified || profile?.is_business_mode)}
               />
-            </TouchableOpacity>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                <Text style={[styles.profileName, { color: colors.text }]} numberOfLines={1} ellipsizeMode="tail">
-                  {profile?.display_name || "User"}
-                </Text>
-                <VerifiedBadge isVerified={profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={18} />
-                {isPremium && (
-                  <View style={styles.premiumBadge}>
-                    <Ionicons name="diamond" size={11} color="#fff" />
-                  </View>
-                )}
-              </View>
-              <PrestigeBadge acoin={profile?.acoin || 0} size="md" showLabel />
-              <Text style={[styles.profileHandle, { color: colors.textMuted }]}>
-                @{profile?.handle || "handle"}
-              </Text>
-              {profile?.is_organization_verified && (
-                <View style={styles.businessTag}>
-                  <Ionicons name="briefcase" size={10} color="#fff" />
-                  <Text style={styles.businessTagText}>Business</Text>
+              {isPremium && (
+                <View style={s.premiumDot}>
+                  <Ionicons name="diamond" size={9} color="#fff" />
                 </View>
               )}
-              {profile?.bio ? (
-                <Text style={[styles.profileBio, { color: colors.textMuted }]} numberOfLines={1}>
-                  {profile.bio}
-                </Text>
-              ) : null}
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
-        </GlassCard>
-
-        {/* ── View public profile ──────────────────────────────────────── */}
-        {profile?.id && (
-          <GlassCard style={styles.viewProfileBtn} variant="subtle" noShadow>
-            <TouchableOpacity
-              style={styles.viewProfileInner}
-              activeOpacity={0.75}
-              onPress={() => router.push({ pathname: "/contact/[id]", params: { id: profile.id, init_name: profile.display_name ?? "", init_handle: profile.handle ?? "", init_avatar: profile.avatar_url ?? "" } })}
-            >
-              <Ionicons name="person-circle-outline" size={17} color={colors.accent} />
-              <Text style={[styles.viewProfileText, { color: colors.accent }]}>View public profile</Text>
-              <Ionicons name="chevron-forward" size={14} color={colors.accent} style={{ marginLeft: "auto" }} />
             </TouchableOpacity>
-          </GlassCard>
-        )}
 
-        {/* ── Social stats ─────────────────────────────────────────────── */}
-        <GlassCard style={styles.statsCard} variant="medium">
+            <View style={{ flex: 1, gap: 2 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                <Text style={[s.heroName, { color: colors.text }]} numberOfLines={1} ellipsizeMode="tail">
+                  {profile?.display_name || "User"}
+                </Text>
+                <VerifiedBadge
+                  isVerified={profile?.is_verified}
+                  isOrganizationVerified={profile?.is_organization_verified}
+                  size={17}
+                />
+              </View>
+              <Text style={[s.heroHandle, { color: colors.textMuted }]}>@{profile?.handle || "handle"}</Text>
+              <View style={{ marginTop: 2 }}>
+                <PrestigeBadge acoin={acoin} size="sm" showLabel />
+              </View>
+              {profile?.is_organization_verified && (
+                <View style={[s.businessChip, { backgroundColor: Colors.gold + "20" }]}>
+                  <Ionicons name="briefcase" size={10} color={Colors.gold} />
+                  <Text style={[s.businessChipText, { color: Colors.gold }]}>Business</Text>
+                </View>
+              )}
+            </View>
+            <View style={[s.editChip, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+              <Ionicons name="pencil" size={13} color={colors.textMuted} />
+              <Text style={[s.editChipText, { color: colors.textMuted }]}>Edit</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Bio */}
+          {!!profile?.bio && (
+            <Text style={[s.heroBio, { color: colors.textSecondary, borderTopColor: colors.border }]} numberOfLines={2}>
+              {profile.bio}
+            </Text>
+          )}
+
+          {/* ACoin bar */}
+          <TouchableOpacity
+            style={[s.acoinBar, { backgroundColor: Colors.gold + "12", borderTopColor: colors.border }]}
+            onPress={() => router.push("/wallet")}
+            activeOpacity={0.8}
+          >
+            <View style={[s.acoinIconWrap, { backgroundColor: Colors.gold + "22" }]}>
+              <Text style={s.acoinEmoji}>🪙</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.acoinBalance, { color: Colors.gold }]}>{fmtAcoin(acoin)} ACoin</Text>
+              <Text style={[s.acoinSub, { color: colors.textMuted }]}>Tap to open wallet</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={15} color={Colors.gold + "80"} />
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Stats Row ─────────────────────────────────────────────── */}
+        <View style={[s.statsRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           {[
-            { label: "Followers", count: followerCount, onPress: () => profile?.id && router.push({ pathname: "/followers", params: { userId: profile.id, type: "followers", ownerHandle: profile.handle } } as any) },
-            { label: "Following", count: followingCount, onPress: () => profile?.id && router.push({ pathname: "/followers", params: { userId: profile.id, type: "following", ownerHandle: profile.handle } } as any) },
-            { label: "Posts",     count: postCount,      onPress: () => profile?.id && router.push({ pathname: "/contact/[id]", params: { id: profile.id, init_name: profile.display_name ?? "", init_handle: profile.handle ?? "", init_avatar: profile.avatar_url ?? "" } }) },
-          ].map((s, i) => (
-            <React.Fragment key={s.label}>
-              {i > 0 && <View style={[styles.statDivider, { backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)" }]} />}
-              <TouchableOpacity style={styles.statCell} activeOpacity={0.7} onPress={s.onPress}>
-                <Text style={[styles.statValue, { color: colors.text }]}>{fmtCount(s.count)}</Text>
-                <Text style={[styles.statLabel, { color: colors.textMuted }]}>{s.label}</Text>
+            {
+              label: "Followers", count: followerCount,
+              onPress: () => profile?.id && router.push({ pathname: "/followers", params: { userId: profile.id, type: "followers", ownerHandle: profile.handle } } as any),
+            },
+            {
+              label: "Following", count: followingCount,
+              onPress: () => profile?.id && router.push({ pathname: "/followers", params: { userId: profile.id, type: "following", ownerHandle: profile.handle } } as any),
+            },
+            {
+              label: "Posts", count: postCount,
+              onPress: () => profile?.id && router.push({ pathname: "/contact/[id]", params: { id: profile.id, init_name: profile.display_name ?? "", init_handle: profile.handle ?? "", init_avatar: profile.avatar_url ?? "" } }),
+            },
+          ].map((stat, i) => (
+            <React.Fragment key={stat.label}>
+              {i > 0 && <View style={[s.statDivider, { backgroundColor: colors.border }]} />}
+              <TouchableOpacity style={s.statCell} onPress={stat.onPress} activeOpacity={0.7}>
+                <Text style={[s.statValue, { color: colors.text }]}>{fmtCount(stat.count)}</Text>
+                <Text style={[s.statLabel, { color: colors.textMuted }]}>{stat.label}</Text>
               </TouchableOpacity>
             </React.Fragment>
           ))}
-        </GlassCard>
+        </View>
 
-        {/* ── Profile completion ───────────────────────────────────────── */}
-        <ProfileCompletionBar profile={profile} isPremium={isPremium} />
+        {/* ── Quick Actions ─────────────────────────────────────────── */}
+        <View style={[s.quickRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {[
+            { icon: "person-circle-outline", label: "View Profile", color: accent, onPress: () => profile?.id && router.push({ pathname: "/contact/[id]", params: { id: profile.id, init_name: profile.display_name ?? "", init_handle: profile.handle ?? "", init_avatar: profile.avatar_url ?? "" } }) },
+            { icon: "pencil-outline",        label: "Edit Profile", color: "#007AFF", onPress: () => router.push("/profile/edit") },
+            { icon: "people-outline",        label: "Find People",  color: "#34C759", onPress: () => router.push("/user-discovery") },
+            { icon: "at-outline",            label: "Usernames",    color: "#5856D6", onPress: () => router.push("/username-market") },
+          ].map((a, i) => (
+            <TouchableOpacity key={a.label} style={s.quickBtn} onPress={a.onPress} activeOpacity={0.75}>
+              <View style={[s.quickIconWrap, { backgroundColor: a.color + "15" }]}>
+                <Ionicons name={a.icon as any} size={20} color={a.color} />
+              </View>
+              <Text style={[s.quickLabel, { color: colors.textSecondary }]} numberOfLines={1}>{a.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-        {/* ── Business verify banner ───────────────────────────────────── */}
-        {hasCompanyPage && !profile?.is_organization_verified && !isOrgPageVerified && !hasVerifApp && !verifyBannerDismissed && (
-          <GlassCard style={{ borderRadius: 16, overflow: "hidden" }} variant="subtle">
-            <LinearGradient
-              colors={["rgba(212,168,83,0.20)", "rgba(212,168,83,0.06)"]}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-            <View style={styles.verifyBannerInner}>
-              <View style={styles.verifyBannerLeft}>
-                <View style={styles.verifyIconWrap}>
-                  <Ionicons name="shield-checkmark-outline" size={22} color="#D4A853" />
+        {/* ── Profile Completion ─────────────────────────────────────── */}
+        <ProfileCompletionBar profile={profile} isPremium={isPremium} colors={colors} accent={accent} />
+
+        {/* ── Business Verify Banner ─────────────────────────────────── */}
+        {showBusinessBanner && (
+          <View>
+            <SectionLabel label="Business" colors={colors} />
+            <View style={[s.verifyBanner, { backgroundColor: colors.surface, borderColor: colors.border, borderLeftColor: Colors.gold }]}>
+              <View style={s.verifyLeft}>
+                <View style={[s.verifyIconWrap, { backgroundColor: Colors.gold + "18" }]}>
+                  <Ionicons name="shield-checkmark-outline" size={22} color={Colors.gold} />
                 </View>
-                <View style={{ flex: 1, gap: 3 }}>
-                  <Text style={styles.verifyTitle}>Verify your business</Text>
-                  <Text style={styles.verifySub}>Stand out with the gold badge — it builds trust with followers.</Text>
-                  <TouchableOpacity style={styles.verifyBtn} onPress={() => router.push("/company" as any)} activeOpacity={0.85}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.verifyTitle, { color: Colors.gold }]}>Verify your business</Text>
+                  <Text style={[s.verifySub, { color: colors.textMuted }]}>Get the gold badge — builds trust with followers.</Text>
+                  <TouchableOpacity
+                    style={[s.verifyBtn, { backgroundColor: Colors.gold }]}
+                    onPress={() => router.push("/company" as any)}
+                    activeOpacity={0.85}
+                  >
                     <Ionicons name="checkmark-circle-outline" size={13} color="#fff" />
-                    <Text style={styles.verifyBtnText}>Go to Company Pages</Text>
+                    <Text style={s.verifyBtnText}>Company Pages</Text>
                   </TouchableOpacity>
                 </View>
               </View>
-              <TouchableOpacity hitSlop={12} onPress={dismissVerifyBanner} style={{ padding: 2, marginTop: -2 }}>
-                <Ionicons name="close" size={17} color="#D4A85380" />
+              <TouchableOpacity hitSlop={14} onPress={dismissVerifyBanner}>
+                <Ionicons name="close" size={18} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
-          </GlassCard>
+          </View>
         )}
 
-        {/* ── Premium banner ───────────────────────────────────────────── */}
+        {/* ── Premium Banner ─────────────────────────────────────────── */}
         {!isPremium && (
-          <TouchableOpacity onPress={() => router.push("/premium")} activeOpacity={0.85}>
-            <LinearGradient
-              colors={["#1a1a2e", "#16213e", "#0f3460"]}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={styles.premiumBanner}
-            >
-              <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(255,214,10,0.06)", borderRadius: 16 }]} />
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-                <View style={styles.premiumIconWrap}>
-                  <Ionicons name="diamond" size={24} color="#FFD60A" />
-                </View>
-                <View>
-                  <Text style={styles.premiumTitle}>Upgrade to Premium</Text>
-                  <Text style={styles.premiumSub}>Pay with ACoin for badges, linked accounts & more</Text>
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.5)" />
-            </LinearGradient>
+          <TouchableOpacity
+            style={[s.premiumBanner, { backgroundColor: "#0f1923", borderColor: "#FFD60A30" }]}
+            onPress={() => router.push("/premium")}
+            activeOpacity={0.88}
+          >
+            <View style={[s.premiumIconWrap, { backgroundColor: "#FFD60A18" }]}>
+              <Ionicons name="diamond" size={22} color="#FFD60A" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.premiumTitle}>Upgrade to Premium</Text>
+              <Text style={s.premiumSub}>Badges, linked accounts, exclusive perks & more</Text>
+            </View>
+            <View style={[s.premiumChip, { backgroundColor: "#FFD60A22" }]}>
+              <Text style={s.premiumChipText}>Upgrade</Text>
+            </View>
           </TouchableOpacity>
         )}
 
-        {/* ── Menu sections ─────────────────────────────────────────────── */}
-        <GlassMenuSection>
-          <GlassMenuItem icon="business-outline" iconBg={["#00BCD4", "#0097A7"]} label="Company Pages" onPress={() => router.push("/company" as any)} />
-        </GlassMenuSection>
-
-        <GlassMenuSection>
-          <GlassMenuItem icon="trophy" iconBg={["#D4A853", "#B8902A"]} label="Prestige Status" badge="NEW" badgeColor="#D4A853" onPress={() => router.push("/prestige")} />
-          {isAdmin && (
-            <>
-              <GlassMenuSeparator />
-              <GlassMenuItem icon="videocam-outline" iconBg={["#32D74B", "#25A83A"]} label="Creator Studio" badge="Admin" badgeColor={colors.accent} onPress={() => router.push("/monetize")} />
-            </>
-          )}
-        </GlassMenuSection>
-
-        <GlassMenuSection>
-          <GlassMenuItem icon="person-add-outline" iconBg={["#00BCD4", "#0097A7"]} label="Find People" badge="NEW" badgeColor={colors.accent} onPress={() => router.push("/user-discovery")} />
-        </GlassMenuSection>
-
-        <GlassMenuSection>
-          <GlassMenuItem
-            icon="diamond-outline" iconBg={["#FFD60A", "#F0C000"]}
-            label="Premium"
-            value={isPremium ? `Active (${subscription?.plan_tier})` : ""}
-            onPress={() => router.push("/premium")}
-          />
-        </GlassMenuSection>
-
-        <GlassMenuSection>
-          <GlassMenuItem icon="sparkles-outline" iconBg={["#BF5AF2", "#9B3FD5"]} label="Advanced Features" onPress={() => router.push("/advanced-features")} />
-          <GlassMenuSeparator />
-          <GlassMenuItem icon="settings-outline" iconBg={["#636366", "#48484A"]} label="Settings" onPress={() => router.push("/settings")} />
-          <GlassMenuSeparator />
-          <GlassMenuItem icon="help-buoy-outline" iconBg={["#5856D6", "#3D3BAA"]} label="Support Center" onPress={() => router.push("/support" as any)} />
-          <GlassMenuSeparator />
-          <GlassMenuItem icon="information-circle-outline" iconBg={["#007AFF", "#0055FF"]} label="About AfuChat" onPress={() => router.push("/about" as any)} />
-        </GlassMenuSection>
-
-        {(profile?.is_admin || profile?.is_support_staff) && (
-          <GlassMenuSection>
-            <GlassMenuItem icon="headset-outline" iconBg={["#FF6B35", "#E05020"]} label="Support Dashboard" badge="Staff" badgeColor="#FF6B35" onPress={() => router.push("/admin/support-dashboard" as any)} />
-            {profile?.is_admin && (
-              <>
-                <GlassMenuSeparator />
-                <GlassMenuItem icon="shield-checkmark" iconBg={[colors.accent, "#0097A7"]} label="Admin Dashboard" badge="Admin" badgeColor={colors.accent} onPress={() => router.push("/admin")} />
-              </>
-            )}
-          </GlassMenuSection>
+        {isPremium && (
+          <View>
+            <SectionLabel label="Subscription" colors={colors} />
+            <MenuCard colors={colors}>
+              <MenuItem
+                icon="diamond"
+                iconColor="#FFD60A"
+                label="Premium Active"
+                value={subscription?.plan_tier ? `Plan: ${subscription.plan_tier}` : "Active"}
+                onPress={() => router.push("/premium")}
+                colors={colors}
+              />
+            </MenuCard>
+          </View>
         )}
+
+        {/* ── Growth & Social ────────────────────────────────────────── */}
+        <View>
+          <SectionLabel label="Growth" colors={colors} />
+          <MenuCard colors={colors}>
+            <MenuItem icon="trophy" iconColor="#D4A853" label="Prestige Status" badge="NEW" badgeColor="#D4A853" onPress={() => router.push("/prestige")} showSeparator colors={colors} />
+            <MenuItem icon="business-outline" iconColor={accent} label="Company Pages" onPress={() => router.push("/company" as any)} showSeparator colors={colors} />
+            <MenuItem icon="people" iconColor="#34C759" label="Find People" badge="NEW" badgeColor="#34C759" onPress={() => router.push("/user-discovery")} showSeparator colors={colors} />
+            <MenuItem icon="at" iconColor="#5856D6" label="Username Market" onPress={() => router.push("/username-market")} colors={colors} />
+          </MenuCard>
+        </View>
+
+        {/* ── Creator (admin only) ───────────────────────────────────── */}
+        {isAdmin && (
+          <View>
+            <SectionLabel label="Creator" colors={colors} />
+            <MenuCard colors={colors}>
+              <MenuItem icon="videocam-outline" iconColor="#32D74B" label="Creator Studio" badge="Admin" badgeColor={accent} onPress={() => router.push("/monetize")} colors={colors} />
+            </MenuCard>
+          </View>
+        )}
+
+        {/* ── Account ────────────────────────────────────────────────── */}
+        <View>
+          <SectionLabel label="Account" colors={colors} />
+          <MenuCard colors={colors}>
+            <MenuItem icon="sparkles-outline" iconColor="#BF5AF2" label="Advanced Features" onPress={() => router.push("/advanced-features")} showSeparator colors={colors} />
+            <MenuItem icon="settings-outline" iconColor="#636366" label="Settings" onPress={() => router.push("/settings")} showSeparator colors={colors} />
+            <MenuItem icon="help-buoy-outline" iconColor="#5856D6" label="Support Center" onPress={() => router.push("/support" as any)} showSeparator colors={colors} />
+            <MenuItem icon="information-circle-outline" iconColor="#007AFF" label="About AfuChat" onPress={() => router.push("/about" as any)} colors={colors} />
+          </MenuCard>
+        </View>
+
+        {/* ── Staff / Admin ──────────────────────────────────────────── */}
+        {(profile?.is_admin || profile?.is_support_staff) && (
+          <View>
+            <SectionLabel label="Staff" colors={colors} />
+            <MenuCard colors={colors}>
+              <MenuItem icon="headset-outline" iconColor="#FF6B35" label="Support Dashboard" badge="Staff" badgeColor="#FF6B35" onPress={() => router.push("/admin/support-dashboard" as any)} showSeparator={!!profile?.is_admin} colors={colors} />
+              {profile?.is_admin && (
+                <MenuItem icon="shield-checkmark" iconColor={accent} label="Admin Dashboard" badge="Admin" badgeColor={accent} onPress={() => router.push("/admin")} colors={colors} />
+              )}
+            </MenuCard>
+          </View>
+        )}
+
       </ScrollView>
 
       <AvatarViewer
-        visible={avatarOpen} uri={profile?.avatar_url}
-        name={profile?.display_name || undefined} onClose={() => setAvatarOpen(false)}
+        visible={avatarOpen}
+        uri={profile?.avatar_url}
+        name={profile?.display_name || undefined}
+        onClose={() => setAvatarOpen(false)}
       />
     </View>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  content: { gap: 14, paddingHorizontal: 16 },
+const s = StyleSheet.create({
+  content: { gap: 14, paddingHorizontal: 14 },
 
-  profileCard: { borderRadius: 20, overflow: "hidden" },
-  profileCardInner: { flexDirection: "row", alignItems: "center", padding: 16, gap: 14 },
-  profileName: { fontSize: 20, fontFamily: "Inter_700Bold" },
-  profileHandle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 1 },
-  profileBio: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
-  premiumBadge: { backgroundColor: "#FFD60A", width: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  businessTag: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: Colors.gold, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, marginTop: 4, alignSelf: "flex-start" },
-  businessTagText: { color: "#fff", fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  // Hero card
+  heroCard: {
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 3,
+    overflow: "hidden",
+  },
+  heroTop: { flexDirection: "row", alignItems: "flex-start", padding: 16, gap: 14 },
+  heroName: { fontSize: 19, fontFamily: "Inter_700Bold", flexShrink: 1 },
+  heroHandle: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  heroBio: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19, paddingHorizontal: 16, paddingBottom: 12, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 10 },
+  premiumDot: { position: "absolute", bottom: -2, right: -2, width: 18, height: 18, borderRadius: 9, backgroundColor: "#FFD60A", alignItems: "center", justifyContent: "center" },
+  editChip: { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, alignSelf: "flex-start", marginTop: 2 },
+  editChipText: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  businessChip: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3, alignSelf: "flex-start", marginTop: 3 },
+  businessChipText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
 
-  viewProfileBtn: { borderRadius: 12, overflow: "hidden" },
-  viewProfileInner: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 11 },
-  viewProfileText: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  // ACoin bar
+  acoinBar: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 11, borderTopWidth: StyleSheet.hairlineWidth },
+  acoinIconWrap: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  acoinEmoji: { fontSize: 18 },
+  acoinBalance: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  acoinSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
 
-  statsCard: { borderRadius: 16, overflow: "hidden", flexDirection: "row", paddingVertical: 16, paddingHorizontal: 8 },
+  // Stats row
+  statsRow: { flexDirection: "row", borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 14, paddingHorizontal: 8 },
   statCell: { flex: 1, alignItems: "center", gap: 3 },
   statValue: { fontSize: 22, fontFamily: "Inter_700Bold" },
   statLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
   statDivider: { width: StyleSheet.hairlineWidth, marginVertical: 4 },
 
-  premiumBanner: { borderRadius: 16, padding: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  premiumIconWrap: { width: 46, height: 46, borderRadius: 14, backgroundColor: "rgba(255,214,10,0.15)", alignItems: "center", justifyContent: "center" },
-  premiumTitle: { color: "#FFD60A", fontSize: 15, fontFamily: "Inter_700Bold" },
-  premiumSub: { color: "rgba(255,255,255,0.55)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  // Quick actions
+  quickRow: { flexDirection: "row", borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 14, paddingHorizontal: 6 },
+  quickBtn: { flex: 1, alignItems: "center", gap: 7 },
+  quickIconWrap: { width: 44, height: 44, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+  quickLabel: { fontSize: 11, fontFamily: "Inter_500Medium", textAlign: "center" },
 
-  verifyBannerInner: { flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 14 },
-  verifyBannerLeft: { flex: 1, flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  verifyIconWrap: { width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(212,168,83,0.20)", alignItems: "center", justifyContent: "center", marginTop: 2 },
-  verifyTitle: { color: "#D4A853", fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  verifySub: { color: "#888", fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17 },
-  verifyBtn: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#D4A853", alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, marginTop: 8 },
+  // Business verify
+  verifyBanner: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderLeftWidth: 3, padding: 14, flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  verifyLeft: { flex: 1, flexDirection: "row", gap: 12, alignItems: "flex-start" },
+  verifyIconWrap: { width: 38, height: 38, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  verifyTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
+  verifySub: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17 },
+  verifyBtn: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", paddingHorizontal: 11, paddingVertical: 6, borderRadius: 20, marginTop: 8 },
   verifyBtnText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
+
+  // Premium banner
+  premiumBanner: { borderRadius: 16, borderWidth: 1, padding: 16, flexDirection: "row", alignItems: "center", gap: 14 },
+  premiumIconWrap: { width: 44, height: 44, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+  premiumTitle: { color: "#FFD60A", fontSize: 15, fontFamily: "Inter_700Bold" },
+  premiumSub: { color: "rgba(255,255,255,0.45)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  premiumChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  premiumChipText: { color: "#FFD60A", fontSize: 12, fontFamily: "Inter_600SemiBold" },
 });
