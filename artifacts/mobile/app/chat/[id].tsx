@@ -5,7 +5,6 @@ import {
   FlatList,
   Image,
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   PanResponder,
   Platform,
@@ -1207,7 +1206,7 @@ function ChatScreen() {
   // Load chatInfo from local SQLite cache immediately so the header renders
   // without any network delay, even if nav params weren't passed.
   useEffect(() => {
-    if (isDraft || chatInfo) return;
+    if (isDraft || chatInfo || Platform.OS === "web") return;
     getLocalConversation(id).then((local) => {
       if (!local) return;
       setChatInfo((prev) => prev ?? {
@@ -1225,13 +1224,20 @@ function ChatScreen() {
     }).catch(() => {});
   }, []);
 
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [floatingInputHeight, setFloatingInputHeight] = useState(80);
+
   useEffect(() => {
+    if (Platform.OS === "web") return;
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const sub = Keyboard.addListener(showEvent, (e) => {
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const onShow = Keyboard.addListener(showEvent, (e) => {
       const h = e.endCoordinates.height;
+      setKeyboardHeight(h);
       if (h > 100) setEmojiKeyboardHeight(h);
     });
-    return () => sub.remove();
+    const onHide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    return () => { onShow.remove(); onHide.remove(); };
   }, []);
   const [showGiftPicker, setShowGiftPicker] = useState(false);
   const [giftSending, setGiftSending] = useState(false);
@@ -1485,64 +1491,63 @@ function ChatScreen() {
     const chatId = isDraft ? realChatId : id;
     if (!chatId || !user) return;
 
-    // Load ALL locally stored messages (no limit — SQLite is fast, no network cost).
-    // getLocalMessages returns oldest-first (ASC). FlatList is inverted so index 0
-    // must be the NEWEST message (appears at bottom). Reverse to get newest-first.
-    const cached = await getLocalMessages(chatId, 5000);
-    if (cached.length > 0) {
-      const newestFirst = [...cached].reverse();
-      setMessages(newestFirst.map((m) => ({
-        id: m.id, chat_id: m.conversation_id, sender_id: m.sender_id,
-        encrypted_content: m.content ?? "", sent_at: m.sent_at,
-        reply_to_message_id: m.reply_to_id, attachment_url: m.attachment_url,
-        attachment_type: m.attachment_type, edited_at: m.edited_at,
-        status: m.status as any, reactions: [], _pending: m.is_pending,
-      })));
-      setLoading(false);
-      // Seed the pagination cursor from the OLDEST cached message (cached[0] = oldest
-      // in ASC order). This lets loadMoreMessages fetch server messages older than
-      // anything in SQLite when the user scrolls to the very top.
-      if (!oldestCursorRef.current) {
-        oldestCursorRef.current = cached[0].sent_at;
-        setHasMore(true);
+    // ── Native-only: load from local SQLite cache first (instant render, no network) ──
+    if (Platform.OS !== "web") {
+      // getLocalMessages returns oldest-first (ASC). FlatList is inverted so index 0
+      // must be the NEWEST message. Reverse to get newest-first.
+      const cached = await getLocalMessages(chatId, 5000);
+      if (cached.length > 0) {
+        const newestFirst = [...cached].reverse();
+        setMessages(newestFirst.map((m) => ({
+          id: m.id, chat_id: m.conversation_id, sender_id: m.sender_id,
+          encrypted_content: m.content ?? "", sent_at: m.sent_at,
+          reply_to_message_id: m.reply_to_id, attachment_url: m.attachment_url,
+          attachment_type: m.attachment_type, edited_at: m.edited_at,
+          status: m.status as any, reactions: [], _pending: m.is_pending,
+        })));
+        setLoading(false);
+        // Seed the pagination cursor from the OLDEST cached message.
+        if (!oldestCursorRef.current) {
+          oldestCursorRef.current = cached[0].sent_at;
+          setHasMore(true);
+        }
+        // Background: pre-download attachments so they render from local storage.
+        autoDownloadChatAttachments(cached.map((m) => ({
+          attachment_url: m.attachment_url,
+          attachment_type: m.attachment_type,
+          encrypted_content: m.content ?? "",
+        })));
+        // Background: refresh reactions for cached messages so they reappear after navigation.
+        const cachedIds = cached.map((m) => m.id).filter((cid) => !cid.startsWith("pending"));
+        if (cachedIds.length > 0) {
+          supabase.from("message_reactions").select("message_id, reaction, user_id").in("message_id", cachedIds).then(({ data: cacheReactions }) => {
+            if (!cacheReactions || cacheReactions.length === 0) return;
+            const reactionMap: Record<string, { emoji: string; count: number; myReaction: boolean }[]> = {};
+            for (const r of cacheReactions as any[]) {
+              if (!reactionMap[r.message_id]) reactionMap[r.message_id] = [];
+              const existing = reactionMap[r.message_id].find((x) => x.emoji === r.reaction);
+              if (existing) { existing.count++; if (r.user_id === user.id) existing.myReaction = true; }
+              else reactionMap[r.message_id].push({ emoji: r.reaction, count: 1, myReaction: r.user_id === user.id });
+            }
+            const cachedIdSet = new Set(cachedIds);
+            setMessages((prev) => prev.map((m) => {
+              if (!cachedIdSet.has(m.id) || !reactionMap[m.id]) return m;
+              return { ...m, reactions: reactionMap[m.id] };
+            }));
+          }).catch(() => {});
+        }
       }
-      // Kick off background attachment downloads for cached messages so they
-      // render from local storage without any network wait.
-      autoDownloadChatAttachments(cached.map((m) => ({
-        attachment_url: m.attachment_url,
-        attachment_type: m.attachment_type,
-        encrypted_content: m.content ?? "",
-      })));
 
-      // Fix: refresh reactions for cached messages so they reappear after navigation
-      const cachedIds = cached.map((m) => m.id).filter((cid) => !cid.startsWith("pending"));
-      if (cachedIds.length > 0) {
-        supabase.from("message_reactions").select("message_id, reaction, user_id").in("message_id", cachedIds).then(({ data: cacheReactions }) => {
-          if (!cacheReactions || cacheReactions.length === 0) return;
-          const reactionMap: Record<string, { emoji: string; count: number; myReaction: boolean }[]> = {};
-          for (const r of cacheReactions as any[]) {
-            if (!reactionMap[r.message_id]) reactionMap[r.message_id] = [];
-            const existing = reactionMap[r.message_id].find((x) => x.emoji === r.reaction);
-            if (existing) { existing.count++; if (r.user_id === user.id) existing.myReaction = true; }
-            else reactionMap[r.message_id].push({ emoji: r.reaction, count: 1, myReaction: r.user_id === user.id });
-          }
-          const cachedIdSet = new Set(cachedIds);
-          setMessages((prev) => prev.map((m) => {
-            if (!cachedIdSet.has(m.id) || !reactionMap[m.id]) return m;
-            return { ...m, reactions: reactionMap[m.id] };
-          }));
-        }).catch(() => {});
+      // If offline on native: show cached messages only, do not attempt network.
+      if (!isOnline()) {
+        if (cached.length === 0) setLoading(false);
+        return;
       }
-    }
-
-    if (!isOnline()) {
-      if (cached.length === 0) setLoading(false);
-      return;
     }
 
     // Delta sync: only fetch messages NEWER than what's already stored on device.
-    // Messages already on device are NEVER re-downloaded.
-    const newestStored = await getNewestMessageDate(chatId);
+    // On web: always fetch fresh from the server (no local cache).
+    const newestStored = Platform.OS !== "web" ? await getNewestMessageDate(chatId) : null;
     let msgQuery = supabase
       .from("messages")
       .select(`id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`)
@@ -1591,8 +1596,8 @@ function ChatScreen() {
         );
       });
 
-      saveMessages(chatId, mapped).catch(() => {});
-      autoDownloadChatAttachments(mapped);
+      if (Platform.OS !== "web") saveMessages(chatId, mapped).catch(() => {});
+      if (Platform.OS !== "web") autoDownloadChatAttachments(mapped);
       clearUnread(chatId).catch(() => {});
 
       if (!newestStored) {
@@ -1727,6 +1732,8 @@ function ChatScreen() {
   }, [id, user, isDraft, realChatId, loadingMore, hasMore]);
 
   useEffect(() => {
+    // Native-only: web has no offline queue and no connectivity events to handle.
+    if (Platform.OS === "web") return;
     const unsub = onConnectivityChange(async (online) => {
       setNetworkOnline(online);
       if (online) {
@@ -3684,7 +3691,7 @@ STRICT RULES:
   return (
     <GestureDetector gesture={backSwipeGesture}>
     <View style={[st.root, { backgroundColor: colors.background }]}>
-      <OfflineBanner />
+      {Platform.OS !== "web" && <OfflineBanner />}
       <View style={[st.header, { backgroundColor: colors.surface, paddingTop: insets.top + 4, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={st.backBtn} hitSlop={12}>
           <Ionicons name="chevron-back" size={26} color={colors.text} />
@@ -3774,7 +3781,8 @@ STRICT RULES:
         ) : null}
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}>
+      {/* ── Message list — fills remaining space, padded so content clears the floating input ── */}
+      <View style={{ flex: 1 }}>
         {loading ? (
           <ChatLoadingSkeleton />
         ) : messages.length === 0 ? (
@@ -3797,7 +3805,7 @@ STRICT RULES:
               extraData={highlightedMsgId}
               renderItem={renderMessage}
               inverted
-              contentContainerStyle={st.listContent}
+              contentContainerStyle={[st.listContent, { paddingBottom: floatingInputHeight + 8 }]}
               showsVerticalScrollIndicator={false}
               onScroll={handleScroll}
               scrollEventThrottle={16}
@@ -3827,7 +3835,7 @@ STRICT RULES:
               }
             />
             <Animated.View
-              style={[st.scrollFab, { opacity: scrollBtnOpacity, backgroundColor: colors.surface }]}
+              style={[st.scrollFab, { opacity: scrollBtnOpacity, backgroundColor: colors.surface, bottom: floatingInputHeight + 8 }]}
               pointerEvents={showScrollBtn ? "auto" : "none"}
             >
               <TouchableOpacity onPress={scrollToBottom} style={st.scrollFabBtn} activeOpacity={0.7}>
@@ -3842,6 +3850,13 @@ STRICT RULES:
           </View>
           </GestureDetector>
         )}
+      </View>
+
+      {/* ── Floating input container ── absolutely positioned, rises with keyboard ── */}
+      <View
+        style={[st.floatingInputContainer, { bottom: keyboardHeight > 0 ? keyboardHeight : insets.bottom }]}
+        onLayout={(e) => setFloatingInputHeight(e.nativeEvent.layout.height)}
+      >
 
         {editingMessage && (
           <View style={[st.replyBanner, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
@@ -3892,7 +3907,7 @@ STRICT RULES:
         )}
 
         {messageLimited ? (
-          <View style={[st.inputFloatOuter, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+          <View style={[st.inputFloatOuter, { paddingBottom: 8 }]}>
             <View style={[st.limitedGlass, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Ionicons name="lock-closed" size={15} color={colors.textMuted} style={{ marginRight: 8 }} />
               <Text style={[st.limitedText, { color: colors.textSecondary }]}>
@@ -3901,7 +3916,7 @@ STRICT RULES:
             </View>
           </View>
         ) : isRecording && recLocked ? (
-          <View style={[st.inputFloatOuter, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+          <View style={[st.inputFloatOuter, { paddingBottom: 8 }]}>
             {Platform.OS === "ios" ? (
               <BlurView intensity={72} tint={colors.background === "#fff" || colors.background === "#FFFFFF" ? "light" : "dark"} style={st.inputGlassPill}>
                 <View style={st.recLockedInner}>
@@ -3953,7 +3968,7 @@ STRICT RULES:
             {!isRecording && (chatInfo?.is_group || chatInfo?.is_channel) && (
               <SmartReplyBar messages={messages} myId={user?.id || ""} input={input} onSend={handleSmartReply} colors={colors} />
             )}
-            <View style={[st.inputFloatOuter, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+            <View style={[st.inputFloatOuter, { paddingBottom: 8 }]}>
               {Platform.OS === "ios" ? (
                 <BlurView intensity={72} tint={colors.background === "#fff" || colors.background === "#FFFFFF" ? "light" : "dark"} style={[st.inputGlassPill, isRecording && !recLocked ? st.recHoldGlass : undefined]}>
                   <View style={st.inputBarRow}>
@@ -4188,7 +4203,7 @@ STRICT RULES:
             onClose={() => setShowEmojiStickerPicker(false)}
           />
         )}
-      </KeyboardAvoidingView>
+      </View>
 
       <MiniProfilePopup
         userId={miniProfileUserId}
@@ -4922,6 +4937,12 @@ const st = StyleSheet.create({
     marginHorizontal: 8,
   },
 
+  floatingInputContainer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
   inputFloatOuter: {
     paddingHorizontal: 8,
     paddingTop: 4,
