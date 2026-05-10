@@ -3670,29 +3670,7 @@ STRICT RULES:
     );
   }, [messages, user, colors, highlightedMsgId, scrollToMessage, advancedFeatures.mini_profile_popup]);
 
-  // ── Swipe right anywhere in the chat to go back (like iOS native push) ──────
-  // RNGH v2 fix: use Gesture.Simultaneous(pan, Gesture.Native()) so the
-  // FlatList's native scroll is NEVER blocked during the gesture's undecided
-  // phase. Without this, failOffsetY causes the FlatList to freeze until the
-  // pan fails — which users experience as a completely broken scroll.
-  const chatGoBack = useCallback(() => router.back(), []);
-  const flatListNative = useRef(Gesture.Native()).current;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const backSwipePan = useRef(
-    Gesture.Pan()
-      .activeOffsetX([20, 999])
-      .failOffsetY([-6, 6])
-      .onEnd((e) => {
-        "worklet";
-        if (e.translationX > 80) runOnJS(chatGoBack)();
-      })
-  ).current;
-  const backSwipeGesture = useRef(
-    Gesture.Simultaneous(backSwipePan, flatListNative)
-  ).current;
-
   return (
-    <GestureDetector gesture={backSwipeGesture}>
     <View style={[st.root, { backgroundColor: colors.background }]}>
       {Platform.OS !== "web" && <OfflineBanner />}
       <View style={[st.header, { backgroundColor: colors.surface, paddingTop: insets.top + 4, borderBottomColor: colors.border }]}>
@@ -3799,7 +3777,6 @@ STRICT RULES:
             </Text>
           </View>
         ) : (
-          <GestureDetector gesture={flatListNative}>
           <View style={{ flex: 1 }}>
             <FlatList
               ref={flatListRef}
@@ -3851,7 +3828,6 @@ STRICT RULES:
               </TouchableOpacity>
             </Animated.View>
           </View>
-          </GestureDetector>
         )}
       </View>
 
@@ -3859,6 +3835,7 @@ STRICT RULES:
       <View
         style={[st.floatingInputContainer, { bottom: keyboardHeight > 0 ? keyboardHeight : insets.bottom }]}
         onLayout={(e) => setFloatingInputHeight(e.nativeEvent.layout.height)}
+        pointerEvents="box-none"
       >
 
         {editingMessage && (
@@ -4715,7 +4692,6 @@ STRICT RULES:
         </Modal>
       )}
     </View>
-    </GestureDetector>
   );
 }
 
