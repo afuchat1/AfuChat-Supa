@@ -1,11 +1,12 @@
-import { Platform } from "react-native";
 import { supabase } from "./supabase";
 
+// Web client ID from google-services.json (client_type: 3).
+// Used by the native SDK to obtain an ID token that Supabase can verify.
 const WEB_CLIENT_ID =
-  "830762767270-lmefgjjk25i17lithkq6iisjv8gfh08d.apps.googleusercontent.com";
+  "148957999957-i5pgudckm6c9sc8pthqr2cl918nd3153.apps.googleusercontent.com";
 
-// Require the native Google Sign-In module at module-load time so any
-// TurboModuleRegistry error is caught once here, not at call time.
+// Load the native module once at module load time so any
+// TurboModuleRegistry error surfaces immediately.
 let _GoogleSignin: any = null;
 let _isErrorWithCode: any = null;
 let _statusCodes: any = null;
@@ -21,16 +22,24 @@ export type GoogleSignInResult =
   | { ok: false; cancelled: true }
   | { ok: false; cancelled: false; error: string };
 
+/**
+ * Trigger the native Google account picker.
+ *
+ * Requirements for the native flow to succeed:
+ *   - Production / EAS build of com.afuchat.app (not Expo Go)
+ *   - The build's SHA-1 fingerprint registered as an Android OAuth client
+ *     (client_type 1) in the Google Cloud Console project 148957999957
+ *
+ * Returns { ok: false, error: "EXPO_GO" } when called inside Expo Go so the
+ * caller can show a friendly message without opening any browser.
+ */
 export async function googleSignIn(): Promise<GoogleSignInResult> {
-  if (Platform.OS !== "web") {
-    return googleSignInNative();
-  }
-  return googleSignInWeb();
-}
-
-async function googleSignInNative(): Promise<GoogleSignInResult> {
   if (!_GoogleSignin) {
-    return { ok: false, cancelled: false, error: "Google Sign-In is not available on this device." };
+    return {
+      ok: false,
+      cancelled: false,
+      error: "Google Sign-In is not available on this device.",
+    };
   }
 
   try {
@@ -39,20 +48,24 @@ async function googleSignInNative(): Promise<GoogleSignInResult> {
 
     let idToken: string | null = null;
 
-    // Try silent sign-in first — instant for returning users
+    // Try silent sign-in first — instant for returning users.
     try {
       const silent = await _GoogleSignin.signInSilently();
       idToken = silent?.data?.idToken ?? null;
     } catch (_) {}
 
-    // Show native account picker if silent sign-in didn't return a token
+    // Show the native account picker if silent sign-in didn't return a token.
     if (!idToken) {
       const resp = await _GoogleSignin.signIn();
       idToken = resp?.data?.idToken ?? null;
     }
 
     if (!idToken) {
-      return { ok: false, cancelled: false, error: "No ID token received from Google." };
+      return {
+        ok: false,
+        cancelled: false,
+        error: "No ID token received from Google.",
+      };
     }
 
     const { data, error } = await supabase.auth.signInWithIdToken({
@@ -70,15 +83,13 @@ async function googleSignInNative(): Promise<GoogleSignInResult> {
       ) {
         return { ok: false, cancelled: true };
       }
-      // DEVELOPER_ERROR (code 10): SHA-1 not registered in Google Cloud Console.
-      // Signal the caller to fall back to in-app WebView OAuth.
+      // Code 10 = DEVELOPER_ERROR: SHA-1 not registered, or running in Expo Go.
       if (err.code === 10 || err.code === "10") {
-        return { ok: false, cancelled: false, error: "DEVELOPER_ERROR" };
+        return { ok: false, cancelled: false, error: "EXPO_GO" };
       }
     }
-    // Also catch DEVELOPER_ERROR from plain Error objects (some library versions)
     if (err?.code === 10 || err?.code === "10") {
-      return { ok: false, cancelled: false, error: "DEVELOPER_ERROR" };
+      return { ok: false, cancelled: false, error: "EXPO_GO" };
     }
     return {
       ok: false,
@@ -86,97 +97,4 @@ async function googleSignInNative(): Promise<GoogleSignInResult> {
       error: err?.message || "Google sign-in failed.",
     };
   }
-}
-
-async function googleSignInWeb(): Promise<GoogleSignInResult> {
-  if (typeof window === "undefined") {
-    return { ok: false, cancelled: false, error: "Not in browser context." };
-  }
-
-  const redirectUrl = window.location.origin + "/";
-
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: redirectUrl,
-      skipBrowserRedirect: true,
-      queryParams: { prompt: "select_account" },
-    },
-  });
-
-  if (error || !data?.url) {
-    return {
-      ok: false,
-      cancelled: false,
-      error: error?.message ?? "Could not start Google sign-in.",
-    };
-  }
-
-  return new Promise<GoogleSignInResult>((resolve) => {
-    const w = 500,
-      h = 620;
-    const left = Math.round(window.screenX + (window.outerWidth - w) / 2);
-    const top = Math.round(window.screenY + (window.outerHeight - h) / 2);
-
-    const popup = window.open(
-      data.url,
-      "google_oauth",
-      `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes,resizable=yes`
-    );
-
-    if (!popup) {
-      resolve({
-        ok: false,
-        cancelled: false,
-        error: "Please allow popups for this site to sign in with Google.",
-      });
-      return;
-    }
-
-    const timer = setInterval(async () => {
-      try {
-        if (popup.closed) {
-          clearInterval(timer);
-          resolve({ ok: false, cancelled: true });
-          return;
-        }
-
-        let u = "";
-        try {
-          u = popup.location.href;
-        } catch (_) {
-          return;
-        }
-        if (!u) return;
-
-        const isCallback =
-          (u.includes("afuchat.com") || u.includes(window.location.origin)) &&
-          (u.includes("code=") || u.includes("access_token="));
-
-        if (isCallback) {
-          clearInterval(timer);
-          popup.close();
-
-          const url = new URL(u);
-          const code = url.searchParams.get("code");
-
-          if (code) {
-            const { data: sd, error: e } =
-              await supabase.auth.exchangeCodeForSession(code);
-            if (e) {
-              resolve({ ok: false, cancelled: false, error: e.message });
-            } else {
-              resolve({ ok: true, userId: sd.user?.id ?? "" });
-            }
-          } else {
-            resolve({
-              ok: false,
-              cancelled: false,
-              error: "No authorization code received.",
-            });
-          }
-        }
-      } catch (_) {}
-    }, 300);
-  });
 }

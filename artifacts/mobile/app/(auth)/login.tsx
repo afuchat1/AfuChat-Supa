@@ -20,7 +20,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
-import { WebView } from "react-native-webview";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -360,26 +359,6 @@ function EmailVerifyModal({
   );
 }
 
-// ─── OAuth WebView modal ──────────────────────────────────────────────────────
-function OAuthWebModal({
-  url, onClose, onNav, onShouldLoad, colors,
-}: { url: string; onClose: () => void; onNav: (s: any) => void; onShouldLoad: (r: any) => boolean; colors: any }) {
-  return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
-          <TouchableOpacity onPress={onClose} style={{ padding: 6 }}>
-            <Ionicons name="close" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={{ fontSize: 16, fontFamily: "Inter_600SemiBold", color: colors.text }}>Sign In</Text>
-          <View style={{ width: 36 }} />
-        </View>
-        <WebView source={{ uri: url }} style={{ flex: 1 }} javaScriptEnabled domStorageEnabled startInLoadingState onNavigationStateChange={onNav} onShouldStartLoadWithRequest={onShouldLoad} />
-      </View>
-    </Modal>
-  );
-}
-
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function LoginScreen() {
   const { colors, isDark, accent } = useTheme();
@@ -396,7 +375,6 @@ export default function LoginScreen() {
   const [forgotVisible, setForgotVisible] = useState(false);
   const [verifyVisible, setVerifyVisible] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState("");
-  const [oauthModalUrl, setOauthModalUrl] = useState<string | null>(null);
   const oauthHandledRef = useRef(false);
   const pwdRef = useRef<TextInput>(null);
 
@@ -484,11 +462,11 @@ export default function LoginScreen() {
     if (oauthHandledRef.current) return; oauthHandledRef.current = true;
     try {
       const code = new URL(url).searchParams.get("code");
-      if (!code) { showAlert("Error", "No code received."); setOauthModalUrl(null); setOauthLoading(null); return; }
+      if (!code) { showAlert("Error", "No code received."); setOauthLoading(null); return; }
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-      if (error) { showAlert("Error", error.message); }
+      if (error) { showAlert("Error", error.message); setOauthLoading(null); }
       else {
-        setOauthModalUrl(null); setOauthLoading(null);
+        setOauthLoading(null);
         const uid = data.user?.id;
         if (uid) {
           const { data: prof } = await supabase.from("profiles").select("onboarding_completed").eq("id", uid).maybeSingle();
@@ -496,8 +474,7 @@ export default function LoginScreen() {
         }
         router.replace("/(tabs)"); return;
       }
-    } catch { showAlert("Error", "Could not complete sign in."); }
-    setOauthModalUrl(null); setOauthLoading(null);
+    } catch { showAlert("Error", "Could not complete sign in."); setOauthLoading(null); }
   }
 
   async function nativeGoogleSignIn() {
@@ -505,43 +482,15 @@ export default function LoginScreen() {
     const result = await googleSignIn();
     if (!result.ok) {
       if (result.cancelled) { setOauthLoading(null); return; }
-      if (result.error === "DEVELOPER_ERROR") {
-        // Native Google Sign-In isn't configured for this build (SHA-1 not
-        // registered). Fall back to the system browser OAuth flow — this is
-        // required because Google blocks OAuth inside embedded WebViews
-        // (Error 403: disallowed_useragent).
-        const redirectUrl = makeRedirectUri({ native: "afuchat://(auth)/login" });
-        const { data: oauthData, error: oauthErr } = await supabase.auth.signInWithOAuth({
-          provider: "google",
-          options: {
-            redirectTo: redirectUrl,
-            skipBrowserRedirect: true,
-            queryParams: { prompt: "select_account" },
-          },
-        });
-        if (oauthErr || !oauthData?.url) {
-          setOauthLoading(null);
-          showAlert("Sign-in Error", "Could not start Google sign-in. Please try again.");
-          return;
-        }
-        const browserResult = await WebBrowser.openAuthSessionAsync(oauthData.url, redirectUrl, { showInRecents: false });
-        if (browserResult.type === "success" && browserResult.url) {
-          const url = new URL(browserResult.url);
-          const code = url.searchParams.get("code");
-          if (code) {
-            const { data: sd, error: e } = await supabase.auth.exchangeCodeForSession(code);
-            if (e) { showAlert("Error", e.message); }
-            else {
-              const uid = sd.user?.id;
-              if (uid) {
-                const { data: prof } = await supabase.from("profiles").select("onboarding_completed").eq("id", uid).maybeSingle();
-                if (!prof?.onboarding_completed) { setOauthLoading(null); router.replace({ pathname: "/onboarding", params: { userId: uid } } as any); return; }
-              }
-              setOauthLoading(null); router.replace("/(tabs)"); return;
-            }
-          }
-        }
+      if (result.error === "EXPO_GO") {
+        // The native Google Sign-In SDK requires a production EAS build of
+        // com.afuchat.app with its SHA-1 fingerprint registered in Google Cloud
+        // Console. It cannot run inside Expo Go.
         setOauthLoading(null);
+        showAlert(
+          "Native Sign-In Unavailable",
+          "Google Sign-In requires the full AfuChat app build. Install AfuChat from the Play Store or build with EAS to enable this."
+        );
         return;
       }
       setOauthLoading(null);
@@ -691,7 +640,6 @@ export default function LoginScreen() {
         colors={colors}
         isDark={isDark}
       />
-      {oauthModalUrl && <OAuthWebModal url={oauthModalUrl} onClose={() => { setOauthModalUrl(null); setOauthLoading(null); }} onNav={(s) => { if (s.url && isOAuthRedirect(s.url)) handleOAuthRedirect(s.url); }} onShouldLoad={(r) => { if (r.url && isOAuthRedirect(r.url)) { handleOAuthRedirect(r.url); return false; } return true; }} colors={colors} />}
     </View>
   );
 }
