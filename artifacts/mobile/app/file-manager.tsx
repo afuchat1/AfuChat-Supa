@@ -19,6 +19,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as MediaLibrary from "expo-media-library";
 import * as FileSystem from "expo-file-system";
+import * as FileSystemLegacy from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as DocumentPicker from "expo-document-picker";
 import * as Haptics from "@/lib/haptics";
@@ -344,13 +345,14 @@ function BrowseTab({ colors, width }: { colors: any; width: number }) {
       if (cat === "documents") {
         setFiles([]);
         setLoading(false);
+        setRefreshing(false);
         return;
       }
       const meta = CATEGORY_META[cat];
-      if (!meta.mediaType) { setLoading(false); return; }
+      if (!meta.mediaType) { setLoading(false); setRefreshing(false); return; }
       const result = await MediaLibrary.getAssetsAsync({
         mediaType: meta.mediaType,
-        first: 200,
+        first: 80,
         sortBy: [[MediaLibrary.SortBy.modificationTime, false]],
       });
       const mapped: DeviceFile[] = result.assets.map((a) => ({
@@ -366,7 +368,8 @@ function BrowseTab({ colors, width }: { colors: any; width: number }) {
       }));
       setFiles(mapped);
 
-      if (counts.images === 0) {
+      // Fetch counts once — guard with a sentinel value (-1 = already loaded)
+      if (counts.images === 0 && counts.videos === 0 && counts.audio === 0) {
         const [imgRes, vidRes, audRes] = await Promise.all([
           MediaLibrary.getAssetsAsync({ mediaType: MediaLibrary.MediaType.photo, first: 1 }),
           MediaLibrary.getAssetsAsync({ mediaType: MediaLibrary.MediaType.video, first: 1 }),
@@ -374,10 +377,12 @@ function BrowseTab({ colors, width }: { colors: any; width: number }) {
         ]);
         setCounts({ images: imgRes.totalCount, videos: vidRes.totalCount, audio: audRes.totalCount, documents: 0 });
       }
-    } catch { /* permission may have changed */ }
+    } catch (e: any) {
+      /* permission may have changed between render and request */
+    }
     setLoading(false);
     setRefreshing(false);
-  }, [permStatus, counts.images]);
+  }, [permStatus, counts.images, counts.videos, counts.audio]);
 
   useEffect(() => { if (permStatus === "granted") loadFiles(category); }, [category, permStatus]);
 
@@ -416,12 +421,13 @@ function BrowseTab({ colors, width }: { colors: any; width: number }) {
 
   async function pickAndShareDoc() {
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: false, multiple: true });
+      const result = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true, multiple: true });
       if (result.canceled) return;
       for (const asset of result.assets) {
         if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(asset.uri);
+        else showAlert("Not available", "Sharing is not available on this device.");
       }
-    } catch { showAlert("Error", "Could not pick file."); }
+    } catch (e: any) { showAlert("Error", e?.message || "Could not pick file. Make sure storage permission is granted."); }
   }
 
   if (permStatus === null) return <ActivityIndicator style={{ marginTop: 40 }} />;
@@ -657,7 +663,7 @@ function TransferTab({ colors, user }: { colors: any; user: any }) {
       if (result.canceled) return;
       const files: PickedFile[] = result.assets.map((a) => ({ uri: a.uri, name: a.name || "file", mimeType: a.mimeType || undefined, size: a.size || undefined }));
       setPickedFiles(files);
-    } catch { showAlert("Error", "Could not pick files."); }
+    } catch (e: any) { showAlert("Error", e?.message || "Could not pick files. Check that file access permissions are granted."); }
   }
 
   async function pickFromGallery() {
@@ -688,7 +694,7 @@ function TransferTab({ colors, user }: { colors: any; user: any }) {
       const code = genCode();
       const ext = getExt(file.name) || "bin";
       const path = `transfers/${user.id}/${code}.${ext}`;
-      const content = await (FileSystem as any).readAsStringAsync(file.uri, { encoding: "base64" });
+      const content = await FileSystemLegacy.readAsStringAsync(file.uri, { encoding: FileSystemLegacy.EncodingType.Base64 });
       setUploadProgress(50);
       const binary = Uint8Array.from(atob(content), (c) => c.charCodeAt(0));
       const { error } = await supabase.storage.from("chat-attachments").upload(path, binary, { contentType: file.mimeType || "application/octet-stream", upsert: true });
