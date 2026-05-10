@@ -1280,6 +1280,10 @@ function ChatScreen() {
     });
     return () => { onShow.remove(); onHide.remove(); };
   }, []);
+  const [showChatOptions, setShowChatOptions] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [disappearingEnabled, setDisappearingEnabled] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
   const [showGiftPicker, setShowGiftPicker] = useState(false);
   const [giftSending, setGiftSending] = useState(false);
   const [giftReveal, setGiftReveal] = useState<{ content: string; isReceiver: boolean } | null>(null);
@@ -2302,6 +2306,135 @@ function ChatScreen() {
       ]
     );
   }
+
+  // ── Chat Options handlers ─────────────────────────────────────────────────
+
+  useEffect(() => {
+    const chatId = isDraft ? realChatId : id;
+    if (!chatId || !user) return;
+    AsyncStorage.getItem(`afu_muted_${chatId}`).then((v) => setIsMuted(v === "1")).catch(() => {});
+    AsyncStorage.getItem(`afu_disappearing_${chatId}`).then((v) => setDisappearingEnabled(v === "1")).catch(() => {});
+    if (chatInfo?.other_id && !chatInfo.is_group && !chatInfo.is_channel) {
+      supabase.from("blocks").select("id").eq("blocker_id", user.id).eq("blocked_id", chatInfo.other_id).maybeSingle()
+        .then(({ data }) => setIsBlocked(!!data)).catch(() => {});
+    }
+  }, [id, realChatId, isDraft, user?.id, chatInfo?.other_id]);
+
+  async function handleMuteToggle() {
+    const chatId = isDraft ? realChatId : id;
+    if (!chatId) return;
+    const next = !isMuted;
+    setIsMuted(next);
+    await AsyncStorage.setItem(`afu_muted_${chatId}`, next ? "1" : "0");
+  }
+
+  async function handleDisappearingToggle() {
+    const chatId = isDraft ? realChatId : id;
+    if (!chatId) return;
+    const next = !disappearingEnabled;
+    setDisappearingEnabled(next);
+    await AsyncStorage.setItem(`afu_disappearing_${chatId}`, next ? "1" : "0");
+  }
+
+  async function handleBlockUser() {
+    if (!user || !chatInfo?.other_id) return;
+    if (isBlocked) {
+      showAlert("Unblock User", `Allow ${headerTitle} to message you again?`, [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Unblock",
+          onPress: async () => {
+            await supabase.from("blocks").delete().eq("blocker_id", user.id).eq("blocked_id", chatInfo.other_id!);
+            setIsBlocked(false);
+            setShowChatOptions(false);
+          },
+        },
+      ]);
+    } else {
+      showAlert("Block User", `Block ${headerTitle}? They won't be able to send you messages.`, [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Block",
+          style: "destructive",
+          onPress: async () => {
+            await supabase.from("blocks").insert({ blocker_id: user.id, blocked_id: chatInfo.other_id });
+            setIsBlocked(true);
+            setShowChatOptions(false);
+          },
+        },
+      ]);
+    }
+  }
+
+  async function handleReportUser() {
+    if (!user || !chatInfo?.other_id) return;
+    showAlert("Report User", `Why are you reporting ${headerTitle}?`, [
+      { text: "Spam", onPress: async () => { await supabase.from("user_reports").insert({ reporter_id: user.id, reported_id: chatInfo.other_id, reason: "spam" }); setShowChatOptions(false); showAlert("Reported", "Thank you. We'll review this report."); } },
+      { text: "Harassment", onPress: async () => { await supabase.from("user_reports").insert({ reporter_id: user.id, reported_id: chatInfo.other_id, reason: "harassment" }); setShowChatOptions(false); showAlert("Reported", "Thank you. We'll review this report."); } },
+      { text: "Inappropriate Content", onPress: async () => { await supabase.from("user_reports").insert({ reporter_id: user.id, reported_id: chatInfo.other_id, reason: "inappropriate" }); setShowChatOptions(false); showAlert("Reported", "Thank you. We'll review this report."); } },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }
+
+  async function handleClearChatMessages() {
+    const chatId = isDraft ? realChatId : id;
+    if (!chatId || !user) return;
+    showAlert("Clear Chat", "Delete all messages in this chat? This cannot be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Clear",
+        style: "destructive",
+        onPress: async () => {
+          setShowChatOptions(false);
+          try {
+            if (chatInfo?.other_id === AFUAI_BOT_ID) {
+              await supabase.rpc("clear_afuai_chat", { p_chat_id: chatId });
+            } else {
+              await supabase.from("messages").delete().eq("chat_id", chatId);
+            }
+            setMessages([]);
+          } catch {
+            showAlert("Error", "Could not clear chat. Please try again.");
+          }
+        },
+      },
+    ]);
+  }
+
+  async function handleDeleteChat() {
+    const chatId = isDraft ? realChatId : id;
+    if (!chatId || !user) return;
+    const isGroup = chatInfo?.is_group || chatInfo?.is_channel;
+    showAlert(
+      isGroup ? "Leave Group" : "Delete Chat",
+      isGroup
+        ? `Leave this ${chatInfo?.is_channel ? "channel" : "group"}? You won't receive messages anymore.`
+        : "Delete this conversation? All messages will be removed for you.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: isGroup ? "Leave" : "Delete",
+          style: "destructive",
+          onPress: async () => {
+            setShowChatOptions(false);
+            try {
+              if (isGroup) {
+                await supabase.from("chat_members").delete().eq("chat_id", chatId).eq("user_id", user.id);
+              } else {
+                await supabase.from("messages").delete().eq("chat_id", chatId);
+                await supabase.from("conversations").delete().eq("id", chatId);
+              }
+              router.back();
+            } catch {
+              showAlert("Error", "Could not complete this action. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   async function handleAfuAiResponse(userText: string, currentMessages: Message[], activeChatId?: string) {
     setIsAfuAiTyping(true);
@@ -3795,52 +3928,59 @@ STRICT RULES:
             })()}
           </View>
         </TouchableOpacity>
-        {chatInfo && !chatInfo.is_group && !chatInfo.is_channel && chatInfo.other_id && chatInfo.other_id !== AFUAI_BOT_ID ? (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <TouchableOpacity
-              style={st.headerAction}
-              hitSlop={8}
-              onPress={async () => {
-                if (!user) return;
-                try {
-                  const { initiateCall } = await import("@/lib/callSignaling");
-                  const callId = await initiateCall({
-                    calleeId: chatInfo.other_id!,
-                    chatId: id as string,
-                    callType: "voice",
-                    callerId: user.id,
-                  });
-                  router.push({ pathname: "/call/[id]", params: { id: callId } });
-                } catch (e: any) {
-                  showAlert("Call failed", e.message || "Could not start call.");
-                }
-              }}
-            >
-              <Ionicons name="call-outline" size={22} color={colors.text} />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+          {chatInfo && !chatInfo.is_group && !chatInfo.is_channel && chatInfo.other_id && chatInfo.other_id !== AFUAI_BOT_ID && (
+            <>
+              <TouchableOpacity
+                style={st.headerAction}
+                hitSlop={8}
+                onPress={async () => {
+                  if (!user) return;
+                  try {
+                    const { initiateCall } = await import("@/lib/callSignaling");
+                    const callId = await initiateCall({
+                      calleeId: chatInfo.other_id!,
+                      chatId: id as string,
+                      callType: "voice",
+                      callerId: user.id,
+                    });
+                    router.push({ pathname: "/call/[id]", params: { id: callId } });
+                  } catch (e: any) {
+                    showAlert("Call failed", e.message || "Could not start call.");
+                  }
+                }}
+              >
+                <Ionicons name="call-outline" size={22} color={colors.text} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={st.headerAction}
+                hitSlop={8}
+                onPress={async () => {
+                  if (!user) return;
+                  try {
+                    const { initiateCall } = await import("@/lib/callSignaling");
+                    const callId = await initiateCall({
+                      calleeId: chatInfo.other_id!,
+                      chatId: id as string,
+                      callType: "video",
+                      callerId: user.id,
+                    });
+                    router.push({ pathname: "/call/[id]", params: { id: callId } });
+                  } catch (e: any) {
+                    showAlert("Call failed", e.message || "Could not start call.");
+                  }
+                }}
+              >
+                <Ionicons name="videocam-outline" size={23} color={colors.text} />
+              </TouchableOpacity>
+            </>
+          )}
+          {chatInfo && (
+            <TouchableOpacity style={st.headerAction} hitSlop={8} onPress={() => setShowChatOptions(true)}>
+              <Ionicons name="ellipsis-vertical" size={22} color={colors.text} />
             </TouchableOpacity>
-            <TouchableOpacity
-              style={st.headerAction}
-              hitSlop={8}
-              onPress={async () => {
-                if (!user) return;
-                try {
-                  const { initiateCall } = await import("@/lib/callSignaling");
-                  const callId = await initiateCall({
-                    calleeId: chatInfo.other_id!,
-                    chatId: id as string,
-                    callType: "video",
-                    callerId: user.id,
-                  });
-                  router.push({ pathname: "/call/[id]", params: { id: callId } });
-                } catch (e: any) {
-                  showAlert("Call failed", e.message || "Could not start call.");
-                }
-              }}
-            >
-              <Ionicons name="videocam-outline" size={23} color={colors.text} />
-            </TouchableOpacity>
-          </View>
-        ) : null}
+          )}
+        </View>
       </View>
 
       {/* ── Message list — fills remaining space, padded so content clears the floating input ── */}
@@ -4735,6 +4875,173 @@ STRICT RULES:
       />
 
 
+      {/* ── Chat Options Sheet ─────────────────────────────────────────────── */}
+      <Modal
+        visible={showChatOptions}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowChatOptions(false)}
+      >
+        <View style={st.optionsOverlay}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setShowChatOptions(false)} />
+          <View style={[st.optionsSheet, { backgroundColor: colors.surface }]}>
+            {/* Handle */}
+            <View style={[st.optionsHandle, { backgroundColor: colors.border }]} />
+
+            {/* Contact / Chat identity header */}
+            <View style={[st.optionsIdentity, { borderBottomColor: colors.border }]}>
+              <Avatar
+                uri={chatInfo?.is_group || chatInfo?.is_channel ? chatInfo?.avatar_url : chatInfo?.other_avatar}
+                name={headerTitle}
+                size={52}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={[st.optionsName, { color: colors.text }]} numberOfLines={1}>{headerTitle}</Text>
+                <Text style={[st.optionsSub, { color: colors.textMuted }]}>
+                  {chatInfo?.is_channel ? "Channel" : chatInfo?.is_group ? "Group chat" : chatInfo?.other_id === AFUAI_BOT_ID ? "AI Assistant" : "Private chat"}
+                </Text>
+              </View>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+
+              {/* ── SECTION: Chat ───────────────────────────────────────── */}
+              <Text style={[st.optionsSection, { color: colors.textMuted }]}>CHAT</Text>
+
+              <TouchableOpacity
+                style={[st.optionsRow, { borderBottomColor: colors.border }]}
+                onPress={() => { setShowChatOptions(false); router.push({ pathname: "/starred-messages" }); }}
+              >
+                <View style={[st.optionsIcon, { backgroundColor: "#FF9500" }]}>
+                  <Ionicons name="star" size={16} color="#fff" />
+                </View>
+                <Text style={[st.optionsLabel, { color: colors.text }]}>Starred Messages</Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+
+              {(chatInfo?.is_group || chatInfo?.is_channel) && (
+                <TouchableOpacity
+                  style={[st.optionsRow, { borderBottomColor: colors.border }]}
+                  onPress={() => { setShowChatOptions(false); router.push({ pathname: "/group/[id]", params: { id: id as string } }); }}
+                >
+                  <View style={[st.optionsIcon, { backgroundColor: "#5856D6" }]}>
+                    <Ionicons name="people" size={16} color="#fff" />
+                  </View>
+                  <Text style={[st.optionsLabel, { color: colors.text }]}>
+                    {chatInfo?.is_channel ? "Channel Info" : "Group Info & Members"}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                </TouchableOpacity>
+              )}
+
+              {chatInfo?.other_id && !chatInfo.is_group && !chatInfo.is_channel && chatInfo.other_id !== AFUAI_BOT_ID && (
+                <TouchableOpacity
+                  style={[st.optionsRow, { borderBottomColor: colors.border }]}
+                  onPress={() => { setShowChatOptions(false); router.push({ pathname: "/profile/[id]", params: { id: chatInfo.other_id! } }); }}
+                >
+                  <View style={[st.optionsIcon, { backgroundColor: "#34C759" }]}>
+                    <Ionicons name="person" size={16} color="#fff" />
+                  </View>
+                  <Text style={[st.optionsLabel, { color: colors.text }]}>View Profile</Text>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                </TouchableOpacity>
+              )}
+
+              {/* ── SECTION: Privacy ─────────────────────────────────────── */}
+              <Text style={[st.optionsSection, { color: colors.textMuted, marginTop: 8 }]}>PRIVACY</Text>
+
+              <TouchableOpacity
+                style={[st.optionsRow, { borderBottomColor: colors.border }]}
+                onPress={handleMuteToggle}
+              >
+                <View style={[st.optionsIcon, { backgroundColor: isMuted ? "#8E8E93" : "#007AFF" }]}>
+                  <Ionicons name={isMuted ? "notifications-off" : "notifications"} size={16} color="#fff" />
+                </View>
+                <Text style={[st.optionsLabel, { color: colors.text }]}>{isMuted ? "Unmute Notifications" : "Mute Notifications"}</Text>
+                <View style={[st.optionsToggle, { backgroundColor: isMuted ? BRAND : colors.border }]}>
+                  <View style={[st.optionsToggleThumb, { transform: [{ translateX: isMuted ? 14 : 0 }] }]} />
+                </View>
+              </TouchableOpacity>
+
+              {!chatInfo?.is_channel && (
+                <TouchableOpacity
+                  style={[st.optionsRow, { borderBottomColor: colors.border }]}
+                  onPress={handleDisappearingToggle}
+                >
+                  <View style={[st.optionsIcon, { backgroundColor: disappearingEnabled ? BRAND : "#5856D6" }]}>
+                    <Ionicons name="timer-outline" size={16} color="#fff" />
+                  </View>
+                  <Text style={[st.optionsLabel, { color: colors.text }]}>Disappearing Messages</Text>
+                  <View style={[st.optionsToggle, { backgroundColor: disappearingEnabled ? BRAND : colors.border }]}>
+                    <View style={[st.optionsToggleThumb, { transform: [{ translateX: disappearingEnabled ? 14 : 0 }] }]} />
+                  </View>
+                </TouchableOpacity>
+              )}
+
+              {/* ── SECTION: Safety ─────────────────────────────────────── */}
+              {chatInfo?.other_id && !chatInfo.is_group && !chatInfo.is_channel && chatInfo.other_id !== AFUAI_BOT_ID && (
+                <>
+                  <Text style={[st.optionsSection, { color: colors.textMuted, marginTop: 8 }]}>SAFETY</Text>
+
+                  <TouchableOpacity
+                    style={[st.optionsRow, { borderBottomColor: colors.border }]}
+                    onPress={() => { setShowChatOptions(false); handleBlockUser(); }}
+                  >
+                    <View style={[st.optionsIcon, { backgroundColor: isBlocked ? "#34C759" : "#FF3B30" }]}>
+                      <Ionicons name={isBlocked ? "checkmark-circle" : "ban"} size={16} color="#fff" />
+                    </View>
+                    <Text style={[st.optionsLabel, { color: isBlocked ? "#34C759" : "#FF3B30" }]}>
+                      {isBlocked ? `Unblock ${headerTitle}` : `Block ${headerTitle}`}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[st.optionsRow, { borderBottomColor: colors.border }]}
+                    onPress={() => { setShowChatOptions(false); handleReportUser(); }}
+                  >
+                    <View style={[st.optionsIcon, { backgroundColor: "#FF9500" }]}>
+                      <Ionicons name="flag" size={16} color="#fff" />
+                    </View>
+                    <Text style={[st.optionsLabel, { color: "#FF9500" }]}>Report {headerTitle}</Text>
+                    <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {/* ── SECTION: Danger ─────────────────────────────────────── */}
+              <Text style={[st.optionsSection, { color: colors.textMuted, marginTop: 8 }]}>MANAGE</Text>
+
+              <TouchableOpacity
+                style={[st.optionsRow, { borderBottomColor: colors.border }]}
+                onPress={handleClearChatMessages}
+              >
+                <View style={[st.optionsIcon, { backgroundColor: "#FF3B30" }]}>
+                  <Ionicons name="trash-outline" size={16} color="#fff" />
+                </View>
+                <Text style={[st.optionsLabel, { color: "#FF3B30" }]}>Clear Chat</Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[st.optionsRow, { borderBottomColor: "transparent" }]}
+                onPress={handleDeleteChat}
+              >
+                <View style={[st.optionsIcon, { backgroundColor: "#FF3B30" }]}>
+                  <Ionicons name={chatInfo?.is_group || chatInfo?.is_channel ? "exit-outline" : "close-circle-outline"} size={16} color="#fff" />
+                </View>
+                <Text style={[st.optionsLabel, { color: "#FF3B30" }]}>
+                  {chatInfo?.is_channel ? "Leave Channel" : chatInfo?.is_group ? "Leave Group" : "Delete Chat"}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+
+              <View style={{ height: 16 }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {forwardMsg && (
         <Modal
           visible
@@ -4801,6 +5108,69 @@ const st = StyleSheet.create({
     gap: 2,
   },
   backBtn: { padding: 6 },
+
+  optionsOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  optionsSheet: {
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    paddingBottom: 32,
+    paddingTop: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 16,
+  },
+  optionsHandle: { width: 38, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 14 },
+  optionsIdentity: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: 4,
+  },
+  optionsName: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  optionsSub: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
+  optionsSection: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.6,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 6,
+  },
+  optionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 13,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  optionsIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  optionsLabel: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
+  optionsToggle: {
+    width: 34,
+    height: 20,
+    borderRadius: 10,
+    padding: 2,
+    justifyContent: "center",
+  },
+  optionsToggleThumb: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#fff",
+  },
+
   headerProfile: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
   headerInfo: { flex: 1 },
   headerName: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
