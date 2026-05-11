@@ -19,7 +19,6 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
-import { GlassHeader } from "@/components/ui/GlassHeader";
 import { uploadAvatarWithError, uploadToStorage } from "@/lib/mediaUpload";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -300,21 +299,41 @@ export default function EditProfileScreen() {
       style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}
       keyboardVerticalOffset={0}
     >
-      <GlassHeader
-        title="Edit Profile"
-        onBack={() => router.back()}
-        right={
-          <TouchableOpacity onPress={save} disabled={saving}>
-            {saving ? (
-              <ActivityIndicator size="small" color={accent} />
-            ) : (
-              <View style={[styles.saveChip, { backgroundColor: accent }]}>
-                <Text style={styles.saveChipText}>Save</Text>
-              </View>
-            )}
+      {/* Native-style navigation header */}
+      <View style={[styles.navBar, { paddingTop: insets.top, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+        <View style={styles.navBarInner}>
+          {/* Left — back */}
+          <TouchableOpacity
+            style={styles.navSideLeft}
+            onPress={() => router.back()}
+            hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
+            activeOpacity={0.6}
+          >
+            <Ionicons name="chevron-back" size={28} color={accent} />
           </TouchableOpacity>
-        }
-      />
+
+          {/* Center — title */}
+          <Text style={[styles.navTitle, { color: colors.text }]} numberOfLines={1}>
+            Edit Profile
+          </Text>
+
+          {/* Right — save */}
+          <View style={styles.navSideRight}>
+            <TouchableOpacity
+              onPress={save}
+              disabled={saving}
+              style={[styles.saveChip, { backgroundColor: accent, opacity: saving ? 0.7 : 1 }]}
+              activeOpacity={0.8}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.saveChipText}>Save</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
 
       <ScrollView
         contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 40 }]}
@@ -648,18 +667,37 @@ export default function EditProfileScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
 
-  header: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 10,
+  // Native nav header
+  navBar: {
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerBtn: { minWidth: 64, alignItems: "flex-start" },
-  cancelText: { fontSize: 16, fontFamily: "Inter_400Regular" },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  saveChip: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20 },
+  navBarInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 4,
+    paddingBottom: 10,
+    paddingTop: 6,
+  },
+  navSideLeft: {
+    width: 52,
+    alignItems: "flex-start",
+    justifyContent: "center",
+    paddingLeft: 4,
+  },
+  navSideRight: {
+    width: 52,
+    alignItems: "flex-end",
+    justifyContent: "center",
+    paddingRight: 4,
+  },
+  navTitle: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 17,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: -0.2,
+  },
+  saveChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, minWidth: 52, alignItems: "center" },
   saveChipText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
 
   body: { gap: 14, paddingHorizontal: 16, paddingTop: 0 },
