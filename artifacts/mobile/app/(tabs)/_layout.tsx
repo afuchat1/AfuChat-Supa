@@ -38,6 +38,11 @@ const TABS = [
   { route: "/(tabs)/me",       label: "Me",       sfOn: "person.circle.fill",   sfOff: "person.circle",   mdOn: "person",      mdOff: "person-outline"     },
 ] as const;
 
+// All animations in the tab bar use JS driver (useNativeDriver: false).
+// This avoids the native/JS driver conflict that arises when React Compiler
+// rewrites hook dependency tracking and native-claimed nodes get re-animated.
+const ND = false as const;
+
 function normalizeTabPath(p: string): string {
   if (p === "/" || p === "/(tabs)" || p === "/(tabs)/index") return "/(tabs)";
   if (p === "/discover"  || p === "/(tabs)/discover")  return "/(tabs)/discover";
@@ -46,32 +51,31 @@ function normalizeTabPath(p: string): string {
   return p;
 }
 
-// ─── Hook: total unread chat count from local store ───────────────────────────
+// ─── Hook: total unread chat count ────────────────────────────────────────────
 function useTotalUnread(userId: string | undefined): number {
   const [total, setTotal] = useState(0);
 
   const refresh = useCallback(async () => {
     const convs = await getLocalConversations();
-    const sum = convs.reduce((acc, c) => acc + (c.unread_count ?? 0), 0);
-    setTotal(sum);
+    setTotal(convs.reduce((s, c) => s + (c.unread_count ?? 0), 0));
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
 
   useEffect(() => {
     if (!userId) return;
-    const channel = supabase
-      .channel("tab-bar-unread-watcher")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => refresh())
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "message_receipts" }, () => refresh())
+    const ch = supabase
+      .channel("tab-bar-unread")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, refresh)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "message_receipts" }, refresh)
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { supabase.removeChannel(ch); };
   }, [userId, refresh]);
 
   return total;
 }
 
-// ─── Single animated tab item ─────────────────────────────────────────────────
+// ─── Single tab item with all-JS animations ───────────────────────────────────
 function TabItem({
   tab,
   isFocused,
@@ -85,99 +89,47 @@ function TabItem({
 }) {
   const isIOS = Platform.OS === "ios";
 
-  // All scale on one value — no Animated.multiply needed
-  // useNativeDriver: true for scale/opacity transforms
+  // One scale value covers both focus-state and long-press bounce.
+  // JS driver throughout — consistent, no native conflict.
   const scaleAnim    = useRef(new Animated.Value(isFocused ? 1.12 : 1)).current;
+  const pillProgress = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
   const labelOpacity = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
+  const labelMaxW    = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
   const dotScale     = useRef(new Animated.Value(unreadDot ? 1 : 0)).current;
 
-  // JS-driver only (interpolating background-color / width)
-  const pillProgress = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
-  const labelMaxW    = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
-
-  // Track isFocused so bounce callback can settle to the right resting scale
+  // Keep a ref so the bounce callback knows the resting scale without re-creation
   const isFocusedRef = useRef(isFocused);
-  useEffect(() => { isFocusedRef.current = isFocused; }, [isFocused]);
+  isFocusedRef.current = isFocused;
 
-  // Focus animation — native driver for scale/opacity
+  // Focus-state animations
   useEffect(() => {
-    const restScale = isFocused ? 1.12 : 1;
-    Animated.spring(scaleAnim, {
-      toValue: restScale,
-      useNativeDriver: true,
-      speed: 20,
-      bounciness: 6,
-    }).start();
-    Animated.timing(labelOpacity, {
-      toValue: isFocused ? 1 : 0,
-      duration: isFocused ? 180 : 80,
-      useNativeDriver: true,
-    }).start();
-    // JS-driver animations (background, max-width) in separate calls
-    Animated.spring(pillProgress, {
-      toValue: isFocused ? 1 : 0,
-      useNativeDriver: false,
-      speed: 18,
-      bounciness: 4,
-    }).start();
-    Animated.spring(labelMaxW, {
-      toValue: isFocused ? 1 : 0,
-      useNativeDriver: false,
-      speed: 18,
-      bounciness: 2,
-    }).start();
+    Animated.spring(scaleAnim, { toValue: isFocused ? 1.12 : 1, useNativeDriver: ND, speed: 20, bounciness: 6 }).start();
+    Animated.timing(labelOpacity, { toValue: isFocused ? 1 : 0, duration: isFocused ? 180 : 80, useNativeDriver: ND }).start();
+    Animated.spring(pillProgress, { toValue: isFocused ? 1 : 0, useNativeDriver: ND, speed: 18, bounciness: 4 }).start();
+    Animated.spring(labelMaxW, { toValue: isFocused ? 1 : 0, useNativeDriver: ND, speed: 18, bounciness: 2 }).start();
   }, [isFocused]);
 
   // Badge dot pop
   useEffect(() => {
-    Animated.spring(dotScale, {
-      toValue: unreadDot ? 1 : 0,
-      useNativeDriver: true,
-      speed: 22,
-      bounciness: 10,
-    }).start();
+    Animated.spring(dotScale, { toValue: unreadDot ? 1 : 0, useNativeDriver: ND, speed: 22, bounciness: 10 }).start();
   }, [unreadDot]);
 
-  // Long-press: squish → overshoot → settle — all on the same scaleAnim node
+  // Long-press bounce: squish → overshoot → settle on same scaleAnim node
   const triggerBounce = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle?.Medium);
-    const restScale = isFocusedRef.current ? 1.12 : 1;
+    const rest = isFocusedRef.current ? 1.12 : 1;
     Animated.sequence([
-      Animated.spring(scaleAnim, {
-        toValue: 0.68,
-        useNativeDriver: true,
-        speed: 80,
-        bounciness: 0,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1.28,
-        useNativeDriver: true,
-        speed: 30,
-        bounciness: 8,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: restScale,
-        useNativeDriver: true,
-        speed: 22,
-        bounciness: 4,
-      }),
+      Animated.spring(scaleAnim, { toValue: 0.68, useNativeDriver: ND, speed: 80, bounciness: 0 }),
+      Animated.spring(scaleAnim, { toValue: 1.28, useNativeDriver: ND, speed: 30, bounciness: 8 }),
+      Animated.spring(scaleAnim, { toValue: rest,  useNativeDriver: ND, speed: 22, bounciness: 4 }),
     ]).start();
   }, [scaleAnim]);
 
   const iconColor = isFocused ? colors.accent : colors.tabIconDefault;
 
-  const pillBg = pillProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["rgba(0,0,0,0)", colors.accent + "22"],
-  });
-  const pillPaddingH = pillProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [10, 14],
-  });
-  const labelMaxWidth = labelMaxW.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 72],
-  });
+  const pillBg = pillProgress.interpolate({ inputRange: [0, 1], outputRange: ["rgba(0,0,0,0)", colors.accent + "22"] });
+  const pillPH = pillProgress.interpolate({ inputRange: [0, 1], outputRange: [10, 14] });
+  const maxW   = labelMaxW.interpolate({ inputRange: [0, 1], outputRange: [0, 72] });
 
   return (
     <TouchableOpacity
@@ -187,76 +139,41 @@ function TabItem({
       delayLongPress={180}
       activeOpacity={0.75}
     >
-      <Animated.View
-        style={[
-          tabItemStyles.pill,
-          { backgroundColor: pillBg, paddingHorizontal: pillPaddingH },
-        ]}
-      >
-        {/* Icon + badge — single scale node, native driver */}
+      <Animated.View style={[tabItemStyles.pill, { backgroundColor: pillBg, paddingHorizontal: pillPH }]}>
+
+        {/* Icon + badge dot, scaled together */}
         <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
           <View style={{ position: "relative" }}>
             {tab.route === "/(tabs)" ? (
-              <Image
-                source={afuSymbol}
-                style={{ width: 22, height: 22, tintColor: iconColor }}
-                resizeMode="contain"
-              />
+              <Image source={afuSymbol} style={{ width: 22, height: 22, tintColor: iconColor }} resizeMode="contain" />
             ) : isIOS ? (
-              <SymbolView
-                name={isFocused ? tab.sfOn : tab.sfOff}
-                tintColor={iconColor}
-                size={22}
-              />
+              <SymbolView name={isFocused ? tab.sfOn : tab.sfOff} tintColor={iconColor} size={22} />
             ) : (
-              <Ionicons
-                name={(isFocused ? tab.mdOn : tab.mdOff) as any}
-                size={22}
-                color={iconColor}
-              />
+              <Ionicons name={(isFocused ? tab.mdOn : tab.mdOff) as any} size={22} color={iconColor} />
             )}
 
-            {/* Unread dot */}
             {unreadDot && (
               <Animated.View
-                style={[
-                  tabItemStyles.dot,
-                  {
-                    backgroundColor: colors.accent,
-                    transform: [{ scale: dotScale }],
-                  },
-                ]}
+                style={[tabItemStyles.dot, { backgroundColor: colors.accent, transform: [{ scale: dotScale }] }]}
               />
             )}
           </View>
         </Animated.View>
 
-        {/* Sliding label — native opacity, JS max-width */}
-        <Animated.View
-          style={{
-            overflow: "hidden",
-            maxWidth: labelMaxWidth,
-            opacity: labelOpacity,
-          }}
-        >
-          <Text
-            style={[tabItemStyles.label, { color: colors.accent }]}
-            numberOfLines={1}
-          >
+        {/* Sliding label */}
+        <Animated.View style={{ overflow: "hidden", maxWidth: maxW, opacity: labelOpacity }}>
+          <Text style={[tabItemStyles.label, { color: colors.accent }]} numberOfLines={1}>
             {tab.label}
           </Text>
         </Animated.View>
+
       </Animated.View>
     </TouchableOpacity>
   );
 }
 
 const tabItemStyles = StyleSheet.create({
-  wrapper: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  wrapper: { flex: 1, alignItems: "center", justifyContent: "center" },
   pill: {
     flexDirection: "row",
     alignItems: "center",
@@ -265,12 +182,7 @@ const tabItemStyles = StyleSheet.create({
     paddingVertical: 9,
     gap: 6,
   },
-  label: {
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: 0.1,
-    marginLeft: 2,
-  },
+  label: { fontSize: 13, fontFamily: "Inter_600SemiBold", letterSpacing: 0.1, marginLeft: 2 },
   dot: {
     position: "absolute",
     top: -2,
@@ -283,33 +195,24 @@ const tabItemStyles = StyleSheet.create({
   },
 });
 
-// ─── Floating bottom tab bar ──────────────────────────────────────────────────
+// ─── Floating tab bar ─────────────────────────────────────────────────────────
 function FloatingTabBar({ userId }: { userId: string | undefined }) {
-  const pathname       = usePathname();
-  const insets         = useSafeAreaInsets();
+  const pathname    = usePathname();
+  const insets      = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
-  const totalUnread    = useTotalUnread(userId);
-
-  const active = normalizeTabPath(pathname);
-  const barBg  = isDark ? "rgba(30,30,32,0.92)" : "rgba(255,255,255,0.94)";
+  const totalUnread = useTotalUnread(userId);
+  const active      = normalizeTabPath(pathname);
+  const barBg       = isDark ? "rgba(30,30,32,0.92)" : "rgba(255,255,255,0.94)";
 
   return (
     <View
-      style={[
-        floatStyles.container,
-        { bottom: (insets.bottom > 0 ? insets.bottom : 12) + 4 },
-      ]}
+      style={[floatStyles.container, { bottom: (insets.bottom > 0 ? insets.bottom : 12) + 4 }]}
       pointerEvents="box-none"
     >
       <View
         style={[
           floatStyles.bar,
-          {
-            backgroundColor: barBg,
-            borderColor: isDark
-              ? "rgba(255,255,255,0.08)"
-              : "rgba(0,0,0,0.07)",
-          },
+          { backgroundColor: barBg, borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)" },
         ]}
       >
         {TABS.map((tab) => (
@@ -327,13 +230,7 @@ function FloatingTabBar({ userId }: { userId: string | undefined }) {
 }
 
 const floatStyles = StyleSheet.create({
-  container: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    alignItems: "stretch",
-    zIndex: 100,
-  },
+  container: { position: "absolute", left: 16, right: 16, alignItems: "stretch", zIndex: 100 },
   bar: {
     flexDirection: "row",
     alignItems: "center",
