@@ -900,7 +900,11 @@ const VideoItem = React.memo(function VideoItem({
       setShowBuffering(false);
       setVideoError(false);
       if (bufferingTimerRef.current) { clearTimeout(bufferingTimerRef.current); bufferingTimerRef.current = null; }
-      if (!cachedUri) videoRef.current?.unloadAsync().catch(() => {});
+      // Do NOT call unloadAsync() here — it fires on first mount too (isActive=false
+      // while preloading) and permanently breaks the underlying AVPlayer before it
+      // has a chance to buffer. The Video component is unmounted automatically by
+      // the shouldMountVideo gate when the item leaves the ±2 nearActive window,
+      // which is the correct place to free native resources.
       // Reset per-frame perf refs when leaving viewport
       bufferingRef.current = false;
       videoStartedRef.current = false;
