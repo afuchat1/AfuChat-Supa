@@ -369,7 +369,7 @@ export default function TabLayout() {
     <TabSwipeProvider>
       <View style={{ flex: 1 }}>
         <ClassicTabLayout isLoggedIn={isLoggedIn} />
-        {isLoggedIn && !isDesktop && Platform.OS !== "web" && (
+        {isLoggedIn && !isDesktop && (
           <FloatingTabBar userId={user?.id} />
         )}
       </View>
