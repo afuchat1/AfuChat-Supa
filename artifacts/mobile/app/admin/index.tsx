@@ -1993,11 +1993,11 @@ export default function AdminDashboard() {
     return (
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Digital ID Scanner</Text>
-        <View style={[styles.userRow, { backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", padding: 28, gap: 14 }]}>
+        <View style={{ backgroundColor: colors.surface, borderRadius: 14, padding: 28, alignItems: "center", gap: 14 }}>
           <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: BRAND + "18", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: BRAND + "40" }}>
             <Ionicons name="scan" size={32} color={BRAND} />
           </View>
-          <Text style={[styles.sectionTitle, { color: colors.text, fontSize: 17, marginBottom: 0 }]}>ID Card Scanner</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text, fontSize: 17, marginBottom: 0, textAlign: "center" }]}>ID Card Scanner</Text>
           <Text style={{ fontSize: 13, color: colors.textMuted, textAlign: "center", lineHeight: 20 }}>
             Scan any AfuChat Digital ID QR code to reveal the full user record, activity history, account status and economy data.
           </Text>

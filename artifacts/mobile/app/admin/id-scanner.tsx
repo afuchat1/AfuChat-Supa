@@ -146,12 +146,13 @@ async function fetchFullRecord(afuIdStr: string): Promise<FullRecord | null> {
     p_afu_id: scannedAfuId,
   });
 
-  if (rpcError || !rows || rows.length === 0) return null;
+  if (rpcError) throw new Error(rpcError.message);
+  if (!rows || rows.length === 0) return null;
   const baseProfile = rows[0];
 
   const COLS = [
     "id", "handle", "display_name", "avatar_url", "bio",
-    "phone_number", "email", "xp", "acoin", "current_grade",
+    "phone_number", "xp", "acoin", "current_grade",
     "is_verified", "is_admin", "is_organization_verified",
     "is_private", "show_online_status", "tipping_enabled",
     "country", "region", "language", "website_url",
@@ -166,7 +167,8 @@ async function fetchFullRecord(afuIdStr: string): Promise<FullRecord | null> {
     .eq("id", baseProfile.id)
     .single();
 
-  if (profileError || !profile) return null;
+  if (profileError) throw new Error(profileError.message);
+  if (!profile) return null;
 
   const [
     { count: membersBefore },
@@ -412,7 +414,7 @@ function IdScannerScreenMobile() {
       {/* ── Error state ── */}
       {scanned && !loading && error && (
         <View style={[st.centeredMsg, { flex: 1 }]}>
-          <Ionicons name="warning-outline" size={44} color="#FF3B30" />
+          <Ionicons name="alert-circle-outline" size={48} color="#FF3B30" />
           <Text style={[st.msgText, { color: "#FF3B30", marginTop: 8 }]}>{error}</Text>
           <TouchableOpacity style={[st.actionPrimary, { marginTop: 24 }]} onPress={reset}>
             <Ionicons name="refresh" size={16} color="#fff" />
