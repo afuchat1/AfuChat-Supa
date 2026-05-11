@@ -1286,12 +1286,15 @@ export default function VideoPlayerScreen() {
   // Stable ref for user — lets fetchVideos read the current user without
   // having it as a dep, so auth-context refreshes never reset the feed.
   const userRef = useRef(user);
+  // Stable ref for videos — lets interaction callbacks (like/bookmark) always
+  // read the latest videos array without being in every useCallback dep list.
+  const videosRef = useRef(videos);
   // Tab indicator is driven purely by videoTab state — no Animated needed.
 
   useEffect(() => { hasMoreRef.current = hasMore; }, [hasMore]);
   useEffect(() => { videoTabRef.current = videoTab; }, [videoTab]);
   useEffect(() => { activeIndexRef.current = activeIndex; }, [activeIndex]);
-  useEffect(() => { videosLenRef.current = videos.length; }, [videos.length]);
+  useEffect(() => { videosLenRef.current = videos.length; videosRef.current = videos; }, [videos]);
   useEffect(() => { userRef.current = user; }, [user]);
 
   // Web: hide scrollbar CSS
@@ -1541,39 +1544,70 @@ export default function VideoPlayerScreen() {
   // ── Interactions ───────────────────────────────────────────────────────────
 
   const handleLike = useCallback(async (postId: string, currentlyLiked: boolean) => {
-    if (!user) { setShowSignInPrompt(true); return; }
-    const post = videos.find((v) => v.id === postId);
-    if (!post) return;
+    const currentUser = userRef.current;
+    if (!currentUser) { setShowSignInPrompt(true); return; }
+
+    // Optimistic update — update UI immediately before any await
     if (currentlyLiked) {
-      await supabase.from("post_acknowledgments").delete().eq("post_id", postId).eq("user_id", user.id);
       setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, liked: false, likeCount: Math.max(0, v.likeCount - 1) } : v));
     } else {
-      await supabase.from("post_acknowledgments").insert({ post_id: postId, user_id: user.id });
       setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, liked: true, likeCount: v.likeCount + 1 } : v));
-      if (post.author_id !== user.id) notifyPostLike({ postAuthorId: post.author_id, likerName: profile?.display_name || "Someone", likerUserId: user.id, postId });
+    }
+
+    if (currentlyLiked) {
+      const { error } = await supabase.from("post_acknowledgments").delete().eq("post_id", postId).eq("user_id", currentUser.id);
+      if (error) {
+        // Rollback on failure
+        setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, liked: true, likeCount: v.likeCount + 1 } : v));
+      }
+    } else {
+      const { error } = await supabase.from("post_acknowledgments").upsert(
+        { post_id: postId, user_id: currentUser.id },
+        { onConflict: "post_id,user_id", ignoreDuplicates: true }
+      );
+      if (error) {
+        // Rollback on failure
+        setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, liked: false, likeCount: Math.max(0, v.likeCount - 1) } : v));
+      } else {
+        // Fire notification after confirmed DB write — use latest videos ref
+        const post = videosRef.current.find((v) => v.id === postId);
+        if (post && post.author_id !== currentUser.id) {
+          notifyPostLike({ postAuthorId: post.author_id, likerName: profile?.display_name || "Someone", likerUserId: currentUser.id, postId });
+        }
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, []);
 
   const handleBookmark = useCallback(async (postId: string, currentlyBookmarked: boolean) => {
-    if (!user) { setShowSignInPrompt(true); return; }
+    const currentUser = userRef.current;
+    if (!currentUser) { setShowSignInPrompt(true); return; }
+    // Optimistic update first
+    setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, bookmarked: !currentlyBookmarked } : v));
     if (currentlyBookmarked) {
-      await supabase.from("post_bookmarks").delete().eq("post_id", postId).eq("user_id", user.id);
-      setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, bookmarked: false } : v));
+      const { error } = await supabase.from("post_bookmarks").delete().eq("post_id", postId).eq("user_id", currentUser.id);
+      if (error) setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, bookmarked: true } : v));
     } else {
-      await supabase.from("post_bookmarks").upsert({ post_id: postId, user_id: user.id }, { onConflict: "post_id,user_id" });
-      setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, bookmarked: true } : v));
+      const { error } = await supabase.from("post_bookmarks").upsert({ post_id: postId, user_id: currentUser.id }, { onConflict: "post_id,user_id", ignoreDuplicates: true });
+      if (error) setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, bookmarked: false } : v));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, []);
 
   const handleFollow = useCallback(async (authorId: string, isFollowing: boolean) => {
-    if (!user) { setShowSignInPrompt(true); return; }
-    if (isFollowing) await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", authorId);
-    else await supabase.from("follows").insert({ follower_id: user.id, following_id: authorId });
+    const currentUser = userRef.current;
+    if (!currentUser) { setShowSignInPrompt(true); return; }
+    // Optimistic update first
     setFollowingSet((prev) => { const next = new Set(prev); if (isFollowing) next.delete(authorId); else next.add(authorId); return next; });
+    if (isFollowing) {
+      const { error } = await supabase.from("follows").delete().eq("follower_id", currentUser.id).eq("following_id", authorId);
+      if (error) setFollowingSet((prev) => { const next = new Set(prev); next.add(authorId); return next; });
+    } else {
+      const { error } = await supabase.from("follows").upsert({ follower_id: currentUser.id, following_id: authorId }, { onConflict: "follower_id,following_id", ignoreDuplicates: true });
+      if (error) setFollowingSet((prev) => { const next = new Set(prev); next.delete(authorId); return next; });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, []);
 
   function handleReplyCountChange(postId: string, delta: number) {
     setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, replyCount: v.replyCount + delta } : v));
