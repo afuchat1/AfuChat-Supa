@@ -284,13 +284,20 @@ export function clearCachedUserId(): void {
 }
 
 /**
- * Wipes all user-specific cache data so that switching accounts never leaks
- * one account's data into another. Call this BEFORE setting the new session.
+ * Wipes every byte of user-specific local data so that switching accounts
+ * never leaks one account's data into another.
+ *
+ * Call this BEFORE setting the new Supabase session.
+ *
+ * Covers:
+ *  - MMKV profile, feed cursors, wallet, search history, push token, etc.
+ *  - AsyncStorage: profile, conversations, messages, feed caches, search,
+ *    feed algorithm weights, media upload usage, feature usage counters,
+ *    wallet, suggested-users dismiss list, pending messages.
  */
 export async function clearAccountCache(): Promise<void> {
   try {
-    // Clear synchronous MMKV profile slot immediately — this prevents the
-    // new account from seeing the old account's profile on first render.
+    // ── MMKV (synchronous, zero I/O) ──────────────────────────────────────────
     storage.delete(KEYS.USER_PROFILE);
     storage.delete(KEYS.USER_ID);
     storage.delete(LAST_USER_KEY);
@@ -305,27 +312,45 @@ export async function clearAccountCache(): Promise<void> {
     storage.delete(KEYS.PUSH_TOKEN);
     storage.delete(KEYS.INTERESTS);
 
-    // Build list of AsyncStorage keys to remove, including all per-chat message caches.
+    // ── AsyncStorage (async batch) ────────────────────────────────────────────
     const allKeys = await AsyncStorage.getAllKeys();
+
+    // Per-chat message caches  →  "offline_messages_<chatId>"
     const messageCacheKeys = allKeys.filter((k) =>
       k.startsWith(CACHE_KEYS.MESSAGES_PREFIX)
     );
 
+    // Daily feature-usage counters  →  "afuchat_feature_<name>_<YYYY-MM-DD>"
+    const featureUsageKeys = allKeys.filter((k) =>
+      k.startsWith("afuchat_feature_")
+    );
+
     await AsyncStorage.multiRemove([
+      // Core offline caches
       CACHE_KEYS.PROFILE,
       CACHE_KEYS.CONVERSATIONS,
       CACHE_KEYS.CONTACTS,
       CACHE_KEYS.MOMENTS,
       CACHE_KEYS.NOTIFICATIONS,
       CACHE_KEYS.PENDING_MESSAGES,
+      CACHE_KEYS.WALLET,
+      // Feed caches
       CACHE_KEYS.FEED_FOR_YOU,
       CACHE_KEYS.FEED_FOLLOWING,
       CACHE_KEYS.FEED_CURSOR_FOR_YOU,
       CACHE_KEYS.FEED_CURSOR_FOLLOWING,
-      CACHE_KEYS.WALLET,
-      // Suggested users dismissed list — account-specific preference
+      // Search (account-personal history + saved searches + pinned results)
+      "@afuchat_search_history",
+      "@afuchat_saved_searches",
+      "@afuchat_pinned_results",
+      // Feed algorithm personalisation weights
+      "feed_interaction_weights_v1",
+      // Media upload quota cache
+      "@afuchat:storage_usage_v1",
+      // UI preferences that are per-account
       "suggested_users_dismissed_v1",
       ...messageCacheKeys,
+      ...featureUsageKeys,
     ]);
   } catch {}
 }

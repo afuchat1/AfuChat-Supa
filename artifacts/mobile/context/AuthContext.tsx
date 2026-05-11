@@ -3,8 +3,26 @@ import { router } from "expo-router";
 import { AppState } from "react-native";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
-import { getStoredAccounts, storeAccount, removeStoredAccount, updateAccountTokens, type StoredAccount } from "@/lib/accountStore";
-import { cacheProfile, getCachedProfile, getCachedProfileSync, clearAccountCache, isOnline, onConnectivityChange, setCachedUserId, getCachedUserId, clearCachedUserId } from "@/lib/offlineStore";
+import {
+  getStoredAccounts,
+  getStoredAccount,
+  storeAccount,
+  removeStoredAccount,
+  updateAccountTokens,
+  updateAccountProfile,
+  type StoredAccount,
+} from "@/lib/accountStore";
+import {
+  cacheProfile,
+  getCachedProfile,
+  getCachedProfileSync,
+  clearAccountCache,
+  isOnline,
+  onConnectivityChange,
+  setCachedUserId,
+  getCachedUserId,
+  clearCachedUserId,
+} from "@/lib/offlineStore";
 import { clearAllConversations } from "@/lib/storage/localConversations";
 import { clearProfileCache } from "@/lib/profileCache";
 import { startOfflineSync } from "@/lib/offlineSync";
@@ -94,28 +112,35 @@ const AuthContext = createContext<AuthContextType>({
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  // Pre-populate from MMKV synchronously — zero I/O, zero wait.
-  // Screens like the Me tab render immediately with cached profile data.
   const _syncProfile = getCachedProfileSync();
   const [profile, setProfile] = useState<Profile | null>(_syncProfile as Profile | null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
-  // If we have a cached profile, don't block screens while waiting for auth.
   const [loading, setLoading] = useState(!_syncProfile);
   const [linkedAccounts, setLinkedAccounts] = useState<StoredAccount[]>([]);
 
-  async function fetchProfile(userId: string) {
+  // ── Guard refs ──────────────────────────────────────────────────────────────
+  // Prevent saveCurrentSession from firing during an account switch or link
+  // operation — otherwise a race condition can write the wrong tokens.
+  const isSwitchingRef = useRef(false);
+  const isLinkingRef = useRef(false);
+
+  // ── Profile fetch ───────────────────────────────────────────────────────────
+
+  async function fetchProfile(userId: string): Promise<Profile | null> {
     if (!isOnline()) {
       const cached = await getCachedProfile();
       if (cached) setProfile(cached as Profile);
       setSubscription(null);
-      return;
+      return cached as Profile | null;
     }
 
     try {
       const [{ data: profileData }, { data: subData }] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, handle, display_name, avatar_url, banner_url, bio, phone_number, xp, acoin, current_grade, is_verified, is_private, show_online_status, country, website_url, language, tipping_enabled, is_admin, is_support_staff, is_organization_verified, is_business_mode, gender, date_of_birth, region, interests, onboarding_completed, scheduled_deletion_at, created_at")
+          .select(
+            "id, handle, display_name, avatar_url, banner_url, bio, phone_number, xp, acoin, current_grade, is_verified, is_private, show_online_status, country, website_url, language, tipping_enabled, is_admin, is_support_staff, is_organization_verified, is_business_mode, gender, date_of_birth, region, interests, onboarding_completed, scheduled_deletion_at, created_at"
+          )
           .eq("id", userId)
           .single(),
         supabase
@@ -132,6 +157,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (profileData) {
         setProfile(profileData as Profile);
         cacheProfile(profileData);
+        // Keep the stored account's display metadata fresh
+        updateAccountProfile(userId, {
+          displayName: (profileData as any).display_name,
+          handle: (profileData as any).handle,
+          avatarUrl: (profileData as any).avatar_url,
+        }).catch(() => {});
       }
 
       if (subData) {
@@ -150,9 +181,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setSubscription(null);
       }
+
+      return profileData as Profile | null;
     } catch {
       const cached = await getCachedProfile();
       if (cached) setProfile(cached as Profile);
+      return cached as Profile | null;
     }
   }
 
@@ -160,8 +194,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (user) await fetchProfile(user.id);
   }
 
-  // Instant local patch — merges fields into profile state + cache immediately.
-  // Used for optimistic updates (e.g. avatar change) before the DB confirms.
   function patchProfile(patch: Partial<Profile>) {
     setProfile((prev) => {
       if (!prev) return prev;
@@ -171,28 +203,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }
 
+  // ── Linked accounts ─────────────────────────────────────────────────────────
+
   async function refreshLinkedAccounts() {
     const accounts = await getStoredAccounts();
     setLinkedAccounts(accounts);
   }
 
+  // ── Save current session snapshot to accountStore ───────────────────────────
+  // Only persists tokens; never overwrites profile metadata (that's handled
+  // inside fetchProfile via updateAccountProfile).
+
   async function saveCurrentSession() {
-    const { data: { session: currentSession } } = await supabase.auth.getSession();
-    if (currentSession && profile) {
-      await storeAccount({
-        userId: currentSession.user.id,
-        email: currentSession.user.email || "",
-        displayName: profile.display_name,
-        handle: profile.handle,
-        avatarUrl: profile.avatar_url,
-        accessToken: currentSession.access_token,
-        refreshToken: currentSession.refresh_token,
-      });
-      await refreshLinkedAccounts();
-    }
+    if (isSwitchingRef.current || isLinkingRef.current) return;
+    const { data: { session: live } } = await supabase.auth.getSession();
+    if (!live || !profile) return;
+    await storeAccount({
+      userId: live.user.id,
+      email: live.user.email || "",
+      displayName: profile.display_name,
+      handle: profile.handle,
+      avatarUrl: profile.avatar_url,
+      accessToken: live.access_token,
+      refreshToken: live.refresh_token,
+    });
+    await refreshLinkedAccounts();
   }
 
-  async function addAccount(email: string, password: string): Promise<{ success: boolean; error?: string }> {
+  // ── Add Account ─────────────────────────────────────────────────────────────
+  // Links a new account WITHOUT switching to it. The user stays on their
+  // current account. We temporarily sign in as the new user purely to
+  // obtain their tokens, then immediately restore the original session.
+
+  async function addAccount(
+    email: string,
+    password: string
+  ): Promise<{ success: boolean; error?: string }> {
     if (!profile?.is_admin) {
       const current = await getStoredAccounts();
       if (current.length >= 2) {
@@ -200,141 +246,265 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    // Snapshot current session tokens before we touch anything
     const { data: { session: currentSession } } = await supabase.auth.getSession();
-    const currentTokens = currentSession ? {
-      access: currentSession.access_token,
-      refresh: currentSession.refresh_token,
-    } : null;
+    if (!currentSession) return { success: false, error: "No active session." };
 
-    await saveCurrentSession();
+    const savedAccess = currentSession.access_token;
+    const savedRefresh = currentSession.refresh_token;
+    const savedUserId = currentSession.user.id;
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      if (currentTokens) {
-        await supabase.auth.setSession({ access_token: currentTokens.access, refresh_token: currentTokens.refresh });
+    // Suppress all onAuthStateChange side-effects during the temporary sign-in
+    isLinkingRef.current = true;
+
+    try {
+      // Sign in as the new account to get their tokens
+      const { data: newData, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError || !newData.session || !newData.user) {
+        return { success: false, error: signInError?.message || "Authentication failed." };
       }
-      return { success: false, error: error.message };
-    }
 
-    if (data.session && data.user) {
+      // Prevent linking the same account that is already active
+      if (newData.user.id === savedUserId) {
+        return { success: false, error: "This account is already active." };
+      }
+
+      // Check if it's already linked
+      const already = await getStoredAccount(newData.user.id);
+      if (already) {
+        return { success: false, error: "This account is already linked." };
+      }
+
+      // Fetch the new account's profile for display metadata
       const { data: newProfile } = await supabase
         .from("profiles")
         .select("display_name, handle, avatar_url")
-        .eq("id", data.user.id)
+        .eq("id", newData.user.id)
         .single();
 
+      // Persist the new account's session
       await storeAccount({
-        userId: data.user.id,
-        email: data.user.email || email,
+        userId: newData.user.id,
+        email: newData.user.email || email,
         displayName: newProfile?.display_name || "User",
         handle: newProfile?.handle || "",
         avatarUrl: newProfile?.avatar_url || null,
-        accessToken: data.session.access_token,
-        refreshToken: data.session.refresh_token,
+        accessToken: newData.session.access_token,
+        refreshToken: newData.session.refresh_token,
       });
 
-      if (currentTokens) {
-        await supabase.auth.setSession({ access_token: currentTokens.access, refresh_token: currentTokens.refresh });
-      }
+      // Restore the original user's session immediately
+      await supabase.auth.setSession({
+        access_token: savedAccess,
+        refresh_token: savedRefresh,
+      });
 
-      await refreshLinkedAccounts();
-    }
-    return { success: true };
-  }
-
-  async function switchAccount(userId: string): Promise<{ success: boolean; error?: string }> {
-    const accounts = await getStoredAccounts();
-    const target = accounts.find((a) => a.userId === userId);
-    if (!target) return { success: false, error: "Account not found" };
-
-    // 1. Persist the current session's tokens before leaving it.
-    await saveCurrentSession();
-
-    // 2. Wipe every user-specific cache so the incoming account starts clean.
-    //    This must happen before setSession() so that no old data can appear
-    //    in the brief window between session swap and the new profile arriving.
-    await Promise.all([
-      clearAccountCache(),
-      clearAllConversations(),
-    ]);
-    clearProfileCache();
-
-    // 3. Drop React state immediately so screens show skeletons, not stale data.
-    setProfile(null);
-    setSubscription(null);
-
-    const { data, error } = await supabase.auth.setSession({
-      access_token: target.accessToken,
-      refresh_token: target.refreshToken,
-    });
-
-    if (error) {
-      const { data: reAuth, error: reErr } = await supabase.auth.refreshSession({ refresh_token: target.refreshToken });
-      if (reErr || !reAuth.session) {
-        await removeStoredAccount(userId);
-        await refreshLinkedAccounts();
-        return { success: false, error: "Session expired. Please add this account again." };
-      }
-      await updateAccountTokens(userId, reAuth.session.access_token, reAuth.session.refresh_token);
       await refreshLinkedAccounts();
       return { success: true };
+    } finally {
+      // Always un-gate, even on unexpected errors
+      isLinkingRef.current = false;
     }
-
-    if (data.session) {
-      await updateAccountTokens(userId, data.session.access_token, data.session.refresh_token);
-    }
-    await refreshLinkedAccounts();
-    return { success: true };
   }
+
+  // ── Switch Account ──────────────────────────────────────────────────────────
+  // Full account switch with zero data leakage:
+  //
+  // 1. Save current session tokens (last chance before wiping state)
+  // 2. Set isSwitchingRef → prevents saveCurrentSession effect from firing
+  // 3. Wipe ALL React state immediately → screens show skeletons, not stale data
+  // 4. Wipe ALL local caches (MMKV + AsyncStorage, full list in clearAccountCache)
+  // 5. Sign out locally only (server session is kept alive for re-use)
+  // 6. Set the new session from stored tokens
+  // 7. If setSession fails → try refreshSession with stored refreshToken
+  // 8. If that also fails → account session is dead; remove it and abort
+  // 9. Fetch the new profile directly (don't rely on onAuthStateChange)
+  // 10. Navigate to root so no stale screen state lingers
+  // 11. Un-gate isSwitchingRef
+
+  async function switchAccount(
+    userId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    if (isSwitchingRef.current) return { success: false, error: "Already switching." };
+
+    const target = await getStoredAccount(userId);
+    if (!target) return { success: false, error: "Account not found. Please add it again." };
+
+    // ── 1. Snapshot current session ──────────────────────────────────────────
+    await saveCurrentSession();
+
+    // ── 2. Gate all side-effects ─────────────────────────────────────────────
+    isSwitchingRef.current = true;
+
+    try {
+      // ── 3. Clear React state immediately (screens show skeletons) ───────────
+      setProfile(null);
+      setSubscription(null);
+      setUser(null);
+      setSession(null);
+      setLoading(true);
+
+      // ── 4. Wipe every local cache in parallel ───────────────────────────────
+      clearProfileCache();
+      clearCachedUserId();
+      await Promise.all([
+        clearAccountCache(),
+        clearAllConversations(),
+      ]);
+
+      // ── 5. Sign out locally (keeps server session alive) ────────────────────
+      await supabase.auth.signOut({ scope: "local" });
+
+      // ── 6. Set the new session ───────────────────────────────────────────────
+      let newSession: Session | null = null;
+
+      const { data: setData, error: setError } = await supabase.auth.setSession({
+        access_token: target.accessToken,
+        refresh_token: target.refreshToken,
+      });
+
+      if (!setError && setData.session) {
+        newSession = setData.session;
+        await updateAccountTokens(
+          userId,
+          setData.session.access_token,
+          setData.session.refresh_token
+        );
+      } else {
+        // ── 7. Fallback: refresh using stored refreshToken ───────────────────
+        const { data: reData, error: reError } = await supabase.auth.refreshSession({
+          refresh_token: target.refreshToken,
+        });
+
+        if (reError || !reData.session) {
+          // ── 8. Session is dead — remove it and abort ─────────────────────
+          await removeStoredAccount(userId);
+          await refreshLinkedAccounts();
+          setLoading(false);
+          return {
+            success: false,
+            error: "This session has expired. Please add this account again.",
+          };
+        }
+
+        newSession = reData.session;
+        await updateAccountTokens(
+          userId,
+          reData.session.access_token,
+          reData.session.refresh_token
+        );
+      }
+
+      // ── 9. Update React identity state ──────────────────────────────────────
+      setSession(newSession);
+      setUser(newSession.user);
+      setCachedUserId(newSession.user.id);
+      setCurrentUserId(newSession.user.id);
+
+      // Fetch the new account's profile directly (don't wait for onAuthStateChange)
+      await fetchProfile(newSession.user.id);
+      await refreshLinkedAccounts();
+
+      setLoading(false);
+
+      // ── 10. Reset navigation so stale screens are gone ───────────────────────
+      router.replace("/(tabs)");
+
+      // Background: register device + ensure AI chat exists
+      registerDeviceSession(newSession.user.id).catch(() => {});
+      supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", newSession.user.id)
+        .single()
+        .then(({ data }) => {
+          ensureAfuAiChat(newSession!.user.id, data?.display_name).catch(() => {});
+        });
+
+      startOfflineSync();
+
+      return { success: true };
+    } finally {
+      // ── 11. Always un-gate ───────────────────────────────────────────────────
+      isSwitchingRef.current = false;
+    }
+  }
+
+  // ── Remove Account ──────────────────────────────────────────────────────────
 
   async function handleRemoveAccount(userId: string) {
     await removeStoredAccount(userId);
     await refreshLinkedAccounts();
   }
 
+  // ── Sign Out ────────────────────────────────────────────────────────────────
+
+  const signOut = useCallback(async () => {
+    isSwitchingRef.current = true; // suppress saveCurrentSession
+    try {
+      if (user) await clearPushToken(user.id);
+
+      // Drop React state immediately
+      setProfile(null);
+      setSubscription(null);
+      setUser(null);
+      setSession(null);
+
+      // Wipe all caches
+      clearCachedUserId();
+      clearProfileCache();
+      await Promise.all([
+        clearAccountCache(),
+        clearAllConversations(),
+      ]);
+
+      await supabase.auth.signOut();
+      router.replace("/discover");
+    } finally {
+      isSwitchingRef.current = false;
+    }
+  }, [user]);
+
+  // ── Bootstrap ────────────────────────────────────────────────────────────────
+
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
-        // ── Happy path: valid session found ────────────────────────────────────
         setSession(session);
         setUser(session.user);
         setCachedUserId(session.user.id);
-        // Show cached profile immediately — no network wait needed for initial render.
         const cached = await getCachedProfile();
         if (cached) setProfile(cached as Profile);
         setLoading(false);
-        // Refresh profile from network in the background.
         fetchProfile(session.user.id);
         startOfflineSync();
-        supabase.from("profiles").select("display_name").eq("id", session.user.id).single().then(({ data }) => {
-          ensureAfuAiChat(session.user.id, data?.display_name).catch(() => {});
-        });
+        supabase
+          .from("profiles")
+          .select("display_name")
+          .eq("id", session.user.id)
+          .single()
+          .then(({ data }) => {
+            ensureAfuAiChat(session.user.id, data?.display_name).catch(() => {});
+          });
       } else {
-        // ── No live session returned ────────────────────────────────────────────
-        // This happens when the access token has already expired by the time the
-        // app opens. Supabase will fire a background refresh; if the device is
-        // offline that refresh fails and a SIGNED_OUT event is emitted (handled
-        // below). In the meantime, keep the user "soft logged in" by restoring
-        // their identity from our local stores so screens never redirect to login.
+        // No live session — try to stay "soft logged in" from local storage
         const cachedUserId = getCachedUserId();
         const accounts = await getStoredAccounts();
         const primaryAccount = accounts[0] ?? null;
 
         if (cachedUserId && primaryAccount) {
-          // We know who this user is. Load their cached profile immediately.
           const cached = await getCachedProfile();
           if (cached) setProfile(cached as Profile);
 
           if (isOnline()) {
-            // Online but session null: try an explicit refresh using the stored
-            // refresh token. If it works, onAuthStateChange will pick it up and
-            // update session/user; we don't need to do it here.
-            supabase.auth.refreshSession({ refresh_token: primaryAccount.refreshToken })
+            supabase.auth
+              .refreshSession({ refresh_token: primaryAccount.refreshToken })
               .catch(() => {});
           } else {
-            // Offline: create a minimal user object from stored account data so
-            // every screen that checks `user?.id` keeps working. The real session
-            // is re-established via onAuthStateChange once connectivity returns.
             const syntheticUser = {
               id: primaryAccount.userId,
               email: primaryAccount.email,
@@ -348,7 +518,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           setLoading(false);
         } else {
-          // Genuinely not logged in — show cached profile if any (guest view).
           const cached = await getCachedProfile();
           if (cached) setProfile(cached as Profile);
           setLoading(false);
@@ -358,87 +527,85 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     refreshLinkedAccounts();
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (event, newSession) => {
-        // On the web, supabase-js silently rotates the access token whenever
-        // the browser tab regains focus and emits TOKEN_REFRESHED. The user
-        // identity hasn't changed, so re-setting session/user (which creates
-        // new object refs) and re-fetching the profile would cascade a
-        // re-render through every useAuth() consumer — making pages like
-        // /shorts and /video/[id] visibly "refresh" each time the user
-        // switches browser tabs and comes back. We keep the new tokens by
-        // patching the existing session object in place instead.
-        if (event === "TOKEN_REFRESHED") {
-          setSession((prev) => {
-            if (!prev || !newSession) return newSession;
-            if (prev.access_token === newSession.access_token) return prev;
-            return Object.assign(prev, {
-              access_token: newSession.access_token,
-              refresh_token: newSession.refresh_token,
-              expires_at: newSession.expires_at,
-              expires_in: newSession.expires_in,
-            });
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
+      // Suppress all state mutations during a switch or link operation.
+      // The switch function manages state directly; we don't want a race.
+      if (isSwitchingRef.current || isLinkingRef.current) return;
+
+      // TOKEN_REFRESHED: patch tokens in-place, don't re-fetch the profile.
+      if (event === "TOKEN_REFRESHED") {
+        setSession((prev) => {
+          if (!prev || !newSession) return newSession;
+          if (prev.access_token === newSession.access_token) return prev;
+          return Object.assign(prev, {
+            access_token: newSession.access_token,
+            refresh_token: newSession.refresh_token,
+            expires_at: newSession.expires_at,
+            expires_in: newSession.expires_in,
           });
-          if (newSession?.user) {
-            setUser((prev) => prev ?? newSession.user);
-            setCachedUserId(newSession.user.id);
-          }
-          return;
-        }
-
-        // ── SIGNED_OUT while offline ────────────────────────────────────────────
-        // When the device has no network, Supabase cannot refresh an expired
-        // access token and fires SIGNED_OUT. This must NOT clear auth state —
-        // the user is still the same person; they just have no connectivity.
-        // The session will be re-established as soon as the network returns and
-        // supabase auto-refreshes (or we call refreshSession on reconnect).
-        if (!newSession?.user && !isOnline()) {
-          return;
-        }
-
-        const newUserId = newSession?.user?.id ?? null;
-
-        // Skip no-op INITIAL_SESSION / SIGNED_IN replays on tab focus where
-        // the active user hasn't actually changed.
-        setSession((prev) => (prev?.user?.id === newUserId ? prev : newSession));
-        setUser((prev) => (prev?.id === newUserId ? prev : newSession?.user ?? null));
-
+        });
         if (newSession?.user) {
+          setUser((prev) => prev ?? newSession.user);
           setCachedUserId(newSession.user.id);
+          // Keep stored tokens fresh
+          updateAccountTokens(
+            newSession.user.id,
+            newSession.access_token,
+            newSession.refresh_token
+          ).catch(() => {});
         }
-
-        if (!newSession?.user) {
-          setProfile(null);
-          setSubscription(null);
-          return;
-        }
-
-        if (event === "SIGNED_IN") {
-          // Register device on first sign-in to detect new devices.
-          registerDeviceSession(newSession.user.id).catch(() => {});
-          fetchProfile(newSession.user.id).then(() => {
-            supabase.from("profiles").select("display_name").eq("id", newSession.user.id).single().then(({ data }) => {
-              ensureAfuAiChat(newSession.user.id, data?.display_name).catch(() => {});
-            });
-          }).catch(() => {});
-        }
+        return;
       }
-    );
+
+      // SIGNED_OUT while offline — keep state, the session will come back.
+      if (!newSession?.user && !isOnline()) return;
+
+      const newUserId = newSession?.user?.id ?? null;
+
+      setSession((prev) => (prev?.user?.id === newUserId ? prev : newSession));
+      setUser((prev) => (prev?.id === newUserId ? prev : newSession?.user ?? null));
+
+      if (newSession?.user) setCachedUserId(newSession.user.id);
+
+      if (!newSession?.user) {
+        setProfile(null);
+        setSubscription(null);
+        return;
+      }
+
+      if (event === "SIGNED_IN") {
+        registerDeviceSession(newSession.user.id).catch(() => {});
+        fetchProfile(newSession.user.id)
+          .then(() => {
+            supabase
+              .from("profiles")
+              .select("display_name")
+              .eq("id", newSession.user.id)
+              .single()
+              .then(({ data }) => {
+                ensureAfuAiChat(newSession.user.id, data?.display_name).catch(() => {});
+              });
+          })
+          .catch(() => {});
+      }
+    });
 
     return () => listener.subscription.unsubscribe();
   }, []);
 
+  // Save current session tokens whenever the live session changes.
+  // Guarded by isSwitchingRef / isLinkingRef so it never fires mid-switch.
   useEffect(() => {
-    if (session && profile) {
+    if (session && profile && !isSwitchingRef.current && !isLinkingRef.current) {
       saveCurrentSession();
     }
-  }, [session, profile]);
+  }, [session?.access_token, profile?.id]);
 
-  // Keep the push notification router aware of the current user so it can
-  // switch linked accounts when a notification tap targets a different one.
+  // Keep push notification router aware of the active user
   useEffect(() => { setCurrentUserId(user?.id ?? null); }, [user?.id]);
-  useEffect(() => { registerSwitchAccount(switchAccount); }, []); // stable ref
+  useEffect(() => { registerSwitchAccount(switchAccount); }, []);
 
+  // Update last_seen on app foreground
   useEffect(() => {
     if (!user) return;
     const updateLastSeen = () => {
@@ -448,38 +615,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active") updateLastSeen();
     });
-    const interval = setInterval(updateLastSeen, 60000);
+    const interval = setInterval(updateLastSeen, 60_000);
     return () => { sub.remove(); clearInterval(interval); };
   }, [user]);
 
+  // Reconnect: re-fetch profile + refresh JWT when network comes back
   useEffect(() => {
     if (!user) return;
     const unsub = onConnectivityChange((online) => {
       if (online) {
         fetchProfile(user.id);
-        // Proactively refresh the JWT when connectivity is restored so Supabase
-        // gets fresh tokens and stops treating the session as expired.
         supabase.auth.refreshSession().catch(() => {});
       }
     });
     return unsub;
   }, [user]);
 
-  // ── Real-time profile subscription ─────────────────────────────────────────
-  // Any UPDATE to this user's profile row (avatar, balance, display_name, etc.)
-  // is merged directly into state — no manual refreshProfile() needed.
+  // Real-time profile subscription — any DB UPDATE flows straight into state
   useEffect(() => {
     if (!user) return;
     const channel = supabase
       .channel(`profile-rt:${user.id}`)
       .on(
         "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "profiles",
-          filter: `id=eq.${user.id}`,
-        },
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${user.id}` },
         (payload) => {
           const incoming = payload.new as Partial<Profile>;
           setProfile((prev) => {
@@ -500,16 +659,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
       const res = await fetch(`${supabaseUrl}/functions/v1/telegram-auth`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": supabaseAnonKey ?? "",
-        },
+        headers: { "Content-Type": "application/json", apikey: supabaseAnonKey ?? "" },
         body: JSON.stringify({ initData }),
       });
       const data = await res.json();
-      if (!res.ok || !data.access_token) {
-        return { success: false, error: data.error ?? "Telegram sign-in failed" };
-      }
+      if (!res.ok || !data.access_token) return { success: false, error: data.error ?? "Telegram sign-in failed" };
       const { error } = await supabase.auth.setSession({
         access_token: data.access_token,
         refresh_token: data.refresh_token,
@@ -521,41 +675,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const signOut = useCallback(async () => {
-    if (user) {
-      await clearPushToken(user.id);
-    }
-    // Drop React state immediately so no screen can flash stale data
-    // in the window between clearing caches and the Supabase SIGNED_OUT event.
-    setProfile(null);
-    setSubscription(null);
-    setUser(null);
-    setSession(null);
-
-    // Clear all local caches before signing out so the next account (or a fresh
-    // login) never sees data from the previous session.
-    clearCachedUserId();
-    await Promise.all([
-      clearAccountCache(),
-      clearAllConversations(),
-    ]);
-    clearProfileCache();
-    await supabase.auth.signOut();
-    router.replace("/discover");
-  }, [user]);
-
   const isPremium = !!subscription && subscription.is_active && new Date(subscription.expires_at) > new Date();
 
-  const contextValue = useMemo(() => ({
-    session, user, profile, subscription, isPremium, loading, linkedAccounts,
-    signOut, refreshProfile, patchProfile, signInWithTelegram, addAccount, switchAccount, removeAccount: handleRemoveAccount, refreshLinkedAccounts,
-  }), [session, user, profile, subscription, isPremium, loading, linkedAccounts, signOut, signInWithTelegram]);
-
-  return (
-    <AuthContext.Provider value={contextValue}>
-      {children}
-    </AuthContext.Provider>
+  const contextValue = useMemo(
+    () => ({
+      session,
+      user,
+      profile,
+      subscription,
+      isPremium,
+      loading,
+      linkedAccounts,
+      signOut,
+      refreshProfile,
+      patchProfile,
+      signInWithTelegram,
+      addAccount,
+      switchAccount,
+      removeAccount: handleRemoveAccount,
+      refreshLinkedAccounts,
+    }),
+    [session, user, profile, subscription, isPremium, loading, linkedAccounts, signOut, signInWithTelegram]
   );
+
+  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => useContext(AuthContext);
