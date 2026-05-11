@@ -132,14 +132,22 @@ type FullRecord = {
 // ─── Data helpers ─────────────────────────────────────────────────────────────
 
 function parseAfuId(raw: string): string | null {
-  const match = raw.match(/afuchat:\/\/id\/(\d+)/i);
-  if (match) return match[1];
-  if (/^\d{8}$/.test(raw.trim())) return raw.trim();
+  const trimmed = raw.trim();
+  const match = trimmed.match(/afuchat:\/\/id\/(\d+)/i);
+  if (match) return match[1].padStart(8, "0");
+  if (/^\d{1,8}$/.test(trimmed)) return trimmed.padStart(8, "0");
   return null;
 }
 
 async function fetchFullRecord(afuIdStr: string): Promise<FullRecord | null> {
-  const afuIdNum = parseInt(afuIdStr, 10);
+  const scannedAfuId = afuIdStr.padStart(8, "0");
+
+  const { data: rows, error: rpcError } = await supabase.rpc("lookup_profile_by_afu_id", {
+    p_afu_id: scannedAfuId,
+  });
+
+  if (rpcError || !rows || rows.length === 0) return null;
+  const baseProfile = rows[0];
 
   const COLS = [
     "id", "handle", "display_name", "avatar_url", "bio",
@@ -152,26 +160,22 @@ async function fetchFullRecord(afuIdStr: string): Promise<FullRecord | null> {
     "created_at", "updated_at",
   ].join(", ");
 
-  const { data: profiles } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select(COLS)
-    .order("created_at", { ascending: true });
+    .eq("id", baseProfile.id)
+    .single();
 
-  if (!profiles || profiles.length === 0) return null;
-
-  const profile = profiles.find((p: any) => {
-    const hex = p.id.replace(/-/g, "");
-    return parseInt(hex.slice(0, 8), 16) % 100000000 === afuIdNum;
-  });
-  if (!profile) return null;
-
-  const memberNumber = profiles.filter((p: any) => p.created_at < profile.created_at).length + 1;
+  if (profileError || !profile) return null;
 
   const [
+    { count: membersBefore },
     { count: posts }, { count: replies }, { count: followers }, { count: following },
     { count: messages }, { count: stories }, { count: giftsReceived }, { count: giftsSent },
     { count: referrals }, { count: channels },
+    subscriptionResult,
   ] = await Promise.all([
+    supabase.from("profiles").select("*", { count: "exact", head: true }).lt("created_at", profile.created_at),
     supabase.from("posts").select("*", { count: "exact", head: true }).eq("author_id", profile.id).is("parent_id", null),
     supabase.from("posts").select("*", { count: "exact", head: true }).eq("author_id", profile.id).not("parent_id", "is", null),
     supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", profile.id),
@@ -182,14 +186,11 @@ async function fetchFullRecord(afuIdStr: string): Promise<FullRecord | null> {
     supabase.from("gifts").select("*", { count: "exact", head: true }).eq("sender_id", profile.id),
     supabase.from("referrals").select("*", { count: "exact", head: true }).eq("referrer_id", profile.id),
     supabase.from("channels").select("*", { count: "exact", head: true }).eq("owner_id", profile.id),
+    supabase.from("user_subscriptions").select("*, subscription_plans(name, tier)").eq("user_id", profile.id).eq("is_active", true).maybeSingle(),
   ]);
 
-  const { data: subscription } = await supabase
-    .from("user_subscriptions")
-    .select("*, subscription_plans(name, tier)")
-    .eq("user_id", profile.id)
-    .eq("is_active", true)
-    .maybeSingle();
+  const memberNumber = (membersBefore ?? 0) + 1;
+  const subscription = (subscriptionResult as any)?.data ?? null;
 
   return {
     profile,
