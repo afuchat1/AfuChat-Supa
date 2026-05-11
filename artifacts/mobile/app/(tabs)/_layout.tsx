@@ -180,21 +180,22 @@ function CompactTabBar({
 }
 
 const bar = StyleSheet.create({
-  // Outer wrapper — absorbs pointer events only on the pill itself
+  // Outer wrapper — centered, not edge-to-edge
   container: {
     position: "absolute",
-    left: 14,
-    right: 14,
-    alignItems: "stretch",
+    left: 0,
+    right: 0,
+    alignItems: "center",
     zIndex: 100,
   },
-  // The floating pill
+  // The floating pill — centered width, not full screen
   pill: {
     flexDirection: "row",
-    borderRadius: 26,
-    paddingVertical: 6,
-    paddingHorizontal: 6,
+    borderRadius: 36,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
     overflow: "visible",
+    width: "84%",
   },
   // Each tab button — flex container, no background
   item: {
@@ -202,13 +203,13 @@ const bar = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  // True capsule pill that wraps icon + label tightly
+  // Oval/ellipse active highlight — wide horizontal, compact vertical
   innerPill: {
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingVertical: 5,
+    paddingHorizontal: 18,
     gap: 2,
   },
   iconWrap: {
