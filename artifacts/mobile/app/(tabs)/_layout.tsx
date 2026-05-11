@@ -104,21 +104,21 @@ function CompactTabBar({
           const isProfile = tab.route === "/(tabs)/me";
 
           return (
-            <TouchableOpacity
-              key={tab.route}
-              style={bar.item}
-              onPress={() => router.navigate(tab.route as any)}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel={tab.label}
-              accessibilityState={{ selected: focused }}
-            >
-              {/* Oval pill wraps icon + label */}
-              <View
+            // Outer View handles flex layout; TouchableOpacity is on the pill only
+            <View key={tab.route} style={bar.item}>
+              <TouchableOpacity
                 style={[
                   bar.innerPill,
-                  focused && { backgroundColor: colors.accent + "1C" },
+                  // Padding only when active — inactive has no visible shape
+                  focused
+                    ? { backgroundColor: colors.accent + "1C", paddingHorizontal: 18, paddingVertical: 6 }
+                    : { paddingHorizontal: 10, paddingVertical: 6 },
                 ]}
+                onPress={() => router.navigate(tab.route as any)}
+                activeOpacity={0.72}
+                accessibilityRole="button"
+                accessibilityLabel={tab.label}
+                accessibilityState={{ selected: focused }}
               >
                 {/* Icon */}
                 <View style={bar.iconWrap}>
@@ -161,7 +161,7 @@ function CompactTabBar({
                 >
                   {tab.label}
                 </Text>
-              </View>
+              </TouchableOpacity>
 
               {/* Unread badge — outside the pill so it's never clipped */}
               {isChats && totalUnread > 0 && (
@@ -176,7 +176,7 @@ function CompactTabBar({
                   </Text>
                 </View>
               )}
-            </TouchableOpacity>
+            </View>
           );
         })}
       </View>
@@ -249,8 +249,9 @@ const bar = StyleSheet.create({
     lineHeight: 13,
   },
   label: {
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: "Inter_700Bold",
+    fontWeight: "700",
     letterSpacing: 0.1,
     textAlign: "center",
   },
