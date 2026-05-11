@@ -113,7 +113,7 @@ function CompactTabBar({
               accessibilityLabel={tab.label}
               accessibilityState={{ selected: focused }}
             >
-              {/* Capsule pill wraps icon + label — borderRadius:999 = true pill */}
+              {/* Oval pill wraps icon + label */}
               <View
                 style={[
                   bar.innerPill,
@@ -152,15 +152,6 @@ function CompactTabBar({
                       color={iconColor}
                     />
                   )}
-
-                  {/* Unread badge */}
-                  {isChats && totalUnread > 0 && (
-                    <View style={[bar.badge, { backgroundColor: colors.accent }]}>
-                      <Text style={bar.badgeText} numberOfLines={1}>
-                        {totalUnread > 99 ? "99+" : String(totalUnread)}
-                      </Text>
-                    </View>
-                  )}
                 </View>
 
                 {/* Label */}
@@ -171,6 +162,20 @@ function CompactTabBar({
                   {tab.label}
                 </Text>
               </View>
+
+              {/* Unread badge — outside the pill so it's never clipped */}
+              {isChats && totalUnread > 0 && (
+                <View
+                  style={[
+                    bar.badge,
+                    { backgroundColor: colors.accent, borderColor: barBg },
+                  ]}
+                >
+                  <Text style={bar.badgeText} numberOfLines={1}>
+                    {totalUnread > 99 ? "99+" : String(totalUnread)}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           );
         })}
@@ -226,14 +231,16 @@ const bar = StyleSheet.create({
   },
   badge: {
     position: "absolute",
-    top: -3,
-    right: -7,
-    minWidth: 17,
-    height: 17,
+    top: 1,
+    right: 6,
+    minWidth: 18,
+    height: 18,
     borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 3,
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    zIndex: 10,
   },
   badgeText: {
     color: "#fff",
