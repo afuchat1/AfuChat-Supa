@@ -243,7 +243,7 @@ const bar = StyleSheet.create({
   },
   label: {
     fontSize: 10,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Inter_700Bold",
     letterSpacing: 0.1,
     textAlign: "center",
   },
