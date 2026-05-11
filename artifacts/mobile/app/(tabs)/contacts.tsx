@@ -381,7 +381,7 @@ export default function ContactsScreen() {
             tintColor={colors.accent}
           />
         }
-        contentContainerStyle={{ paddingBottom: 90 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 90 }}
         showsVerticalScrollIndicator={false}
       />
     </View>

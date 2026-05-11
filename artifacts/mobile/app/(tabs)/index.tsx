@@ -1400,7 +1400,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                           tintColor={colors.accent}
                         />
                       }
-                      contentContainerStyle={{ paddingBottom: insets.bottom + 52 + 80 + 50 }}
+                      contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
                       showsVerticalScrollIndicator={false}
                       onScroll={handleFabScroll}
                       scrollEventThrottle={16}
@@ -1469,7 +1469,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                     tintColor={colors.accent}
                   />
                 }
-                contentContainerStyle={{ paddingBottom: insets.bottom + 52 + 80 + 50 }}
+                contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
                 showsVerticalScrollIndicator={false}
                 onScroll={handleFabScroll}
                 scrollEventThrottle={16}

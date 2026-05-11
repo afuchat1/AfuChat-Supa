@@ -34,6 +34,7 @@ import { useAutoTranslate } from "@/context/LanguageContext";
 import { LANG_LABELS } from "@/lib/translate";
 import { aiSummarizeThread } from "@/lib/aiHelper";
 import { setPageMeta, resetPageMeta } from "@/lib/webMeta";
+import * as Haptics from "@/lib/haptics";
 
 type Reply = {
   id: string;
@@ -449,7 +450,7 @@ export default function PostDetailScreen() {
   async function toggleLike() {
     if (!post) return;
     if (!user) { router.push("/(auth)/login"); return; }
-    if (Platform.OS !== "web") { try { const H = require("expo-haptics"); H.impactAsync(H.ImpactFeedbackStyle.Light); } catch {} }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (post.liked) {
       const { error } = await supabase.from("post_acknowledgments").delete().eq("post_id", post.id).eq("user_id", user.id);
       if (!error) setPost({ ...post, liked: false, likeCount: Math.max(0, post.likeCount - 1) });
@@ -475,7 +476,7 @@ export default function PostDetailScreen() {
     if (!replyText.trim() || !user || sending) return;
     if (replyText.trim().length > 280) { showAlert("Too long", "Replies are limited to 280 characters."); return; }
     setSending(true);
-    if (Platform.OS !== "web") { try { const H = require("expo-haptics"); H.impactAsync(H.ImpactFeedbackStyle.Light); } catch {} }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const content = replyText.trim();
     const insertData: any = { post_id: id, author_id: user.id, content };
     if (replyingTo) insertData.parent_reply_id = replyingTo.id;
@@ -503,7 +504,7 @@ export default function PostDetailScreen() {
     else {
       setPost({ ...post, content: editContent.trim() });
       setEditMode(false);
-      if (Platform.OS !== "web") { try { const H = require("expo-haptics"); H.notificationAsync(H.NotificationFeedbackType.Success); } catch {} }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
     setEditSaving(false);
   }
@@ -530,7 +531,7 @@ export default function PostDetailScreen() {
     setReportSending(false);
     if (error) { showAlert("Error", "Could not submit report. Please try again."); return; }
     setReportVisible(false); setReportReason(""); setReportOtherText("");
-    if (Platform.OS !== "web") { try { const H = require("expo-haptics"); H.notificationAsync(H.NotificationFeedbackType.Success); } catch {} }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     showAlert("Reported", "Thank you for your report. Our team will review it.");
   }
 

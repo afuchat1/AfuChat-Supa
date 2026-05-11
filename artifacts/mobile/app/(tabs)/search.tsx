@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import Animated, { FadeIn, FadeInDown, FadeInRight } from "react-native-reanimated";
 import * as VideoThumbnails from "expo-video-thumbnails";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "@/lib/haptics";
 
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
@@ -295,7 +295,7 @@ export default function SearchScreen() {
   const handledQRef   = useRef<string | null>(null);
   const { isDesktop } = useIsDesktop();
 
-  const scrollPB = insets.bottom + 56 + 16;
+  const scrollPB = insets.bottom + 90;
 
   const inputRef    = useRef<TextInput>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);

@@ -326,7 +326,7 @@ export default function CommunitiesScreen() {
           data={listData}
           keyExtractor={(item) => item.id}
           renderItem={({ item, index }) => <CommunityCard item={item} index={index} />}
-          contentContainerStyle={{ padding: 12, gap: 10, paddingBottom: insets.bottom + 24 }}
+          contentContainerStyle={{ padding: 12, gap: 10, paddingBottom: insets.bottom + 90 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.accent} />

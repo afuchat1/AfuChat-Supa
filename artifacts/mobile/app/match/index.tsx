@@ -272,15 +272,15 @@ function SwipeCard({
       else if (g.dx < -SWIPE_THRESHOLD) flyOut("left");
       else if (Math.abs(g.dx) < 8 && Math.abs(g.dy) < 8) {
         onTap();
-        Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: true }).start();
-      } else Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: true }).start();
+        Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
+      } else Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
     },
   }), [isTop]);
 
   function flyOut(dir: "left" | "right" | "up") {
     Haptics.impactAsync();
     const toVal = dir === "right" ? { x: SW * 1.5, y: 0 } : dir === "left" ? { x: -SW * 1.5, y: 0 } : { x: 0, y: -SH * 1.5 };
-    Animated.timing(pan, { toValue: toVal, duration: SWIPE_OUT_DURATION, useNativeDriver: true }).start(() => {
+    Animated.timing(pan, { toValue: toVal, duration: SWIPE_OUT_DURATION, useNativeDriver: false }).start(() => {
       pan.setValue({ x: 0, y: 0 });
       if (dir === "right") onSwipeRight();
       else if (dir === "left") onSwipeLeft();

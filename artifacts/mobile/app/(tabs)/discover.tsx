@@ -1745,7 +1745,7 @@ export default function DiscoverScreen() {
           contentContainerStyle={{
             gap: 8,
             paddingTop: headerHeight + 8,
-            paddingBottom: insets.bottom + 52 + 80 + 50,
+            paddingBottom: insets.bottom + 100,
           }}
           showsVerticalScrollIndicator={false}
           onScroll={onFeedScroll}
@@ -1816,7 +1816,7 @@ export default function DiscoverScreen() {
       {user && (
         <TouchableOpacity
           ref={fabRef}
-          style={[styles.fab, { backgroundColor: colors.accent, bottom: insets.bottom + 52 + 16 }]}
+          style={[styles.fab, { backgroundColor: colors.accent, bottom: insets.bottom + 90 }]}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setShowCreatePicker(true);

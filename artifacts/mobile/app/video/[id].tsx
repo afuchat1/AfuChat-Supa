@@ -21,7 +21,6 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  Clipboard,
   FlatList,
   KeyboardAvoidingView,
   Linking,
@@ -38,6 +37,7 @@ import {
   ViewToken,
   useWindowDimensions,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { Image as ExpoImage } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
@@ -71,6 +71,7 @@ import {
   diversifyFeed,
   type FeedSignals,
 } from "../../lib/feedAlgorithm";
+import * as Haptics from "@/lib/haptics";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -525,9 +526,7 @@ function CommentsSheet({ visible, onClose, postId, postAuthorId, onReplyCountCha
       Animated.spring(sendScale, { toValue: 0.78, tension: 400, friction: 8, useNativeDriver: USE_NATIVE }),
       Animated.spring(sendScale, { toValue: 1, tension: 400, friction: 8, useNativeDriver: USE_NATIVE }),
     ]).start();
-    if (Platform.OS !== "web") {
-      import("expo-haptics").then(({ default: H }) => H.impactAsync(H.ImpactFeedbackStyle.Light)).catch(() => {});
-    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const payload: any = { post_id: postId, author_id: user.id, content: text.trim() };
     if (replyingTo) payload.parent_reply_id = replyingTo.id;
     const { data, error } = await supabase.from("post_replies").insert(payload).select("id, author_id, content, created_at, parent_reply_id").single();
@@ -725,7 +724,7 @@ const cStyles = StyleSheet.create({
 function SocialShareSheet({ visible, onClose, url, title }: { visible: boolean; onClose: () => void; url: string; title: string }) {
   if (!visible) return null;
   async function handlePlatform(p: typeof SOCIAL_PLATFORMS[number]) {
-    if (p.id === "copy") { Clipboard.setString(url); onClose(); return; }
+    if (p.id === "copy") { Clipboard.setStringAsync(url); onClose(); return; }
     if (p.id === "more") { onClose(); setTimeout(async () => { await Share.share({ message: `${title} ${url}`, url, title }); }, 300); return; }
     onClose();
     const deepUrl = p.scheme!(url);
@@ -1660,7 +1659,7 @@ export default function VideoPlayerScreen() {
     try { await Share.share({ message: `Reposting: ${item.profile.display_name} on AfuChat\n${url}`, url, title: "Repost from AfuChat" }); } catch {}
   }
 
-  function handleCopyLink(item: VideoPost) { Clipboard.setString(getVideoUrl(item)); showToast("Link copied"); }
+  function handleCopyLink(item: VideoPost) { Clipboard.setStringAsync(getVideoUrl(item)); showToast("Link copied"); }
   function handleNotInterested(item: VideoPost) { setVideos((prev) => prev.filter((v) => v.id !== item.id)); showToast("Removed from feed"); }
   function handleReport(item: VideoPost) {
     Alert.alert("Report video", "Why are you reporting this?", [

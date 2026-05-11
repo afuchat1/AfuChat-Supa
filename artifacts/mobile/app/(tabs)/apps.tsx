@@ -434,7 +434,7 @@ export default function AppsScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{
           paddingTop: insets.top + 8,
-          paddingBottom: insets.bottom + 72,
+          paddingBottom: insets.bottom + 90,
         }}
         showsVerticalScrollIndicator={false}
       >
