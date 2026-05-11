@@ -150,6 +150,10 @@ function ChatRow({
   isActive,
   isTyping,
   phonebookName,
+  selectMode = false,
+  isSelected = false,
+  onEnterSelectMode,
+  onToggleSelect,
 }: {
   item: ChatItem;
   onPress: () => void;
@@ -160,6 +164,10 @@ function ChatRow({
   isActive?: boolean;
   isTyping?: boolean;
   phonebookName?: string;
+  selectMode?: boolean;
+  isSelected?: boolean;
+  onEnterSelectMode?: () => void;
+  onToggleSelect?: () => void;
 }) {
   const { colors } = useTheme();
   // Lazy import to avoid touching native paths.
@@ -222,10 +230,21 @@ function ChatRow({
     <View {...bind}>
       <ContextMenu {...menuProps} />
     <TouchableOpacity
-      style={[styles.row, { backgroundColor: isActive ? colors.backgroundSecondary : colors.surface }]}
-      onPress={onPress}
+      style={[styles.row, { backgroundColor: isSelected ? colors.accent + "18" : isActive ? colors.backgroundSecondary : colors.surface }]}
+      onPress={selectMode ? onToggleSelect : onPress}
+      onLongPress={selectMode ? undefined : onEnterSelectMode}
+      delayLongPress={320}
       activeOpacity={0.7}
     >
+      {selectMode && (
+        <View style={[
+          selStyles.circle,
+          { borderColor: isSelected ? colors.accent : colors.textMuted + "66" },
+          isSelected && { backgroundColor: colors.accent },
+        ]}>
+          {isSelected && <Ionicons name="checkmark" size={13} color="#fff" />}
+        </View>
+      )}
       <View style={{ position: "relative" }}>
         <Avatar uri={avatar} name={displayName || "Chat"} size={50} square={!!(item.is_organization_verified)} />
         {isOnlineDot && (
@@ -545,6 +564,10 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
   const [pageIdx, setPageIdx]           = useState(0);
   const pagerRef = useRef<FlatList<any>>(null);
 
+  // ── Multi-select state ────────────────────────────────────────────────────
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   // ── FAB hide-on-scroll ──────────────────────────────────────────────────────
   const fabAnim     = useRef(new Animated.Value(1)).current;
   const lastScrollY = useRef(0);
@@ -861,6 +884,47 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
     [loadChats],
   );
 
+  // ── Multi-select handlers ─────────────────────────────────────────────────
+  const enterSelectMode = useCallback((id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSelectMode(true);
+    setSelectedIds(new Set([id]));
+  }, []);
+
+  const toggleSelect = useCallback((id: string) => {
+    Haptics.selectionAsync();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const selectAll = useCallback((items: ChatItem[]) => {
+    Haptics.selectionAsync();
+    setSelectedIds(new Set(items.map((c) => c.id)));
+  }, []);
+
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    const ok = await confirmAlert(
+      `Delete ${count} chat${count !== 1 ? "s" : ""}?`,
+      "This will permanently delete the selected conversations for everyone.",
+      { confirmText: "Delete", destructive: true },
+    );
+    if (!ok) return;
+    const ids = Array.from(selectedIds);
+    setChats((prev) => prev.filter((c) => !ids.includes(c.id)));
+    exitSelectMode();
+    await Promise.all(ids.map((id) => supabase.from("chats").delete().eq("id", id)));
+  }, [selectedIds, exitSelectMode]);
+
   useEffect(() => {
     if (!user) return;
     import("../../lib/rewardXp").then(({ rewardXp }) => rewardXp("daily_login")).catch(() => {});
@@ -1032,6 +1096,11 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
     });
   }, [navigation, totalUnread, panelMode]);
 
+  // Chats currently visible — used by "Select All" to know what to select.
+  const currentPageChats: ChatItem[] = showFolderUI && hasFolders
+    ? getPageChats(pages[pageIdx] ?? { key: "all" })
+    : filtered;
+
   if (!user) {
     if (panelMode) {
       // Inside the desktop master-detail panel — keep the layout intact and
@@ -1079,8 +1148,15 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
         ]}
       >
         <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, zIndex: 0 }]} />
-        {/* Account avatar stack — left side */}
-        {(() => {
+        {/* Account avatar stack — left side (hidden in select mode, replaced by Cancel) */}
+        {selectMode ? (
+          <TouchableOpacity
+            onPress={exitSelectMode}
+            hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+          >
+            <Text style={[selStyles.cancelText, { color: colors.accent }]}>Cancel</Text>
+          </TouchableOpacity>
+        ) : (() => {
           const others = linkedAccounts.filter(a => a.userId !== user?.id);
           const currentFallback = { userId: user?.id || "", displayName: profile?.display_name || "", avatarUrl: profile?.avatar_url || null };
           const currentStored = linkedAccounts.find(a => a.userId === user?.id);
@@ -1143,23 +1219,41 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
           );
         })()}
 
-        <Text style={[styles.headerTitle, { color: colors.text, textAlign: "center", flex: 1 }]}>AfuChat</Text>
+        {selectMode ? (
+          <Text style={[styles.headerTitle, { color: colors.text, textAlign: "center", flex: 1 }]}>
+            {selectedIds.size > 0 ? `${selectedIds.size} selected` : "Select chats"}
+          </Text>
+        ) : (
+          <Text style={[styles.headerTitle, { color: colors.text, textAlign: "center", flex: 1 }]}>AfuChat</Text>
+        )}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-          <TouchableOpacity onPress={() => router.push("/notifications")} style={styles.headerIcon}>
-            <Ionicons name="notifications-outline" size={22} color={colors.text} />
-            {unreadNotifCount > 0 && (
-              <View style={styles.notifBadge}>
-                <Text style={styles.notifBadgeText}>{unreadNotifCount > 99 ? "99+" : unreadNotifCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          {selectMode ? (
+            <TouchableOpacity
+              onPress={() => selectAll(currentPageChats)}
+              hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+              disabled={selectedIds.size === currentPageChats.length && currentPageChats.length > 0}
+            >
+              <Text style={[selStyles.selectAllText, { color: selectedIds.size === currentPageChats.length && currentPageChats.length > 0 ? colors.textMuted : colors.accent }]}>
+                All
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={() => router.push("/notifications")} style={styles.headerIcon}>
+              <Ionicons name="notifications-outline" size={22} color={colors.text} />
+              {unreadNotifCount > 0 && (
+                <View style={styles.notifBadge}>
+                  <Text style={styles.notifBadgeText}>{unreadNotifCount > 99 ? "99+" : unreadNotifCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       </View>
       )}
 
-      {!panelMode && <HomeBanner />}
+      {!panelMode && !selectMode && <HomeBanner />}
 
-      <View style={styles.searchWrap}>
+      {!selectMode && <View style={styles.searchWrap}>
         <View style={[
           styles.searchBox,
           { backgroundColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.06)", borderWidth: StyleSheet.hairlineWidth, borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)" },
@@ -1189,7 +1283,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
             </View>
           )}
         </View>
-      </View>
+      </View>}
 
       {/* ── Mobile folder tab bar ─────────────────────────────────────────── */}
       {showFolderUI && (
@@ -1366,6 +1460,10 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                           item={item}
                           phonebookName={!item.is_group && !item.is_channel ? phonebookNames.get(item.other_id) : undefined}
                           isTyping={chatPrefs.typing_indicators && !!typingChatIds[item.id]}
+                          selectMode={selectMode}
+                          isSelected={selectedIds.has(item.id)}
+                          onEnterSelectMode={() => enterSelectMode(item.id)}
+                          onToggleSelect={() => toggleSelect(item.id)}
                           onPress={() => {
                             Haptics.selectionAsync();
                             router.push({
@@ -1435,6 +1533,10 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                     phonebookName={!item.is_group && !item.is_channel ? phonebookNames.get(item.other_id) : undefined}
                     isActive={panelMode && item.id === activeChatId}
                     isTyping={chatPrefs.typing_indicators && !!typingChatIds[item.id]}
+                    selectMode={selectMode}
+                    isSelected={selectedIds.has(item.id)}
+                    onEnterSelectMode={() => enterSelectMode(item.id)}
+                    onToggleSelect={() => toggleSelect(item.id)}
                     onPress={() => {
                       Haptics.selectionAsync();
                       router.push({
@@ -1510,6 +1612,36 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
         } : undefined}
       />
 
+      {/* ── Multi-select bulk-delete action bar ─────────────────────────────── */}
+      {selectMode && !panelMode && (
+        <View
+          style={[
+            selStyles.actionBar,
+            {
+              bottom: insets.bottom + 90,
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              shadowColor: "#000",
+            },
+          ]}
+          pointerEvents="box-none"
+        >
+          <TouchableOpacity
+            style={[selStyles.deleteBtn, { backgroundColor: selectedIds.size > 0 ? "#FF3B30" : colors.backgroundSecondary }]}
+            onPress={handleBulkDelete}
+            disabled={selectedIds.size === 0}
+            activeOpacity={0.82}
+          >
+            <Ionicons name="trash-outline" size={18} color={selectedIds.size > 0 ? "#fff" : colors.textMuted} />
+            <Text style={[selStyles.deleteBtnText, { color: selectedIds.size > 0 ? "#fff" : colors.textMuted }]}>
+              {selectedIds.size > 0
+                ? `Delete ${selectedIds.size} chat${selectedIds.size !== 1 ? "s" : ""}`
+                : "Select chats to delete"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {user && panelMode && (
         <TouchableOpacity
           style={[styles.fab, { backgroundColor: colors.accent, bottom: 24, right: 24 }]}
@@ -1520,7 +1652,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
         </TouchableOpacity>
       )}
 
-      {user && !panelMode && (
+      {user && !panelMode && !selectMode && (
         <Animated.View
           style={[
             styles.fab,
@@ -1576,6 +1708,54 @@ export default function ChatsRoute() {
 export function ChatsListPanel() {
   return <ChatsScreen panelMode />;
 }
+
+const selStyles = StyleSheet.create({
+  circle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelText: {
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+  },
+  selectAllText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    paddingHorizontal: 4,
+  },
+  actionBar: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    alignItems: "center",
+  },
+  deleteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    width: "100%",
+    justifyContent: "center",
+  },
+  deleteBtnText: {
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+  },
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
