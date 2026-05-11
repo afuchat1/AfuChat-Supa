@@ -46,7 +46,7 @@ function normalizeTabPath(p: string): string {
   return p;
 }
 
-// ─── Hook: total unread chat count from local store ──────────────────────────
+// ─── Hook: total unread chat count from local store ───────────────────────────
 function useTotalUnread(userId: string | undefined): number {
   const [total, setTotal] = useState(0);
 
@@ -56,24 +56,14 @@ function useTotalUnread(userId: string | undefined): number {
     setTotal(sum);
   }, []);
 
-  // Load on mount
   useEffect(() => { refresh(); }, [refresh]);
 
-  // Refresh when Supabase fires a realtime event on messages
   useEffect(() => {
     if (!userId) return;
     const channel = supabase
       .channel("tab-bar-unread-watcher")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages" },
-        () => { refresh(); },
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "message_receipts" },
-        () => { refresh(); },
-      )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => refresh())
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "message_receipts" }, () => refresh())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [userId, refresh]);
@@ -95,43 +85,50 @@ function TabItem({
 }) {
   const isIOS = Platform.OS === "ios";
 
-  const pillProgress  = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
-  const iconScale     = useRef(new Animated.Value(isFocused ? 1.12 : 1)).current;
-  const labelOpacity  = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
-  const labelMaxW     = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
-  const bounceScale   = useRef(new Animated.Value(1)).current;
-  const dotScale      = useRef(new Animated.Value(unreadDot ? 1 : 0)).current;
+  // All scale on one value — no Animated.multiply needed
+  // useNativeDriver: true for scale/opacity transforms
+  const scaleAnim    = useRef(new Animated.Value(isFocused ? 1.12 : 1)).current;
+  const labelOpacity = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
+  const dotScale     = useRef(new Animated.Value(unreadDot ? 1 : 0)).current;
 
-  // Tab-focus animations
+  // JS-driver only (interpolating background-color / width)
+  const pillProgress = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
+  const labelMaxW    = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
+
+  // Track isFocused so bounce callback can settle to the right resting scale
+  const isFocusedRef = useRef(isFocused);
+  useEffect(() => { isFocusedRef.current = isFocused; }, [isFocused]);
+
+  // Focus animation — native driver for scale/opacity
   useEffect(() => {
-    Animated.parallel([
-      Animated.spring(pillProgress, {
-        toValue: isFocused ? 1 : 0,
-        useNativeDriver: false,
-        speed: 18,
-        bounciness: 4,
-      }),
-      Animated.spring(iconScale, {
-        toValue: isFocused ? 1.12 : 1,
-        useNativeDriver: true,
-        speed: 20,
-        bounciness: 6,
-      }),
-      Animated.timing(labelOpacity, {
-        toValue: isFocused ? 1 : 0,
-        duration: isFocused ? 180 : 80,
-        useNativeDriver: true,
-      }),
-      Animated.spring(labelMaxW, {
-        toValue: isFocused ? 1 : 0,
-        useNativeDriver: false,
-        speed: 18,
-        bounciness: 2,
-      }),
-    ]).start();
+    const restScale = isFocused ? 1.12 : 1;
+    Animated.spring(scaleAnim, {
+      toValue: restScale,
+      useNativeDriver: true,
+      speed: 20,
+      bounciness: 6,
+    }).start();
+    Animated.timing(labelOpacity, {
+      toValue: isFocused ? 1 : 0,
+      duration: isFocused ? 180 : 80,
+      useNativeDriver: true,
+    }).start();
+    // JS-driver animations (background, max-width) in separate calls
+    Animated.spring(pillProgress, {
+      toValue: isFocused ? 1 : 0,
+      useNativeDriver: false,
+      speed: 18,
+      bounciness: 4,
+    }).start();
+    Animated.spring(labelMaxW, {
+      toValue: isFocused ? 1 : 0,
+      useNativeDriver: false,
+      speed: 18,
+      bounciness: 2,
+    }).start();
   }, [isFocused]);
 
-  // Badge dot pop animation
+  // Badge dot pop
   useEffect(() => {
     Animated.spring(dotScale, {
       toValue: unreadDot ? 1 : 0,
@@ -141,29 +138,31 @@ function TabItem({
     }).start();
   }, [unreadDot]);
 
+  // Long-press: squish → overshoot → settle — all on the same scaleAnim node
   const triggerBounce = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle?.Medium);
+    const restScale = isFocusedRef.current ? 1.12 : 1;
     Animated.sequence([
-      Animated.spring(bounceScale, {
-        toValue: 0.72,
+      Animated.spring(scaleAnim, {
+        toValue: 0.68,
         useNativeDriver: true,
-        speed: 60,
+        speed: 80,
         bounciness: 0,
       }),
-      Animated.spring(bounceScale, {
-        toValue: 1.22,
+      Animated.spring(scaleAnim, {
+        toValue: 1.28,
         useNativeDriver: true,
-        speed: 28,
-        bounciness: 12,
+        speed: 30,
+        bounciness: 8,
       }),
-      Animated.spring(bounceScale, {
-        toValue: 1,
+      Animated.spring(scaleAnim, {
+        toValue: restScale,
         useNativeDriver: true,
-        speed: 20,
-        bounciness: 6,
+        speed: 22,
+        bounciness: 4,
       }),
     ]).start();
-  }, [bounceScale]);
+  }, [scaleAnim]);
 
   const iconColor = isFocused ? colors.accent : colors.tabIconDefault;
 
@@ -171,12 +170,10 @@ function TabItem({
     inputRange: [0, 1],
     outputRange: ["rgba(0,0,0,0)", colors.accent + "22"],
   });
-
   const pillPaddingH = pillProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [10, 14],
   });
-
   const labelMaxWidth = labelMaxW.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 72],
@@ -193,20 +190,11 @@ function TabItem({
       <Animated.View
         style={[
           tabItemStyles.pill,
-          {
-            backgroundColor: pillBg,
-            paddingHorizontal: pillPaddingH,
-          },
+          { backgroundColor: pillBg, paddingHorizontal: pillPaddingH },
         ]}
       >
-        {/* Icon + bounce wrapper + badge dot */}
-        <Animated.View
-          style={{
-            transform: [
-              { scale: Animated.multiply(iconScale, bounceScale) },
-            ],
-          }}
-        >
+        {/* Icon + badge — single scale node, native driver */}
+        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
           <View style={{ position: "relative" }}>
             {tab.route === "/(tabs)" ? (
               <Image
@@ -228,19 +216,22 @@ function TabItem({
               />
             )}
 
-            {/* Unread dot badge */}
+            {/* Unread dot */}
             {unreadDot && (
               <Animated.View
                 style={[
                   tabItemStyles.dot,
-                  { backgroundColor: colors.accent, transform: [{ scale: dotScale }] },
+                  {
+                    backgroundColor: colors.accent,
+                    transform: [{ scale: dotScale }],
+                  },
                 ]}
               />
             )}
           </View>
         </Animated.View>
 
-        {/* Sliding label */}
+        {/* Sliding label — native opacity, JS max-width */}
         <Animated.View
           style={{
             overflow: "hidden",
