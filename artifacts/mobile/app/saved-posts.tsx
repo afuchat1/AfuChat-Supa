@@ -321,7 +321,8 @@ export default function SavedScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const [tab, setTab] = useState<Tab>("all");
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const [tab, setTab] = useState<Tab>((params.tab as Tab) ?? "all");
   const [posts, setPosts] = useState<SavedPost[]>([]);
   const [messages, setMessages] = useState<StarredMessage[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);

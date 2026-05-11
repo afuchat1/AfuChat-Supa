@@ -1283,6 +1283,8 @@ function ChatScreen() {
   const [showChatOptions, setShowChatOptions] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [disappearingEnabled, setDisappearingEnabled] = useState(false);
+  const [disappearingTimer, setDisappearingTimer] = useState(86400); // seconds; 0 = off
+  const [showDisappearingPicker, setShowDisappearingPicker] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [showGiftPicker, setShowGiftPicker] = useState(false);
   const [giftSending, setGiftSending] = useState(false);
@@ -2314,6 +2316,7 @@ function ChatScreen() {
     if (!chatId || !user) return;
     AsyncStorage.getItem(`afu_muted_${chatId}`).then((v) => setIsMuted(v === "1")).catch(() => {});
     AsyncStorage.getItem(`afu_disappearing_${chatId}`).then((v) => setDisappearingEnabled(v === "1")).catch(() => {});
+    AsyncStorage.getItem(`afu_disappearing_timer_${chatId}`).then((v) => { if (v) setDisappearingTimer(parseInt(v, 10)); }).catch(() => {});
     if (chatInfo?.other_id && !chatInfo.is_group && !chatInfo.is_channel) {
       supabase.from("blocks").select("id").eq("blocker_id", user.id).eq("blocked_id", chatInfo.other_id).maybeSingle()
         .then(({ data }) => setIsBlocked(!!data)).catch(() => {});
@@ -2333,7 +2336,26 @@ function ChatScreen() {
     if (!chatId) return;
     const next = !disappearingEnabled;
     setDisappearingEnabled(next);
+    if (!next) setShowDisappearingPicker(false);
     await AsyncStorage.setItem(`afu_disappearing_${chatId}`, next ? "1" : "0");
+  }
+
+  async function handleDisappearingTimerSelect(seconds: number) {
+    const chatId = isDraft ? realChatId : id;
+    if (!chatId) return;
+    if (seconds === 0) {
+      setDisappearingEnabled(false);
+      setDisappearingTimer(86400);
+      setShowDisappearingPicker(false);
+      await AsyncStorage.setItem(`afu_disappearing_${chatId}`, "0");
+      await AsyncStorage.removeItem(`afu_disappearing_timer_${chatId}`);
+    } else {
+      setDisappearingEnabled(true);
+      setDisappearingTimer(seconds);
+      setShowDisappearingPicker(false);
+      await AsyncStorage.setItem(`afu_disappearing_${chatId}`, "1");
+      await AsyncStorage.setItem(`afu_disappearing_timer_${chatId}`, String(seconds));
+    }
   }
 
   async function handleBlockUser() {
@@ -4880,10 +4902,10 @@ STRICT RULES:
         visible={showChatOptions}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowChatOptions(false)}
+        onRequestClose={() => { setShowChatOptions(false); setShowDisappearingPicker(false); }}
       >
         <View style={st.optionsOverlay}>
-          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setShowChatOptions(false)} />
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => { setShowChatOptions(false); setShowDisappearingPicker(false); }} />
           <View style={[st.optionsSheet, { backgroundColor: colors.surface }]}>
             {/* Handle */}
             <View style={[st.optionsHandle, { backgroundColor: colors.border }]} />
@@ -4910,7 +4932,7 @@ STRICT RULES:
 
               <TouchableOpacity
                 style={[st.optionsRow, { borderBottomColor: colors.border }]}
-                onPress={() => { setShowChatOptions(false); router.push({ pathname: "/starred-messages" }); }}
+                onPress={() => { setShowChatOptions(false); router.push({ pathname: "/saved-posts", params: { tab: "messages" } } as any); }}
               >
                 <View style={[st.optionsIcon, { backgroundColor: "#FF9500" }]}>
                   <Ionicons name="star" size={16} color="#fff" />
@@ -4937,7 +4959,7 @@ STRICT RULES:
               {chatInfo?.other_id && !chatInfo.is_group && !chatInfo.is_channel && chatInfo.other_id !== AFUAI_BOT_ID && (
                 <TouchableOpacity
                   style={[st.optionsRow, { borderBottomColor: colors.border }]}
-                  onPress={() => { setShowChatOptions(false); router.push({ pathname: "/profile/[id]", params: { id: chatInfo.other_id! } }); }}
+                  onPress={() => { setShowChatOptions(false); router.push({ pathname: "/contact/[id]", params: { id: chatInfo.other_id! } }); }}
                 >
                   <View style={[st.optionsIcon, { backgroundColor: "#34C759" }]}>
                     <Ionicons name="person" size={16} color="#fff" />
@@ -4963,20 +4985,61 @@ STRICT RULES:
                 </View>
               </TouchableOpacity>
 
-              {!chatInfo?.is_channel && (
-                <TouchableOpacity
-                  style={[st.optionsRow, { borderBottomColor: colors.border }]}
-                  onPress={handleDisappearingToggle}
-                >
-                  <View style={[st.optionsIcon, { backgroundColor: disappearingEnabled ? BRAND : "#5856D6" }]}>
-                    <Ionicons name="timer-outline" size={16} color="#fff" />
-                  </View>
-                  <Text style={[st.optionsLabel, { color: colors.text }]}>Disappearing Messages</Text>
-                  <View style={[st.optionsToggle, { backgroundColor: disappearingEnabled ? BRAND : colors.border }]}>
-                    <View style={[st.optionsToggleThumb, { transform: [{ translateX: disappearingEnabled ? 14 : 0 }] }]} />
-                  </View>
-                </TouchableOpacity>
-              )}
+              {!chatInfo?.is_channel && (() => {
+                const DISAPPEAR_OPTIONS = [
+                  { label: "Off",      seconds: 0 },
+                  { label: "5 minutes", seconds: 300 },
+                  { label: "1 hour",   seconds: 3600 },
+                  { label: "24 hours", seconds: 86400 },
+                  { label: "7 days",   seconds: 604800 },
+                  { label: "4 weeks",  seconds: 2419200 },
+                ];
+                const activeLabel = disappearingEnabled
+                  ? (DISAPPEAR_OPTIONS.find((o) => o.seconds === disappearingTimer)?.label ?? "Custom")
+                  : "Off";
+                return (
+                  <>
+                    <TouchableOpacity
+                      style={[st.optionsRow, { borderBottomColor: colors.border }]}
+                      onPress={() => setShowDisappearingPicker((v) => !v)}
+                    >
+                      <View style={[st.optionsIcon, { backgroundColor: disappearingEnabled ? BRAND : "#5856D6" }]}>
+                        <Ionicons name="timer-outline" size={16} color="#fff" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[st.optionsLabel, { color: colors.text }]}>Disappearing Messages</Text>
+                        <Text style={{ fontSize: 12, color: disappearingEnabled ? BRAND : colors.textMuted, marginTop: 1 }}>{activeLabel}</Text>
+                      </View>
+                      <Ionicons name={showDisappearingPicker ? "chevron-up" : "chevron-down"} size={16} color={colors.textMuted} />
+                    </TouchableOpacity>
+                    {showDisappearingPicker && (
+                      <View style={{ backgroundColor: colors.backgroundSecondary, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                        {DISAPPEAR_OPTIONS.map((opt) => {
+                          const isSelected = opt.seconds === 0 ? !disappearingEnabled : (disappearingEnabled && disappearingTimer === opt.seconds);
+                          return (
+                            <TouchableOpacity
+                              key={opt.seconds}
+                              style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
+                              onPress={() => handleDisappearingTimerSelect(opt.seconds)}
+                            >
+                              <Ionicons
+                                name={opt.seconds === 0 ? "close-circle-outline" : "timer-outline"}
+                                size={16}
+                                color={isSelected ? BRAND : colors.textMuted}
+                                style={{ marginRight: 12 }}
+                              />
+                              <Text style={{ flex: 1, fontSize: 14, color: isSelected ? BRAND : colors.text, fontFamily: isSelected ? "Inter_600SemiBold" : "Inter_400Regular" }}>
+                                {opt.label}
+                              </Text>
+                              {isSelected && <Ionicons name="checkmark" size={16} color={BRAND} />}
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </>
+                );
+              })()}
 
               {/* ── SECTION: Safety ─────────────────────────────────────── */}
               {chatInfo?.other_id && !chatInfo.is_group && !chatInfo.is_channel && chatInfo.other_id !== AFUAI_BOT_ID && (
