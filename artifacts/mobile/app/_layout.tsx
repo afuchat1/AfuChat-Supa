@@ -36,6 +36,7 @@ import CommunityBanner from "@/components/ui/CommunityBanner";
 import { DesktopShell } from "@/components/desktop/DesktopShell";
 import { DevViewToolbar } from "@/components/dev/DevViewToolbar";
 import { useState } from "react";
+import "@/lib/navigationGuard";
 
 function CommunityBannerManager() {
   const { session } = useAuth();
