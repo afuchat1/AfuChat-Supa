@@ -68,7 +68,9 @@ function useTotalUnread(userId: string | undefined): number {
   return total;
 }
 
-// ─── Compact Telegram-style bottom tab bar ─────────────────────────────────────
+// ─── Floating Telegram-style tab bar ──────────────────────────────────────────
+// Pill-shaped floating bar with side margins + shadow.
+// Active tab gets its own tinted bubble — no sliding animation.
 function CompactTabBar({
   userId,
   avatarUrl,
@@ -83,108 +85,136 @@ function CompactTabBar({
   const active      = normalizeTabPath(pathname);
   const isIOS       = Platform.OS === "ios";
 
-  const barBg       = colors.surface;
-  const borderColor = isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.10)";
+  const barBg = isDark ? "rgba(28,28,30,0.96)" : "rgba(255,255,255,0.97)";
+  const shadow = isDark
+    ? { shadowColor: "#000", shadowOpacity: 0.45, shadowRadius: 20, shadowOffset: { width: 0, height: 6 }, elevation: 18 }
+    : { shadowColor: "#000", shadowOpacity: 0.13, shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, elevation: 12 };
+  const bottomPos = (insets.bottom > 0 ? insets.bottom : 10) + 6;
 
   return (
     <View
-      style={[
-        bar.root,
-        {
-          backgroundColor: barBg,
-          borderTopColor: borderColor,
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 6,
-        },
-      ]}
+      pointerEvents="box-none"
+      style={[bar.container, { bottom: bottomPos }]}
     >
-      {TABS.map((tab) => {
-        const focused    = active === tab.route;
-        const iconColor  = focused ? colors.accent : colors.tabIconDefault ?? colors.textMuted;
-        const isChats    = tab.route === "/(tabs)";
-        const isProfile  = tab.route === "/(tabs)/me";
+      <View style={[bar.pill, shadow, { backgroundColor: barBg }]}>
+        {TABS.map((tab) => {
+          const focused   = active === tab.route;
+          const iconColor = focused ? colors.accent : (isDark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.38)");
+          const isChats   = tab.route === "/(tabs)";
+          const isProfile = tab.route === "/(tabs)/me";
 
-        return (
-          <TouchableOpacity
-            key={tab.route}
-            style={bar.item}
-            onPress={() => router.navigate(tab.route as any)}
-            activeOpacity={0.65}
-            accessibilityRole="button"
-            accessibilityLabel={tab.label}
-            accessibilityState={{ selected: focused }}
-          >
-            {/* Icon */}
-            <View style={bar.iconWrap}>
-              {isProfile && avatarUrl ? (
-                <Image
-                  source={{ uri: avatarUrl }}
+          return (
+            <TouchableOpacity
+              key={tab.route}
+              style={bar.item}
+              onPress={() => router.navigate(tab.route as any)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={tab.label}
+              accessibilityState={{ selected: focused }}
+            >
+              {/* Active-tab tinted bubble — sits behind icon+label */}
+              {focused && (
+                <View
                   style={[
-                    bar.avatar,
-                    focused
-                      ? { borderColor: colors.accent, borderWidth: 2 }
-                      : { borderColor: "transparent", borderWidth: 2 },
+                    bar.activeBubble,
+                    { backgroundColor: colors.accent + "1C" },
                   ]}
                 />
-              ) : isChats ? (
-                <Image
-                  source={afuSymbol}
-                  style={{ width: 24, height: 24 }}
-                  resizeMode="contain"
-                  tintColor={iconColor}
-                />
-              ) : isIOS ? (
-                <SymbolView
-                  name={focused ? tab.sfOn : tab.sfOff}
-                  tintColor={iconColor}
-                  size={24}
-                />
-              ) : (
-                <Ionicons
-                  name={(focused ? tab.mdOn : tab.mdOff) as any}
-                  size={24}
-                  color={iconColor}
-                />
               )}
 
-              {/* Unread badge */}
-              {isChats && totalUnread > 0 && (
-                <View style={[bar.badge, { backgroundColor: colors.accent }]}>
-                  <Text style={bar.badgeText} numberOfLines={1}>
-                    {totalUnread > 99 ? "99+" : String(totalUnread)}
-                  </Text>
-                </View>
-              )}
-            </View>
+              {/* Icon */}
+              <View style={bar.iconWrap}>
+                {isProfile && avatarUrl ? (
+                  <Image
+                    source={{ uri: avatarUrl }}
+                    style={[
+                      bar.avatar,
+                      focused
+                        ? { borderColor: colors.accent, borderWidth: 2 }
+                        : { borderColor: "transparent", borderWidth: 2 },
+                    ]}
+                  />
+                ) : isChats ? (
+                  <Image
+                    source={afuSymbol}
+                    style={{ width: 23, height: 23 }}
+                    resizeMode="contain"
+                    tintColor={iconColor}
+                  />
+                ) : isIOS ? (
+                  <SymbolView
+                    name={focused ? tab.sfOn : tab.sfOff}
+                    tintColor={iconColor}
+                    size={23}
+                  />
+                ) : (
+                  <Ionicons
+                    name={(focused ? tab.mdOn : tab.mdOff) as any}
+                    size={23}
+                    color={iconColor}
+                  />
+                )}
 
-            {/* Label */}
-            <Text
-              style={[bar.label, { color: iconColor }]}
-              numberOfLines={1}
-            >
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
+                {/* Unread badge */}
+                {isChats && totalUnread > 0 && (
+                  <View style={[bar.badge, { backgroundColor: colors.accent }]}>
+                    <Text style={bar.badgeText} numberOfLines={1}>
+                      {totalUnread > 99 ? "99+" : String(totalUnread)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Label */}
+              <Text
+                style={[bar.label, { color: iconColor }]}
+                numberOfLines={1}
+              >
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </View>
   );
 }
 
 const bar = StyleSheet.create({
-  root: {
+  // Outer wrapper — absorbs pointer events only on the pill itself
+  container: {
     position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    flexDirection: "row",
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 8,
+    left: 14,
+    right: 14,
+    alignItems: "stretch",
+    zIndex: 100,
   },
+  // The floating pill
+  pill: {
+    flexDirection: "row",
+    borderRadius: 26,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    overflow: "visible",
+  },
+  // Each tab button
   item: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 3,
+    paddingVertical: 5,
+    gap: 2,
+    zIndex: 1,
+  },
+  // Per-tab active bubble (replaces the sliding pill)
+  activeBubble: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 4,
+    right: 4,
+    borderRadius: 18,
   },
   iconWrap: {
     position: "relative",
@@ -200,20 +230,20 @@ const bar = StyleSheet.create({
   },
   badge: {
     position: "absolute",
-    top: -4,
-    right: -8,
-    minWidth: 18,
-    height: 18,
+    top: -3,
+    right: -7,
+    minWidth: 17,
+    height: 17,
     borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 4,
+    paddingHorizontal: 3,
   },
   badgeText: {
     color: "#fff",
     fontSize: 10,
     fontFamily: "Inter_700Bold",
-    lineHeight: 14,
+    lineHeight: 13,
   },
   label: {
     fontSize: 10,
