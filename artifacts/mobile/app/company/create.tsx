@@ -253,7 +253,7 @@ export default function CreateCompanyPageScreen() {
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <View style={[styles.nav, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <Ionicons name="chevron-back" size={24} color={colors.accent} />
           </TouchableOpacity>
           <Text style={[styles.navTitle, { color: colors.text }]}>Create Page</Text>
           <View style={{ width: 24 }} />
@@ -284,7 +284,7 @@ export default function CreateCompanyPageScreen() {
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <View style={[styles.nav, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <Ionicons name="chevron-back" size={24} color={colors.accent} />
           </TouchableOpacity>
           <Text style={[styles.navTitle, { color: colors.text }]}>Create Page</Text>
           <View style={{ width: 24 }} />
@@ -366,7 +366,7 @@ export default function CreateCompanyPageScreen() {
       {/* Nav */}
       <View style={[styles.nav, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={step === 1 ? () => router.back() : () => setStep((s) => s - 1)} hitSlop={12}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="chevron-back" size={24} color={colors.accent} />
         </TouchableOpacity>
         <Text style={[styles.navTitle, { color: colors.text }]}>Create Page</Text>
         <Text style={[styles.stepCounter, { color: colors.textMuted }]}>{step}/{TOTAL_STEPS}</Text>
@@ -838,7 +838,7 @@ export default function CreateCompanyPageScreen() {
             onPress={() => setStep((s) => s - 1)}
             activeOpacity={0.75}
           >
-            <Ionicons name="arrow-back" size={18} color={colors.text} />
+            <Ionicons name="chevron-back" size={18} color={colors.accent} />
             <Text style={[styles.backBtnText, { color: colors.text }]}>Back</Text>
           </TouchableOpacity>
         )}

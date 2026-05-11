@@ -254,7 +254,7 @@ export default function TermsScreen() {
           style={st.backBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="chevron-back" size={24} color={colors.accent} />
         </TouchableOpacity>
         <Text style={[st.headerTitle, { color: colors.text }]}>Terms & Policies</Text>
         <View style={{ width: 40 }} />

@@ -33,7 +33,6 @@ function formatBytes(bytes: number): string {
 }
 
 export default function OfflineVideosScreen() {
-  if (Platform.OS === "web") return null;
   const { colors, accent } = useTheme();
   const insets = useSafeAreaInsets();
   const [videos, setVideos] = useState<OfflineVideoEntry[]>([]);

@@ -520,11 +520,13 @@ export default function ShopManage() {
     return (
       <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
+          <View style={styles.headerSide}>
+            <TouchableOpacity onPress={() => router.back()} hitSlop={{ top:10,left:10,right:10,bottom:10 }}>
+              <Ionicons name="chevron-back" size={26} color={colors.accent} />
+            </TouchableOpacity>
+          </View>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Store Manager</Text>
-          <View style={{ width: 24 }} />
+          <View style={styles.headerSide} />
         </View>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 16 }}>
           <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: colors.accent + "18", alignItems: "center", justifyContent: "center" }}>
@@ -553,11 +555,13 @@ export default function ShopManage() {
     return (
       <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
         <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
+          <View style={styles.headerSide}>
+            <TouchableOpacity onPress={() => router.back()} hitSlop={{ top:10,left:10,right:10,bottom:10 }}>
+              <Ionicons name="chevron-back" size={26} color={colors.accent} />
+            </TouchableOpacity>
+          </View>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Store Manager</Text>
-          <View style={{ width: 24 }} />
+          <View style={styles.headerSide} />
         </View>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 16 }}>
           <View style={{ width: 80, height: 80, borderRadius: 24, backgroundColor: colors.accent + "15", alignItems: "center", justifyContent: "center" }}>
@@ -581,15 +585,19 @@ export default function ShopManage() {
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Store Manager</Text>
-        {shop && (
-          <TouchableOpacity onPress={() => router.push({ pathname: "/shop/[userId]", params: { userId: user!.id } })} hitSlop={10}>
-            <Ionicons name="eye-outline" size={22} color={colors.accent} />
+        <View style={styles.headerSide}>
+          <TouchableOpacity onPress={() => router.back()} hitSlop={{ top:10,left:10,right:10,bottom:10 }}>
+            <Ionicons name="chevron-back" size={26} color={colors.accent} />
           </TouchableOpacity>
-        )}
+        </View>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Store Manager</Text>
+        <View style={styles.headerSide}>
+          {shop && (
+            <TouchableOpacity onPress={() => router.push({ pathname: "/shop/[userId]", params: { userId: user!.id } })} hitSlop={10}>
+              <Ionicons name="eye-outline" size={22} color={colors.accent} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <View style={[styles.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
@@ -780,8 +788,9 @@ export default function ShopManage() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle: { flex: 1, fontSize: 18, fontFamily: "Inter_700Bold" },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 4, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  headerSide: { width: 52, alignItems: "center", justifyContent: "center" },
+  headerTitle: { flex: 1, fontSize: 17, fontFamily: "Inter_600SemiBold", textAlign: "center", letterSpacing: -0.2 },
   tabBar: { flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth },
   tab: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: "transparent" },
   tabText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },

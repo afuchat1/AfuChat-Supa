@@ -29,7 +29,7 @@ export default function NotFoundScreen() {
           onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/discover")}
           hitSlop={12}
         >
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
+          <Ionicons name="chevron-back" size={22} color={colors.accent} />
         </TouchableOpacity>
       )}
 
@@ -66,7 +66,7 @@ export default function NotFoundScreen() {
               onPress={() => router.back()}
               activeOpacity={0.8}
             >
-              <Ionicons name="arrow-back-outline" size={17} color={colors.text} />
+              <Ionicons name="chevron-back" size={17} color={colors.accent} />
               <Text style={[styles.secondaryBtnText, { color: colors.text }]}>Go back</Text>
             </TouchableOpacity>
           )}

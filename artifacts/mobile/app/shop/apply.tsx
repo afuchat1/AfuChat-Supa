@@ -122,7 +122,7 @@ export default function SellerApplyScreen() {
       <View style={[st.root, { backgroundColor: colors.background }]}>
         <View style={[st.header, { paddingTop: headerTopPad, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <Ionicons name="chevron-back" size={24} color={colors.accent} />
           </TouchableOpacity>
           <Text style={[st.headerTitle, { color: colors.text }]}>Seller Application</Text>
           <View style={{ width: 24 }} />
@@ -139,7 +139,7 @@ export default function SellerApplyScreen() {
       <View style={[st.root, { backgroundColor: colors.background }]}>
         <View style={[st.header, { paddingTop: headerTopPad, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <Ionicons name="chevron-back" size={24} color={colors.accent} />
           </TouchableOpacity>
           <Text style={[st.headerTitle, { color: colors.text }]}>Seller Application</Text>
           <View style={{ width: 24 }} />
@@ -166,7 +166,7 @@ export default function SellerApplyScreen() {
       <View style={[st.root, { backgroundColor: colors.background }]}>
         <View style={[st.header, { paddingTop: headerTopPad, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <Ionicons name="chevron-back" size={24} color={colors.accent} />
           </TouchableOpacity>
           <Text style={[st.headerTitle, { color: colors.text }]}>Seller Application</Text>
           <View style={{ width: 24 }} />
@@ -198,7 +198,7 @@ export default function SellerApplyScreen() {
       <View style={[st.root, { backgroundColor: colors.background }]}>
         <View style={[st.header, { paddingTop: headerTopPad, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <Ionicons name="chevron-back" size={24} color={colors.accent} />
           </TouchableOpacity>
           <Text style={[st.headerTitle, { color: colors.text }]}>Seller Application</Text>
           <View style={{ width: 24 }} />
@@ -233,7 +233,7 @@ export default function SellerApplyScreen() {
     <View style={[st.root, { backgroundColor: colors.backgroundSecondary }]}>
       <View style={[st.header, { paddingTop: headerTopPad, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="chevron-back" size={24} color={colors.accent} />
         </TouchableOpacity>
         <Text style={[st.headerTitle, { color: colors.text }]}>Become a Seller</Text>
         <View style={{ width: 24 }} />

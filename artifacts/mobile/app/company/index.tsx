@@ -74,7 +74,7 @@ export default function CompanyIndexScreen() {
       {/* Header */}
       <View style={[styles.navBar, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="chevron-back" size={24} color={colors.accent} />
         </TouchableOpacity>
         <Text style={[styles.navTitle, { color: colors.text }]}>Company Pages</Text>
         {(profile?.is_verified || profile?.is_organization_verified) && !loading && myPages.length === 0 ? (

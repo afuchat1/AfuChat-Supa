@@ -1075,7 +1075,7 @@ export default function FileManagerScreen() {
     <View style={[ms.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
       <View style={[ms.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="chevron-back" size={24} color={colors.accent} />
         </TouchableOpacity>
         <View style={{ flex: 1, alignItems: "center" }}>
           <Text style={[ms.headerTitle, { color: colors.text }]}>File Manager</Text>

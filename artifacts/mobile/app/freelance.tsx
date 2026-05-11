@@ -851,7 +851,7 @@ function ListingModal({ visible, listing, reviews, userId, profile, colors, isDa
         {/* Nav */}
         <View style={[st.modalNav, { backgroundColor: colors.surface, paddingTop: insets.top + 8, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={onClose} hitSlop={12} style={st.navBtn}>
-            <Ionicons name="arrow-back" size={22} color={colors.text} />
+            <Ionicons name="chevron-back" size={22} color={colors.accent} />
           </TouchableOpacity>
           <Text style={[st.modalNavTitle, { color: colors.text }]} numberOfLines={1}>{l.title}</Text>
           {own
@@ -999,7 +999,7 @@ function OrderModal({ visible, order, userId, colors, insets, submitting, showDe
           {/* Nav */}
           <View style={[st.modalNav, { backgroundColor: colors.surface, paddingTop: insets.top + 8, borderBottomColor: colors.border }]}>
             <TouchableOpacity onPress={onClose} hitSlop={12} style={st.navBtn}>
-              <Ionicons name="arrow-back" size={22} color={colors.text} />
+              <Ionicons name="chevron-back" size={22} color={colors.accent} />
             </TouchableOpacity>
             <Text style={[st.modalNavTitle, { color: colors.text }]}>Order Details</Text>
             <View style={{ width: 36 }} />

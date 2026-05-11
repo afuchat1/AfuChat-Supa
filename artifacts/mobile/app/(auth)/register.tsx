@@ -331,7 +331,7 @@ export default function RegisterScreen() {
         onPress={() => (router.canGoBack() ? router.back() : router.replace("/" as any))}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Ionicons name="arrow-back" size={20} color={colors.text} />
+        <Ionicons name="chevron-back" size={20} color={colors.accent} />
       </TouchableOpacity>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={[mobSt.scroll, { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>

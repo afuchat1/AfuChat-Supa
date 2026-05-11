@@ -124,10 +124,13 @@ export default function CartScreen() {
     return (
       <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
         <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
+          <View style={styles.headerSide}>
+            <TouchableOpacity onPress={() => router.back()} hitSlop={{ top:10,left:10,right:10,bottom:10 }}>
+              <Ionicons name="chevron-back" size={26} color={colors.accent} />
+            </TouchableOpacity>
+          </View>
           <Text style={[styles.headerTitle, { color: colors.text }]}>My Cart</Text>
+          <View style={styles.headerSide} />
         </View>
         <View style={{ padding: 12, gap: 10, marginTop: 8 }}>{[1,2,3,4].map(i => <ListRowSkeleton key={i} />)}</View>
       </View>
@@ -137,11 +140,15 @@ export default function CartScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <View style={styles.headerSide}>
+          <TouchableOpacity onPress={() => router.back()} hitSlop={{ top:10,left:10,right:10,bottom:10 }}>
+            <Ionicons name="chevron-back" size={26} color={colors.accent} />
+          </TouchableOpacity>
+        </View>
         <Text style={[styles.headerTitle, { color: colors.text }]}>My Cart</Text>
-        <Text style={[styles.headerCount, { color: colors.textMuted }]}>{items.length} item{items.length !== 1 ? "s" : ""}</Text>
+        <View style={styles.headerSide}>
+          <Text style={[styles.headerCount, { color: colors.textMuted }]}>{items.length}</Text>
+        </View>
       </View>
 
       {items.length === 0 ? (
@@ -318,8 +325,9 @@ export default function CartScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle: { flex: 1, fontSize: 18, fontFamily: "Inter_700Bold" },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 4, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  headerSide: { width: 52, alignItems: "center", justifyContent: "center" },
+  headerTitle: { flex: 1, fontSize: 17, fontFamily: "Inter_600SemiBold", textAlign: "center", letterSpacing: -0.2 },
   headerCount: { fontSize: 13, fontFamily: "Inter_400Regular" },
   emptyCart: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 40 },
   emptyTitle: { fontSize: 20, fontFamily: "Inter_700Bold" },

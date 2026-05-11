@@ -277,7 +277,7 @@ export default function MatchOnboarding() {
 
       {/* Back button */}
       <TouchableOpacity style={[styles.backBtn, { top: insets.top + 16 }]} onPress={prevStep}>
-        <Ionicons name="arrow-back" size={22} color={colors.text} />
+        <Ionicons name="chevron-back" size={22} color={colors.accent} />
       </TouchableOpacity>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">

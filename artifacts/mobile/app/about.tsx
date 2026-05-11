@@ -113,7 +113,7 @@ export default function AboutScreen() {
       {/* Nav bar */}
       <View style={[st.nav, { backgroundColor: colors.surface, paddingTop: insets.top + 6, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={st.navBack}>
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
+          <Ionicons name="chevron-back" size={22} color={colors.accent} />
         </TouchableOpacity>
         <Text style={[st.navTitle, { color: colors.text }]}>About AfuChat</Text>
         <View style={{ width: 38 }} />

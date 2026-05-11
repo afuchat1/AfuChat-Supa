@@ -351,7 +351,7 @@ export default function SupportDashboard() {
         <View style={[st.threadHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           {!isTablet && (
             <TouchableOpacity onPress={() => setShowThread(false)} style={st.iconBtn}>
-              <Ionicons name="arrow-back" size={22} color={colors.text} />
+              <Ionicons name="chevron-back" size={22} color={colors.accent} />
             </TouchableOpacity>
           )}
           <View style={{ flex: 1 }}>

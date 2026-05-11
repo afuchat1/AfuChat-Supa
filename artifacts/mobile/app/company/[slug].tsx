@@ -376,7 +376,7 @@ export default function CompanyPageScreen() {
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <View style={[styles.navBar, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <Ionicons name="chevron-back" size={24} color={colors.accent} />
           </TouchableOpacity>
           <Text style={[styles.navTitle, { color: colors.text }]}>Company Page</Text>
           <View style={{ width: 24 }} />
@@ -393,7 +393,7 @@ export default function CompanyPageScreen() {
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <View style={[styles.navBar, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <Ionicons name="chevron-back" size={24} color={colors.accent} />
           </TouchableOpacity>
           <Text style={[styles.navTitle, { color: colors.text }]}>Not Found</Text>
           <View style={{ width: 24 }} />

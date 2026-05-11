@@ -66,7 +66,7 @@ export default function ChannelIntroScreen() {
         onPress={() => router.back()}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <Ionicons name="arrow-back" size={24} color={colors.text} />
+        <Ionicons name="chevron-back" size={24} color={colors.accent} />
       </TouchableOpacity>
 
       <View style={styles.heroSection}>

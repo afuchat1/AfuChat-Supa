@@ -246,7 +246,7 @@ export default function CollectionsScreen() {
       <View style={[styles.root, { backgroundColor: bg, paddingTop: insets.top }]}>
         <View style={[styles.detailHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => setSelectedCollection(null)} style={styles.backBtn} hitSlop={10}>
-            <Ionicons name="arrow-back" size={22} color={colors.text} />
+            <Ionicons name="chevron-back" size={22} color={colors.accent} />
           </TouchableOpacity>
           <View style={[styles.colIconBig, { backgroundColor: selectedCollection.color + "22" }]}>
             <Text style={{ fontSize: 28 }}>{selectedCollection.emoji}</Text>
@@ -330,7 +330,7 @@ export default function CollectionsScreen() {
     <View style={[styles.root, { backgroundColor: bg, paddingTop: insets.top }]}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
+          <Ionicons name="chevron-back" size={22} color={colors.accent} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Collections</Text>
         <TouchableOpacity

@@ -516,7 +516,7 @@ export default function ArticleDetailScreen() {
         /* ── No cover: plain nav ── */
         <View style={[styles.headerNoCover, { paddingTop: insets.top + 4 }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtnPlain} hitSlop={8}>
-            <Ionicons name="arrow-back" size={22} color={colors.text} />
+            <Ionicons name="chevron-back" size={22} color={colors.accent} />
           </TouchableOpacity>
           <TouchableOpacity onPress={handleShare} style={styles.backBtnPlain} hitSlop={8}>
             <Ionicons name="share-outline" size={20} color={colors.text} />

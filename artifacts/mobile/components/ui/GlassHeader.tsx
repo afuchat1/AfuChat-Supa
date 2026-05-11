@@ -35,9 +35,6 @@ export function GlassHeader({
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const paddingTop = insets.top + (largeTitle ? 6 : 8);
-  const paddingBottom = 12 + extraBottom;
-
   function handleBack() {
     if (onBack) { onBack(); return; }
     if (router.canGoBack()) router.back();
@@ -47,17 +44,13 @@ export function GlassHeader({
     <View
       style={[
         styles.container,
-        { backgroundColor: colors.background, borderBottomColor: colors.border },
+        { paddingTop: insets.top, backgroundColor: colors.background, borderBottomColor: colors.border },
         style,
       ]}
     >
-      <View
-        style={[
-          styles.inner,
-          { paddingTop, paddingBottom },
-          largeTitle && styles.innerLarge,
-        ]}
-      >
+      <View style={[styles.inner, { paddingBottom: 10 + extraBottom }]}>
+
+        {/* Left — back button */}
         <View style={styles.side}>
           {showBack && (
             <TouchableOpacity
@@ -71,6 +64,7 @@ export function GlassHeader({
           )}
         </View>
 
+        {/* Center — title (+ optional subtitle) */}
         <View style={styles.center}>
           {largeTitle ? (
             <Text style={[styles.largeTitle, { color: colors.text }]} numberOfLines={1}>
@@ -90,8 +84,9 @@ export function GlassHeader({
           )}
         </View>
 
+        {/* Right slot — keeps title centered */}
         <View style={[styles.side, styles.sideRight]}>
-          {right ?? <View style={styles.backBtn} />}
+          {right ?? null}
         </View>
       </View>
     </View>
@@ -100,21 +95,17 @@ export function GlassHeader({
 
 const styles = StyleSheet.create({
   container: {
-    position: "relative",
-    zIndex: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    zIndex: 10,
   },
   inner: {
     flexDirection: "row",
-    alignItems: "flex-end",
-    paddingHorizontal: 8,
-  },
-  innerLarge: {
-    alignItems: "flex-end",
-    paddingHorizontal: 16,
+    alignItems: "center",
+    paddingHorizontal: 4,
+    paddingTop: 6,
   },
   side: {
-    width: 50,
+    width: 52,
     alignItems: "flex-start",
     justifyContent: "center",
   },
@@ -124,10 +115,11 @@ const styles = StyleSheet.create({
   center: {
     flex: 1,
     alignItems: "center",
-    paddingBottom: 2,
+    gap: 1,
   },
   backBtn: {
-    width: 40,
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
   },

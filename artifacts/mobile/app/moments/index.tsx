@@ -238,7 +238,7 @@ export default function MomentsScreen() {
             onPress={() => router.back()}
             style={styles.backBtn}
           >
-            <Ionicons name="arrow-back" size={22} color={colors.text} />
+            <Ionicons name="chevron-back" size={22} color={colors.accent} />
           </TouchableOpacity>
         )}
         <Text style={[styles.headerTitle, { color: colors.text }]}>

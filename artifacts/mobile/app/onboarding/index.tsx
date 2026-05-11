@@ -953,7 +953,7 @@ export default function OnboardingScreen() {
       <View style={[st.topBar, { paddingTop: insets.top + 8 }]}>
         {step > 1 ? (
           <TouchableOpacity onPress={goBack} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <Ionicons name="chevron-back" size={24} color={colors.accent} />
           </TouchableOpacity>
         ) : (
           <View style={{ width: 24 }} />
