@@ -75,46 +75,40 @@ function useTotalUnread(userId: string | undefined): number {
   return total;
 }
 
-// ─── Single tab item with all-JS animations ───────────────────────────────────
+// ─── Single tab item — NO own pill background; parent renders the sliding pill ──
 function TabItem({
   tab,
   isFocused,
   colors,
   unreadDot,
+  onLayout,
 }: {
   tab: (typeof TABS)[number];
   isFocused: boolean;
   colors: any;
   unreadDot?: boolean;
+  onLayout?: (e: any) => void;
 }) {
   const isIOS = Platform.OS === "ios";
 
-  // One scale value covers both focus-state and long-press bounce.
-  // JS driver throughout — consistent, no native conflict.
   const scaleAnim    = useRef(new Animated.Value(isFocused ? 1.12 : 1)).current;
-  const pillProgress = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
   const labelOpacity = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
   const labelMaxW    = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
   const dotScale     = useRef(new Animated.Value(unreadDot ? 1 : 0)).current;
 
-  // Keep a ref so the bounce callback knows the resting scale without re-creation
   const isFocusedRef = useRef(isFocused);
   isFocusedRef.current = isFocused;
 
-  // Focus-state animations
   useEffect(() => {
-    Animated.spring(scaleAnim, { toValue: isFocused ? 1.12 : 1, useNativeDriver: ND, speed: 20, bounciness: 6 }).start();
-    Animated.timing(labelOpacity, { toValue: isFocused ? 1 : 0, duration: isFocused ? 180 : 80, useNativeDriver: ND }).start();
-    Animated.spring(pillProgress, { toValue: isFocused ? 1 : 0, useNativeDriver: ND, speed: 18, bounciness: 4 }).start();
-    Animated.spring(labelMaxW, { toValue: isFocused ? 1 : 0, useNativeDriver: ND, speed: 18, bounciness: 2 }).start();
+    Animated.spring(scaleAnim,  { toValue: isFocused ? 1.12 : 1, useNativeDriver: ND, speed: 20, bounciness: 6 }).start();
+    Animated.timing(labelOpacity, { toValue: isFocused ? 1 : 0, duration: isFocused ? 200 : 100, useNativeDriver: ND }).start();
+    Animated.spring(labelMaxW,  { toValue: isFocused ? 1 : 0, useNativeDriver: ND, speed: 18, bounciness: 2 }).start();
   }, [isFocused]);
 
-  // Badge dot pop
   useEffect(() => {
     Animated.spring(dotScale, { toValue: unreadDot ? 1 : 0, useNativeDriver: ND, speed: 22, bounciness: 10 }).start();
   }, [unreadDot]);
 
-  // Long-press bounce: squish → overshoot → settle on same scaleAnim node
   const triggerBounce = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle?.Medium);
     const rest = isFocusedRef.current ? 1.12 : 1;
@@ -126,22 +120,19 @@ function TabItem({
   }, [scaleAnim]);
 
   const iconColor = isFocused ? colors.accent : colors.tabIconDefault;
-
-  const pillBg = pillProgress.interpolate({ inputRange: [0, 1], outputRange: ["rgba(0,0,0,0)", colors.accent + "22"] });
-  const pillPH = pillProgress.interpolate({ inputRange: [0, 1], outputRange: [10, 14] });
-  const maxW   = labelMaxW.interpolate({ inputRange: [0, 1], outputRange: [0, 72] });
+  const maxW      = labelMaxW.interpolate({ inputRange: [0, 1], outputRange: [0, 68] });
 
   return (
     <TouchableOpacity
       style={tabItemStyles.wrapper}
       onPress={() => router.navigate(tab.route as any)}
       onLongPress={triggerBounce}
+      onLayout={onLayout}
       delayLongPress={180}
-      activeOpacity={0.75}
+      activeOpacity={0.85}
     >
-      <Animated.View style={[tabItemStyles.pill, { backgroundColor: pillBg, paddingHorizontal: pillPH }]}>
-
-        {/* Icon + badge dot, scaled together */}
+      {/* Content only — background comes from the parent's sliding pill */}
+      <View style={tabItemStyles.content}>
         <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
           <View style={{ position: "relative" }}>
             {tab.route === "/(tabs)" ? (
@@ -151,35 +142,30 @@ function TabItem({
             ) : (
               <Ionicons name={(isFocused ? tab.mdOn : tab.mdOff) as any} size={22} color={iconColor} />
             )}
-
             {unreadDot && (
-              <Animated.View
-                style={[tabItemStyles.dot, { backgroundColor: colors.accent, transform: [{ scale: dotScale }] }]}
-              />
+              <Animated.View style={[tabItemStyles.dot, { backgroundColor: colors.accent, transform: [{ scale: dotScale }] }]} />
             )}
           </View>
         </Animated.View>
 
-        {/* Sliding label */}
         <Animated.View style={{ overflow: "hidden", maxWidth: maxW, opacity: labelOpacity }}>
           <Text style={[tabItemStyles.label, { color: colors.accent }]} numberOfLines={1}>
             {tab.label}
           </Text>
         </Animated.View>
-
-      </Animated.View>
+      </View>
     </TouchableOpacity>
   );
 }
 
 const tabItemStyles = StyleSheet.create({
-  wrapper: { flex: 1, alignItems: "center", justifyContent: "center" },
-  pill: {
+  wrapper:  { flex: 1, alignItems: "center", justifyContent: "center" },
+  content: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 24,
     paddingVertical: 9,
+    paddingHorizontal: 10,
     gap: 6,
   },
   label: { fontSize: 13, fontFamily: "Inter_600SemiBold", letterSpacing: 0.1, marginLeft: 2 },
@@ -195,14 +181,59 @@ const tabItemStyles = StyleSheet.create({
   },
 });
 
-// ─── Floating tab bar ─────────────────────────────────────────────────────────
+// ─── Floating tab bar with single sliding highlight pill ──────────────────────
+const BAR_PAD_H = 8; // must match floatStyles.bar paddingHorizontal
+
 function FloatingTabBar({ userId }: { userId: string | undefined }) {
   const pathname    = usePathname();
   const insets      = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const totalUnread = useTotalUnread(userId);
   const active      = normalizeTabPath(pathname);
+  const activeIdx   = TABS.findIndex((t) => t.route === active);
   const barBg       = isDark ? "rgba(30,30,32,0.92)" : "rgba(255,255,255,0.94)";
+
+  // Each tab's measured { x, width } in the bar's coordinate space
+  const tabLayouts  = useRef<Array<{ x: number; w: number } | null>>(TABS.map(() => null));
+  const readyCount  = useRef(0);
+  const initialized = useRef(false);
+
+  // Single shared pill position — no jump, only springs
+  const slideX = useRef(new Animated.Value(-999)).current;
+  const slideW = useRef(new Animated.Value(0)).current;
+
+  // Called when a tab's TouchableOpacity reports its layout
+  const handleTabLayout = useCallback((idx: number, e: any) => {
+    const { x, width } = e.nativeEvent.layout;
+    if (tabLayouts.current[idx]?.x === x && tabLayouts.current[idx]?.w === width) return;
+    tabLayouts.current[idx] = { x, w: width };
+    readyCount.current = tabLayouts.current.filter(Boolean).length;
+
+    // Once all tabs are measured, set the initial pill position instantly (no spring)
+    if (!initialized.current && readyCount.current >= TABS.length) {
+      initialized.current = true;
+      const layout = tabLayouts.current[activeIdx];
+      if (layout) {
+        slideX.setValue(layout.x);
+        slideW.setValue(layout.w);
+      }
+    }
+  }, [activeIdx]);
+
+  // Track previous active index so we only spring on actual tab changes
+  const prevIdxRef = useRef(activeIdx);
+  useEffect(() => {
+    if (prevIdxRef.current === activeIdx) return;
+    prevIdxRef.current = activeIdx;
+
+    const layout = tabLayouts.current[activeIdx];
+    if (!layout) return;
+
+    Animated.parallel([
+      Animated.spring(slideX, { toValue: layout.x, useNativeDriver: ND, speed: 16, bounciness: 5 }),
+      Animated.spring(slideW, { toValue: layout.w, useNativeDriver: ND, speed: 16, bounciness: 5 }),
+    ]).start();
+  }, [activeIdx]);
 
   return (
     <View
@@ -215,13 +246,27 @@ function FloatingTabBar({ userId }: { userId: string | undefined }) {
           { backgroundColor: barBg, borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)" },
         ]}
       >
-        {TABS.map((tab) => (
+        {/* ── Single pill that slides between tabs — rendered BEHIND everything ── */}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            floatStyles.slidingPill,
+            {
+              backgroundColor: colors.accent + "22",
+              width: slideW,
+              transform: [{ translateX: slideX }],
+            },
+          ]}
+        />
+
+        {TABS.map((tab, idx) => (
           <TabItem
             key={tab.route}
             tab={tab}
             isFocused={active === tab.route}
             colors={colors}
             unreadDot={tab.route === "/(tabs)" && totalUnread > 0}
+            onLayout={(e) => handleTabLayout(idx, e)}
           />
         ))}
       </View>
@@ -237,12 +282,21 @@ const floatStyles = StyleSheet.create({
     borderRadius: 36,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: 6,
-    paddingHorizontal: 8,
+    paddingHorizontal: BAR_PAD_H,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.14,
     shadowRadius: 24,
     elevation: 16,
+  },
+  slidingPill: {
+    position: "absolute",
+    top: 6,
+    bottom: 6,
+    left: 0,
+    borderRadius: 24,
+    // zIndex: -1 would hide it behind siblings, but RN renders earlier children behind later ones,
+    // so rendering the pill first (before the TabItems) keeps it visually underneath.
   },
 });
 
