@@ -2,10 +2,9 @@ import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
-  Dimensions,
   Image,
   Platform,
   StyleSheet,
@@ -21,6 +20,9 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { TabSwipeProvider } from "@/context/TabSwipeContext";
+import * as Haptics from "@/lib/haptics";
+import { getLocalConversations } from "@/lib/storage/localConversations";
+import { supabase } from "@/lib/supabase";
 
 let isLiquidGlassAvailable: () => boolean = () => false;
 try {
@@ -44,27 +46,66 @@ function normalizeTabPath(p: string): string {
   return p;
 }
 
-// ─── Single animated tab item ──────────────────────────────────────────────────
+// ─── Hook: total unread chat count from local store ──────────────────────────
+function useTotalUnread(userId: string | undefined): number {
+  const [total, setTotal] = useState(0);
+
+  const refresh = useCallback(async () => {
+    const convs = await getLocalConversations();
+    const sum = convs.reduce((acc, c) => acc + (c.unread_count ?? 0), 0);
+    setTotal(sum);
+  }, []);
+
+  // Load on mount
+  useEffect(() => { refresh(); }, [refresh]);
+
+  // Refresh when Supabase fires a realtime event on messages
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel("tab-bar-unread-watcher")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        () => { refresh(); },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "message_receipts" },
+        () => { refresh(); },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [userId, refresh]);
+
+  return total;
+}
+
+// ─── Single animated tab item ─────────────────────────────────────────────────
 function TabItem({
   tab,
   isFocused,
   colors,
+  unreadDot,
 }: {
   tab: (typeof TABS)[number];
   isFocused: boolean;
   colors: any;
+  unreadDot?: boolean;
 }) {
   const isIOS = Platform.OS === "ios";
 
-  // Animated values
-  const pillWidth   = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
-  const iconScale   = useRef(new Animated.Value(isFocused ? 1.1 : 1)).current;
-  const labelOpacity = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
-  const labelWidth   = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
+  const pillProgress  = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
+  const iconScale     = useRef(new Animated.Value(isFocused ? 1.12 : 1)).current;
+  const labelOpacity  = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
+  const labelMaxW     = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
+  const bounceScale   = useRef(new Animated.Value(1)).current;
+  const dotScale      = useRef(new Animated.Value(unreadDot ? 1 : 0)).current;
 
+  // Tab-focus animations
   useEffect(() => {
     Animated.parallel([
-      Animated.spring(pillWidth, {
+      Animated.spring(pillProgress, {
         toValue: isFocused ? 1 : 0,
         useNativeDriver: false,
         speed: 18,
@@ -81,7 +122,7 @@ function TabItem({
         duration: isFocused ? 180 : 80,
         useNativeDriver: true,
       }),
-      Animated.spring(labelWidth, {
+      Animated.spring(labelMaxW, {
         toValue: isFocused ? 1 : 0,
         useNativeDriver: false,
         speed: 18,
@@ -90,19 +131,53 @@ function TabItem({
     ]).start();
   }, [isFocused]);
 
+  // Badge dot pop animation
+  useEffect(() => {
+    Animated.spring(dotScale, {
+      toValue: unreadDot ? 1 : 0,
+      useNativeDriver: true,
+      speed: 22,
+      bounciness: 10,
+    }).start();
+  }, [unreadDot]);
+
+  const triggerBounce = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle?.Medium);
+    Animated.sequence([
+      Animated.spring(bounceScale, {
+        toValue: 0.72,
+        useNativeDriver: true,
+        speed: 60,
+        bounciness: 0,
+      }),
+      Animated.spring(bounceScale, {
+        toValue: 1.22,
+        useNativeDriver: true,
+        speed: 28,
+        bounciness: 12,
+      }),
+      Animated.spring(bounceScale, {
+        toValue: 1,
+        useNativeDriver: true,
+        speed: 20,
+        bounciness: 6,
+      }),
+    ]).start();
+  }, [bounceScale]);
+
   const iconColor = isFocused ? colors.accent : colors.tabIconDefault;
 
-  const pillBg = pillWidth.interpolate({
+  const pillBg = pillProgress.interpolate({
     inputRange: [0, 1],
     outputRange: ["rgba(0,0,0,0)", colors.accent + "22"],
   });
 
-  const pillPaddingH = pillWidth.interpolate({
+  const pillPaddingH = pillProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [10, 14],
   });
 
-  const labelMaxWidth = labelWidth.interpolate({
+  const labelMaxWidth = labelMaxW.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 72],
   });
@@ -111,6 +186,8 @@ function TabItem({
     <TouchableOpacity
       style={tabItemStyles.wrapper}
       onPress={() => router.navigate(tab.route as any)}
+      onLongPress={triggerBounce}
+      delayLongPress={180}
       activeOpacity={0.75}
     >
       <Animated.View
@@ -122,30 +199,54 @@ function TabItem({
           },
         ]}
       >
-        <Animated.View style={{ transform: [{ scale: iconScale }] }}>
-          {tab.route === "/(tabs)" ? (
-            <Image
-              source={afuSymbol}
-              style={{ width: 22, height: 22, tintColor: iconColor }}
-              resizeMode="contain"
-            />
-          ) : isIOS ? (
-            <SymbolView
-              name={isFocused ? tab.sfOn : tab.sfOff}
-              tintColor={iconColor}
-              size={22}
-            />
-          ) : (
-            <Ionicons
-              name={(isFocused ? tab.mdOn : tab.mdOff) as any}
-              size={22}
-              color={iconColor}
-            />
-          )}
+        {/* Icon + bounce wrapper + badge dot */}
+        <Animated.View
+          style={{
+            transform: [
+              { scale: Animated.multiply(iconScale, bounceScale) },
+            ],
+          }}
+        >
+          <View style={{ position: "relative" }}>
+            {tab.route === "/(tabs)" ? (
+              <Image
+                source={afuSymbol}
+                style={{ width: 22, height: 22, tintColor: iconColor }}
+                resizeMode="contain"
+              />
+            ) : isIOS ? (
+              <SymbolView
+                name={isFocused ? tab.sfOn : tab.sfOff}
+                tintColor={iconColor}
+                size={22}
+              />
+            ) : (
+              <Ionicons
+                name={(isFocused ? tab.mdOn : tab.mdOff) as any}
+                size={22}
+                color={iconColor}
+              />
+            )}
+
+            {/* Unread dot badge */}
+            {unreadDot && (
+              <Animated.View
+                style={[
+                  tabItemStyles.dot,
+                  { backgroundColor: colors.accent, transform: [{ scale: dotScale }] },
+                ]}
+              />
+            )}
+          </View>
         </Animated.View>
 
+        {/* Sliding label */}
         <Animated.View
-          style={{ overflow: "hidden", maxWidth: labelMaxWidth, opacity: labelOpacity }}
+          style={{
+            overflow: "hidden",
+            maxWidth: labelMaxWidth,
+            opacity: labelOpacity,
+          }}
         >
           <Text
             style={[tabItemStyles.label, { color: colors.accent }]}
@@ -179,17 +280,27 @@ const tabItemStyles = StyleSheet.create({
     letterSpacing: 0.1,
     marginLeft: 2,
   },
+  dot: {
+    position: "absolute",
+    top: -2,
+    right: -3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: "transparent",
+  },
 });
 
 // ─── Floating bottom tab bar ──────────────────────────────────────────────────
-function FloatingTabBar() {
-  const pathname = usePathname();
-  const insets   = useSafeAreaInsets();
+function FloatingTabBar({ userId }: { userId: string | undefined }) {
+  const pathname       = usePathname();
+  const insets         = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
+  const totalUnread    = useTotalUnread(userId);
 
   const active = normalizeTabPath(pathname);
-
-  const barBg = isDark ? "rgba(30,30,32,0.92)" : "rgba(255,255,255,0.94)";
+  const barBg  = isDark ? "rgba(30,30,32,0.92)" : "rgba(255,255,255,0.94)";
 
   return (
     <View
@@ -204,7 +315,9 @@ function FloatingTabBar() {
           floatStyles.bar,
           {
             backgroundColor: barBg,
-            borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)",
+            borderColor: isDark
+              ? "rgba(255,255,255,0.08)"
+              : "rgba(0,0,0,0.07)",
           },
         ]}
       >
@@ -214,6 +327,7 @@ function FloatingTabBar() {
             tab={tab}
             isFocused={active === tab.route}
             colors={colors}
+            unreadDot={tab.route === "/(tabs)" && totalUnread > 0}
           />
         ))}
       </View>
@@ -281,7 +395,7 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
 
 // ─── Root layout ──────────────────────────────────────────────────────────────
 export default function TabLayout() {
-  const { session, profile, loading } = useAuth();
+  const { session, profile, loading, user } = useAuth();
   const { isDesktop } = useIsDesktop();
   const isLoggedIn     = !!session;
   const prevSessionRef = useRef<Session | null>(null);
@@ -314,7 +428,7 @@ export default function TabLayout() {
       <View style={{ flex: 1 }}>
         <ClassicTabLayout isLoggedIn={isLoggedIn} />
         {isLoggedIn && !isDesktop && Platform.OS !== "web" && (
-          <FloatingTabBar />
+          <FloatingTabBar userId={user?.id} />
         )}
       </View>
     </TabSwipeProvider>
