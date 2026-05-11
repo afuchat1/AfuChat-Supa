@@ -103,14 +103,6 @@ const CATEGORIES: Category[] = [
     title: "Entertainment",
     apps: [
       {
-        id: "games",
-        label: "Games",
-        icon: "game-controller",
-        gradient: ["#007AFF", "#0A84FF"],
-        route: "/games",
-        featuredSub: "Play mini games and win ACoins.",
-      },
-      {
         id: "gifts",
         label: "Gifts",
         icon: "gift",
@@ -134,14 +126,6 @@ const CATEGORIES: Category[] = [
     id: "tools",
     title: "Tools",
     apps: [
-      {
-        id: "files",
-        label: "Files",
-        icon: "folder",
-        gradient: ["#5856D6", "#6E6CD3"],
-        route: "/file-manager",
-        featuredSub: "Browse device files, transfer offline via Nearby Share, and manage your storage.",
-      },
       {
         id: "digitalid",
         label: "Digital ID",

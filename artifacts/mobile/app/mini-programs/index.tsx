@@ -47,19 +47,6 @@ const SECTIONS: SectionData[] = [
       { icon: "ticket-outline", label: "Event\nTickets", color: "#AF52DE", route: "/mini-programs/tickets" },
     ],
   },
-  {
-    title: "Gaming",
-    items: [
-      { icon: "skull-outline", label: "Snake", color: "#00BCD4", route: "/games/snake" },
-      { icon: "grid-outline", label: "Tetris", color: "#00BCD4", route: "/games/tetris" },
-      { icon: "apps-outline", label: "2048", color: "#EDC22E", route: "/games/game-2048" },
-      { icon: "airplane-outline", label: "Flappy\nBird", color: "#70c5ce", route: "/games/flappy" },
-      { icon: "rocket-outline", label: "Space\nShooter", color: "#00E676", route: "/games/space-shooter" },
-      { icon: "cube-outline", label: "Brick\nBreaker", color: "#FF9800", route: "/games/brick-breaker" },
-      { icon: "flag-outline", label: "Mine-\nsweeper", color: "#4CAF50", route: "/games/minesweeper" },
-      { icon: "extension-puzzle-outline", label: "Memory\nMatch", color: "#45B7D1", route: "/games/memory-match" },
-    ],
-  },
 ];
 
 function ServiceIcon({ item }: { item: ServiceItem }) {
