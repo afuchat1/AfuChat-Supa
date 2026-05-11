@@ -24,7 +24,6 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { clearBadge } from "@/lib/pushNotifications";
-import { GlassHeader } from "@/components/ui/GlassHeader";
 import { preloadNotificationSound } from "@/lib/soundManager";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { NotificationSkeleton } from "@/components/ui/Skeleton";
@@ -648,27 +647,52 @@ export default function NotificationsScreen() {
   };
 
   return (
-    <View style={[st.root, { backgroundColor: colors.backgroundSecondary }]}>
+    <View style={[st.root, { backgroundColor: colors.background }]}>
       <OfflineBanner />
 
-      <GlassHeader
-        title="Notifications"
-        subtitle={unreadCount > 0 ? `${unreadCount} unread` : undefined}
-        right={
-          unreadCount > 0 ? (
-            <TouchableOpacity onPress={markAllRead} style={[st.readAllBtn, { backgroundColor: accent + "15", borderColor: accent + "40" }]}>
-              <Ionicons name="checkmark-done-outline" size={14} color={accent} />
-              <Text style={[st.readAllText, { color: accent }]}>Read all</Text>
-            </TouchableOpacity>
-          ) : undefined
-        }
-      />
+      {/* Native-style navigation header */}
+      <View style={[st.navBar, { paddingTop: insets.top, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+        <View style={st.navBarInner}>
+          {/* Left — back button */}
+          <TouchableOpacity
+            style={st.navSide}
+            onPress={() => router.canGoBack() ? router.back() : null}
+            hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
+            activeOpacity={0.6}
+          >
+            <Ionicons name="chevron-back" size={28} color={accent} />
+          </TouchableOpacity>
 
-      {/* AfuChat accent line under header */}
-      <View style={[st.accentLine, { backgroundColor: accent }]} />
+          {/* Center — title + unread count */}
+          <View style={st.navCenter}>
+            <Text style={[st.navTitle, { color: colors.text }]} numberOfLines={1}>
+              Notifications
+            </Text>
+            {unreadCount > 0 && (
+              <Text style={[st.navSub, { color: colors.textMuted }]}>
+                {unreadCount} unread
+              </Text>
+            )}
+          </View>
+
+          {/* Right — mark all read icon button */}
+          <View style={st.navSide}>
+            {unreadCount > 0 && (
+              <TouchableOpacity
+                onPress={markAllRead}
+                style={[st.navIconBtn, { backgroundColor: accent + "18" }]}
+                hitSlop={{ top: 8, left: 8, right: 8, bottom: 8 }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="checkmark-done-outline" size={18} color={accent} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </View>
 
       {/* Category filter tabs */}
-      <View style={[st.categoriesOuter, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+      <View style={[st.categoriesOuter, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.categoriesRow}>
           {CATEGORIES.map((cat) => {
             const count =
@@ -709,29 +733,43 @@ export default function NotificationsScreen() {
 const st = StyleSheet.create({
   root: { flex: 1 },
 
-  // Header
-  header: {
-    flexDirection: "row", alignItems: "flex-end",
-    paddingHorizontal: 16, paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth, gap: 10,
+  // Native navigation header
+  navBar: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  backBtn: { padding: 4, marginBottom: 2 },
-  headerCenter: { flex: 1, gap: 1 },
-  headerTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
-  headerBadge: {
-    minWidth: 22, height: 22, borderRadius: 11,
-    alignItems: "center", justifyContent: "center", paddingHorizontal: 6,
+  navBarInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 4,
+    paddingBottom: 10,
+    paddingTop: 6,
   },
-  headerBadgeText: { fontSize: 11, fontFamily: "Inter_700Bold", color: "#fff" },
-  unreadSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  readAllBtn: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 11, paddingVertical: 7,
-    borderRadius: 14, borderWidth: 1,
+  navSide: {
+    width: 52,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  readAllText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  accentLine: { height: 2, opacity: 0.85 },
+  navCenter: {
+    flex: 1,
+    alignItems: "center",
+    gap: 1,
+  },
+  navTitle: {
+    fontSize: 17,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: -0.2,
+  },
+  navSub: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+  },
+  navIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   // Category tabs
   categoriesOuter: { borderBottomWidth: StyleSheet.hairlineWidth },
