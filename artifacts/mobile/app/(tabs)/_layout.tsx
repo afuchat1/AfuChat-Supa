@@ -113,66 +113,64 @@ function CompactTabBar({
               accessibilityLabel={tab.label}
               accessibilityState={{ selected: focused }}
             >
-              {/* Active-tab tinted bubble — sits behind icon+label */}
-              {focused && (
-                <View
-                  style={[
-                    bar.activeBubble,
-                    { backgroundColor: colors.accent + "1C" },
-                  ]}
-                />
-              )}
-
-              {/* Icon */}
-              <View style={bar.iconWrap}>
-                {isProfile && avatarUrl ? (
-                  <Image
-                    source={{ uri: avatarUrl }}
-                    style={[
-                      bar.avatar,
-                      focused
-                        ? { borderColor: colors.accent, borderWidth: 2 }
-                        : { borderColor: "transparent", borderWidth: 2 },
-                    ]}
-                  />
-                ) : isChats ? (
-                  <Image
-                    source={afuSymbol}
-                    style={{ width: 23, height: 23 }}
-                    resizeMode="contain"
-                    tintColor={iconColor}
-                  />
-                ) : isIOS ? (
-                  <SymbolView
-                    name={focused ? tab.sfOn : tab.sfOff}
-                    tintColor={iconColor}
-                    size={23}
-                  />
-                ) : (
-                  <Ionicons
-                    name={(focused ? tab.mdOn : tab.mdOff) as any}
-                    size={23}
-                    color={iconColor}
-                  />
-                )}
-
-                {/* Unread badge */}
-                {isChats && totalUnread > 0 && (
-                  <View style={[bar.badge, { backgroundColor: colors.accent }]}>
-                    <Text style={bar.badgeText} numberOfLines={1}>
-                      {totalUnread > 99 ? "99+" : String(totalUnread)}
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              {/* Label */}
-              <Text
-                style={[bar.label, { color: iconColor }]}
-                numberOfLines={1}
+              {/* Capsule pill wraps icon + label — borderRadius:999 = true pill */}
+              <View
+                style={[
+                  bar.innerPill,
+                  focused && { backgroundColor: colors.accent + "1C" },
+                ]}
               >
-                {tab.label}
-              </Text>
+                {/* Icon */}
+                <View style={bar.iconWrap}>
+                  {isProfile && avatarUrl ? (
+                    <Image
+                      source={{ uri: avatarUrl }}
+                      style={[
+                        bar.avatar,
+                        focused
+                          ? { borderColor: colors.accent, borderWidth: 2 }
+                          : { borderColor: "transparent", borderWidth: 2 },
+                      ]}
+                    />
+                  ) : isChats ? (
+                    <Image
+                      source={afuSymbol}
+                      style={{ width: 22, height: 22 }}
+                      resizeMode="contain"
+                      tintColor={iconColor}
+                    />
+                  ) : isIOS ? (
+                    <SymbolView
+                      name={focused ? tab.sfOn : tab.sfOff}
+                      tintColor={iconColor}
+                      size={22}
+                    />
+                  ) : (
+                    <Ionicons
+                      name={(focused ? tab.mdOn : tab.mdOff) as any}
+                      size={22}
+                      color={iconColor}
+                    />
+                  )}
+
+                  {/* Unread badge */}
+                  {isChats && totalUnread > 0 && (
+                    <View style={[bar.badge, { backgroundColor: colors.accent }]}>
+                      <Text style={bar.badgeText} numberOfLines={1}>
+                        {totalUnread > 99 ? "99+" : String(totalUnread)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Label */}
+                <Text
+                  style={[bar.label, { color: iconColor }]}
+                  numberOfLines={1}
+                >
+                  {tab.label}
+                </Text>
+              </View>
             </TouchableOpacity>
           );
         })}
@@ -198,23 +196,20 @@ const bar = StyleSheet.create({
     paddingHorizontal: 6,
     overflow: "visible",
   },
-  // Each tab button
+  // Each tab button — flex container, no background
   item: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 5,
-    gap: 2,
-    zIndex: 1,
   },
-  // Per-tab active bubble (replaces the sliding pill)
-  activeBubble: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    left: 4,
-    right: 4,
-    borderRadius: 18,
+  // True capsule pill that wraps icon + label tightly
+  innerPill: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    gap: 2,
   },
   iconWrap: {
     position: "relative",
