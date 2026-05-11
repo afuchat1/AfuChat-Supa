@@ -26,9 +26,20 @@
  * CREATE POLICY "owner insert" ON owned_usernames FOR INSERT WITH CHECK (auth.uid() = owner_id);
  * CREATE POLICY "owner delete" ON owned_usernames FOR DELETE USING (auth.uid() = owner_id);
  * CREATE POLICY "owner update" ON owned_usernames FOR UPDATE USING (auth.uid() = owner_id);
+ *
+ * CREATE TABLE IF NOT EXISTS username_listings (
+ *   id          UUID      DEFAULT gen_random_uuid() PRIMARY KEY,
+ *   username    TEXT      NOT NULL,
+ *   price       INTEGER   NOT NULL,
+ *   seller_id   UUID      NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+ *   description TEXT,
+ *   is_active   BOOLEAN   DEFAULT TRUE,
+ *   views       INTEGER   DEFAULT 0,
+ *   created_at  TIMESTAMPTZ DEFAULT NOW()
+ * );
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -43,7 +54,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -51,7 +62,7 @@ import { supabase } from "@/lib/supabase";
 import { MarketplaceCardSkeleton } from "@/components/ui/Skeleton";
 import Colors from "@/constants/colors";
 import { transferAcoin } from "@/lib/monetize";
-import { showAlert, confirmAlert } from "@/lib/alert";
+import { showAlert } from "@/lib/alert";
 import * as Haptics from "@/lib/haptics";
 import * as Clipboard from "expo-clipboard";
 
@@ -85,10 +96,10 @@ type SortKey = "price_desc" | "price_asc" | "newest" | "rarity";
 /* ─── Rarity helpers ───────────────────────────────────────── */
 
 const RARITY_TIERS = [
-  { max: 4,       label: "Legendary", color: "#FF9500", emoji: "👑" },
-  { max: 6,       label: "Rare",      color: "#BF5AF2", emoji: "💎" },
-  { max: 9,       label: "Uncommon",  color: "#007AFF", emoji: "⭐" },
-  { max: Infinity, label: "Common",   color: "#8E8E93", emoji: "·"  },
+  { max: 4,        label: "Legendary", color: "#FF9500", emoji: "👑" },
+  { max: 6,        label: "Rare",      color: "#BF5AF2", emoji: "💎" },
+  { max: 9,        label: "Uncommon",  color: "#007AFF", emoji: "⭐" },
+  { max: Infinity, label: "Common",    color: "#8E8E93", emoji: "·"  },
 ];
 
 function getRarity(handle: string) {
@@ -98,8 +109,18 @@ function getRarity(handle: string) {
 
 function fmtPrice(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
+}
+
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const d = Math.floor(diff / 86400000);
+  if (d === 0) return "Today";
+  if (d === 1) return "Yesterday";
+  if (d < 30)  return `${d}d ago`;
+  const m = Math.floor(d / 30);
+  return `${m}mo ago`;
 }
 
 /* ─── Main screen ──────────────────────────────────────────── */
@@ -113,7 +134,6 @@ export default function UsernameMarketScreen() {
 
   const [tab, setTab] = useState<TabKey>("browse");
   const [listings, setListings] = useState<Listing[]>([]);
-  const [myListings, setMyListings] = useState<Listing[]>([]);
   const [ownedUsernames, setOwnedUsernames] = useState<OwnedUsername[]>([]);
   const [loading, setLoading] = useState(true);
   const [ownedLoading, setOwnedLoading] = useState(false);
@@ -157,30 +177,29 @@ export default function UsernameMarketScreen() {
         seller_handle: l.profiles?.handle || "",
       }));
       setListings(mapped);
-      setMyListings(mapped.filter((l) => l.seller_id === user?.id));
     }
     setLoading(false);
-  }, [user]);
+  }, []);
 
   const loadOwnedUsernames = useCallback(async () => {
     if (!user) return;
     setOwnedLoading(true);
 
-    // Get all owned usernames for this user
     const { data: owned } = await supabase
       .from("owned_usernames")
       .select("id, handle, is_primary, acquired_at")
       .eq("owner_id", user.id)
       .order("acquired_at", { ascending: false });
 
-    // Also include their primary profile handle if not in owned_usernames yet
     const handles: OwnedUsername[] = owned ? [...owned] : [];
+
+    // Also include their primary profile handle if not recorded yet
     if (profile?.handle && !handles.find((h) => h.handle === profile.handle)) {
       handles.unshift({
         id: "primary",
         handle: profile.handle,
         is_primary: true,
-        acquired_at: profile.created_at || new Date().toISOString(),
+        acquired_at: (profile as any).created_at || new Date().toISOString(),
       });
     }
 
@@ -210,20 +229,25 @@ export default function UsernameMarketScreen() {
       setOwnedUsernames(handles);
     }
     setOwnedLoading(false);
-  }, [user, profile?.handle, profile?.created_at]);
+  }, [user, profile?.handle, (profile as any)?.created_at]);
 
-  useEffect(() => {
-    loadListings();
-  }, [loadListings]);
+  // Reload market listings whenever screen gains focus (catches stale data after buy)
+  useFocusEffect(
+    useCallback(() => {
+      loadListings();
+    }, [loadListings])
+  );
 
   useEffect(() => {
     if (tab === "mine" || tab === "sell") loadOwnedUsernames();
   }, [tab, loadOwnedUsernames]);
 
-  /* ── Filtering + sorting ── */
+  /* ── Filtering + sorting (browse tab only) ── */
 
   const displayListings = useMemo(() => {
-    let result = tab === "mine" ? myListings : listings;
+    let result = listings;
+    // Hide listings belonging to current user from browse tab
+    // (they manage them from "mine" tab)
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       result = result.filter(
@@ -231,13 +255,13 @@ export default function UsernameMarketScreen() {
       );
     }
     switch (sort) {
-      case "price_asc":   return [...result].sort((a, b) => a.price - b.price);
-      case "price_desc":  return [...result].sort((a, b) => b.price - a.price);
-      case "newest":      return [...result].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      case "rarity":      return [...result].sort((a, b) => a.username.length - b.username.length);
-      default:            return result;
+      case "price_asc":  return [...result].sort((a, b) => a.price - b.price);
+      case "price_desc": return [...result].sort((a, b) => b.price - a.price);
+      case "newest":     return [...result].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      case "rarity":     return [...result].sort((a, b) => a.username.length - b.username.length);
+      default:           return result;
     }
-  }, [listings, myListings, tab, search, sort]);
+  }, [listings, search, sort]);
 
   /* ── Buy action ── */
 
@@ -269,7 +293,7 @@ export default function UsernameMarketScreen() {
             setBuying(item.id);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-            // 1. Transfer ACoin
+            // 1. Transfer ACoin buyer → seller
             const result = await transferAcoin({
               buyerId: user.id,
               sellerId: item.seller_id,
@@ -285,32 +309,33 @@ export default function UsernameMarketScreen() {
               return;
             }
 
-            // 2. Add to buyer's owned_usernames
+            // 2. Deactivate the listing FIRST (removes it from market immediately)
+            await supabase
+              .from("username_listings")
+              .update({ is_active: false })
+              .eq("id", item.id);
+
+            // 3. Transfer ownership: add to buyer, remove from seller
             await supabase.from("owned_usernames").upsert(
               { handle: item.username, owner_id: user.id, is_primary: false },
               { onConflict: "handle" }
             );
-
-            // 3. Remove from seller's owned_usernames (if present)
             await supabase
               .from("owned_usernames")
               .delete()
               .eq("handle", item.username)
               .eq("owner_id", item.seller_id);
 
-            // 4. Deactivate listing
-            await supabase
-              .from("username_listings")
-              .update({ is_active: false })
-              .eq("id", item.id);
-
-            setBuying(null);
+            // 4. Remove from local listings state immediately
             setListings((prev) => prev.filter((l) => l.id !== item.id));
+            setBuying(null);
+
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             showAlert(
-              "Username Acquired!",
-              `@${item.username} is now in your collection. Visit Profile Edit to set it as your primary handle.`,
+              "Username Acquired! 🎉",
+              `@${item.username} is now in your collection. Visit "My Usernames" to manage it or set it as your primary handle.`,
               [
-                { text: "Go to Profile", onPress: () => router.push("/profile/edit") },
+                { text: "My Collection", onPress: () => { loadOwnedUsernames(); setTab("mine"); } },
                 { text: "OK" },
               ]
             );
@@ -323,24 +348,37 @@ export default function UsernameMarketScreen() {
   /* ── Delist action ── */
 
   async function delistUsername(listingId: string, username: string) {
-    await showAlert(
-      `Remove @${username}?`,
-      "This will take it off the market. You'll keep the username.",
+    showAlert(
+      `Remove @${username} from market?`,
+      "This will take it off sale. You keep the username and can re-list it anytime.",
       [
-        { text: "Cancel" },
+        { text: "Cancel", style: "cancel" },
         {
           text: "Remove Listing",
+          style: "destructive",
           onPress: async () => {
             await supabase
               .from("username_listings")
               .update({ is_active: false })
               .eq("id", listingId);
-            loadListings();
+            // Remove from browse listings immediately
+            setListings((prev) => prev.filter((l) => l.id !== listingId));
             loadOwnedUsernames();
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           },
         },
       ]
     );
+  }
+
+  /* ── Re-list from "My Usernames" tab ── */
+
+  function relistHandle(h: OwnedUsername) {
+    setSellFromOwned(h);
+    setListHandle("");
+    setListPrice("500");
+    setListDesc("");
+    setTab("sell");
   }
 
   /* ── Submit listing ── */
@@ -397,7 +435,8 @@ export default function UsernameMarketScreen() {
 
     if (error) { showAlert("Error", error.message); return; }
 
-    showAlert("Listed!", `@${handle} is now on the market for ${fmtPrice(price)} ACoin.`);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    showAlert("Listed! 🏷️", `@${handle} is now on the market for ${fmtPrice(price)} ACoin.`);
     setListHandle("");
     setListPrice("500");
     setListDesc("");
@@ -417,7 +456,6 @@ export default function UsernameMarketScreen() {
       .update({ handle })
       .eq("id", user.id);
     if (error) { showAlert("Error", error.message); return; }
-    // Mark this as primary in owned_usernames
     await supabase
       .from("owned_usernames")
       .update({ is_primary: false })
@@ -439,9 +477,9 @@ export default function UsernameMarketScreen() {
   /* ─── Render ─────────────────────────────────────────────── */
 
   const TABS: { key: TabKey; label: string; icon: string }[] = [
-    { key: "browse", label: "Browse",       icon: "storefront-outline" },
-    { key: "mine",   label: "My Usernames", icon: "person-outline"     },
-    { key: "sell",   label: "List Handle",  icon: "pricetag-outline"   },
+    { key: "browse", label: "Browse",        icon: "storefront-outline" },
+    { key: "mine",   label: "My Usernames",  icon: "person-outline"     },
+    { key: "sell",   label: "List Handle",   icon: "pricetag-outline"   },
   ];
 
   const SORT_LABELS: Record<SortKey, string> = {
@@ -479,9 +517,7 @@ export default function UsernameMarketScreen() {
         {RARITY_TIERS.map((r) => (
           <View key={r.label} style={styles.rarityItem}>
             <View style={[styles.rarityDot, { backgroundColor: r.color }]} />
-            <Text style={[styles.rarityLabel, { color: colors.textMuted }]}>
-              {r.label}
-            </Text>
+            <Text style={[styles.rarityLabel, { color: colors.textMuted }]}>{r.label}</Text>
           </View>
         ))}
         <TouchableOpacity
@@ -507,15 +543,19 @@ export default function UsernameMarketScreen() {
               <Text style={[styles.tabText, { color: active ? accent : colors.textMuted }]}>
                 {t.label}
               </Text>
+              {t.key === "mine" && ownedUsernames.length > 0 && (
+                <View style={[styles.tabBadge, { backgroundColor: accent }]}>
+                  <Text style={styles.tabBadgeText}>{ownedUsernames.length}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           );
         })}
       </View>
 
       {/* ─────────── BROWSE TAB ─────────── */}
-      {(tab === "browse" || tab === "mine") && (
+      {tab === "browse" && (
         <>
-          {/* Search + sort row */}
           <View style={[styles.searchRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
             <View style={[styles.searchBox, { backgroundColor: colors.backgroundSecondary }]}>
               <Ionicons name="search-outline" size={15} color={colors.textMuted} />
@@ -555,21 +595,17 @@ export default function UsernameMarketScreen() {
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyEmoji}>🏷️</Text>
                   <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                    {tab === "mine" ? "No active listings" : search ? "No results" : "No handles for sale yet"}
+                    {search ? "No results" : "No handles for sale yet"}
                   </Text>
                   <Text style={[styles.emptySub, { color: colors.textMuted }]}>
-                    {tab === "mine"
-                      ? "List your handles to earn ACoin"
-                      : "Check back soon or list your own!"}
+                    Check back soon or list your own handle!
                   </Text>
-                  {tab === "mine" && (
-                    <TouchableOpacity
-                      style={[styles.emptyBtn, { backgroundColor: accent }]}
-                      onPress={() => setTab("sell")}
-                    >
-                      <Text style={styles.emptyBtnText}>List a Handle</Text>
-                    </TouchableOpacity>
-                  )}
+                  <TouchableOpacity
+                    style={[styles.emptyBtn, { backgroundColor: accent }]}
+                    onPress={() => setTab("sell")}
+                  >
+                    <Text style={styles.emptyBtnText}>List a Handle</Text>
+                  </TouchableOpacity>
                 </View>
               }
               renderItem={({ item }) => (
@@ -590,12 +626,130 @@ export default function UsernameMarketScreen() {
       )}
 
       {/* ─────────── MY USERNAMES TAB ─────────── */}
-      {tab === "mine" && false /* rendered above via same tab block */}
+      {tab === "mine" && (
+        <>
+          {ownedLoading ? (
+            <View style={{ padding: 16, gap: 10 }}>
+              {[1, 2, 3].map((i) => <MarketplaceCardSkeleton key={i} />)}
+            </View>
+          ) : ownedUsernames.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyEmoji}>👤</Text>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>No usernames yet</Text>
+              <Text style={[styles.emptySub, { color: colors.textMuted }]}>
+                Buy handles from the market to build your collection
+              </Text>
+              <TouchableOpacity
+                style={[styles.emptyBtn, { backgroundColor: accent }]}
+                onPress={() => setTab("browse")}
+              >
+                <Text style={styles.emptyBtnText}>Browse Market</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <FlatList
+              data={ownedUsernames}
+              keyExtractor={(h) => h.id}
+              contentContainerStyle={{ padding: 12, gap: 10, paddingBottom: 40 }}
+              showsVerticalScrollIndicator={false}
+              ListHeaderComponent={
+                <Text style={[styles.sectionSub, { color: colors.textMuted, marginBottom: 4 }]}>
+                  {ownedUsernames.length} username{ownedUsernames.length !== 1 ? "s" : ""} owned
+                  · tap a handle to manage it
+                </Text>
+              }
+              renderItem={({ item: h }) => {
+                const rarity = getRarity(h.handle);
+                return (
+                  <View style={[styles.ownedCard, { backgroundColor: colors.surface, borderColor: rarity.color + "33" }]}>
+                    {/* Handle + badges */}
+                    <View style={styles.ownedCardTop}>
+                      <View style={[styles.handleBubble, { backgroundColor: rarity.color + "18" }]}>
+                        <Text style={[styles.handleText, { color: rarity.color }]}>@{h.handle}</Text>
+                      </View>
+                      <View style={styles.ownedBadgeRow}>
+                        <View style={[styles.rarityTag, { backgroundColor: rarity.color + "22" }]}>
+                          <Text style={[styles.rarityTagText, { color: rarity.color }]}>
+                            {rarity.emoji} {rarity.label}
+                          </Text>
+                        </View>
+                        {h.is_primary && (
+                          <View style={[styles.rarityTag, { backgroundColor: accent + "22" }]}>
+                            <Text style={[styles.rarityTagText, { color: accent }]}>⭐ Primary</Text>
+                          </View>
+                        )}
+                        {h.listed && (
+                          <View style={[styles.rarityTag, { backgroundColor: "#FF950022" }]}>
+                            <Text style={[styles.rarityTagText, { color: "#FF9500" }]}>
+                              🏷️ {fmtPrice(h.listing_price || 0)} ACoin
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
 
-      {/* ─────────── OWNED USERNAMES section (rendered inside browse/"mine" tabs) ── */}
-      {/* Handled by the tab="mine" block above — nothing extra here */}
+                    {/* Meta */}
+                    <Text style={[styles.ownedMeta, { color: colors.textMuted }]}>
+                      {h.handle.length} chars · acquired {timeAgo(h.acquired_at)}
+                    </Text>
 
-      {/* ─────────── SELL TAB ─────────── */}
+                    {/* Listed notice */}
+                    {h.listed && (
+                      <View style={[styles.listedNotice, { backgroundColor: "#FF950012", borderColor: "#FF950033" }]}>
+                        <Ionicons name="storefront-outline" size={13} color="#FF9500" />
+                        <Text style={[styles.listedNoticeText, { color: "#FF9500" }]}>
+                          Currently listed on market for {fmtPrice(h.listing_price || 0)} ACoin
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Actions */}
+                    <View style={styles.ownedActions}>
+                      <TouchableOpacity
+                        style={[styles.ownedActionChip, { backgroundColor: colors.backgroundSecondary }]}
+                        onPress={() => copyHandle(h.handle)}
+                      >
+                        <Ionicons name="copy-outline" size={14} color={colors.textMuted} />
+                        <Text style={[styles.ownedActionChipText, { color: colors.textMuted }]}>Copy</Text>
+                      </TouchableOpacity>
+
+                      {!h.is_primary && (
+                        <TouchableOpacity
+                          style={[styles.ownedActionChip, { backgroundColor: accent + "18" }]}
+                          onPress={() => setPrimaryHandle(h.handle)}
+                        >
+                          <Ionicons name="star-outline" size={14} color={accent} />
+                          <Text style={[styles.ownedActionChipText, { color: accent }]}>Set Primary</Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {h.listed && h.listing_id ? (
+                        <TouchableOpacity
+                          style={[styles.ownedActionChip, { backgroundColor: "#FF3B3018" }]}
+                          onPress={() => delistUsername(h.listing_id!, h.handle)}
+                        >
+                          <Ionicons name="close-circle-outline" size={14} color="#FF3B30" />
+                          <Text style={[styles.ownedActionChipText, { color: "#FF3B30" }]}>Delist</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          style={[styles.ownedActionChip, { backgroundColor: "#34C75918" }]}
+                          onPress={() => relistHandle(h)}
+                        >
+                          <Ionicons name="pricetag-outline" size={14} color="#34C759" />
+                          <Text style={[styles.ownedActionChipText, { color: "#34C759" }]}>List for Sale</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                );
+              }}
+            />
+          )}
+        </>
+      )}
+
+      {/* ─────────── SELL / LIST TAB ─────────── */}
       {tab === "sell" && (
         <ScrollView
           contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 60 }}
@@ -612,10 +766,10 @@ export default function UsernameMarketScreen() {
             <ActivityIndicator color={accent} />
           ) : ownedUsernames.length > 0 ? (
             <View>
-              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>
                 Your Handles
               </Text>
-              <View style={[styles.ownedGrid, { borderColor: colors.border }]}>
+              <View style={styles.ownedGrid}>
                 {ownedUsernames.map((h) => {
                   const isSelected = sellFromOwned?.handle === h.handle;
                   const rarity = getRarity(h.handle);
@@ -626,12 +780,12 @@ export default function UsernameMarketScreen() {
                         styles.ownedChip,
                         {
                           backgroundColor: isSelected ? accent + "22" : colors.backgroundSecondary,
-                          borderColor: isSelected ? accent : colors.border,
+                          borderColor: isSelected ? accent : h.listed ? "#FF950044" : colors.border,
                         },
                       ]}
                       onPress={() => {
                         if (h.listed) {
-                          showAlert("Already Listed", `@${h.handle} is already on the market.`);
+                          showAlert("Already Listed", `@${h.handle} is already on the market. Delist it from "My Usernames" tab first.`);
                           return;
                         }
                         setSellFromOwned(isSelected ? null : h);
@@ -648,7 +802,7 @@ export default function UsernameMarketScreen() {
                       )}
                       {h.listed && (
                         <View style={[styles.listedBadge, { backgroundColor: "#FF950020" }]}>
-                          <Text style={[styles.listedBadgeText, { color: "#FF9500" }]}>listed</Text>
+                          <Text style={styles.listedBadgeText}>listed</Text>
                         </View>
                       )}
                     </TouchableOpacity>
@@ -661,8 +815,8 @@ export default function UsernameMarketScreen() {
           {/* Or enter manually */}
           {!sellFromOwned && (
             <View>
-              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-                {ownedUsernames.length > 0 ? "Or enter a handle" : "Handle to Sell"}
+              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>
+                {ownedUsernames.length > 0 ? "Or enter a handle manually" : "Handle to Sell"}
               </Text>
               <View style={[styles.field, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <Text style={[styles.atSign, { color: colors.textMuted }]}>@</Text>
@@ -683,7 +837,7 @@ export default function UsernameMarketScreen() {
           {sellFromOwned && (
             <View style={[styles.selectedHandleCard, { backgroundColor: colors.surface, borderColor: accent + "44" }]}>
               <View>
-                <Text style={[styles.selectedHandleLabel, { color: colors.textMuted }]}>Listing</Text>
+                <Text style={[styles.selectedHandleLabel, { color: colors.textMuted }]}>Listing handle</Text>
                 <Text style={[styles.selectedHandleText, { color: getRarity(sellFromOwned.handle).color }]}>
                   @{sellFromOwned.handle}
                 </Text>
@@ -695,7 +849,7 @@ export default function UsernameMarketScreen() {
           )}
 
           <View>
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Asking Price (ACoin)</Text>
+            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Asking Price (ACoin)</Text>
             <View style={[styles.field, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={{ fontSize: 16 }}>🪙</Text>
               <TextInput
@@ -715,7 +869,7 @@ export default function UsernameMarketScreen() {
           </View>
 
           <View>
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Description (optional)</Text>
+            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Description (optional)</Text>
             <View style={[styles.fieldMultiline, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <TextInput
                 style={[styles.fieldInput, { color: colors.text }]}
@@ -744,84 +898,6 @@ export default function UsernameMarketScreen() {
               </>
             )}
           </TouchableOpacity>
-
-          {/* My owned usernames full list */}
-          {ownedUsernames.length > 0 && (
-            <View>
-              <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 8 }]}>
-                My Username Collection ({ownedUsernames.length})
-              </Text>
-              {ownedUsernames.map((h) => {
-                const rarity = getRarity(h.handle);
-                return (
-                  <View
-                    key={h.id}
-                    style={[styles.ownedRow, { backgroundColor: colors.surface, borderColor: rarity.color + "33" }]}
-                  >
-                    <View style={[styles.ownedRowHandle, { backgroundColor: rarity.color + "18" }]}>
-                      <Text style={[styles.ownedRowHandleText, { color: rarity.color }]}>
-                        @{h.handle}
-                      </Text>
-                    </View>
-                    <View style={styles.ownedRowMeta}>
-                      <View style={[styles.rarityTag, { backgroundColor: rarity.color + "18" }]}>
-                        <Text style={[styles.rarityTagText, { color: rarity.color }]}>
-                          {rarity.label}
-                        </Text>
-                      </View>
-                      {h.is_primary && (
-                        <View style={[styles.rarityTag, { backgroundColor: accent + "22" }]}>
-                          <Text style={[styles.rarityTagText, { color: accent }]}>Primary</Text>
-                        </View>
-                      )}
-                      {h.listed && (
-                        <View style={[styles.rarityTag, { backgroundColor: "#FF950022" }]}>
-                          <Text style={[styles.rarityTagText, { color: "#FF9500" }]}>
-                            {fmtPrice(h.listing_price || 0)} 🪙
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    <View style={styles.ownedRowActions}>
-                      <TouchableOpacity
-                        onPress={() => copyHandle(h.handle)}
-                        hitSlop={8}
-                        style={styles.ownedActionBtn}
-                      >
-                        <Ionicons name="copy-outline" size={16} color={colors.textMuted} />
-                      </TouchableOpacity>
-                      {!h.is_primary && (
-                        <TouchableOpacity
-                          onPress={() => setPrimaryHandle(h.handle)}
-                          hitSlop={8}
-                          style={styles.ownedActionBtn}
-                        >
-                          <Ionicons name="swap-horizontal-outline" size={16} color={accent} />
-                        </TouchableOpacity>
-                      )}
-                      {h.listed && h.listing_id ? (
-                        <TouchableOpacity
-                          onPress={() => delistUsername(h.listing_id!, h.handle)}
-                          hitSlop={8}
-                          style={styles.ownedActionBtn}
-                        >
-                          <Ionicons name="trash-outline" size={16} color="#FF3B30" />
-                        </TouchableOpacity>
-                      ) : (
-                        <TouchableOpacity
-                          onPress={() => { setSellFromOwned(h); setTab("sell"); }}
-                          hitSlop={8}
-                          style={styles.ownedActionBtn}
-                        >
-                          <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          )}
         </ScrollView>
       )}
 
@@ -1003,6 +1079,15 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   tabText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  tabBadge: {
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  tabBadgeText: { fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" },
 
   searchRow: {
     flexDirection: "row",
@@ -1052,15 +1137,46 @@ const styles = StyleSheet.create({
   rarityTag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   rarityTagText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
 
-  emptyState: { alignItems: "center", paddingVertical: 50, gap: 8 },
-  emptyEmoji: { fontSize: 48 },
+  emptyState: { alignItems: "center", paddingVertical: 60, gap: 10, paddingHorizontal: 32 },
+  emptyEmoji: { fontSize: 52 },
   emptyTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
+  emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 19 },
   emptyBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 20, marginTop: 8 },
   emptyBtnText: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 14 },
 
   sectionTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
-  sectionSub: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19, marginTop: -8 },
+  sectionSub: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 },
+
+  // Owned username card (My Usernames tab)
+  ownedCard: {
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    gap: 8,
+  },
+  ownedCardTop: { flexDirection: "row", alignItems: "flex-start", gap: 10, flexWrap: "wrap" },
+  ownedBadgeRow: { flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 5, alignItems: "center" },
+  ownedMeta: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  listedNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  listedNoticeText: { fontSize: 12, fontFamily: "Inter_500Medium", flex: 1 },
+  ownedActions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 2 },
+  ownedActionChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  ownedActionChipText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
 
   fieldLabel: { fontSize: 13, fontFamily: "Inter_500Medium", marginBottom: 8 },
   fieldHint: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 6 },
@@ -1085,11 +1201,7 @@ const styles = StyleSheet.create({
   fieldInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
   atSign: { fontSize: 20, fontFamily: "Inter_700Bold" },
 
-  ownedGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
+  ownedGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   ownedChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -1125,21 +1237,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   submitBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
-
-  ownedRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    marginBottom: 8,
-  },
-  ownedRowHandle: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, flexShrink: 1 },
-  ownedRowHandleText: { fontSize: 15, fontFamily: "Inter_700Bold" },
-  ownedRowMeta: { flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 4 },
-  ownedRowActions: { flexDirection: "row", gap: 4 },
-  ownedActionBtn: { padding: 6 },
 
   sortBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
   sortSheet: {
