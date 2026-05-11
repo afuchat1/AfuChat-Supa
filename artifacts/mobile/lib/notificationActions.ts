@@ -125,8 +125,35 @@ export async function handleNotificationAction(
         break;
       }
 
-      // All other identifiers (DEFAULT, "view_*") are navigation-based
-      // and handled by routeNotificationResponse in pushNotifications.ts.
+      // ── Decline an incoming call ───────────────────────────────────
+      case "decline_call": {
+        if (!data.callId) return;
+        const session = (await supabase.auth.getSession()).data.session;
+        if (!session) return;
+        await supabase
+          .from("calls")
+          .update({ status: "declined", ended_at: new Date().toISOString() })
+          .eq("id", data.callId)
+          .eq("callee_id", session.user.id);
+        break;
+      }
+
+      // ── Confirm delivery of a shipped order ───────────────────────
+      case "confirm_delivery": {
+        if (!data.orderId) return;
+        const session = (await supabase.auth.getSession()).data.session;
+        if (!session) return;
+        // Mark delivered — triggers escrow release on the server side
+        await supabase
+          .from("orders")
+          .update({ status: "delivered", delivered_at: new Date().toISOString() })
+          .eq("id", data.orderId)
+          .eq("buyer_id", session.user.id);
+        break;
+      }
+
+      // All other identifiers (DEFAULT, "view_*", "accept_call") are
+      // navigation-based and handled by routeNotificationResponse in pushNotifications.ts.
       default:
         break;
     }

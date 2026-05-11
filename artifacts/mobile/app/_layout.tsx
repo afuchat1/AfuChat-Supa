@@ -33,6 +33,7 @@ import { AdvancedFeaturesProvider } from "@/context/AdvancedFeaturesContext";
 import { DataModeProvider } from "@/context/DataModeContext";
 import GoogleOneTap from "@/components/ui/GoogleOneTap";
 import CommunityBanner from "@/components/ui/CommunityBanner";
+import { InAppNotifBanner } from "@/components/ui/InAppNotifBanner";
 import { DesktopShell } from "@/components/desktop/DesktopShell";
 import { DevViewToolbar } from "@/components/dev/DevViewToolbar";
 import { useState } from "react";
@@ -238,6 +239,7 @@ export default function RootLayout() {
                     <AdvancedFeaturesProvider>
                     <DataModeProvider>
                     {Platform.OS !== "web" && <PushNotificationManager />}
+                    <InAppNotifBanner />
                     <CallManager />
                     <AppLockGate>
                       <DesktopShell>

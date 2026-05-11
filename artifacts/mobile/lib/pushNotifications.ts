@@ -17,6 +17,8 @@ export const NOTIF_CATEGORY = {
   POST_INTERACT:   "afuchat_post_interact",
   NEW_FOLLOWER:    "afuchat_new_follower",
   ORDER_UPDATE:    "afuchat_order_update",
+  ORDER_SHIPPED:   "afuchat_order_shipped",
+  INCOMING_CALL:   "afuchat_incoming_call",
 } as const;
 
 let _lastRegistrationError: string | null = null;
@@ -148,6 +150,34 @@ export async function setupNotificationCategories(): Promise<void> {
         options: { opensAppToForeground: false, isDestructive: false },
       },
     ]);
+
+    // ── Shipped order: confirm delivery directly from notification ─────
+    await Notifications.setNotificationCategoryAsync(NOTIF_CATEGORY.ORDER_SHIPPED, [
+      {
+        identifier: "confirm_delivery",
+        buttonTitle: "✓ Confirm Delivery",
+        options: { opensAppToForeground: false, isDestructive: false },
+      },
+      {
+        identifier: "view_order",
+        buttonTitle: "View Order",
+        options: { opensAppToForeground: true },
+      },
+    ]);
+
+    // ── Incoming call: accept (opens app) + decline (background) ──────
+    await Notifications.setNotificationCategoryAsync(NOTIF_CATEGORY.INCOMING_CALL, [
+      {
+        identifier: "accept_call",
+        buttonTitle: "✅ Accept",
+        options: { opensAppToForeground: true },
+      },
+      {
+        identifier: "decline_call",
+        buttonTitle: "❌ Decline",
+        options: { opensAppToForeground: false, isDestructive: true },
+      },
+    ]);
   } catch (e) {
     console.warn("[PushNotif] Category setup failed:", e);
   }
@@ -210,6 +240,21 @@ export async function setupNotificationChannels(): Promise<void> {
       importance: Notifications.AndroidImportance.HIGH,
       enableVibrate: false,
       ...base,
+    });
+
+    // ── Incoming calls — max priority, bypass DnD ──────────────────────
+    await Notifications.setNotificationChannelAsync("calls", {
+      name: "Incoming Calls",
+      description: "Voice and video call alerts",
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 400, 200, 400, 200, 400],
+      lightColor: "#34C759",
+      bypassDnd: true,
+      showBadge: true,
+      enableVibrate: true,
+      enableLights: true,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      sound: "default",
     });
   } catch (e) {
     console.warn("[PushNotif] Channel setup failed:", e);
@@ -344,7 +389,7 @@ async function routeNotificationResponse(response: any) {
     } catch {}
   }
 
-  // Explicit view actions from action buttons
+  // Explicit view / navigation actions from action buttons
   if (response.actionIdentifier === "view_post" && data.postId) {
     router.push(`/p/${data.postId}` as any);
     return;
@@ -356,6 +401,10 @@ async function routeNotificationResponse(response: any) {
   if (response.actionIdentifier === "view_order") {
     if (data.orderId) router.push(`/shop/order/${data.orderId}` as any);
     else router.push("/shop/my-orders" as any);
+    return;
+  }
+  if (response.actionIdentifier === "accept_call" && data.callId) {
+    router.push(`/call/${data.callId}` as any);
     return;
   }
 
@@ -438,6 +487,7 @@ export function setupNotificationListeners() {
         "view_post",
         "view_profile",
         "view_order",
+        "accept_call",
       ].includes(actionIdentifier);
 
       if (isNavAction) {
@@ -475,15 +525,17 @@ export async function sendPushNotification(params: {
 
     const soundToken = await getPushSoundToken();
 
+    const type = params.data?.type;
     const channelId =
-      params.data?.type === "message"       ? "messages"
-      : params.data?.type === "follow"      ? "social"
-      : params.data?.type === "like"        ? "social"
-      : params.data?.type === "reply"       ? "social"
-      : params.data?.type === "mention"     ? "social"
-      : params.data?.type === "order"       ? "marketplace"
-      : params.data?.type === "escrow"      ? "marketplace"
-      : params.data?.type === "payment"     ? "marketplace"
+      type === "message"  ? "messages"
+      : type === "call"   ? "calls"
+      : type === "follow" ? "social"
+      : type === "like"   ? "social"
+      : type === "reply"  ? "social"
+      : type === "mention"? "social"
+      : type === "order"  ? "marketplace"
+      : type === "escrow" ? "marketplace"
+      : type === "payment"? "marketplace"
       : "default";
 
     const payload: Record<string, any> = {
@@ -494,11 +546,21 @@ export async function sendPushNotification(params: {
       // to the correct linked account before navigating.
       data: { recipientUserId: params.userId, ...(params.data || {}) },
       badge: 1,
-      priority: "high",
+      priority: type === "call" ? "high" : "normal",
       channelId,
-      ttl: 604800,
-      expiration: Math.floor(Date.now() / 1000) + 604800,
+      ttl: type === "call" ? 30 : 604800,
+      expiration: Math.floor(Date.now() / 1000) + (type === "call" ? 30 : 604800),
     };
+
+    // Collapse duplicate notifications of the same conversation/thread on both
+    // iOS (thread-id) and Android (collapse_key via collapseId).
+    if (type === "message" && params.data?.chatId) {
+      payload.collapseId = `chat_${params.data.chatId}`;
+      payload["thread-id"] = params.data.chatId;
+    }
+    if (type === "call") {
+      payload.collapseId = `call_${params.data?.callId || params.userId}`;
+    }
 
     if (soundToken) payload.sound = soundToken;
     if (params.categoryIdentifier) payload.categoryIdentifier = params.categoryIdentifier;

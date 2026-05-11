@@ -281,7 +281,7 @@ export async function notifyOrderShipped(params: {
     userId: params.buyerId,
     title: "Your Order Has Shipped! 📦",
     body: `${params.sellerName} has shipped your order. Confirm delivery to release payment.`,
-    categoryIdentifier: NOTIF_CATEGORY.ORDER_UPDATE,
+    categoryIdentifier: NOTIF_CATEGORY.ORDER_SHIPPED,
     data: {
       type: "order",
       orderId: params.orderId,
@@ -562,6 +562,7 @@ export async function notifyCallInitiated(params: {
     userId: params.calleeId,
     title: `Incoming ${params.callType === "video" ? "Video" : "Voice"} Call`,
     body: `${params.callerName} is calling you`,
+    categoryIdentifier: NOTIF_CATEGORY.INCOMING_CALL,
     data: {
       type: "call",
       callId: params.callId,
