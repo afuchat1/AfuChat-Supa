@@ -573,19 +573,57 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
   const lastScrollY = useRef(0);
   const fabHidden   = useRef(false);
 
+  // ── Collapsible search bar ───────────────────────────────────────────────
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const searchExpandedRef  = useRef(false);
+  const searchBarAnim      = useRef(new Animated.Value(0)).current;
+  const searchOpacityAnim  = useRef(new Animated.Value(0)).current;
+  const searchInputRef     = useRef<TextInput>(null);
+  const pullRevealFiredRef  = useRef(false);
+
+  const expandSearch = useCallback(() => {
+    searchExpandedRef.current = true;
+    setSearchExpanded(true);
+    Animated.parallel([
+      Animated.spring(searchBarAnim,     { toValue: 1, useNativeDriver: false, speed: 22, bounciness: 5 }),
+      Animated.timing(searchOpacityAnim, { toValue: 1, duration: 160, useNativeDriver: false }),
+    ]).start(() => { searchInputRef.current?.focus(); });
+  }, [searchBarAnim, searchOpacityAnim]);
+
+  const collapseSearch = useCallback((clearText = true) => {
+    searchInputRef.current?.blur();
+    Animated.parallel([
+      Animated.spring(searchBarAnim,     { toValue: 0, useNativeDriver: false, speed: 22, bounciness: 0 }),
+      Animated.timing(searchOpacityAnim, { toValue: 0, duration: 120, useNativeDriver: false }),
+    ]).start(() => {
+      searchExpandedRef.current = false;
+      setSearchExpanded(false);
+      if (clearText) setSearch("");
+    });
+  }, [searchBarAnim, searchOpacityAnim]);
+
   const handleFabScroll = useCallback((e: any) => {
     const y  = e.nativeEvent.contentOffset.y;
     const dy = y - lastScrollY.current;
     lastScrollY.current = y;
 
+    // Pull-down past the top → reveal search bar
+    if (y < -28 && !searchExpandedRef.current && !pullRevealFiredRef.current) {
+      pullRevealFiredRef.current = true;
+      expandSearch();
+    }
+    if (y >= 0) pullRevealFiredRef.current = false;
+
     if (dy > 6 && y > 60 && !fabHidden.current) {
       fabHidden.current = true;
       Animated.spring(fabAnim, { toValue: 0, useNativeDriver: true, speed: 24, bounciness: 0 }).start();
+      // Collapse search bar on scroll-down if nothing typed
+      if (searchExpandedRef.current && !search) collapseSearch(false);
     } else if (dy < -4 && fabHidden.current) {
       fabHidden.current = false;
       Animated.spring(fabAnim, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 6 }).start();
     }
-  }, [fabAnim]);
+  }, [fabAnim, search, expandSearch, collapseSearch]);
 
   const fetchUnreadCount = useCallback(async () => {
     if (!user) return;
@@ -1238,14 +1276,21 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
               </Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity onPress={() => router.push("/notifications")} style={styles.headerIcon}>
-              <Ionicons name="notifications-outline" size={22} color={colors.text} />
-              {unreadNotifCount > 0 && (
-                <View style={styles.notifBadge}>
-                  <Text style={styles.notifBadgeText}>{unreadNotifCount > 99 ? "99+" : unreadNotifCount}</Text>
-                </View>
+            <>
+              {!searchExpanded && (
+                <TouchableOpacity onPress={expandSearch} style={styles.headerIcon} hitSlop={{ top: 6, left: 6, bottom: 6, right: 6 }}>
+                  <Ionicons name="search-outline" size={22} color={colors.text} />
+                </TouchableOpacity>
               )}
-            </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push("/notifications")} style={styles.headerIcon}>
+                <Ionicons name="notifications-outline" size={22} color={colors.text} />
+                {unreadNotifCount > 0 && (
+                  <View style={styles.notifBadge}>
+                    <Text style={styles.notifBadgeText}>{unreadNotifCount > 99 ? "99+" : unreadNotifCount}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </>
           )}
         </View>
       </View>
@@ -1253,37 +1298,50 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
 
       {!panelMode && !selectMode && <HomeBanner />}
 
-      {!selectMode && <View style={styles.searchWrap}>
-        <View style={[
-          styles.searchBox,
-          { backgroundColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.06)", borderWidth: StyleSheet.hairlineWidth, borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)" },
-        ]}>
-          <Ionicons
-            name="search-outline"
-            size={19}
-            color={colors.textMuted}
-          />
-          <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Search conversations…"
-            placeholderTextColor={colors.textMuted}
-            value={search}
-            onChangeText={setSearch}
-            returnKeyType="search"
-          />
-          {search.length > 0 ? (
-            <Pressable onPress={() => setSearch("")} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-              <View style={[styles.clearBtn, { backgroundColor: colors.textMuted + "28" }]}>
-                <Ionicons name="close" size={13} color={colors.textMuted} />
-              </View>
-            </Pressable>
-          ) : (
-            <View style={[styles.kbdHint, { borderColor: colors.border }]}>
-              <Ionicons name="mic-outline" size={14} color={colors.textMuted} />
+      {!selectMode && (
+        <Animated.View style={{
+          height: searchBarAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 60] }),
+          opacity: searchOpacityAnim,
+          overflow: "hidden",
+        }}>
+          <View style={styles.searchWrap}>
+            <View style={[
+              styles.searchBox,
+              { backgroundColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.06)", borderWidth: StyleSheet.hairlineWidth, borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)" },
+            ]}>
+              <Ionicons name="search-outline" size={19} color={colors.textMuted} />
+              <TextInput
+                ref={searchInputRef}
+                style={[styles.searchInput, { color: colors.text }]}
+                placeholder="Search conversations…"
+                placeholderTextColor={colors.textMuted}
+                value={search}
+                onChangeText={setSearch}
+                returnKeyType="search"
+                onSubmitEditing={() => { if (!search) collapseSearch(); }}
+              />
+              {search.length > 0 ? (
+                <Pressable onPress={() => setSearch("")} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                  <View style={[styles.clearBtn, { backgroundColor: colors.textMuted + "28" }]}>
+                    <Ionicons name="close" size={13} color={colors.textMuted} />
+                  </View>
+                </Pressable>
+              ) : (
+                <TouchableOpacity onPress={() => router.push("/ai" as any)} activeOpacity={0.75} style={styles.aiBtn}>
+                  <LinearGradient
+                    colors={["#7B61FF", "#00C2CB"]}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                    style={styles.aiBtnGrad}
+                  >
+                    <Ionicons name="flash" size={11} color="#fff" />
+                    <Text style={styles.aiBtnText}>AI</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
             </View>
-          )}
-        </View>
-      </View>}
+          </View>
+        </Animated.View>
+      )}
 
 
       <View style={[styles.body, isDesktop && styles.bodyRow]}>
@@ -1933,13 +1991,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  kbdHint: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
-    borderWidth: 1,
+  aiBtn: {
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  aiBtnGrad: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    gap: 3,
+    borderRadius: 8,
+  },
+  aiBtnText: {
+    color: "#fff",
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 0.3,
   },
   row: {
     flexDirection: "row",
