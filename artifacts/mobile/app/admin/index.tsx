@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -11,7 +11,9 @@ import {
   Switch,
   Modal,
   FlatList,
+  Dimensions,
 } from "react-native";
+import Svg, { Path, Line, Circle, Defs, LinearGradient as SvgLinearGradient, Stop, Polyline } from "react-native-svg";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -98,6 +100,9 @@ const TABS = [
   { id: "reports", label: "Reports", icon: "shield" as const },
   { id: "broadcast", label: "Broadcast", icon: "megaphone" as const },
   { id: "system", label: "System", icon: "settings" as const },
+  { id: "analytics", label: "Analytics", icon: "bar-chart" as const },
+  { id: "economy", label: "Economy", icon: "trending-up" as const },
+  { id: "config", label: "App Config", icon: "construct" as const },
 ];
 
 function timeAgo(iso: string) {
@@ -176,6 +181,24 @@ export default function AdminDashboard() {
   const [verifReviewNote, setVerifReviewNote] = useState("");
   const [verifReviewSaving, setVerifReviewSaving] = useState(false);
   const [verifExpandedId, setVerifExpandedId] = useState<string | null>(null);
+
+  // Analytics
+  const [analyticsGrowth, setAnalyticsGrowth] = useState<{ label: string; users: number; posts: number; messages: number }[]>([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsPeriod, setAnalyticsPeriod] = useState<"7d" | "30d">("7d");
+  const [analyticsMetric, setAnalyticsMetric] = useState<"users" | "posts" | "messages">("users");
+
+  // Economy
+  const [topEarners, setTopEarners] = useState<any[]>([]);
+  const [topGifters, setTopGifters] = useState<any[]>([]);
+  const [topGiftReceivers, setTopGiftReceivers] = useState<any[]>([]);
+  const [giftStats, setGiftStats] = useState({ totalGifts: 0, totalAcoinGifted: 0, uniqueGifters: 0 });
+  const [economyLoading, setEconomyLoading] = useState(false);
+
+  // App Config
+  const [appConfig, setAppConfig] = useState<Record<string, any>>({});
+  const [configLoading, setConfigLoading] = useState(false);
+  const [configSaving, setConfigSaving] = useState<string | null>(null);
 
   const isAdmin = !!profile?.is_admin;
 
@@ -395,11 +418,86 @@ export default function AdminDashboard() {
     setVerifApps(data || []);
   }, []);
 
+  const loadAnalyticsData = useCallback(async () => {
+    if (!isAdmin) return;
+    setAnalyticsLoading(true);
+    try {
+      const days = analyticsPeriod === "7d" ? 7 : 30;
+      const points: { label: string; users: number; posts: number; messages: number }[] = [];
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const start = new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
+        const end = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).toISOString();
+        const label = analyticsPeriod === "7d"
+          ? d.toLocaleDateString("en", { weekday: "short" })
+          : `${d.getMonth() + 1}/${d.getDate()}`;
+        const [{ count: u }, { count: p }, { count: m }] = await Promise.all([
+          supabase.from("profiles").select("*", { count: "exact", head: true }).gte("created_at", start).lt("created_at", end),
+          supabase.from("posts").select("*", { count: "exact", head: true }).gte("created_at", start).lt("created_at", end),
+          supabase.from("messages").select("*", { count: "exact", head: true }).gte("created_at", start).lt("created_at", end),
+        ]);
+        points.push({ label, users: u || 0, posts: p || 0, messages: m || 0 });
+      }
+      setAnalyticsGrowth(points);
+    } catch {}
+    setAnalyticsLoading(false);
+  }, [analyticsPeriod]);
+
+  const loadEconomyData = useCallback(async () => {
+    if (!isAdmin) return;
+    setEconomyLoading(true);
+    try {
+      const [{ data: earners }, { data: gifterRows }, { data: receiverRows }, { count: totalGifts }] = await Promise.all([
+        supabase.from("profiles").select("id, display_name, handle, acoin, xp, is_verified").order("acoin", { ascending: false }).limit(10),
+        supabase.from("gift_transactions").select("sender_id, profiles!gift_transactions_sender_id_fkey(display_name, handle)").limit(500),
+        supabase.from("gift_transactions").select("receiver_id, acoin_value, profiles!gift_transactions_receiver_id_fkey(display_name, handle)").limit(500),
+        supabase.from("gift_transactions").select("*", { count: "exact", head: true }),
+      ]);
+      setTopEarners(earners || []);
+      const gifterMap: Record<string, { name: string; handle: string; count: number }> = {};
+      for (const g of (gifterRows || [])) {
+        const id = (g as any).sender_id;
+        const name = (g as any).profiles?.display_name || "Unknown";
+        const handle = (g as any).profiles?.handle || "?";
+        if (!gifterMap[id]) gifterMap[id] = { name, handle, count: 0 };
+        gifterMap[id].count++;
+      }
+      setTopGifters(Object.entries(gifterMap).sort((a, b) => b[1].count - a[1].count).slice(0, 10).map(([id, v]) => ({ id, ...v })));
+      const receiverMap: Record<string, { name: string; handle: string; count: number; totalAcoin: number }> = {};
+      let totalAcoinGifted = 0;
+      for (const g of (receiverRows || [])) {
+        const id = (g as any).receiver_id;
+        const name = (g as any).profiles?.display_name || "Unknown";
+        const handle = (g as any).profiles?.handle || "?";
+        const val = (g as any).acoin_value || 0;
+        totalAcoinGifted += val;
+        if (!receiverMap[id]) receiverMap[id] = { name, handle, count: 0, totalAcoin: 0 };
+        receiverMap[id].count++;
+        receiverMap[id].totalAcoin += val;
+      }
+      setTopGiftReceivers(Object.entries(receiverMap).sort((a, b) => b[1].totalAcoin - a[1].totalAcoin).slice(0, 10).map(([id, v]) => ({ id, ...v })));
+      setGiftStats({ totalGifts: totalGifts || 0, totalAcoinGifted, uniqueGifters: Object.keys(gifterMap).length });
+    } catch {}
+    setEconomyLoading(false);
+  }, []);
+
+  const loadConfigData = useCallback(async () => {
+    if (!isAdmin) return;
+    setConfigLoading(true);
+    try {
+      const { data } = await supabase.from("app_settings").select("*").limit(1).maybeSingle();
+      setAppConfig(data || {});
+    } catch {}
+    setConfigLoading(false);
+  }, []);
+
   const loadAll = useCallback(async () => {
     setLoading(true);
     await Promise.all([
       loadStats(), loadUsers(), loadPosts(), loadPlans(), loadCurrency(),
       loadReports(), loadSellerApplications(), loadReferrals(), loadMatchData(), loadChannelData(), loadSystemData(), loadVerifApps(),
+      loadAnalyticsData(), loadEconomyData(), loadConfigData(),
     ]);
     setLoading(false);
   }, []);
@@ -407,6 +505,7 @@ export default function AdminDashboard() {
   useEffect(() => { loadAll(); }, []);
   useEffect(() => { loadUsers(); }, [userSearch]);
   useEffect(() => { loadPosts(); }, [postSearch]);
+  useEffect(() => { loadAnalyticsData(); }, [analyticsPeriod]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -2013,6 +2112,338 @@ export default function AdminDashboard() {
     );
   }
 
+  function renderAnalytics() {
+    const screenW = Dimensions.get("window").width;
+    const CHART_W = screenW - 64;
+    const CHART_H = 170;
+    const PAD_L = 10, PAD_R = 8, PAD_T = 12, PAD_B = 8;
+    const plotW = CHART_W - PAD_L - PAD_R;
+    const plotH = CHART_H - PAD_T - PAD_B;
+    const metricColors: Record<string, string> = { users: BRAND, posts: "#6366F1", messages: "#10B981" };
+    const color = metricColors[analyticsMetric];
+    const values = analyticsGrowth.map((d) => d[analyticsMetric]);
+    const maxVal = Math.max(...values, 1);
+    const n = values.length;
+    const pts = values.map((v, i) => ({
+      x: PAD_L + (n <= 1 ? plotW / 2 : (i / (n - 1)) * plotW),
+      y: PAD_T + plotH - (v / maxVal) * plotH,
+    }));
+    const polyPts = pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+    const areaD = pts.length > 1
+      ? `M${pts[0].x.toFixed(1)},${(PAD_T + plotH).toFixed(1)} ` +
+        pts.map((p) => `L${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ") +
+        ` L${pts[pts.length - 1].x.toFixed(1)},${(PAD_T + plotH).toFixed(1)} Z`
+      : "";
+    const total = values.reduce((a, b) => a + b, 0);
+    const avg = n > 0 ? Math.round(total / n) : 0;
+    const peakIdx = values.reduce((mi, v, i) => (v > values[mi] ? i : mi), 0);
+    const metricIcons: Record<string, string> = { users: "person-add", posts: "create", messages: "chatbubbles" };
+
+    return (
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Growth Analytics</Text>
+        <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+          {(["7d", "30d"] as const).map((p) => (
+            <TouchableOpacity
+              key={p}
+              onPress={() => setAnalyticsPeriod(p)}
+              style={{ paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, borderWidth: 1, backgroundColor: analyticsPeriod === p ? BRAND : colors.surface, borderColor: analyticsPeriod === p ? BRAND : colors.border }}
+            >
+              <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: analyticsPeriod === p ? "#fff" : colors.textSecondary }}>{p === "7d" ? "7 Days" : "30 Days"}</Text>
+            </TouchableOpacity>
+          ))}
+          {analyticsLoading && <ActivityIndicator color={BRAND} size="small" style={{ marginLeft: 8 }} />}
+        </View>
+        <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+          {(["users", "posts", "messages"] as const).map((m) => (
+            <TouchableOpacity
+              key={m}
+              onPress={() => setAnalyticsMetric(m)}
+              style={{ flex: 1, paddingVertical: 9, borderRadius: 10, borderWidth: 1, alignItems: "center", backgroundColor: analyticsMetric === m ? metricColors[m] + "18" : colors.surface, borderColor: analyticsMetric === m ? metricColors[m] : colors.border }}
+            >
+              <Ionicons name={metricIcons[m] as any} size={14} color={analyticsMetric === m ? metricColors[m] : colors.textMuted} />
+              <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: analyticsMetric === m ? metricColors[m] : colors.textMuted, textTransform: "capitalize", marginTop: 2 }}>{m}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 16, marginBottom: 12 }}>
+          {analyticsLoading ? (
+            <View style={{ height: CHART_H, alignItems: "center", justifyContent: "center" }}>
+              <ActivityIndicator color={BRAND} size="large" />
+            </View>
+          ) : analyticsGrowth.length === 0 ? (
+            <View style={{ height: CHART_H, alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="bar-chart-outline" size={32} color={colors.textMuted} />
+              <Text style={{ color: colors.textMuted, marginTop: 8, fontSize: 13 }}>No data yet</Text>
+            </View>
+          ) : (
+            <>
+              <Svg width={CHART_W} height={CHART_H}>
+                <Defs>
+                  <SvgLinearGradient id="ag" x1="0" y1="0" x2="0" y2="1">
+                    <Stop offset="0" stopColor={color} stopOpacity="0.3" />
+                    <Stop offset="1" stopColor={color} stopOpacity="0.01" />
+                  </SvgLinearGradient>
+                </Defs>
+                {[0, 0.5, 1].map((t, i) => (
+                  <Line key={i} x1={PAD_L} y1={PAD_T + t * plotH} x2={CHART_W - PAD_R} y2={PAD_T + t * plotH} stroke={colors.border} strokeWidth="0.6" strokeDasharray="4,4" />
+                ))}
+                {areaD ? <Path d={areaD} fill="url(#ag)" /> : null}
+                {pts.length > 1 ? <Polyline points={polyPts} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" /> : null}
+                {pts.map((p, i) => (
+                  <Circle key={i} cx={p.x} cy={p.y} r={pts.length <= 10 ? 3.5 : 2} fill={color} />
+                ))}
+              </Svg>
+              <View style={{ flexDirection: "row", marginTop: 2 }}>
+                {analyticsGrowth.map((d, i) => {
+                  const step = analyticsPeriod === "7d" ? 1 : 5;
+                  const show = i % step === 0 || i === analyticsGrowth.length - 1;
+                  return (
+                    <Text key={i} style={{ flex: 1, fontSize: 9, color: show ? colors.textMuted : "transparent", textAlign: "center", fontFamily: "Inter_400Regular" }} numberOfLines={1}>
+                      {d.label}
+                    </Text>
+                  );
+                })}
+              </View>
+            </>
+          )}
+        </View>
+        <View style={styles.statsGrid}>
+          <StatCard title="Total" value={total} icon={metricIcons[analyticsMetric] as any} color={color} colors={colors} />
+          <StatCard title="Daily Avg" value={avg} icon="analytics" color="#6366F1" colors={colors} />
+          <StatCard title="Peak" value={values[peakIdx] || 0} icon="arrow-up-circle" color="#10B981" colors={colors} />
+          <StatCard title="Days" value={n} icon="calendar" color={GOLD} colors={colors} />
+        </View>
+        <View style={[styles.planCard, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.lookupCardTitle, { color: colors.text, marginBottom: 10 }]}>Last 7 Days Breakdown</Text>
+          {analyticsGrowth.slice(-7).map((d, i) => {
+            const val = d[analyticsMetric];
+            const pct = maxVal > 0 ? val / maxVal : 0;
+            return (
+              <View key={i} style={{ marginBottom: 10 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary, fontFamily: "Inter_500Medium" }}>{d.label}</Text>
+                  <Text style={{ fontSize: 12, color, fontFamily: "Inter_700Bold" }}>{val}</Text>
+                </View>
+                <View style={{ height: 5, backgroundColor: colors.border, borderRadius: 3 }}>
+                  <View style={{ height: 5, backgroundColor: color, borderRadius: 3, width: `${Math.round(pct * 100)}%` }} />
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    );
+  }
+
+  function renderEconomy() {
+    const maxAcoin = topEarners.length > 0 ? Math.max(topEarners[0]?.acoin || 1, 1) : 1;
+    const maxGifts = topGifters.length > 0 ? Math.max(topGifters[0]?.count || 1, 1) : 1;
+    const maxReceived = topGiftReceivers.length > 0 ? Math.max(topGiftReceivers[0]?.totalAcoin || 1, 1) : 1;
+    return (
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>ACoin Economy</Text>
+        {economyLoading ? (
+          <ActivityIndicator color={BRAND} style={{ marginTop: 20 }} />
+        ) : (
+          <>
+            <View style={styles.statsGrid}>
+              <StatCard title="Total Gifts" value={giftStats.totalGifts} icon="gift" color={GOLD} colors={colors} />
+              <StatCard title="ACoin Gifted" value={giftStats.totalAcoinGifted.toLocaleString()} icon="diamond" color="#6366F1" colors={colors} />
+              <StatCard title="Gifters" value={giftStats.uniqueGifters} icon="people" color={BRAND} colors={colors} />
+              <StatCard title="Total ACoin" value={stats.totalAcoin.toLocaleString()} icon="wallet" color="#10B981" colors={colors} />
+            </View>
+
+            <View style={[styles.planCard, { backgroundColor: colors.surface }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <Ionicons name="trophy" size={16} color={GOLD} />
+                <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Top ACoin Holders</Text>
+              </View>
+              {topEarners.length === 0 ? (
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>No data</Text>
+              ) : (
+                topEarners.map((u, i) => (
+                  <View key={u.id} style={{ marginBottom: 10 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 3, gap: 8 }}>
+                      <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: i === 0 ? GOLD : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : colors.textMuted, width: 18, textAlign: "center" }}>
+                        {i + 1}
+                      </Text>
+                      <View style={[styles.userAvatar, { width: 26, height: 26, borderRadius: 13, backgroundColor: BRAND }]}>
+                        <Text style={{ fontSize: 11, color: "#fff", fontFamily: "Inter_700Bold" }}>{(u.display_name || "?")[0].toUpperCase()}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                          <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.text }} numberOfLines={1}>{u.display_name}</Text>
+                          {u.is_verified && <Ionicons name="checkmark-circle" size={12} color={BRAND} />}
+                        </View>
+                        <Text style={{ fontSize: 10, color: colors.textMuted }}>@{u.handle}</Text>
+                      </View>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                        <Ionicons name="diamond" size={11} color={GOLD} />
+                        <Text style={{ fontSize: 12, color: GOLD, fontFamily: "Inter_700Bold" }}>{(u.acoin || 0).toLocaleString()}</Text>
+                      </View>
+                    </View>
+                    <View style={{ height: 4, backgroundColor: colors.border, borderRadius: 2, marginLeft: 26 }}>
+                      <View style={{ height: 4, backgroundColor: GOLD, borderRadius: 2, width: `${Math.round(((u.acoin || 0) / maxAcoin) * 100)}%` }} />
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+
+            <View style={[styles.planCard, { backgroundColor: colors.surface }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <Ionicons name="gift" size={16} color="#FF6B6B" />
+                <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Top Gifters (by count)</Text>
+              </View>
+              {topGifters.length === 0 ? (
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>No gift data yet</Text>
+              ) : (
+                topGifters.slice(0, 7).map((u, i) => (
+                  <View key={u.id} style={{ marginBottom: 10 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 3, gap: 8 }}>
+                      <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: i < 3 ? "#FF6B6B" : colors.textMuted, width: 18, textAlign: "center" }}>{i + 1}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.text }} numberOfLines={1}>{u.name}</Text>
+                        <Text style={{ fontSize: 10, color: colors.textMuted }}>@{u.handle}</Text>
+                      </View>
+                      <Text style={{ fontSize: 12, color: "#FF6B6B", fontFamily: "Inter_700Bold" }}>{u.count} gifts</Text>
+                    </View>
+                    <View style={{ height: 4, backgroundColor: colors.border, borderRadius: 2, marginLeft: 26 }}>
+                      <View style={{ height: 4, backgroundColor: "#FF6B6B", borderRadius: 2, width: `${Math.round((u.count / maxGifts) * 100)}%` }} />
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+
+            <View style={[styles.planCard, { backgroundColor: colors.surface }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <Ionicons name="star" size={16} color="#6366F1" />
+                <Text style={[styles.lookupCardTitle, { color: colors.text }]}>Top Gift Receivers (by ACoin)</Text>
+              </View>
+              {topGiftReceivers.length === 0 ? (
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>No gift data yet</Text>
+              ) : (
+                topGiftReceivers.slice(0, 7).map((u, i) => (
+                  <View key={u.id} style={{ marginBottom: 10 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 3, gap: 8 }}>
+                      <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: i < 3 ? "#6366F1" : colors.textMuted, width: 18, textAlign: "center" }}>{i + 1}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.text }} numberOfLines={1}>{u.name}</Text>
+                        <Text style={{ fontSize: 10, color: colors.textMuted }}>@{u.handle} · {u.count} gifts</Text>
+                      </View>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                        <Ionicons name="diamond" size={11} color="#6366F1" />
+                        <Text style={{ fontSize: 12, color: "#6366F1", fontFamily: "Inter_700Bold" }}>{u.totalAcoin.toLocaleString()}</Text>
+                      </View>
+                    </View>
+                    <View style={{ height: 4, backgroundColor: colors.border, borderRadius: 2, marginLeft: 26 }}>
+                      <View style={{ height: 4, backgroundColor: "#6366F1", borderRadius: 2, width: `${Math.round((u.totalAcoin / maxReceived) * 100)}%` }} />
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+          </>
+        )}
+      </View>
+    );
+  }
+
+  async function toggleConfigFlag(key: string, currentVal: boolean) {
+    setConfigSaving(key);
+    try {
+      if (appConfig.id) {
+        await supabase.from("app_settings").update({ [key]: !currentVal }).eq("id", appConfig.id);
+      } else {
+        await supabase.from("app_settings").insert({ [key]: !currentVal });
+      }
+      setAppConfig((prev: any) => ({ ...prev, [key]: !currentVal }));
+    } catch {}
+    setConfigSaving(null);
+  }
+
+  function renderConfig() {
+    const flags = [
+      { key: "maintenance_mode", label: "Maintenance Mode", desc: "Show a maintenance banner to all users", icon: "construct", color: "#FF3B30" },
+      { key: "registration_enabled", label: "New Registrations", desc: "Allow new users to sign up", icon: "person-add", color: "#10B981" },
+      { key: "gifts_enabled", label: "Gift Economy", desc: "Enable sending gifts between users", icon: "gift", color: GOLD },
+      { key: "match_enabled", label: "AfuMatch Dating", desc: "Enable the AfuMatch dating feature", icon: "heart", color: "#FF2D55" },
+      { key: "ai_chat_enabled", label: "AI Chat (Afu AI)", desc: "Enable the in-app AI chat assistant", icon: "sparkles", color: "#6366F1" },
+      { key: "stories_enabled", label: "Stories", desc: "Allow users to post and view stories", icon: "aperture", color: "#EC4899" },
+      { key: "channels_enabled", label: "Channels", desc: "Enable the channels / broadcast feature", icon: "megaphone", color: BRAND },
+      { key: "red_envelopes_enabled", label: "Red Envelopes", desc: "Enable sending red envelope gifts", icon: "mail", color: "#FF3B30" },
+      { key: "video_calls_enabled", label: "Video Calls", desc: "Enable 1-on-1 video call feature", icon: "videocam", color: "#3B82F6" },
+      { key: "creator_monetization_enabled", label: "Creator Monetization", desc: "Enable the Creator Studio monetization tools", icon: "ribbon", color: GOLD },
+    ];
+
+    return (
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>App Configuration</Text>
+        <Text style={[{ fontSize: 13, color: colors.textMuted, marginBottom: 12, fontFamily: "Inter_400Regular" }]}>
+          Toggle platform-wide feature flags. Changes take effect immediately for all users.
+        </Text>
+        {configLoading ? (
+          <ActivityIndicator color={BRAND} style={{ marginTop: 20 }} />
+        ) : (
+          <>
+            {flags.map((flag) => {
+              const isOn = !!appConfig[flag.key];
+              const saving = configSaving === flag.key;
+              return (
+                <View key={flag.key} style={[styles.reportCard, { backgroundColor: colors.surface, flexDirection: "row", alignItems: "center", gap: 12 }]}>
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: flag.color + "18", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Ionicons name={flag.icon as any} size={18} color={flag.color} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.text }}>{flag.label}</Text>
+                    <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 1, lineHeight: 16 }}>{flag.desc}</Text>
+                  </View>
+                  {saving ? (
+                    <ActivityIndicator size="small" color={flag.color} />
+                  ) : (
+                    <Switch
+                      value={isOn}
+                      onValueChange={() => toggleConfigFlag(flag.key, isOn)}
+                      trackColor={{ true: flag.color, false: colors.border }}
+                      thumbColor="#fff"
+                    />
+                  )}
+                </View>
+              );
+            })}
+
+            <View style={[styles.planCard, { backgroundColor: colors.surface, marginTop: 4 }]}>
+              <Text style={[styles.lookupCardTitle, { color: colors.text, marginBottom: 8 }]}>App Info</Text>
+              {[
+                { label: "Total Users", value: stats.totalUsers.toLocaleString() },
+                { label: "Premium Members", value: stats.premiumUsers.toLocaleString() },
+                { label: "Verified Accounts", value: stats.verifiedUsers.toLocaleString() },
+                { label: "Total ACoin in Circulation", value: stats.totalAcoin.toLocaleString() },
+                { label: "Total Nexa (XP) Issued", value: stats.totalNexa.toLocaleString() },
+                { label: "Pending Deletions", value: stats.pendingDeletions.toString() },
+              ].map((row) => (
+                <View key={row.label} style={[styles.lookupRow, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.lookupLabel, { color: colors.textMuted }]}>{row.label}</Text>
+                  <Text style={[styles.lookupValue, { color: colors.text }]}>{row.value}</Text>
+                </View>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.actionBtn, { borderColor: colors.border, marginTop: 4 }]}
+              onPress={loadConfigData}
+            >
+              <Ionicons name="refresh" size={16} color={colors.textSecondary} />
+              <Text style={{ color: colors.textSecondary, fontSize: 14, fontFamily: "Inter_600SemiBold" }}>Refresh Config</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
+    );
+  }
+
   const tabContent: Record<string, () => React.ReactNode> = {
     overview: renderOverview,
     verifications: renderVerifications,
@@ -2029,6 +2460,9 @@ export default function AdminDashboard() {
     reports: renderReports,
     broadcast: renderBroadcast,
     system: renderSystem,
+    analytics: renderAnalytics,
+    economy: renderEconomy,
+    config: renderConfig,
   };
 
   return (
