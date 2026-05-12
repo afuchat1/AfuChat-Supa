@@ -82,6 +82,11 @@ type Listing = {
   is_active: boolean;
   views: number;
   created_at: string;
+  is_auction?: boolean;
+  auction_end_at?: string | null;
+  reserve_price?: number;
+  current_bid?: number;
+  current_bidder_id?: string | null;
 };
 
 type OwnedUsername = {
@@ -92,6 +97,16 @@ type OwnedUsername = {
   listed?: boolean;
   listing_price?: number;
   listing_id?: string;
+};
+
+type Bid = {
+  id: string;
+  listing_id: string;
+  bidder_id: string;
+  bidder_name: string;
+  bidder_handle: string;
+  amount: number;
+  created_at: string;
 };
 
 type SortKey = "price_desc" | "price_asc" | "newest" | "rarity";
@@ -126,9 +141,62 @@ function timeAgo(iso: string) {
   return `${m}mo ago`;
 }
 
+function auctionTimeLeft(endAt: string): string {
+  const diff = new Date(endAt).getTime() - Date.now();
+  if (diff <= 0) return "Ended";
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  if (h >= 24) return `${Math.floor(h / 24)}d ${h % 24}h left`;
+  if (h > 0) return `${h}h ${m}m left`;
+  if (m > 0) return `${m}m ${s}s left`;
+  return `${s}s left`;
+}
+
+/* ─── Random handle helpers ────────────────────────────────── */
+
+const RAND_ADJS = [
+  "swift","bold","calm","deep","free","gold","high","kind","pure","wise",
+  "bright","clear","cool","dark","epic","fast","glow","huge","iron","jade",
+  "keen","loud","mild","neat","open","proud","quick","real","safe","true",
+];
+const RAND_NOUNS = [
+  "lion","hawk","wolf","bear","star","moon","tree","wave","storm","fire",
+  "wind","lake","hill","peak","sage","hero","core","nexus","byte","spark",
+  "ridge","coast","grove","blade","crest","dawn","dusk","echo","flame","pulse",
+];
+
+function generateRandomAfuHandle(): string {
+  const adj  = RAND_ADJS[Math.floor(Math.random() * RAND_ADJS.length)];
+  const noun = RAND_NOUNS[Math.floor(Math.random() * RAND_NOUNS.length)];
+  const num  = Math.floor(100 + Math.random() * 9000);
+  return `afu_${adj}${noun}${num}`;
+}
+
+async function assignRandomHandleToSeller(
+  supabaseClient: typeof import("@/lib/supabase").supabase,
+  sellerId: string
+): Promise<void> {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const newHandle = generateRandomAfuHandle();
+    const { data: existing } = await supabaseClient
+      .from("profiles")
+      .select("id")
+      .eq("handle", newHandle)
+      .maybeSingle();
+    if (!existing) {
+      await supabaseClient
+        .from("profiles")
+        .update({ handle: newHandle })
+        .eq("id", sellerId);
+      return;
+    }
+  }
+}
+
 /* ─── Main screen ──────────────────────────────────────────── */
 
-type TabKey = "browse" | "mine" | "sell";
+type TabKey = "browse" | "auctions" | "mine" | "sell";
 
 export default function UsernameMarketScreen() {
   const { colors, accent } = useTheme();
@@ -152,6 +220,19 @@ export default function UsernameMarketScreen() {
   const [listDesc, setListDesc] = useState("");
   const [listing, setListing] = useState(false);
   const [sellFromOwned, setSellFromOwned] = useState<OwnedUsername | null>(null);
+
+  // Auctions
+  const [auctions, setAuctions] = useState<Listing[]>([]);
+  const [auctionLoading, setAuctionLoading] = useState(false);
+  const [selectedAuction, setSelectedAuction] = useState<Listing | null>(null);
+  const [bids, setBids] = useState<Bid[]>([]);
+  const [bidsLoading, setBidsLoading] = useState(false);
+  const [bidAmount, setBidAmount] = useState("");
+  const [placing, setPlacing] = useState(false);
+  // Sell tab auction toggle
+  const [listAsAuction, setListAsAuction] = useState(false);
+  const [auctionDurationHours, setAuctionDurationHours] = useState("24");
+  const [auctionReserve, setAuctionReserve] = useState("");
 
   /* ── Data loading ── */
 
@@ -259,6 +340,147 @@ export default function UsernameMarketScreen() {
     if (tab === "mine" || tab === "sell") loadOwnedUsernames();
   }, [tab, loadOwnedUsernames]);
 
+  /* ── Load auctions ── */
+
+  const loadAuctions = useCallback(async () => {
+    setAuctionLoading(true);
+    const { data } = await supabase
+      .from("username_listings")
+      .select(
+        "id, username, price, seller_id, description, is_active, views, created_at, is_auction, auction_end_at, reserve_price, current_bid, current_bidder_id, profiles!username_listings_seller_id_fkey(display_name, handle)"
+      )
+      .eq("is_active", true)
+      .eq("is_auction", true)
+      .gt("auction_end_at", new Date().toISOString())
+      .order("auction_end_at", { ascending: true });
+    if (data) {
+      setAuctions(
+        data.map((l: any) => ({
+          id: l.id,
+          username: l.username,
+          price: l.price,
+          seller_id: l.seller_id,
+          description: l.description || "",
+          is_active: l.is_active,
+          views: l.views || 0,
+          created_at: l.created_at,
+          seller_name: l.profiles?.display_name || "Seller",
+          seller_handle: l.profiles?.handle || "",
+          is_auction: true,
+          auction_end_at: l.auction_end_at,
+          reserve_price: l.reserve_price || l.price,
+          current_bid: l.current_bid || 0,
+          current_bidder_id: l.current_bidder_id || null,
+        }))
+      );
+    }
+    setAuctionLoading(false);
+  }, []);
+
+  const loadBids = useCallback(async (listingId: string) => {
+    setBidsLoading(true);
+    const { data } = await supabase
+      .from("username_bids")
+      .select(
+        "id, listing_id, bidder_id, amount, created_at, profiles!username_bids_bidder_id_fkey(display_name, handle)"
+      )
+      .eq("listing_id", listingId)
+      .order("amount", { ascending: false })
+      .limit(20);
+    if (data) {
+      setBids(
+        data.map((b: any) => ({
+          id: b.id,
+          listing_id: b.listing_id,
+          bidder_id: b.bidder_id,
+          bidder_name: b.profiles?.display_name || "Bidder",
+          bidder_handle: b.profiles?.handle || "",
+          amount: b.amount,
+          created_at: b.created_at,
+        }))
+      );
+    }
+    setBidsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (tab === "auctions") loadAuctions();
+  }, [tab, loadAuctions]);
+
+  /* ── Bid action ── */
+
+  async function placeBid(auction: Listing) {
+    if (!user || !profile) { router.push("/(auth)/login"); return; }
+    if (auction.seller_id === user.id) {
+      showAlert("Cannot Bid", "You cannot bid on your own auction.");
+      return;
+    }
+    const amount = parseInt(bidAmount, 10);
+    if (!amount || amount < 10) {
+      showAlert("Invalid Bid", "Minimum bid is 10 ACoin.");
+      return;
+    }
+    const minBid = Math.max(
+      (auction.current_bid || 0) + 1,
+      auction.reserve_price || auction.price
+    );
+    if (amount < minBid) {
+      showAlert(
+        "Bid Too Low",
+        `Minimum bid is ${fmtPrice(minBid)} ACoin (must beat current highest bid).`
+      );
+      return;
+    }
+    const myAcoin = profile.acoin || 0;
+    if (myAcoin < amount) {
+      showAlert(
+        "Not Enough ACoin",
+        `You need ${fmtPrice(amount)} ACoin but only have ${fmtPrice(myAcoin)}.`,
+        [{ text: "Top Up Wallet", onPress: () => router.push("/wallet") }, { text: "Cancel" }]
+      );
+      return;
+    }
+    showAlert(
+      `Bid ${fmtPrice(amount)} ACoin?`,
+      `Place a bid of ${fmtPrice(amount)} ACoin on @${auction.username}.\n\nACoin is only charged if you win. If outbid, your bid is cancelled at no cost.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Place Bid",
+          onPress: async () => {
+            setPlacing(true);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            const { error } = await supabase.from("username_bids").insert({
+              listing_id: auction.id,
+              bidder_id: user.id,
+              amount,
+            });
+            if (error) {
+              setPlacing(false);
+              showAlert("Error", error.message);
+              return;
+            }
+            // Update the listing's current_bid only if this bid is higher
+            await supabase
+              .from("username_listings")
+              .update({ current_bid: amount, current_bidder_id: user.id })
+              .eq("id", auction.id)
+              .lt("current_bid", amount);
+            setPlacing(false);
+            setBidAmount("");
+            setSelectedAuction(null);
+            loadAuctions();
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            showAlert(
+              "Bid Placed! 🔨",
+              `Your bid of ${fmtPrice(amount)} ACoin on @${auction.username} is live. You'll be notified if you're outbid.`
+            );
+          },
+        },
+      ]
+    );
+  }
+
   /* ── Filtering + sorting (browse tab only) ── */
 
   const displayListings = useMemo(() => {
@@ -349,6 +571,14 @@ export default function UsernameMarketScreen() {
 
             // 4. Remove from local listings state immediately
             setListings((prev) => prev.filter((l) => l.id !== item.id));
+
+            // 5. If the seller just sold the handle they use as their primary
+            //    profile handle, auto-assign them a random AfuChat username so
+            //    their profile is never left empty.
+            if (item.username === item.seller_handle) {
+              await assignRandomHandleToSeller(supabase, item.seller_id);
+            }
+
             setBuying(null);
 
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -482,27 +712,46 @@ export default function UsernameMarketScreen() {
     }
 
     setListing(true);
-    const { error } = await supabase.from("username_listings").insert({
+    const insertPayload: Record<string, any> = {
       username: handle,
       price,
       seller_id: user.id,
       description: listDesc.trim(),
       is_active: true,
       views: 0,
-    });
+    };
+    if (listAsAuction) {
+      const hours = Math.max(1, parseInt(auctionDurationHours, 10) || 24);
+      const reserve = parseInt(auctionReserve, 10) || price;
+      insertPayload.is_auction = true;
+      insertPayload.auction_end_at = new Date(Date.now() + hours * 3_600_000).toISOString();
+      insertPayload.reserve_price = reserve;
+      insertPayload.current_bid = 0;
+    }
+    const { error } = await supabase.from("username_listings").insert(insertPayload);
     setListing(false);
 
     if (error) { showAlert("Error", error.message); return; }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    showAlert("Listed! 🏷️", `@${handle} is now on the market for ${fmtPrice(price)} ACoin.`);
+    if (listAsAuction) {
+      const hours = parseInt(auctionDurationHours, 10) || 24;
+      showAlert("Auction Live! 🔨", `@${handle} is now open for bids. Auction ends in ${hours}h.`);
+    } else {
+      showAlert("Listed! 🏷️", `@${handle} is now on the market for ${fmtPrice(price)} ACoin.`);
+    }
+    const wasAuction = listAsAuction;
     setListHandle("");
     setListPrice("500");
     setListDesc("");
     setSellFromOwned(null);
+    setListAsAuction(false);
+    setAuctionDurationHours("24");
+    setAuctionReserve("");
     loadListings();
+    loadAuctions();
     loadOwnedUsernames();
-    setTab("mine");
+    setTab(wasAuction ? "auctions" : "mine");
   }
 
   /* ── Set primary handle ── */
@@ -536,9 +785,10 @@ export default function UsernameMarketScreen() {
   /* ─── Render ─────────────────────────────────────────────── */
 
   const TABS: { key: TabKey; label: string; icon: string }[] = [
-    { key: "browse", label: "Browse",        icon: "storefront-outline" },
-    { key: "mine",   label: "My Usernames",  icon: "person-outline"     },
-    { key: "sell",   label: "List Handle",   icon: "pricetag-outline"   },
+    { key: "browse",   label: "Browse",     icon: "storefront-outline" },
+    { key: "auctions", label: "Auctions",   icon: "hammer-outline"     },
+    { key: "mine",     label: "My Handles", icon: "person-outline"     },
+    { key: "sell",     label: "List",       icon: "pricetag-outline"   },
   ];
 
   const SORT_LABELS: Record<SortKey, string> = {
@@ -808,6 +1058,168 @@ export default function UsernameMarketScreen() {
         </>
       )}
 
+      {/* ─────────── AUCTIONS TAB ─────────── */}
+      {tab === "auctions" && (
+        <>
+          {auctionLoading ? (
+            <View style={{ padding: 16, gap: 10 }}>
+              {[1, 2, 3].map((i) => <MarketplaceCardSkeleton key={i} />)}
+            </View>
+          ) : auctions.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyEmoji}>🔨</Text>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>No Live Auctions</Text>
+              <Text style={[styles.emptySub, { color: colors.textMuted }]}>
+                No handles up for auction right now. List yours as an auction from the List tab!
+              </Text>
+              <TouchableOpacity
+                style={[styles.emptyBtn, { backgroundColor: accent }]}
+                onPress={() => setTab("sell")}
+              >
+                <Text style={styles.emptyBtnText}>Start an Auction</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <FlatList
+              data={auctions}
+              keyExtractor={(l) => l.id}
+              contentContainerStyle={{ gap: 10, padding: 12, paddingBottom: 40 }}
+              showsVerticalScrollIndicator={false}
+              ListHeaderComponent={
+                <View style={[styles.foundBanner, { backgroundColor: accent + "15" }]}>
+                  <Ionicons name="hammer-outline" size={15} color={accent} />
+                  <Text style={[styles.headerSub, { color: accent, marginLeft: 6 }]}>
+                    {auctions.length} live auction{auctions.length !== 1 ? "s" : ""} — bid to win!
+                  </Text>
+                </View>
+              }
+              renderItem={({ item: a }) => {
+                const rarity = getRarity(a.username);
+                const isWinning = a.current_bidder_id === user?.id;
+                const timeLeft = auctionTimeLeft(a.auction_end_at!);
+                const urgent = (new Date(a.auction_end_at!).getTime() - Date.now()) < 3_600_000;
+                return (
+                  <View style={[styles.ownedCard, { backgroundColor: colors.surface, borderColor: rarity.color + "44" }]}>
+                    <View style={styles.ownedCardTop}>
+                      <View style={[styles.handleBubble, { backgroundColor: rarity.color + "18" }]}>
+                        <Text style={[styles.handleText, { color: rarity.color }]}>@{a.username}</Text>
+                      </View>
+                      <View style={[styles.rarityTag, { backgroundColor: rarity.color + "22" }]}>
+                        <Text style={[styles.rarityTagText, { color: rarity.color }]}>
+                          {rarity.emoji} {rarity.label}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Timer + bid info */}
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 6 }}>
+                      <View style={[styles.rarityTag, { backgroundColor: (urgent ? "#FF3B30" : "#34C759") + "18", flexDirection: "row", alignItems: "center", gap: 4 }]}>
+                        <Ionicons name="time-outline" size={12} color={urgent ? "#FF3B30" : "#34C759"} />
+                        <Text style={[styles.rarityTagText, { color: urgent ? "#FF3B30" : "#34C759" }]}>{timeLeft}</Text>
+                      </View>
+                      <View style={[styles.rarityTag, { backgroundColor: Colors.gold + "18", flexDirection: "row", alignItems: "center", gap: 4 }]}>
+                        <Text style={[styles.rarityTagText, { color: Colors.gold }]}>
+                          {(a.current_bid || 0) > 0
+                            ? `🔨 Top bid: ${fmtPrice(a.current_bid!)} ACoin`
+                            : `🪙 Reserve: ${fmtPrice(a.reserve_price || a.price)} ACoin`}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {isWinning && (
+                      <View style={[styles.listedNotice, { backgroundColor: "#34C75912", borderColor: "#34C75933" }]}>
+                        <Ionicons name="checkmark-circle-outline" size={13} color="#34C759" />
+                        <Text style={[styles.listedNoticeText, { color: "#34C759" }]}>You are the highest bidder!</Text>
+                      </View>
+                    )}
+
+                    {a.description ? (
+                      <Text style={[styles.ownedMeta, { color: colors.textMuted }]} numberOfLines={2}>{a.description}</Text>
+                    ) : null}
+
+                    <Text style={[styles.ownedMeta, { color: colors.textMuted }]}>
+                      Listed by @{a.seller_handle} · {timeAgo(a.created_at)}
+                    </Text>
+
+                    {/* Bid input */}
+                    {selectedAuction?.id === a.id ? (
+                      <View style={{ gap: 8, marginTop: 8 }}>
+                        <View style={[styles.field, { backgroundColor: colors.backgroundSecondary, borderColor: accent + "66" }]}>
+                          <Text style={{ fontSize: 16 }}>🪙</Text>
+                          <TextInput
+                            style={[styles.fieldInput, { color: colors.text }]}
+                            placeholder={`Min ${fmtPrice(Math.max((a.current_bid || 0) + 1, a.reserve_price || a.price))}`}
+                            placeholderTextColor={colors.textMuted}
+                            value={bidAmount}
+                            onChangeText={setBidAmount}
+                            keyboardType="number-pad"
+                            autoFocus
+                          />
+                          <Text style={{ color: colors.textMuted, fontSize: 13 }}>ACoin</Text>
+                        </View>
+                        <View style={{ flexDirection: "row", gap: 8 }}>
+                          <TouchableOpacity
+                            style={[styles.ownedActionChip, { flex: 1, justifyContent: "center", backgroundColor: accent }]}
+                            onPress={() => placeBid(a)}
+                            disabled={placing}
+                          >
+                            {placing ? (
+                              <ActivityIndicator color="#fff" size="small" />
+                            ) : (
+                              <>
+                                <Ionicons name="hammer" size={14} color="#fff" />
+                                <Text style={[styles.ownedActionChipText, { color: "#fff" }]}>Confirm Bid</Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.ownedActionChip, { backgroundColor: colors.backgroundSecondary }]}
+                            onPress={() => { setSelectedAuction(null); setBidAmount(""); }}
+                          >
+                            <Text style={[styles.ownedActionChipText, { color: colors.textMuted }]}>Cancel</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={styles.ownedActions}>
+                        {a.seller_id !== user?.id ? (
+                          <TouchableOpacity
+                            style={[styles.ownedActionChip, { backgroundColor: accent + "18", flex: 1, justifyContent: "center" }]}
+                            onPress={() => {
+                              setSelectedAuction(a);
+                              setBidAmount("");
+                              loadBids(a.id);
+                            }}
+                          >
+                            <Ionicons name="hammer-outline" size={14} color={accent} />
+                            <Text style={[styles.ownedActionChipText, { color: accent }]}>Place Bid</Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <TouchableOpacity
+                            style={[styles.ownedActionChip, { backgroundColor: "#FF3B3018" }]}
+                            onPress={() => delistUsername(a.id, a.username)}
+                          >
+                            <Ionicons name="close-circle-outline" size={14} color="#FF3B30" />
+                            <Text style={[styles.ownedActionChipText, { color: "#FF3B30" }]}>Cancel Auction</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                          style={[styles.ownedActionChip, { backgroundColor: colors.backgroundSecondary }]}
+                          onPress={() => copyHandle(a.username)}
+                        >
+                          <Ionicons name="copy-outline" size={14} color={colors.textMuted} />
+                          <Text style={[styles.ownedActionChipText, { color: colors.textMuted }]}>Copy</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                );
+              }}
+            />
+          )}
+        </>
+      )}
+
       {/* ─────────── SELL / LIST TAB ─────────── */}
       {tab === "sell" && (
         <ScrollView
@@ -907,8 +1319,42 @@ export default function UsernameMarketScreen() {
             </View>
           )}
 
+          {/* Listing type toggle */}
+          <View style={[styles.ownedCard, { backgroundColor: colors.surface, borderColor: colors.border, gap: 12 }]}>
+            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Listing Type</Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <TouchableOpacity
+                style={[
+                  styles.ownedActionChip,
+                  { flex: 1, justifyContent: "center", backgroundColor: !listAsAuction ? accent + "22" : colors.backgroundSecondary, borderWidth: 1.5, borderColor: !listAsAuction ? accent : colors.border },
+                ]}
+                onPress={() => setListAsAuction(false)}
+              >
+                <Ionicons name="pricetag-outline" size={14} color={!listAsAuction ? accent : colors.textMuted} />
+                <Text style={[styles.ownedActionChipText, { color: !listAsAuction ? accent : colors.textMuted }]}>Fixed Price</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.ownedActionChip,
+                  { flex: 1, justifyContent: "center", backgroundColor: listAsAuction ? accent + "22" : colors.backgroundSecondary, borderWidth: 1.5, borderColor: listAsAuction ? accent : colors.border },
+                ]}
+                onPress={() => setListAsAuction(true)}
+              >
+                <Ionicons name="hammer-outline" size={14} color={listAsAuction ? accent : colors.textMuted} />
+                <Text style={[styles.ownedActionChipText, { color: listAsAuction ? accent : colors.textMuted }]}>Auction</Text>
+              </TouchableOpacity>
+            </View>
+            {listAsAuction && (
+              <Text style={[styles.fieldHint, { color: colors.textMuted }]}>
+                Buyers bid — highest bid when time expires wins the handle.
+              </Text>
+            )}
+          </View>
+
           <View>
-            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Asking Price (ACoin)</Text>
+            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>
+              {listAsAuction ? "Reserve Price (ACoin)" : "Asking Price (ACoin)"}
+            </Text>
             <View style={[styles.field, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={{ fontSize: 16 }}>🪙</Text>
               <TextInput
@@ -923,9 +1369,35 @@ export default function UsernameMarketScreen() {
               <Text style={[{ color: colors.textMuted, fontSize: 13 }]}>ACoin</Text>
             </View>
             <Text style={[styles.fieldHint, { color: colors.textMuted }]}>
-              Minimum 10 ACoin · You receive 100% of the sale
+              {listAsAuction
+                ? "Minimum opening bid · bidding starts at this amount"
+                : "Minimum 10 ACoin · You receive 100% of the sale"}
             </Text>
           </View>
+
+          {listAsAuction && (
+            <View>
+              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Auction Duration</Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {["6", "12", "24", "48", "72"].map((h) => (
+                  <TouchableOpacity
+                    key={h}
+                    style={[
+                      styles.ownedActionChip,
+                      {
+                        backgroundColor: auctionDurationHours === h ? accent + "22" : colors.backgroundSecondary,
+                        borderWidth: 1.5,
+                        borderColor: auctionDurationHours === h ? accent : colors.border,
+                      },
+                    ]}
+                    onPress={() => setAuctionDurationHours(h)}
+                  >
+                    <Text style={[styles.ownedActionChipText, { color: auctionDurationHours === h ? accent : colors.textMuted }]}>{h}h</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
 
           <View>
             <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Description (optional)</Text>
@@ -952,8 +1424,8 @@ export default function UsernameMarketScreen() {
               <ActivityIndicator color="#fff" />
             ) : (
               <>
-                <Ionicons name="pricetag" size={18} color="#fff" />
-                <Text style={styles.submitBtnText}>List for Sale</Text>
+                <Ionicons name={listAsAuction ? "hammer" : "pricetag"} size={18} color="#fff" />
+                <Text style={styles.submitBtnText}>{listAsAuction ? "Start Auction" : "List for Sale"}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -1097,8 +1569,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  headerTitle: { fontSize: 18, fontFamily: "Inter_700Bold", fontWeight: "700" },
   headerSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
+  foundBanner: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, marginBottom: 6 },
   acoinPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   acoinText: { fontSize: 13, fontFamily: "Inter_700Bold" },
 

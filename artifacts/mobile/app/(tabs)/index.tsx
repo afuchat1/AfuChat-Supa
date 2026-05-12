@@ -1955,7 +1955,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     lineHeight: 12,
   },
-  headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
+  headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold", fontWeight: "700" },
   panelHeader: {
     flexDirection: "row",
     alignItems: "center",
