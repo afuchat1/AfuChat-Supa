@@ -1207,6 +1207,7 @@ function ChatScreen() {
   };
 
   const [chatInfo, setChatInfo] = useState<ChatInfo | null>(buildInitialChatInfo);
+  const isAfuAiDirectChat = chatInfo?.other_id === AFUAI_BOT_ID;
   const [phonebookName, setPhonebookName] = useState<string | null>(null);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const typingMapRef = useRef<Map<string, string>>(new Map());
@@ -2913,8 +2914,6 @@ STRICT RULES:
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const isAfuAiDirectChat = chatInfo?.other_id === AFUAI_BOT_ID;
-
     const activeChatId = await getOrCreateChatId();
     if (!activeChatId) {
       setSending(false);
@@ -4248,7 +4247,7 @@ STRICT RULES:
                         />
                         {!input.trim() && (
                           <>
-                            {!chatInfo?.is_group && !chatInfo?.is_channel && (
+                            {!chatInfo?.is_group && !chatInfo?.is_channel && !isAfuAiDirectChat && (
                               <TouchableOpacity onPress={() => setShowGiftPicker(true)} hitSlop={8} style={st.pillIcon}>
                                 <Ionicons name="gift-outline" size={21} color={colors.textMuted} />
                               </TouchableOpacity>
@@ -4258,9 +4257,11 @@ STRICT RULES:
                                 <Text style={{ fontSize: 19 }}>🧧</Text>
                               </TouchableOpacity>
                             )}
-                            <TouchableOpacity onPress={() => setShowAttachMenu(true)} hitSlop={8} style={st.pillIcon}>
-                              <Ionicons name="attach" size={21} color={colors.textMuted} style={{ transform: [{ rotate: "-45deg" }] }} />
-                            </TouchableOpacity>
+                            {!isAfuAiDirectChat && (
+                              <TouchableOpacity onPress={() => setShowAttachMenu(true)} hitSlop={8} style={st.pillIcon}>
+                                <Ionicons name="attach" size={21} color={colors.textMuted} style={{ transform: [{ rotate: "-45deg" }] }} />
+                              </TouchableOpacity>
+                            )}
                           </>
                         )}
                       </View>
@@ -4355,7 +4356,7 @@ STRICT RULES:
                         />
                         {!input.trim() && (
                           <>
-                            {!chatInfo?.is_group && !chatInfo?.is_channel && (
+                            {!chatInfo?.is_group && !chatInfo?.is_channel && !isAfuAiDirectChat && (
                               <TouchableOpacity onPress={() => setShowGiftPicker(true)} hitSlop={8} style={st.pillIcon}>
                                 <Ionicons name="gift-outline" size={21} color={colors.textMuted} />
                               </TouchableOpacity>
@@ -4365,9 +4366,11 @@ STRICT RULES:
                                 <Text style={{ fontSize: 19 }}>🧧</Text>
                               </TouchableOpacity>
                             )}
-                            <TouchableOpacity onPress={() => setShowAttachMenu(true)} hitSlop={8} style={st.pillIcon}>
-                              <Ionicons name="attach" size={21} color={colors.textMuted} style={{ transform: [{ rotate: "-45deg" }] }} />
-                            </TouchableOpacity>
+                            {!isAfuAiDirectChat && (
+                              <TouchableOpacity onPress={() => setShowAttachMenu(true)} hitSlop={8} style={st.pillIcon}>
+                                <Ionicons name="attach" size={21} color={colors.textMuted} style={{ transform: [{ rotate: "-45deg" }] }} />
+                              </TouchableOpacity>
+                            )}
                           </>
                         )}
                       </View>

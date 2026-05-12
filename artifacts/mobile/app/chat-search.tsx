@@ -57,7 +57,7 @@ type MessageResult = {
 
 type AiInsight = {
   summary: string; bestTab: TabId; suggestions: string[];
-  filters: string[]; resultSummary: string;
+  filters: string[]; resultSummary: string; actions: string[];
 };
 
 const TABS: { id: TabId; label: string; icon: string; premium?: boolean }[] = [
@@ -87,14 +87,24 @@ async function fetchChatAiInsight(query: string): Promise<AiInsight | null> {
         messages: [
           {
             role: "system",
-            content: `You are AfuChat's messaging search assistant. Analyze the user's search query in context of chats and messaging. Reply ONLY with valid JSON (no markdown) in this exact format:
+            content: `You are AfuChat's expert messaging search assistant. Deeply analyze the user's search query in the context of chats, people, groups, and channels. Reply ONLY with valid JSON (no markdown) in this exact format:
 {
-  "summary": "1-2 sentences about what the user is searching for in their chats",
+  "summary": "2-3 sentences: what the user is looking for, why, and the most likely match type",
   "bestTab": "one of: chats | people | channels | groups | messages",
-  "suggestions": ["related search 1", "related search 2", "related search 3"],
-  "filters": ["filter keyword 1", "filter keyword 2"],
-  "resultSummary": "One sentence describing what results to expect"
-}`,
+  "suggestions": ["refined version of this search", "related search 2", "alternative angle"],
+  "filters": ["key filter term 1", "key filter term 2"],
+  "resultSummary": "One specific sentence about what results to expect in the best tab",
+  "actions": ["Specific step the user should take (e.g. 'Open the chat and search within it')", "Another concrete action (e.g. 'Message this person directly')", "Third step (e.g. 'Join this group to access its content')"]
+}
+
+## REASONING GUIDE
+- "chats": user's own conversations — direct messages or named group chats
+- "people": individual profiles, find by name or @handle
+- "channels": broadcast feeds run by creators/brands; one-way updates
+- "groups": multi-member discussion spaces; two-way conversation
+- "messages": full-text search inside public channels & groups (premium)
+
+Actions must be specific, practical, and directly tied to the query — not generic advice.`,
           },
           { role: "user", content: `Search query: "${query}"` },
         ],
@@ -112,6 +122,7 @@ async function fetchChatAiInsight(query: string): Promise<AiInsight | null> {
       suggestions: Array.isArray(p.suggestions) ? p.suggestions : [],
       filters: Array.isArray(p.filters) ? p.filters : [],
       resultSummary: p.resultSummary || "",
+      actions: Array.isArray(p.actions) ? p.actions : [],
     };
   } catch { return null; }
 }
@@ -140,6 +151,7 @@ export default function ChatSearchScreen() {
 
   const [aiInsight, setAiInsight] = useState<AiInsight | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [insightExpanded, setInsightExpanded] = useState(false);
 
   const hasPremiumMessages = hasTier("silver");
 
@@ -330,8 +342,7 @@ export default function ChatSearchScreen() {
   };
 
   function navigateToChat(id: string, params: Record<string, string>) {
-    router.back();
-    setTimeout(() => router.push({ pathname: "/chat/[id]", params: { id, ...params } } as any), 50);
+    router.replace({ pathname: "/chat/[id]", params: { id, ...params } } as any);
   }
 
   function ChatRow({ item }: { item: ChatResult }) {
@@ -511,62 +522,89 @@ export default function ChatSearchScreen() {
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={[ss.aiPanel, { borderColor: AI_PURPLE + "40" }]}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => setInsightExpanded(v => !v)}
+            style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+          >
             <LinearGradient colors={[AI_PURPLE, AI_TEAL]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={ss.aiIconBg}>
               <Ionicons name="sparkles" size={13} color="#fff" />
             </LinearGradient>
             <Text style={{ color: AI_PURPLE, fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.8, flex: 1 }}>
               AI SEARCH ASSISTANT
             </Text>
-            {aiInsight.bestTab && (
+            {aiInsight.bestTab && !insightExpanded && (
               <View style={{ backgroundColor: AI_PURPLE + "20", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 }}>
                 <Text style={{ color: AI_PURPLE, fontSize: 10, fontFamily: "Inter_600SemiBold" }}>
                   Best: {TABS.find(t => t.id === aiInsight.bestTab)?.label}
                 </Text>
               </View>
             )}
-          </View>
+            <Ionicons name={insightExpanded ? "chevron-up" : "chevron-down"} size={14} color={AI_PURPLE} />
+          </TouchableOpacity>
 
-          <Text style={{ color: colors.text, fontSize: 13, lineHeight: 18, marginBottom: 8 }}>{aiInsight.summary}</Text>
-
-          {aiInsight.resultSummary ? (
-            <View style={{ flexDirection: "row", gap: 6, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", borderRadius: 8, padding: 8, marginBottom: 8, alignItems: "flex-start" }}>
-              <Ionicons name="bulb-outline" size={13} color={AI_TEAL} style={{ marginTop: 1 }} />
-              <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17, flex: 1 }}>{aiInsight.resultSummary}</Text>
-            </View>
-          ) : null}
-
-          {aiInsight.filters.length > 0 && (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-              {aiInsight.filters.map((f, i) => (
-                <TouchableOpacity
-                  key={i}
-                  style={{ backgroundColor: AI_TEAL + "20", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, flexDirection: "row", alignItems: "center", gap: 4 }}
-                  onPress={() => { setQuery(f); onChangeQuery(f); }}
-                >
-                  <Ionicons name="filter-outline" size={9} color={AI_TEAL} />
-                  <Text style={{ color: AI_TEAL, fontSize: 11, fontFamily: "Inter_500Medium" }}>{f}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {aiInsight.suggestions.length > 0 && (
+          {insightExpanded && (
             <>
-              <Text style={{ color: colors.textMuted, fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5, marginBottom: 6 }}>
-                TRY ALSO
-              </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                {aiInsight.suggestions.map((s, i) => (
-                  <TouchableOpacity
-                    key={i}
-                    style={{ backgroundColor: AI_PURPLE + "1A", borderColor: AI_PURPLE + "35", borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}
-                    onPress={() => { setQuery(s); onChangeQuery(s); }}
-                  >
-                    <Text style={{ color: AI_PURPLE, fontSize: 11, fontFamily: "Inter_500Medium" }}>{s}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <View style={{ height: 10 }} />
+
+              <Text style={{ color: colors.text, fontSize: 13, lineHeight: 18, marginBottom: 8 }}>{aiInsight.summary}</Text>
+
+              {aiInsight.resultSummary ? (
+                <View style={{ flexDirection: "row", gap: 6, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", borderRadius: 8, padding: 8, marginBottom: 8, alignItems: "flex-start" }}>
+                  <Ionicons name="bulb-outline" size={13} color={AI_TEAL} style={{ marginTop: 1 }} />
+                  <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17, flex: 1 }}>{aiInsight.resultSummary}</Text>
+                </View>
+              ) : null}
+
+              {aiInsight.actions && aiInsight.actions.length > 0 && (
+                <View style={{ marginBottom: 8 }}>
+                  <Text style={{ color: colors.textMuted, fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5, marginBottom: 6 }}>
+                    WHAT TO DO
+                  </Text>
+                  {aiInsight.actions.map((a, i) => (
+                    <View key={i} style={{ flexDirection: "row", alignItems: "flex-start", gap: 7, marginBottom: 5 }}>
+                      <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: AI_PURPLE + "25", alignItems: "center", justifyContent: "center", marginTop: 1 }}>
+                        <Text style={{ color: AI_PURPLE, fontSize: 9, fontFamily: "Inter_700Bold" }}>{i + 1}</Text>
+                      </View>
+                      <Text style={{ color: colors.text, fontSize: 12, lineHeight: 17, flex: 1 }}>{a}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {aiInsight.filters.length > 0 && (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                  {aiInsight.filters.map((f, i) => (
+                    <TouchableOpacity
+                      key={i}
+                      style={{ backgroundColor: AI_TEAL + "20", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, flexDirection: "row", alignItems: "center", gap: 4 }}
+                      onPress={() => { setQuery(f); onChangeQuery(f); }}
+                    >
+                      <Ionicons name="filter-outline" size={9} color={AI_TEAL} />
+                      <Text style={{ color: AI_TEAL, fontSize: 11, fontFamily: "Inter_500Medium" }}>{f}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {aiInsight.suggestions.length > 0 && (
+                <>
+                  <Text style={{ color: colors.textMuted, fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5, marginBottom: 6 }}>
+                    TRY ALSO
+                  </Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                    {aiInsight.suggestions.map((s, i) => (
+                      <TouchableOpacity
+                        key={i}
+                        style={{ backgroundColor: AI_PURPLE + "1A", borderColor: AI_PURPLE + "35", borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}
+                        onPress={() => { setQuery(s); onChangeQuery(s); }}
+                      >
+                        <Text style={{ color: AI_PURPLE, fontSize: 11, fontFamily: "Inter_500Medium" }}>{s}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
             </>
           )}
         </LinearGradient>

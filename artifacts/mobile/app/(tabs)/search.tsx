@@ -96,7 +96,7 @@ type EventResult   = { id:string; title:string; description:string|null; emoji:s
 type GiftResult    = { id:string; name:string; emoji:string; base_xp_cost:number; rarity:string; description:string|null };
 type MarketResult  = { id:string; kind:"product"|"freelance"|"community"; title:string; desc:string|null; emoji:string|null; image_url:string|null; price:number; badge:string|null; seller_name:string; route:string };
 type JobResult     = { id:string; title:string; job_type:string|null; location:string|null; description:string|null; apply_url:string|null; created_at:string; company_name:string; company_logo:string|null; company_slug:string|null };
-type AiInsight     = { summary:string; suggestions:string[]; intent:string; bestCategory:string; keyTerms:string[]; explanation:string };
+type AiInsight     = { summary:string; suggestions:string[]; intent:string; bestCategory:string; keyTerms:string[]; explanation:string; actions:string[] };
 
 type AllResults = {
   people:   (PersonResult|OrgPageResult)[];
@@ -192,18 +192,18 @@ Given the search query, reason about what the user truly wants on AfuChat, then 
   "bestCategory": "one of: people | posts | videos | channels | events | gifts | market | jobs | all",
   "keyTerms": ["2-5 core extracted search keywords most relevant to finding results"],
   "suggestions": ["a more specific version of this search", "a related search the user might also want", "a broader or alternative angle on the same need"],
-  "explanation": "one concrete sentence naming the best category and why — e.g. which feature of that category makes it the right fit"
+  "explanation": "one concrete sentence naming the best category and why",
+  "actions": ["Specific action the user should take right now (e.g. 'Switch to Videos tab and filter by newest')", "Second concrete step (e.g. 'Follow this creator to get their updates')", "Third practical step (e.g. 'Search within Market for freelance listings on this topic')"]
 }
+
+Actions must be specific, tied to AfuChat features, and immediately useful — not generic. Use AfuChat-specific vocabulary: tabs (People, Posts, Videos, Channels, Events, Market, Jobs, Gifts), features (follow, DM, subscribe, boost, ACoins, XP, AfuAI), and actions (join group, subscribe to channel, apply to job, buy in market, attend event).
 
 ## EXAMPLES
 Query: "graphic designer Nigeria"
-→ intent: "person", bestCategory: "people", summary: "The user is looking for a graphic designer based in Nigeria, likely to hire or collaborate with. On AfuChat, many creative professionals list their country and skills in their bio and offer freelance services. They may also find relevant freelance listings in the Market.", keyTerms: ["graphic design", "designer", "Nigeria", "creative"], suggestions: ["freelance graphic designer Lagos", "logo designer Nigeria", "creative designer portfolio"], explanation: "People is best because designers with country=Nigeria will appear there; the Market tab also has freelance design services."
-
-Query: "afuai how to use"
-→ intent: "topic", bestCategory: "posts", summary: "The user wants to learn how to use AfuAI, the built-in AI chatbot on AfuChat. They are likely a new user exploring the platform's AI features. Posts and videos from the community explaining AfuAI usage will be most helpful.", keyTerms: ["AfuAI", "AI chatbot", "how to use", "AfuChat AI"], suggestions: ["AfuAI tips", "AfuChat AI features", "how to chat with AI on AfuChat"], explanation: "Posts and videos contain tutorials and community explanations about AfuAI; the AI itself is accessible via the chat section."
+→ intent: "person", bestCategory: "people", summary: "The user is looking for a graphic designer based in Nigeria, likely to hire or collaborate with.", keyTerms: ["graphic design", "designer", "Nigeria"], suggestions: ["freelance graphic designer Lagos", "logo designer Nigeria"], explanation: "People tab shows designers with country=Nigeria in their bio.", actions: ["Go to the People tab and filter by country 'Nigeria'", "Check the Market tab — Freelance section — for design service listings", "Message a designer directly to discuss your project"]
 
 Query: "coding bootcamp"
-→ intent: "event", bestCategory: "events", summary: "The user is searching for a coding bootcamp — a structured, intensive learning programme. AfuChat hosts educational events, workshops, and training sessions in its Events section, often around tech and education. Channels run by tech communities and posts about bootcamp opportunities are also relevant.", keyTerms: ["coding", "bootcamp", "programming", "tech training"], suggestions: ["software development workshop", "tech event Lagos", "web development course"], explanation: "Events is the best category as bootcamps are time-bound structured programmes typically listed there."`,
+→ intent: "event", bestCategory: "events", summary: "The user is looking for a coding bootcamp — a structured tech training programme.", keyTerms: ["coding", "bootcamp", "programming"], suggestions: ["software development workshop", "web development course"], explanation: "Events tab lists time-bound educational programmes like bootcamps.", actions: ["Open the Events tab and filter by 'Education' or 'Tech' category", "Subscribe to tech channels for bootcamp announcements", "Search Market > Communities for paid coding study groups"]`,
           },
           { role: "user", content: `Search query: "${query}"` },
         ],
@@ -222,6 +222,7 @@ Query: "coding bootcamp"
       keyTerms: Array.isArray(parsed.keyTerms) ? parsed.keyTerms : [],
       suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
       explanation: parsed.explanation || "",
+      actions: Array.isArray(parsed.actions) ? parsed.actions : [],
     } as AiInsight;
   } catch {
     return null;
@@ -319,6 +320,7 @@ export default function SearchScreen() {
 
   const [aiInsight, setAiInsight] = useState<AiInsight | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [insightExpanded, setInsightExpanded] = useState(false);
 
   useEffect(() => {
     if (incomingTag && incomingTag !== handledTagRef.current) {
@@ -1102,67 +1104,98 @@ export default function SearchScreen() {
           colors={isDark ? [PURPLE + "28", PURPLE + "0C"] : [PURPLE + "16", PURPLE + "06"]}
           style={[ss.aiCard, { borderColor: PURPLE + "35" }]}
         >
-          {/* Header row */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          {/* Collapsed header — always visible, tap to expand */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => setInsightExpanded(v => !v)}
+            style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+          >
             <LinearGradient colors={[PURPLE, "#A855F7"]} style={{ width: 30, height: 30, borderRadius: 9, alignItems: "center", justifyContent: "center" }}>
               <Ionicons name="sparkles" size={15} color="#fff" />
             </LinearGradient>
             <View style={{ flex: 1 }}>
               <Text style={{ color: PURPLE, fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.9 }}>AI SEARCH INSIGHT</Text>
+              {!insightExpanded && (
+                <Text style={{ color: colors.textSecondary, fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 }} numberOfLines={1}>
+                  {aiInsight.summary}
+                </Text>
+              )}
             </View>
-            {/* Intent + best category badges */}
-            <View style={{ flexDirection: "row", gap: 5 }}>
+            {!insightExpanded && (
               <View style={{ backgroundColor: PURPLE + "20", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, flexDirection: "row", alignItems: "center", gap: 3 }}>
                 <Ionicons name={intentIcon} size={10} color={PURPLE} />
-                <Text style={{ color: PURPLE, fontSize: 10, fontFamily: "Inter_600SemiBold" }}>{aiInsight.intent}</Text>
+                <Text style={{ color: PURPLE, fontSize: 10, fontFamily: "Inter_600SemiBold" }}>{catLabel}</Text>
               </View>
-            </View>
-          </View>
+            )}
+            <Ionicons name={insightExpanded ? "chevron-up" : "chevron-down"} size={15} color={PURPLE} />
+          </TouchableOpacity>
 
-          {/* Summary */}
-          <Text style={{ color: colors.text, fontSize: 13, lineHeight: 19, marginBottom: 10 }}>{aiInsight.summary}</Text>
-
-          {/* Best category recommendation */}
-          {aiInsight.explanation ? (
-            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, backgroundColor: PURPLE + "12", borderRadius: 8, padding: 8, marginBottom: 10 }}>
-              <Ionicons name="bulb-outline" size={13} color={PURPLE} style={{ marginTop: 1 }} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: PURPLE, fontSize: 10, fontFamily: "Inter_700Bold", marginBottom: 2 }}>
-                  Best results in: <Text style={{ color: colors.text }}>{catLabel}</Text>
-                </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 11, lineHeight: 16 }}>{aiInsight.explanation}</Text>
-              </View>
-            </View>
-          ) : null}
-
-          {/* Key terms */}
-          {aiInsight.keyTerms.length > 0 && (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>
-              {aiInsight.keyTerms.map((term, i) => (
-                <TouchableOpacity
-                  key={i}
-                  style={{ backgroundColor: isDark ? "#ffffff14" : "#00000010", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, flexDirection: "row", alignItems: "center", gap: 4 }}
-                  onPress={() => onHistoryPress(term)}
-                >
-                  <Ionicons name="key-outline" size={9} color={colors.textMuted} />
-                  <Text style={{ color: colors.textSecondary, fontSize: 11, fontFamily: "Inter_500Medium" }}>{term}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {/* Suggestions */}
-          {aiInsight.suggestions.length > 0 && (
+          {/* Expanded content */}
+          {insightExpanded && (
             <>
-              <Text style={{ color: colors.textMuted, fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5, marginBottom: 6 }}>TRY THESE SEARCHES</Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}>
-                {aiInsight.suggestions.map((s, i) => (
-                  <TouchableOpacity key={i} style={{ backgroundColor: PURPLE + "1A", borderColor: PURPLE + "30", borderWidth: 1, borderRadius: 20, paddingHorizontal: 11, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 4 }} onPress={() => onHistoryPress(s)}>
-                    <Ionicons name="search-outline" size={10} color={PURPLE} />
-                    <Text style={{ color: PURPLE, fontSize: 12, fontFamily: "Inter_500Medium" }}>{s}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <View style={{ height: 12 }} />
+
+              {/* Summary */}
+              <Text style={{ color: colors.text, fontSize: 13, lineHeight: 19, marginBottom: 10 }}>{aiInsight.summary}</Text>
+
+              {/* Best category */}
+              {aiInsight.explanation ? (
+                <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, backgroundColor: PURPLE + "12", borderRadius: 8, padding: 8, marginBottom: 10 }}>
+                  <Ionicons name="bulb-outline" size={13} color={PURPLE} style={{ marginTop: 1 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: PURPLE, fontSize: 10, fontFamily: "Inter_700Bold", marginBottom: 2 }}>
+                      Best results in: <Text style={{ color: colors.text }}>{catLabel}</Text>
+                    </Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 11, lineHeight: 16 }}>{aiInsight.explanation}</Text>
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Actionable steps */}
+              {aiInsight.actions && aiInsight.actions.length > 0 && (
+                <View style={{ marginBottom: 10 }}>
+                  <Text style={{ color: colors.textMuted, fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5, marginBottom: 7 }}>WHAT TO DO</Text>
+                  {aiInsight.actions.map((a, i) => (
+                    <View key={i} style={{ flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
+                      <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: PURPLE + "25", alignItems: "center", justifyContent: "center", marginTop: 1 }}>
+                        <Text style={{ color: PURPLE, fontSize: 10, fontFamily: "Inter_700Bold" }}>{i + 1}</Text>
+                      </View>
+                      <Text style={{ color: colors.text, fontSize: 12, lineHeight: 18, flex: 1 }}>{a}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Key terms */}
+              {aiInsight.keyTerms.length > 0 && (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>
+                  {aiInsight.keyTerms.map((term, i) => (
+                    <TouchableOpacity
+                      key={i}
+                      style={{ backgroundColor: isDark ? "#ffffff14" : "#00000010", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, flexDirection: "row", alignItems: "center", gap: 4 }}
+                      onPress={() => onHistoryPress(term)}
+                    >
+                      <Ionicons name="key-outline" size={9} color={colors.textMuted} />
+                      <Text style={{ color: colors.textSecondary, fontSize: 11, fontFamily: "Inter_500Medium" }}>{term}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* Suggestions */}
+              {aiInsight.suggestions.length > 0 && (
+                <>
+                  <Text style={{ color: colors.textMuted, fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5, marginBottom: 6 }}>TRY THESE SEARCHES</Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}>
+                    {aiInsight.suggestions.map((s, i) => (
+                      <TouchableOpacity key={i} style={{ backgroundColor: PURPLE + "1A", borderColor: PURPLE + "30", borderWidth: 1, borderRadius: 20, paddingHorizontal: 11, paddingVertical: 5, flexDirection: "row", alignItems: "center", gap: 4 }} onPress={() => onHistoryPress(s)}>
+                        <Ionicons name="search-outline" size={10} color={PURPLE} />
+                        <Text style={{ color: PURPLE, fontSize: 12, fontFamily: "Inter_500Medium" }}>{s}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
             </>
           )}
         </LinearGradient>
