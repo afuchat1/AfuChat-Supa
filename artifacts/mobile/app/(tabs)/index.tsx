@@ -578,7 +578,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
   const searchExpandedRef  = useRef(false);
   const searchBarAnim      = useRef(new Animated.Value(0)).current;
   const searchOpacityAnim  = useRef(new Animated.Value(0)).current;
-  const searchInputRef     = useRef<TextInput>(null);
+  const searchInputRef     = useRef<{ blur: () => void } | null>(null);
   const pullRevealFiredRef  = useRef(false);
 
   const expandSearch = useCallback(() => {
@@ -587,7 +587,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
     Animated.parallel([
       Animated.spring(searchBarAnim,     { toValue: 1, useNativeDriver: false, speed: 22, bounciness: 5 }),
       Animated.timing(searchOpacityAnim, { toValue: 1, duration: 160, useNativeDriver: false }),
-    ]).start(() => { searchInputRef.current?.focus(); });
+    ]).start();
   }, [searchBarAnim, searchOpacityAnim]);
 
   const collapseSearch = useCallback((clearText = true) => {
@@ -1310,34 +1310,38 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
               { backgroundColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.06)", borderWidth: StyleSheet.hairlineWidth, borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)" },
             ]}>
               <Ionicons name="search-outline" size={19} color={colors.textMuted} />
-              <TextInput
-                ref={searchInputRef}
-                style={[styles.searchInput, { color: colors.text }]}
-                placeholder="Search conversations…"
-                placeholderTextColor={colors.textMuted}
-                value={search}
-                onChangeText={setSearch}
-                returnKeyType="search"
-                onSubmitEditing={() => { if (!search) collapseSearch(); }}
-              />
-              {search.length > 0 ? (
-                <Pressable onPress={() => setSearch("")} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-                  <View style={[styles.clearBtn, { backgroundColor: colors.textMuted + "28" }]}>
-                    <Ionicons name="close" size={13} color={colors.textMuted} />
-                  </View>
-                </Pressable>
-              ) : (
-                <TouchableOpacity onPress={() => router.push("/ai" as any)} activeOpacity={0.75} style={styles.aiBtn}>
-                  <LinearGradient
-                    colors={["#7B61FF", "#00C2CB"]}
-                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                    style={styles.aiBtnGrad}
-                  >
-                    <Ionicons name="flash" size={11} color="#fff" />
-                    <Text style={styles.aiBtnText}>AI</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity
+                style={{ flex: 1 }}
+                onPress={() => {
+                  collapseSearch(false);
+                  router.push("/chat-search" as any);
+                }}
+                activeOpacity={1}
+              >
+                <Text
+                  style={[styles.searchInput, { color: colors.textMuted, lineHeight: 40, marginTop: 0 }]}
+                  numberOfLines={1}
+                >
+                  {search || "Search conversations…"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  collapseSearch(false);
+                  router.push(("/chat-search?ai=true") as any);
+                }}
+                activeOpacity={0.75}
+                style={styles.aiBtn}
+              >
+                <LinearGradient
+                  colors={["#7B61FF", "#00C2CB"]}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                  style={styles.aiBtnGrad}
+                >
+                  <Ionicons name="sparkles" size={11} color="#fff" />
+                  <Text style={styles.aiBtnText}>AI</Text>
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
           </View>
         </Animated.View>

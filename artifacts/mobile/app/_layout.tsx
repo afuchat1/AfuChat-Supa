@@ -106,6 +106,7 @@ function RootLayoutNav() {
       <Stack.Screen name="support/ticket/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding/index" options={{ animation: "fade", gestureEnabled: false }} />
       <Stack.Screen name="qr-scanner" options={{ headerShown: false, animation: "slide_from_bottom" }} />
+      <Stack.Screen name="chat-search" options={{ headerShown: false, animation: "slide_from_bottom" }} />
       <Stack.Screen name="terms" options={bottomSheetAnim} />
       <Stack.Screen name="privacy" options={bottomSheetAnim} />
       <Stack.Screen name="chat/[id]" options={{ animation: Platform.OS === "web" ? "none" : "slide_from_right" }} />
