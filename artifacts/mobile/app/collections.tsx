@@ -22,6 +22,7 @@ import { ComingSoonView } from "@/components/ui/ComingSoonView";
 import { ListRowSkeleton, PostSkeleton } from "@/components/ui/Skeleton";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "@/lib/haptics";
+import { storage, KEYS } from "@/lib/storage";
 
 type Collection = {
   id: string;
@@ -355,11 +356,25 @@ export default function CollectionsScreen() {
 
   async function setPrimaryHandle(handle: string) {
     if (!user) return;
+    const storedMs = storage.getString(KEYS.HANDLE_CHANGED_AT_PREFIX + user.id);
+    if (storedMs) {
+      const elapsed   = Date.now() - parseInt(storedMs, 10);
+      const remaining = 30 * 24 * 60 * 60 * 1000 - elapsed;
+      if (remaining > 0) {
+        const daysLeft = Math.ceil(remaining / (24 * 60 * 60 * 1000));
+        showAlert(
+          "Username Locked",
+          `You can change your username again in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}.`
+        );
+        return;
+      }
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const { error } = await supabase.from("profiles").update({ handle }).eq("id", user.id);
     if (error) { showAlert("Error", error.message); return; }
     await supabase.from("owned_usernames").update({ is_primary: false }).eq("owner_id", user.id);
     await supabase.from("owned_usernames").upsert({ handle, owner_id: user.id, is_primary: true }, { onConflict: "handle" });
+    storage.setString(KEYS.HANDLE_CHANGED_AT_PREFIX + user.id, Date.now().toString());
     showAlert("Primary Handle Updated", `Your profile now shows @${handle}.`);
     loadOwnedUsernames();
   }

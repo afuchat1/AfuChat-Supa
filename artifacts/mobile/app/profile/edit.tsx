@@ -26,6 +26,18 @@ import { Avatar } from "@/components/ui/Avatar";
 import { showAlert } from "@/lib/alert";
 import { aiGenerateBio } from "@/lib/aiHelper";
 import { COUNTRIES, type Country } from "@/constants/countries";
+import { storage, KEYS } from "@/lib/storage";
+
+// ─── Cooldown helpers ─────────────────────────────────────────────────────────
+const HANDLE_COOLDOWN_DAYS = 30;
+const NAME_COOLDOWN_DAYS   = 7;
+
+function getDaysRemaining(storedMs: string | undefined, cooldownDays: number): number {
+  if (!storedMs) return 0;
+  const elapsed  = Date.now() - parseInt(storedMs, 10);
+  const remaining = cooldownDays * 24 * 60 * 60 * 1000 - elapsed;
+  return remaining > 0 ? Math.ceil(remaining / (24 * 60 * 60 * 1000)) : 0;
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const INTERESTS = [
@@ -150,6 +162,14 @@ export default function EditProfileScreen() {
   const [handleStatus, setHandleStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid_format" | "own">("own");
   const handleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Cooldown — read once synchronously from MMKV (synchronous store)
+  const [handleLockedDays] = useState(() =>
+    getDaysRemaining(storage.getString(KEYS.HANDLE_CHANGED_AT_PREFIX + (user?.id ?? "")), HANDLE_COOLDOWN_DAYS)
+  );
+  const [nameLockedDays] = useState(() =>
+    getDaysRemaining(storage.getString(KEYS.NAME_CHANGED_AT_PREFIX + (user?.id ?? "")), NAME_COOLDOWN_DAYS)
+  );
+
   // Loading
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -223,6 +243,25 @@ export default function EditProfileScreen() {
     if (handleStatus === "taken" || handleStatus === "invalid_format") {
       showAlert("Invalid handle", "Please fix your handle before saving."); return;
     }
+
+    const nameChanged   = displayName.trim() !== profile?.display_name;
+    const handleChanged = handle.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_") !== profile?.handle;
+
+    if (nameChanged && nameLockedDays > 0) {
+      showAlert(
+        "Name Locked",
+        `You can change your display name again in ${nameLockedDays} day${nameLockedDays !== 1 ? "s" : ""}.`
+      );
+      return;
+    }
+    if (handleChanged && handleLockedDays > 0) {
+      showAlert(
+        "Username Locked",
+        `You can change your username again in ${handleLockedDays} day${handleLockedDays !== 1 ? "s" : ""}.`
+      );
+      return;
+    }
+
     setSaving(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
@@ -263,6 +302,8 @@ export default function EditProfileScreen() {
     if (error) {
       showAlert("Error", error.message);
     } else {
+      if (nameChanged)   storage.setString(KEYS.NAME_CHANGED_AT_PREFIX   + user!.id, Date.now().toString());
+      if (handleChanged) storage.setString(KEYS.HANDLE_CHANGED_AT_PREFIX + user!.id, Date.now().toString());
       patchProfile(updateData);
       router.back();
     }
@@ -386,21 +427,32 @@ export default function EditProfileScreen() {
         {/* ── Identity ── */}
         <SectionCard title="IDENTITY" icon="person-outline" colors={colors}>
           <FieldRow label="Name" colors={colors}>
-            <TextInput
-              style={[styles.fieldInput, { color: colors.text }]}
-              value={displayName}
-              onChangeText={setDisplayName}
-              placeholder="Your display name"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="words"
-              returnKeyType="next"
-            />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <TextInput
+                style={[styles.fieldInput, { color: nameLockedDays > 0 ? colors.textMuted : colors.text, flex: 1 }]}
+                value={displayName}
+                onChangeText={setDisplayName}
+                placeholder="Your display name"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="words"
+                returnKeyType="next"
+                editable={nameLockedDays === 0}
+              />
+              {nameLockedDays > 0 && (
+                <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
+              )}
+            </View>
+            {nameLockedDays > 0 && (
+              <Text style={[styles.handleHint, { color: colors.textMuted }]}>
+                Can change in {nameLockedDays} day{nameLockedDays !== 1 ? "s" : ""} · changes every {NAME_COOLDOWN_DAYS} days
+              </Text>
+            )}
           </FieldRow>
           <FieldRow label="Handle" noBorder colors={colors}>
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               <Text style={[styles.handleAt, { color: colors.textMuted }]}>@</Text>
               <TextInput
-                style={[styles.fieldInput, { color: colors.text, flex: 1 }]}
+                style={[styles.fieldInput, { color: handleLockedDays > 0 ? colors.textMuted : colors.text, flex: 1 }]}
                 value={handle}
                 onChangeText={setHandle}
                 placeholder="your_handle"
@@ -408,16 +460,25 @@ export default function EditProfileScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 returnKeyType="next"
+                editable={handleLockedDays === 0}
               />
-              <HandleStatus status={handleStatus} colors={colors} accent={accent} />
+              {handleLockedDays > 0
+                ? <Ionicons name="lock-closed" size={14} color={colors.textMuted} style={{ marginLeft: 6 }} />
+                : <HandleStatus status={handleStatus} colors={colors} accent={accent} />
+              }
             </View>
-            {handleStatus === "taken" && (
+            {handleLockedDays > 0 && (
+              <Text style={[styles.handleHint, { color: colors.textMuted }]}>
+                Can change in {handleLockedDays} day{handleLockedDays !== 1 ? "s" : ""} · changes every {HANDLE_COOLDOWN_DAYS} days
+              </Text>
+            )}
+            {handleLockedDays === 0 && handleStatus === "taken" && (
               <Text style={[styles.handleHint, { color: "#FF3B30" }]}>That handle is already taken — try another.</Text>
             )}
-            {handleStatus === "invalid_format" && (
+            {handleLockedDays === 0 && handleStatus === "invalid_format" && (
               <Text style={[styles.handleHint, { color: "#FF9F0A" }]}>Only letters, numbers and underscores, minimum 3 characters.</Text>
             )}
-            {handleStatus === "available" && (
+            {handleLockedDays === 0 && handleStatus === "available" && (
               <Text style={[styles.handleHint, { color: "#34C759" }]}>@{handle.trim().toLowerCase()} is available!</Text>
             )}
           </FieldRow>

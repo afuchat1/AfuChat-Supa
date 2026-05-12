@@ -172,4 +172,6 @@ export const KEYS = {
   SEARCH_HISTORY: "search_history",
   INTERESTS: "user_interests",
   LANGUAGE: "app_language",
+  HANDLE_CHANGED_AT_PREFIX: "handle_changed_at_",
+  NAME_CHANGED_AT_PREFIX: "name_changed_at_",
 } as const;
