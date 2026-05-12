@@ -29,6 +29,7 @@ import { useAppAccent } from "@/context/AppAccentContext";
 import { showAlert } from "@/lib/alert";
 import { GoogleLogo, GitHubLogo, XLogo, GitLabLogo } from "@/components/ui/OAuthLogos";
 import { googleSignIn } from "@/lib/googleAuth";
+import SupportReportModal from "@/components/ui/SupportReportModal";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -194,6 +195,7 @@ export default function RegisterScreen() {
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
   const oauthHandledRef = useRef(false);
   const [verifyVisible, setVerifyVisible] = useState(false);
+  const [supportModalVisible, setSupportModalVisible] = useState(false);
   const [signupEmail, setSignupEmail] = useState("");
   const [signupUserId, setSignupUserId] = useState<string | null>(null);
   const pwdRef = useRef<TextInput>(null);
@@ -313,6 +315,18 @@ export default function RegisterScreen() {
           <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: accent }}>{" "}Sign in</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Support link */}
+      <TouchableOpacity
+        onPress={() => setSupportModalVisible(true)}
+        style={formSt.supportLink}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="help-buoy-outline" size={14} color={colors.textMuted} />
+        <Text style={[formSt.supportLinkText, { color: colors.textMuted }]}>
+          Need help creating your account? Contact support
+        </Text>
+      </TouchableOpacity>
     </>
   );
 
@@ -336,6 +350,11 @@ export default function RegisterScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
       <VerifyEmailModal visible={verifyVisible} onClose={() => setVerifyVisible(false)} email={signupEmail} onVerified={onVerified} colors={colors} isDark={isDark} />
+      <SupportReportModal
+        visible={supportModalVisible}
+        onClose={() => setSupportModalVisible(false)}
+        context="Register Page"
+      />
     </View>
   );
 }
@@ -345,6 +364,8 @@ const formSt = StyleSheet.create({
   primaryBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold", letterSpacing: 0.1 },
   switchRow: { flexDirection: "row", justifyContent: "center", flexWrap: "wrap" },
   switchText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  supportLink: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 4 },
+  supportLinkText: { fontSize: 12, fontFamily: "Inter_400Regular" },
 });
 
 const mobBackSt = StyleSheet.create({

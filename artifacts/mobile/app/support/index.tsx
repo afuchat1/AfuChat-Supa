@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -14,12 +15,32 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import * as Device from "expo-device";
+import Constants from "expo-constants";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import { showAlert } from "@/lib/alert";
+
+function buildDeviceInfo(): string {
+  const { width, height } = Dimensions.get("window");
+  const appVersion =
+    Constants.expoConfig?.version ||
+    (Constants as any).manifest?.version ||
+    "unknown";
+  return [
+    `Platform: ${Platform.OS === "ios" ? "iOS" : Platform.OS === "android" ? "Android" : "Web"}`,
+    `OS Version: ${Device.osVersion || "unknown"}`,
+    `Device Model: ${Device.modelName || "unknown"}`,
+    `Device Brand: ${(Device as any).brand || "unknown"}`,
+    `Device Type: ${Device.deviceType === 1 ? "Phone" : Device.deviceType === 2 ? "Tablet" : "Other"}`,
+    `Screen: ${Math.round(width)} × ${Math.round(height)}`,
+    `App Version: ${appVersion}`,
+    `Expo SDK: ${Constants.expoConfig?.sdkVersion || (Constants as any).manifest?.sdkVersion || "unknown"}`,
+  ].join("\n");
+}
 
 const BRAND_FALLBACK = Colors.brand;
 
@@ -68,6 +89,9 @@ export default function SupportCenter() {
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [email, setEmail] = useState(user?.email || "");
+  const [includeDeviceInfo, setIncludeDeviceInfo] = useState(true);
+  const [showDevicePreview, setShowDevicePreview] = useState(false);
+  const deviceInfo = useMemo(() => buildDeviceInfo(), []);
 
   const fetchTickets = useCallback(async () => {
     if (!user) return;
@@ -94,6 +118,10 @@ export default function SupportCenter() {
 
     setSubmitting(true);
     try {
+      const fullMessage = includeDeviceInfo
+        ? `${message.trim()}\n\n── Device Info ──────────────────\n${deviceInfo}`
+        : message.trim();
+
       const { data: ticket, error } = await supabase
         .from("support_tickets")
         .insert({
@@ -113,7 +141,7 @@ export default function SupportCenter() {
         ticket_id: ticket.id,
         sender_id: user.id,
         sender_type: "user",
-        message: message.trim(),
+        message: fullMessage,
       });
 
       setSubject(""); setMessage(""); setCategory("");
@@ -294,6 +322,76 @@ export default function SupportCenter() {
               numberOfLines={6}
               textAlignVertical="top"
             />
+
+            {/* Device info toggle */}
+            <Text style={[st.formLabel, { color: colors.textMuted }]}>DEVICE DIAGNOSTICS</Text>
+            <TouchableOpacity
+              style={[
+                st.deviceToggle,
+                {
+                  borderColor: includeDeviceInfo ? BRAND + "55" : colors.border,
+                  backgroundColor: includeDeviceInfo ? BRAND + "08" : colors.surface,
+                },
+              ]}
+              onPress={() => setIncludeDeviceInfo(v => !v)}
+              activeOpacity={0.75}
+            >
+              <View style={[st.deviceToggleIcon, { backgroundColor: includeDeviceInfo ? BRAND + "18" : colors.backgroundSecondary || colors.border + "40" }]}>
+                <Ionicons
+                  name="phone-portrait-outline"
+                  size={16}
+                  color={includeDeviceInfo ? BRAND : colors.textMuted}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[st.deviceToggleTitle, { color: colors.text }]}>
+                  Attach device info
+                </Text>
+                <Text style={[st.deviceToggleSub, { color: colors.textMuted }]}>
+                  Helps us tell if it's a device-specific bug
+                </Text>
+              </View>
+              <View style={[
+                st.togglePill,
+                { backgroundColor: includeDeviceInfo ? BRAND : colors.border },
+              ]}>
+                <View style={[
+                  st.toggleKnob,
+                  { transform: [{ translateX: includeDeviceInfo ? 18 : 0 }] },
+                ]} />
+              </View>
+            </TouchableOpacity>
+
+            {/* Device info preview expand */}
+            {includeDeviceInfo && (
+              <TouchableOpacity
+                style={[st.devicePreviewToggle, { borderColor: colors.border }]}
+                onPress={() => setShowDevicePreview(v => !v)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name={showDevicePreview ? "eye-off-outline" : "eye-outline"} size={13} color={colors.textMuted} />
+                <Text style={[st.devicePreviewToggleText, { color: colors.textMuted }]}>
+                  {showDevicePreview ? "Hide device details" : "Preview what will be attached"}
+                </Text>
+                <Ionicons name={showDevicePreview ? "chevron-up" : "chevron-down"} size={13} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+
+            {includeDeviceInfo && showDevicePreview && (
+              <View style={[st.deviceInfoBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                {deviceInfo.split("\n").map((line, i) => {
+                  const colonIdx = line.indexOf(": ");
+                  const key = colonIdx >= 0 ? line.slice(0, colonIdx) : line;
+                  const val = colonIdx >= 0 ? line.slice(colonIdx + 2) : "";
+                  return (
+                    <View key={i} style={st.deviceInfoRow}>
+                      <Text style={[st.deviceInfoKey, { color: colors.textMuted }]}>{key}</Text>
+                      <Text style={[st.deviceInfoVal, { color: colors.text }]}>{val}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
           </ScrollView>
 
           <View style={[st.submitBar, { borderTopColor: colors.border, paddingBottom: insets.bottom + 16, backgroundColor: colors.background }]}>
@@ -482,4 +580,40 @@ const st = StyleSheet.create({
   ticketMeta: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
   ticketMetaText: { fontSize: 12, fontFamily: "Inter_400Regular", textTransform: "capitalize" },
   ticketDot: { fontSize: 12 },
+
+  deviceToggle: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    borderRadius: 14, borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14, paddingVertical: 13, marginBottom: 8,
+  },
+  deviceToggleIcon: {
+    width: 36, height: 36, borderRadius: 10,
+    alignItems: "center", justifyContent: "center",
+  },
+  deviceToggleTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  deviceToggleSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
+  togglePill: {
+    width: 42, height: 24, borderRadius: 12,
+    justifyContent: "center", paddingHorizontal: 3,
+  },
+  toggleKnob: {
+    width: 18, height: 18, borderRadius: 9,
+    backgroundColor: "#fff",
+  },
+
+  devicePreviewToggle: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    borderRadius: 8, borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12, paddingVertical: 8, marginBottom: 8,
+    alignSelf: "flex-start",
+  },
+  devicePreviewToggleText: { fontSize: 12, fontFamily: "Inter_400Regular" },
+
+  deviceInfoBox: {
+    borderRadius: 12, borderWidth: StyleSheet.hairlineWidth,
+    padding: 14, gap: 6, marginBottom: 16,
+  },
+  deviceInfoRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  deviceInfoKey: { fontSize: 12, fontFamily: "Inter_600SemiBold", width: 110 },
+  deviceInfoVal: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular" },
 });

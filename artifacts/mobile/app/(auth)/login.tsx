@@ -29,6 +29,7 @@ import { useAppAccent } from "@/context/AppAccentContext";
 import { showAlert } from "@/lib/alert";
 import { GoogleLogo, GitHubLogo, XLogo, GitLabLogo } from "@/components/ui/OAuthLogos";
 import { googleSignIn } from "@/lib/googleAuth";
+import SupportReportModal from "@/components/ui/SupportReportModal";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -353,6 +354,7 @@ export default function LoginScreen() {
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
   const [forgotVisible, setForgotVisible] = useState(false);
   const [verifyVisible, setVerifyVisible] = useState(false);
+  const [supportModalVisible, setSupportModalVisible] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState("");
   const oauthHandledRef = useRef(false);
   const pwdRef = useRef<TextInput>(null);
@@ -592,6 +594,18 @@ export default function LoginScreen() {
                   <Text style={[styles.switchLink, { color: accent }]}>Sign up</Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Support link */}
+              <TouchableOpacity
+                onPress={() => setSupportModalVisible(true)}
+                style={styles.supportLink}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="help-buoy-outline" size={14} color={isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.35)"} />
+                <Text style={[styles.supportLinkText, { color: isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.35)" }]}>
+                  Having trouble signing in? Contact support
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         </ScrollView>
@@ -600,6 +614,11 @@ export default function LoginScreen() {
       {/* Modals */}
       <ForgotPasswordModal visible={forgotVisible} onClose={() => setForgotVisible(false)} isDark={isDark} />
       <EmailVerifyModal visible={verifyVisible} email={verifyEmail} onClose={() => setVerifyVisible(false)} onVerified={() => { setVerifyVisible(false); router.replace("/(tabs)"); }} isDark={isDark} />
+      <SupportReportModal
+        visible={supportModalVisible}
+        onClose={() => setSupportModalVisible(false)}
+        context="Login Page"
+      />
     </View>
   );
 }
@@ -636,4 +655,8 @@ const styles = StyleSheet.create({
   switchRow: { flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "center" },
   switchText: { fontSize: 14, fontFamily: "Inter_400Regular" },
   switchLink: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+
+  // support link
+  supportLink: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 4 },
+  supportLinkText: { fontSize: 12, fontFamily: "Inter_400Regular" },
 });
