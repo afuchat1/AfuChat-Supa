@@ -30,7 +30,7 @@ export async function askAi(prompt: string, systemPrompt?: string, options?: Ask
   }
   messages.push({ role: "user", content: prompt });
 
-  const res = await fetch(`${getEdgeFnBase()}/ai-chat`, {
+  const res = await fetch(`${getEdgeFnBase()}/afu-ai-reply`, {
     method: "POST",
     headers: edgeHeaders(),
     body: JSON.stringify({

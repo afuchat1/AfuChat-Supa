@@ -517,6 +517,62 @@ const storyBarStyles = StyleSheet.create({
   name: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 4, textAlign: "center" },
 });
 
+// ─── Compact Story Avatars for Header ────────────────────────────────────────
+function CompactStoryHeader({ userId, colors, onExpand }: { userId: string; colors: any; onExpand: () => void }) {
+  const [previews, setPreviews] = useState<Array<{ id: string; avatarUrl: string | null; displayName: string; hasUnseen: boolean }>>([]);
+
+  useEffect(() => {
+    const now = new Date().toISOString();
+    supabase.from("stories")
+      .select("user_id, profiles!stories_user_id_fkey(display_name, avatar_url)")
+      .gt("expires_at", now)
+      .order("created_at", { ascending: false })
+      .limit(30)
+      .then(({ data }) => {
+        if (!data?.length) { setPreviews([]); return; }
+        const seen = new Set<string>();
+        const list: Array<{ id: string; avatarUrl: string | null; displayName: string; hasUnseen: boolean }> = [];
+        for (const s of data as any[]) {
+          if (seen.has(s.user_id)) continue;
+          seen.add(s.user_id);
+          list.push({
+            id: s.user_id,
+            avatarUrl: s.profiles?.avatar_url || null,
+            displayName: s.profiles?.display_name || "User",
+            hasUnseen: s.user_id !== userId,
+          });
+          if (list.length >= 3) break;
+        }
+        setPreviews(list);
+      });
+  }, [userId]);
+
+  if (previews.length === 0) return null;
+
+  return (
+    <TouchableOpacity onPress={onExpand} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 2 }} activeOpacity={0.75}>
+      {previews.map((p, i) => (
+        <View
+          key={p.id}
+          style={{
+            marginLeft: i === 0 ? 0 : -9,
+            zIndex: 3 - i,
+            width: 32, height: 32, borderRadius: 16,
+            borderWidth: 2,
+            borderColor: colors.background,
+            overflow: "hidden",
+          }}
+        >
+          <Avatar uri={p.avatarUrl} name={p.displayName} size={28} />
+          {p.hasUnseen && (
+            <View style={{ position: "absolute", bottom: 0, right: 0, width: 9, height: 9, borderRadius: 5, backgroundColor: "#00BCD4", borderWidth: 1.5, borderColor: colors.background }} />
+          )}
+        </View>
+      ))}
+    </TouchableOpacity>
+  );
+}
+
 type ChatTabKey = "all" | "unread" | "personal" | "groups" | "channels";
 
 /**
@@ -573,57 +629,47 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
   const lastScrollY = useRef(0);
   const fabHidden   = useRef(false);
 
-  // ── Collapsible search bar ───────────────────────────────────────────────
-  const [searchExpanded, setSearchExpanded] = useState(false);
-  const searchExpandedRef  = useRef(false);
-  const searchBarAnim      = useRef(new Animated.Value(0)).current;
-  const searchOpacityAnim  = useRef(new Animated.Value(0)).current;
-  const searchInputRef     = useRef<{ blur: () => void } | null>(null);
+  // ── Collapsible stories bar (hard pull-down to reveal) ──────────────────
+  const [storiesExpanded, setStoriesExpanded] = useState(false);
+  const storiesExpandedRef = useRef(false);
+  const storiesHeightAnim  = useRef(new Animated.Value(0)).current;
   const pullRevealFiredRef  = useRef(false);
 
-  const expandSearch = useCallback(() => {
-    searchExpandedRef.current = true;
-    setSearchExpanded(true);
-    Animated.parallel([
-      Animated.spring(searchBarAnim,     { toValue: 1, useNativeDriver: false, speed: 22, bounciness: 5 }),
-      Animated.timing(searchOpacityAnim, { toValue: 1, duration: 160, useNativeDriver: false }),
-    ]).start();
-  }, [searchBarAnim, searchOpacityAnim]);
+  const expandStories = useCallback(() => {
+    if (storiesExpandedRef.current) return;
+    storiesExpandedRef.current = true;
+    setStoriesExpanded(true);
+    Animated.spring(storiesHeightAnim, { toValue: 1, useNativeDriver: false, speed: 18, bounciness: 4 }).start();
+  }, [storiesHeightAnim]);
 
-  const collapseSearch = useCallback((clearText = true) => {
-    searchInputRef.current?.blur();
-    Animated.parallel([
-      Animated.spring(searchBarAnim,     { toValue: 0, useNativeDriver: false, speed: 22, bounciness: 0 }),
-      Animated.timing(searchOpacityAnim, { toValue: 0, duration: 120, useNativeDriver: false }),
-    ]).start(() => {
-      searchExpandedRef.current = false;
-      setSearchExpanded(false);
-      if (clearText) setSearch("");
+  const collapseStories = useCallback(() => {
+    Animated.spring(storiesHeightAnim, { toValue: 0, useNativeDriver: false, speed: 24, bounciness: 0 }).start(() => {
+      storiesExpandedRef.current = false;
+      setStoriesExpanded(false);
     });
-  }, [searchBarAnim, searchOpacityAnim]);
+  }, [storiesHeightAnim]);
 
   const handleFabScroll = useCallback((e: any) => {
     const y  = e.nativeEvent.contentOffset.y;
     const dy = y - lastScrollY.current;
     lastScrollY.current = y;
 
-    // Pull-down past the top → reveal search bar
-    if (y < -28 && !searchExpandedRef.current && !pullRevealFiredRef.current) {
+    // Hard pull-down past threshold → expand stories bar
+    if (y < -50 && !storiesExpandedRef.current && !pullRevealFiredRef.current) {
       pullRevealFiredRef.current = true;
-      expandSearch();
+      expandStories();
     }
     if (y >= 0) pullRevealFiredRef.current = false;
 
     if (dy > 6 && y > 60 && !fabHidden.current) {
       fabHidden.current = true;
       Animated.spring(fabAnim, { toValue: 0, useNativeDriver: true, speed: 24, bounciness: 0 }).start();
-      // Collapse search bar on scroll-down if nothing typed
-      if (searchExpandedRef.current && !search) collapseSearch(false);
+      if (storiesExpandedRef.current) collapseStories();
     } else if (dy < -4 && fabHidden.current) {
       fabHidden.current = false;
       Animated.spring(fabAnim, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 6 }).start();
     }
-  }, [fabAnim, search, expandSearch, collapseSearch]);
+  }, [fabAnim, expandStories, collapseStories]);
 
   const fetchUnreadCount = useCallback(async () => {
     if (!user) return;
@@ -1186,7 +1232,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
         ]}
       >
         <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, zIndex: 0 }]} />
-        {/* Account avatar stack — left side (hidden in select mode, replaced by Cancel) */}
+        {/* Compact story previews — left side (hidden in select mode) */}
         {selectMode ? (
           <TouchableOpacity
             onPress={exitSelectMode}
@@ -1194,75 +1240,16 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
           >
             <Text style={[selStyles.cancelText, { color: colors.accent }]}>Cancel</Text>
           </TouchableOpacity>
-        ) : (() => {
-          const others = linkedAccounts.filter(a => a.userId !== user?.id);
-          const currentFallback = { userId: user?.id || "", displayName: profile?.display_name || "", avatarUrl: profile?.avatar_url || null };
-          const currentStored = linkedAccounts.find(a => a.userId === user?.id);
-          const current = currentStored || currentFallback;
-          // Others first (behind), current last (on top). Max 3 total.
-          const displayList = [...others, current].slice(-3);
-          const extra = linkedAccounts.length > 3 ? linkedAccounts.length - 3 : 0;
-          return (
-            <TouchableOpacity
-              style={styles.accountStack}
-              onPress={() => router.push("/linked-accounts")}
-              activeOpacity={0.75}
-            >
-              {displayList.map((acc, i) => {
-                const isActive = acc.userId === user?.id;
-                const isSwitching = switchingId === acc.userId;
-                return (
-                  <TouchableOpacity
-                    key={acc.userId}
-                    style={[
-                      styles.stackAvatarWrap,
-                      {
-                        marginLeft: i === 0 ? 0 : -10,
-                        zIndex: i + 1,
-                        borderColor: colors.surface,
-                        borderWidth: 1.5,
-                        borderRadius: 18,
-                      },
-                    ]}
-                    onPress={async (e) => {
-                      e.stopPropagation();
-                      if (isActive) {
-                        router.push("/linked-accounts");
-                        return;
-                      }
-                      setSwitchingId(acc.userId);
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                      await switchAccount(acc.userId);
-                      setSwitchingId(null);
-                    }}
-                    activeOpacity={0.75}
-                    disabled={isSwitching}
-                  >
-                    {isSwitching ? (
-                      <View style={[styles.stackAvatar, { backgroundColor: colors.inputBg, alignItems: "center", justifyContent: "center" }]}>
-                        <ActivityIndicator size="small" color={colors.accent} />
-                      </View>
-                    ) : (
-                      <Avatar uri={acc.avatarUrl} name={acc.displayName} size={30} />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-              {extra > 0 && (
-                <View style={[styles.stackAvatarWrap, styles.stackExtra, { marginLeft: -10, backgroundColor: colors.inputBg, borderColor: colors.surface, zIndex: 10 }]}>
-                  <Text style={[styles.stackExtraText, { color: colors.textMuted }]}>+{extra}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          );
-        })()}
+        ) : user ? (
+          <CompactStoryHeader userId={user.id} colors={colors} onExpand={expandStories} />
+        ) : null}
 
         {selectMode ? (
-          <Text style={[styles.headerTitle, { color: colors.text, textAlign: "center", flex: 1 }]}>
+          <Text style={[styles.headerTitle, { color: colors.text, flex: 1, marginLeft: 8 }]}>
             {selectedIds.size > 0 ? `${selectedIds.size} selected` : "Select chats"}
           </Text>
         ) : (
-          <Text style={[styles.headerTitle, { color: colors.text, textAlign: "center", flex: 1 }]}>AfuChat</Text>
+          <Text style={[styles.headerTitle, { color: colors.text, flex: 1, marginLeft: 8 }]}>AfuChat</Text>
         )}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
           {selectMode ? (
@@ -1277,11 +1264,6 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
             </TouchableOpacity>
           ) : (
             <>
-              {!searchExpanded && (
-                <TouchableOpacity onPress={expandSearch} style={styles.headerIcon} hitSlop={{ top: 6, left: 6, bottom: 6, right: 6 }}>
-                  <Ionicons name="search-outline" size={22} color={colors.text} />
-                </TouchableOpacity>
-              )}
               <TouchableOpacity onPress={() => router.push("/notifications")} style={styles.headerIcon}>
                 <Ionicons name="notifications-outline" size={22} color={colors.text} />
                 {unreadNotifCount > 0 && (
@@ -1298,53 +1280,53 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
 
       {!panelMode && !selectMode && <HomeBanner />}
 
-      {!selectMode && (
+      {/* Stories expansion area — slides in on hard pull-down, above search bar */}
+      {!panelMode && !selectMode && (
         <Animated.View style={{
-          height: searchBarAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 60] }),
-          opacity: searchOpacityAnim,
+          height: storiesHeightAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 116] }),
           overflow: "hidden",
         }}>
-          <View style={styles.searchWrap}>
-            <View style={[
-              styles.searchBox,
-              { backgroundColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.06)", borderWidth: StyleSheet.hairlineWidth, borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)" },
-            ]}>
-              <Ionicons name="search-outline" size={19} color={colors.textMuted} />
-              <TouchableOpacity
-                style={{ flex: 1 }}
-                onPress={() => {
-                  collapseSearch(false);
-                  router.push("/chat-search" as any);
-                }}
-                activeOpacity={1}
-              >
-                <Text
-                  style={[styles.searchInput, { color: colors.textMuted, lineHeight: 40, marginTop: 0 }]}
-                  numberOfLines={1}
-                >
-                  {search || "Search conversations…"}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => {
-                  collapseSearch(false);
-                  router.push(("/chat-search?ai=true") as any);
-                }}
-                activeOpacity={0.75}
-                style={styles.aiBtn}
-              >
-                <LinearGradient
-                  colors={["#7B61FF", "#00C2CB"]}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                  style={styles.aiBtnGrad}
-                >
-                  <Ionicons name="sparkles" size={11} color="#fff" />
-                  <Text style={styles.aiBtnText}>AI</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          </View>
+          {storiesExpanded && user && (
+            <StoriesBar userId={user.id} colors={colors} isDesktop={false} />
+          )}
         </Animated.View>
+      )}
+
+      {!selectMode && (
+        <View style={styles.searchWrap}>
+          <View style={[
+            styles.searchBox,
+            { backgroundColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.06)", borderWidth: StyleSheet.hairlineWidth, borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)" },
+          ]}>
+            <Ionicons name="search-outline" size={19} color={colors.textMuted} />
+            <TouchableOpacity
+              style={{ flex: 1 }}
+              onPress={() => router.push("/chat-search" as any)}
+              activeOpacity={1}
+            >
+              <Text
+                style={[styles.searchInput, { color: colors.textMuted, lineHeight: 40, marginTop: 0 }]}
+                numberOfLines={1}
+              >
+                Search conversations…
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push(("/chat-search?ai=true") as any)}
+              activeOpacity={0.75}
+              style={styles.aiBtn}
+            >
+              <LinearGradient
+                colors={["#7B61FF", "#00C2CB"]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                style={styles.aiBtnGrad}
+              >
+                <Ionicons name="sparkles" size={11} color="#fff" />
+                <Text style={styles.aiBtnText}>AI</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
       )}
 
 
@@ -1466,7 +1448,6 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                       ListHeaderComponent={isAll && !search && user ? (
                         <>
                           <StoryUploadBanner colors={colors} />
-                          <StoriesBar userId={user.id} colors={colors} isDesktop={isDesktop} />
                           {chats.length < 8 && <SuggestedUsers compact maxCards={10} />}
                         </>
                       ) : null}
@@ -1539,7 +1520,6 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                 ListHeaderComponent={user && tabFilter === "all" && !search ? (
                   <>
                     <StoryUploadBanner colors={colors} />
-                    <StoriesBar userId={user.id} colors={colors} isDesktop={isDesktop} />
                     {chats.length < 8 && <SuggestedUsers compact maxCards={10} />}
                   </>
                 ) : null}

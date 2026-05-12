@@ -140,7 +140,7 @@ function dateRangeCutoff(range: DateRange): string | null {
 
 async function fetchAiInsight(query: string): Promise<AiInsight | null> {
   try {
-    const res = await fetch(`${getEdgeFnBase()}/ai-chat`, {
+    const res = await fetch(`${getEdgeFnBase()}/afu-ai-reply`, {
       method: "POST",
       headers: edgeHeaders(),
       body: JSON.stringify({

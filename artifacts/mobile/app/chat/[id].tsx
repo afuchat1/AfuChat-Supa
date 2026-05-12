@@ -2504,7 +2504,7 @@ STRICT RULES:
         .map(m => ({ role: m.sender_id === user?.id ? "user" as const : "assistant" as const, content: m.encrypted_content }));
       conversationMessages.push({ role: "user", content: userText.replace(/@afuai/gi, "").trim() || userText });
 
-      const res = await fetch(`${getEdgeFnBase()}/ai-chat`, {
+      const res = await fetch(`${getEdgeFnBase()}/afu-ai-reply`, {
         method: "POST",
         headers: edgeHeaders(),
         body: JSON.stringify({ messages: [{ role: "system", content: systemPrompt }, ...conversationMessages] }),
