@@ -35,8 +35,11 @@
  *   description TEXT,
  *   is_active   BOOLEAN   DEFAULT TRUE,
  *   views       INTEGER   DEFAULT 0,
- *   created_at  TIMESTAMPTZ DEFAULT NOW()
+ *   created_at  TIMESTAMPTZ DEFAULT NOW(),
+ *   sold_to_id  UUID      REFERENCES profiles(id) ON DELETE SET NULL  -- set when purchased; prevents re-listing
  * );
+ * -- Run this if the table already exists:
+ * ALTER TABLE username_listings ADD COLUMN IF NOT EXISTS sold_to_id UUID REFERENCES profiles(id) ON DELETE SET NULL;
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -193,14 +196,28 @@ export default function UsernameMarketScreen() {
 
     const handles: OwnedUsername[] = owned ? [...owned] : [];
 
-    // Also include their primary profile handle if not recorded yet
+    // Include the primary profile handle only if it hasn't been sold to someone else.
+    // If it was sold, the seller keeps using it as their display @handle but loses
+    // marketplace ownership — so we must NOT add it back into the sellable collection.
     if (profile?.handle && !handles.find((h) => h.handle === profile.handle)) {
-      handles.unshift({
-        id: "primary",
-        handle: profile.handle,
-        is_primary: true,
-        acquired_at: (profile as any).created_at || new Date().toISOString(),
-      });
+      const { data: otherOwner } = await supabase
+        .from("owned_usernames")
+        .select("id")
+        .eq("handle", profile.handle)
+        .neq("owner_id", user.id)
+        .maybeSingle();
+
+      if (!otherOwner) {
+        // Nobody else has marketplace ownership — it still belongs to this user
+        handles.unshift({
+          id: "primary",
+          handle: profile.handle,
+          is_primary: true,
+          acquired_at: (profile as any).created_at || new Date().toISOString(),
+        });
+      }
+      // If otherOwner exists the handle was sold; skip adding it so the seller
+      // cannot re-list it. Their profiles.handle is untouched (they still use it).
     }
 
     // Mark which are currently listed for sale
@@ -309,13 +326,17 @@ export default function UsernameMarketScreen() {
               return;
             }
 
-            // 2. Deactivate the listing FIRST (removes it from market immediately)
+            // 2. Deactivate the listing and record who bought it.
+            //    sold_to_id acts as the permanent "sold" marker — it prevents
+            //    anyone (including the buyer) from ever re-listing this handle.
             await supabase
               .from("username_listings")
-              .update({ is_active: false })
+              .update({ is_active: false, sold_to_id: user.id })
               .eq("id", item.id);
 
-            // 3. Transfer ownership: add to buyer, remove from seller
+            // 3. Transfer ownership: upsert buyer's row, delete seller's row.
+            //    If the handle was the seller's profiles.handle, their display
+            //    handle is intentionally left unchanged — they keep using it.
             await supabase.from("owned_usernames").upsert(
               { handle: item.username, owner_id: user.id, is_primary: false },
               { onConflict: "handle" }
@@ -333,7 +354,7 @@ export default function UsernameMarketScreen() {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             showAlert(
               "Username Acquired! 🎉",
-              `@${item.username} is now in your collection. Visit "My Usernames" to manage it or set it as your primary handle.`,
+              `@${item.username} is now permanently in your collection — it cannot be re-sold. Visit "My Usernames" to manage it or set it as your primary handle.`,
               [
                 { text: "My Collection", onPress: () => { loadOwnedUsernames(); setTab("mine"); } },
                 { text: "OK" },
@@ -395,7 +416,7 @@ export default function UsernameMarketScreen() {
     const price = parseInt(listPrice, 10);
     if (!price || price < 10) { showAlert("Invalid price", "Minimum price is 10 ACoin."); return; }
 
-    // Verify ownership
+    // ── Guard 1: Verify the current user owns this handle ──────────────────
     const { data: ownershipRow } = await supabase
       .from("owned_usernames")
       .select("id")
@@ -404,12 +425,50 @@ export default function UsernameMarketScreen() {
       .maybeSingle();
 
     const isPrimaryHandle = handle === profile?.handle;
+
     if (!ownershipRow && !isPrimaryHandle) {
       showAlert("Not Your Handle", `You don't own @${handle}. You can only list usernames you own.`);
       return;
     }
 
-    // Check if already listed
+    // ── Guard 2: Reject if another user has marketplace ownership ───────────
+    // Catches the case where the seller sold their primary handle — their
+    // profiles.handle is unchanged (they still display it) but the marketplace
+    // ownership now belongs to the buyer.
+    const { data: otherOwner } = await supabase
+      .from("owned_usernames")
+      .select("id")
+      .eq("handle", handle)
+      .neq("owner_id", user.id)
+      .maybeSingle();
+
+    if (otherOwner) {
+      showAlert(
+        "No Longer Yours",
+        `@${handle} was sold and is now owned by another user. You keep using it as your display handle but cannot re-list it.`
+      );
+      return;
+    }
+
+    // ── Guard 3: Block re-listing of any handle that was ever sold ──────────
+    // sold_to_id is set permanently when a listing is purchased — this prevents
+    // the buyer (or anyone else) from ever trading this handle again.
+    const { data: soldRecord } = await supabase
+      .from("username_listings")
+      .select("id")
+      .eq("username", handle)
+      .not("sold_to_id", "is", null)
+      .maybeSingle();
+
+    if (soldRecord) {
+      showAlert(
+        "Final Sale Only",
+        `@${handle} was already sold on the marketplace. Purchased usernames are permanently owned and cannot be re-listed.`
+      );
+      return;
+    }
+
+    // ── Guard 4: Already active listing ────────────────────────────────────
     const { data: existing } = await supabase
       .from("username_listings")
       .select("id")
