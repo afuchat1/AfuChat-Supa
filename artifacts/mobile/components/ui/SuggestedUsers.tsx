@@ -5,13 +5,15 @@
  *  • Discover → For You feed header (after 3-ish posts)
  *  • Chat home → above the story bar (for users with few chats)
  *
- * Algorithm:
- *  1. Load current user's interests + who they already follow.
- *  2. Query profiles that share at least one interest, ordered by XP.
- *     Falls back to top-XP users when the user has no interests set.
- *  3. Exclude self + already-following + previously dismissed cards.
- *  4. Score by overlap count + XP + verified status, then shuffle
- *     the top pool so every session feels fresh.
+ * Algorithm (3 signals, merged + scored):
+ *  1. Friends-of-friends — if you follow A and A follows B, surface B.
+ *     mutualCount = how many of your follows also follow this person.
+ *  2. Shared interests — profiles that overlap with your interests, by XP.
+ *  3. Top XP fallback — when the user has no interests and no follows.
+ *
+ *  Score = mutualCount × 18 + sharedInterests × 12 + xp/500 (capped 25) + verified × 8
+ *  Top pool is shuffled so every session feels fresh.
+ *  Already-following and dismissed cards are always excluded.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -44,6 +46,8 @@ type SuggestedUser = {
   interests: string[];
   bio: string | null;
   sharedCount: number;
+  mutualCount: number;
+  mutualHandle: string | null;
 };
 
 const DISMISSED_KEY = "suggested_users_dismissed_v1";
@@ -51,6 +55,7 @@ const MAX_DISMISSED  = 200;
 const CARD_WIDTH     = 148;
 const POOL_SIZE      = 40;
 const DISPLAY_SIZE   = 12;
+const FOF_FOLLOWING_LIMIT = 60;
 
 // ─── Module-level result cache (survives tab switches, expires after 5 min) ───
 type CachedResult = {
@@ -62,7 +67,7 @@ type CachedResult = {
   expiresAt: number;
 };
 let _cachedResult: CachedResult | null = null;
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 async function loadDismissed(): Promise<Set<string>> {
@@ -131,6 +136,25 @@ function UserCard({
     ? user.display_name.charCodeAt(0) * 37 % 360
     : 200;
 
+  const MUTUAL_COLOR = "#FF9500";
+
+  const badgeLabel = (() => {
+    if (user.mutualCount > 0 && user.mutualHandle) {
+      if (user.mutualCount === 1) return `@${user.mutualHandle} follows them`;
+      return `@${user.mutualHandle} +${user.mutualCount - 1} follow them`;
+    }
+    if (user.mutualCount > 0) {
+      return `${user.mutualCount} mutual connection${user.mutualCount > 1 ? "s" : ""}`;
+    }
+    if (user.sharedCount > 0) {
+      return `${user.sharedCount} shared interest${user.sharedCount > 1 ? "s" : ""}`;
+    }
+    return null;
+  })();
+
+  const badgeColor = user.mutualCount > 0 ? MUTUAL_COLOR : accent;
+  const badgeIcon  = user.mutualCount > 0 ? "person-add-outline" : "people-outline";
+
   return (
     <TouchableOpacity
       style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
@@ -175,12 +199,12 @@ function UserCard({
         @{user.handle}
       </Text>
 
-      {/* Shared interests badge — only shown when there is a real match */}
-      {user.sharedCount > 0 && (
-        <View style={[styles.interestBadge, { backgroundColor: accent + "18" }]}>
-          <Ionicons name="people-outline" size={10} color={accent} />
-          <Text style={[styles.interestBadgeText, { color: accent }]}>
-            {user.sharedCount} shared interest{user.sharedCount > 1 ? "s" : ""}
+      {/* Badge — mutual connection takes priority over shared interests */}
+      {badgeLabel && (
+        <View style={[styles.interestBadge, { backgroundColor: badgeColor + "18" }]}>
+          <Ionicons name={badgeIcon as any} size={10} color={badgeColor} />
+          <Text style={[styles.interestBadgeText, { color: badgeColor }]} numberOfLines={1}>
+            {badgeLabel}
           </Text>
         </View>
       )}
@@ -236,8 +260,6 @@ export function SuggestedUsers({
   const load = useCallback(async (force = false) => {
     if (!user) { setLoading(false); return; }
 
-    // Serve from module-level cache when still valid and same user — avoids
-    // redundant network calls every time the tab is focused.
     if (
       !force &&
       _cachedResult &&
@@ -267,42 +289,118 @@ export function SuggestedUsers({
     const excludeIds = new Set([user.id, ...followingIds, ...dis]);
     const userInterests: string[] = profile?.interests || [];
 
-    // Build query — overlap interests when possible, fall back to top XP
-    let q = supabase
-      .from("profiles")
-      .select("id, display_name, handle, avatar_url, xp, is_verified, interests, bio")
-      .neq("id", user.id)
-      .order("xp", { ascending: false })
-      .limit(POOL_SIZE);
+    // ── Signal 1: Friends-of-friends ─────────────────────────────────────────
+    // Fetch who the people I follow also follow (2nd degree).
+    // Limit to first FOF_FOLLOWING_LIMIT followees to keep query manageable.
+    const fofSource = followingIds.slice(0, FOF_FOLLOWING_LIMIT);
+    let mutualCountMap = new Map<string, number>();   // userId → how many of my follows follow them
+    let mutualSourceMap = new Map<string, string>();  // userId → one follower_id connecting them
 
-    if (userInterests.length > 0) {
-      q = (q as any).overlaps("interests", userInterests);
+    if (fofSource.length > 0) {
+      const { data: fofRows } = await supabase
+        .from("follows")
+        .select("follower_id, following_id")
+        .in("follower_id", fofSource)
+        .limit(2000);
+
+      if (!mountedRef.current) return;
+
+      for (const row of fofRows || []) {
+        if (excludeIds.has(row.following_id)) continue;
+        const prev = mutualCountMap.get(row.following_id) || 0;
+        mutualCountMap.set(row.following_id, prev + 1);
+        if (prev === 0) mutualSourceMap.set(row.following_id, row.follower_id);
+      }
     }
 
-    const { data } = await q;
-    if (!mountedRef.current) return;
+    // Resolve handles for the "connecting" people so we can show "@handle follows them"
+    const mutualSourceIds = Array.from(new Set(Array.from(mutualSourceMap.values())));
+    const handleMap = new Map<string, string>(); // userId → handle
 
-    // Filter out excluded IDs + score
-    const candidates = (data || [])
-      .filter((u: any) => !excludeIds.has(u.id))
-      .map((u: any) => {
-        const interests: string[] = u.interests || [];
-        const sharedCount = interests.filter(i => userInterests.includes(i)).length;
-        const score =
-          sharedCount * 12 +
-          Math.min((u.xp || 0) / 500, 25) +
-          (u.is_verified ? 8 : 0);
-        return { ...u, interests, sharedCount, score } as SuggestedUser & { score: number };
-      })
-      .sort((a: any, b: any) => b.score - a.score);
+    if (mutualSourceIds.length > 0) {
+      const { data: sourceProfiles } = await supabase
+        .from("profiles")
+        .select("id, handle")
+        .in("id", mutualSourceIds);
+
+      if (!mountedRef.current) return;
+      for (const p of sourceProfiles || []) handleMap.set(p.id, p.handle);
+    }
+
+    // ── Signal 2: Shared interests ────────────────────────────────────────────
+    let interestData: any[] = [];
+    {
+      let q = supabase
+        .from("profiles")
+        .select("id, display_name, handle, avatar_url, xp, is_verified, interests, bio")
+        .neq("id", user.id)
+        .order("xp", { ascending: false })
+        .limit(POOL_SIZE);
+
+      if (userInterests.length > 0) {
+        q = (q as any).overlaps("interests", userInterests);
+      }
+
+      const { data } = await q;
+      if (!mountedRef.current) return;
+      interestData = data || [];
+    }
+
+    // ── Signal 3: Friends-of-friends profile fetch ────────────────────────────
+    const fofCandidateIds = Array.from(mutualCountMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 25)
+      .map(([id]) => id);
+
+    let fofProfileData: any[] = [];
+    if (fofCandidateIds.length > 0) {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, display_name, handle, avatar_url, xp, is_verified, interests, bio")
+        .in("id", fofCandidateIds);
+      if (!mountedRef.current) return;
+      fofProfileData = data || [];
+    }
+
+    // ── Merge + score ─────────────────────────────────────────────────────────
+    const seenIds = new Set<string>();
+    const allCandidates: (SuggestedUser & { score: number })[] = [];
+
+    function buildCandidate(u: any): (SuggestedUser & { score: number }) | null {
+      if (excludeIds.has(u.id) || seenIds.has(u.id)) return null;
+      seenIds.add(u.id);
+      const interests: string[] = u.interests || [];
+      const sharedCount = interests.filter((i: string) => userInterests.includes(i)).length;
+      const mutualCount = mutualCountMap.get(u.id) || 0;
+      const sourceId    = mutualSourceMap.get(u.id);
+      const mutualHandle = sourceId ? (handleMap.get(sourceId) || null) : null;
+      const score =
+        mutualCount * 18 +
+        sharedCount * 12 +
+        Math.min((u.xp || 0) / 500, 25) +
+        (u.is_verified ? 8 : 0);
+      return { ...u, interests, sharedCount, mutualCount, mutualHandle, score };
+    }
+
+    // Add interest-based candidates first, then fof-only ones
+    for (const u of interestData) {
+      const c = buildCandidate(u);
+      if (c) allCandidates.push(c);
+    }
+    for (const u of fofProfileData) {
+      const c = buildCandidate(u);
+      if (c) allCandidates.push(c);
+    }
+
+    allCandidates.sort((a, b) => b.score - a.score);
 
     // Shuffle top pool for variety
-    const pool = shuffle(candidates.slice(0, Math.min(POOL_SIZE, candidates.length)));
+    const pool = shuffle(allCandidates.slice(0, Math.min(POOL_SIZE, allCandidates.length)));
 
     let finalUsers: SuggestedUser[];
 
-    // If we got nothing with interests, fall back to top users globally
-    if (pool.length === 0 && userInterests.length > 0) {
+    // Fallback to top-XP when no results at all
+    if (pool.length === 0) {
       const { data: fallback } = await supabase
         .from("profiles")
         .select("id, display_name, handle, avatar_url, xp, is_verified, interests, bio")
@@ -311,17 +409,23 @@ export function SuggestedUsers({
         .limit(POOL_SIZE);
 
       if (!mountedRef.current) return;
-      const fallbackFiltered = (fallback || [])
-        .filter((u: any) => !excludeIds.has(u.id))
-        .map((u: any) => ({ ...u, interests: u.interests || [], sharedCount: 0 } as SuggestedUser));
-      finalUsers = shuffle(fallbackFiltered);
+      finalUsers = shuffle(
+        (fallback || [])
+          .filter((u: any) => !excludeIds.has(u.id))
+          .map((u: any) => ({
+            ...u,
+            interests: u.interests || [],
+            sharedCount: 0,
+            mutualCount: 0,
+            mutualHandle: null,
+          } as SuggestedUser))
+      );
     } else {
       finalUsers = pool;
     }
 
     const followersSetLocal = new Set((followersRes.data || []).map((f: any) => f.follower_id as string));
 
-    // Store in module-level cache so the next tab focus skips the network call.
     _cachedResult = {
       users: finalUsers,
       followingSet: followingSetLocal,
@@ -343,6 +447,10 @@ export function SuggestedUsers({
   async function handleFollow(targetId: string) {
     if (!user) return;
     setFollowingSet(prev => new Set([...prev, targetId]));
+    // Invalidate cache so the next mount re-fetches with updated following list
+    if (_cachedResult && _cachedResult.userId === user.id) {
+      _cachedResult.expiresAt = 0;
+    }
     await supabase.from("follows").upsert({
       follower_id: user.id,
       following_id: targetId,
@@ -354,8 +462,6 @@ export function SuggestedUsers({
     setUsers(prev => prev.filter(u => u.id !== targetId));
     const next = new Set([...dismissed, targetId]);
     setDismissed(next);
-    // Keep module-level cache in sync so the dismissed card stays gone
-    // if the component remounts before the 5-min TTL expires.
     if (_cachedResult && _cachedResult.userId === user?.id) {
       _cachedResult = {
         ..._cachedResult,
@@ -368,7 +474,6 @@ export function SuggestedUsers({
 
   const horizontalScrollActive = useHorizontalScrollLock();
 
-  // Don't render until loaded; hide if no results
   if (!user) return null;
   if (loading) {
     return (
@@ -469,7 +574,6 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
 
-  // Card
   card: {
     width: CARD_WIDTH,
     borderRadius: 16,
@@ -515,8 +619,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 20,
     marginTop: 2,
+    maxWidth: "100%",
   },
-  interestBadgeText: { fontSize: 10, fontFamily: "Inter_500Medium" },
+  interestBadgeText: { fontSize: 10, fontFamily: "Inter_500Medium", flexShrink: 1 },
 
   followBtn: {
     width: "100%",
@@ -530,7 +635,6 @@ const styles = StyleSheet.create({
   },
   followBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
 
-  // Skeleton
   skeletonRow: { flexDirection: "row", gap: 10, paddingHorizontal: 16 },
   skeletonCard: {
     width: CARD_WIDTH,
