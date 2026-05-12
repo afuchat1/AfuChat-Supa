@@ -1,13 +1,20 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
+  Linking,
+  Modal,
+  Platform,
   ScrollView,
   Share,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import * as Contacts from "expo-contacts";
+import QRCode from "react-native-qrcode-svg";
 import { ReferralSkeleton } from "@/components/ui/Skeleton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -253,6 +260,240 @@ function StepRow({ step, total, isLast, accent, colors }: {
   );
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+type PhoneContact = {
+  key: string;
+  name: string;
+  phone: string;
+  rawPhone: string;
+};
+
+function normalizeForInvite(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("00")) return "+" + digits.slice(2);
+  if (digits.length === 9 || digits.length === 10) return "+254" + digits.slice(-9);
+  return "+" + digits;
+}
+
+function smsUrl(phone: string, body: string): string {
+  const sep = Platform.OS === "ios" ? "&" : "?";
+  return `sms:${phone}${sep}body=${encodeURIComponent(body)}`;
+}
+
+// ─── QR Modal ─────────────────────────────────────────────────────────────────
+function QRModal({ visible, link, accent, onClose }: {
+  visible: boolean; link: string; accent: string; onClose: () => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={qrStyles.overlay} activeOpacity={1} onPress={onClose}>
+        <View style={[qrStyles.card, { backgroundColor: colors.surface }]} onStartShouldSetResponder={() => true}>
+          <Text style={[qrStyles.title, { color: colors.text }]}>Scan to Join AfuChat</Text>
+          <Text style={[qrStyles.sub, { color: colors.textMuted }]}>
+            Point any camera at this code to open your referral link
+          </Text>
+          <View style={[qrStyles.qrWrap, { borderColor: colors.border, backgroundColor: "#fff" }]}>
+            <QRCode value={link} size={200} color="#111" backgroundColor="#fff" />
+          </View>
+          <Text style={[qrStyles.link, { color: accent }]} numberOfLines={1}>{link}</Text>
+          <TouchableOpacity
+            style={[qrStyles.shareQrBtn, { borderColor: accent }]}
+            onPress={async () => {
+              try { await Share.share({ message: link, url: link }); } catch {}
+            }}
+          >
+            <Ionicons name="share-outline" size={16} color={accent} />
+            <Text style={[qrStyles.shareQrBtnText, { color: accent }]}>Share Link</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[qrStyles.closeBtn, { backgroundColor: accent }]} onPress={onClose}>
+            <Text style={qrStyles.closeBtnText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+// ─── Invite Contacts Section ──────────────────────────────────────────────────
+function InviteContactsSection({ referralLink, accent, colors }: {
+  referralLink: string; accent: string; colors: any;
+}) {
+  const [state, setState] = useState<"idle" | "loading" | "done" | "denied">("idle");
+  const [contacts, setContacts] = useState<PhoneContact[]>([]);
+  const [query, setQuery] = useState("");
+
+  const inviteMsg = `Join me on AfuChat! Sign up with my link and get 1 week of free Platinum: ${referralLink}`;
+
+  const loadContacts = useCallback(async () => {
+    setState("loading");
+    const { status } = await Contacts.requestPermissionsAsync();
+    if (status !== "granted") { setState("denied"); return; }
+
+    const { data } = await Contacts.getContactsAsync({
+      fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Name],
+    });
+
+    const seen = new Set<string>();
+    const list: PhoneContact[] = [];
+    for (const c of data) {
+      for (const pn of c.phoneNumbers || []) {
+        if (!pn.number) continue;
+        const norm = normalizeForInvite(pn.number);
+        if (norm.length < 8 || seen.has(norm)) continue;
+        seen.add(norm);
+        list.push({ key: norm, name: c.name || "Unknown", phone: norm, rawPhone: pn.number });
+      }
+    }
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    setContacts(list);
+    setState("done");
+  }, []);
+
+  const filtered = query.trim()
+    ? contacts.filter(c =>
+        c.name.toLowerCase().includes(query.toLowerCase()) ||
+        c.rawPhone.includes(query)
+      )
+    : contacts;
+
+  function initials(name: string) {
+    const parts = name.trim().split(/\s+/);
+    return (parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "");
+  }
+
+  return (
+    <View style={[invStyles.card, { backgroundColor: colors.surface }]}>
+      <View style={invStyles.cardHeader}>
+        <View style={[invStyles.cardIconWrap, { backgroundColor: accent + "18" }]}>
+          <Ionicons name="people" size={18} color={accent} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[invStyles.cardTitle, { color: colors.text }]}>Invite Your Contacts</Text>
+          <Text style={[invStyles.cardSub, { color: colors.textMuted }]}>
+            Send your referral link via WhatsApp, SMS, or Email
+          </Text>
+        </View>
+      </View>
+
+      {state === "idle" && (
+        <TouchableOpacity
+          style={[invStyles.loadBtn, { backgroundColor: accent }]}
+          onPress={loadContacts}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="person-add-outline" size={16} color="#fff" />
+          <Text style={invStyles.loadBtnText}>Load Contacts</Text>
+        </TouchableOpacity>
+      )}
+
+      {state === "loading" && (
+        <View style={invStyles.center}>
+          <ActivityIndicator color={accent} />
+          <Text style={[invStyles.loadingText, { color: colors.textMuted }]}>Scanning contacts…</Text>
+        </View>
+      )}
+
+      {state === "denied" && (
+        <View style={invStyles.center}>
+          <Ionicons name="lock-closed-outline" size={32} color={colors.textMuted} />
+          <Text style={[invStyles.deniedText, { color: colors.textMuted }]}>
+            Contacts permission denied. Enable it in Settings to invite people.
+          </Text>
+          <TouchableOpacity
+            style={[invStyles.loadBtn, { backgroundColor: accent, marginTop: 4 }]}
+            onPress={() => Linking.openSettings()}
+            activeOpacity={0.85}
+          >
+            <Text style={invStyles.loadBtnText}>Open Settings</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {state === "done" && (
+        <>
+          <View style={[invStyles.searchRow, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+            <Ionicons name="search-outline" size={16} color={colors.textMuted} />
+            <TextInput
+              style={[invStyles.searchInput, { color: colors.text }]}
+              placeholder="Search contacts…"
+              placeholderTextColor={colors.textMuted}
+              value={query}
+              onChangeText={setQuery}
+              returnKeyType="search"
+            />
+            {query.length > 0 && (
+              <TouchableOpacity onPress={() => setQuery("")} hitSlop={8}>
+                <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {filtered.length === 0 ? (
+            <View style={invStyles.center}>
+              <Text style={[invStyles.deniedText, { color: colors.textMuted }]}>No contacts match "{query}"</Text>
+            </View>
+          ) : (
+            <>
+              <Text style={[invStyles.countLabel, { color: colors.textMuted }]}>
+                {filtered.length} contact{filtered.length !== 1 ? "s" : ""}
+              </Text>
+              {filtered.slice(0, 50).map((c) => (
+                <View
+                  key={c.key}
+                  style={[invStyles.contactRow, { borderTopColor: colors.border }]}
+                >
+                  <View style={[invStyles.avatar, { backgroundColor: accent + "22" }]}>
+                    <Text style={[invStyles.avatarText, { color: accent }]}>
+                      {initials(c.name).toUpperCase() || "?"}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[invStyles.contactName, { color: colors.text }]} numberOfLines={1}>{c.name}</Text>
+                    <Text style={[invStyles.contactPhone, { color: colors.textMuted }]}>{c.rawPhone}</Text>
+                  </View>
+                  <View style={invStyles.actionBtns}>
+                    <TouchableOpacity
+                      style={[invStyles.actionBtn, { backgroundColor: "#25D36620" }]}
+                      onPress={() => {
+                        const num = c.phone.replace(/\D/g, "");
+                        Linking.openURL(`https://wa.me/${num}?text=${encodeURIComponent(inviteMsg)}`).catch(() =>
+                          Linking.openURL(`whatsapp://send?phone=${num}&text=${encodeURIComponent(inviteMsg)}`)
+                        );
+                      }}
+                    >
+                      <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[invStyles.actionBtn, { backgroundColor: "#007AFF20" }]}
+                      onPress={() => Linking.openURL(smsUrl(c.phone, inviteMsg)).catch(() => {})}
+                    >
+                      <Ionicons name="chatbubble-ellipses-outline" size={16} color="#007AFF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[invStyles.actionBtn, { backgroundColor: "#FF9F0A20" }]}
+                      onPress={() => {
+                        Share.share({ message: inviteMsg, url: referralLink });
+                      }}
+                    >
+                      <Ionicons name="ellipsis-horizontal" size={16} color="#FF9F0A" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+              {filtered.length > 50 && (
+                <Text style={[invStyles.countLabel, { color: colors.textMuted, textAlign: "center", paddingVertical: 8 }]}>
+                  Showing first 50 results — search to narrow down
+                </Text>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </View>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function ReferralScreen() {
   const { colors, accent } = useTheme();
@@ -261,6 +502,7 @@ export default function ReferralScreen() {
   const [referrals, setReferrals] = useState<ReferralEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
   const [activeShare, setActiveShare] = useState<"link" | "code">("link");
 
   const referralLink = `https://afuchat.com/${profile?.handle || ""}`;
@@ -452,11 +694,65 @@ export default function ReferralScreen() {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={[styles.shareBtn, { backgroundColor: accent }]} onPress={handleShare} activeOpacity={0.85}>
-            <Ionicons name="share-social" size={18} color="#fff" />
-            <Text style={styles.shareBtnText}>Share {activeShare === "code" ? "Code" : "Link"}</Text>
-          </TouchableOpacity>
+          {/* Share + QR row */}
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <TouchableOpacity style={[styles.shareBtn, { backgroundColor: accent, flex: 1 }]} onPress={handleShare} activeOpacity={0.85}>
+              <Ionicons name="share-social" size={18} color="#fff" />
+              <Text style={styles.shareBtnText}>Share {activeShare === "code" ? "Code" : "Link"}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.shareBtn, { backgroundColor: colors.backgroundTertiary, paddingHorizontal: 18 }]}
+              onPress={() => setShowQRModal(true)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="qr-code-outline" size={20} color={accent} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Quick invite row */}
+          <View style={[styles.quickInviteRow, { borderTopColor: colors.border }]}>
+            <Text style={[styles.quickInviteLabel, { color: colors.textMuted }]}>Quick invite:</Text>
+            <TouchableOpacity
+              style={[styles.quickInviteBtn, { backgroundColor: "#25D36618" }]}
+              onPress={() => {
+                const msg = `Join me on AfuChat! Get 1 week of free Platinum: ${referralLink}`;
+                Linking.openURL(`https://wa.me/?text=${encodeURIComponent(msg)}`).catch(() =>
+                  Share.share({ message: msg })
+                );
+              }}
+            >
+              <Ionicons name="logo-whatsapp" size={16} color="#25D366" />
+              <Text style={[styles.quickInviteBtnText, { color: "#25D366" }]}>WhatsApp</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.quickInviteBtn, { backgroundColor: "#007AFF18" }]}
+              onPress={() => {
+                const msg = `Join me on AfuChat! Get 1 week of free Platinum: ${referralLink}`;
+                const url = smsUrl("", msg);
+                Linking.openURL(url).catch(() => Share.share({ message: msg }));
+              }}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={15} color="#007AFF" />
+              <Text style={[styles.quickInviteBtnText, { color: "#007AFF" }]}>SMS</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.quickInviteBtn, { backgroundColor: "#FF9F0A18" }]}
+              onPress={() => {
+                const subject = "Join me on AfuChat!";
+                const body = `Hey! I've been using AfuChat and thought you'd love it.\n\nSign up with my link to get 1 week of free Platinum:\n${referralLink}`;
+                Linking.openURL(
+                  `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+                ).catch(() => Share.share({ message: body }));
+              }}
+            >
+              <Ionicons name="mail-outline" size={15} color="#FF9F0A" />
+              <Text style={[styles.quickInviteBtnText, { color: "#FF9F0A" }]}>Email</Text>
+            </TouchableOpacity>
+          </View>
         </View>
+
+        {/* ── Invite Contacts ── */}
+        <InviteContactsSection referralLink={referralLink} accent={accent} colors={colors} />
 
         {/* ── Reward Steps ── */}
         <View style={[styles.stepsSection, { backgroundColor: colors.surface }]}>
@@ -561,6 +857,13 @@ export default function ReferralScreen() {
           ))}
         </View>
       </ScrollView>
+
+      <QRModal
+        visible={showQRModal}
+        link={referralLink}
+        accent={accent}
+        onClose={() => setShowQRModal(false)}
+      />
     </View>
   );
 }
@@ -660,4 +963,48 @@ const styles = StyleSheet.create({
   howRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   howIcon: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   howText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
+
+  // Quick invite strip inside share card
+  quickInviteRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  quickInviteLabel: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  quickInviteBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 },
+  quickInviteBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+});
+
+// ─── QR Modal Styles ──────────────────────────────────────────────────────────
+const qrStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center", padding: 24 },
+  card: { width: "100%", borderRadius: 24, padding: 24, alignItems: "center", gap: 14 },
+  title: { fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center" },
+  sub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 18 },
+  qrWrap: { padding: 16, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
+  link: { fontSize: 12, fontFamily: "Inter_500Medium", textAlign: "center" },
+  shareQrBtn: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 24, paddingVertical: 11, borderRadius: 24, borderWidth: 1.5 },
+  shareQrBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  closeBtn: { borderRadius: 14, paddingVertical: 13, paddingHorizontal: 48 },
+  closeBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+});
+
+// ─── Invite Contacts Styles ───────────────────────────────────────────────────
+const invStyles = StyleSheet.create({
+  card: { borderRadius: 16, padding: 16, gap: 14 },
+  cardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  cardIconWrap: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  cardTitle: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  cardSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2, lineHeight: 17 },
+  loadBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, paddingVertical: 13 },
+  loadBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  center: { alignItems: "center", gap: 10, paddingVertical: 16 },
+  loadingText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  deniedText: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 18 },
+  searchRow: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: StyleSheet.hairlineWidth },
+  searchInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", padding: 0 },
+  countLabel: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  contactRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  avatarText: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  contactName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  contactPhone: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
+  actionBtns: { flexDirection: "row", gap: 6 },
+  actionBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
 });
