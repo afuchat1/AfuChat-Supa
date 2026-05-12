@@ -2,7 +2,7 @@
   "expo": {
     "name": "AfuChat",
     "slug": "afuchat",
-    "version": "2.0.65",
+    "version": "2.0.66",
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
     "scheme": "afuchat",
@@ -34,7 +34,7 @@
         "applinks:afuchat.com",
         "applinks:www.afuchat.com"
       ],
-      "buildNumber": "2.0.65"
+      "buildNumber": "2.0.66"
     },
     "android": {
       "package": "com.afuchat.app",
