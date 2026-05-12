@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,20 +15,24 @@ import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { supabase } from "@/lib/supabase";
+import { getBaseUrl } from "@/lib/api-client-react/src/custom-fetch";
 
 const DATA_TYPES = [
-  { id: "profile", icon: "person-circle" as const, iconBg: Colors.brand, label: "Profile Data", description: "Your display name, bio, settings, and account info" },
-  { id: "messages", icon: "chatbubble" as const, iconBg: "#34C759", label: "Messages", description: "All your chat conversations and media" },
-  { id: "posts", icon: "document-text" as const, iconBg: "#FF9500", label: "Posts & Moments", description: "Everything you've posted on Discover" },
-  { id: "activity", icon: "analytics" as const, iconBg: "#007AFF", label: "Activity History", description: "Search history and app usage data" },
-  { id: "transactions", icon: "card" as const, iconBg: "#AF52DE", label: "Transactions", description: "ACoin and Nexa transaction history" },
+  { id: "profile",      icon: "person-circle"   as const, iconBg: Colors.brand,  label: "Profile Data",     description: "Your display name, bio, settings, and account info" },
+  { id: "messages",     icon: "chatbubble"       as const, iconBg: "#34C759",     label: "Messages",         description: "All your chat conversations and media" },
+  { id: "posts",        icon: "document-text"    as const, iconBg: "#FF9500",     label: "Posts & Moments",  description: "Everything you've posted on Discover" },
+  { id: "activity",     icon: "analytics"        as const, iconBg: "#007AFF",     label: "Activity History", description: "Notifications, follows, and app activity" },
+  { id: "transactions", icon: "card"             as const, iconBg: "#AF52DE",     label: "Transactions",     description: "ACoin and XP transaction history" },
 ];
 
 export default function PrivacyDownloadScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<Set<string>>(new Set(["profile"]));
+  const [loading, setLoading] = useState(false);
   const [requested, setRequested] = useState(false);
+  const [sentToEmail, setSentToEmail] = useState("");
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -38,16 +43,51 @@ export default function PrivacyDownloadScreen() {
     });
   }
 
-  function requestDownload() {
+  async function requestDownload() {
     if (selected.size === 0) {
       showAlert("Select Data", "Please select at least one data type to download.");
       return;
     }
-    showAlert(
-      "Request Submitted",
-      "Your data export has been queued. We'll send you an email with a download link within 48 hours. The file will be available for 7 days.",
-      [{ text: "OK", onPress: () => setRequested(true) }]
-    );
+
+    // Get the current session JWT
+    const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+    if (sessionErr || !sessionData?.session?.access_token) {
+      showAlert("Not Signed In", "Please sign in to request a data export.");
+      return;
+    }
+
+    const token = sessionData.session.access_token;
+    const base = getBaseUrl();
+    if (!base) {
+      showAlert("Error", "Could not reach the server. Please try again later.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${base}/api/data-export`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ types: Array.from(selected) }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        showAlert("Export Failed", json?.error || "Something went wrong. Please try again.");
+        return;
+      }
+
+      setSentToEmail(json.email || "");
+      setRequested(true);
+    } catch (err: any) {
+      showAlert("Network Error", "Could not reach the server. Please check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -60,9 +100,11 @@ export default function PrivacyDownloadScreen() {
             <View style={[styles.successIcon, { backgroundColor: "#34C75922" }]}>
               <Ionicons name="checkmark-circle" size={56} color="#34C759" />
             </View>
-            <Text style={[styles.successTitle, { color: colors.text }]}>Request Submitted!</Text>
+            <Text style={[styles.successTitle, { color: colors.text }]}>Export Sent!</Text>
             <Text style={[styles.successDesc, { color: colors.textMuted }]}>
-              We're preparing your data export. You'll receive an email within 48 hours with a secure download link.
+              Your data export has been sent to{"\n"}
+              <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.text }}>{sentToEmail}</Text>
+              {"\n\n"}Open the email and download the attached JSON file. It contains all the data you selected.
             </Text>
             <TouchableOpacity style={[styles.doneBtn, { backgroundColor: colors.accent }]} onPress={() => router.back()}>
               <Text style={styles.doneBtnText}>Done</Text>
@@ -71,15 +113,15 @@ export default function PrivacyDownloadScreen() {
         ) : (
           <>
             <GlassCard style={{ marginHorizontal: 16, marginTop: 20, borderRadius: 14, overflow: "hidden" }} variant="subtle" noShadow>
-            <View style={styles.infoCard}>
-              <Ionicons name="shield-checkmark" size={22} color={colors.accent} />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.infoTitle, { color: colors.text }]}>Your data is yours</Text>
-                <Text style={[styles.infoText, { color: colors.textMuted }]}>
-                  AfuChat gives you full access to a copy of your personal data. Select what you'd like to include.
-                </Text>
+              <View style={styles.infoCard}>
+                <Ionicons name="shield-checkmark" size={22} color={colors.accent} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.infoTitle, { color: colors.text }]}>Your data is yours</Text>
+                  <Text style={[styles.infoText, { color: colors.textMuted }]}>
+                    AfuChat gives you full access to a copy of your personal data. Select what you'd like to include and we'll email it to you instantly.
+                  </Text>
+                </View>
               </View>
-            </View>
             </GlassCard>
 
             <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>SELECT DATA TO INCLUDE</Text>
@@ -111,16 +153,26 @@ export default function PrivacyDownloadScreen() {
             </GlassCard>
 
             <Text style={[styles.hint, { color: colors.textMuted }]}>
-              Your data will be compiled into a ZIP file sent to your registered email address. This may take up to 48 hours.
+              Your selected data will be compiled into a JSON file and emailed to your registered address immediately — no waiting required.
             </Text>
 
             <TouchableOpacity
-              style={[styles.requestBtn, { backgroundColor: colors.accent, opacity: selected.size === 0 ? 0.5 : 1 }]}
+              style={[styles.requestBtn, { backgroundColor: colors.accent, opacity: (selected.size === 0 || loading) ? 0.5 : 1 }]}
               onPress={requestDownload}
               activeOpacity={0.85}
+              disabled={loading || selected.size === 0}
             >
-              <Ionicons name="cloud-download" size={18} color="#fff" />
-              <Text style={styles.requestBtnText}>Request Data Export ({selected.size} selected)</Text>
+              {loading ? (
+                <>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={styles.requestBtnText}>Preparing export…</Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="cloud-download" size={18} color="#fff" />
+                  <Text style={styles.requestBtnText}>Export & Email My Data ({selected.size} selected)</Text>
+                </>
+              )}
             </TouchableOpacity>
           </>
         )}
@@ -131,8 +183,6 @@ export default function PrivacyDownloadScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
   infoCard: { flexDirection: "row", alignItems: "flex-start", gap: 12, borderRadius: 14, padding: 16 },
   infoTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", marginBottom: 4 },
   infoText: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
@@ -146,12 +196,12 @@ const styles = StyleSheet.create({
   rowDesc: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 16 },
   checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, alignItems: "center", justifyContent: "center" },
   hint: { fontSize: 13, fontFamily: "Inter_400Regular", paddingHorizontal: 20, paddingTop: 14, lineHeight: 18 },
-  requestBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.brand, marginHorizontal: 16, marginTop: 20, borderRadius: 16, paddingVertical: 16 },
+  requestBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginHorizontal: 16, marginTop: 20, borderRadius: 16, paddingVertical: 16 },
   requestBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
   successContainer: { alignItems: "center", paddingHorizontal: 32, paddingTop: 60, gap: 16 },
   successIcon: { width: 100, height: 100, borderRadius: 50, alignItems: "center", justifyContent: "center" },
   successTitle: { fontSize: 24, fontFamily: "Inter_700Bold", textAlign: "center" },
   successDesc: { fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22 },
-  doneBtn: { backgroundColor: Colors.brand, paddingHorizontal: 40, paddingVertical: 14, borderRadius: 24, marginTop: 8 },
+  doneBtn: { paddingHorizontal: 40, paddingVertical: 14, borderRadius: 24, marginTop: 8 },
   doneBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
 });

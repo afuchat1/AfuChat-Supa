@@ -3,11 +3,17 @@ const FROM = "AfuChat Notifications <notifications@afuchat.com>";
 const SUPPORT_EMAIL = "support@afuchat.com";
 const SUPPORT_INBOX = "support+tickets@afuchat.com";
 
+interface EmailAttachment {
+  filename: string;
+  content: string; // base64-encoded
+}
+
 interface SendEmailOptions {
   to: string | string[];
   subject: string;
   html: string;
   replyTo?: string;
+  attachments?: EmailAttachment[];
 }
 
 export async function sendEmail(opts: SendEmailOptions): Promise<boolean> {
@@ -28,6 +34,9 @@ export async function sendEmail(opts: SendEmailOptions): Promise<boolean> {
         subject: opts.subject,
         html: opts.html,
         reply_to: opts.replyTo,
+        ...(opts.attachments && opts.attachments.length > 0
+          ? { attachments: opts.attachments }
+          : {}),
       }),
     });
     if (!res.ok) {
