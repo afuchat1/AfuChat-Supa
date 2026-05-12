@@ -51,7 +51,8 @@ import {
   getCachedUserId,
   onConnectivityChange,
 } from "@/lib/offlineStore";
-import { getLocalMessages, saveMessages, savePendingMessage, getNewestMessageDate } from "@/lib/storage/localMessages";
+import { getLocalMessages, saveMessages, savePendingMessage, getNewestMessageDate, deleteAllLocalMessages } from "@/lib/storage/localMessages";
+import { LinkPreview } from "@/components/ui/LinkPreview";
 import { getPhonebookName } from "@/lib/storage/localContacts";
 import { clearUnread, getLocalConversation } from "@/lib/storage/localConversations";
 import { getLocalAttachmentUri, ensureChatAttachmentDownloaded, autoDownloadChatAttachments, openChatFile, saveAttachmentToGallery } from "@/lib/storage/chatAttachmentCache";
@@ -967,6 +968,9 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
                 ? <AiRichContent content={displayText} colors={colors} isUser={isMe} />
                 : <RichText style={[st.bubbleText, { color: textColor, fontSize: chatPrefsLocal?.font_size ?? 15, lineHeight: (chatPrefsLocal?.font_size ?? 15) + 5 }]} linkColor={isMe ? "#FFFFFF" : BRAND} selectable={Platform.OS === "web"}>{displayText}</RichText>
               }
+              {!msg._isAi && !isSpecial && chatPrefsLocal?.link_previews !== false && (
+                <LinkPreview text={displayText} isMe={isMe} />
+              )}
             </TouchableOpacity>
           )}
 
@@ -1544,7 +1548,9 @@ function ChatScreen() {
     if (Platform.OS !== "web") {
       // getLocalMessages returns oldest-first (ASC). FlatList is inverted so index 0
       // must be the NEWEST message. Reverse to get newest-first.
-      const cached = await getLocalMessages(chatId, 5000);
+      const clearedAt = await AsyncStorage.getItem(`chat_cleared_${user.id}_${chatId}`).catch(() => null);
+      const allCached = await getLocalMessages(chatId, 5000);
+      const cached = clearedAt ? allCached.filter((m) => m.sent_at > clearedAt) : allCached;
       if (cached.length > 0) {
         const newestFirst = [...cached].reverse();
         setMessages(newestFirst.map((m) => ({
@@ -1597,6 +1603,9 @@ function ChatScreen() {
     // Delta sync: only fetch messages NEWER than what's already stored on device.
     // On web: always fetch fresh from the server (no local cache).
     const newestStored = Platform.OS !== "web" ? await getNewestMessageDate(chatId) : null;
+    const clearedAtServer = Platform.OS !== "web"
+      ? await AsyncStorage.getItem(`chat_cleared_${user.id}_${chatId}`).catch(() => null)
+      : null;
     let msgQuery = supabase
       .from("messages")
       .select(`id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`)
@@ -1604,8 +1613,10 @@ function ChatScreen() {
       .order("sent_at", { ascending: false })
       .limit(100);
     if (newestStored) {
-      // Only fetch messages sent after the newest one we already have
       msgQuery = msgQuery.gt("sent_at", newestStored);
+    }
+    if (clearedAtServer && (!newestStored || clearedAtServer > newestStored)) {
+      msgQuery = msgQuery.gt("sent_at", clearedAtServer);
     }
     const { data } = await msgQuery;
 
@@ -2434,7 +2445,11 @@ function ChatScreen() {
   async function handleClearChatMessages() {
     const chatId = isDraft ? realChatId : id;
     if (!chatId || !user) return;
-    showAlert("Clear Chat", "Delete all messages in this chat? This cannot be undone.", [
+    const isGroupOrChannel = chatInfo?.is_group || chatInfo?.is_channel;
+    const subtitle = isGroupOrChannel
+      ? "This clears the chat for you only — other members won't be affected. This cannot be undone."
+      : "This clears the chat for you only. This cannot be undone.";
+    showAlert("Clear Chat", subtitle, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Clear",
@@ -2442,10 +2457,13 @@ function ChatScreen() {
         onPress: async () => {
           setShowChatOptions(false);
           try {
+            const clearedAt = new Date().toISOString();
+            await AsyncStorage.setItem(`chat_cleared_${user.id}_${chatId}`, clearedAt);
+            if (Platform.OS !== "web") {
+              await deleteAllLocalMessages(chatId);
+            }
             if (chatInfo?.other_id === AFUAI_BOT_ID) {
-              await supabase.rpc("clear_afuai_chat", { p_chat_id: chatId });
-            } else {
-              await supabase.from("messages").delete().eq("chat_id", chatId);
+              await supabase.rpc("clear_afuai_chat", { p_chat_id: chatId }).catch(() => {});
             }
             setMessages([]);
           } catch {
