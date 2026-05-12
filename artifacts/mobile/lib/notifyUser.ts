@@ -208,6 +208,7 @@ export async function notifyGiftReceived(params: {
     userId: params.recipientId,
     title: "Gift Received! 🎁",
     body: `${params.senderName} sent you ${params.giftName}`,
+    categoryIdentifier: NOTIF_CATEGORY.GIFT_RECEIVED,
     data: {
       type: "gift",
       actorId: params.senderUserId,
@@ -229,7 +230,7 @@ export async function notifyMention(params: {
     userId: params.targetUserId,
     title: `${params.mentionedBy} mentioned you`,
     body: params.preview.substring(0, 100),
-    categoryIdentifier: NOTIF_CATEGORY.POST_INTERACT,
+    categoryIdentifier: NOTIF_CATEGORY.MENTION,
     data: {
       postId: params.postId,
       type: "mention",

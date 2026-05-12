@@ -29,15 +29,19 @@ function notify() {
   _listeners.forEach((fn) => fn(_current));
 }
 
-export function showBanner(payload: Omit<BannerPayload, "id">, autoDismissMs = 4500): void {
-  if (_dismissTimer) clearTimeout(_dismissTimer);
+export function showBanner(payload: Omit<BannerPayload, "id">, autoDismissMs = 0): void {
+  if (_dismissTimer) { clearTimeout(_dismissTimer); _dismissTimer = null; }
   _current = { id: Math.random().toString(36).slice(2), ...payload };
   notify();
-  _dismissTimer = setTimeout(() => {
-    _current = null;
-    notify();
-    _dismissTimer = null;
-  }, autoDismissMs);
+  // Auto-dismiss is now managed entirely inside InAppNotifBanner component.
+  // Pass autoDismissMs > 0 only for legacy callers that need store-level timing.
+  if (autoDismissMs > 0) {
+    _dismissTimer = setTimeout(() => {
+      _current = null;
+      notify();
+      _dismissTimer = null;
+    }, autoDismissMs);
+  }
 }
 
 export function dismissBanner(): void {

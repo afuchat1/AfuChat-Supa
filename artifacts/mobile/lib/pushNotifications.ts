@@ -5,7 +5,7 @@ import { supabase, supabaseUrl, supabaseAnonKey } from "@/lib/supabase";
 import { getPushSoundToken } from "@/lib/soundManager";
 import { handleNotificationAction } from "@/lib/notificationActions";
 
-const EAS_PROJECT_ID = "b55c5d92-7a83-472f-b660-d1838efba5fe";
+const EAS_PROJECT_ID = "784a87ad-e3d1-438c-9c84-1b336f4fd2d2";
 
 // AfuChat branded sound — kept for reference (used only in call ringtone flow).
 // Android notification channels use device default sound instead.
@@ -19,6 +19,8 @@ export const NOTIF_CATEGORY = {
   ORDER_UPDATE:    "afuchat_order_update",
   ORDER_SHIPPED:   "afuchat_order_shipped",
   INCOMING_CALL:   "afuchat_incoming_call",
+  GIFT_RECEIVED:   "afuchat_gift_received",
+  MENTION:         "afuchat_mention",
 } as const;
 
 let _lastRegistrationError: string | null = null;
@@ -176,6 +178,43 @@ export async function setupNotificationCategories(): Promise<void> {
         identifier: "decline_call",
         buttonTitle: "❌ Decline",
         options: { opensAppToForeground: false, isDestructive: true },
+      },
+    ]);
+
+    // ── Gift received: view wallet + thank sender (open profile) ──────
+    await Notifications.setNotificationCategoryAsync(NOTIF_CATEGORY.GIFT_RECEIVED, [
+      {
+        identifier: "view_profile",
+        buttonTitle: "👤 View Sender",
+        options: { opensAppToForeground: true },
+      },
+      {
+        identifier: "mark_read",
+        buttonTitle: "Dismiss",
+        options: { opensAppToForeground: false, isDestructive: false },
+      },
+    ]);
+
+    // ── Mention: inline reply + view post ────────────────────────────
+    await Notifications.setNotificationCategoryAsync(NOTIF_CATEGORY.MENTION, [
+      {
+        identifier: "post_reply",
+        buttonTitle: "Reply",
+        options: { opensAppToForeground: false },
+        textInput: {
+          submitButtonTitle: "Send",
+          placeholder: "Write your reply…",
+        },
+      },
+      {
+        identifier: "like",
+        buttonTitle: "❤️ Like",
+        options: { opensAppToForeground: false, isDestructive: false },
+      },
+      {
+        identifier: "view_post",
+        buttonTitle: "View Post",
+        options: { opensAppToForeground: true },
       },
     ]);
   } catch (e) {
