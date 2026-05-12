@@ -78,33 +78,30 @@ function timeAgo(iso: string) {
   return `${Math.floor(h / 24)}d`;
 }
 
+/** Robustly extract and parse a JSON object from an AI reply that may include markdown fences. */
+function parseChatAiJson(raw: string): Record<string, any> | null {
+  if (!raw) return null;
+  const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const candidate = fenceMatch ? fenceMatch[1].trim() : raw;
+  const objMatch = candidate.match(/\{[\s\S]*\}/);
+  if (!objMatch) return null;
+  try { return JSON.parse(objMatch[0]); } catch { return null; }
+}
+
 async function fetchChatAiInsight(query: string): Promise<AiInsight | null> {
   try {
     const res = await fetch(`${getEdgeFnBase()}/afu-ai-reply`, {
       method: "POST",
       headers: edgeHeaders(),
       body: JSON.stringify({
+        max_tokens: 500,
         messages: [
           {
             role: "system",
-            content: `You are AfuChat's expert messaging search assistant. Deeply analyze the user's search query in the context of chats, people, groups, and channels. Reply ONLY with valid JSON (no markdown) in this exact format:
-{
-  "summary": "2-3 sentences: what the user is looking for, why, and the most likely match type",
-  "bestTab": "one of: chats | people | channels | groups | messages",
-  "suggestions": ["refined version of this search", "related search 2", "alternative angle"],
-  "filters": ["key filter term 1", "key filter term 2"],
-  "resultSummary": "One specific sentence about what results to expect in the best tab",
-  "actions": ["Specific step the user should take (e.g. 'Open the chat and search within it')", "Another concrete action (e.g. 'Message this person directly')", "Third step (e.g. 'Join this group to access its content')"]
-}
+            content: `You are AfuChat's messaging search assistant. Analyze the search query and reply ONLY with a single JSON object — no markdown, no code fences, no text outside the JSON:
+{"summary":"2-3 sentences on what the user wants","bestTab":"chats|people|channels|groups|messages","suggestions":["refined search","related search","alternative"],"filters":["filter term 1","filter term 2"],"resultSummary":"one sentence on expected results","actions":["specific step 1","specific step 2","specific step 3"]}
 
-## REASONING GUIDE
-- "chats": user's own conversations — direct messages or named group chats
-- "people": individual profiles, find by name or @handle
-- "channels": broadcast feeds run by creators/brands; one-way updates
-- "groups": multi-member discussion spaces; two-way conversation
-- "messages": full-text search inside public channels & groups (premium)
-
-Actions must be specific, practical, and directly tied to the query — not generic advice.`,
+Tabs: chats=user's own DMs/group chats, people=profiles by name/@handle, channels=creator/brand broadcast feeds, groups=discussion spaces, messages=full-text inside channels/groups (premium). Actions must be specific to AfuChat (e.g. "Open the chat", "Message this person", "Join the group").`,
           },
           { role: "user", content: `Search query: "${query}"` },
         ],
@@ -112,17 +109,16 @@ Actions must be specific, practical, and directly tied to the query — not gene
     });
     if (!res.ok) return null;
     const data = await res.json();
-    const content: string = data?.choices?.[0]?.message?.content ?? data?.content ?? data?.reply ?? "";
-    const match = content.match(/\{[\s\S]*\}/);
-    if (!match) return null;
-    const p = JSON.parse(match[0]);
+    const raw: string = data?.choices?.[0]?.message?.content ?? data?.content ?? data?.reply ?? "";
+    const p = parseChatAiJson(raw);
+    if (!p) return null;
     return {
-      summary: p.summary || "",
-      bestTab: (p.bestTab as TabId) || "chats",
-      suggestions: Array.isArray(p.suggestions) ? p.suggestions : [],
-      filters: Array.isArray(p.filters) ? p.filters : [],
-      resultSummary: p.resultSummary || "",
-      actions: Array.isArray(p.actions) ? p.actions : [],
+      summary:       typeof p.summary       === "string" ? p.summary       : "",
+      bestTab:       (p.bestTab as TabId) || "chats",
+      suggestions:   Array.isArray(p.suggestions) ? p.suggestions : [],
+      filters:       Array.isArray(p.filters)     ? p.filters     : [],
+      resultSummary: typeof p.resultSummary === "string" ? p.resultSummary : "",
+      actions:       Array.isArray(p.actions)     ? p.actions     : [],
     };
   } catch { return null; }
 }

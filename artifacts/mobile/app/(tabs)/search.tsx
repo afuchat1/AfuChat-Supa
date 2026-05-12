@@ -138,72 +138,48 @@ function dateRangeCutoff(range: DateRange): string | null {
 
 // ─── AI Insight Fetcher ───────────────────────────────────────────────────────
 
+/** Robustly extract and parse a JSON object from an AI reply that may include markdown fences or prose. */
+function parseAiJson(raw: string): Record<string, any> | null {
+  if (!raw) return null;
+  // Strip markdown code fences if present (```json ... ``` or ``` ... ```)
+  const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const candidate = fenceMatch ? fenceMatch[1].trim() : raw;
+  // Find the outermost JSON object
+  const objMatch = candidate.match(/\{[\s\S]*\}/);
+  if (!objMatch) return null;
+  try {
+    return JSON.parse(objMatch[0]);
+  } catch {
+    return null;
+  }
+}
+
 async function fetchAiInsight(query: string): Promise<AiInsight | null> {
   try {
     const res = await fetch(`${getEdgeFnBase()}/afu-ai-reply`, {
       method: "POST",
       headers: edgeHeaders(),
       body: JSON.stringify({
+        max_tokens: 700,
         messages: [
           {
             role: "system",
-            content: `You are AfuChat's intelligent search assistant. You have deep knowledge of every feature on the AfuChat platform. Use this knowledge to analyze search queries and guide users to exactly what they need.
+            content: `You are AfuChat's intelligent search assistant. Analyze the user's search query in context of the AfuChat platform and return a JSON guide to help them find exactly what they need.
 
-## PLATFORM OVERVIEW
-AfuChat is a fully-featured African-focused social super-app combining social networking, content creation, commerce, and communication. It serves students, professionals, creators, businesses, and communities.
+AfuChat search categories:
+- people: user profiles, @handles, bios, organisations
+- posts: text posts, articles, photo posts with hashtags/mentions
+- videos: short and long video content, tutorials, vlogs
+- channels: broadcast feeds by creators/brands (like Telegram channels)
+- events: ticketed or free real-world/virtual events
+- gifts: virtual digital gifts users send each other
+- market: products, freelance services, paid communities
+- jobs: job and internship listings by companies
 
-## SEARCH CATEGORIES — what each one contains:
+Reply ONLY with a single JSON object — no markdown, no code fences, no explanation text outside the JSON:
+{"summary":"2-3 sentences on what the user wants and why","intent":"person|content|video|topic|product|service|event|job|gift|community|mixed","bestCategory":"people|posts|videos|channels|events|gifts|market|jobs|all","keyTerms":["term1","term2"],"suggestions":["refined search 1","related search 2","alternative angle"],"explanation":"one sentence on why bestCategory is best","actions":["specific AfuChat action 1","specific AfuChat action 2","specific AfuChat action 3"]}
 
-**people** — User profiles and organisation pages. Profiles have: display name, @handle, bio, avatar, XP (experience points), ACoins (virtual currency), grade/level (e.g. Rookie, Explorer, Star, Legend), country, interests, verified badge (blue = individual, gold = organisation/business), premium tier (Silver/Gold/Platinum), follow counts. Organisations have a logo, description, and slug. Search by name, username, profession, country, or topic expertise.
-
-**posts** — Short text posts, photo posts (single or multi-image galleries), long-form articles with a title, and mixed media posts. Posts have: hashtags (#topic), mentions (@user), like/comment/share counts, view counts, visibility (public/followers/private), and can be boosted. Use for finding opinions, discussions, news, tutorials, announcements, or user-generated stories on any topic.
-
-**videos** — Short-form and long-form video content (like Shorts/Reels). Videos have: view counts, audio/music attribution (audio_name), thumbnail, and duration. Creators post tutorials, entertainment, vlogs, educational content, product demos, comedy, music videos, and event highlights. Great for visual content, how-tos, and trending clips.
-
-**channels** — Broadcast channels where creators/organisations publish updates to subscribers (like Telegram channels or WhatsApp channels). Have subscriber counts and are typically run by influencers, brands, news outlets, schools, businesses, or community leaders. Search when looking for official updates, newsletters, fan channels, or topic-specific feeds.
-
-**events** — Ticketed or free real-world and virtual events. Events have: title, description, emoji, date, price (0 = free), capacity, tickets sold, category (e.g. Education, Tech, Music, Business, Sports, Arts), and the creator's name. Great for conferences, workshops, meetups, parties, concerts, webinars, and community gatherings.
-
-**gifts** — Virtual digital gifts that users send to each other in chats or on profiles. Gifts have: name, emoji, XP cost, rarity (Common, Rare, Epic, Legendary), and a description. They are part of AfuChat's social gifting and appreciation system. Search when looking for a specific gift to send or gifting options.
-
-**market** — AfuChat's marketplace with three sub-types:
-  • Products — physical or digital items for sale (gadgets, clothing, art, templates, e-books, courses)
-  • Freelance services — skills offered for hire (design, coding, writing, photography, tutoring, translation)
-  • Communities — paid or free membership groups around shared interests (study groups, professional networks, fan clubs)
-  All have: title, description, emoji, price, seller name, and optional images.
-
-**jobs** — Job and internship listings posted by companies on the platform. Jobs have: title, company name, company logo, job type (Full-time / Part-time / Remote / Freelance / Internship), location, description, and apply URL. Search when looking for work opportunities, internships, or hiring prospects.
-
-## SOCIAL & PLATFORM MECHANICS (inform your analysis):
-- **XP & Grades**: Users earn XP through activity. Grades go: Rookie → Explorer → Achiever → Star → Master → Legend. Higher-grade users are more active and influential.
-- **ACoins**: Virtual currency used for gifts, marketplace, boosting posts, and premium features.
-- **Subscriptions**: Free / Silver / Gold / Platinum plans unlock AI messages, larger file sharing, more linked accounts, and advanced features.
-- **AfuAI**: Built-in AI chatbot accessible via DMs. Users search for AI-related queries to use it.
-- **Chats & Groups**: Private DMs, group chats, and broadcast channels. End-to-end encrypted.
-- **Reactions & Stickers**: Users react to messages with emoji. Sticker packs are part of the gifting culture.
-- **Hashtags**: Posts and videos are tagged. Trending hashtags surface popular topics.
-- **Onboarding**: New users select interests (e.g. Tech, Music, Fashion, Business, Education, Sports, Gaming, Food, Travel, Art).
-
-## YOUR TASK
-Given the search query, reason about what the user truly wants on AfuChat, then reply ONLY with valid JSON (no markdown, no code blocks, no extra text) in this exact format:
-{
-  "summary": "2-3 sentences explaining exactly what the user is looking for, why they might be searching this on AfuChat, and what kind of content or person they expect to find",
-  "intent": "one of: person | content | video | topic | product | service | event | job | gift | community | mixed",
-  "bestCategory": "one of: people | posts | videos | channels | events | gifts | market | jobs | all",
-  "keyTerms": ["2-5 core extracted search keywords most relevant to finding results"],
-  "suggestions": ["a more specific version of this search", "a related search the user might also want", "a broader or alternative angle on the same need"],
-  "explanation": "one concrete sentence naming the best category and why",
-  "actions": ["Specific action the user should take right now (e.g. 'Switch to Videos tab and filter by newest')", "Second concrete step (e.g. 'Follow this creator to get their updates')", "Third practical step (e.g. 'Search within Market for freelance listings on this topic')"]
-}
-
-Actions must be specific, tied to AfuChat features, and immediately useful — not generic. Use AfuChat-specific vocabulary: tabs (People, Posts, Videos, Channels, Events, Market, Jobs, Gifts), features (follow, DM, subscribe, boost, ACoins, XP, AfuAI), and actions (join group, subscribe to channel, apply to job, buy in market, attend event).
-
-## EXAMPLES
-Query: "graphic designer Nigeria"
-→ intent: "person", bestCategory: "people", summary: "The user is looking for a graphic designer based in Nigeria, likely to hire or collaborate with.", keyTerms: ["graphic design", "designer", "Nigeria"], suggestions: ["freelance graphic designer Lagos", "logo designer Nigeria"], explanation: "People tab shows designers with country=Nigeria in their bio.", actions: ["Go to the People tab and filter by country 'Nigeria'", "Check the Market tab — Freelance section — for design service listings", "Message a designer directly to discuss your project"]
-
-Query: "coding bootcamp"
-→ intent: "event", bestCategory: "events", summary: "The user is looking for a coding bootcamp — a structured tech training programme.", keyTerms: ["coding", "bootcamp", "programming"], suggestions: ["software development workshop", "web development course"], explanation: "Events tab lists time-bound educational programmes like bootcamps.", actions: ["Open the Events tab and filter by 'Education' or 'Tech' category", "Subscribe to tech channels for bootcamp announcements", "Search Market > Communities for paid coding study groups"]`,
+Actions must name specific AfuChat tabs/features (People tab, Market > Freelance, subscribe to channel, DM, join group, apply to job, send gift, attend event).`,
           },
           { role: "user", content: `Search query: "${query}"` },
         ],
@@ -211,18 +187,17 @@ Query: "coding bootcamp"
     });
     if (!res.ok) return null;
     const data = await res.json();
-    const content: string = data?.choices?.[0]?.message?.content ?? data?.content ?? data?.reply ?? "";
-    const match = content.match(/\{[\s\S]*\}/);
-    if (!match) return null;
-    const parsed = JSON.parse(match[0]);
+    const raw: string = data?.choices?.[0]?.message?.content ?? data?.content ?? data?.reply ?? "";
+    const parsed = parseAiJson(raw);
+    if (!parsed) return null;
     return {
-      summary: parsed.summary || "",
-      intent: parsed.intent || "mixed",
-      bestCategory: parsed.bestCategory || "all",
-      keyTerms: Array.isArray(parsed.keyTerms) ? parsed.keyTerms : [],
-      suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
-      explanation: parsed.explanation || "",
-      actions: Array.isArray(parsed.actions) ? parsed.actions : [],
+      summary:      typeof parsed.summary      === "string" ? parsed.summary      : "",
+      intent:       typeof parsed.intent        === "string" ? parsed.intent        : "mixed",
+      bestCategory: typeof parsed.bestCategory  === "string" ? parsed.bestCategory  : "all",
+      keyTerms:     Array.isArray(parsed.keyTerms)   ? parsed.keyTerms   : [],
+      suggestions:  Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+      explanation:  typeof parsed.explanation  === "string" ? parsed.explanation  : "",
+      actions:      Array.isArray(parsed.actions)    ? parsed.actions    : [],
     } as AiInsight;
   } catch {
     return null;
@@ -439,9 +414,17 @@ export default function SearchScreen() {
     try {
       if (aiMode && trimmed.length >= 3) {
         setAiLoading(true);
-        fetchAiInsight(trimmed)
-          .then((insight) => { if (insight && id === searchIdRef.current) setAiInsight(insight); })
-          .finally(() => setAiLoading(false));
+        fetchAiInsight(trimmed).then((insight) => {
+          if (insight && id === searchIdRef.current) {
+            setAiInsight(insight);
+            // Auto-switch to the AI-recommended tab (matches chat-search behaviour)
+            const cat = insight.bestCategory as SearchTab;
+            const validTabs: SearchTab[] = ["all","people","posts","videos","channels","events","gifts","market","jobs"];
+            if (cat && validTabs.includes(cat) && cat !== "all") {
+              setTab(cat);
+            }
+          }
+        }).finally(() => setAiLoading(false));
       }
 
       const wantsPeople   = all || currentTab === "people";
@@ -1154,17 +1137,27 @@ export default function SearchScreen() {
               {/* Summary */}
               <Text style={{ color: colors.text, fontSize: 13, lineHeight: 19, marginBottom: 10 }}>{aiInsight.summary}</Text>
 
-              {/* Best category */}
+              {/* Best category — tappable to switch tab */}
               {aiInsight.explanation ? (
-                <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, backgroundColor: PURPLE + "12", borderRadius: 8, padding: 8, marginBottom: 10 }}>
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    const cat = aiInsight.bestCategory as SearchTab;
+                    const validTabs: SearchTab[] = ["all","people","posts","videos","channels","events","gifts","market","jobs"];
+                    if (cat && validTabs.includes(cat)) { setTab(cat); setInsightExpanded(false); }
+                  }}
+                  style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, backgroundColor: PURPLE + "12", borderRadius: 8, padding: 8, marginBottom: 10 }}
+                >
                   <Ionicons name="bulb-outline" size={13} color={PURPLE} style={{ marginTop: 1 }} />
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: PURPLE, fontSize: 10, fontFamily: "Inter_700Bold", marginBottom: 2 }}>
                       Best results in: <Text style={{ color: colors.text }}>{catLabel}</Text>
+                      <Text style={{ color: PURPLE, fontFamily: "Inter_400Regular" }}> — tap to switch</Text>
                     </Text>
                     <Text style={{ color: colors.textSecondary, fontSize: 11, lineHeight: 16 }}>{aiInsight.explanation}</Text>
                   </View>
-                </View>
+                  <Ionicons name="arrow-forward-circle-outline" size={16} color={PURPLE} style={{ alignSelf: "center" }} />
+                </TouchableOpacity>
               ) : null}
 
               {/* Actionable steps */}
