@@ -1,30 +1,26 @@
-import { Platform } from "react-native";
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || "";
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
+
+/**
+ * Returns the Supabase edge function base URL.
+ * All AI logic is handled by Supabase edge functions — NOT the Express backend.
+ */
+function getEdgeFnBase(): string {
+  return `${supabaseUrl}/functions/v1`;
+}
+
+/** Common auth headers for Supabase edge function calls. */
+function edgeHeaders(): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${supabaseAnonKey}`,
+    "apikey": supabaseAnonKey,
+  };
+}
 
 interface AskAiOptions {
   fast?: boolean;
   maxTokens?: number;
-}
-
-/**
- * Returns the base URL for the AfuChat API server.
- *
- * - Web (Expo web / Metro dev proxy): relative "/api" — Metro proxies this
- *   to the Express server running on port 3000.
- * - Native (iOS/Android) dev: uses EXPO_PUBLIC_DOMAIN (the Replit dev domain)
- *   so the native app can reach the server.
- * - EAS production builds: uses EXPO_PUBLIC_API_URL set in eas.json.
- */
-export function getAiApiBase(): string {
-  const explicit = process.env.EXPO_PUBLIC_API_URL || "";
-  if (explicit && explicit !== "https://YOUR_BACKEND_DOMAIN" && explicit !== "https://afuchat.replit.app") {
-    return explicit.replace(/\/$/, "") + "/api";
-  }
-  if (Platform.OS === "web" || typeof window !== "undefined") {
-    return "/api";
-  }
-  const domain = process.env.EXPO_PUBLIC_DOMAIN || "";
-  if (domain) return `https://${domain}/api`;
-  return "http://localhost:3000/api";
 }
 
 export async function askAi(prompt: string, systemPrompt?: string, options?: AskAiOptions): Promise<string> {
@@ -34,9 +30,9 @@ export async function askAi(prompt: string, systemPrompt?: string, options?: Ask
   }
   messages.push({ role: "user", content: prompt });
 
-  const res = await fetch(`${getAiApiBase()}/ai/chat`, {
+  const res = await fetch(`${getEdgeFnBase()}/ai-chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: edgeHeaders(),
     body: JSON.stringify({
       messages,
       fast: options?.fast ?? true,
@@ -125,9 +121,9 @@ export async function aiSummarizeThread(post: string, replies: { author: string;
 }
 
 export async function transcribeAudio(audioUrl: string): Promise<string> {
-  const res = await fetch(`${getAiApiBase()}/ai/chat`, {
+  const res = await fetch(`${getEdgeFnBase()}/transcribe`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: edgeHeaders(),
     body: JSON.stringify({ audioUrl }),
   });
 
@@ -271,3 +267,6 @@ export async function aiResearchCompanyAndGenerateAbout(ctx: JobAiContext): Prom
     { fast: false, maxTokens: 400 }
   );
 }
+
+/** Builds the Supabase edge function base URL — exported for screens that call edge fns directly. */
+export { getEdgeFnBase, edgeHeaders };

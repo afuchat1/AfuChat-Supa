@@ -25,7 +25,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { supabase } from "@/lib/supabase";
-import { getAiApiBase } from "@/lib/aiHelper";
+import { getEdgeFnBase, edgeHeaders } from "@/lib/aiHelper";
 import {
   getSearchHistory,
   addToHistory,
@@ -140,9 +140,9 @@ function dateRangeCutoff(range: DateRange): string | null {
 
 async function fetchAiInsight(query: string): Promise<AiInsight | null> {
   try {
-    const res = await fetch(`${getAiApiBase()}/ai/chat`, {
+    const res = await fetch(`${getEdgeFnBase()}/ai-chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: edgeHeaders(),
       body: JSON.stringify({
         messages: [
           {
@@ -558,13 +558,13 @@ export default function SearchScreen() {
           id: p.id, kind: "freelance" as const, title: p.title, desc: p.description,
           emoji: p.emoji || "💼", image_url: null, price: p.price || 0,
           badge: "Freelance", seller_name: (p.profiles as any)?.display_name || "",
-          route: `/freelance/${p.id}`,
+          route: `/freelance`,
         })));
         if (comms.data) marketItems.push(...comms.data.map((p: any) => ({
           id: p.id, kind: "community" as const, title: p.name, desc: p.description,
           emoji: p.emoji || "🏠", image_url: null, price: p.price || 0,
           badge: "Community", seller_name: (p.profiles as any)?.display_name || "",
-          route: `/communities/${p.id}`,
+          route: `/paid-communities`,
         })));
       }
 
@@ -972,14 +972,14 @@ export default function SearchScreen() {
           const rc = RARITY_COLORS[g.rarity] || "#9E9E9E";
           return (
             <Animated.View key={g.id} entering={FadeInDown.delay(i * 20).duration(180)}>
-              <View style={{ width: GIFT_W, backgroundColor: colors.surface, borderRadius: 14, padding: 10, alignItems: "center", gap: 4, borderWidth: 1, borderColor: rc + "30" }}>
+              <TouchableOpacity onPress={() => router.push("/gifts/marketplace" as any)} activeOpacity={0.8} style={{ width: GIFT_W, backgroundColor: colors.surface, borderRadius: 14, padding: 10, alignItems: "center", gap: 4, borderWidth: 1, borderColor: rc + "30" }}>
                 <Text style={{ fontSize: 26 }}>{g.emoji}</Text>
                 <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.text, textAlign: "center" }} numberOfLines={2}>{g.name}</Text>
                 <View style={{ backgroundColor: rc + "1A", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 }}>
                   <Text style={{ color: rc, fontSize: 9, fontFamily: "Inter_700Bold", textTransform: "capitalize" }}>{g.rarity}</Text>
                 </View>
                 <Text style={{ color: GOLD, fontSize: 11, fontFamily: "Inter_700Bold" }}>✦ {g.base_xp_cost}</Text>
-              </View>
+              </TouchableOpacity>
             </Animated.View>
           );
         })}

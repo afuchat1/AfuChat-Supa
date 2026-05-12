@@ -15,7 +15,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { supabase } from "@/lib/supabase";
-import { getAiApiBase } from "@/lib/aiHelper";
+import { getEdgeFnBase, edgeHeaders } from "@/lib/aiHelper";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useTier } from "@/hooks/useTier";
@@ -80,9 +80,9 @@ function timeAgo(iso: string) {
 
 async function fetchChatAiInsight(query: string): Promise<AiInsight | null> {
   try {
-    const res = await fetch(`${getAiApiBase()}/ai/chat`, {
+    const res = await fetch(`${getEdgeFnBase()}/ai-chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: edgeHeaders(),
       body: JSON.stringify({
         messages: [
           {

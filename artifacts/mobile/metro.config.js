@@ -1,7 +1,16 @@
 const { getDefaultConfig } = require("expo/metro-config");
 const http = require("http");
+const path = require("path");
 
 const config = getDefaultConfig(__dirname);
+
+// Exclude the mockup-sandbox vite build artefacts from Metro's file watcher.
+// Without this, Metro crashes with ENOENT when Vite rotates its deps_temp_*
+// directories during a hot-reload cycle.
+config.resolver = {
+  ...(config.resolver || {}),
+  blockList: /artifacts[\\/]mockup-sandbox[\\/].*/,
+};
 
 /**
  * EXPO_NO_LAZY=1 is set in the workflow env so Metro never uses multipart/mixed
