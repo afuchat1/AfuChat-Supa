@@ -172,6 +172,8 @@ export default function ContactProfileScreen() {
   const [followingCount, setFollowingCount] = useState(0);
   const [postCount, setPostCount] = useState(0);
   const [mutualCount, setMutualCount] = useState(0);
+  const [alsoFollowPreviews, setAlsoFollowPreviews] = useState<{ id: string; display_name: string; handle: string; avatar_url: string | null }[]>([]);
+  const [alsoFollowCount, setAlsoFollowCount] = useState(0);
   const [posts, setPosts] = useState<UserPost[]>([]);
   const [postsLoading, setPostsLoading] = useState(true);
   const [hasShop, setHasShop] = useState(false);
@@ -237,6 +239,35 @@ export default function ContactProfileScreen() {
     supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", id).then(({ count }) => setFollowingCount(count || 0));
     if (user) {
       supabase.rpc("get_mutual_followers_count", { user_a: user.id, user_b: id }).then(({ data }) => setMutualCount(data || 0), () => {});
+
+      // Fetch "people I follow who also follow this profile" for the social-proof banner
+      (async () => {
+        try {
+          // Step 1: get up to 500 follower IDs of the target profile (excluding myself)
+          const { data: profileFollowers } = await supabase
+            .from("follows")
+            .select("follower_id")
+            .eq("following_id", id)
+            .neq("follower_id", user.id)
+            .limit(500);
+          if (!profileFollowers || profileFollowers.length === 0) return;
+          const followerIds = profileFollowers.map((f: any) => f.follower_id);
+          // Step 2: from those, find who I follow, and grab their profiles
+          const { data: overlap } = await supabase
+            .from("follows")
+            .select("following_id, profiles!follows_following_id_fkey(id, display_name, handle, avatar_url)")
+            .eq("follower_id", user.id)
+            .in("following_id", followerIds)
+            .limit(4);
+          if (!overlap || overlap.length === 0) return;
+          const previews = overlap
+            .map((row: any) => row.profiles)
+            .filter(Boolean)
+            .slice(0, 3) as { id: string; display_name: string; handle: string; avatar_url: string | null }[];
+          setAlsoFollowPreviews(previews);
+          setAlsoFollowCount(overlap.length);
+        } catch (_) {}
+      })();
     }
   }, [id, user]);
 
@@ -517,6 +548,65 @@ export default function ContactProfileScreen() {
             ))}
           </View>
         </View>
+      )}
+
+      {/* ── "Also followed by people you follow" social-proof banner ─── */}
+      {!isOwnProfile && alsoFollowPreviews.length > 0 && (
+        <TouchableOpacity
+          activeOpacity={0.75}
+          onPress={() => router.push({ pathname: "/contact/[id]", params: { id: alsoFollowPreviews[0].id } } as any)}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+            marginHorizontal: 16,
+            marginBottom: 12,
+            backgroundColor: colors.backgroundSecondary,
+            borderRadius: 12,
+            paddingVertical: 9,
+            paddingHorizontal: 12,
+          }}
+        >
+          {/* Overlapping mini-avatars */}
+          <View style={{ flexDirection: "row", width: alsoFollowPreviews.length * 20 + 10 }}>
+            {alsoFollowPreviews.map((p, i) => (
+              <View
+                key={p.id}
+                style={{
+                  position: "absolute",
+                  left: i * 20,
+                  zIndex: alsoFollowPreviews.length - i,
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  borderWidth: 2,
+                  borderColor: colors.background,
+                  overflow: "hidden",
+                  backgroundColor: colors.border,
+                }}
+              >
+                {p.avatar_url ? (
+                  <Image source={{ uri: p.avatar_url }} style={{ width: 28, height: 28 }} />
+                ) : (
+                  <View style={{ width: 28, height: 28, backgroundColor: colors.accent + "33", alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ color: colors.accent, fontSize: 11, fontFamily: "Inter_700Bold" }}>{(p.display_name || "?")[0].toUpperCase()}</Text>
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+          {/* Label */}
+          <Text style={{ flex: 1, fontSize: 12, fontFamily: "Inter_400Regular", color: colors.textSecondary, lineHeight: 17 }} numberOfLines={2}>
+            {(() => {
+              const names = alsoFollowPreviews.map(p => `@${p.handle || p.display_name}`);
+              const extra = alsoFollowCount - alsoFollowPreviews.length;
+              if (names.length === 1 && extra === 0) return `${names[0]} you follow also follows this account`;
+              if (extra === 0) return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} you follow also follow this account`;
+              return `${names.join(", ")} and ${extra} other${extra !== 1 ? "s" : ""} you follow also follow this account`;
+            })()}
+          </Text>
+          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+        </TouchableOpacity>
       )}
 
       {/* ── CTA row ─── */}
