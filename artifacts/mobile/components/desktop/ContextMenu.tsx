@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
-    // @ts-expect-error react-native-web supports this
+    // @ts-ignore
     boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
   },
   item: {

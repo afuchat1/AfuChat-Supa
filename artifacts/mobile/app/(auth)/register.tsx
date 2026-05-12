@@ -227,7 +227,7 @@ export default function RegisterScreen() {
     router.replace({ pathname: "/onboarding", params: { userId: signupUserId || uid || "" } });
   }
 
-  async function nativeGoogleSignIn() {
+  async function nativeGoogleSignIn(): Promise<void> {
     setOauthLoading("google");
     const result = await googleSignIn();
     if (!result.ok) {

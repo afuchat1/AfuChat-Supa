@@ -368,7 +368,7 @@ export default function CommunitiesScreen() {
         </View>
       ) : (
         <FlatList
-          data={listData}
+          data={listData as any[]}
           keyExtractor={(item) => item.id}
           renderItem={({ item, index }) =>
             activeTab === "groups" ? (

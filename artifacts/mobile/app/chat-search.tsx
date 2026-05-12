@@ -61,11 +61,13 @@ type MediaResult = {
   id: string; chat_id: string; chat_name: string; chat_avatar: string | null;
   attachment_url: string; attachment_type: "image" | "video" | "gif";
   sender_name: string; sent_at: string;
+  is_group: boolean; is_channel: boolean;
 };
 
 type LinkResult = {
   id: string; chat_id: string; chat_name: string; chat_avatar: string | null;
   url: string; preview_text: string; sender_name: string; sent_at: string;
+  is_group: boolean; is_channel: boolean;
 };
 
 type AiInsight = {
@@ -146,7 +148,7 @@ export default function ChatSearchScreen() {
   const { q: incomingQ, ai: aiParam } = useLocalSearchParams<{ q?: string; ai?: string }>();
 
   const inputRef    = useRef<TextInput>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const [query,      setQuery]      = useState(incomingQ || "");
   const [tab,        setTab]        = useState<TabId>("chats");
@@ -234,7 +236,7 @@ export default function ChatSearchScreen() {
       for (const c of dmChats || []) {
         if (combined.find((x: any) => x.id === c.id)) continue;
         const other = (c.chat_members || []).filter((m: any) => m.user_id !== user.id)[0]?.profiles;
-        if (other?.display_name?.toLowerCase().includes(q.toLowerCase())) combined.push(c);
+        if ((other as any)?.display_name?.toLowerCase().includes(q.toLowerCase())) combined.push(c);
       }
 
       setChatResults(combined.slice(0, 20).map((c: any) => {
@@ -356,15 +358,16 @@ export default function ChatSearchScreen() {
 
       setMediaResults(msgs.map((m: any) => {
         const chat = chatMap.get(m.chat_id) as any;
-        const isGroup = chat?.is_group || chat?.is_channel;
-        const other = !isGroup ? (chat?.chat_members || []).filter((mb: any) => mb.user_id !== user.id)[0]?.profiles : null;
-        const chatName = isGroup ? (chat?.name || "Chat") : (other?.display_name || "Unknown");
-        const chatAvatar = isGroup ? (chat?.avatar_url || null) : (other?.avatar_url || null);
+        const isGroupChat = !!(chat?.is_group || chat?.is_channel);
+        const other = !isGroupChat ? (chat?.chat_members || []).filter((mb: any) => mb.user_id !== user.id)[0]?.profiles : null;
+        const chatName = isGroupChat ? (chat?.name || "Chat") : (other?.display_name || "Unknown");
+        const chatAvatar = isGroupChat ? (chat?.avatar_url || null) : (other?.avatar_url || null);
         const sender = profileMap.get(m.sender_id) as any;
         return {
           id: m.id, chat_id: m.chat_id, chat_name: chatName, chat_avatar: chatAvatar,
           attachment_url: m.attachment_url, attachment_type: m.attachment_type,
           sender_name: sender?.display_name || "User", sent_at: m.sent_at,
+          is_group: !!chat?.is_group, is_channel: !!chat?.is_channel,
         };
       }));
     } catch { setMediaResults([]); }
@@ -406,16 +409,17 @@ export default function ChatSearchScreen() {
         const match = URL_RE.exec(m.encrypted_content || "");
         if (!match) continue;
         const chat = chatMap.get(m.chat_id) as any;
-        const isGroup = chat?.is_group || chat?.is_channel;
-        const other = !isGroup ? (chat?.chat_members || []).filter((mb: any) => mb.user_id !== user.id)[0]?.profiles : null;
-        const chatName = isGroup ? (chat?.name || "Chat") : (other?.display_name || "Unknown");
-        const chatAvatar = isGroup ? (chat?.avatar_url || null) : (other?.avatar_url || null);
+        const isGroupChat = !!(chat?.is_group || chat?.is_channel);
+        const other = !isGroupChat ? (chat?.chat_members || []).filter((mb: any) => mb.user_id !== user.id)[0]?.profiles : null;
+        const chatName = isGroupChat ? (chat?.name || "Chat") : (other?.display_name || "Unknown");
+        const chatAvatar = isGroupChat ? (chat?.avatar_url || null) : (other?.avatar_url || null);
         const sender = profileMap.get(m.sender_id) as any;
         const url = match[0];
         const previewText = (m.encrypted_content || "").replace(url, "").trim() || url;
         results.push({
           id: m.id, chat_id: m.chat_id, chat_name: chatName, chat_avatar: chatAvatar,
           url, preview_text: previewText, sender_name: sender?.display_name || "User", sent_at: m.sent_at,
+          is_group: !!chat?.is_group, is_channel: !!chat?.is_channel,
         });
         if (results.length >= 30) break;
       }
@@ -500,7 +504,13 @@ export default function ChatSearchScreen() {
     return (
       <TouchableOpacity
         style={[ss.row, { borderBottomColor: colors.border }]}
-        onPress={() => { Haptics.selectionAsync(); router.back(); setTimeout(() => router.push(`/${item.handle}` as any), 50); }}
+        onPress={async () => {
+          Haptics.selectionAsync();
+          router.push({
+            pathname: "/contact/[id]",
+            params: { id: item.id, init_name: item.display_name, init_handle: item.handle, init_avatar: item.avatar_url ?? "", init_verified: item.is_verified ? "1" : "0", init_org_verified: item.is_organization_verified ? "1" : "0" },
+          } as any);
+        }}
         activeOpacity={0.72}
       >
         <Avatar uri={item.avatar_url} name={item.display_name} size={46} />
@@ -508,7 +518,7 @@ export default function ChatSearchScreen() {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
             <Text style={[ss.rowTitle, { color: colors.text }]} numberOfLines={1}>{item.display_name}</Text>
             {(item.is_verified || item.is_organization_verified) && (
-              <VerifiedBadge org={item.is_organization_verified} size={14} />
+              <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={14} />
             )}
           </View>
           <Text style={[ss.rowSub, { color: colors.textMuted }]}>@{item.handle}</Text>
@@ -620,7 +630,7 @@ export default function ChatSearchScreen() {
     return (
       <TouchableOpacity
         style={[ss.row, { borderBottomColor: colors.border }]}
-        onPress={() => { Haptics.selectionAsync(); navigateToChat(item.chat_id, { otherName: item.chat_name, otherAvatar: item.chat_avatar || "", otherId: "", isGroup: "false", isChannel: "false", chatName: item.chat_name }); }}
+        onPress={() => { Haptics.selectionAsync(); navigateToChat(item.chat_id, { otherName: item.chat_name, otherAvatar: item.chat_avatar || "", otherId: "", isGroup: item.is_group ? "true" : "false", isChannel: item.is_channel ? "true" : "false", chatName: item.chat_name }); }}
         activeOpacity={0.72}
       >
         <View style={ss.mediaThumb}>

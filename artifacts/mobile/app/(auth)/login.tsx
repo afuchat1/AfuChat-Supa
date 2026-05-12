@@ -426,7 +426,7 @@ export default function LoginScreen() {
   }
 
   // ─── OAuth ──────────────────────────────────────────────────────────────
-  async function nativeGoogleSignIn() {
+  async function nativeGoogleSignIn(): Promise<void> {
     setOauthLoading("google");
     const result = await googleSignIn();
     if (!result.ok) {

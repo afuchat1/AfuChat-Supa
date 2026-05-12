@@ -413,7 +413,7 @@ export default function CreateDuetScreen() {
                     isLooping
                     isMuted
                     posterSource={original.image_url ? { uri: original.image_url } : undefined}
-                    usePosterImage={!!original.image_url}
+                    {...(original.image_url ? { usePosterImage: true } as any : {})}
                   />
                 ) : (
                   // @ts-ignore

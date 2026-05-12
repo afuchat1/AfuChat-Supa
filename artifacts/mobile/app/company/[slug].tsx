@@ -168,7 +168,7 @@ export default function CompanyPageScreen() {
     ]);
 
     setPosts((postsData ?? []) as PagePost[]);
-    setFollowers((followersData ?? []) as Follower[]);
+    setFollowers((followersData ?? []) as unknown as Follower[]);
     setFollowing(!!followCheck.data);
     setMyPages((myPagesData ?? []) as any[]);
     setJobs((jobsData ?? []) as any[]);

@@ -247,7 +247,7 @@ export default function CallScreen() {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {isVideo && remoteStream && Platform.OS === "web" ? (
-        <WebVideoStream stream={remoteStream} style={StyleSheet.absoluteFill} />
+        <WebVideoStream stream={remoteStream} style={StyleSheet.absoluteFill as any} />
       ) : isVideo && remoteStream && RTCView ? (
         <RTCView
           streamURL={remoteStream.toURL()}

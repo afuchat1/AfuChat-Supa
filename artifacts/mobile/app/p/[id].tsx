@@ -630,7 +630,7 @@ export default function PostShortLinkScreen() {
         </View>
       </Modal>
 
-      <ImageViewer visible={imgViewer.visible} images={imgViewer.images} initialIndex={imgViewer.initialIndex} onClose={imgViewer.closeViewer} />
+      <ImageViewer visible={imgViewer.visible} images={imgViewer.images} index={imgViewer.index} onClose={imgViewer.closeViewer} />
     </View>
   );
 }

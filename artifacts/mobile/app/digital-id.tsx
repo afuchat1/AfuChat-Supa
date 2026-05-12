@@ -112,7 +112,7 @@ async function webDownload(domRef: React.RefObject<View>, filename: string) {
   document.body.removeChild(a);
 }
 
-async function nativeDownload(ref: React.RefObject<ViewShot>) {
+async function nativeDownload(ref: React.RefObject<any>) {
   if (!ref.current || typeof (ref.current as any).capture !== "function") return;
   const uri: string = await (ref.current as any).capture();
   if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri, { mimeType: "image/png" });

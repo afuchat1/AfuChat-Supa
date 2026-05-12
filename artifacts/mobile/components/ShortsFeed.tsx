@@ -138,7 +138,7 @@ function WebShortsPlayer({
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      {/* @ts-expect-error react-native-web exposes raw HTML elements via createElement */}
+      {/* @ts-ignore */}
       <video
         ref={ref}
         src={src}
@@ -225,7 +225,7 @@ function NativeShortsPlayer({
         isLooping
         isMuted={muted}
         posterSource={poster ? { uri: poster } : undefined}
-        usePosterImage={!!poster}
+        {...(poster ? { usePosterImage: true } as any : {})}
       />
       {!preloadOnly && paused && (
         <View style={styles.centerPlayBtn} pointerEvents="none">

@@ -1050,7 +1050,7 @@ const VideoItem = React.memo(function VideoItem({
           isLooping
           isMuted={false}
           posterSource={item.image_url ? { uri: item.image_url } : undefined}
-          usePosterImage={!!item.image_url}
+          {...(item.image_url ? { usePosterImage: true } as any : {})}
           onPlaybackStatusUpdate={onPlaybackStatus}
           onError={() => {
             if (!videoError) {

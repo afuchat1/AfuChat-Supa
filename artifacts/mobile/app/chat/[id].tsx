@@ -2352,7 +2352,7 @@ function ChatScreen() {
     AsyncStorage.getItem(`afu_disappearing_timer_${chatId}`).then((v) => { if (v) setDisappearingTimer(parseInt(v, 10)); }).catch(() => {});
     if (chatInfo?.other_id && !chatInfo.is_group && !chatInfo.is_channel) {
       supabase.from("blocks").select("id").eq("blocker_id", user.id).eq("blocked_id", chatInfo.other_id).maybeSingle()
-        .then(({ data }) => setIsBlocked(!!data)).catch(() => {});
+        .then(({ data }: any) => setIsBlocked(!!data), () => {});
     }
   }, [id, realChatId, isDraft, user?.id, chatInfo?.other_id]);
 
@@ -3543,9 +3543,9 @@ STRICT RULES:
     setRecordingDuration(0);
     setRecordingTenths(0);
     setWaveformLevels([]);
-    slideX.value = withSpring(0, SPRING_SNAP);
-    slideY.value = withSpring(0, SPRING_SNAP);
-    micScale.value = withSpring(1, SPRING_CONFIG);
+    slideX.value = withSpring(0, MIC_SPRING_SNAP);
+    slideY.value = withSpring(0, MIC_SPRING_SNAP);
+    micScale.value = withSpring(1, MIC_SPRING_CONFIG);
     recBarOpacity.value = withTiming(0, { duration: 150 });
     cancelProgress.value = withTiming(0, { duration: 150 });
     lockProgress.value = withTiming(0, { duration: 150 });
@@ -3642,9 +3642,9 @@ STRICT RULES:
     setRecordingDuration(0);
     setRecordingTenths(0);
     setWaveformLevels([]);
-    slideX.value = withSpring(0, SPRING_SNAP);
-    slideY.value = withSpring(0, SPRING_SNAP);
-    micScale.value = withSpring(1, SPRING_CONFIG);
+    slideX.value = withSpring(0, MIC_SPRING_SNAP);
+    slideY.value = withSpring(0, MIC_SPRING_SNAP);
+    micScale.value = withSpring(1, MIC_SPRING_CONFIG);
     recBarOpacity.value = withTiming(0, { duration: 150 });
     cancelProgress.value = withTiming(0, { duration: 150 });
     lockProgress.value = withTiming(0, { duration: 150 });
@@ -4079,7 +4079,7 @@ STRICT RULES:
               style={[st.strangerBtnOutline, { borderColor: colors.border }]}
               onPress={async () => {
                 if (!chatInfo.other_id) return;
-                await supabase.from("follows").insert({ follower_id: user?.id, following_id: chatInfo.other_id }).catch(() => {});
+                try { await supabase.from("follows").insert({ follower_id: user?.id, following_id: chatInfo.other_id }); } catch {}
                 setIsStranger(false);
               }}
             >
@@ -4093,7 +4093,7 @@ STRICT RULES:
                   { text: "Cancel", style: "cancel" },
                   { text: "Block", style: "destructive", onPress: async () => {
                     if (!chatInfo.other_id || !user) return;
-                    await supabase.from("blocked_users").insert({ blocker_id: user.id, blocked_id: chatInfo.other_id }).catch(() => {});
+                    try { await supabase.from("blocked_users").insert({ blocker_id: user.id, blocked_id: chatInfo.other_id }); } catch {}
                     setIsStranger(false);
                     router.back();
                   }},

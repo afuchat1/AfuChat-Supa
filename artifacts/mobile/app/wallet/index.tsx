@@ -51,7 +51,7 @@ type Transaction = {
   label: string;
   icon: string;
   color: string;
-  currency: "nexa" | "acoin" | "gift";
+  currency: "nexa" | "acoin" | "gift" | "points";
   metadata?: Record<string, any>;
   fee?: number;
   nexaSpent?: number;

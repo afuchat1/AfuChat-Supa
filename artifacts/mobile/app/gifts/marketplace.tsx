@@ -453,7 +453,7 @@ export default function GiftMarketplaceScreen() {
                   const { data: cancelled } = await supabase
                     .from("gift_marketplace")
                     .update({ status: "cancelled" })
-                    .eq("id", selectedListing.id)
+                    .eq("id", selectedListing!.id)
                     .eq("status", "listed")
                     .select("id");
                   if (!cancelled || cancelled.length === 0) {

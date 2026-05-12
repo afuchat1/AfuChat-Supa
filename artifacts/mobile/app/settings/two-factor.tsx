@@ -262,7 +262,7 @@ export default function TwoFactorScreen() {
                   onPress={() => setShowDisableGate(true)}
                 >
                   <View style={[styles.rowIcon, { backgroundColor: "#FF3B30" }]}>
-                    <Ionicons name="shield-off-outline" size={18} color="#fff" />
+                    <Ionicons name="shield-outline" size={18} color="#fff" />
                   </View>
                   <View style={styles.rowMeta}>
                     <Text style={[styles.rowLabel, { color: colors.text }]}>Disable Two-Factor Auth</Text>

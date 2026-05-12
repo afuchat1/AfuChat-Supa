@@ -1239,7 +1239,7 @@ export default function UsernameMarketScreen() {
                   <View style={{ marginTop: 20, gap: 8 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4, marginBottom: 4 }}>
                       <Ionicons name="checkmark-done-circle-outline" size={16} color={colors.textMuted} />
-                      <Text style={[styles.cardTitle, { color: colors.textMuted, letterSpacing: 0.6 }]}>
+                      <Text style={[styles.sectionTitle, { color: colors.textMuted, letterSpacing: 0.6 }]}>
                         RECENTLY SETTLED
                       </Text>
                     </View>

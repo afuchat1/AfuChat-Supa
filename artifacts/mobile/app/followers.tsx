@@ -215,7 +215,7 @@ export default function FollowersScreen() {
                 <Ionicons name="business" size={10} color={colors.accent} />
               </View>
             )}
-            <PrestigeBadge grade={item.current_grade} size={14} />
+            <PrestigeBadge grade={item.current_grade} size="sm" />
           </View>
           <Text style={[styles.handle, { color: colors.textMuted }]} numberOfLines={1}>
             @{item.handle}
