@@ -429,27 +429,12 @@ export default function LoginScreen() {
     const result = await googleSignIn();
     if (!result.ok) {
       setOauthLoading(null);
+      // User consciously dismissed the picker — stop here.
       if (result.cancelled) return;
-      if (result.error === "EXPO_GO") {
-        showAlert(
-          "Testing with Expo Go",
-          "Google Sign-In requires a compiled APK build. Open the app from your installed APK (built with EAS) to use Google Sign-In. Use email/password to sign in here."
-        );
-        return;
-      }
-      if (result.error === "SHA1_MISMATCH") {
-        showAlert(
-          "Google Sign-In Setup Needed",
-          "This APK's signing fingerprint (SHA-1) is not registered in Google Cloud Console. Go to Cloud Console → Credentials → your Android OAuth client and add the SHA-1 for this build."
-        );
-        return;
-      }
-      if (result.error === "NO_MODULE") {
-        showAlert("Not Available", "The Google Sign-In module is not linked in this build.");
-        return;
-      }
-      showAlert("Google Sign-In Failed", result.error);
-      return;
+      // Native Google Sign-In unavailable (Expo Go, SHA-1 mismatch, missing module,
+      // or any other error) — seamlessly fall back to the web-based OAuth flow,
+      // which works identically to GitHub sign-in.
+      return signInWithProvider("google", false);
     }
     const uid = result.userId;
     if (uid) {

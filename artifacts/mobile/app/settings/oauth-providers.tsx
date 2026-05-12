@@ -15,7 +15,7 @@ import type { UserIdentity } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
-import { GitHubLogo, XLogo, GitLabLogo } from "@/components/ui/OAuthLogos";
+import { GoogleLogo, GitHubLogo, XLogo, GitLabLogo } from "@/components/ui/OAuthLogos";
 import * as Haptics from "@/lib/haptics";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -31,6 +31,7 @@ type Provider = {
 };
 
 const PROVIDERS: Provider[] = [
+  { id: "google",  label: "Google",      iconGradient: ["#EA4335", "#4285F4"], renderLogo: () => <GoogleLogo size={18} /> },
   { id: "github",  label: "GitHub",      iconGradient: ["#24292E", "#404040"], renderLogo: () => <GitHubLogo size={18} color="#fff" /> },
   { id: "twitter", label: "X (Twitter)", iconGradient: ["#1a1a1a", "#333333"], renderLogo: () => <XLogo size={18} color="#fff" /> },
   { id: "gitlab",  label: "GitLab",      iconGradient: ["#FC6D26", "#E24329"], renderLogo: () => <GitLabLogo size={18} /> },

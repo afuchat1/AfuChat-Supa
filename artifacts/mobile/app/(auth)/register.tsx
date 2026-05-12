@@ -229,21 +229,13 @@ export default function RegisterScreen() {
     setOauthLoading("google");
     const result = await googleSignIn();
     if (!result.ok) {
-      if (result.cancelled) { setOauthLoading(null); return; }
-      if (result.error === "EXPO_GO") {
-        // The native Google Sign-In SDK requires a production EAS build of
-        // com.afuchat.app with its SHA-1 fingerprint registered in Google Cloud
-        // Console. It cannot run inside Expo Go.
-        setOauthLoading(null);
-        showAlert(
-          "Native Sign-In Unavailable",
-          "Google Sign-In requires the full AfuChat app build. Install AfuChat from the Play Store or build with EAS to enable this."
-        );
-        return;
-      }
       setOauthLoading(null);
-      showAlert("Error", result.error);
-      return;
+      // User consciously dismissed the picker — stop here.
+      if (result.cancelled) return;
+      // Native Google Sign-In unavailable (Expo Go, SHA-1 mismatch, missing module,
+      // or any other error) — seamlessly fall back to the web-based OAuth flow,
+      // which works identically to GitHub sign-in.
+      return signInWithProvider("google", false);
     }
     const uid = result.userId;
     if (uid) {
