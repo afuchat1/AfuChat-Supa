@@ -11,7 +11,6 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "@/lib/haptics";
@@ -26,14 +25,16 @@ import { showAlert } from "@/lib/alert";
 import { isOnline } from "@/lib/offlineStore";
 import { TIER_CHANNEL_LIMITS } from "@/lib/featureUsage";
 
+const PURPLE = "#5856D6";
+
 export default function CreateChannelScreen() {
   const { colors } = useTheme();
   const { user, subscription } = useAuth();
-  const insets = useSafeAreaInsets();
 
   const [channelName, setChannelName] = useState("");
   const [description, setDescription] = useState("");
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [isPublic, setIsPublic] = useState(true);
   const [creating, setCreating] = useState(false);
 
   const descRef = useRef<TextInput>(null);
@@ -60,14 +61,19 @@ export default function CreateChannelScreen() {
       showAlert("No internet", "Creating a channel requires an internet connection.");
       return;
     }
+    if (!channelName.trim()) {
+      showAlert("Channel name required", "Please enter a name for your channel.");
+      return;
+    }
+    if (!user) return;
+
     const tier = (subscription?.plan_tier as keyof typeof TIER_CHANNEL_LIMITS) || "free";
     const limit = TIER_CHANNEL_LIMITS[tier] ?? 1;
     if (isFinite(limit)) {
       const { count } = await supabase
-        .from("chats")
+        .from("channels")
         .select("id", { count: "exact", head: true })
-        .eq("created_by", user!.id)
-        .eq("is_channel", true);
+        .eq("owner_id", user.id);
       const current = count ?? 0;
       if (current >= limit) {
         const nextTier = tier === "free" ? "Silver" : tier === "silver" ? "Gold" : "Platinum";
@@ -75,109 +81,93 @@ export default function CreateChannelScreen() {
           "Channel limit reached",
           `You can create up to ${limit} channel${limit === 1 ? "" : "s"} on your current plan. Upgrade to ${nextTier} to broadcast to more audiences.`,
           [
-            { text: `Upgrade to ${nextTier}`, onPress: () => router.push("/premium") },
+            { text: `Upgrade to ${nextTier}`, onPress: () => router.push("/premium" as any) },
             { text: "OK" },
           ]
         );
-        setCreating(false);
         return;
       }
     }
-    if (!channelName.trim()) {
-      showAlert("Channel name required", "Please enter a name for your channel.");
-      return;
-    }
-    if (!user) return;
 
     setCreating(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     let avatarUrl: string | null = null;
-
     if (avatarUri) {
-      const ext = avatarUri.split(".").pop()?.split("?")[0]?.toLowerCase() ?? "jpg";
-      const fileName = `channel-${user.id}-${Date.now()}.${ext}`;
-      const { publicUrl } = await uploadToStorage("group-avatars", `${user.id}/${fileName}`, avatarUri, `image/${ext === "png" ? "png" : "jpeg"}`);
-      avatarUrl = publicUrl;
+      try {
+        const ext = avatarUri.split(".").pop()?.split("?")[0]?.toLowerCase() ?? "jpg";
+        const fileName = `channel-${user.id}-${Date.now()}.${ext}`;
+        const { publicUrl } = await uploadToStorage(
+          "group-avatars",
+          `${user.id}/${fileName}`,
+          avatarUri,
+          `image/${ext === "png" ? "png" : "jpeg"}`
+        );
+        avatarUrl = publicUrl;
+      } catch (_) {}
     }
 
-    const { data: chat, error } = await supabase
-      .from("chats")
+    const { data: channel, error } = await supabase
+      .from("channels")
       .insert({
         name: channelName.trim(),
         description: description.trim() || null,
-        is_group: false,
-        is_channel: true,
         avatar_url: avatarUrl,
-        created_by: user.id,
-        user_id: user.id,
+        owner_id: user.id,
+        is_public: isPublic,
+        subscriber_count: 0,
       })
-      .select()
+      .select("id")
       .single();
 
-    if (error || !chat) {
-      const { data: chat2, error: error2 } = await supabase
-        .from("chats")
-        .insert({
-          name: channelName.trim(),
-          is_group: true,
-          avatar_url: avatarUrl,
-          created_by: user.id,
-          user_id: user.id,
-        })
-        .select()
-        .single();
-
-      if (error2 || !chat2) {
-        showAlert("Error", "Could not create channel. Please try again.");
-        setCreating(false);
-        return;
-      }
-
-      await supabase.from("chat_members").insert({
-        chat_id: chat2.id,
-        user_id: user.id,
-        is_admin: true,
-      });
-
-      try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("channel_created"); } catch (_) {}
-      router.replace({ pathname: "/chat/[id]", params: { id: chat2.id } });
+    if (error || !channel) {
+      showAlert("Error", "Could not create channel. Please try again.");
       setCreating(false);
       return;
     }
 
-    await supabase.from("chat_members").insert({
-      chat_id: chat.id,
-      user_id: user.id,
-      is_admin: true,
-    });
+    await supabase
+      .from("channel_subscriptions")
+      .insert({ channel_id: channel.id, user_id: user.id });
 
-    try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("channel_created"); } catch (_) {}
-    router.replace({ pathname: "/chat/[id]", params: { id: chat.id } });
+    try {
+      const { rewardXp } = await import("../../lib/rewardXp");
+      rewardXp("channel_created");
+    } catch (_) {}
+
+    router.replace({ pathname: "/channel/[id]", params: { id: channel.id } });
     setCreating(false);
   }
 
   return (
     <KeyboardAvoidingView
       style={[styles.root, { backgroundColor: colors.background }]}
-      behavior="padding"
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <GlassHeader
         title="New Channel"
         onBack={() => router.back()}
         right={
-          <TouchableOpacity onPress={createChannel} disabled={creating || !channelName.trim()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <TouchableOpacity
+            onPress={createChannel}
+            disabled={creating || !channelName.trim()}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             {creating ? (
-              <ActivityIndicator color={colors.accent} size="small" />
+              <ActivityIndicator color={PURPLE} size="small" />
             ) : (
-              <Ionicons name="checkmark" size={24} color={channelName.trim() ? colors.accent : colors.textMuted} />
+              <Ionicons name="checkmark" size={24} color={channelName.trim() ? PURPLE : colors.textMuted} />
             )}
           </TouchableOpacity>
         }
       />
 
       <View style={[styles.nameSection, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity style={[styles.avatarBtn, { backgroundColor: colors.accent }]} onPress={pickAvatar} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={[styles.avatarBtn, { backgroundColor: avatarUri ? "transparent" : PURPLE }]}
+          onPress={pickAvatar}
+          activeOpacity={0.8}
+        >
           {avatarUri ? (
             <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
           ) : (
@@ -192,7 +182,7 @@ export default function CreateChannelScreen() {
 
         <View style={styles.nameInputWrap}>
           <TextInput
-            style={[styles.nameInput, { color: colors.text, borderBottomColor: colors.accent }]}
+            style={[styles.nameInput, { color: colors.text, borderBottomColor: PURPLE }]}
             placeholder="Channel name"
             placeholderTextColor={colors.textMuted}
             value={channelName}
@@ -201,17 +191,14 @@ export default function CreateChannelScreen() {
             returnKeyType="next"
             onSubmitEditing={() => descRef.current?.focus()}
           />
-          <TouchableOpacity style={styles.emojiBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="happy-outline" size={22} color={colors.textMuted} />
-          </TouchableOpacity>
         </View>
       </View>
 
       <View style={[styles.descSection, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TextInput
           ref={descRef}
-          style={[styles.descInput, { color: colors.text, borderBottomColor: colors.border }]}
-          placeholder="Description"
+          style={[styles.descInput, { color: colors.text }]}
+          placeholder="Description (optional)"
           placeholderTextColor={colors.textMuted}
           value={description}
           onChangeText={setDescription}
@@ -219,8 +206,49 @@ export default function CreateChannelScreen() {
           returnKeyType="done"
           blurOnSubmit
         />
-        <Text style={[styles.descHint, { color: colors.textMuted }]}>
-          You can provide an optional description for your channel.
+      </View>
+
+      <TouchableOpacity
+        style={[styles.visibilityRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}
+        onPress={() => setIsPublic((v) => !v)}
+        activeOpacity={0.75}
+      >
+        <View style={styles.visibilityLeft}>
+          <Ionicons
+            name={isPublic ? "globe-outline" : "lock-closed-outline"}
+            size={20}
+            color={isPublic ? PURPLE : colors.textMuted}
+          />
+          <View>
+            <Text style={[styles.visibilityTitle, { color: colors.text }]}>
+              {isPublic ? "Public Channel" : "Private Channel"}
+            </Text>
+            <Text style={[styles.visibilitySub, { color: colors.textMuted }]}>
+              {isPublic
+                ? "Anyone can find and subscribe"
+                : "Only people with the link can subscribe"}
+            </Text>
+          </View>
+        </View>
+        <View
+          style={[
+            styles.visibilityToggle,
+            { backgroundColor: isPublic ? PURPLE : colors.border },
+          ]}
+        >
+          <View
+            style={[
+              styles.visibilityThumb,
+              { transform: [{ translateX: isPublic ? 18 : 0 }] },
+            ]}
+          />
+        </View>
+      </TouchableOpacity>
+
+      <View style={[styles.tipCard, { backgroundColor: PURPLE + "0E", marginHorizontal: 14, marginTop: 14, borderRadius: 14, borderWidth: 1, borderColor: PURPLE + "30", padding: 14 }]}>
+        <Ionicons name="megaphone-outline" size={16} color={PURPLE} />
+        <Text style={[styles.tipText, { color: PURPLE }]}>
+          As the channel owner, only you can post broadcasts. Subscribers can like and comment on your posts.
         </Text>
       </View>
     </KeyboardAvoidingView>
@@ -229,15 +257,6 @@ export default function CreateChannelScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
 
   nameSection: {
     flexDirection: "row",
@@ -245,6 +264,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 20,
     gap: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   avatarBtn: {
     width: 64,
@@ -271,8 +291,6 @@ const styles = StyleSheet.create({
   },
   nameInputWrap: {
     flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
     paddingBottom: 6,
   },
   nameInput: {
@@ -280,26 +298,47 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontFamily: "Inter_400Regular",
     padding: 0,
+    borderBottomWidth: 1.5,
+    paddingBottom: 6,
   },
-  emojiBtn: { paddingLeft: 8 },
 
   descSection: {
     paddingHorizontal: 16,
-    paddingTop: 20,
+    paddingTop: 16,
     paddingBottom: 12,
-    gap: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   descInput: {
     fontSize: 16,
     fontFamily: "Inter_400Regular",
-    paddingBottom: 8,
-    minHeight: 36,
-    color: "inherit",
+    minHeight: 60,
     padding: 0,
   },
-  descHint: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 18,
+
+  visibilityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  visibilityLeft: { flex: 1, flexDirection: "row", alignItems: "center", gap: 12 },
+  visibilityTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  visibilitySub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  visibilityToggle: {
+    width: 42,
+    height: 24,
+    borderRadius: 12,
+    padding: 3,
+    justifyContent: "center",
+  },
+  visibilityThumb: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#fff",
+  },
+
+  tipCard: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  tipText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
 });
