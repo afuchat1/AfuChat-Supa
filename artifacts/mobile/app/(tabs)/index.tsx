@@ -633,21 +633,29 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
   const [storiesExpanded, setStoriesExpanded] = useState(false);
   const storiesExpandedRef = useRef(false);
   const storiesHeightAnim  = useRef(new Animated.Value(0)).current;
+  // Drives compact avatar opacity/scale in header (1=visible, 0=hidden)
+  const compactAvatarAnim  = useRef(new Animated.Value(1)).current;
   const pullRevealFiredRef  = useRef(false);
 
   const expandStories = useCallback(() => {
     if (storiesExpandedRef.current) return;
     storiesExpandedRef.current = true;
     setStoriesExpanded(true);
-    Animated.spring(storiesHeightAnim, { toValue: 1, useNativeDriver: false, speed: 18, bounciness: 4 }).start();
-  }, [storiesHeightAnim]);
+    Animated.parallel([
+      Animated.spring(storiesHeightAnim, { toValue: 1, useNativeDriver: false, speed: 18, bounciness: 4 }),
+      Animated.timing(compactAvatarAnim, { toValue: 0, duration: 160, useNativeDriver: true }),
+    ]).start();
+  }, [storiesHeightAnim, compactAvatarAnim]);
 
   const collapseStories = useCallback(() => {
-    Animated.spring(storiesHeightAnim, { toValue: 0, useNativeDriver: false, speed: 24, bounciness: 0 }).start(() => {
+    Animated.parallel([
+      Animated.spring(storiesHeightAnim, { toValue: 0, useNativeDriver: false, speed: 24, bounciness: 0 }),
+      Animated.timing(compactAvatarAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
+    ]).start(() => {
       storiesExpandedRef.current = false;
       setStoriesExpanded(false);
     });
-  }, [storiesHeightAnim]);
+  }, [storiesHeightAnim, compactAvatarAnim]);
 
   const handleFabScroll = useCallback((e: any) => {
     const y  = e.nativeEvent.contentOffset.y;
@@ -1241,7 +1249,9 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
             <Text style={[selStyles.cancelText, { color: colors.accent }]}>Cancel</Text>
           </TouchableOpacity>
         ) : user ? (
-          <CompactStoryHeader userId={user.id} colors={colors} onExpand={expandStories} />
+          <Animated.View style={{ opacity: compactAvatarAnim, transform: [{ scale: compactAvatarAnim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }) }] }}>
+            <CompactStoryHeader userId={user.id} colors={colors} onExpand={expandStories} />
+          </Animated.View>
         ) : null}
 
         {selectMode ? (
@@ -1283,11 +1293,25 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
       {/* Stories expansion area — slides in on hard pull-down, above search bar */}
       {!panelMode && !selectMode && (
         <Animated.View style={{
-          height: storiesHeightAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 116] }),
+          height: storiesHeightAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 120] }),
           overflow: "hidden",
+          opacity: storiesHeightAnim.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 0.6, 1] }),
         }}>
-          {storiesExpanded && user && (
-            <StoriesBar userId={user.id} colors={colors} isDesktop={false} />
+          {user && (
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <View style={{ flex: 1 }}>
+                <StoriesBar userId={user.id} colors={colors} isDesktop={false} />
+              </View>
+              {/* Collapse chevron — tap to close stories bar */}
+              <TouchableOpacity
+                onPress={collapseStories}
+                style={{ paddingRight: 12, paddingLeft: 4, alignSelf: "center", paddingVertical: 8 }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                activeOpacity={0.65}
+              >
+                <Ionicons name="chevron-up" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
           )}
         </Animated.View>
       )}
