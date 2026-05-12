@@ -1,8 +1,30 @@
-import { supabaseUrl, supabaseAnonKey } from "@/lib/supabase";
+import { Platform } from "react-native";
 
 interface AskAiOptions {
   fast?: boolean;
   maxTokens?: number;
+}
+
+/**
+ * Returns the base URL for the AfuChat API server.
+ *
+ * - Web (Expo web / Metro dev proxy): relative "/api" — Metro proxies this
+ *   to the Express server running on port 3000.
+ * - Native (iOS/Android) dev: uses EXPO_PUBLIC_DOMAIN (the Replit dev domain)
+ *   so the native app can reach the server.
+ * - EAS production builds: uses EXPO_PUBLIC_API_URL set in eas.json.
+ */
+export function getAiApiBase(): string {
+  const explicit = process.env.EXPO_PUBLIC_API_URL || "";
+  if (explicit && explicit !== "https://YOUR_BACKEND_DOMAIN" && explicit !== "https://afuchat.replit.app") {
+    return explicit.replace(/\/$/, "") + "/api";
+  }
+  if (Platform.OS === "web" || typeof window !== "undefined") {
+    return "/api";
+  }
+  const domain = process.env.EXPO_PUBLIC_DOMAIN || "";
+  if (domain) return `https://${domain}/api`;
+  return "http://localhost:3000/api";
 }
 
 export async function askAi(prompt: string, systemPrompt?: string, options?: AskAiOptions): Promise<string> {
@@ -12,13 +34,9 @@ export async function askAi(prompt: string, systemPrompt?: string, options?: Ask
   }
   messages.push({ role: "user", content: prompt });
 
-  const res = await fetch(`${supabaseUrl}/functions/v1/ai-chat`, {
+  const res = await fetch(`${getAiApiBase()}/ai/chat`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${supabaseAnonKey}`,
-      "apikey": supabaseAnonKey,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       messages,
       fast: options?.fast ?? true,
@@ -107,13 +125,9 @@ export async function aiSummarizeThread(post: string, replies: { author: string;
 }
 
 export async function transcribeAudio(audioUrl: string): Promise<string> {
-  const res = await fetch(`${supabaseUrl}/functions/v1/ai-chat`, {
+  const res = await fetch(`${getAiApiBase()}/ai/chat`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${supabaseAnonKey}`,
-      "apikey": supabaseAnonKey,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ audioUrl }),
   });
 

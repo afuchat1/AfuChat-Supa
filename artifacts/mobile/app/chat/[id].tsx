@@ -64,7 +64,7 @@ import { useChatPreferences, CHAT_THEME_COLORS, BUBBLE_RADIUS } from "@/context/
 import { useAdvancedFeatures } from "@/context/AdvancedFeaturesContext";
 import { useDataMode } from "@/context/DataModeContext";
 import { markChatVisited, setActiveChatId, clearActiveChatId } from "@/lib/chatVisited";
-import { askAi, aiSuggestReply, transcribeAudio } from "@/lib/aiHelper";
+import { askAi, aiSuggestReply, transcribeAudio, getAiApiBase } from "@/lib/aiHelper";
 import {
   playNotificationSound as playMgrSound,
   resetToPlaybackMode,
@@ -2504,9 +2504,9 @@ STRICT RULES:
         .map(m => ({ role: m.sender_id === user?.id ? "user" as const : "assistant" as const, content: m.encrypted_content }));
       conversationMessages.push({ role: "user", content: userText.replace(/@afuai/gi, "").trim() || userText });
 
-      const res = await fetch(`${SUPA_URL}/functions/v1/ai-chat`, {
+      const res = await fetch(`${getAiApiBase()}/ai/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPA_KEY}`, "apikey": SUPA_KEY || "" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: [{ role: "system", content: systemPrompt }, ...conversationMessages] }),
       });
       const data = await res.json();

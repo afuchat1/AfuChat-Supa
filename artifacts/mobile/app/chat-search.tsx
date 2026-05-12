@@ -15,6 +15,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { supabase } from "@/lib/supabase";
+import { getAiApiBase } from "@/lib/aiHelper";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useTier } from "@/hooks/useTier";
@@ -77,13 +78,9 @@ function timeAgo(iso: string) {
   return `${Math.floor(h / 24)}d`;
 }
 
-function getEdgeFnBase() {
-  return (process.env.EXPO_PUBLIC_SUPABASE_URL || "").trim().replace(/\/+$/, "") + "/functions/v1";
-}
-
 async function fetchChatAiInsight(query: string): Promise<AiInsight | null> {
   try {
-    const res = await fetch(`${getEdgeFnBase()}/ai-chat`, {
+    const res = await fetch(`${getAiApiBase()}/ai/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

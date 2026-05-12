@@ -25,6 +25,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { supabase } from "@/lib/supabase";
+import { getAiApiBase } from "@/lib/aiHelper";
 import {
   getSearchHistory,
   addToHistory,
@@ -129,10 +130,6 @@ function fmtNum(n: number) {
   return String(n);
 }
 
-function getEdgeFnBase(): string {
-  return (process.env.EXPO_PUBLIC_SUPABASE_URL || "").trim().replace(/\/+$/, "") + "/functions/v1";
-}
-
 function dateRangeCutoff(range: DateRange): string | null {
   if (range === "all") return null;
   const ms = range === "24h" ? 86400000 : range === "7d" ? 604800000 : 2592000000;
@@ -143,7 +140,7 @@ function dateRangeCutoff(range: DateRange): string | null {
 
 async function fetchAiInsight(query: string): Promise<AiInsight | null> {
   try {
-    const res = await fetch(`${getEdgeFnBase()}/ai-chat`, {
+    const res = await fetch(`${getAiApiBase()}/ai/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
