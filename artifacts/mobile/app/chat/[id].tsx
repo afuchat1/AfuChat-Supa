@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -150,6 +150,11 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 
 const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 const BRAND_FALLBACK = Colors.brand;
+const MIC_SPRING_CONFIG = { damping: 18, stiffness: 200, mass: 0.8 };
+const MIC_SPRING_SNAP = { damping: 20, stiffness: 180 };
+const MIC_CANCEL_THRESHOLD = -120;
+const MIC_LOCK_THRESHOLD = -100;
+const MIC_DIRECTION_DEADZONE = 10;
 
 function formatLastSeen(ts: string | null | undefined, showOnlineStatus?: boolean): { text: string; isOnline: boolean } {
   if (showOnlineStatus === false) return { text: "last seen recently", isOnline: false };
@@ -801,12 +806,12 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
                 hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
               >
                 <Text style={[st.senderName, { color: BRAND }]}>
-                  {msg.sender?.display_name}
+                  {msg.sender?.display_name ?? ""}
                 </Text>
               </TouchableOpacity>
             ) : (
               <Text style={[st.senderName, { color: BRAND }]}>
-                {msg.sender?.display_name}
+                {msg.sender?.display_name ?? ""}
               </Text>
             )
           )}
@@ -954,7 +959,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
             })()
           ) : msg.attachment_type === "sticker" ? (
             <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.8}>
-              <Text style={{ fontSize: 64, lineHeight: 74 }}>{msg.encrypted_content}</Text>
+              <Text style={{ fontSize: 64, lineHeight: 74 }}>{msg.encrypted_content ?? ""}</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
@@ -1323,12 +1328,6 @@ function ChatScreen() {
   const recStartedSV = useSharedValue(false);
   const recPressActiveSV = useSharedValue(false);
 
-  const CANCEL_THRESHOLD = -120;
-  const LOCK_THRESHOLD = -100;
-  const DIRECTION_DEADZONE = 10;
-  const SPRING_CONFIG = { damping: 18, stiffness: 200, mass: 0.8 };
-  const SPRING_SNAP = { damping: 20, stiffness: 180 };
-
   const slideX = useSharedValue(0);
   const slideY = useSharedValue(0);
   const micScale = useSharedValue(1);
@@ -1379,10 +1378,10 @@ function ChatScreen() {
     cancelVoiceRecording();
   }, []);
 
-  const micGesture = Gesture.Pan()
+  const micGesture = useMemo(() => Gesture.Pan()
     .minDistance(0)
     .onBegin(() => {
-      micScale.value = withSpring(1.35, SPRING_CONFIG);
+      micScale.value = withSpring(1.35, MIC_SPRING_CONFIG);
       recBarOpacity.value = withTiming(1, { duration: 200 });
       directionLock.value = "none";
       runOnJS(onRecStart)();
@@ -1394,7 +1393,7 @@ function ChatScreen() {
       const absY = Math.abs(e.translationY);
 
       if (directionLock.value === "none") {
-        if (absX > DIRECTION_DEADZONE || absY > DIRECTION_DEADZONE) {
+        if (absX > MIC_DIRECTION_DEADZONE || absY > MIC_DIRECTION_DEADZONE) {
           directionLock.value = absX > absY ? "horizontal" : "vertical";
         }
         return;
@@ -1404,14 +1403,14 @@ function ChatScreen() {
         const clampedX = Math.min(0, e.translationX);
         slideX.value = clampedX;
         slideY.value = 0;
-        cancelProgress.value = interpolate(clampedX, [CANCEL_THRESHOLD, 0], [1, 0], Extrapolation.CLAMP);
+        cancelProgress.value = interpolate(clampedX, [MIC_CANCEL_THRESHOLD, 0], [1, 0], Extrapolation.CLAMP);
         lockProgress.value = 0;
 
-        if (clampedX < CANCEL_THRESHOLD && !recCancelledSV.value) {
+        if (clampedX < MIC_CANCEL_THRESHOLD && !recCancelledSV.value) {
           recCancelledSV.value = true;
-          slideX.value = withSpring(0, SPRING_SNAP);
-          slideY.value = withSpring(0, SPRING_SNAP);
-          micScale.value = withSpring(1, SPRING_SNAP);
+          slideX.value = withSpring(0, MIC_SPRING_SNAP);
+          slideY.value = withSpring(0, MIC_SPRING_SNAP);
+          micScale.value = withSpring(1, MIC_SPRING_SNAP);
           recBarOpacity.value = withTiming(0, { duration: 200 });
           cancelProgress.value = withTiming(0, { duration: 200 });
           runOnJS(onRecCancel)();
@@ -1420,13 +1419,13 @@ function ChatScreen() {
         const clampedY = Math.min(0, e.translationY);
         slideY.value = clampedY;
         slideX.value = 0;
-        lockProgress.value = interpolate(clampedY, [LOCK_THRESHOLD, 0], [1, 0], Extrapolation.CLAMP);
+        lockProgress.value = interpolate(clampedY, [MIC_LOCK_THRESHOLD, 0], [1, 0], Extrapolation.CLAMP);
         cancelProgress.value = 0;
 
-        if (clampedY < LOCK_THRESHOLD && !recLockedSV.value && !recCancelledSV.value) {
-          slideX.value = withSpring(0, SPRING_SNAP);
-          slideY.value = withSpring(0, SPRING_SNAP);
-          micScale.value = withSpring(1.1, SPRING_CONFIG);
+        if (clampedY < MIC_LOCK_THRESHOLD && !recLockedSV.value && !recCancelledSV.value) {
+          slideX.value = withSpring(0, MIC_SPRING_SNAP);
+          slideY.value = withSpring(0, MIC_SPRING_SNAP);
+          micScale.value = withSpring(1.1, MIC_SPRING_CONFIG);
           lockProgress.value = withTiming(0, { duration: 200 });
           runOnJS(onRecLock)();
         }
@@ -1436,9 +1435,9 @@ function ChatScreen() {
       recPressActiveSV.value = false;
       directionLock.value = "none";
       if (!recLockedSV.value) {
-        slideX.value = withSpring(0, SPRING_SNAP);
-        slideY.value = withSpring(0, SPRING_SNAP);
-        micScale.value = withSpring(1, SPRING_CONFIG);
+        slideX.value = withSpring(0, MIC_SPRING_SNAP);
+        slideY.value = withSpring(0, MIC_SPRING_SNAP);
+        micScale.value = withSpring(1, MIC_SPRING_CONFIG);
         recBarOpacity.value = withTiming(0, { duration: 150 });
         cancelProgress.value = withTiming(0, { duration: 150 });
         lockProgress.value = withTiming(0, { duration: 150 });
@@ -1450,7 +1449,7 @@ function ChatScreen() {
     })
     .onFinalize(() => {
       recPressActiveSV.value = false;
-    });
+    }), [onRecStart, onRecCancel, onRecLock, onRecSend]);
 
   const micBtnAnimStyle = useAnimatedStyle(() => ({
     transform: [
@@ -4098,7 +4097,7 @@ STRICT RULES:
             <View style={[st.replyBarAccent, { backgroundColor: BRAND }]} />
             <View style={{ flex: 1 }}>
               <Text style={[st.replyBannerName, { color: BRAND }]}>{replyTo.sender?.display_name || "Message"}</Text>
-              <Text style={[st.replyBannerText, { color: colors.textSecondary }]} numberOfLines={1}>{replyTo.encrypted_content}</Text>
+              <Text style={[st.replyBannerText, { color: colors.textSecondary }]} numberOfLines={1}>{replyTo.encrypted_content ?? ""}</Text>
             </View>
             <TouchableOpacity onPress={() => setReplyTo(null)} hitSlop={8}>
               <Ionicons name="close" size={20} color={colors.textMuted} />

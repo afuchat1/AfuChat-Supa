@@ -677,7 +677,7 @@ function ListHeader({
             </Text>
           </View>
           {recents.map((r, i) => (
-            <View key={r.id}>
+            <View key={`${r.id}-${i}`}>
               <TouchableOpacity
                 style={[styles.contactRow, { backgroundColor: colors.surface }]}
                 onPress={() => onRecentPress(r)}
