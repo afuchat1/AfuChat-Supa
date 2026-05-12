@@ -90,7 +90,7 @@ type PersonResult  = { id:string; handle:string; display_name:string; avatar_url
 type OrgPageResult = { id:string; name:string; slug:string; logo_url:string|null; description:string|null; kind:"org" };
 type PostResult    = { id:string; content:string; image_url:string|null; author_id:string; author_handle:string; author_name:string; author_avatar:string|null; view_count:number; created_at:string; post_type:string; article_title:string|null };
 type VideoResult   = { id:string; content:string; video_url:string; image_url:string|null; author_id:string; author_handle:string; author_name:string; author_avatar:string|null; view_count:number; created_at:string; audio_name:string|null; duration_seconds:number|null };
-type ChannelResult = { id:string; name:string; description:string|null; avatar_url:string|null; subscriber_count:number };
+type ChannelResult = { id:string; name:string; description:string|null; avatar_url:string|null; subscriber_count:number; owner_handle:string|null; owner_name:string|null };
 type GroupResult   = { id:string; name:string; description:string|null; avatar_url:string|null; member_count:number };
 type EventResult   = { id:string; title:string; description:string|null; emoji:string; price:number; event_date:string; capacity:number; tickets_sold:number; category:string|null; creator_name:string; creator_handle:string };
 type GiftResult    = { id:string; name:string; emoji:string; base_xp_cost:number; rarity:string; description:string|null };
@@ -502,8 +502,9 @@ export default function SearchScreen() {
 
           wantsChannels
             ? supabase.from("channels")
-                .select("id, name, description, avatar_url, subscriber_count")
+                .select("id, name, description, avatar_url, subscriber_count, owner_id, profiles!channels_owner_id_fkey(display_name, handle)")
                 .or(`name.ilike.${pat},description.ilike.${pat}`)
+                .not("owner_id", "is", null)
                 .order("subscriber_count", { ascending: false })
                 .limit(all ? 4 : 20)
             : Promise.resolve({ data: [] }),
@@ -603,7 +604,18 @@ export default function SearchScreen() {
         };
       });
 
-      const channels: ChannelResult[] = (channelsRes.data || []) as any[];
+      const channels: ChannelResult[] = ((channelsRes.data || []) as any[]).map((ch: any) => {
+        const owner = ch.profiles;
+        return {
+          id: ch.id,
+          name: ch.name,
+          description: ch.description || null,
+          avatar_url: ch.avatar_url || null,
+          subscriber_count: ch.subscriber_count || 0,
+          owner_handle: owner?.handle || null,
+          owner_name: owner?.display_name || null,
+        };
+      });
 
       const groups: GroupResult[] = ((groupsRes.data || []) as any[]).map((c: any) => {
         const countArr = c.chat_members;
@@ -923,7 +935,11 @@ export default function SearchScreen() {
           </View>
           <View style={{ flex: 1, gap: 3 }}>
             <Text style={[ss.rowTitle, { color: colors.text }]} numberOfLines={1}>{ch.name}</Text>
-            {ch.description ? <Text style={[ss.rowSub, { color: colors.textMuted }]} numberOfLines={1}>{ch.description}</Text> : null}
+            {ch.owner_name
+              ? <Text style={[ss.rowSub, { color: colors.textMuted }]} numberOfLines={1}>by {ch.owner_name}{ch.owner_handle ? ` @${ch.owner_handle}` : ""}</Text>
+              : ch.description
+                ? <Text style={[ss.rowSub, { color: colors.textMuted }]} numberOfLines={1}>{ch.description}</Text>
+                : null}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
               <Ionicons name="people-outline" size={11} color={PURPLE} />
               <Text style={{ color: PURPLE, fontSize: 11, fontFamily: "Inter_600SemiBold" }}>{fmtNum(ch.subscriber_count)} subscribers</Text>
