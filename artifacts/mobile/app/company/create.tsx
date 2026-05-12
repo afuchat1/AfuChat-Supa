@@ -896,7 +896,7 @@ export default function CreateCompanyPageScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   nav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  navTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", flex: 1, textAlign: "center" },
+  navTitle: { fontSize: 17, fontFamily: "Inter_700Bold", flex: 1, textAlign: "center" },
   stepCounter: { fontSize: 13, fontFamily: "Inter_500Medium", width: 32, textAlign: "right" },
   progressBar: { paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   progressSegment: { height: 3, borderRadius: 2 },

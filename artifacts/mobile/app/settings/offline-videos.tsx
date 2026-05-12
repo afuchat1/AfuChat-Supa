@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerSide: { width: 44, alignItems: "center" },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  headerTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
   centerLoader: { flex: 1, alignItems: "center", justifyContent: "center" },
   body: { paddingTop: 24, paddingHorizontal: 16, gap: 0 },
 

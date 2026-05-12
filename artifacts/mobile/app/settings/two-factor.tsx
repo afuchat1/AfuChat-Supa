@@ -629,7 +629,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerBtn: { width: 44, alignItems: "center" },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  headerTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
 
   body: { paddingHorizontal: 16, paddingTop: 24, gap: 14 },

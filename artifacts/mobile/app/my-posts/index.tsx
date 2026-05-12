@@ -208,7 +208,7 @@ export default function MyPostsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  headerTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingTop: 80 },
   card: { marginHorizontal: 8, borderRadius: 16, overflow: "hidden", paddingTop: 14 },
   cardHeader: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, gap: 10, marginBottom: 10 },

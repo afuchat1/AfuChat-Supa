@@ -5239,7 +5239,7 @@ const st = StyleSheet.create({
 
   headerProfile: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
   headerInfo: { flex: 1 },
-  headerName: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  headerName: { fontSize: 16, fontFamily: "Inter_700Bold" },
   headerSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
   headerAction: { padding: 6 },
   loadingCenter: { flex: 1, alignItems: "center", justifyContent: "center" },

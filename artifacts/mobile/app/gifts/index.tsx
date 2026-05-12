@@ -697,7 +697,7 @@ export default function GiftsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  headerTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
   acoinBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: Colors.gold, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 16 },
   acoinText: { color: "#fff", fontSize: 13, fontFamily: "Inter_700Bold" },
   statsBar: { flexDirection: "row", alignItems: "center", paddingVertical: 14, paddingHorizontal: 16 },

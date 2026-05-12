@@ -401,7 +401,7 @@ const pub = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  headerTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
   hero: { alignItems: "center", paddingHorizontal: 24, paddingVertical: 32, marginBottom: 2 },
   avatar: { marginBottom: 16 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },

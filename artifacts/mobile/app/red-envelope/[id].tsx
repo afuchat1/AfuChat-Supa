@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   header: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12 },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", color: "#fff" },
+  headerTitle: { fontSize: 17, fontFamily: "Inter_700Bold", color: "#fff" },
   envelopeCard: { backgroundColor: "#FF3B30", paddingVertical: 32, paddingHorizontal: 24, alignItems: "center", gap: 8, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
   senderName: { fontSize: 18, fontFamily: "Inter_600SemiBold", color: "#fff" },
   envelopeMsg: { fontSize: 15, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.85)" },

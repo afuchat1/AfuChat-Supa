@@ -550,7 +550,7 @@ function Field({ label, required, hint, children, colors }: {
 const st = StyleSheet.create({
   root: { flex: 1 },
   navBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  navTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  navTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
   bigTitle: { fontSize: 22, fontFamily: "Inter_700Bold", textAlign: "center" },
   bigSub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 21 },
   dateBadge: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },

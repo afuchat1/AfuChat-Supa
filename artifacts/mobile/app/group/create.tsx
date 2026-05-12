@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   cancelText: { fontSize: 16, fontFamily: "Inter_400Regular" },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  headerTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
   createText: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
   nameRow: {
     flexDirection: "row",

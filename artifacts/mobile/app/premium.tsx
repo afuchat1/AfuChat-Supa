@@ -602,7 +602,7 @@ const s = StyleSheet.create({
     paddingBottom: 10,
     zIndex: 10,
   },
-  navTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", color: "#fff" },
+  navTitle: { fontSize: 17, fontFamily: "Inter_700Bold", color: "#fff" },
   backBtn: {
     width: 38,
     height: 38,

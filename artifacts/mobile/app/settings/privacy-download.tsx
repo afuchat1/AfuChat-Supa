@@ -132,7 +132,7 @@ export default function PrivacyDownloadScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  headerTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
   infoCard: { flexDirection: "row", alignItems: "flex-start", gap: 12, borderRadius: 14, padding: 16 },
   infoTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", marginBottom: 4 },
   infoText: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },

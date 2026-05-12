@@ -454,7 +454,7 @@ const af = StyleSheet.create({
     gap: 4,
   },
   headerBack: { padding: 6 },
-  headerTitle: { flex: 1, textAlign: "center", fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  headerTitle: { flex: 1, textAlign: "center", fontSize: 17, fontFamily: "Inter_700Bold" },
   headerRight: { width: 40, alignItems: "center" },
   saveDot: { width: 7, height: 7, borderRadius: 3.5 },
 

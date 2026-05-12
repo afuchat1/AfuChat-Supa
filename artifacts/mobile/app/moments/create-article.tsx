@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth, gap: 12 },
   headerBtn: { padding: 4 },
   headerCenter: { flex: 1 },
-  headerTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  headerTitle: { fontSize: 16, fontFamily: "Inter_700Bold" },
   publishBtn: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20 },
   publishText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   content: { paddingHorizontal: 20, paddingTop: 16, gap: 0 },

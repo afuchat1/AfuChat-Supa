@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  headerTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
   content: { paddingHorizontal: 20, paddingTop: 24, gap: 4 },
   pageTitle: { fontSize: 26, fontFamily: "Inter_700Bold", marginBottom: 4 },
   updated: { fontSize: 13, fontFamily: "Inter_400Regular", marginBottom: 16 },

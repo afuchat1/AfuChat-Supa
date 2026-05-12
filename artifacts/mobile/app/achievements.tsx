@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", letterSpacing: -0.2 },
+  headerTitle: { fontSize: 17, fontFamily: "Inter_700Bold", letterSpacing: -0.2 },
   summaryBar: { margin: 16, borderRadius: 16, padding: 16 },
   summaryTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   summaryTitle: { fontSize: 16, fontFamily: "Inter_700Bold" },

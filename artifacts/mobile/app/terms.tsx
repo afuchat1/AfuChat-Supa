@@ -320,7 +320,7 @@ const st = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  headerTitle: { flex: 1, textAlign: "center", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  headerTitle: { flex: 1, textAlign: "center", fontSize: 16, fontFamily: "Inter_700Bold" },
 
   intro: { paddingHorizontal: 20, paddingTop: 28, paddingBottom: 24, gap: 8 },
   introTitle: { fontSize: 22, fontFamily: "Inter_700Bold", lineHeight: 28 },

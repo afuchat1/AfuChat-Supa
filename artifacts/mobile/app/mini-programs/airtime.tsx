@@ -166,7 +166,7 @@ export default function AirtimeScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  headerTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
   content: { padding: 16, gap: 12 },
   label: { fontSize: 14, fontFamily: "Inter_600SemiBold", marginTop: 4 },
   providerRow: { flexDirection: "row", gap: 8 },
