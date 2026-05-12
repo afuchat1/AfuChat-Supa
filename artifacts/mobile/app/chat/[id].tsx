@@ -1486,6 +1486,8 @@ function ChatScreen() {
   const [attachmentPreview, setAttachmentPreview] = useState<{ uri: string; type: string; name?: string; mimeType?: string } | null>(null);
   const [networkOnline, setNetworkOnline] = useState(isOnline());
   const [messageLimited, setMessageLimited] = useState(false);
+  const [isStranger, setIsStranger] = useState(false);
+  const [strangerCountry, setStrangerCountry] = useState<string | null>(null);
   const [forwardMsg, setForwardMsg] = useState<Message | null>(null);
   const [forwardChats, setForwardChats] = useState<{ id: string; name: string; avatar: string | null }[]>([]);
   const [forwardSending, setForwardSending] = useState(false);
@@ -1848,9 +1850,40 @@ function ChatScreen() {
     setMessageLimited((count || 0) >= 1);
   }, [user, chatInfo, isDraft, realChatId, id]);
 
+  const checkIfStranger = useCallback(async () => {
+    if (!user) return;
+    const info = chatInfo;
+    if (!info || info.is_group || info.is_channel || !info.other_id || info.other_id === AFUAI_BOT_ID) {
+      setIsStranger(false);
+      return;
+    }
+    const otherId = info.other_id;
+    const { data: iFollow } = await supabase
+      .from("follows").select("id").eq("follower_id", user.id).eq("following_id", otherId).maybeSingle();
+    if (iFollow) { setIsStranger(false); return; }
+
+    const chatId = isDraft ? realChatId : id;
+    if (!chatId) { setIsStranger(false); return; }
+    const { data: theirMsgs } = await supabase
+      .from("messages").select("id").eq("chat_id", chatId).eq("sender_id", otherId).limit(1);
+    const theyMessagedMe = theirMsgs && theirMsgs.length > 0;
+    if (!theyMessagedMe) { setIsStranger(false); return; }
+
+    const { data: myMsgs } = await supabase
+      .from("messages").select("id").eq("chat_id", chatId).eq("sender_id", user.id).limit(1);
+    const iReplied = myMsgs && myMsgs.length > 0;
+    if (iReplied) { setIsStranger(false); return; }
+
+    const { data: otherProfile } = await supabase
+      .from("profiles").select("country").eq("id", otherId).maybeSingle();
+    setStrangerCountry((otherProfile as any)?.country || null);
+    setIsStranger(true);
+  }, [user, chatInfo, isDraft, realChatId, id]);
+
   useEffect(() => {
     checkMessageGating();
-  }, [checkMessageGating, messages.length]);
+    checkIfStranger();
+  }, [checkMessageGating, checkIfStranger, messages.length]);
 
 
   useEffect(() => {
@@ -4003,6 +4036,77 @@ STRICT RULES:
         </View>
       </View>
 
+      {/* ── Stranger message-request banner ── */}
+      {isStranger && chatInfo?.other_id && (
+        <View style={[st.strangerBanner, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <View style={[st.strangerIconWrap, { backgroundColor: "#FF9500" + "18" }]}>
+              <Ionicons name="person-add-outline" size={18} color="#FF9500" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[st.strangerTitle, { color: colors.text }]}>New message request</Text>
+              <Text style={[st.strangerSub, { color: colors.textMuted }]}>
+                {chatInfo.other_name || "Unknown"}{strangerCountry ? ` · ${strangerCountry}` : ""}
+              </Text>
+            </View>
+          </View>
+          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+            <TouchableOpacity
+              style={[st.strangerBtn, { backgroundColor: BRAND }]}
+              onPress={() => { setIsStranger(false); chatInputRef.current?.focus(); }}
+            >
+              <Ionicons name="chatbubble-outline" size={13} color="#fff" />
+              <Text style={st.strangerBtnText}>Accept & Reply</Text>
+            </TouchableOpacity>
+            {Platform.OS !== "web" && (
+              <TouchableOpacity
+                style={[st.strangerBtnOutline, { borderColor: colors.border }]}
+                onPress={async () => {
+                  try {
+                    const Contacts = await import("expo-contacts");
+                    const { status } = await Contacts.requestPermissionsAsync();
+                    if (status !== "granted") { showAlert("Permission needed", "Allow contacts access to save this person."); return; }
+                    await Contacts.presentContactInputAsync({ [Contacts.Fields.FirstName]: chatInfo.other_name || "Unknown" } as any);
+                    setIsStranger(false);
+                  } catch {}
+                }}
+              >
+                <Ionicons name="person-add-outline" size={13} color={colors.text} />
+                <Text style={[st.strangerBtnOutlineText, { color: colors.text }]}>Save Contact</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[st.strangerBtnOutline, { borderColor: colors.border }]}
+              onPress={async () => {
+                if (!chatInfo.other_id) return;
+                await supabase.from("follows").insert({ follower_id: user?.id, following_id: chatInfo.other_id }).catch(() => {});
+                setIsStranger(false);
+              }}
+            >
+              <Ionicons name="person-outline" size={13} color={colors.text} />
+              <Text style={[st.strangerBtnOutlineText, { color: colors.text }]}>Follow</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[st.strangerBtnOutline, { borderColor: "#FF3B30" + "55" }]}
+              onPress={() => {
+                showAlert("Block this user?", "They won't be able to send you messages.", [
+                  { text: "Cancel", style: "cancel" },
+                  { text: "Block", style: "destructive", onPress: async () => {
+                    if (!chatInfo.other_id || !user) return;
+                    await supabase.from("blocked_users").insert({ blocker_id: user.id, blocked_id: chatInfo.other_id }).catch(() => {});
+                    setIsStranger(false);
+                    router.back();
+                  }},
+                ]);
+              }}
+            >
+              <Ionicons name="ban-outline" size={13} color="#FF3B30" />
+              <Text style={[st.strangerBtnOutlineText, { color: "#FF3B30" }]}>Block</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* ── Message list — fills remaining space, padded so content clears the floating input ── */}
       <View style={{ flex: 1 }}>
         {loading ? (
@@ -5440,6 +5544,54 @@ const st = StyleSheet.create({
     borderRadius: 26,
     borderWidth: StyleSheet.hairlineWidth,
     marginHorizontal: 8,
+  },
+
+  strangerBanner: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  strangerIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  strangerTitle: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+  },
+  strangerSub: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    marginTop: 1,
+  },
+  strangerBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  strangerBtnText: {
+    color: "#fff",
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
+  strangerBtnOutline: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  strangerBtnOutlineText: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
   },
 
   floatingInputContainer: {

@@ -10,17 +10,20 @@ import {
   Animated,
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   RefreshControl,
   SectionList,
   SectionListData,
+  Share,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import * as Contacts from "expo-contacts";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -51,6 +54,46 @@ type Contact = {
   is_organization_verified: boolean;
   bio: string | null;
 };
+
+type AfuContact = {
+  id: string;
+  display_name: string;
+  handle: string;
+  avatar_url: string | null;
+  acoin: number;
+  phone_number: string;
+  phonebook_name: string;
+};
+
+type NonAfuContact = {
+  name: string;
+  phone: string;
+};
+
+type PhoneState = "idle" | "loading" | "done" | "denied";
+
+function normalizePhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("00")) return "+" + digits.slice(2);
+  if (digits.length === 10) return "+1" + digits;
+  return "+" + digits;
+}
+
+const INVITE_MSG =
+  "Hey! I'm using AfuChat — the social super app for chatting, discovering content, and connecting with people. Join me here: https://afuchat.com";
+
+async function sendInvite(name: string, phone: string) {
+  if (Platform.OS !== "web") {
+    try {
+      const smsUrl = `sms:${phone}${Platform.OS === "ios" ? "&" : "?"}body=${encodeURIComponent(INVITE_MSG)}`;
+      if (await Linking.canOpenURL(smsUrl)) {
+        await Linking.openURL(smsUrl);
+        return;
+      }
+    } catch {}
+  }
+  await Share.share({ message: INVITE_MSG, title: "Join AfuChat" });
+}
 
 type RecentPartner = {
   id: string;
@@ -98,6 +141,10 @@ export default function NewChatScreen() {
   const [recents, setRecents] = useState<RecentPartner[]>([]);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [phoneState, setPhoneState] = useState<PhoneState>("idle");
+  const [phoneExpanded, setPhoneExpanded] = useState(false);
+  const [phoneOnAfu, setPhoneOnAfu] = useState<AfuContact[]>([]);
+  const [phoneNotAfu, setPhoneNotAfu] = useState<NonAfuContact[]>([]);
   const [selected, setSelected] = useState<Map<string, Contact>>(new Map());
   const [starting, setStarting] = useState(false);
 
@@ -241,6 +288,58 @@ export default function NewChatScreen() {
       return next;
     });
   }, []);
+
+  const loadPhoneContacts = useCallback(async () => {
+    if (Platform.OS === "web") return;
+    setPhoneState("loading");
+    const { status } = await Contacts.requestPermissionsAsync();
+    if (status !== "granted") { setPhoneState("denied"); return; }
+
+    const { data } = await Contacts.getContactsAsync({ fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Name] });
+    const phoneMap = new Map<string, string>();
+    for (const c of data) {
+      const name = c.name || "Unknown";
+      for (const pn of c.phoneNumbers || []) {
+        if (pn.number) {
+          const n = normalizePhone(pn.number);
+          if (n.length >= 8) phoneMap.set(n, name);
+        }
+      }
+    }
+    const phones = Array.from(phoneMap.keys());
+    if (phones.length === 0) { setPhoneOnAfu([]); setPhoneNotAfu([]); setPhoneState("done"); return; }
+
+    const allProfiles: any[] = [];
+    for (let i = 0; i < phones.length; i += 100) {
+      const { data: profiles } = await supabase
+        .from("profiles").select("id, display_name, handle, avatar_url, acoin, phone_number")
+        .in("phone_number", phones.slice(i, i + 100)).neq("id", user?.id || "");
+      if (profiles) allProfiles.push(...profiles);
+    }
+    const foundPhones = new Set(allProfiles.map((p) => p.phone_number));
+    const found: AfuContact[] = allProfiles.map((p) => ({
+      id: p.id, display_name: p.display_name, handle: p.handle,
+      avatar_url: p.avatar_url, acoin: p.acoin || 0,
+      phone_number: p.phone_number, phonebook_name: phoneMap.get(p.phone_number) || p.display_name,
+    }));
+    const notFound: NonAfuContact[] = [];
+    for (const [phone, name] of phoneMap.entries()) {
+      if (!foundPhones.has(phone)) notFound.push({ name, phone });
+    }
+    setPhoneOnAfu(found);
+    setPhoneNotAfu(notFound.slice(0, 200));
+    setPhoneState("done");
+  }, [user]);
+
+  const handleTogglePhone = useCallback(() => {
+    Haptics.selectionAsync();
+    if (!phoneExpanded) {
+      setPhoneExpanded(true);
+      if (phoneState === "idle") loadPhoneContacts();
+    } else {
+      setPhoneExpanded(false);
+    }
+  }, [phoneExpanded, phoneState, loadPhoneContacts]);
 
   async function openChat(contactId: string) {
     if (!user) return;
@@ -478,6 +577,13 @@ export default function NewChatScreen() {
                   }}
                   phonebookNames={phonebookNames}
                   contactCount={contacts.length}
+                  phoneState={phoneState}
+                  phoneExpanded={phoneExpanded}
+                  onTogglePhone={handleTogglePhone}
+                  onReloadPhone={loadPhoneContacts}
+                  phoneOnAfu={phoneOnAfu}
+                  phoneNotAfu={phoneNotAfu}
+                  onOpenChat={openChat}
                 />
               }
               renderSectionHeader={({ section }) => (
@@ -606,6 +712,13 @@ function ListHeader({
   onRecentPress,
   phonebookNames,
   contactCount,
+  phoneState,
+  phoneExpanded,
+  onTogglePhone,
+  onReloadPhone,
+  phoneOnAfu,
+  phoneNotAfu,
+  onOpenChat,
 }: {
   colors: any;
   accent: string;
@@ -615,6 +728,13 @@ function ListHeader({
   onRecentPress: (r: RecentPartner) => void;
   phonebookNames: Map<string, string>;
   contactCount: number;
+  phoneState: PhoneState;
+  phoneExpanded: boolean;
+  onTogglePhone: () => void;
+  onReloadPhone: () => void;
+  phoneOnAfu: AfuContact[];
+  phoneNotAfu: NonAfuContact[];
+  onOpenChat: (userId: string) => void;
 }) {
   return (
     <View>
@@ -640,18 +760,6 @@ function ListHeader({
           onPress={() => router.push("/channel/intro" as any)}
           colors={colors}
         />
-        {Platform.OS !== "web" && (
-          <>
-            <Separator indent={58} />
-            <QuickAction
-              icon="call"
-              iconBg={accent}
-              label="Find Phone Contacts"
-              onPress={() => router.push("/phone-contacts")}
-              colors={colors}
-            />
-          </>
-        )}
       </View>
 
       {/* Skeleton */}
@@ -716,6 +824,103 @@ function ListHeader({
               {i < recents.length - 1 && <Separator indent={70} />}
             </View>
           ))}
+        </View>
+      )}
+
+      {/* ── Phone Contacts inline section (native only) ── */}
+      {Platform.OS !== "web" && (
+        <View>
+          <TouchableOpacity
+            style={[styles.phoneHeader, { backgroundColor: colors.surface, borderTopColor: colors.separator, borderBottomColor: colors.separator }]}
+            onPress={onTogglePhone}
+            activeOpacity={0.75}
+          >
+            <View style={[styles.quickIcon, { backgroundColor: accent }]}>
+              <Ionicons name="call" size={18} color="#fff" />
+            </View>
+            <Text style={[styles.quickLabel, { color: colors.text, flex: 1 }]}>Phone Contacts</Text>
+            {phoneState === "loading" && <ActivityIndicator size="small" color={accent} style={{ marginRight: 8 }} />}
+            <Ionicons name={phoneExpanded ? "chevron-up" : "chevron-down"} size={16} color={colors.textMuted} />
+          </TouchableOpacity>
+
+          {phoneExpanded && (
+            <View style={{ backgroundColor: colors.backgroundSecondary }}>
+              {phoneState === "loading" && (
+                <View style={styles.phoneCenter}>
+                  <ActivityIndicator color={accent} />
+                  <Text style={[styles.phoneHint, { color: colors.textSecondary }]}>Scanning your contacts…</Text>
+                </View>
+              )}
+
+              {phoneState === "denied" && (
+                <View style={styles.phoneCenter}>
+                  <Ionicons name="people-outline" size={40} color={colors.textMuted} />
+                  <Text style={[{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.text, textAlign: "center" }]}>Contacts access denied</Text>
+                  <Text style={[styles.phoneHint, { color: colors.textSecondary }]}>Allow contacts permission in settings to find friends.</Text>
+                  <TouchableOpacity style={[styles.retryBtn, { backgroundColor: accent }]} onPress={onReloadPhone}>
+                    <Text style={styles.retryBtnText}>Try Again</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {phoneState === "done" && phoneOnAfu.length === 0 && phoneNotAfu.length === 0 && (
+                <View style={styles.phoneCenter}>
+                  <Text style={[styles.phoneHint, { color: colors.textSecondary }]}>No phone contacts found.</Text>
+                </View>
+              )}
+
+              {phoneState === "done" && phoneOnAfu.length > 0 && (
+                <>
+                  <View style={[styles.phoneSectionRow, { backgroundColor: colors.backgroundSecondary }]}>
+                    <View style={[styles.phoneDot, { backgroundColor: "#34C759" }]} />
+                    <Text style={[styles.phoneSectionTitle, { color: colors.text }]}>On AfuChat ({phoneOnAfu.length})</Text>
+                  </View>
+                  {phoneOnAfu.map((item) => (
+                    <View key={item.id} style={[styles.phoneCard, { backgroundColor: colors.surface }]}>
+                      <Avatar uri={item.avatar_url} name={item.display_name} size={44} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.contactName, { color: colors.text }]} numberOfLines={1}>{item.phonebook_name}</Text>
+                        <Text style={[styles.contactHandle, { color: colors.textMuted }]}>@{item.handle}</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.phoneActionBtn, { backgroundColor: accent }]}
+                        onPress={() => onOpenChat(item.id)}
+                      >
+                        <Ionicons name="chatbubble" size={15} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </>
+              )}
+
+              {phoneState === "done" && phoneNotAfu.length > 0 && (
+                <>
+                  <View style={[styles.phoneSectionRow, { backgroundColor: colors.backgroundSecondary, marginTop: phoneOnAfu.length > 0 ? 10 : 0 }]}>
+                    <View style={[styles.phoneDot, { backgroundColor: colors.textMuted }]} />
+                    <Text style={[styles.phoneSectionTitle, { color: colors.text }]}>Invite Friends ({phoneNotAfu.length})</Text>
+                  </View>
+                  {phoneNotAfu.map((item) => (
+                    <View key={item.phone} style={[styles.phoneCard, { backgroundColor: colors.surface }]}>
+                      <View style={[styles.phoneAvPlaceholder, { backgroundColor: colors.backgroundSecondary }]}>
+                        <Ionicons name="person-outline" size={20} color={colors.textMuted} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.contactName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
+                        <Text style={[styles.contactHandle, { color: colors.textMuted }]}>{item.phone}</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.phoneActionBtn, { backgroundColor: colors.backgroundSecondary, borderWidth: 1.5, borderColor: accent }]}
+                        onPress={() => sendInvite(item.name, item.phone)}
+                      >
+                        <Ionicons name="share-outline" size={15} color={accent} />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </>
+              )}
+              <View style={{ height: 8 }} />
+            </View>
+          )}
         </View>
       )}
 
@@ -1064,6 +1269,58 @@ const styles = StyleSheet.create({
   startingOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  phoneHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginTop: 8,
+  },
+  phoneCenter: {
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 20,
+    paddingHorizontal: 28,
+  },
+  phoneHint: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
+  retryBtn: { paddingHorizontal: 24, paddingVertical: 10, borderRadius: 22, marginTop: 4 },
+  retryBtnText: { color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  phoneSectionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  phoneDot: { width: 7, height: 7, borderRadius: 4 },
+  phoneSectionTitle: { fontSize: 12, fontFamily: "Inter_700Bold", letterSpacing: 0.3 },
+  phoneCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginHorizontal: 12,
+    marginBottom: 7,
+    borderRadius: 12,
+    padding: 12,
+  },
+  phoneActionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  phoneAvPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
   },

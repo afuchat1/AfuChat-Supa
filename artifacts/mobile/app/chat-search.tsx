@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Image,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -27,7 +29,7 @@ const AI_PURPLE = "#7B61FF";
 const AI_TEAL   = "#00C2CB";
 const GOLD      = "#D4A853";
 
-type TabId = "chats" | "people" | "channels" | "groups" | "messages";
+type TabId = "chats" | "people" | "channels" | "groups" | "messages" | "media" | "links";
 
 type ChatResult = {
   id: string; name: string | null; is_group: boolean; is_channel: boolean;
@@ -55,6 +57,17 @@ type MessageResult = {
   content: string; sender_name: string; sent_at: string; is_channel: boolean;
 };
 
+type MediaResult = {
+  id: string; chat_id: string; chat_name: string; chat_avatar: string | null;
+  attachment_url: string; attachment_type: "image" | "video" | "gif";
+  sender_name: string; sent_at: string;
+};
+
+type LinkResult = {
+  id: string; chat_id: string; chat_name: string; chat_avatar: string | null;
+  url: string; preview_text: string; sender_name: string; sent_at: string;
+};
+
 type AiInsight = {
   summary: string; bestTab: TabId; suggestions: string[];
   filters: string[]; resultSummary: string; actions: string[];
@@ -66,6 +79,8 @@ const TABS: { id: TabId; label: string; icon: string; premium?: boolean }[] = [
   { id: "channels", label: "Channels", icon: "megaphone-outline" },
   { id: "groups",   label: "Groups",   icon: "people-outline" },
   { id: "messages", label: "Messages", icon: "mail-open-outline", premium: true },
+  { id: "media",    label: "Media",    icon: "images-outline" },
+  { id: "links",    label: "Links",    icon: "link-outline" },
 ];
 
 function timeAgo(iso: string) {
@@ -144,6 +159,8 @@ export default function ChatSearchScreen() {
   const [channelResults, setChannelResults] = useState<ChannelResult[]>([]);
   const [groupResults,   setGroupResults]   = useState<GroupResult[]>([]);
   const [messageResults, setMessageResults] = useState<MessageResult[]>([]);
+  const [mediaResults,   setMediaResults]   = useState<MediaResult[]>([]);
+  const [linkResults,    setLinkResults]    = useState<LinkResult[]>([]);
 
   const [aiInsight, setAiInsight] = useState<AiInsight | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -188,6 +205,8 @@ export default function ChatSearchScreen() {
       searchChannels(trimmed),
       searchGroups(trimmed),
       hasPremiumMessages ? searchMessages(trimmed) : Promise.resolve(),
+      searchMedia(trimmed),
+      searchLinks(trimmed),
     ]);
     setLoading(false);
   }, [user, hasPremiumMessages]);
@@ -307,12 +326,110 @@ export default function ChatSearchScreen() {
     } catch { setMessageResults([]); }
   }
 
+  async function searchMedia(q: string) {
+    if (!user) return;
+    try {
+      const { data: memberRows } = await supabase
+        .from("chat_members").select("chat_id").eq("user_id", user.id);
+      if (!memberRows?.length) { setMediaResults([]); return; }
+      const chatIds = memberRows.map((m: any) => m.chat_id);
+
+      const { data: msgs } = await supabase
+        .from("messages")
+        .select("id, chat_id, attachment_url, attachment_type, sent_at, sender_id")
+        .in("chat_id", chatIds)
+        .in("attachment_type", ["image", "video", "gif"])
+        .not("attachment_url", "is", null)
+        .order("sent_at", { ascending: false })
+        .limit(40);
+
+      if (!msgs?.length) { setMediaResults([]); return; }
+
+      const chatIdsUnique = [...new Set(msgs.map((m: any) => m.chat_id))] as string[];
+      const senderIds = [...new Set(msgs.map((m: any) => m.sender_id))] as string[];
+      const [{ data: chats }, { data: profiles }] = await Promise.all([
+        supabase.from("chats").select("id, name, avatar_url, is_group, is_channel, chat_members(user_id, profiles(id, display_name, avatar_url))").in("id", chatIdsUnique),
+        supabase.from("profiles").select("id, display_name").in("id", senderIds),
+      ]);
+      const chatMap = new Map((chats || []).map((c: any) => [c.id, c]));
+      const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+
+      setMediaResults(msgs.map((m: any) => {
+        const chat = chatMap.get(m.chat_id) as any;
+        const isGroup = chat?.is_group || chat?.is_channel;
+        const other = !isGroup ? (chat?.chat_members || []).filter((mb: any) => mb.user_id !== user.id)[0]?.profiles : null;
+        const chatName = isGroup ? (chat?.name || "Chat") : (other?.display_name || "Unknown");
+        const chatAvatar = isGroup ? (chat?.avatar_url || null) : (other?.avatar_url || null);
+        const sender = profileMap.get(m.sender_id) as any;
+        return {
+          id: m.id, chat_id: m.chat_id, chat_name: chatName, chat_avatar: chatAvatar,
+          attachment_url: m.attachment_url, attachment_type: m.attachment_type,
+          sender_name: sender?.display_name || "User", sent_at: m.sent_at,
+        };
+      }));
+    } catch { setMediaResults([]); }
+  }
+
+  async function searchLinks(q: string) {
+    if (!user) return;
+    try {
+      const { data: memberRows } = await supabase
+        .from("chat_members").select("chat_id").eq("user_id", user.id);
+      if (!memberRows?.length) { setLinkResults([]); return; }
+      const chatIds = memberRows.map((m: any) => m.chat_id);
+
+      const { data: msgs } = await supabase
+        .from("messages")
+        .select("id, chat_id, encrypted_content, sent_at, sender_id")
+        .in("chat_id", chatIds)
+        .ilike("encrypted_content", "%http%")
+        .not("encrypted_content", "is", null)
+        .order("sent_at", { ascending: false })
+        .limit(60);
+
+      const URL_RE = /https?:\/\/[^\s<>"]+/gi;
+      const linkMsgs = (msgs || []).filter((m: any) => URL_RE.test(m.encrypted_content || ""));
+      if (!linkMsgs.length) { setLinkResults([]); return; }
+
+      const chatIdsUnique = [...new Set(linkMsgs.map((m: any) => m.chat_id))] as string[];
+      const senderIds = [...new Set(linkMsgs.map((m: any) => m.sender_id))] as string[];
+      const [{ data: chats }, { data: profiles }] = await Promise.all([
+        supabase.from("chats").select("id, name, avatar_url, is_group, is_channel, chat_members(user_id, profiles(id, display_name, avatar_url))").in("id", chatIdsUnique),
+        supabase.from("profiles").select("id, display_name").in("id", senderIds),
+      ]);
+      const chatMap = new Map((chats || []).map((c: any) => [c.id, c]));
+      const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+
+      const results: LinkResult[] = [];
+      for (const m of linkMsgs) {
+        URL_RE.lastIndex = 0;
+        const match = URL_RE.exec(m.encrypted_content || "");
+        if (!match) continue;
+        const chat = chatMap.get(m.chat_id) as any;
+        const isGroup = chat?.is_group || chat?.is_channel;
+        const other = !isGroup ? (chat?.chat_members || []).filter((mb: any) => mb.user_id !== user.id)[0]?.profiles : null;
+        const chatName = isGroup ? (chat?.name || "Chat") : (other?.display_name || "Unknown");
+        const chatAvatar = isGroup ? (chat?.avatar_url || null) : (other?.avatar_url || null);
+        const sender = profileMap.get(m.sender_id) as any;
+        const url = match[0];
+        const previewText = (m.encrypted_content || "").replace(url, "").trim() || url;
+        results.push({
+          id: m.id, chat_id: m.chat_id, chat_name: chatName, chat_avatar: chatAvatar,
+          url, preview_text: previewText, sender_name: sender?.display_name || "User", sent_at: m.sent_at,
+        });
+        if (results.length >= 30) break;
+      }
+      setLinkResults(results);
+    } catch { setLinkResults([]); }
+  }
+
   function onChangeQuery(text: string) {
     setQuery(text);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!text.trim()) {
       setChatResults([]); setPeopleResults([]); setChannelResults([]);
-      setGroupResults([]); setMessageResults([]); setHasSearched(false); setAiInsight(null); return;
+      setGroupResults([]); setMessageResults([]); setMediaResults([]); setLinkResults([]);
+      setHasSearched(false); setAiInsight(null); return;
     }
     debounceRef.current = setTimeout(() => performSearch(text, aiMode), 320);
   }
@@ -334,7 +451,8 @@ export default function ChatSearchScreen() {
 
   const counts: Record<TabId, number> = {
     chats: chatResults.length, people: peopleResults.length,
-    channels: channelResults.length, groups: groupResults.length, messages: messageResults.length,
+    channels: channelResults.length, groups: groupResults.length,
+    messages: messageResults.length, media: mediaResults.length, links: linkResults.length,
   };
 
   function navigateToChat(id: string, params: Record<string, string>) {
@@ -497,6 +615,67 @@ export default function ChatSearchScreen() {
     );
   }
 
+  function MediaRow({ item }: { item: MediaResult }) {
+    const isVideo = item.attachment_type === "video";
+    return (
+      <TouchableOpacity
+        style={[ss.row, { borderBottomColor: colors.border }]}
+        onPress={() => { Haptics.selectionAsync(); navigateToChat(item.chat_id, { otherName: item.chat_name, otherAvatar: item.chat_avatar || "", otherId: "", isGroup: "false", isChannel: "false", chatName: item.chat_name }); }}
+        activeOpacity={0.72}
+      >
+        <View style={ss.mediaThumb}>
+          {item.attachment_url ? (
+            <Image source={{ uri: item.attachment_url }} style={ss.mediaThumbImg} resizeMode="cover" />
+          ) : (
+            <View style={[ss.mediaThumbImg, { backgroundColor: colors.backgroundSecondary, alignItems: "center", justifyContent: "center" }]}>
+              <Ionicons name={isVideo ? "videocam" : "image"} size={20} color={colors.textMuted} />
+            </View>
+          )}
+          {isVideo && (
+            <View style={ss.mediaPlay}>
+              <Ionicons name="play" size={10} color="#fff" />
+            </View>
+          )}
+        </View>
+        <View style={ss.rowBody}>
+          <Text style={[ss.rowTitle, { color: colors.text }]} numberOfLines={1}>{item.chat_name}</Text>
+          <Text style={[ss.rowSub, { color: colors.textMuted }]} numberOfLines={1}>
+            {item.sender_name} · {timeAgo(item.sent_at)}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+      </TouchableOpacity>
+    );
+  }
+
+  function LinkRow({ item }: { item: LinkResult }) {
+    const domain = (() => { try { return new URL(item.url).hostname.replace("www.", ""); } catch { return item.url.slice(0, 30); } })();
+    return (
+      <TouchableOpacity
+        style={[ss.row, { borderBottomColor: colors.border }]}
+        onPress={() => {
+          Haptics.selectionAsync();
+          Linking.openURL(item.url).catch(() => {});
+        }}
+        activeOpacity={0.72}
+      >
+        <View style={[ss.linkIconBg, { backgroundColor: colors.accent + "18" }]}>
+          <Ionicons name="link" size={18} color={colors.accent} />
+        </View>
+        <View style={ss.rowBody}>
+          <Text style={[ss.rowTitle, { color: colors.accent }]} numberOfLines={1}>{domain}</Text>
+          <Text style={[ss.rowSub, { color: colors.textMuted }]} numberOfLines={1}>
+            {item.preview_text || item.url}
+          </Text>
+          <Text style={[ss.rowSub, { color: colors.textMuted, fontSize: 10 }]} numberOfLines={1}>
+            {item.sender_name} in {item.chat_name} · {timeAgo(item.sent_at)}
+          </Text>
+        </View>
+        <Ionicons name="open-outline" size={14} color={colors.textMuted} />
+      </TouchableOpacity>
+    );
+  }
+
   function AiPanel() {
     if (aiLoading) {
       return (
@@ -615,6 +794,8 @@ export default function ChatSearchScreen() {
       channels: { icon: "megaphone-outline",     title: "No channels found", sub: "Try different keywords" },
       groups:   { icon: "people-outline",        title: "No groups found",   sub: "Try different keywords" },
       messages: { icon: "mail-open-outline",     title: "No messages found", sub: "Try different keywords in public channels and groups" },
+      media:    { icon: "images-outline",        title: "No media found",    sub: "Photos and videos you've shared will appear here" },
+      links:    { icon: "link-outline",          title: "No links found",    sub: "Links shared in your chats will appear here" },
     };
     const { icon, title, sub } = cfg[tabId];
     return (
@@ -687,6 +868,7 @@ export default function ChatSearchScreen() {
     const dataMap: Record<TabId, any[]> = {
       chats: chatResults, people: peopleResults,
       channels: channelResults, groups: groupResults, messages: messageResults,
+      media: mediaResults, links: linkResults,
     };
     const data = dataMap[tab];
     if (data.length === 0) return <EmptyState tabId={tab} />;
@@ -701,6 +883,8 @@ export default function ChatSearchScreen() {
           if (tab === "channels") return <ChannelRow item={item} />;
           if (tab === "groups")   return <GroupRow   item={item} />;
           if (tab === "messages") return <MessageRow item={item} />;
+          if (tab === "media")    return <MediaRow   item={item} />;
+          if (tab === "links")    return <LinkRow    item={item} />;
           return null;
         }}
         showsVerticalScrollIndicator={false}
@@ -869,6 +1053,21 @@ const ss = StyleSheet.create({
   msgBtn: {
     width: 32, height: 32, borderRadius: 16,
     alignItems: "center", justifyContent: "center", borderWidth: 1,
+  },
+
+  mediaThumb: {
+    width: 52, height: 52, borderRadius: 8, overflow: "hidden", position: "relative",
+  },
+  mediaThumbImg: {
+    width: 52, height: 52,
+  },
+  mediaPlay: {
+    position: "absolute", right: 3, bottom: 3,
+    backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 8, padding: 3,
+  },
+  linkIconBg: {
+    width: 46, height: 46, borderRadius: 10,
+    alignItems: "center", justifyContent: "center",
   },
 
   empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 32 },

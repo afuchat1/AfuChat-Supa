@@ -35,6 +35,7 @@ import { encodeId } from "@/lib/shortId";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { VideoThumbnail } from "@/components/ui/VideoThumbnail";
 import * as Clipboard from "expo-clipboard";
+import * as Contacts from "expo-contacts";
 import { getProfileCache, setProfileCache } from "@/lib/profileCache";
 import { getPhonebookName } from "@/lib/storage/localContacts";
 
@@ -375,6 +376,23 @@ export default function ContactProfileScreen() {
     }
   }
 
+  async function saveToDevice() {
+    if (Platform.OS === "web" || !profile) return;
+    try {
+      const { status } = await Contacts.requestPermissionsAsync();
+      if (status !== "granted") {
+        showAlert("Permission needed", "Allow contacts access to save this person to your phone.");
+        return;
+      }
+      await Contacts.presentContactInputAsync({
+        [Contacts.Fields.FirstName]: profile.display_name,
+        [Contacts.Fields.Note]: `AfuChat: @${profile.handle}`,
+      } as any);
+    } catch {
+      showAlert("Error", "Could not open contacts. Please try again.");
+    }
+  }
+
   function reportUser() {
     if (!user || !id) return;
     showAlert("Report Account", "Why are you reporting this account?", [
@@ -640,6 +658,17 @@ export default function ContactProfileScreen() {
             <Ionicons name="chatbubble-outline" size={14} color={colors.accent} />
             <Text style={[st.ctaMessageText, { color: colors.accent }]}>Message</Text>
           </TouchableOpacity>
+
+          {Platform.OS !== "web" && (
+            <TouchableOpacity
+              style={[st.ctaMessage, { borderColor: colors.border }]}
+              onPress={saveToDevice}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="person-add-outline" size={14} color={colors.textSecondary} />
+              <Text style={[st.ctaMessageText, { color: colors.textSecondary }]}>Save</Text>
+            </TouchableOpacity>
+          )}
 
         </View>
       )}
