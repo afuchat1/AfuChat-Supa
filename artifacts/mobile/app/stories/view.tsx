@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   FlatList,
@@ -86,6 +86,15 @@ export default function ViewStoryScreen() {
 
   // Progress animation
   const progressAnim = useRef(new Animated.Value(0)).current;
+
+  // Hoist panelH + translateY above all early returns so the React Compiler
+  // never evaluates transform: [{ translateY }] with an undefined value.
+  const panelH = screenH * 0.52;
+  const translateY = useMemo(
+    () => slideAnim.interpolate({ inputRange: [0, 1], outputRange: [panelH, 0] }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [panelH]
+  );
 
   const isOwner = user?.id === userId;
 
@@ -382,12 +391,6 @@ export default function ViewStoryScreen() {
 
   const elapsed = Math.floor((Date.now() - new Date(story.created_at).getTime()) / 3600000);
   const timeLabel = elapsed < 1 ? "just now" : `${elapsed}h ago`;
-
-  const panelH = screenH * 0.52;
-  const translateY = slideAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [panelH, 0],
-  });
 
   const storyLike = likeState[story.id] ?? { liked: false, count: 0 };
 
