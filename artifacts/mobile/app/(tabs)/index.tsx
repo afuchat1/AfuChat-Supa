@@ -1254,13 +1254,18 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
           </Animated.View>
         ) : null}
 
-        {selectMode ? (
-          <Text style={[styles.headerTitle, { color: colors.text, flex: 1, marginLeft: 8 }]}>
-            {selectedIds.size > 0 ? `${selectedIds.size} selected` : "Select chats"}
+        {/* Title — absolutely centered so it stays in the middle
+            regardless of how wide the left/right elements are */}
+        <View
+          pointerEvents="none"
+          style={{ position: "absolute", left: 0, right: 0, bottom: 12, alignItems: "center" }}
+        >
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            {selectMode
+              ? (selectedIds.size > 0 ? `${selectedIds.size} selected` : "Select chats")
+              : "AfuChat"}
           </Text>
-        ) : (
-          <Text style={[styles.headerTitle, { color: colors.text, flex: 1, marginLeft: 8 }]}>AfuChat</Text>
-        )}
+        </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
           {selectMode ? (
             <TouchableOpacity

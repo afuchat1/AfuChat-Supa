@@ -201,6 +201,8 @@ export default function RootLayout() {
       }
 
       // HTTPS deep link — profile handles on afuchat.com
+      // Also stores the handle as referrer_handle so that if the visitor
+      // is a new user going through onboarding, the referrer gets credit.
       try {
         const parsed = new URL(url);
         if (parsed.hostname !== "afuchat.com" && parsed.hostname !== "www.afuchat.com") return;
@@ -210,9 +212,11 @@ export default function RootLayout() {
         if (path.startsWith("@")) {
           const handle = path.slice(1);
           if (/^[a-zA-Z0-9_]+$/.test(handle)) {
+            AsyncStorage.setItem("referrer_handle", handle.toLowerCase()).catch(() => {});
             router.push(`/${path}` as any);
           }
         } else if (/^[a-zA-Z0-9_]+$/.test(path)) {
+          AsyncStorage.setItem("referrer_handle", path.toLowerCase()).catch(() => {});
           router.push(`/${path}` as any);
         }
       } catch (_) {}
