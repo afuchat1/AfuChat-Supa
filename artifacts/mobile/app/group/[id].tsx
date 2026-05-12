@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -135,8 +136,27 @@ export default function GroupManageScreen() {
   const [addLoading, setAddLoading] = useState(false);
   const [addSaving, setAddSaving] = useState(false);
 
+  // Member search
+  const [memberSearch, setMemberSearch] = useState("");
+
+  // Mute (uses same AsyncStorage key as the chat screen)
+  const [isMuted, setIsMuted] = useState(false);
+
   const sheetBg = isDark ? "#1C1C1E" : "#fff";
   const sheetBorder = isDark ? "#2C2C2E" : "#E5E5EA";
+
+  // ── Load mute state from AsyncStorage (same key as chat screen) ─────────────
+
+  useEffect(() => {
+    if (!id) return;
+    AsyncStorage.getItem(`afu_muted_${id}`).then((v) => setIsMuted(v === "1")).catch(() => {});
+  }, [id]);
+
+  async function toggleMute() {
+    const next = !isMuted;
+    setIsMuted(next);
+    if (id) await AsyncStorage.setItem(`afu_muted_${id}`, next ? "1" : "0").catch(() => {});
+  }
 
   // ── Data loading ────────────────────────────────────────────────────────────
 
@@ -438,6 +458,16 @@ export default function GroupManageScreen() {
   const sortedMembers = [...admins, ...nonAdmins];
   const iAmMember = members.some((m) => m.user_id === user?.id);
 
+  const filteredMembers = useMemo(() => {
+    if (!memberSearch.trim()) return sortedMembers;
+    const q = memberSearch.toLowerCase();
+    return sortedMembers.filter(
+      (m) =>
+        m.profile.display_name.toLowerCase().includes(q) ||
+        m.profile.handle.toLowerCase().includes(q)
+    );
+  }, [sortedMembers, memberSearch]);
+
   // ── Loading ──────────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -557,13 +587,28 @@ export default function GroupManageScreen() {
 
           <TouchableOpacity
             style={s.actionBtn}
+            onPress={toggleMute}
+            activeOpacity={0.7}
+          >
+            <View style={[s.actionIconWrap, { backgroundColor: isMuted ? "#8E8E9318" : "#FF950018" }]}>
+              <Ionicons
+                name={isMuted ? "notifications-off-outline" : "notifications-outline"}
+                size={22}
+                color={isMuted ? "#8E8E93" : "#FF9500"}
+              />
+            </View>
+            <Text style={[s.actionLabel, { color: colors.text }]}>{isMuted ? "Unmute" : "Mute"}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={s.actionBtn}
             onPress={() => router.push({ pathname: "/chat/[id]", params: { id } })}
             activeOpacity={0.7}
           >
             <View style={[s.actionIconWrap, { backgroundColor: "#34C75918" }]}>
               <Ionicons name="chatbubble-outline" size={22} color="#34C759" />
             </View>
-            <Text style={[s.actionLabel, { color: colors.text }]}>Open Chat</Text>
+            <Text style={[s.actionLabel, { color: colors.text }]}>Chat</Text>
           </TouchableOpacity>
         </View>
 
@@ -596,10 +641,33 @@ export default function GroupManageScreen() {
             </Text>
           </View>
 
+          {/* Member search */}
+          {memberCount > 5 && (
+            <View style={[s.searchWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+              <Ionicons name="search-outline" size={16} color={colors.textMuted} style={{ marginRight: 6 }} />
+              <TextInput
+                style={[s.searchInput, { color: colors.text }]}
+                placeholder={`Search ${isChannel ? "subscribers" : "members"}…`}
+                placeholderTextColor={colors.textMuted}
+                value={memberSearch}
+                onChangeText={setMemberSearch}
+                returnKeyType="search"
+                clearButtonMode="while-editing"
+              />
+            </View>
+          )}
+
           <View style={[s.membersCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            {sortedMembers.map((member, index) => {
+            {filteredMembers.length === 0 ? (
+              <View style={{ padding: 24, alignItems: "center" }}>
+                <Text style={{ color: colors.textMuted, fontSize: 14, fontFamily: "Inter_400Regular" }}>
+                  No results for "{memberSearch}"
+                </Text>
+              </View>
+            ) : null}
+            {filteredMembers.map((member, index) => {
               const isMe = member.user_id === user?.id;
-              const isLast = index === sortedMembers.length - 1;
+              const isLast = index === filteredMembers.length - 1;
               return (
                 <TouchableOpacity
                   key={member.user_id}
@@ -998,6 +1066,22 @@ const s = StyleSheet.create({
   settingLabel: { fontSize: 15, fontFamily: "Inter_500Medium" },
   settingHint: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17 },
 
+  searchWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    padding: 0,
+  },
   membersCard: {
     marginHorizontal: 16,
     borderRadius: 14,
