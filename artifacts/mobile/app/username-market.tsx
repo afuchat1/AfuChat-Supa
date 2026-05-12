@@ -87,6 +87,8 @@ type Listing = {
   reserve_price?: number;
   current_bid?: number;
   current_bidder_id?: string | null;
+  settled_at?: string | null;
+  sold_to_id?: string | null;
 };
 
 type OwnedUsername = {
@@ -223,6 +225,7 @@ export default function UsernameMarketScreen() {
 
   // Auctions
   const [auctions, setAuctions] = useState<Listing[]>([]);
+  const [settledAuctions, setSettledAuctions] = useState<Listing[]>([]);
   const [auctionLoading, setAuctionLoading] = useState(false);
   const [selectedAuction, setSelectedAuction] = useState<Listing | null>(null);
   const [bids, setBids] = useState<Bid[]>([]);
@@ -342,38 +345,52 @@ export default function UsernameMarketScreen() {
 
   /* ── Load auctions ── */
 
+  const mapAuction = (l: any): Listing => ({
+    id: l.id,
+    username: l.username,
+    price: l.price,
+    seller_id: l.seller_id,
+    description: l.description || "",
+    is_active: l.is_active,
+    views: l.views || 0,
+    created_at: l.created_at,
+    seller_name: l.profiles?.display_name || "Seller",
+    seller_handle: l.profiles?.handle || "",
+    is_auction: true,
+    auction_end_at: l.auction_end_at,
+    reserve_price: l.reserve_price || l.price,
+    current_bid: l.current_bid || 0,
+    current_bidder_id: l.current_bidder_id || null,
+    settled_at: l.settled_at || null,
+    sold_to_id: l.sold_to_id || null,
+  });
+
+  const AUCTION_SELECT =
+    "id, username, price, seller_id, description, is_active, views, created_at, is_auction, auction_end_at, reserve_price, current_bid, current_bidder_id, settled_at, sold_to_id, profiles!username_listings_seller_id_fkey(display_name, handle)";
+
   const loadAuctions = useCallback(async () => {
     setAuctionLoading(true);
-    const { data } = await supabase
-      .from("username_listings")
-      .select(
-        "id, username, price, seller_id, description, is_active, views, created_at, is_auction, auction_end_at, reserve_price, current_bid, current_bidder_id, profiles!username_listings_seller_id_fkey(display_name, handle)"
-      )
-      .eq("is_active", true)
-      .eq("is_auction", true)
-      .gt("auction_end_at", new Date().toISOString())
-      .order("auction_end_at", { ascending: true });
-    if (data) {
-      setAuctions(
-        data.map((l: any) => ({
-          id: l.id,
-          username: l.username,
-          price: l.price,
-          seller_id: l.seller_id,
-          description: l.description || "",
-          is_active: l.is_active,
-          views: l.views || 0,
-          created_at: l.created_at,
-          seller_name: l.profiles?.display_name || "Seller",
-          seller_handle: l.profiles?.handle || "",
-          is_auction: true,
-          auction_end_at: l.auction_end_at,
-          reserve_price: l.reserve_price || l.price,
-          current_bid: l.current_bid || 0,
-          current_bidder_id: l.current_bidder_id || null,
-        }))
-      );
-    }
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const [liveRes, settledRes] = await Promise.all([
+      supabase
+        .from("username_listings")
+        .select(AUCTION_SELECT)
+        .eq("is_active", true)
+        .eq("is_auction", true)
+        .gt("auction_end_at", new Date().toISOString())
+        .order("auction_end_at", { ascending: true }),
+      supabase
+        .from("username_listings")
+        .select(AUCTION_SELECT)
+        .eq("is_auction", true)
+        .eq("is_active", false)
+        .not("settled_at", "is", null)
+        .gt("settled_at", sevenDaysAgo)
+        .order("settled_at", { ascending: false })
+        .limit(20),
+    ]);
+    if (liveRes.data)    setAuctions(liveRes.data.map(mapAuction));
+    if (settledRes.data) setSettledAuctions(settledRes.data.map(mapAuction));
     setAuctionLoading(false);
   }, []);
 
@@ -1065,7 +1082,7 @@ export default function UsernameMarketScreen() {
             <View style={{ padding: 16, gap: 10 }}>
               {[1, 2, 3].map((i) => <MarketplaceCardSkeleton key={i} />)}
             </View>
-          ) : auctions.length === 0 ? (
+          ) : auctions.length === 0 && settledAuctions.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyEmoji}>🔨</Text>
               <Text style={[styles.emptyTitle, { color: colors.text }]}>No Live Auctions</Text>
@@ -1089,7 +1106,9 @@ export default function UsernameMarketScreen() {
                 <View style={[styles.foundBanner, { backgroundColor: accent + "15" }]}>
                   <Ionicons name="hammer-outline" size={15} color={accent} />
                   <Text style={[styles.headerSub, { color: accent, marginLeft: 6 }]}>
-                    {auctions.length} live auction{auctions.length !== 1 ? "s" : ""} — bid to win!
+                    {auctions.length > 0
+                      ? `${auctions.length} live auction${auctions.length !== 1 ? "s" : ""} — bid to win!`
+                      : "No live auctions right now"}
                   </Text>
                 </View>
               }
@@ -1215,6 +1234,88 @@ export default function UsernameMarketScreen() {
                   </View>
                 );
               }}
+              ListFooterComponent={
+                settledAuctions.length > 0 ? (
+                  <View style={{ marginTop: 20, gap: 8 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4, marginBottom: 4 }}>
+                      <Ionicons name="checkmark-done-circle-outline" size={16} color={colors.textMuted} />
+                      <Text style={[styles.cardTitle, { color: colors.textMuted, letterSpacing: 0.6 }]}>
+                        RECENTLY SETTLED
+                      </Text>
+                    </View>
+                    {settledAuctions.map((s) => {
+                      const rarity      = getRarity(s.username);
+                      const userWon     = s.sold_to_id === user?.id;
+                      const userSold    = s.seller_id  === user?.id;
+                      const hadWinner   = !!s.sold_to_id;
+                      return (
+                        <View
+                          key={s.id}
+                          style={[
+                            styles.ownedCard,
+                            {
+                              backgroundColor: colors.surface,
+                              borderColor: hadWinner ? rarity.color + "44" : colors.border,
+                              opacity: 0.85,
+                            },
+                          ]}
+                        >
+                          <View style={styles.ownedCardTop}>
+                            <View style={[styles.handleBubble, { backgroundColor: rarity.color + "18" }]}>
+                              <Text style={[styles.handleText, { color: rarity.color }]}>@{s.username}</Text>
+                            </View>
+                            <View style={[
+                              styles.rarityTag,
+                              { backgroundColor: hadWinner ? "#34C75920" : "#8E8E9320" },
+                            ]}>
+                              <Ionicons
+                                name={hadWinner ? "checkmark-circle" : "close-circle"}
+                                size={12}
+                                color={hadWinner ? "#34C759" : "#8E8E93"}
+                              />
+                              <Text style={[styles.rarityTagText, { color: hadWinner ? "#34C759" : "#8E8E93" }]}>
+                                {hadWinner ? "Sold" : "No Sale"}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {userWon && (
+                            <View style={[styles.listedNotice, { backgroundColor: "#34C75912", borderColor: "#34C75933" }]}>
+                              <Ionicons name="trophy" size={13} color="#34C759" />
+                              <Text style={[styles.listedNoticeText, { color: "#34C759" }]}>
+                                You won · {fmtPrice(s.current_bid || 0)} ACoin charged · now in your collection
+                              </Text>
+                            </View>
+                          )}
+                          {userSold && hadWinner && (
+                            <View style={[styles.listedNotice, { backgroundColor: accent + "12", borderColor: accent + "33" }]}>
+                              <Ionicons name="cash-outline" size={13} color={accent} />
+                              <Text style={[styles.listedNoticeText, { color: accent }]}>
+                                You sold for {fmtPrice(s.current_bid || 0)} ACoin
+                              </Text>
+                            </View>
+                          )}
+                          {userSold && !hadWinner && (
+                            <View style={[styles.listedNotice, { backgroundColor: "#FF3B3010", borderColor: "#FF3B3030" }]}>
+                              <Ionicons name="information-circle-outline" size={13} color="#FF3B30" />
+                              <Text style={[styles.listedNoticeText, { color: "#FF3B30" }]}>
+                                No qualifying bids — handle is back in your collection
+                              </Text>
+                            </View>
+                          )}
+
+                          <Text style={[styles.ownedMeta, { color: colors.textMuted }]}>
+                            {hadWinner
+                              ? `Final bid: ${fmtPrice(s.current_bid || 0)} ACoin`
+                              : `Reserve: ${fmtPrice(s.reserve_price || s.price)} ACoin`}
+                            {" · "}settled {timeAgo(s.settled_at!)}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : null
+              }
             />
           )}
         </>
