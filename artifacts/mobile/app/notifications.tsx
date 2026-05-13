@@ -31,6 +31,7 @@ import OfflineBanner from "@/components/ui/OfflineBanner";
 import { isOnline } from "@/lib/offlineStore";
 import { getLocalNotifications, saveNotifications, markNotificationRead as markLocalRead, markAllNotificationsRead as markAllLocalRead } from "@/lib/storage/localNotifications";
 import { encodeId } from "@/lib/shortId";
+import { useIsDesktop } from "@/hooks/useIsDesktop";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -377,6 +378,7 @@ export default function NotificationsScreen() {
   const { colors, accent } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const { isDesktop } = useIsDesktop();
 
   const [items, setItems] = useState<NotifItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -576,9 +578,9 @@ export default function NotificationsScreen() {
   const renderContent = () => {
     if (loading) {
       return (
-        <View style={{ padding: 8 }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 8 }}>
           {[1, 2, 3, 4, 5, 6].map((i) => <NotificationSkeleton key={i} />)}
-        </View>
+        </ScrollView>
       );
     }
 
@@ -604,6 +606,7 @@ export default function NotificationsScreen() {
       <FlatList
         data={grouped}
         keyExtractor={(g) => g.date}
+        style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshControl={
@@ -641,7 +644,7 @@ export default function NotificationsScreen() {
             ))}
           </View>
         )}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 90 }}
+        contentContainerStyle={{ paddingBottom: isDesktop ? 24 : insets.bottom + 90 }}
       />
     );
   };
@@ -650,46 +653,70 @@ export default function NotificationsScreen() {
     <View style={[st.root, { backgroundColor: colors.background }]}>
       <OfflineBanner />
 
-      {/* Native-style navigation header */}
-      <View style={[st.navBar, { paddingTop: insets.top, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <View style={st.navBarInner}>
-          {/* Left — back button */}
-          <TouchableOpacity
-            style={st.navSide}
-            onPress={() => router.canGoBack() ? router.back() : null}
-            hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
-            activeOpacity={0.6}
-          >
-            <Ionicons name="chevron-back" size={28} color={accent} />
-          </TouchableOpacity>
+      {/* Native-style navigation header — hidden on desktop (shell provides navigation) */}
+      {!isDesktop && (
+        <View style={[st.navBar, { paddingTop: insets.top, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+          <View style={st.navBarInner}>
+            {/* Left — back button */}
+            <TouchableOpacity
+              style={st.navSide}
+              onPress={() => router.canGoBack() ? router.back() : null}
+              hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
+              activeOpacity={0.6}
+            >
+              <Ionicons name="chevron-back" size={28} color={accent} />
+            </TouchableOpacity>
 
-          {/* Center — title + unread count */}
-          <View style={st.navCenter}>
-            <Text style={[st.navTitle, { color: colors.text }]} numberOfLines={1}>
-              Notifications
-            </Text>
-            {unreadCount > 0 && (
-              <Text style={[st.navSub, { color: colors.textMuted }]}>
-                {unreadCount} unread
+            {/* Center — title + unread count */}
+            <View style={st.navCenter}>
+              <Text style={[st.navTitle, { color: colors.text }]} numberOfLines={1}>
+                Notifications
               </Text>
-            )}
-          </View>
+              {unreadCount > 0 && (
+                <Text style={[st.navSub, { color: colors.textMuted }]}>
+                  {unreadCount} unread
+                </Text>
+              )}
+            </View>
 
-          {/* Right — mark all read icon button */}
-          <View style={st.navSide}>
-            {unreadCount > 0 && (
-              <TouchableOpacity
-                onPress={markAllRead}
-                style={[st.navIconBtn, { backgroundColor: accent + "18" }]}
-                hitSlop={{ top: 8, left: 8, right: 8, bottom: 8 }}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="checkmark-done-outline" size={18} color={accent} />
-              </TouchableOpacity>
-            )}
+            {/* Right — mark all read icon button */}
+            <View style={st.navSide}>
+              {unreadCount > 0 && (
+                <TouchableOpacity
+                  onPress={markAllRead}
+                  style={[st.navIconBtn, { backgroundColor: accent + "18" }]}
+                  hitSlop={{ top: 8, left: 8, right: 8, bottom: 8 }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="checkmark-done-outline" size={18} color={accent} />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </View>
-      </View>
+      )}
+
+      {/* Desktop: compact header row with title + mark-all button */}
+      {isDesktop && (
+        <View style={[st.desktopHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+          <Text style={[st.navTitle, { color: colors.text }]}>Notifications</Text>
+          {unreadCount > 0 && (
+            <TouchableOpacity
+              onPress={markAllRead}
+              style={[st.navIconBtn, { backgroundColor: accent + "18" }]}
+              hitSlop={{ top: 8, left: 8, right: 8, bottom: 8 }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="checkmark-done-outline" size={18} color={accent} />
+            </TouchableOpacity>
+          )}
+          {unreadCount > 0 && (
+            <Text style={[st.navSub, { color: colors.textMuted, marginLeft: 6 }]}>
+              {unreadCount} unread
+            </Text>
+          )}
+        </View>
+      )}
 
       {/* Category filter tabs */}
       <View style={[st.categoriesOuter, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
@@ -725,7 +752,9 @@ export default function NotificationsScreen() {
         </ScrollView>
       </View>
 
-      {renderContent()}
+      <View style={{ flex: 1 }}>
+        {renderContent()}
+      </View>
     </View>
   );
 }
@@ -736,6 +765,14 @@ const st = StyleSheet.create({
   // Native navigation header
   navBar: {
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  desktopHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 10,
   },
   navBarInner: {
     flexDirection: "row",
@@ -876,7 +913,7 @@ const st = StyleSheet.create({
   datePillText: { fontSize: 11, fontFamily: "Inter_500Medium", textTransform: "uppercase", letterSpacing: 0.5 },
 
   // Empty state
-  emptyWrap: { alignItems: "center", paddingTop: 72, paddingHorizontal: 32, gap: 14 },
+  emptyWrap: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 14 },
   emptyIconWrap: {
     width: 96, height: 96, borderRadius: 48,
     alignItems: "center", justifyContent: "center", marginBottom: 4,
