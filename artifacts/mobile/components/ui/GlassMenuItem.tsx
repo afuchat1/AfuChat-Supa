@@ -8,7 +8,6 @@ import {
   type ViewStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/hooks/useTheme";
 import * as Haptics from "@/lib/haptics";
 
@@ -56,7 +55,7 @@ export function GlassMenuSeparator({ indent = 54 }: { indent?: number }) {
 // ─── GlassMenuItem ────────────────────────────────────────────────────────────
 export interface GlassMenuItemProps {
   icon: React.ComponentProps<typeof Ionicons>["name"];
-  iconBg: string | [string, string];
+  iconBg?: string | [string, string];
   label: string;
   value?: string;
   subtitle?: string;
@@ -72,7 +71,6 @@ export interface GlassMenuItemProps {
 
 export const GlassMenuItem = React.memo(function GlassMenuItem({
   icon,
-  iconBg,
   label,
   value,
   subtitle,
@@ -85,11 +83,7 @@ export const GlassMenuItem = React.memo(function GlassMenuItem({
   noChevron = false,
   rightElement,
 }: GlassMenuItemProps) {
-  const { colors, isDark } = useTheme();
-
-  const iconBgColors: [string, string] = Array.isArray(iconBg)
-    ? iconBg
-    : [iconBg, adjustLightness(iconBg, isDark ? -0.1 : 0.12)];
+  const { colors } = useTheme();
 
   return (
     <TouchableOpacity
@@ -102,15 +96,12 @@ export const GlassMenuItem = React.memo(function GlassMenuItem({
       activeOpacity={0.65}
       disabled={disabled || loading}
     >
-      <View style={styles.iconWrap}>
-        <LinearGradient
-          colors={iconBgColors}
-          start={{ x: 0.2, y: 0 }}
-          end={{ x: 0.8, y: 1 }}
-          style={styles.iconBg}
-        >
-          <Ionicons name={icon} size={18} color="#fff" />
-        </LinearGradient>
+      <View style={[styles.iconWrap, { backgroundColor: danger ? "#FF3B3015" : colors.backgroundSecondary }]}>
+        <Ionicons
+          name={icon}
+          size={18}
+          color={danger ? "#FF3B30" : colors.icon}
+        />
       </View>
 
       <View style={styles.labelWrap}>
@@ -156,14 +147,6 @@ export const GlassMenuItem = React.memo(function GlassMenuItem({
   );
 });
 
-function adjustLightness(hex: string, delta: number): string {
-  const n = parseInt(hex.replace("#", ""), 16);
-  const r = Math.min(255, Math.max(0, (n >> 16) + Math.round(delta * 80)));
-  const g = Math.min(255, Math.max(0, ((n >> 8) & 0xff) + Math.round(delta * 80)));
-  const b = Math.min(255, Math.max(0, (n & 0xff) + Math.round(delta * 80)));
-  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
-}
-
 const styles = StyleSheet.create({
   sectionWrap: { gap: 8 },
   sectionLabel: {
@@ -181,8 +164,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     gap: 13,
   },
-  iconWrap: {},
-  iconBg: {
+  iconWrap: {
     width: 34,
     height: 34,
     borderRadius: 9,

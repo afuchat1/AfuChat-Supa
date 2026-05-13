@@ -25,14 +25,14 @@ type Settings = {
   data_analytics: boolean;
 };
 
-function ToggleRow({ icon, iconBg, label, description, value, onToggle, saving }: {
-  icon: React.ComponentProps<typeof Ionicons>["name"]; iconBg: string; label: string; description: string;
+function ToggleRow({ icon, label, description, value, onToggle, saving }: {
+  icon: React.ComponentProps<typeof Ionicons>["name"]; label: string; description: string;
   value: boolean; onToggle: (v: boolean) => void; saving?: boolean;
 }) {
   const { colors } = useTheme();
   return (
     <View style={[styles.row, { backgroundColor: colors.surface }]}>
-      <View style={[styles.rowIcon, { backgroundColor: iconBg }]}><Ionicons name={icon} size={18} color="#fff" /></View>
+      <View style={[styles.rowIcon, { backgroundColor: colors.backgroundSecondary }]}><Ionicons name={icon} size={18} color={colors.icon} /></View>
       <View style={styles.rowText}>
         <Text style={[styles.rowLabel, { color: colors.text }]}>{label}</Text>
         <Text style={[styles.rowDesc, { color: colors.textMuted }]}>{description}</Text>
@@ -77,7 +77,7 @@ export default function PrivacyDataScreen() {
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>DATA USAGE</Text>
           <GlassCard style={styles.group} variant="medium">
             <ToggleRow
-              icon="sparkles" iconBg="#BF5AF2"
+              icon="sparkles"
               label="Personalisation"
               description="Use your activity to personalise your feed, suggestions, and AI responses"
               value={settings.data_personalization}
@@ -86,7 +86,7 @@ export default function PrivacyDataScreen() {
             />
             <View style={[styles.sep, { backgroundColor: colors.border, marginLeft: 62 }]} />
             <ToggleRow
-              icon="analytics" iconBg={colors.accent}
+              icon="analytics"
               label="Analytics"
               description="Help improve AfuChat by sharing anonymous usage statistics"
               value={settings.data_analytics}
@@ -102,8 +102,8 @@ export default function PrivacyDataScreen() {
               onPress={() => router.push("/settings/privacy-download" as any)}
               activeOpacity={0.7}
             >
-              <View style={[styles.linkIcon, { backgroundColor: "#007AFF" }]}>
-                <Ionicons name="cloud-download" size={18} color="#fff" />
+              <View style={[styles.linkIcon, { backgroundColor: colors.backgroundSecondary }]}>
+                <Ionicons name="cloud-download" size={18} color={colors.icon} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.linkLabel, { color: colors.text }]}>Download My Data</Text>
@@ -120,8 +120,8 @@ export default function PrivacyDataScreen() {
               ])}
               activeOpacity={0.7}
             >
-              <View style={[styles.linkIcon, { backgroundColor: "#FF3B30" }]}>
-                <Ionicons name="trash" size={18} color="#fff" />
+              <View style={[styles.linkIcon, { backgroundColor: "#FF3B3015" }]}>
+                <Ionicons name="trash" size={18} color="#FF3B30" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.linkLabel, { color: "#FF3B30" }]}>Clear Activity History</Text>

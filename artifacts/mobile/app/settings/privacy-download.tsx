@@ -19,11 +19,11 @@ import { supabase } from "@/lib/supabase";
 import { getBaseUrl } from "@/lib/api-client-react/src/custom-fetch";
 
 const DATA_TYPES = [
-  { id: "profile",      icon: "person-circle"   as const, iconBg: Colors.brand,  label: "Profile Data",     description: "Your display name, bio, settings, and account info" },
-  { id: "messages",     icon: "chatbubble"       as const, iconBg: "#34C759",     label: "Messages",         description: "All your chat conversations and media" },
-  { id: "posts",        icon: "document-text"    as const, iconBg: "#FF9500",     label: "Posts & Moments",  description: "Everything you've posted on Discover" },
-  { id: "activity",     icon: "analytics"        as const, iconBg: "#007AFF",     label: "Activity History", description: "Notifications, follows, and app activity" },
-  { id: "transactions", icon: "card"             as const, iconBg: "#AF52DE",     label: "Transactions",     description: "ACoin and XP transaction history" },
+  { id: "profile",      icon: "person-circle"   as const, label: "Profile Data",     description: "Your display name, bio, settings, and account info" },
+  { id: "messages",     icon: "chatbubble"       as const, label: "Messages",         description: "All your chat conversations and media" },
+  { id: "posts",        icon: "document-text"    as const, label: "Posts & Moments",  description: "Everything you've posted on Discover" },
+  { id: "activity",     icon: "analytics"        as const, label: "Activity History", description: "Notifications, follows, and app activity" },
+  { id: "transactions", icon: "card"             as const, label: "Transactions",     description: "ACoin and XP transaction history" },
 ];
 
 export default function PrivacyDownloadScreen() {
@@ -136,8 +136,8 @@ export default function PrivacyDownloadScreen() {
                       onPress={() => toggle(item.id)}
                       activeOpacity={0.7}
                     >
-                      <View style={[styles.rowIcon, { backgroundColor: item.id === "profile" ? colors.accent : item.iconBg }]}>
-                        <Ionicons name={item.icon} size={18} color="#fff" />
+                      <View style={[styles.rowIcon, { backgroundColor: colors.backgroundSecondary }]}>
+                        <Ionicons name={item.icon} size={18} color={colors.icon} />
                       </View>
                       <View style={styles.rowText}>
                         <Text style={[styles.rowLabel, { color: colors.text }]}>{item.label}</Text>

@@ -27,14 +27,14 @@ type Settings = {
   hide_from_search: boolean;
 };
 
-function ToggleRow({ icon, iconBg, label, description, value, onToggle, saving }: {
-  icon: React.ComponentProps<typeof Ionicons>["name"]; iconBg: string; label: string; description: string;
+function ToggleRow({ icon, label, description, value, onToggle, saving }: {
+  icon: React.ComponentProps<typeof Ionicons>["name"]; label: string; description: string;
   value: boolean; onToggle: (v: boolean) => void; saving?: boolean;
 }) {
   const { colors } = useTheme();
   return (
     <View style={[styles.row, { backgroundColor: colors.surface }]}>
-      <View style={[styles.rowIcon, { backgroundColor: iconBg }]}><Ionicons name={icon} size={18} color="#fff" /></View>
+      <View style={[styles.rowIcon, { backgroundColor: colors.backgroundSecondary }]}><Ionicons name={icon} size={18} color={colors.icon} /></View>
       <View style={styles.rowText}>
         <Text style={[styles.rowLabel, { color: colors.text }]}>{label}</Text>
         <Text style={[styles.rowDesc, { color: colors.textMuted }]}>{description}</Text>
@@ -79,15 +79,15 @@ export default function PrivacyVisibilityScreen() {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>CONNECTIONS</Text>
           <GlassCard style={styles.group} variant="medium">
-            <ToggleRow icon="people" iconBg="#007AFF" label="Hide Followers List" description="Others cannot see who follows you" value={settings.hide_followers_list} onToggle={(v) => toggle("hide_followers_list", v)} saving={saving === "hide_followers_list"} />
+            <ToggleRow icon="people" label="Hide Followers List" description="Others cannot see who follows you" value={settings.hide_followers_list} onToggle={(v) => toggle("hide_followers_list", v)} saving={saving === "hide_followers_list"} />
             <View style={[styles.sep, { backgroundColor: colors.border, marginLeft: 62 }]} />
-            <ToggleRow icon="person-add" iconBg="#5856D6" label="Hide Following List" description="Others cannot see who you follow" value={settings.hide_following_list} onToggle={(v) => toggle("hide_following_list", v)} saving={saving === "hide_following_list"} />
+            <ToggleRow icon="person-add" label="Hide Following List" description="Others cannot see who you follow" value={settings.hide_following_list} onToggle={(v) => toggle("hide_following_list", v)} saving={saving === "hide_following_list"} />
           </GlassCard>
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>DISCOVERABILITY</Text>
           <GlassCard style={styles.group} variant="medium">
-            <ToggleRow icon="document-text" iconBg="#FF9500" label="Limit Post Visibility" description="Only followers can see your posts in Discover" value={settings.hide_posts_non_followers} onToggle={(v) => toggle("hide_posts_non_followers", v)} saving={saving === "hide_posts_non_followers"} />
+            <ToggleRow icon="document-text" label="Limit Post Visibility" description="Only followers can see your posts in Discover" value={settings.hide_posts_non_followers} onToggle={(v) => toggle("hide_posts_non_followers", v)} saving={saving === "hide_posts_non_followers"} />
             <View style={[styles.sep, { backgroundColor: colors.border, marginLeft: 62 }]} />
-            <ToggleRow icon="search" iconBg="#FF3B30" label="Hide From Search" description="Your profile won't appear in search results" value={settings.hide_from_search} onToggle={(v) => toggle("hide_from_search", v)} saving={saving === "hide_from_search"} />
+            <ToggleRow icon="search" label="Hide From Search" description="Your profile won't appear in search results" value={settings.hide_from_search} onToggle={(v) => toggle("hide_from_search", v)} saving={saving === "hide_from_search"} />
           </GlassCard>
           <Text style={[styles.hint, { color: colors.textMuted }]}>Hiding your lists does not affect who can follow or message you. All changes are applied instantly.</Text>
         </ScrollView>

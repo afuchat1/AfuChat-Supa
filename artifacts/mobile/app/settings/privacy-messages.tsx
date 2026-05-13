@@ -24,10 +24,10 @@ type Settings = {
   message_privacy: PrivacyLevel;
 };
 
-const OPTIONS: { value: PrivacyLevel; label: string; description: string; icon: React.ComponentProps<typeof Ionicons>["name"]; iconBg: string }[] = [
-  { value: "everyone", label: "Everyone", description: "Anyone on AfuChat can message you", icon: "globe", iconBg: "#34C759" },
-  { value: "followers", label: "Followers Only", description: "Only people you follow back can message you", icon: "people", iconBg: "#007AFF" },
-  { value: "nobody", label: "Nobody", description: "Turn off all direct messages from new people", icon: "ban", iconBg: "#FF3B30" },
+const OPTIONS: { value: PrivacyLevel; label: string; description: string; icon: React.ComponentProps<typeof Ionicons>["name"] }[] = [
+  { value: "everyone", label: "Everyone", description: "Anyone on AfuChat can message you", icon: "globe" },
+  { value: "followers", label: "Followers Only", description: "Only people you follow back can message you", icon: "people" },
+  { value: "nobody", label: "Nobody", description: "Turn off all direct messages from new people", icon: "ban" },
 ];
 
 export default function PrivacyMessagesScreen() {
@@ -72,8 +72,8 @@ export default function PrivacyMessagesScreen() {
                     onPress={() => select(opt.value)}
                     activeOpacity={0.7}
                   >
-                    <View style={[styles.optIcon, { backgroundColor: opt.iconBg }]}>
-                      <Ionicons name={opt.icon} size={18} color="#fff" />
+                    <View style={[styles.optIcon, { backgroundColor: colors.backgroundSecondary }]}>
+                      <Ionicons name={opt.icon} size={18} color={colors.icon} />
                     </View>
                     <View style={styles.optText}>
                       <Text style={[styles.optLabel, { color: colors.text }]}>{opt.label}</Text>

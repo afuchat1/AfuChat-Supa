@@ -30,7 +30,6 @@ function RadioGroup({
   label,
   description,
   icon,
-  iconBg,
   value,
   onChange,
   saving,
@@ -38,7 +37,6 @@ function RadioGroup({
   label: string;
   description: string;
   icon: React.ComponentProps<typeof Ionicons>["name"];
-  iconBg: string;
   value: PrivacyLevel;
   onChange: (v: PrivacyLevel) => void;
   saving: boolean;
@@ -48,7 +46,7 @@ function RadioGroup({
   return (
     <View style={[styles.groupCard, { backgroundColor: colors.surface }]}>
       <View style={styles.groupHeader}>
-        <View style={[styles.groupIcon, { backgroundColor: iconBg }]}><Ionicons name={icon} size={18} color="#fff" /></View>
+        <View style={[styles.groupIcon, { backgroundColor: colors.backgroundSecondary }]}><Ionicons name={icon} size={18} color={colors.icon} /></View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.groupLabel, { color: colors.text }]}>{label}</Text>
           <Text style={[styles.groupDesc, { color: colors.textMuted }]}>{description}</Text>
@@ -102,7 +100,7 @@ export default function PrivacyInteractionsScreen() {
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>INTERACTIONS</Text>
           <View style={{ paddingHorizontal: 16, gap: 12 }}>
             <RadioGroup
-              icon="heart" iconBg="#FF2D55"
+              icon="heart"
               label="Reactions & Comments"
               description="Who can react to and comment on your posts"
               value={settings.reactions_privacy}
@@ -110,7 +108,7 @@ export default function PrivacyInteractionsScreen() {
               saving={saving === "reactions_privacy"}
             />
             <RadioGroup
-              icon="pricetag" iconBg="#FF9500"
+              icon="pricetag"
               label="Tagging"
               description="Who can tag you in their posts or stories"
               value={settings.allow_tagging}

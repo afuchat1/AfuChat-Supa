@@ -29,7 +29,6 @@ type Settings = {
 
 function ToggleRow({
   icon,
-  iconBg,
   label,
   description,
   value,
@@ -37,7 +36,6 @@ function ToggleRow({
   saving,
 }: {
   icon: React.ComponentProps<typeof Ionicons>["name"];
-  iconBg: string;
   label: string;
   description: string;
   value: boolean;
@@ -47,8 +45,8 @@ function ToggleRow({
   const { colors } = useTheme();
   return (
     <View style={[styles.row, { backgroundColor: colors.surface }]}>
-      <View style={[styles.rowIcon, { backgroundColor: iconBg }]}>
-        <Ionicons name={icon} size={18} color="#fff" />
+      <View style={[styles.rowIcon, { backgroundColor: colors.backgroundSecondary }]}>
+        <Ionicons name={icon} size={18} color={colors.icon} />
       </View>
       <View style={styles.rowText}>
         <Text style={[styles.rowLabel, { color: colors.text }]}>{label}</Text>
@@ -129,7 +127,6 @@ export default function PrivacyAccountScreen() {
           <GlassCard style={styles.group} variant="medium">
             <ToggleRow
               icon="lock-closed"
-              iconBg="#007AFF"
               label="Private Account"
               description="Only approved followers can see your posts and stories"
               value={settings.is_private}
@@ -139,7 +136,6 @@ export default function PrivacyAccountScreen() {
             <View style={[styles.sep, { backgroundColor: colors.border, marginLeft: 62 }]} />
             <ToggleRow
               icon="person-circle"
-              iconBg="#5856D6"
               label="Public Bio"
               description="Show your bio to everyone, not just followers"
               value={settings.show_bio_publicly}
@@ -152,7 +148,6 @@ export default function PrivacyAccountScreen() {
           <GlassCard style={styles.group} variant="medium">
             <ToggleRow
               icon="radio-button-on"
-              iconBg="#34C759"
               label="Show Online Status"
               description="Let others see when you are currently active"
               value={settings.show_online_status}
@@ -162,7 +157,6 @@ export default function PrivacyAccountScreen() {
             <View style={[styles.sep, { backgroundColor: colors.border, marginLeft: 62 }]} />
             <ToggleRow
               icon="time"
-              iconBg="#FF9500"
               label="Show Last Seen"
               description="Display when you were last active to your contacts"
               value={settings.show_last_seen}

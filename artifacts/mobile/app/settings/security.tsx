@@ -24,7 +24,6 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { GlassMenuSection, GlassMenuItem, GlassMenuSeparator } from "@/components/ui/GlassMenuItem";
 import { TwoFactorGate } from "@/components/ui/TwoFactorGate";
 import Colors from "@/constants/colors";
-import { LinearGradient } from "expo-linear-gradient";
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function SecuritySettingsScreen() {
@@ -193,7 +192,6 @@ export default function SecuritySettingsScreen() {
         <GlassMenuSection title="SECURITY">
           <GlassMenuItem
             icon="key-outline"
-            iconBg={["#007AFF", "#0055FF"]}
             label="Change Password"
             subtitle="Update your account password"
             onPress={() => setShowPwdGate(true)}
@@ -201,7 +199,6 @@ export default function SecuritySettingsScreen() {
           <GlassMenuSeparator />
           <GlassMenuItem
             icon="shield-checkmark-outline"
-            iconBg={["#34C759", "#25A844"]}
             label="Device Security"
             subtitle="PIN lock, biometrics, trusted devices"
             onPress={() => router.push("/device-security" as any)}
@@ -212,7 +209,6 @@ export default function SecuritySettingsScreen() {
         <GlassMenuSection title="YOUR DATA">
           <GlassMenuItem
             icon="download-outline"
-            iconBg={["#00BCD4", "#0097A7"]}
             label="Download My Data"
             subtitle="Export profile, posts, contacts & transactions"
             onPress={() => setShowDownloadGate(true)}
@@ -224,7 +220,6 @@ export default function SecuritySettingsScreen() {
         <GlassMenuSection title="DANGER ZONE">
           <GlassMenuItem
             icon="trash-outline"
-            iconBg={["#FF3B30", "#CC2B22"]}
             label="Delete Account"
             danger
             noChevron={false}
