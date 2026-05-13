@@ -1,9 +1,9 @@
-import { useWindowDimensions } from "react-native";
+import { PixelRatio, useWindowDimensions } from "react-native";
 
 export type ScreenSize = "tiny" | "small" | "medium" | "large" | "xlarge";
 
 export function useResponsive() {
-  const { width, height } = useWindowDimensions();
+  const { width, height, fontScale } = useWindowDimensions();
 
   const size: ScreenSize =
     width < 320 ? "tiny" :
@@ -21,7 +21,11 @@ export function useResponsive() {
   const hp = (pct: number) => (width * pct) / 100;
   const vp = (pct: number) => (height * pct) / 100;
 
-  const fontSize = (base: number) => Math.round(Math.max(base * 0.8, base * scale));
+  // Scales by both screen width and device accessibility font size
+  const fontSize = (base: number) => {
+    const widthScaled = Math.round(Math.max(base * 0.8, base * scale));
+    return Math.round(widthScaled * Math.min(fontScale, 1.4));
+  };
 
   const spacing = (base: number) => Math.round(base * scale);
 
@@ -37,6 +41,7 @@ export function useResponsive() {
     height,
     size,
     scale,
+    fontScale,
     isSmall,
     isTiny,
     isTablet,

@@ -103,7 +103,7 @@ function formatNum(n: number): string {
   return String(n);
 }
 
-function RecentCommenters({ postId, replyCount, bgColor }: { postId: string; replyCount: number; bgColor: string }) {
+function RecentCommenters({ postId, replyCount, bgColor, accentColor }: { postId: string; replyCount: number; bgColor: string; accentColor: string }) {
   const [avatars, setAvatars] = useState<{ avatar_url: string | null; display_name: string }[]>([]);
   useEffect(() => {
     if (replyCount === 0) { setAvatars([]); return; }
@@ -159,8 +159,8 @@ function RecentCommenters({ postId, replyCount, bgColor }: { postId: string; rep
           {a.avatar_url ? (
             <ExpoImage source={{ uri: a.avatar_url }} style={{ width: 20, height: 20 }} contentFit="cover" />
           ) : (
-            <View style={{ width: 20, height: 20, backgroundColor: "#00BCD440", alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ fontSize: 8, color: "#00BCD4", fontFamily: "Inter_700Bold" }}>{(a.display_name || "U").slice(0, 1).toUpperCase()}</Text>
+            <View style={{ width: 20, height: 20, backgroundColor: accentColor + "40", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 8, color: accentColor, fontFamily: "Inter_700Bold" }}>{(a.display_name || "U").slice(0, 1).toUpperCase()}</Text>
             </View>
           )}
         </View>
@@ -207,6 +207,7 @@ function PostUploadBanner({ colors }: { colors: typeof Colors.light }) {
 }
 
 function BookmarkButton({ bookmarked, onPress }: { bookmarked: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
   const scale = useRef(new Animated.Value(1)).current;
   function handlePress() {
     Animated.sequence([
@@ -218,7 +219,7 @@ function BookmarkButton({ bookmarked, onPress }: { bookmarked: boolean; onPress:
   return (
     <Animated.View style={{ transform: [{ scale }], marginLeft: "auto" }}>
       <TouchableOpacity onPress={handlePress} hitSlop={8}>
-        <Ionicons name={bookmarked ? "bookmark" : "bookmark-outline"} size={18} color={bookmarked ? Colors.gold : "#8E8E93"} />
+        <Ionicons name={bookmarked ? "bookmark" : "bookmark-outline"} size={18} color={bookmarked ? Colors.gold : colors.textMuted} />
       </TouchableOpacity>
     </Animated.View>
   );
@@ -314,10 +315,10 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
                 onPress={() => router.push(`/company/${item.org_slug}` as any)}
                 activeOpacity={0.8}
               >
-                <View style={{ width: isDesktop ? 44 : 40, height: isDesktop ? 44 : 40, borderRadius: 8, backgroundColor: "#00BCD420", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                <View style={{ width: isDesktop ? 44 : 40, height: isDesktop ? 44 : 40, borderRadius: 8, backgroundColor: colors.accent + "20", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                   {item.profile.avatar_url
                     ? <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={isDesktop ? 44 : 40} square />
-                    : <Text style={{ color: "#00BCD4", fontFamily: "Inter_700Bold", fontSize: isDesktop ? 18 : 16 }}>{(item.profile.display_name || "O").slice(0, 1).toUpperCase()}</Text>
+                    : <Text style={{ color: colors.accent, fontFamily: "Inter_700Bold", fontSize: isDesktop ? 18 : 16 }}>{(item.profile.display_name || "O").slice(0, 1).toUpperCase()}</Text>
                   }
                 </View>
               </TouchableOpacity>
@@ -347,8 +348,8 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
               </View>
               {item.org_page_id ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <View style={{ backgroundColor: "#00BCD415", borderRadius: 4, paddingHorizontal: 6, paddingVertical: 1 }}>
-                    <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: "#00BCD4", textTransform: "capitalize" }}>
+                  <View style={{ backgroundColor: colors.accent + "15", borderRadius: 4, paddingHorizontal: 6, paddingVertical: 1 }}>
+                    <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.accent, textTransform: "capitalize" }}>
                       {item.org_type?.replace(/\s*\/.*$/, "") || "Company"}
                     </Text>
                   </View>
@@ -374,12 +375,12 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
             )}
             {item.org_page_id ? (
               <TouchableOpacity
-                style={[styles.followBtn, { backgroundColor: "#00BCD415", borderWidth: 1, borderColor: "#00BCD430" }]}
+                style={[styles.followBtn, { backgroundColor: colors.accent + "15", borderWidth: 1, borderColor: colors.accent + "30" }]}
                 onPress={() => router.push(`/company/${item.org_slug}` as any)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="business-outline" size={14} color="#00BCD4" />
-                <Text style={[styles.followBtnText, { color: "#00BCD4" }]}>View Page</Text>
+                <Ionicons name="business-outline" size={14} color={colors.accent} />
+                <Text style={[styles.followBtnText, { color: colors.accent }]}>View Page</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
@@ -549,7 +550,7 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
               activeOpacity={0.7}
             >
               <Ionicons name="chatbubble-outline" size={18} color={colors.textMuted} />
-              <RecentCommenters postId={item.id} replyCount={item.replyCount} bgColor={colors.background} />
+              <RecentCommenters postId={item.id} replyCount={item.replyCount} bgColor={colors.background} accentColor={colors.accent} />
               <Text style={[styles.footerStatNum, { color: colors.textMuted }]}>{formatNum(item.replyCount)}</Text>
             </TouchableOpacity>
 

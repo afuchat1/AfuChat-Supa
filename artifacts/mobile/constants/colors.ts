@@ -32,6 +32,8 @@ export default {
     avatar: "#DDD7C9",
     online: "#00BCD4",
     unread: BRAND,
+    icon: "#3A3A3C",
+    iconMuted: "#8C7F6A",
   },
   dark: {
     text: "#F1F1F1",
@@ -57,5 +59,7 @@ export default {
     avatar: "#272727",
     online: "#00BCD4",
     unread: BRAND,
+    icon: "#EBEBF5",
+    iconMuted: "#636366",
   },
 };

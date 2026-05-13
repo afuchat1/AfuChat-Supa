@@ -370,9 +370,9 @@ export default function MeScreen() {
         {/* ── Quick Actions ─────────────────────────────────────────── */}
         <View style={[s.quickRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           {[
-            { icon: "person-circle-outline", label: "View Profile", color: accent, onPress: () => profile?.id && router.push({ pathname: "/contact/[id]", params: { id: profile.id, init_name: profile.display_name ?? "", init_handle: profile.handle ?? "", init_avatar: profile.avatar_url ?? "" } }) },
-            { icon: "pencil-outline",        label: "Edit Profile", color: "#007AFF", onPress: () => router.push("/profile/edit") },
-            { icon: "at-outline",            label: "Usernames",    color: "#5856D6", onPress: () => router.push("/username-market") },
+            { icon: "person-circle-outline", label: "View Profile", color: accent,       onPress: () => profile?.id && router.push({ pathname: "/contact/[id]", params: { id: profile.id, init_name: profile.display_name ?? "", init_handle: profile.handle ?? "", init_avatar: profile.avatar_url ?? "" } }) },
+            { icon: "pencil-outline",        label: "Edit Profile", color: colors.icon, onPress: () => router.push("/profile/edit") },
+            { icon: "at-outline",            label: "Usernames",    color: colors.icon, onPress: () => router.push("/username-market") },
           ].map((a, i) => (
             <TouchableOpacity key={a.label} style={s.quickBtn} onPress={a.onPress} activeOpacity={0.75}>
               <View style={[s.quickIconWrap, { backgroundColor: a.color + "15" }]}>
@@ -455,10 +455,10 @@ export default function MeScreen() {
         <View>
           <SectionLabel label="Growth" colors={colors} />
           <MenuCard colors={colors}>
-            <MenuItem icon="trophy" iconColor="#D4A853" label="Prestige Status" badge="NEW" badgeColor="#D4A853" onPress={() => router.push("/prestige")} showSeparator colors={colors} />
+            <MenuItem icon="trophy" iconColor={Colors.gold} label="Prestige Status" badge="NEW" badgeColor={Colors.gold} onPress={() => router.push("/prestige")} showSeparator colors={colors} />
             <MenuItem icon="business-outline" iconColor={accent} label="Company Pages" onPress={() => router.push("/company" as any)} showSeparator colors={colors} />
-            <MenuItem icon="people" iconColor="#34C759" label="Find People" badge="NEW" badgeColor="#34C759" onPress={() => router.push("/user-discovery")} showSeparator colors={colors} />
-            <MenuItem icon="at" iconColor="#5856D6" label="Username Market" onPress={() => router.push("/username-market")} colors={colors} />
+            <MenuItem icon="people" iconColor={colors.icon} label="Find People" badge="NEW" badgeColor={accent} onPress={() => router.push("/user-discovery")} showSeparator colors={colors} />
+            <MenuItem icon="at" iconColor={colors.icon} label="Username Market" onPress={() => router.push("/username-market")} colors={colors} />
           </MenuCard>
         </View>
 
@@ -467,7 +467,7 @@ export default function MeScreen() {
           <View>
             <SectionLabel label="Creator" colors={colors} />
             <MenuCard colors={colors}>
-              <MenuItem icon="videocam-outline" iconColor="#32D74B" label="Creator Studio" badge="Admin" badgeColor={accent} onPress={() => router.push("/monetize")} colors={colors} />
+              <MenuItem icon="videocam-outline" iconColor={colors.icon} label="Creator Studio" badge="Admin" badgeColor={accent} onPress={() => router.push("/monetize")} colors={colors} />
             </MenuCard>
           </View>
         )}
@@ -476,10 +476,10 @@ export default function MeScreen() {
         <View>
           <SectionLabel label="Account" colors={colors} />
           <MenuCard colors={colors}>
-            <MenuItem icon="sparkles-outline" iconColor="#BF5AF2" label="Advanced Features" onPress={() => router.push("/advanced-features")} showSeparator colors={colors} />
-            <MenuItem icon="settings-outline" iconColor="#636366" label="Settings" onPress={() => router.push("/settings")} showSeparator colors={colors} />
-            <MenuItem icon="help-buoy-outline" iconColor="#5856D6" label="Support Center" onPress={() => router.push("/support" as any)} showSeparator colors={colors} />
-            <MenuItem icon="information-circle-outline" iconColor="#007AFF" label="About AfuChat" onPress={() => router.push("/about" as any)} colors={colors} />
+            <MenuItem icon="sparkles-outline" iconColor={colors.icon} label="Advanced Features" onPress={() => router.push("/advanced-features")} showSeparator colors={colors} />
+            <MenuItem icon="settings-outline" iconColor={colors.icon} label="Settings" onPress={() => router.push("/settings")} showSeparator colors={colors} />
+            <MenuItem icon="help-buoy-outline" iconColor={colors.icon} label="Support Center" onPress={() => router.push("/support" as any)} showSeparator colors={colors} />
+            <MenuItem icon="information-circle-outline" iconColor={colors.icon} label="About AfuChat" onPress={() => router.push("/about" as any)} colors={colors} />
           </MenuCard>
         </View>
 
@@ -488,7 +488,7 @@ export default function MeScreen() {
           <View>
             <SectionLabel label="Staff" colors={colors} />
             <MenuCard colors={colors}>
-              <MenuItem icon="headset-outline" iconColor="#FF6B35" label="Support Dashboard" badge="Staff" badgeColor="#FF6B35" onPress={() => router.push("/admin/support-dashboard" as any)} showSeparator={!!profile?.is_admin} colors={colors} />
+              <MenuItem icon="headset-outline" iconColor={colors.icon} label="Support Dashboard" badge="Staff" badgeColor={accent} onPress={() => router.push("/admin/support-dashboard" as any)} showSeparator={!!profile?.is_admin} colors={colors} />
               {profile?.is_admin && (
                 <MenuItem icon="shield-checkmark" iconColor={accent} label="Admin Dashboard" badge="Admin" badgeColor={accent} onPress={() => router.push("/admin")} colors={colors} />
               )}

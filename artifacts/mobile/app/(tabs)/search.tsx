@@ -45,6 +45,7 @@ const SUCCESS = "#34C759";
 const WARN    = "#FF9500";
 const RED     = "#FF3B30";
 const INDIGO  = "#5856D6";
+const BLUE    = "#007AFF";
 
 const RARITY_COLORS: Record<string, string> = {
   common: "#9E9E9E", uncommon: BRAND, rare: "#2979FF",
@@ -1322,7 +1323,7 @@ export default function SearchScreen() {
         )}
         {showPosts && (
           <View>
-            <SectionHeader icon="document-text" label="Posts & Articles" color="#007AFF" count={results.posts.length} onSeeAll={tab === "all" && results.posts.length >= 5 ? () => onTabPress("posts") : undefined} />
+            <SectionHeader icon="document-text" label="Posts & Articles" color={BLUE} count={results.posts.length} onSeeAll={tab === "all" && results.posts.length >= 5 ? () => onTabPress("posts") : undefined} />
             <View style={{ paddingHorizontal: 12, gap: 10 }}>
               {results.posts.map((p, i) => <PostCard key={p.id} p={p} i={i} />)}
             </View>
