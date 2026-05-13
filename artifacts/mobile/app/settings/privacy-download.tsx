@@ -14,7 +14,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseUrl, supabaseAnonKey } from "@/lib/supabase";
 
 const DATA_TYPES = [
   { id: "profile",      icon: "person-circle"   as const, label: "Profile Data",     description: "Your display name, bio, settings, and account info" },
@@ -49,17 +49,31 @@ export default function PrivacyDownloadScreen() {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("data-export", {
-        body: { types: Array.from(selected) },
-      });
-
-      if (error) {
-        showAlert("Export Failed", error.message || "Something went wrong. Please try again.");
+      // Get the current session token
+      const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+      if (sessionErr || !sessionData?.session) {
+        showAlert("Not Signed In", "You must be signed in to export your data.");
         return;
       }
+      const accessToken = sessionData.session.access_token;
 
-      if (data?.error) {
-        showAlert("Export Failed", data.error);
+      // Call the edge function directly via fetch — more reliable than
+      // supabase.functions.invoke in Expo Go environments.
+      const functionUrl = `${supabaseUrl}/functions/v1/data-export`;
+      const res = await fetch(functionUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+          apikey: supabaseAnonKey,
+        },
+        body: JSON.stringify({ types: Array.from(selected) }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || data?.error) {
+        showAlert("Export Failed", data?.error || `Server error (${res.status}). Please try again.`);
         return;
       }
 

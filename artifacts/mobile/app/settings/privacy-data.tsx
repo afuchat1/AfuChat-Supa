@@ -102,21 +102,6 @@ export default function PrivacyDataScreen() {
           <GlassCard style={styles.group} variant="medium">
             <TouchableOpacity
               style={[styles.linkRow, { backgroundColor: colors.surface }]}
-              onPress={() => router.push("/settings/privacy-download" as any)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.linkIcon, { backgroundColor: colors.backgroundSecondary }]}>
-                <Ionicons name="cloud-download" size={18} color={colors.icon} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.linkLabel, { color: colors.text }]}>Download My Data</Text>
-                <Text style={[styles.linkDesc, { color: colors.textMuted }]}>Request a copy of all your AfuChat data</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-            </TouchableOpacity>
-            <View style={[styles.sep, { backgroundColor: colors.border, marginLeft: 62 }]} />
-            <TouchableOpacity
-              style={[styles.linkRow, { backgroundColor: colors.surface }]}
               onPress={() => showAlert("Clear History", "This will clear your search history and browsing activity. Continue?", [
                 { text: "Cancel", style: "cancel" },
                 { text: "Clear", style: "destructive", onPress: () => showAlert("Done", "Activity history cleared.") },
