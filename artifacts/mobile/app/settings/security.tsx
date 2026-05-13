@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,7 +14,6 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
-import * as FileSystem from "expo-file-system";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -66,7 +64,7 @@ export default function SecuritySettingsScreen() {
     }
   }
 
-  // ── Download data ────────────────────────────────────────────────────────────
+  // ── Download data (via Supabase Edge Function → email) ──────────────────────
   const [showDownloadGate, setShowDownloadGate] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
@@ -74,42 +72,27 @@ export default function SecuritySettingsScreen() {
     if (!user) return;
     setDownloading(true);
     try {
-      const [
-        { data: profileData }, { data: userPosts }, { data: chatMemberships },
-        { data: xpTransfers }, { data: acoinTx },
-      ] = await Promise.all([
-        supabase.from("profiles").select("*").eq("id", user.id).single(),
-        supabase.from("posts").select("id, content, created_at, view_count").eq("author_id", user.id).order("created_at", { ascending: false }),
-        supabase.from("chat_members").select("chat_id").eq("user_id", user.id),
-        supabase.from("xp_transfers").select("*").or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`).order("created_at", { ascending: false }).limit(100),
-        supabase.from("acoin_transactions").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(100),
-      ]);
-      const exportData = {
-        exported_at: new Date().toISOString(),
-        account: { email: user.email, created_at: user.created_at },
-        profile: profileData, posts: userPosts || [],
-        chats_count: chatMemberships?.length || 0,
-        nexa_transfers: xpTransfers || [], acoin_transactions: acoinTx || [],
-      };
-      const json = JSON.stringify(exportData, null, 2);
-      if (Platform.OS === "web") {
-        const blob = new Blob([json], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url; a.download = `afuchat_data_${new Date().toISOString().split("T")[0]}.json`; a.click();
-        URL.revokeObjectURL(url); showAlert("Downloaded", "Your data has been downloaded.");
-      } else {
-        const fileUri = (FileSystem as any).documentDirectory + `afuchat_data_${new Date().toISOString().split("T")[0]}.json`;
-        await FileSystem.writeAsStringAsync(fileUri, json);
-        try {
-          const Sharing = await import("expo-sharing");
-          if (await Sharing.isAvailableAsync()) { await Sharing.shareAsync(fileUri, { mimeType: "application/json" }); }
-          else { showAlert("Saved", `Data saved to ${fileUri}`); }
-        } catch { showAlert("Saved", `Data saved to ${fileUri}`); }
+      const { data, error } = await supabase.functions.invoke("data-export", {
+        body: { types: ["profile", "posts", "messages", "activity", "transactions"] },
+      });
+
+      if (error || data?.error) {
+        const msg = data?.error ?? error?.message ?? "Something went wrong. Please try again.";
+        showAlert("Export Failed", msg);
+        return;
       }
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch { showAlert("Error", "Failed to download data. Please try again."); }
-    setDownloading(false);
+      const email = data?.email ?? user.email ?? "your registered email";
+      showAlert(
+        "Export Sent",
+        `Your data export has been sent to ${email}. Check your inbox for the attached JSON file.`
+      );
+    } catch {
+      showAlert("Error", "Failed to request data export. Please check your connection and try again.");
+    } finally {
+      setDownloading(false);
+    }
   }
 
   // ── Delete account ────────────────────────────────────────────────────────────
