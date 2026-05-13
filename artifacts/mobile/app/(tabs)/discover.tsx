@@ -235,7 +235,27 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
       router.push({ pathname: "/video/[id]", params: { id: item.id } });
       return;
     }
-    router.push({ pathname: "/p/[id]", params: { id: encodeId(item.id) } });
+    router.push({
+      pathname: "/p/[id]",
+      params: {
+        id: encodeId(item.id),
+        init_name: item.profile.display_name,
+        init_handle: item.profile.handle,
+        init_avatar: item.profile.avatar_url ?? "",
+        init_content: (item.content ?? "").slice(0, 600),
+        init_created_at: item.created_at,
+        init_like_count: String(item.likeCount),
+        init_reply_count: String(item.replyCount),
+        init_view_count: String(item.view_count),
+        init_verified: item.is_verified ? "1" : "0",
+        init_org_verified: item.is_organization_verified ? "1" : "0",
+        init_liked: item.liked ? "1" : "0",
+        init_image: (item.images?.[0] ?? item.image_url) ?? "",
+        init_post_type: item.post_type ?? "",
+        init_article_title: item.article_title ?? "",
+        init_author_id: item.author_id,
+      },
+    });
   }
 
   function capturePostImage() {

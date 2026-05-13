@@ -1571,9 +1571,23 @@ export default function VideoPlayerScreen() {
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
 
+  // Use measured FlatList height for perfect snap on all Android devices.
+  // useWindowDimensions() may include status/nav bar pixels that the FlatList
+  // itself does not occupy (common on Infinix, Tecno, OPPO with gesture nav),
+  // causing pagingEnabled to snap to the wrong position.
+  const [listHeight, setListHeight] = useState(SCREEN_H);
+  const listHeightRef = useRef(SCREEN_H);
+  const onListLayout = useCallback((e: any) => {
+    const h = e.nativeEvent.layout.height;
+    if (h > 0 && Math.abs(h - listHeightRef.current) > 2) {
+      listHeightRef.current = h;
+      setListHeight(h);
+    }
+  }, []);
+
   const getItemLayout = useCallback((_: any, index: number) => ({
-    length: SCREEN_H, offset: SCREEN_H * index, index,
-  }), [SCREEN_H]);
+    length: listHeight, offset: listHeight * index, index,
+  }), [listHeight]);
 
   // ── Interactions ───────────────────────────────────────────────────────────
 
@@ -1780,14 +1794,14 @@ export default function VideoPlayerScreen() {
   const onOpenMenu = useCallback((item: VideoPost) => setMenuItem(item), []);
 
   const videoItemProps = React.useMemo(() => ({
-    screenH: SCREEN_H, screenW: SCREEN_W,
+    screenH: listHeight, screenW: SCREEN_W,
     onLike: handleLike, onBookmark: handleBookmark,
     onOpenComments: setCommentPostId,
     onShare,
     onFollow: handleFollow,
     onRecordView: handleRecordView,
     onOpenMenu,
-  }), [SCREEN_H, SCREEN_W, handleLike, handleBookmark, handleFollow, handleRecordView, onShare, onOpenMenu]);
+  }), [listHeight, SCREEN_W, handleLike, handleBookmark, handleFollow, handleRecordView, onShare, onOpenMenu]);
 
   const renderItem = useCallback(({ item, index }: { item: VideoPost; index: number }) => (
     <VideoItem
@@ -1943,11 +1957,14 @@ export default function VideoPlayerScreen() {
           onScrollToIndexFailed={(info) => {
             setTimeout(() => listRef.current?.scrollToIndex({ index: info.index, animated: false }), 300);
           }}
+          // Layout measurement — fixes snap misalignment on Infinix/Android devices
+          // where the FlatList height differs from useWindowDimensions()
+          onLayout={onListLayout}
           // Misc
           decelerationRate="fast"
           style={{ flex: 1, backgroundColor: "#000" }}
           ListFooterComponent={loadingMore ? (
-            <View style={{ width: SCREEN_W, height: SCREEN_H, alignItems: "center", justifyContent: "center", backgroundColor: "#000" }}>
+            <View style={{ width: SCREEN_W, height: listHeight, alignItems: "center", justifyContent: "center", backgroundColor: "#000" }}>
               <ActivityIndicator color="rgba(255,255,255,0.6)" size="small" />
             </View>
           ) : null}

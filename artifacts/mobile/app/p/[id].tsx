@@ -189,16 +189,52 @@ function buildReplyTree(flatReplies: Reply[]): Reply[] {
 }
 
 export default function PostShortLinkScreen() {
-  const { id: shortCode } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{
+    id: string;
+    init_name?: string; init_handle?: string; init_avatar?: string;
+    init_content?: string; init_created_at?: string;
+    init_like_count?: string; init_reply_count?: string; init_view_count?: string;
+    init_verified?: string; init_org_verified?: string;
+    init_liked?: string; init_image?: string;
+    init_post_type?: string; init_article_title?: string; init_author_id?: string;
+  }>();
+  const { id: shortCode } = params;
   const id = useMemo(() => (shortCode ? decodeId(shortCode) : shortCode), [shortCode]);
+
+  // Hydrate from discover params instantly — no network needed to show the post
+  const initPost = useMemo<PostData | null>(() => {
+    if (!params.init_name || !params.init_author_id) return null;
+    return {
+      id: id || "",
+      content: params.init_content ?? "",
+      image_url: params.init_image || null,
+      images: params.init_image ? [params.init_image] : [],
+      post_type: params.init_post_type || null,
+      article_title: params.init_article_title || null,
+      created_at: params.init_created_at ?? new Date().toISOString(),
+      view_count: Number(params.init_view_count ?? 0),
+      visibility: "public",
+      author: {
+        id: params.init_author_id,
+        display_name: params.init_name,
+        avatar_url: params.init_avatar || null,
+        handle: params.init_handle ?? "",
+        is_verified: params.init_verified === "1",
+        is_organization_verified: params.init_org_verified === "1",
+      },
+      liked: params.init_liked === "1",
+      likeCount: Number(params.init_like_count ?? 0),
+      replyCount: Number(params.init_reply_count ?? 0),
+    };
+  }, []);
 
   const { user, profile: myProfile } = useAuth();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { isDesktop } = useIsDesktop();
-  const [post, setPost] = useState<PostData | null>(null);
+  const [post, setPost] = useState<PostData | null>(initPost);
   const [replies, setReplies] = useState<Reply[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initPost);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Reply | null>(null);
