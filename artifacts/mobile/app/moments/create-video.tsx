@@ -747,6 +747,7 @@ function EditPhase({
   const [trimEnd, setTrimEnd] = useState(duration);
   const [brightness, setBrightness] = useState(0);
   const [audience, setAudience] = useState<"public" | "followers" | "private">("public");
+  const [step, setStep] = useState<1 | 2>(1);
 
   // Thumbnail generation
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -850,17 +851,29 @@ function EditPhase({
 
       {/* ── Top bar ── */}
       <View style={[es.topBar, { paddingTop: insets.top + 6 }]}>
-        <TouchableOpacity onPress={onBack} style={es.backBtn} hitSlop={10}>
+        <TouchableOpacity onPress={step === 1 ? onBack : () => setStep(1)} style={es.backBtn} hitSlop={10}>
           <Ionicons name="arrow-back" size={22} color="#fff" />
         </TouchableOpacity>
-        <Text style={es.topTitle}>Edit Video</Text>
-        <TouchableOpacity
-          onPress={handlePost}
-          disabled={!caption.trim()}
-          style={[es.postBtn, { backgroundColor: caption.trim() ? accent : "#333" }]}
-        >
-          <Text style={es.postBtnText}>Post</Text>
-        </TouchableOpacity>
+        <View style={{ flex: 1, alignItems: "center" }}>
+          <Text style={es.topTitle}>{step === 1 ? "Enhance" : "Details"}</Text>
+          <View style={{ flexDirection: "row", gap: 6, marginTop: 3 }}>
+            <View style={{ width: 20, height: 3, borderRadius: 2, backgroundColor: accent }} />
+            <View style={{ width: 20, height: 3, borderRadius: 2, backgroundColor: step === 2 ? accent : "#3a3a3a" }} />
+          </View>
+        </View>
+        {step === 1 ? (
+          <TouchableOpacity onPress={() => setStep(2)} style={[es.postBtn, { backgroundColor: accent }]}>
+            <Text style={es.postBtnText}>Next</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={handlePost}
+            disabled={!caption.trim()}
+            style={[es.postBtn, { backgroundColor: caption.trim() ? accent : "#333" }]}
+          >
+            <Text style={es.postBtnText}>Post</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView
@@ -869,6 +882,9 @@ function EditPhase({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* ─── Step 1: Enhance ─── */}
+        {step === 1 && (
+        <>
         {/* ── Video preview ── */}
         <View style={[es.previewWrap, { height: previewH, width: W }]}>
           <Video
@@ -1196,74 +1212,118 @@ function EditPhase({
             <View style={{ gap: 16 }}>
               <Text style={es.panelTitle}>Adjustments</Text>
               <AdjustSlider label="Brightness" value={brightness} min={-1} max={1} accent={accent} onChange={setBrightness} />
-
-              {/* Audience */}
-              <View style={{ gap: 8 }}>
-                <Text style={[es.panelTitle, { fontSize: 12 }]}>Audience</Text>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  {(["public", "followers", "private"] as const).map((a) => (
-                    <TouchableOpacity
-                      key={a}
-                      onPress={() => { setAudience(a); void Haptics.selectionAsync(); }}
-                      style={[es.audienceBtn, audience === a && { backgroundColor: accent + "22", borderColor: accent }]}
-                    >
-                      <Ionicons
-                        name={a === "public" ? "globe-outline" : a === "followers" ? "people-outline" : "lock-closed-outline"}
-                        size={14} color={audience === a ? accent : "#666"}
-                      />
-                      <Text style={[es.audienceBtnText, { color: audience === a ? accent : "#666" }]}>
-                        {a === "public" ? "Everyone" : a === "followers" ? "Followers" : "Only Me"}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
+              <Text style={{ color: "#555", fontFamily: "Inter_400Regular", fontSize: 12, marginTop: 4 }}>
+                Set audience and caption on the next screen.
+              </Text>
             </View>
           )}
         </View>
-
-        {/* ── Sound banner ── */}
-        {soundName && !soundDismissed && (
-          <View style={[es.soundBanner, { backgroundColor: "#1A1A1A", borderColor: "#333" }]}>
-            {soundAlbumArt
-              ? <ExpoImage source={{ uri: soundAlbumArt }} style={es.soundArt} contentFit="cover" />
-              : <View style={[es.soundArt, { backgroundColor: accent + "22", alignItems: "center", justifyContent: "center" }]}>
-                  <Ionicons name="musical-notes" size={16} color={accent} />
-                </View>
-            }
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: "#888", fontSize: 11, fontFamily: "Inter_500Medium" }}>Sound</Text>
-              <Text style={{ color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" }} numberOfLines={1}>{soundName}</Text>
-            </View>
-            <TouchableOpacity onPress={() => setSoundDismissed(true)} hitSlop={8}>
-              <Ionicons name="close-circle" size={18} color="#555" />
-            </TouchableOpacity>
-          </View>
+        </>
         )}
 
-        {/* ── Caption ── */}
-        <View style={[es.captionWrap, { backgroundColor: "#1A1A1A", borderColor: "#333" }]}>
-          <Ionicons name="pencil-outline" size={17} color="#666" style={{ marginTop: 3 }} />
-          <TextInput
-            style={[es.captionInput, { color: "#fff" }]}
-            placeholder="Add a caption… #hashtags @mentions"
-            placeholderTextColor="#444"
-            value={caption}
-            onChangeText={setCaption}
-            multiline maxLength={500}
-          />
-        </View>
+        {/* ─── Step 2: Details ─── */}
+        {step === 2 && (
+        <View style={{ gap: 0, paddingTop: 8 }}>
 
-        {/* ── Post button ── */}
-        <TouchableOpacity
-          onPress={handlePost}
-          disabled={!caption.trim()}
-          style={[es.bigPostBtn, { backgroundColor: caption.trim() ? accent : "#222", marginHorizontal: 16 }]}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="send" size={18} color="#fff" />
-          <Text style={es.bigPostBtnText}>Post Video</Text>
-        </TouchableOpacity>
+          {/* Cover thumbnail */}
+          <View style={{ marginHorizontal: 16, marginBottom: 16, gap: 10 }}>
+            <Text style={[es.panelTitle, { color: "#ccc" }]}>Cover</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              {thumbnailUri ? (
+                <ExpoImage
+                  source={{ uri: thumbnailUri }}
+                  style={{ width: 88, height: 62, borderRadius: 8, backgroundColor: "#222" }}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={{ width: 88, height: 62, borderRadius: 8, backgroundColor: "#222", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="image-outline" size={22} color="#444" />
+                </View>
+              )}
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={{ color: "#ccc", fontSize: 13, fontFamily: "Inter_500Medium" }}>
+                  Frame at {fmtTime(thumbTime)}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setStep(1)}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                >
+                  <Ionicons name="cut-outline" size={13} color={accent} />
+                  <Text style={{ color: accent, fontSize: 12, fontFamily: "Inter_500Medium" }}>
+                    Go back to Trim to adjust
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          {/* Audience */}
+          <View style={{ marginHorizontal: 16, marginBottom: 16, gap: 8 }}>
+            <Text style={[es.panelTitle, { color: "#ccc" }]}>Audience</Text>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {(["public", "followers", "private"] as const).map((a) => (
+                <TouchableOpacity
+                  key={a}
+                  onPress={() => { setAudience(a); void Haptics.selectionAsync(); }}
+                  style={[es.audienceBtn, audience === a && { backgroundColor: accent + "22", borderColor: accent }]}
+                >
+                  <Ionicons
+                    name={a === "public" ? "globe-outline" : a === "followers" ? "people-outline" : "lock-closed-outline"}
+                    size={14} color={audience === a ? accent : "#666"}
+                  />
+                  <Text style={[es.audienceBtnText, { color: audience === a ? accent : "#666" }]}>
+                    {a === "public" ? "Everyone" : a === "followers" ? "Followers" : "Only Me"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* ── Sound banner ── */}
+          {soundName && !soundDismissed && (
+            <View style={[es.soundBanner, { backgroundColor: "#1A1A1A", borderColor: "#333" }]}>
+              {soundAlbumArt
+                ? <ExpoImage source={{ uri: soundAlbumArt }} style={es.soundArt} contentFit="cover" />
+                : <View style={[es.soundArt, { backgroundColor: accent + "22", alignItems: "center", justifyContent: "center" }]}>
+                    <Ionicons name="musical-notes" size={16} color={accent} />
+                  </View>
+              }
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: "#888", fontSize: 11, fontFamily: "Inter_500Medium" }}>Sound</Text>
+                <Text style={{ color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" }} numberOfLines={1}>{soundName}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setSoundDismissed(true)} hitSlop={8}>
+                <Ionicons name="close-circle" size={18} color="#555" />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ── Caption ── */}
+          <View style={[es.captionWrap, { backgroundColor: "#1A1A1A", borderColor: "#333" }]}>
+            <Ionicons name="pencil-outline" size={17} color="#666" style={{ marginTop: 3 }} />
+            <TextInput
+              style={[es.captionInput, { color: "#fff" }]}
+              placeholder="Add a caption… #hashtags @mentions"
+              placeholderTextColor="#444"
+              value={caption}
+              onChangeText={setCaption}
+              multiline maxLength={500}
+            />
+          </View>
+
+          {/* ── Post button ── */}
+          <TouchableOpacity
+            onPress={handlePost}
+            disabled={!caption.trim()}
+            style={[es.bigPostBtn, { backgroundColor: caption.trim() ? accent : "#222", marginHorizontal: 16 }]}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="send" size={18} color="#fff" />
+            <Text style={es.bigPostBtnText}>Post Video</Text>
+          </TouchableOpacity>
+
+        </View>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );

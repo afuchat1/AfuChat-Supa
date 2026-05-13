@@ -237,6 +237,40 @@ export default function UsernameMarketScreen() {
   const [auctionDurationHours, setAuctionDurationHours] = useState("24");
   const [auctionReserve, setAuctionReserve] = useState("");
 
+  // Purchase info popup
+  type HandlePurchaseInfo = {
+    handle: string;
+    price: number;
+    purchasedAt: string;
+    sellerHandle: string | null;
+  };
+  const [purchasePopup, setPurchasePopup] = useState<HandlePurchaseInfo | null>(null);
+  const [purchaseChecking, setPurchaseChecking] = useState<string | null>(null);
+
+  async function showPurchaseInfo(handle: string) {
+    void Haptics.selectionAsync();
+    setPurchaseChecking(handle);
+    const { data } = await supabase
+      .from("username_listings")
+      .select("price, created_at, seller_id, profiles!username_listings_seller_id_fkey(handle)")
+      .eq("username", handle)
+      .not("sold_to_id", "is", null)
+      .maybeSingle();
+    setPurchaseChecking(null);
+    if (!data) { showAlert("Not Purchased", `@${handle} was not acquired from the marketplace.`); return; }
+    setPurchasePopup({
+      handle,
+      price: (data as any).price ?? 0,
+      purchasedAt: (data as any).created_at ?? "",
+      sellerHandle: (data as any).profiles?.handle ?? null,
+    });
+  }
+
+  function fmtDate(iso: string) {
+    if (!iso) return "—";
+    return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  }
+
   /* ── Data loading ── */
 
   const loadListings = useCallback(async () => {
@@ -1039,6 +1073,17 @@ export default function UsernameMarketScreen() {
                         <Text style={[styles.ownedActionChipText, { color: colors.textMuted }]}>Copy</Text>
                       </TouchableOpacity>
 
+                      <TouchableOpacity
+                        style={[styles.ownedActionChip, { backgroundColor: "#34C75910" }]}
+                        onPress={() => showPurchaseInfo(h.handle)}
+                        disabled={purchaseChecking === h.handle}
+                      >
+                        {purchaseChecking === h.handle
+                          ? <ActivityIndicator size="small" color="#34C759" />
+                          : <Ionicons name="receipt-outline" size={14} color="#34C759" />}
+                        <Text style={[styles.ownedActionChipText, { color: "#34C759" }]}>Purchase Info</Text>
+                      </TouchableOpacity>
+
                       {!h.is_primary && (
                         <TouchableOpacity
                           style={[styles.ownedActionChip, { backgroundColor: accent + "18" }]}
@@ -1551,6 +1596,107 @@ export default function UsernameMarketScreen() {
             </TouchableOpacity>
           ))}
         </View>
+      </Modal>
+
+      {/* ── Purchase Info Modal ── */}
+      <Modal
+        visible={!!purchasePopup}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPurchasePopup(null)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" }}
+          activeOpacity={1}
+          onPress={() => setPurchasePopup(null)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={{
+              width: "82%",
+              backgroundColor: colors.surface,
+              borderRadius: 22,
+              padding: 24,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: colors.border,
+              gap: 16,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <Text style={{ fontSize: 17, fontFamily: "Inter_700Bold", color: colors.text }}>
+                Purchase History
+              </Text>
+              <TouchableOpacity onPress={() => setPurchasePopup(null)} hitSlop={10}>
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ alignItems: "center", paddingVertical: 8 }}>
+              {(() => {
+                const r = purchasePopup ? getRarity(purchasePopup.handle) : null;
+                return (
+                  <View style={{ backgroundColor: (r?.color ?? accent) + "18", paddingHorizontal: 20, paddingVertical: 10, borderRadius: 24 }}>
+                    <Text style={{ fontSize: 26, fontFamily: "Inter_700Bold", color: r?.color ?? accent }}>
+                      @{purchasePopup?.handle}
+                    </Text>
+                  </View>
+                );
+              })()}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8 }}>
+                <Ionicons name="storefront-outline" size={13} color="#34C759" />
+                <Text style={{ fontSize: 12, fontFamily: "Inter_500Medium", color: "#34C759" }}>
+                  Purchased from Marketplace
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ gap: 12, backgroundColor: colors.backgroundSecondary, borderRadius: 14, padding: 14 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+                  <Ionicons name="cash-outline" size={16} color={colors.icon} />
+                  <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.textSecondary }}>Price Paid</Text>
+                </View>
+                <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: "#FFD60A" }}>
+                  🪙 {purchasePopup?.price.toLocaleString()} ACoin
+                </Text>
+              </View>
+
+              <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
+
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+                  <Ionicons name="calendar-outline" size={16} color={colors.icon} />
+                  <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.textSecondary }}>Purchase Date</Text>
+                </View>
+                <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.text }}>
+                  {purchasePopup ? fmtDate(purchasePopup.purchasedAt) : "—"}
+                </Text>
+              </View>
+
+              {purchasePopup?.sellerHandle && (
+                <>
+                  <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+                      <Ionicons name="person-outline" size={16} color={colors.icon} />
+                      <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.textSecondary }}>Sold By</Text>
+                    </View>
+                    <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.text }}>
+                      @{purchasePopup.sellerHandle}
+                    </Text>
+                  </View>
+                </>
+              )}
+            </View>
+
+            <TouchableOpacity
+              onPress={() => setPurchasePopup(null)}
+              style={{ backgroundColor: accent, borderRadius: 16, paddingVertical: 12, alignItems: "center" }}
+            >
+              <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 15 }}>Done</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
