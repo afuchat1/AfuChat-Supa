@@ -451,6 +451,14 @@ export default function MeScreen() {
           </View>
         )}
 
+        {/* ── Analytics ──────────────────────────────────────────────── */}
+        <View>
+          <SectionLabel label="Creator Analytics" colors={colors} />
+          <MenuCard colors={colors}>
+            <MenuItem icon="bar-chart" iconColor={accent} label="Video Analytics" value={`${fmtCount(postCount)} posts`} onPress={() => router.push("/video-analytics" as any)} colors={colors} />
+          </MenuCard>
+        </View>
+
         {/* ── Growth & Social ────────────────────────────────────────── */}
         <View>
           <SectionLabel label="Growth" colors={colors} />
