@@ -39,9 +39,9 @@ type Post = {
   id: string;
   content: string | null;
   video_url: string | null;
-  thumbnail_url: string | null;
+  image_url: string | null;
   view_count: number;
-  like_count: number;
+  likes: number;
   comment_count: number;
   share_count: number;
   created_at: string;
@@ -161,7 +161,8 @@ function TopVideoRow({
   accent: string;
 }) {
   const caption = post.content?.replace(/\n/g, " ").slice(0, 60) || "Untitled";
-  const isVideo = post.post_type === "video";
+  const isVideo = post.post_type === "video" || !!post.video_url;
+  const thumbUri = post.image_url ?? null;
 
   return (
     <TouchableOpacity
@@ -176,8 +177,8 @@ function TopVideoRow({
 
       {/* Thumbnail */}
       <View style={[vr.thumb, { backgroundColor: colors.border }]}>
-        {post.thumbnail_url ? (
-          <Image source={{ uri: post.thumbnail_url }} style={vr.thumbImg} resizeMode="cover" />
+        {thumbUri ? (
+          <Image source={{ uri: thumbUri }} style={vr.thumbImg} resizeMode="cover" />
         ) : (
           <Ionicons name={isVideo ? "videocam" : "image"} size={20} color={colors.textMuted} />
         )}
@@ -204,7 +205,7 @@ function TopVideoRow({
         </View>
         <View style={vr.statRow}>
           <Ionicons name="heart-outline" size={12} color={colors.textMuted} />
-          <Text style={[vr.statVal, { color: colors.textMuted }]}>{fmtNum(post.like_count)}</Text>
+          <Text style={[vr.statVal, { color: colors.textMuted }]}>{fmtNum(post.likes)}</Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -258,19 +259,20 @@ export default function VideoAnalyticsScreen() {
     // ── Fetch all user posts (last 90 days for trend) ──────────────────────
     const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
 
-    const { data: posts } = await supabase
+    const { data: posts, error } = await supabase
       .from("posts")
-      .select("id, content, video_url, thumbnail_url, view_count, like_count, comment_count, share_count, created_at, post_type")
+      .select("id, content, video_url, image_url, view_count, likes, comment_count, share_count, created_at, post_type")
       .eq("author_id", user.id)
       .gte("created_at", since)
       .order("created_at", { ascending: false })
       .limit(200);
 
-    if (!posts) { setLoading(false); setRefreshing(false); return; }
+    if (error) console.warn("[VideoAnalytics] query error:", error.message);
+    if (!posts || error) { setLoading(false); setRefreshing(false); return; }
 
     // ── Aggregate totals ───────────────────────────────────────────────────
     const tViews = posts.reduce((s, p) => s + (p.view_count ?? 0), 0);
-    const tLikes = posts.reduce((s, p) => s + (p.like_count ?? 0), 0);
+    const tLikes = posts.reduce((s, p) => s + (p.likes ?? 0), 0);
     setTotalViews(tViews);
     setTotalLikes(tLikes);
     setTotalPosts(posts.length);
