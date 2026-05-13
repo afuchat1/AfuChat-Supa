@@ -41,12 +41,16 @@ type Post = {
   video_url: string | null;
   image_url: string | null;
   view_count: number;
-  likes: number;
+  post_likes: { count: number }[];
   comment_count: number;
   share_count: number;
   created_at: string;
   post_type: string;
 };
+
+function getLikes(post: Post): number {
+  return post.post_likes?.[0]?.count ?? 0;
+}
 
 type DayBucket = { date: string; label: string; count: number };
 
@@ -205,7 +209,7 @@ function TopVideoRow({
         </View>
         <View style={vr.statRow}>
           <Ionicons name="heart-outline" size={12} color={colors.textMuted} />
-          <Text style={[vr.statVal, { color: colors.textMuted }]}>{fmtNum(post.likes)}</Text>
+          <Text style={[vr.statVal, { color: colors.textMuted }]}>{fmtNum(getLikes(post))}</Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -261,7 +265,7 @@ export default function VideoAnalyticsScreen() {
 
     const { data: posts, error } = await supabase
       .from("posts")
-      .select("id, content, video_url, image_url, view_count, likes, comment_count, share_count, created_at, post_type")
+      .select("id, content, video_url, image_url, view_count, comment_count, share_count, created_at, post_type, post_likes(count)")
       .eq("author_id", user.id)
       .gte("created_at", since)
       .order("created_at", { ascending: false })
@@ -272,7 +276,7 @@ export default function VideoAnalyticsScreen() {
 
     // ── Aggregate totals ───────────────────────────────────────────────────
     const tViews = posts.reduce((s, p) => s + (p.view_count ?? 0), 0);
-    const tLikes = posts.reduce((s, p) => s + (p.likes ?? 0), 0);
+    const tLikes = posts.reduce((s, p) => s + getLikes(p as any), 0);
     setTotalViews(tViews);
     setTotalLikes(tLikes);
     setTotalPosts(posts.length);
