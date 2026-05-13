@@ -11,12 +11,10 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
-import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { supabase } from "@/lib/supabase";
-import { getBaseUrl } from "@/lib/api-client-react/src/custom-fetch";
 
 const DATA_TYPES = [
   { id: "profile",      icon: "person-circle"   as const, label: "Profile Data",     description: "Your display name, bio, settings, and account info" },
@@ -49,39 +47,23 @@ export default function PrivacyDownloadScreen() {
       return;
     }
 
-    // Get the current session JWT
-    const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
-    if (sessionErr || !sessionData?.session?.access_token) {
-      showAlert("Not Signed In", "Please sign in to request a data export.");
-      return;
-    }
-
-    const token = sessionData.session.access_token;
-    const base = getBaseUrl();
-    if (!base) {
-      showAlert("Error", "Could not reach the server. Please try again later.");
-      return;
-    }
-
     setLoading(true);
     try {
-      const res = await fetch(`${base}/api/data-export`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ types: Array.from(selected) }),
+      const { data, error } = await supabase.functions.invoke("data-export", {
+        body: { types: Array.from(selected) },
       });
 
-      const json = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        showAlert("Export Failed", json?.error || "Something went wrong. Please try again.");
+      if (error) {
+        showAlert("Export Failed", error.message || "Something went wrong. Please try again.");
         return;
       }
 
-      setSentToEmail(json.email || "");
+      if (data?.error) {
+        showAlert("Export Failed", data.error);
+        return;
+      }
+
+      setSentToEmail(data?.email ?? "");
       setRequested(true);
     } catch (err: any) {
       showAlert("Network Error", "Could not reach the server. Please check your connection and try again.");
