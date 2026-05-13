@@ -137,7 +137,6 @@
           ]
         }
       ],
-      "expo-sqlite",
       [
         "expo-media-library",
         {
@@ -147,8 +146,12 @@
         }
       ]
     ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "updates": {
-      "enabled": false
+      "enabled": false,
+      "fallbackToCacheTimeout": 0
     },
     "experiments": {
       "typedRoutes": true,
