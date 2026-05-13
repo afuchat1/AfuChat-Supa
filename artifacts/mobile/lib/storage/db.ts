@@ -313,6 +313,21 @@ async function runMigrations(db: DB) {
     await db.runAsync("UPDATE schema_version SET version = 9");
   }
 
+  // ── v10: Add watched_at to video_registry ────────────────────────────────
+  // Separates "when did the user watch this?" from "when was it stored?".
+  // watched_at is set each time markVideoWatched is called (updates on re-watch).
+  // stored_at still records the first-download time (never updated after that).
+  if (currentVersion < 10) {
+    const safeAdd = async (sql: string) => { try { await db.execAsync(sql); } catch {} };
+    await safeAdd("ALTER TABLE video_registry ADD COLUMN watched_at INTEGER");
+    // Back-fill existing rows: treat stored_at as watched_at
+    await safeAdd("UPDATE video_registry SET watched_at = stored_at WHERE watched_at IS NULL");
+    await safeAdd(
+      "CREATE INDEX IF NOT EXISTS idx_video_watched ON video_registry(watched_at DESC)",
+    );
+    await db.runAsync("UPDATE schema_version SET version = 10");
+  }
+
   // ── v8: Own profile + full user settings on device ───────────────────────
   // user_profiles: the logged-in user's own profile (one row per account).
   // user_settings: all privacy/notification/chat settings stored permanently.

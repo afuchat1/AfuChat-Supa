@@ -26,6 +26,7 @@ import { registerAlertListener, unregisterAlertListener } from "@/lib/alert";
 import { setBaseUrl } from "@/lib/api-client-react/src";
 import { migrateOfflineCacheV2toV3 } from "@/lib/videoCache";
 import { initDeviceStorage } from "@/lib/storage";
+import { PostUploadBanner } from "@/components/PostUploadBanner";
 import { AppLockGate } from "@/components/AppLockGate";
 import { ChatPreferencesProvider } from "@/context/ChatPreferencesContext";
 import { AppAccentProvider } from "@/context/AppAccentContext";
@@ -245,6 +246,7 @@ export default function RootLayout() {
                     <DataModeProvider>
                     {Platform.OS !== "web" && <PushNotificationManager />}
                     <InAppNotifBanner />
+                    <PostUploadBanner />
                     <CallManager />
                     <AppLockGate>
                       <DesktopShell>

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -36,10 +36,6 @@ import { PostSkeleton } from "@/components/ui/Skeleton";
 import { VideoThumbnail } from "@/components/ui/VideoThumbnail";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import OfflineBanner from "@/components/ui/OfflineBanner";
-import {
-  getPostUploadState,
-  subscribePostUpload,
-} from "@/lib/postUploadStore";
 import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
 import { getLocalFeedPosts, saveFeedPosts, getNewestFeedPostDate, type FeedTab as LocalFeedTab } from "@/lib/storage/localFeed";
 import { getCachedFeedTab, cacheFeedTab, getCachedMoments, cacheMoments, cacheFeedCursor } from "@/lib/offlineStore";
@@ -165,43 +161,6 @@ function RecentCommenters({ postId, replyCount, bgColor, accentColor }: { postId
           )}
         </View>
       ))}
-    </View>
-  );
-}
-
-function usePostUpload() {
-  return useSyncExternalStore(subscribePostUpload, getPostUploadState);
-}
-
-function PostUploadBanner({ colors }: { colors: typeof Colors.light }) {
-  const upload = usePostUpload();
-  if (!upload) return null;
-
-  const icon: any = upload.type === "video" ? "videocam" : "image-outline";
-  const doneMsg = upload.type === "video" ? "Video posted!" : "Post published!";
-  const activeMsg = upload.type === "video" ? "Posting your video…" : "Sharing your post…";
-  const errorMsg = upload.type === "video" ? "Video failed to post." : "Post failed to publish.";
-
-  const label = upload.done ? doneMsg : upload.failed ? errorMsg : activeMsg;
-  const bgColor = upload.failed ? "#FF3B30" : (colors as any).accent ?? colors.tint;
-  const barWidth = `${Math.round(upload.progress * 100)}%` as any;
-
-  return (
-    <View style={{ backgroundColor: bgColor, paddingHorizontal: 16, paddingVertical: 10 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <Ionicons name={icon} size={16} color="#fff" />
-        <Text style={{ color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold", flex: 1 }}>
-          {label}
-        </Text>
-        {!upload.done && !upload.failed && (
-          <ActivityIndicator size="small" color="#fff" />
-        )}
-      </View>
-      {!upload.done && !upload.failed && (
-        <View style={{ height: 2, backgroundColor: "rgba(255,255,255,0.3)", borderRadius: 1, marginTop: 6 }}>
-          <View style={{ height: 2, backgroundColor: "#fff", borderRadius: 1, width: barWidth }} />
-        </View>
-      )}
     </View>
   );
 }
@@ -1553,7 +1512,6 @@ export default function DiscoverScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <OfflineBanner />
-      <PostUploadBanner colors={colors} />
       <DesktopFeedLayout>
 
       {/* ── Scroll-aware header (absolutely positioned so it can slide away) ── */}

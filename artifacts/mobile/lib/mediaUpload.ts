@@ -17,6 +17,8 @@
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase, supabaseUrl, supabaseAnonKey } from "./supabase";
+import * as FileSystem from "expo-file-system/legacy";
+import { FileSystemUploadType } from "expo-file-system/legacy";
 
 function getUploadsBase(): string {
   return `${supabaseUrl}/functions/v1/uploads`;
@@ -213,8 +215,10 @@ async function proxyUpload(
 /**
  * Upload a file to Cloudflare R2.
  *
- * On web: proxied through the Supabase Edge Function (no CORS issues).
- * On native: presigned PUT URL, bytes go directly to R2 (faster).
+ * Web:            proxied through Supabase Edge Function (avoids CORS).
+ * Native file://: FileSystem.uploadAsync streams bytes directly — no ArrayBuffer
+ *                 loaded into memory, safe for 100 MB+ videos.
+ * Native data:/blob:: fileUriToBlob + proxy (already in-memory, small).
  */
 export async function uploadToStorage(
   bucket: string,
@@ -231,54 +235,62 @@ export async function uploadToStorage(
       ? resolvedMime?.split("/")?.[1]?.replace("jpeg", "jpg") || "bin"
       : fileUri.split(".").pop()?.split("?")[0]?.toLowerCase() || "bin";
     const mime = resolvedMime || getMime(ext);
+    const realBucket = resolveBucket(bucket);
 
-    let body: Blob | ArrayBuffer;
-    if (
-      Platform.OS !== "web" &&
-      !fileUri.startsWith("data:") &&
-      !fileUri.startsWith("blob:")
-    ) {
-      try {
-        const r = await fetch(fileUri);
-        body = await r.arrayBuffer();
-      } catch (e: any) {
-        return { publicUrl: null, error: `Could not read file: ${e?.message || e}` };
-      }
-    } else {
+    // ── Web: always proxy (no CORS to R2) ───────────────────────────────────
+    if (Platform.OS === "web") {
+      let body: Blob | ArrayBuffer;
       try {
         body = await fileUriToBlob(fileUri, mime);
       } catch {
         return { publicUrl: null, error: "Could not read selected file. Please try again." };
       }
-    }
-
-    const realBucket = resolveBucket(bucket);
-
-    if (Platform.OS === "web") {
       const proxied = await proxyUpload(realBucket, filePath, body, mime);
-      if (proxied.error || !proxied.publicUrl) {
-        return { publicUrl: null, error: proxied.error || "Upload failed" };
-      }
-      return { publicUrl: proxied.publicUrl, error: null };
+      return proxied.error
+        ? { publicUrl: null, error: proxied.error }
+        : { publicUrl: proxied.publicUrl, error: null };
     }
 
-    // Attempt presigned PUT directly to R2. If it fails for any reason
-    // (R2 not configured, network error, R2 rejects the PUT), fall back
-    // to the server-side proxy path which works even without direct R2 access.
+    // ── Native: data: / blob: URIs are already in memory — small files ───────
+    if (fileUri.startsWith("data:") || fileUri.startsWith("blob:")) {
+      let body: Blob | ArrayBuffer;
+      try {
+        body = await fileUriToBlob(fileUri, mime);
+      } catch {
+        return { publicUrl: null, error: "Could not read selected file. Please try again." };
+      }
+      const sign = await getSignedUpload(realBucket, filePath, mime);
+      if (sign.data) {
+        try {
+          const putResp = await fetch(sign.data.uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": mime },
+            body: body as any,
+          });
+          if (putResp.ok) return { publicUrl: sign.data.publicUrl, error: null };
+        } catch {}
+      }
+      return proxyUpload(realBucket, filePath, body, mime);
+    }
+
+    // ── Native file:// path — stream via FileSystem.uploadAsync ─────────────
+    // This is the critical path for video uploads: avoids loading the entire
+    // file into JS memory (which would OOM on 50-100 MB videos).
+
+    // 1. Try presigned PUT — bytes stream directly from disk to R2.
     const sign = await getSignedUpload(realBucket, filePath, mime);
     if (sign.data) {
       try {
-        const putResp = await fetch(sign.data.uploadUrl, {
-          method: "PUT",
+        const putResult = await FileSystem.uploadAsync(sign.data.uploadUrl, fileUri, {
+          httpMethod: "PUT",
           headers: { "Content-Type": mime },
-          body: body as any,
+          uploadType: FileSystemUploadType.BINARY_CONTENT,
         });
-        if (putResp.ok) {
+        if (putResult.status >= 200 && putResult.status < 300) {
           return { publicUrl: sign.data.publicUrl, error: null };
         }
-        const errText = await putResp.text().catch(() => "");
         console.warn(
-          `[Upload] Presigned PUT failed (${putResp.status}), falling back to proxy: ${errText.slice(0, 120)}`,
+          `[Upload] Presigned PUT failed (${putResult.status}), falling back to proxy`,
         );
       } catch (e: any) {
         console.warn(`[Upload] Presigned PUT threw, falling back to proxy: ${e?.message || e}`);
@@ -287,8 +299,40 @@ export async function uploadToStorage(
       console.warn(`[Upload] Sign failed (${sign.error}), falling back to proxy`);
     }
 
-    // Proxy fallback: send bytes through the API server
-    return proxyUpload(realBucket, filePath, body, mime);
+    // 2. Proxy fallback — POST bytes through the Supabase Edge Function.
+    //    Still streamed via FileSystem.uploadAsync, not loaded into memory.
+    const token = await getAccessToken();
+    if (!token) return { publicUrl: null, error: "Not authenticated" };
+    const qs = new URLSearchParams({ bucket: realBucket, path: filePath }).toString();
+    try {
+      const proxyResult = await FileSystem.uploadAsync(
+        `${uploadsUrl("upload")}?${qs}`,
+        fileUri,
+        {
+          httpMethod: "POST",
+          headers: {
+            "Content-Type": mime,
+            Authorization: `Bearer ${token}`,
+            apikey: supabaseAnonKey,
+          },
+          uploadType: FileSystemUploadType.BINARY_CONTENT,
+        },
+      );
+      const text = proxyResult.body ?? "";
+      if (!text) return { publicUrl: null, error: `Upload failed (HTTP ${proxyResult.status})` };
+      if (text.trimStart().startsWith("<")) return { publicUrl: null, error: "Upload service unreachable" };
+      let json: any;
+      try { json = JSON.parse(text); } catch {
+        return { publicUrl: null, error: `Upload failed (HTTP ${proxyResult.status})` };
+      }
+      if (proxyResult.status < 200 || proxyResult.status >= 300) {
+        return { publicUrl: null, error: json?.error || `Upload failed (HTTP ${proxyResult.status})` };
+      }
+      if (!json?.publicUrl) return { publicUrl: null, error: "Upload service returned no URL" };
+      return { publicUrl: json.publicUrl, error: null };
+    } catch (e: any) {
+      return { publicUrl: null, error: `Upload failed: ${e?.message || e}` };
+    }
   } catch (e: any) {
     return { publicUrl: null, error: e?.message || "Upload failed" };
   }

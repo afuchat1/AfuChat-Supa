@@ -30,7 +30,8 @@ export type OfflineVideoEntry = {
   url: string;
   fileUri: string;
   fileSize: number;
-  cachedAt: number; // kept for compat — now means "storedAt"
+  cachedAt: number;   // first-download timestamp (stored_at)
+  watchedAt?: number; // last time user watched this video
   title: string;
   thumbnail: string | null;
 };
@@ -89,7 +90,7 @@ async function dbGetAll(): Promise<OfflineVideoEntry[]> {
   try {
     const db = await getDB();
     const rows = await db.getAllAsync<any>(
-      "SELECT * FROM video_registry ORDER BY stored_at DESC",
+      "SELECT * FROM video_registry ORDER BY COALESCE(watched_at, stored_at) DESC",
     );
     return rows.map((row) => ({
       postId: row.post_id,
@@ -97,6 +98,29 @@ async function dbGetAll(): Promise<OfflineVideoEntry[]> {
       fileUri: row.file_uri,
       fileSize: row.file_size,
       cachedAt: row.stored_at,
+      watchedAt: row.watched_at ?? row.stored_at,
+      title: row.title ?? "",
+      thumbnail: row.thumbnail ?? null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function dbGetRecent(sinceMs: number): Promise<OfflineVideoEntry[]> {
+  try {
+    const db = await getDB();
+    const rows = await db.getAllAsync<any>(
+      "SELECT * FROM video_registry WHERE COALESCE(watched_at, stored_at) >= ? ORDER BY COALESCE(watched_at, stored_at) DESC",
+      [sinceMs],
+    );
+    return rows.map((row) => ({
+      postId: row.post_id,
+      url: row.url,
+      fileUri: row.file_uri,
+      fileSize: row.file_size,
+      cachedAt: row.stored_at,
+      watchedAt: row.watched_at ?? row.stored_at,
       title: row.title ?? "",
       thumbnail: row.thumbnail ?? null,
     }));
@@ -108,16 +132,41 @@ async function dbGetAll(): Promise<OfflineVideoEntry[]> {
 async function dbSaveEntry(entry: OfflineVideoEntry): Promise<void> {
   try {
     const db = await getDB();
+    const now = Date.now();
+    // stored_at is set only on first insert (INSERT OR IGNORE path),
+    // watched_at is always updated so re-watches bump the timestamp.
     await db.runAsync(
-      `INSERT OR REPLACE INTO video_registry
-       (post_id, url, file_uri, file_size, title, thumbnail, stored_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO video_registry
+         (post_id, url, file_uri, file_size, title, thumbnail, stored_at, watched_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(post_id) DO UPDATE SET
+         url       = excluded.url,
+         file_uri  = excluded.file_uri,
+         file_size = excluded.file_size,
+         title     = excluded.title,
+         thumbnail = excluded.thumbnail,
+         watched_at = ?`,
       [
         entry.postId, entry.url, entry.fileUri, entry.fileSize,
-        entry.title, entry.thumbnail, Date.now(),
+        entry.title, entry.thumbnail, now, now,
+        now, // second bind for the ON CONFLICT watched_at = ?
       ],
     );
-  } catch {}
+  } catch {
+    // Fallback: simple upsert without ON CONFLICT syntax (older SQLite)
+    try {
+      const db2 = await getDB();
+      await db2.runAsync(
+        `INSERT OR REPLACE INTO video_registry
+           (post_id, url, file_uri, file_size, title, thumbnail, stored_at, watched_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          entry.postId, entry.url, entry.fileUri, entry.fileSize,
+          entry.title, entry.thumbnail, entry.cachedAt || Date.now(), Date.now(),
+        ],
+      );
+    } catch {}
+  }
 }
 
 async function dbDeleteEntry(postId: string): Promise<void> {
@@ -276,10 +325,20 @@ export async function markVideoWatched(
 
 // ─── Registry queries ──────────────────────────────────────────────────────────
 
-/** Returns all permanently stored videos, newest first. No TTL filtering. */
+/** Returns all permanently stored videos, ordered by last-watched newest first. */
 export async function getOfflineVideos(): Promise<OfflineVideoEntry[]> {
   if (Platform.OS === "web") return [];
   return dbGetAll();
+}
+
+/**
+ * Returns videos the user watched within the last `hours` hours (default 24).
+ * These are already on-device — no network needed to play them.
+ */
+export async function getRecentlyWatchedVideos(hours = 24): Promise<OfflineVideoEntry[]> {
+  if (Platform.OS === "web") return [];
+  const since = Date.now() - hours * 60 * 60 * 1000;
+  return dbGetRecent(since);
 }
 
 /** Total size and count of permanently stored videos. */

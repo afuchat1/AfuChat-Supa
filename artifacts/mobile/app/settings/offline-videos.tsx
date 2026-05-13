@@ -5,6 +5,7 @@ import {
   FlatList,
   Image,
   Platform,
+  SectionList,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -17,12 +18,15 @@ import { useTheme } from "@/hooks/useTheme";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import {
   getOfflineVideos,
+  getRecentlyWatchedVideos,
   getOfflineCacheStats,
   clearAllOfflineVideos,
   removeOfflineVideo,
   clearExpiredOfflineVideos,
   type OfflineVideoEntry,
 } from "@/lib/videoCache";
+
+const MS_24H = 24 * 60 * 60 * 1000;
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -32,10 +36,29 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
+function formatRelativeTime(ms?: number): string {
+  if (!ms) return "";
+  const diff = Date.now() - ms;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+type SectionData = {
+  title: string;
+  subtitle: string;
+  accent: boolean;
+  data: OfflineVideoEntry[];
+};
+
 export default function OfflineVideosScreen() {
   const { colors, accent } = useTheme();
   const insets = useSafeAreaInsets();
-  const [videos, setVideos] = useState<OfflineVideoEntry[]>([]);
+
+  const [sections, setSections] = useState<SectionData[]>([]);
   const [stats, setStats] = useState<{ count: number; bytes: number }>({ count: 0, bytes: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -43,9 +66,34 @@ export default function OfflineVideosScreen() {
     setLoading(true);
     try {
       await clearExpiredOfflineVideos();
-      const [vids, st] = await Promise.all([getOfflineVideos(), getOfflineCacheStats()]);
-      setVideos(vids);
+      const [recent, all, st] = await Promise.all([
+        getRecentlyWatchedVideos(24),
+        getOfflineVideos(),
+        getOfflineCacheStats(),
+      ]);
       setStats(st);
+
+      const recentIds = new Set(recent.map((v) => v.postId));
+      const older = all.filter((v) => !recentIds.has(v.postId));
+
+      const built: SectionData[] = [];
+      if (recent.length > 0) {
+        built.push({
+          title: "Watched Today",
+          subtitle: "Ready to play offline",
+          accent: true,
+          data: recent,
+        });
+      }
+      if (older.length > 0) {
+        built.push({
+          title: "All Saved Videos",
+          subtitle: "Older than 24 hours",
+          accent: false,
+          data: older,
+        });
+      }
+      setSections(built);
     } finally {
       setLoading(false);
     }
@@ -56,7 +104,7 @@ export default function OfflineVideosScreen() {
   function handleClearAll() {
     Alert.alert(
       "Clear Offline Videos",
-      "All cached videos will be removed from this device. They'll be re-cached automatically as you watch them again.",
+      "All saved videos will be removed from this device.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -64,7 +112,7 @@ export default function OfflineVideosScreen() {
           style: "destructive",
           onPress: async () => {
             await clearAllOfflineVideos();
-            setVideos([]);
+            setSections([]);
             setStats({ count: 0, bytes: 0 });
           },
         },
@@ -74,12 +122,19 @@ export default function OfflineVideosScreen() {
 
   async function handleRemove(postId: string) {
     await removeOfflineVideo(postId);
-    const updated = videos.filter((v) => v.postId !== postId);
-    setVideos(updated);
-    setStats({ count: updated.length, bytes: updated.reduce((a, v) => a + v.fileSize, 0) });
+    const updated = sections.map((s) => ({
+      ...s,
+      data: s.data.filter((v) => v.postId !== postId),
+    })).filter((s) => s.data.length > 0);
+    setSections(updated);
+    const allRemaining = updated.flatMap((s) => s.data);
+    setStats({ count: allRemaining.length, bytes: allRemaining.reduce((a, v) => a + v.fileSize, 0) });
   }
 
-  const ListHeader = (
+  const allCount = sections.reduce((a, s) => a + s.data.length, 0);
+  const recentCount = sections.find((s) => s.accent)?.data.length ?? 0;
+
+  const StatsHeader = (
     <>
       {/* Stats card */}
       <View style={[styles.statsCard, { backgroundColor: colors.surface }]}>
@@ -92,7 +147,9 @@ export default function OfflineVideosScreen() {
               {stats.count} {stats.count === 1 ? "video" : "videos"} · {formatBytes(stats.bytes)}
             </Text>
             <Text style={[styles.statsSub, { color: colors.textMuted }]}>
-              Saved permanently on this device
+              {recentCount > 0
+                ? `${recentCount} watched in the last 24 hrs · saved offline`
+                : "Saved permanently on this device"}
             </Text>
           </View>
           {stats.count > 0 && (
@@ -102,17 +159,26 @@ export default function OfflineVideosScreen() {
           )}
         </View>
 
+        {/* Info pills */}
+        <View style={styles.pillRow}>
+          <View style={[styles.pill, { backgroundColor: accent + "18" }]}>
+            <Ionicons name="wifi-outline" size={13} color={accent} />
+            <Text style={[styles.pillText, { color: accent }]}>Watch offline anytime</Text>
+          </View>
+          <View style={[styles.pill, { backgroundColor: colors.backgroundSecondary }]}>
+            <Ionicons name="sync-outline" size={13} color={colors.textMuted} />
+            <Text style={[styles.pillText, { color: colors.textMuted }]}>No re-download</Text>
+          </View>
+        </View>
+
         <View style={[styles.infoBox, { backgroundColor: colors.backgroundSecondary }]}>
           <Ionicons name="information-circle-outline" size={15} color={colors.textMuted} />
           <Text style={[styles.infoText, { color: colors.textMuted }]}>
-            Videos are saved automatically when you watch them. They stay on your device permanently until you delete them — no re-downloading needed, even without internet.
+            Videos you watch in the feed are saved automatically. They live on your device
+            permanently — open them here to re-watch without any internet connection.
           </Text>
         </View>
       </View>
-
-      {videos.length > 0 && (
-        <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>CACHED VIDEOS</Text>
-      )}
     </>
   );
 
@@ -123,10 +189,91 @@ export default function OfflineVideosScreen() {
       </View>
       <Text style={[styles.emptyTitle, { color: colors.text }]}>No offline videos yet</Text>
       <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-        Videos you watch in the feed are automatically saved here so you can re-watch them anytime without an internet connection.
+        Videos you watch in the feed are saved here automatically. Watch a few videos and they'll
+        appear here so you can re-watch them without internet.
       </Text>
     </View>
   );
+
+  function renderSectionHeader({ section }: { section: SectionData }) {
+    return (
+      <View style={styles.sectionHeaderWrap}>
+        {section.accent && (
+          <View style={[styles.sectionAccentDot, { backgroundColor: accent }]} />
+        )}
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.sectionLabel, { color: colors.text }]}>{section.title}</Text>
+          <Text style={[styles.sectionSub, { color: colors.textMuted }]}>{section.subtitle}</Text>
+        </View>
+        <Text style={[styles.sectionCount, { color: colors.textMuted }]}>
+          {section.data.length}
+        </Text>
+      </View>
+    );
+  }
+
+  function renderItem({ item, index, section }: { item: OfflineVideoEntry; index: number; section: SectionData }) {
+    const isFirst = index === 0;
+    const isLast = index === section.data.length - 1;
+    return (
+      <View style={[
+        styles.videoRow,
+        { backgroundColor: colors.surface },
+        isFirst && styles.rowFirst,
+        isLast && styles.rowLast,
+      ]}>
+        {/* Thumbnail */}
+        <View style={styles.thumb}>
+          {item.thumbnail ? (
+            <Image source={{ uri: item.thumbnail }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          ) : (
+            <View style={[StyleSheet.absoluteFill, styles.thumbPlaceholder]}>
+              <Ionicons name="videocam" size={22} color="rgba(255,255,255,0.4)" />
+            </View>
+          )}
+          {/* Offline ready badge */}
+          <View style={styles.offlineBadge}>
+            <Ionicons name="checkmark-circle" size={9} color="#fff" />
+            <Text style={styles.offlineBadgeText}>Offline</Text>
+          </View>
+        </View>
+
+        {/* Info */}
+        <View style={styles.videoInfo}>
+          <Text style={[styles.videoTitle, { color: colors.text }]} numberOfLines={2}>
+            {item.title || "Video"}
+          </Text>
+          <View style={styles.metaRow}>
+            <Text style={[styles.videoMeta, { color: colors.textMuted }]}>
+              {formatBytes(item.fileSize)}
+            </Text>
+            {item.watchedAt && (
+              <>
+                <View style={[styles.metaDot, { backgroundColor: colors.textMuted }]} />
+                <Text style={[styles.videoMeta, { color: colors.textMuted }]}>
+                  {formatRelativeTime(item.watchedAt)}
+                </Text>
+              </>
+            )}
+          </View>
+        </View>
+
+        {/* Play */}
+        <TouchableOpacity
+          onPress={() => router.push({ pathname: "/video/[id]", params: { id: item.postId } })}
+          hitSlop={8}
+          style={[styles.playBtn, { backgroundColor: accent + "22" }]}
+        >
+          <Ionicons name="play" size={16} color={accent} />
+        </TouchableOpacity>
+
+        {/* Remove */}
+        <TouchableOpacity onPress={() => handleRemove(item.postId)} hitSlop={8} style={styles.removeBtn}>
+          <Ionicons name="trash-outline" size={18} color="#FF3B30" />
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
@@ -136,67 +283,29 @@ export default function OfflineVideosScreen() {
         <View style={styles.centerLoader}>
           <ActivityIndicator color={accent} size="large" />
         </View>
-      ) : (
-        <FlatList
-          data={videos}
+      ) : allCount === 0 ? (
+        <SectionList
+          sections={[]}
           keyExtractor={(v) => v.postId}
           contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 40 }]}
-          ListHeaderComponent={ListHeader}
+          ListHeaderComponent={StatsHeader}
           ListEmptyComponent={EmptyState}
+          renderSectionHeader={() => null}
+          renderItem={() => null}
+        />
+      ) : (
+        <SectionList
+          sections={sections}
+          keyExtractor={(v) => v.postId}
+          contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 40 }]}
+          stickySectionHeadersEnabled={false}
+          ListHeaderComponent={StatsHeader}
+          renderSectionHeader={renderSectionHeader}
+          renderItem={renderItem}
           ItemSeparatorComponent={() => (
             <View style={[styles.separator, { backgroundColor: colors.border }]} />
           )}
-          renderItem={({ item, index }) => (
-            <View style={[
-              styles.videoRow,
-              { backgroundColor: colors.surface },
-              index === 0 && styles.rowFirst,
-              index === videos.length - 1 && styles.rowLast,
-            ]}>
-              {/* Thumbnail */}
-              <View style={styles.thumb}>
-                {item.thumbnail ? (
-                  <Image
-                    source={{ uri: item.thumbnail }}
-                    style={StyleSheet.absoluteFill}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={[StyleSheet.absoluteFill, styles.thumbPlaceholder]}>
-                    <Ionicons name="videocam" size={22} color="rgba(255,255,255,0.4)" />
-                  </View>
-                )}
-                <View style={styles.expiryBadge}>
-                  <Ionicons name="checkmark-circle" size={9} color="#fff" />
-                  <Text style={styles.expiryText}>Saved</Text>
-                </View>
-              </View>
-
-              {/* Info */}
-              <View style={styles.videoInfo}>
-                <Text style={[styles.videoTitle, { color: colors.text }]} numberOfLines={2}>
-                  {item.title || "Video"}
-                </Text>
-                <Text style={[styles.videoMeta, { color: colors.textMuted }]}>
-                  {formatBytes(item.fileSize)}
-                </Text>
-              </View>
-
-              {/* Play button */}
-              <TouchableOpacity
-                onPress={() => router.push({ pathname: "/video/[id]", params: { id: item.postId } })}
-                hitSlop={8}
-                style={[styles.playBtn, { backgroundColor: accent + "22" }]}
-              >
-                <Ionicons name="play" size={16} color={accent} />
-              </TouchableOpacity>
-
-              {/* Remove */}
-              <TouchableOpacity onPress={() => handleRemove(item.postId)} hitSlop={8} style={styles.removeBtn}>
-                <Ionicons name="trash-outline" size={18} color="#FF3B30" />
-              </TouchableOpacity>
-            </View>
-          )}
+          SectionSeparatorComponent={() => <View style={{ height: 16 }} />}
         />
       )}
     </View>
@@ -205,20 +314,10 @@ export default function OfflineVideosScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    paddingHorizontal: 8,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerSide: { width: 44, alignItems: "center" },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
   centerLoader: { flex: 1, alignItems: "center", justifyContent: "center" },
-  body: { paddingTop: 24, paddingHorizontal: 16, gap: 0 },
+  body: { paddingTop: 20, paddingHorizontal: 16, gap: 0 },
 
-  statsCard: { borderRadius: 14, padding: 16, marginBottom: 24 },
+  statsCard: { borderRadius: 14, padding: 16, marginBottom: 20 },
   statsTop: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
   iconBadge: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   statsTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
@@ -231,6 +330,18 @@ const styles = StyleSheet.create({
     borderColor: "#FF3B30",
   },
   clearBtnText: { color: "#FF3B30", fontSize: 12, fontFamily: "Inter_600SemiBold" },
+
+  pillRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  pillText: { fontSize: 11, fontFamily: "Inter_500Medium" },
+
   infoBox: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -240,13 +351,18 @@ const styles = StyleSheet.create({
   },
   infoText: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17 },
 
-  sectionLabel: {
-    fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: 0.6,
-    marginBottom: 8,
-    paddingLeft: 4,
+  sectionHeaderWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 4,
+    paddingBottom: 8,
+    paddingTop: 4,
   },
+  sectionAccentDot: { width: 8, height: 8, borderRadius: 4 },
+  sectionLabel: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  sectionSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
+  sectionCount: { fontSize: 12, fontFamily: "Inter_500Medium" },
 
   videoRow: {
     flexDirection: "row",
@@ -272,23 +388,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  expiryBadge: {
+  offlineBadge: {
     position: "absolute",
     bottom: 4,
     left: 4,
     flexDirection: "row",
     alignItems: "center",
     gap: 2,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: "rgba(0,0,0,0.65)",
     borderRadius: 4,
     paddingHorizontal: 4,
     paddingVertical: 2,
   },
-  expiryText: { color: "#fff", fontSize: 9, fontFamily: "Inter_600SemiBold" },
+  offlineBadgeText: { color: "#fff", fontSize: 9, fontFamily: "Inter_600SemiBold" },
 
   videoInfo: { flex: 1 },
   videoTitle: { fontSize: 14, fontFamily: "Inter_500Medium", lineHeight: 19 },
-  videoMeta: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 2 },
+  metaDot: { width: 3, height: 3, borderRadius: 1.5 },
+  videoMeta: { fontSize: 11, fontFamily: "Inter_400Regular" },
 
   playBtn: {
     width: 32,
