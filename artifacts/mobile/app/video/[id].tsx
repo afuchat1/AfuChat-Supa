@@ -58,6 +58,7 @@ import { notifyPostLike, notifyPostReply } from "@/lib/notifyUser";
 import { RichText } from "@/components/ui/RichText";
 import { encodeId, decodeId, isUuid } from "@/lib/shortId";
 import { getCachedVideoUri, cacheVideo, markVideoWatched } from "@/lib/videoCache";
+import { getLocalFeedPost } from "@/lib/storage/localFeed";
 import { saveVideoProgress, clearVideoProgress } from "@/lib/videoProgress";
 import { useResolvedVideoSource } from "@/hooks/useResolvedVideoSource";
 import { getPostVideoManifest, pickBestSource } from "@/lib/videoApi";
@@ -1328,7 +1329,40 @@ export default function VideoPlayerScreen() {
       loadingMoreRef.current = true;
       setLoadingMore(true);
     } else {
-      setLoading(true); setVideos([]); cursorRef.current = null; setHasMore(true);
+      cursorRef.current = null; setHasMore(true);
+
+      // ── Offline-first: show the target video from local cache immediately ────
+      // This lets the video open instantly even with no internet connection.
+      let showedLocalVideo = false;
+      if (id) {
+        const local = await getLocalFeedPost(id);
+        if (local?.video_url) {
+          showedLocalVideo = true;
+          setVideos([{
+            id: local.id,
+            author_id: local.author_id,
+            content: local.content ?? "",
+            video_url: local.video_url!,
+            image_url: local.image_url,
+            created_at: local.created_at,
+            view_count: local.view_count,
+            audio_name: null,
+            profile: {
+              display_name: local.author_name ?? "User",
+              handle: local.author_handle ?? "user",
+              avatar_url: local.author_avatar ?? null,
+            },
+            liked: local.liked,
+            bookmarked: local.bookmarked,
+            likeCount: local.like_count,
+            replyCount: local.reply_count,
+          }]);
+          setLoading(false);
+        }
+      }
+      if (!showedLocalVideo) {
+        setLoading(true); setVideos([]);
+      }
     }
 
     const currentUser = userRef.current;

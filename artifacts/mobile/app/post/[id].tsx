@@ -35,6 +35,7 @@ import { LANG_LABELS } from "@/lib/translate";
 import { aiSummarizeThread } from "@/lib/aiHelper";
 import { setPageMeta, resetPageMeta } from "@/lib/webMeta";
 import * as Haptics from "@/lib/haptics";
+import { getLocalFeedPost } from "@/lib/storage/localFeed";
 
 type Reply = {
   id: string;
@@ -315,6 +316,41 @@ export default function PostDetailScreen() {
   const loadPost = useCallback(async () => {
     if (!id) return;
 
+    // ── 1. Offline-first: show from local SQLite cache immediately ─────────────
+    const local = await getLocalFeedPost(id);
+    if (local) {
+      // Video posts should open in the video screen — redirect even offline
+      if (local.post_type === "video" && local.video_url) {
+        router.replace({ pathname: "/video/[id]", params: { id: local.id } });
+        return;
+      }
+      setPost({
+        id: local.id,
+        content: local.content ?? "",
+        image_url: local.image_url,
+        images: local.images,
+        post_type: local.post_type ?? null,
+        article_title: local.article_title ?? null,
+        created_at: local.created_at,
+        view_count: local.view_count,
+        visibility: "public",
+        author: {
+          id: local.author_id,
+          display_name: local.author_name ?? "User",
+          avatar_url: local.author_avatar ?? null,
+          handle: local.author_handle ?? "user",
+          is_verified: local.is_verified,
+          is_organization_verified: local.is_org_verified,
+        },
+        liked: local.liked,
+        likeCount: local.like_count,
+        replyCount: local.reply_count,
+      });
+      setLoading(false);
+      // Fall through — continue network fetch in background to refresh counts
+    }
+
+    // ── 2. Network fetch (primary or background refresh) ──────────────────────
     const [postRes, likeCountRes, replyCountRes, myLikeRes, myViewRes] = await Promise.all([
       supabase
         .from("posts")
@@ -350,7 +386,11 @@ export default function PostDetailScreen() {
     ]);
 
     const data = postRes.data;
-    if (!data) { setLoading(false); return; }
+    if (!data) {
+      // Network failed — if we showed from local cache, keep it; otherwise show error
+      if (!local) setLoading(false);
+      return;
+    }
 
     if ((data as any).post_type === "video" && (data as any).video_url) {
       router.replace({ pathname: "/video/[id]", params: { id: data.id } });
