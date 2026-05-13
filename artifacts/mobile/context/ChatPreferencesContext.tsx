@@ -2,6 +2,13 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+import { patchLocalSetting } from "@/lib/storage/localSettings";
+
+const CHAT_PREF_TO_LOCAL: Partial<Record<string, string>> = {
+  read_receipts: "chat_read_receipts",
+  bubble_style:  "chat_bubble_style",
+  auto_download: "chat_media_autodownload",
+};
 
 const APP_ACCENT_KEY = "app_color_theme";
 
@@ -100,6 +107,14 @@ export function ChatPreferencesProvider({ children }: { children: React.ReactNod
     setPrefs((p) => ({ ...p, [key]: value }));
     if (key === "chat_theme") AsyncStorage.setItem(APP_ACCENT_KEY, value as string);
     if (!user) return;
+    // Mirror certain prefs to local settings for offline-first access
+    const localKey = CHAT_PREF_TO_LOCAL[key as string];
+    if (localKey) {
+      let localVal: any = value;
+      // Map boolean auto_download → string enum expected by localSettings
+      if (key === "auto_download") localVal = (value as boolean) ? "wifi_only" : "never";
+      patchLocalSetting(user.id, localKey as any, localVal).catch(() => {});
+    }
     await supabase
       .from("chat_preferences")
       .upsert({ user_id: user.id, [key]: value }, { onConflict: "user_id" });

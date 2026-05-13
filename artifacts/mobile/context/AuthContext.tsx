@@ -24,6 +24,8 @@ import {
   clearCachedUserId,
 } from "@/lib/offlineStore";
 import { clearAllConversations } from "@/lib/storage/localConversations";
+import { saveLocalProfile, deleteLocalProfile } from "@/lib/storage/localProfile";
+import { saveLocalSettings, deleteLocalSettings } from "@/lib/storage/localSettings";
 import { clearProfileCache } from "@/lib/profileCache";
 import { startOfflineSync } from "@/lib/offlineSync";
 import { clearPushToken, registerSwitchAccount, setCurrentUserId } from "@/lib/pushNotifications";
@@ -157,6 +159,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (profileData) {
         setProfile(profileData as Profile);
         cacheProfile(profileData);
+        // Persist profile to device storage (permanent, offline-first)
+        saveLocalProfile(profileData as any).catch(() => {});
         // Keep the stored account's display metadata fresh
         updateAccountProfile(userId, {
           displayName: (profileData as any).display_name,
@@ -457,9 +461,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Wipe all caches
       clearCachedUserId();
       clearProfileCache();
+      const signedOutUserId = user?.id;
       await Promise.all([
         clearAccountCache(),
         clearAllConversations(),
+        signedOutUserId ? deleteLocalProfile(signedOutUserId) : Promise.resolve(),
+        signedOutUserId ? deleteLocalSettings(signedOutUserId) : Promise.resolve(),
       ]);
 
       await supabase.auth.signOut();

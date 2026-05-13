@@ -17,6 +17,7 @@ import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { patchLocalSetting } from "@/lib/storage/localSettings";
 
 type PrivacyLevel = "everyone" | "followers" | "nobody";
 
@@ -49,6 +50,8 @@ export default function PrivacyMessagesScreen() {
   async function select(value: PrivacyLevel) {
     if (!user || saving) return;
     setSaving(true);
+    // Write to device immediately (offline-first)
+    patchLocalSetting(user.id, "message_privacy", value).catch(() => {});
     const { error } = await supabase.from("profiles").update({ message_privacy: value }).eq("id", user.id);
     if (error) showAlert("Error", "Failed to save setting.");
     else setSettings({ message_privacy: value });

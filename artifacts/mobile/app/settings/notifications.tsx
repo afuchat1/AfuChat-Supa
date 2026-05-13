@@ -20,6 +20,17 @@ import { useTheme } from "@/hooks/useTheme";
 import { getSoundMode, setSoundMode, playNotificationSound, SoundMode } from "@/lib/soundManager";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { patchLocalSetting, saveLocalSettings } from "@/lib/storage/localSettings";
+
+const NOTIF_KEY_MAP: Partial<Record<string, string>> = {
+  push_likes:     "notif_likes",
+  push_comments:  "notif_comments",
+  push_follows:   "notif_follows",
+  push_messages:  "notif_messages",
+  push_mentions:  "notif_mentions",
+  push_replies:   "notif_comments",
+  push_gifts:     "notif_tips",
+};
 
 type Prefs = {
   push_enabled: boolean;
@@ -76,6 +87,11 @@ export default function NotificationSettingsScreen() {
     const val = !prefs[key];
     setPrefs((p) => ({ ...p, [key]: val }));
     if (!user) return;
+    // Save to device immediately (offline-first), then sync to server
+    const settingKey = NOTIF_KEY_MAP[key];
+    if (settingKey) {
+      patchLocalSetting(user.id, settingKey as any, val as any).catch(() => {});
+    }
     await supabase.from("notification_preferences").upsert({ user_id: user.id, [key]: val }, { onConflict: "user_id" });
     Haptics.selectionAsync();
   }

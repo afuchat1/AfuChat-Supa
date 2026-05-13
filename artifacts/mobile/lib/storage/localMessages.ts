@@ -9,6 +9,7 @@
 //   • getNewestMessageDate() → cursor for delta sync
 
 import { getDB } from "./db";
+import { autoDownloadAttachment } from "./mediaDownloader";
 
 export type LocalMessage = {
   id: string;
@@ -164,6 +165,14 @@ export async function saveMessages(conversationId: string, messages: any[]): Pro
            WHERE id = ?`,
           [msg.status ?? null, msg.edited_at ?? null, local.id],
         );
+      }
+      // Fire-and-forget: auto-download attachment to permanent device storage
+      if (local.attachment_url && local.attachment_type && local.attachment_type !== "video") {
+        autoDownloadAttachment(
+          local.id,
+          local.attachment_url,
+          local.attachment_type as any,
+        ).catch(() => {});
       }
     }
   } catch {}

@@ -279,4 +279,78 @@ async function runMigrations(db: DB) {
     `);
     await db.runAsync("UPDATE schema_version SET version = 7");
   }
+
+  // ── v8: Own profile + full user settings on device ───────────────────────
+  // user_profiles: the logged-in user's own profile (one row per account).
+  // user_settings: all privacy/notification/chat settings stored permanently.
+  if (currentVersion < 8) {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS user_profiles (
+        id TEXT PRIMARY KEY,
+        handle TEXT NOT NULL,
+        display_name TEXT NOT NULL,
+        avatar_url TEXT,
+        banner_url TEXT,
+        bio TEXT,
+        phone_number TEXT,
+        xp INTEGER NOT NULL DEFAULT 0,
+        acoin INTEGER NOT NULL DEFAULT 0,
+        current_grade TEXT NOT NULL DEFAULT '',
+        is_verified INTEGER NOT NULL DEFAULT 0,
+        is_private INTEGER NOT NULL DEFAULT 0,
+        show_online_status INTEGER NOT NULL DEFAULT 1,
+        country TEXT,
+        website_url TEXT,
+        language TEXT NOT NULL DEFAULT 'en',
+        tipping_enabled INTEGER NOT NULL DEFAULT 0,
+        is_admin INTEGER NOT NULL DEFAULT 0,
+        is_support_staff INTEGER NOT NULL DEFAULT 0,
+        is_organization_verified INTEGER NOT NULL DEFAULT 0,
+        is_business_mode INTEGER NOT NULL DEFAULT 0,
+        gender TEXT,
+        date_of_birth TEXT,
+        region TEXT,
+        interests TEXT,
+        onboarding_completed INTEGER NOT NULL DEFAULT 0,
+        scheduled_deletion_at TEXT,
+        created_at TEXT,
+        stored_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS user_settings (
+        user_id TEXT PRIMARY KEY,
+        is_private INTEGER NOT NULL DEFAULT 0,
+        show_online_status INTEGER NOT NULL DEFAULT 1,
+        show_last_seen INTEGER NOT NULL DEFAULT 1,
+        show_bio_publicly INTEGER NOT NULL DEFAULT 1,
+        hide_followers_list INTEGER NOT NULL DEFAULT 0,
+        hide_following_list INTEGER NOT NULL DEFAULT 0,
+        hide_posts_non_followers INTEGER NOT NULL DEFAULT 0,
+        hide_from_search INTEGER NOT NULL DEFAULT 0,
+        message_privacy TEXT NOT NULL DEFAULT 'everyone',
+        reactions_privacy TEXT NOT NULL DEFAULT 'everyone',
+        allow_tagging TEXT NOT NULL DEFAULT 'everyone',
+        data_personalization INTEGER NOT NULL DEFAULT 1,
+        data_analytics INTEGER NOT NULL DEFAULT 1,
+        notif_likes INTEGER NOT NULL DEFAULT 1,
+        notif_comments INTEGER NOT NULL DEFAULT 1,
+        notif_follows INTEGER NOT NULL DEFAULT 1,
+        notif_messages INTEGER NOT NULL DEFAULT 1,
+        notif_mentions INTEGER NOT NULL DEFAULT 1,
+        notif_reposts INTEGER NOT NULL DEFAULT 1,
+        notif_tips INTEGER NOT NULL DEFAULT 1,
+        notif_system INTEGER NOT NULL DEFAULT 1,
+        notif_stories INTEGER NOT NULL DEFAULT 1,
+        notif_live INTEGER NOT NULL DEFAULT 1,
+        chat_read_receipts INTEGER NOT NULL DEFAULT 1,
+        chat_media_autodownload TEXT NOT NULL DEFAULT 'wifi_only',
+        chat_bubble_style TEXT NOT NULL DEFAULT 'default',
+        app_language TEXT NOT NULL DEFAULT 'en',
+        app_theme TEXT NOT NULL DEFAULT 'system',
+        stored_at INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL DEFAULT 0
+      );
+    `);
+    await db.runAsync("UPDATE schema_version SET version = 8");
+  }
 }
