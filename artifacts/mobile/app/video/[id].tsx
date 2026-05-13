@@ -70,6 +70,9 @@ import {
   getLearnedInterestBoosts,
   matchInterestsWeighted,
   diversifyFeed,
+  getSeenVideoIds,
+  markVideosSeen,
+  weightedSample,
   type FeedSignals,
 } from "../../lib/feedAlgorithm";
 import * as Haptics from "@/lib/haptics";
@@ -1430,7 +1433,10 @@ export default function VideoPlayerScreen() {
       }));
 
       // ── Rank by quality algorithm ───────────────────────────────────────────
-      const learnedWeights = await getLearnedInterestBoosts();
+      const [learnedWeights, seenVideoIds] = await Promise.all([
+        getLearnedInterestBoosts(),
+        getSeenVideoIds(),
+      ]);
       const now = Date.now();
 
       // Count how many times each author appears in this page (for diversity penalty)
@@ -1440,9 +1446,10 @@ export default function VideoPlayerScreen() {
       let diversified: VideoPost[];
 
       if (tab === "for_you") {
-        // Full quality algorithm: freshness tiers + engagement velocity + interest matching
+        // Full quality algorithm: freshness + velocity + interest + seen-video demotion
         const scored = mapped.map((v) => {
           const interestMatches = matchInterestsWeighted(v.content, [], learnedWeights);
+          const isSeen = seenVideoIds.has(v.id);
           const signals: FeedSignals = {
             likeCount: v.likeCount,
             replyCount: v.replyCount,
@@ -1450,6 +1457,7 @@ export default function VideoPlayerScreen() {
             createdAt: v.created_at,
             interestMatches,
             isFollowing: followedSet.has(v.author_id),
+            // Use like history as proxy for author interaction strength
             authorInteractionCount: v.liked ? 3 : 0,
             isVerified: false,
             isOrgVerified: false,
@@ -1457,28 +1465,31 @@ export default function VideoPlayerScreen() {
             sameCountry: false,
             authorPostCountInFeed: authorPageCount[v.author_id] || 1,
             contentLength: v.content?.length || 0,
+            postType: "video",
+            isSeen,
           };
-          let score = computeFeedScore(signals);
-          // Penalise already-liked videos so users see fresh content
-          if (v.liked) score -= 30;
-          return { id: v.id, author_id: v.author_id, score, video: v };
+          const score = computeFeedScore(signals);
+          return { id: v.id, author_id: v.author_id, score, postType: "video" as const, video: v };
         });
 
-        // diversifyFeed ensures no creator dominates consecutive slots
-        const diversifiedScored = diversifyFeed(scored);
-        diversified = diversifiedScored.map((s) => (s as any).video as VideoPost);
+        // Weighted random sampling from top candidates so every session feels
+        // different even with the same pool of videos. Pick from top-40 scored
+        // videos proportional to their score so quality still wins, just not always.
+        const topPool = [...scored].sort((a, b) => b.score - a.score).slice(0, 40);
+        const sampled = weightedSample(topPool, Math.min(topPool.length, VIDEO_PAGE_SIZE));
+
+        // Diversify to prevent same-creator back-to-back slots
+        const diversifiedScored = diversifyFeed(sampled);
+        diversified = diversifiedScored.map((s) => s.video as VideoPost);
       } else {
-        // Following tab: newest-first with a light engagement velocity boost.
-        // Users follow specific creators and expect chronological recency,
-        // not algorithmic reordering.
+        // Following tab: newest-first with light engagement velocity boost.
         const scored = mapped.map((v) => {
           const ageHours = (now - new Date(v.created_at).getTime()) / 3600000;
-          // Smooth recency decay: full score < 6h, half score at ~24h
           const recency = Math.max(0, 100 - ageHours * 1.5);
-          // Light velocity bonus so genuinely popular posts surface slightly higher
           const velocity = Math.min((v.likeCount + v.replyCount * 2) / Math.max(ageHours, 0.5) * 6, 20);
-          const score = recency + velocity + Math.random() * 4;
-          return { id: v.id, author_id: v.author_id, score, video: v };
+          // Larger jitter so following tab isn't purely chronological every time
+          const score = recency + velocity + Math.random() * 8;
+          return { id: v.id, author_id: v.author_id, score, postType: "video" as const, video: v };
         });
         scored.sort((a, b) => b.score - a.score);
         diversified = scored.map((s) => s.video);
@@ -1562,6 +1573,12 @@ export default function VideoPlayerScreen() {
       const idx = viewableItems[0].index;
       setActiveIndex(idx);
       activeIndexRef.current = idx;
+      // Mark this video (and its neighbors) as seen so it gets demoted next session
+      const seenBatch: string[] = [];
+      for (const vt of viewableItems) {
+        if (vt.item?.id) seenBatch.push(vt.item.id);
+      }
+      if (seenBatch.length > 0) markVideosSeen(seenBatch).catch(() => {});
       // Preload more when 3 from end
       if (idx >= videosLenRef.current - 3 && !loadingMoreRef.current && hasMoreRef.current && cursorRef.current) {
         fetchVideos(videoTabRef.current, cursorRef.current);

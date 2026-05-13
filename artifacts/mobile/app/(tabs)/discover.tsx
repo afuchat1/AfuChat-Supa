@@ -41,7 +41,7 @@ import { getLocalFeedPosts, saveFeedPosts, getNewestFeedPostDate, type FeedTab a
 import { getCachedFeedTab, cacheFeedTab, getCachedMoments, cacheMoments, cacheFeedCursor } from "@/lib/offlineStore";
 import { notifyPostLike } from "@/lib/notifyUser";
 import { sharePost, shareVideo } from "@/lib/share";
-import { matchInterestsWeighted, recordInteraction, getLearnedInterestBoosts, computeFeedScore, diversifyFeed, type FeedSignals } from "@/lib/feedAlgorithm";
+import { matchInterestsWeighted, recordInteraction, getLearnedInterestBoosts, computeFeedScore, diversifyFeed, getSeenPostIds, markPostsSeen, weightedSample, type FeedSignals } from "@/lib/feedAlgorithm";
 import { useLanguage } from "@/context/LanguageContext";
 import { translateText, LANG_LABELS } from "@/lib/translate";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
@@ -1089,12 +1089,17 @@ export default function DiscoverScreen() {
         authorPostCount[aid] = (authorPostCount[aid] || 0) + 1;
       }
 
+      // Load seen post IDs in parallel with scoring (already have data at this point)
+      const seenPostIds = await getSeenPostIds();
+
       const scored = data.map((p: any) => {
         const likeCount = likeMap[p.id] || 0;
         const replyCount = replyMap[p.id] || 0;
         const hasImages = (p.post_images?.length > 0) || !!p.image_url;
         const content = p.content || "";
         const authorCountry = p.profiles?.country || "";
+        const postType = p.post_type || "post";
+        const isSeen = seenPostIds.has(p.id);
 
         const interestMatches = matchInterestsWeighted(content, userInterests, learnedWeightsRef.current);
 
@@ -1112,6 +1117,8 @@ export default function DiscoverScreen() {
           sameCountry: !!userCountry && !!authorCountry && userCountry === authorCountry,
           authorPostCountInFeed: authorPostCount[p.author_id] || 1,
           contentLength: content.length,
+          postType,
+          isSeen,
         };
 
         const score = computeFeedScore(signals);
@@ -1139,7 +1146,7 @@ export default function DiscoverScreen() {
           replyCount,
           score,
           bookmarked: myBookmarkSet.has(p.id),
-          post_type: p.post_type || "post",
+          post_type: postType,
           article_title: p.article_title || null,
           article_body: p.article_body || null,
           video_url: p.video_url || null,
@@ -1148,7 +1155,16 @@ export default function DiscoverScreen() {
         };
       });
 
-      const diversified = diversifyFeed(scored);
+      // Weighted random sampling from top candidates — quality still wins but
+      // lower-ranked posts can surface, making every refresh genuinely different.
+      const topPool = [...scored].sort((a, b) => b.score - a.score).slice(0, 60);
+      const sampled = weightedSample(topPool, Math.min(topPool.length, 30));
+
+      // Diversify: no same-author back-to-back, no 3 same post-types in a row
+      const diversified = diversifyFeed(sampled.map((p) => ({ ...p, postType: p.post_type })));
+
+      // Mark these posts as seen so they get demoted on the next refresh
+      markPostsSeen(diversified.map((p) => p.id)).catch(() => {});
 
       // Fetch org page posts and splice into feed (1 per every ~5 regular posts)
       let orgPostItems: PostItem[] = [];

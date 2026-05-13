@@ -1,8 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const INTERACTION_WEIGHTS_KEY = "feed_interaction_weights_v1";
+const SEEN_FEED_POSTS_KEY = "seen_feed_post_ids_v2";
+const SEEN_VIDEO_IDS_KEY = "seen_video_ids_v2";
 const DECAY_FACTOR = 0.97;
 const MAX_WEIGHT = 120;
+const SEEN_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 const INTEREST_KEYWORDS: Record<string, string[]> = {
   technology: ["tech", "code", "software", "app", "ai", "robot", "computer", "programming", "developer", "startup", "digital", "gadget", "phone", "laptop", "internet", "algorithm", "data", "cloud", "machine learning", "api", "hack", "cyber", "silicon", "ios", "android"],
@@ -25,6 +28,59 @@ const INTEREST_KEYWORDS: Record<string, string[]> = {
   crypto: ["crypto", "bitcoin", "ethereum", "blockchain", "nft", "web3", "defi", "token", "wallet", "mining", "altcoin", "binance", "decentralized", "smart contract", "solana", "metaverse", "hodl", "bull", "bear market"],
 };
 
+// ─── Seen-item tracking ───────────────────────────────────────────────────────
+// Posts/videos are stored with a timestamp. Entries expire after 7 days so the
+// feed gradually re-surfaces evergreen content without showing the same thing
+// every session. Pruning happens on every write to keep storage small.
+
+async function _readSeenMap(key: string): Promise<Record<string, number>> {
+  try {
+    const raw = await AsyncStorage.getItem(key);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+async function _writeSeenMap(key: string, map: Record<string, number>): Promise<void> {
+  try {
+    const now = Date.now();
+    const pruned: Record<string, number> = {};
+    for (const [id, ts] of Object.entries(map)) {
+      if (now - ts < SEEN_EXPIRY_MS) pruned[id] = ts;
+    }
+    await AsyncStorage.setItem(key, JSON.stringify(pruned));
+  } catch {}
+}
+
+export async function getSeenPostIds(): Promise<Set<string>> {
+  const map = await _readSeenMap(SEEN_FEED_POSTS_KEY);
+  const now = Date.now();
+  return new Set(Object.entries(map).filter(([, ts]) => now - ts < SEEN_EXPIRY_MS).map(([id]) => id));
+}
+
+export async function markPostsSeen(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  const map = await _readSeenMap(SEEN_FEED_POSTS_KEY);
+  const now = Date.now();
+  for (const id of ids) map[id] = now;
+  await _writeSeenMap(SEEN_FEED_POSTS_KEY, map);
+}
+
+export async function getSeenVideoIds(): Promise<Set<string>> {
+  const map = await _readSeenMap(SEEN_VIDEO_IDS_KEY);
+  const now = Date.now();
+  return new Set(Object.entries(map).filter(([, ts]) => now - ts < SEEN_EXPIRY_MS).map(([id]) => id));
+}
+
+export async function markVideosSeen(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  const map = await _readSeenMap(SEEN_VIDEO_IDS_KEY);
+  const now = Date.now();
+  for (const id of ids) map[id] = now;
+  await _writeSeenMap(SEEN_VIDEO_IDS_KEY, map);
+}
+
+// ─── Interest matching ────────────────────────────────────────────────────────
+
 export function matchInterests(content: string, userInterests: string[]): number {
   if (!content || !userInterests || userInterests.length === 0) return 0;
   const lower = content.toLowerCase();
@@ -32,17 +88,42 @@ export function matchInterests(content: string, userInterests: string[]): number
   for (const interest of userInterests) {
     const keywords = INTEREST_KEYWORDS[interest];
     if (!keywords) continue;
-    let matched = false;
     for (const kw of keywords) {
-      if (lower.includes(kw)) {
-        matched = true;
-        totalMatches++;
-        break;
-      }
+      if (lower.includes(kw)) { totalMatches++; break; }
     }
   }
   return totalMatches;
 }
+
+export function matchInterestsWeighted(
+  content: string,
+  userInterests: string[],
+  learnedWeights: Record<string, number>,
+): number {
+  if (!content) return 0;
+  const lower = content.toLowerCase();
+  let totalScore = 0;
+
+  for (const interest of (userInterests || [])) {
+    const keywords = INTEREST_KEYWORDS[interest];
+    if (!keywords) continue;
+    if (keywords.some((kw) => lower.includes(kw))) {
+      const boost = (learnedWeights[interest] || 0) / 20;
+      totalScore += 1 + boost;
+    }
+  }
+  for (const [category, weight] of Object.entries(learnedWeights)) {
+    if ((userInterests || []).includes(category)) continue;
+    const keywords = INTEREST_KEYWORDS[category];
+    if (!keywords || weight < 5) continue;
+    if (keywords.some((kw) => lower.includes(kw))) {
+      totalScore += weight / 30;
+    }
+  }
+  return totalScore;
+}
+
+// ─── Feed scoring ─────────────────────────────────────────────────────────────
 
 export type FeedSignals = {
   likeCount: number;
@@ -58,13 +139,18 @@ export type FeedSignals = {
   sameCountry: boolean;
   authorPostCountInFeed: number;
   contentLength: number;
+  postType?: string;
+  isSeen?: boolean;
 };
 
 export function computeFeedScore(signals: FeedSignals): number {
   const ageHours = (Date.now() - new Date(signals.createdAt).getTime()) / 3600000;
 
-  const freshnessScore = ageHours < 1 ? 40
-    : ageHours < 4 ? 35
+  // ── Freshness: tiered decay curve ─────────────────────────────────────────
+  const freshnessScore =
+    ageHours < 1 ? 45
+    : ageHours < 3 ? 40
+    : ageHours < 6 ? 35
     : ageHours < 12 ? 28
     : ageHours < 24 ? 22
     : ageHours < 48 ? 15
@@ -72,35 +158,60 @@ export function computeFeedScore(signals: FeedSignals): number {
     : ageHours < 168 ? 5
     : 2;
 
+  // ── Viral velocity: engagement per hour with sqrt dampening ───────────────
   const velocityWindow = Math.max(ageHours, 0.5);
-  const engagementPerHour = (signals.likeCount + signals.replyCount * 2) / velocityWindow;
-  const trendingScore = Math.min(engagementPerHour * 8, 30);
+  const rawVelocity = (signals.likeCount + signals.replyCount * 2.5) / velocityWindow;
+  // sqrt dampening so viral posts don't completely drown everything else
+  const trendingScore = Math.min(Math.sqrt(rawVelocity) * 12, 35);
 
-  const rawEngagement = signals.likeCount * 1.5 + signals.replyCount * 3 + Math.min(signals.viewCount, 100) * 0.05;
-  const engagementScore = Math.min(rawEngagement, 25);
+  // ── Burst signal: brand-new post gaining traction fast ────────────────────
+  const burstScore = ageHours < 3 && signals.likeCount >= 5 ? 10 : 0;
 
-  const interestScore = signals.interestMatches * 12;
+  // ── Absolute engagement (log scale to prevent outlier dominance) ──────────
+  const rawEngagement = signals.likeCount * 1.5 + signals.replyCount * 3 + Math.min(signals.viewCount, 200) * 0.04;
+  const engagementScore = Math.min(rawEngagement > 0 ? Math.log1p(rawEngagement) * 6 : 0, 22);
 
+  // ── Interest alignment ────────────────────────────────────────────────────
+  const interestScore = signals.interestMatches * 13;
+
+  // ── Social affinity ───────────────────────────────────────────────────────
   let affinityScore = 0;
-  if (signals.isFollowing) affinityScore += 18;
-  if (signals.authorInteractionCount >= 5) affinityScore += 12;
-  else if (signals.authorInteractionCount >= 2) affinityScore += 7;
-  else if (signals.authorInteractionCount >= 1) affinityScore += 3;
+  if (signals.isFollowing) affinityScore += 20;
+  if (signals.authorInteractionCount >= 5) affinityScore += 14;
+  else if (signals.authorInteractionCount >= 2) affinityScore += 8;
+  else if (signals.authorInteractionCount >= 1) affinityScore += 4;
 
+  // ── Quality signals ───────────────────────────────────────────────────────
   const qualityScore =
-    (signals.isOrgVerified ? 5 : 0) +
-    (signals.isVerified ? 3 : 0) +
-    (signals.hasImages ? 4 : 0) +
-    (signals.sameCountry ? 3 : 0) +
+    (signals.isOrgVerified ? 6 : 0) +
+    (signals.isVerified ? 4 : 0) +
+    (signals.hasImages ? 5 : 0) +
+    (signals.sameCountry ? 4 : 0) +
     (signals.contentLength > 50 ? 2 : 0) +
-    (signals.contentLength > 120 ? 2 : 0);
+    (signals.contentLength > 150 ? 3 : 0) +
+    (signals.postType === "video" ? 4 : 0) +
+    (signals.postType === "article" ? 2 : 0);
 
-  const diversityPenalty = signals.authorPostCountInFeed > 2 ? -(signals.authorPostCountInFeed - 2) * 8 : 0;
+  // ── Diversity penalty: cap same author in one batch ───────────────────────
+  const diversityPenalty = signals.authorPostCountInFeed > 2
+    ? -(signals.authorPostCountInFeed - 2) * 10
+    : 0;
 
-  const randomJitter = Math.random() * 5;
+  // ── Already seen: strong demotion (not exclusion — keeps feed from going empty) ──
+  const seenPenalty = signals.isSeen ? -45 : 0;
 
-  return freshnessScore + trendingScore + engagementScore + interestScore + affinityScore + qualityScore + diversityPenalty + randomJitter;
+  // ── Random jitter: large enough to surface unexpected gems ───────────────
+  // 0–15 pts (was 0–5). This is the key lever for variety between sessions.
+  const randomJitter = Math.random() * 15;
+
+  return (
+    freshnessScore + trendingScore + burstScore + engagementScore +
+    interestScore + affinityScore + qualityScore +
+    diversityPenalty + seenPenalty + randomJitter
+  );
 }
+
+// ─── Interaction learning ─────────────────────────────────────────────────────
 
 export async function recordInteraction(
   content: string,
@@ -124,51 +235,32 @@ export async function getLearnedInterestBoosts(): Promise<Record<string, number>
   try {
     const raw = await AsyncStorage.getItem(INTERACTION_WEIGHTS_KEY);
     return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
+  } catch { return {}; }
 }
 
-export function matchInterestsWeighted(
-  content: string,
-  userInterests: string[],
-  learnedWeights: Record<string, number>,
-): number {
-  if (!content) return 0;
-  const lower = content.toLowerCase();
-  let totalScore = 0;
+// ─── Feed diversification ─────────────────────────────────────────────────────
+// Algorithm:
+//  1. Sort by score descending.
+//  2. Walk through and reject a post if the same author appeared in the last
+//     3 slots OR the same post type appeared 3 times in a row.
+//  3. Deferred posts are re-inserted at the earliest safe position.
+//  4. Unsatisfied deferred posts are appended to the tail.
 
-  for (const interest of (userInterests || [])) {
-    const keywords = INTEREST_KEYWORDS[interest];
-    if (!keywords) continue;
-    if (keywords.some((kw) => lower.includes(kw))) {
-      const boost = (learnedWeights[interest] || 0) / 20;
-      totalScore += 1 + boost;
-    }
-  }
-
-  for (const [category, weight] of Object.entries(learnedWeights)) {
-    if ((userInterests || []).includes(category)) continue;
-    const keywords = INTEREST_KEYWORDS[category];
-    if (!keywords || weight < 5) continue;
-    if (keywords.some((kw) => lower.includes(kw))) {
-      totalScore += weight / 30;
-    }
-  }
-
-  return totalScore;
-}
-
-export function diversifyFeed(posts: { id: string; author_id: string; score: number }[]): typeof posts {
+export function diversifyFeed<T extends { id: string; author_id: string; score: number; postType?: string }>(
+  posts: T[],
+): T[] {
   const sorted = [...posts].sort((a, b) => b.score - a.score);
-  const result: typeof posts = [];
-  const deferred: typeof posts = [];
+  const result: T[] = [];
+  const deferred: T[] = [];
 
   for (const post of sorted) {
-    const lastFive = result.slice(-4).map((p) => p.author_id);
-    const authorRecentCount = lastFive.filter((a) => a === post.author_id).length;
+    const tail = result.slice(-3);
+    const sameAuthorRecently = tail.some((p) => p.author_id === post.author_id);
+    const typeRunLength = result.length >= 3
+      ? result.slice(-3).filter((p) => p.postType === post.postType && post.postType).length
+      : 0;
 
-    if (authorRecentCount >= 1) {
+    if (sameAuthorRecently || typeRunLength >= 3) {
       deferred.push(post);
     } else {
       result.push(post);
@@ -177,9 +269,12 @@ export function diversifyFeed(posts: { id: string; author_id: string; score: num
 
   for (const post of deferred) {
     let inserted = false;
-    for (let i = Math.min(result.length, 3); i < result.length; i++) {
-      const window = result.slice(Math.max(0, i - 2), i).map((p) => p.author_id);
-      if (!window.includes(post.author_id)) {
+    // Try to insert from position 3 onward (never at top)
+    for (let i = Math.min(result.length, 3); i <= result.length; i++) {
+      const tail = result.slice(Math.max(0, i - 3), i);
+      const sameAuthor = tail.some((p) => p.author_id === post.author_id);
+      const typeRun = tail.filter((p) => p.postType === post.postType && post.postType).length;
+      if (!sameAuthor && typeRun < 3) {
         result.splice(i, 0, post);
         inserted = true;
         break;
@@ -189,4 +284,32 @@ export function diversifyFeed(posts: { id: string; author_id: string; score: num
   }
 
   return result;
+}
+
+// ─── Weighted random sampling ─────────────────────────────────────────────────
+// Picks N items from a list with probability proportional to their score.
+// This gives top-scored content an advantage without making the feed
+// deterministic — lower-scored items can still win slots, which is what
+// makes every refresh feel genuinely different.
+
+export function weightedSample<T extends { score: number }>(items: T[], n: number): T[] {
+  if (items.length <= n) return [...items];
+  const pool = [...items];
+  const selected: T[] = [];
+
+  while (selected.length < n && pool.length > 0) {
+    const minScore = Math.min(...pool.map((p) => p.score));
+    const shift = minScore < 0 ? -minScore + 1 : 0;
+    const totalWeight = pool.reduce((s, p) => s + p.score + shift, 0);
+    let r = Math.random() * totalWeight;
+    let idx = 0;
+    for (let i = 0; i < pool.length; i++) {
+      r -= pool[i].score + shift;
+      if (r <= 0) { idx = i; break; }
+    }
+    selected.push(pool[idx]);
+    pool.splice(idx, 1);
+  }
+
+  return selected;
 }

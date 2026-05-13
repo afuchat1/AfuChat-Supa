@@ -10,6 +10,15 @@ const config = getDefaultConfig(__dirname);
 config.resolver = {
   ...(config.resolver || {}),
   blockList: /artifacts[\\/]mockup-sandbox[\\/].*/,
+  // Enable symlink following so Metro resolves pnpm's content-addressed store
+  // correctly on Android (pnpm creates symlinks that Metro doesn't follow by default).
+  unstable_enableSymlinks: true,
+  // Explicit node_modules search paths: mobile-local first, then workspace root.
+  // This ensures packages hoisted by pnpm to the workspace root are found.
+  nodeModulesPaths: [
+    path.resolve(__dirname, "node_modules"),
+    path.resolve(__dirname, "../../node_modules"),
+  ],
 };
 
 /**
