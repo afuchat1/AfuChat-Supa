@@ -1,5 +1,22 @@
 # EAS Build History
 
+## v2.0.70 — Android APK (preview)
+
+- **Build ID**: `5f38a277-036a-4e82-9180-7be1b4a81252`
+- **Dashboard**: https://expo.dev/accounts/afuchat/projects/afuchat/builds/5f38a277-036a-4e82-9180-7be1b4a81252
+- **Platform**: Android
+- **Profile**: preview (APK, internal distribution)
+- **versionCode**: 2070 (auto-incremented by EAS remote from 2069)
+- **Keystore**: Build Credentials 3ohDBvKUsq (default, managed by Expo)
+- **Archive size**: 1.3 MB
+- **Triggered**: 2026-05-16
+- **Fixes in this build**:
+  - Installed `expo-sqlite@~16.0.10` — resolves "Unable to resolve expo-sqlite" crash on Android
+  - Added plus/camera button in chat header left when no active stories exist
+  - Added `mediaDownloader.web.ts` stub — fixes blank web preview
+  - Added Video Analytics dashboard screen (`/video-analytics`)
+- **Method**: EAS CLI from isolated /tmp dir with absolute pnpm symlinks
+
 ## v2.0.69 — Android APK (preview)
 
 - **Build ID**: `e9f3b9ec-2951-4db0-af08-e5ea1e8242a9`

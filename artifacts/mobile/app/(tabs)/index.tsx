@@ -547,7 +547,18 @@ function CompactStoryHeader({ userId, colors, onExpand }: { userId: string; colo
       });
   }, [userId]);
 
-  if (previews.length === 0) return null;
+  if (previews.length === 0) {
+    return (
+      <TouchableOpacity
+        onPress={() => router.push("/stories/camera")}
+        style={{ width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: colors.accent, borderStyle: "dashed" }}
+        activeOpacity={0.7}
+        hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+      >
+        <Ionicons name="add" size={20} color={colors.accent} />
+      </TouchableOpacity>
+    );
+  }
 
   return (
     <TouchableOpacity onPress={onExpand} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 2 }} activeOpacity={0.75}>
