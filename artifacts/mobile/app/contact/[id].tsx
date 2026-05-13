@@ -188,7 +188,7 @@ export default function ContactProfileScreen() {
 
   type PurchaseInfo = {
     handle: string;
-    price: number;
+    price: number | null;
     purchasedAt: string;
     sellerHandle: string | null;
   };
@@ -202,19 +202,29 @@ export default function ContactProfileScreen() {
 
   async function showHandlePurchase(handle: string) {
     setPurchaseLoading(true);
-    const { data } = await supabase
-      .from("username_listings")
-      .select("price, created_at, profiles!username_listings_seller_id_fkey(handle)")
-      .eq("username", handle)
-      .not("sold_to_id", "is", null)
-      .maybeSingle();
+    // Query both tables in parallel — listing gives price/seller, owned_usernames gives fallback date
+    const [{ data: listing }, { data: owned }] = await Promise.all([
+      supabase
+        .from("username_listings")
+        .select("price, created_at, profiles!username_listings_seller_id_fkey(handle)")
+        .eq("username", handle)
+        .not("sold_to_id", "is", null)
+        .maybeSingle(),
+      supabase
+        .from("owned_usernames")
+        .select("acquired_at")
+        .eq("handle", handle)
+        .maybeSingle(),
+    ]);
     setPurchaseLoading(false);
-    if (!data) return;
+    if (!listing && !owned) return;
     setPurchasePopup({
       handle,
-      price: (data as any).price ?? 0,
-      purchasedAt: (data as any).created_at ?? "",
-      sellerHandle: (data as any).profiles?.handle ?? null,
+      price: listing ? ((listing as any).price ?? null) : null,
+      purchasedAt: listing
+        ? ((listing as any).created_at ?? "")
+        : ((owned as any)?.acquired_at ?? ""),
+      sellerHandle: listing ? ((listing as any).profiles?.handle ?? null) : null,
     });
   }
 
@@ -256,8 +266,8 @@ export default function ContactProfileScreen() {
 
     supabase.from("shops").select("id, pin_to_profile").eq("seller_id", id).eq("is_active", true).eq("pin_to_profile", true).maybeSingle().then(({ data }) => setHasShop(!!data));
 
-    // Load all owned usernames (aliases) for this profile
-    supabase.from("owned_usernames").select("handle").eq("owner_id", id).order("acquired_at", { ascending: true }).then(({ data: aliases }) => {
+    // Load owned usernames that are NOT the primary handle (these are marketplace purchases)
+    supabase.from("owned_usernames").select("handle, is_primary").eq("owner_id", id).eq("is_primary", false).order("acquired_at", { ascending: true }).then(({ data: aliases }) => {
       if (aliases && aliases.length > 0) setOwnedUsernames(aliases.map((a: any) => a.handle));
     });
 
@@ -522,22 +532,6 @@ export default function ContactProfileScreen() {
         <VerifiedBadge isVerified={profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={16} />
         <PrestigeBadge acoin={profile?.acoin || 0} size="sm" showLabel />
       </View>
-      {/* Tappable handle — shows purchase info if this username was bought on the marketplace */}
-      {profile?.handle ? (
-        <TouchableOpacity
-          onPress={() => showHandlePurchase(profile.handle)}
-          activeOpacity={0.65}
-          style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 16, marginBottom: 4 }}
-          hitSlop={6}
-        >
-          {purchaseLoading ? (
-            <ActivityIndicator size={11} color={colors.textMuted} />
-          ) : null}
-          <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: colors.textMuted }}>
-            @{profile.handle}
-          </Text>
-        </TouchableOpacity>
-      ) : null}
       {/* Show phone-book name when the user has this person saved differently */}
       {!!phonebookName && phonebookName !== profile?.display_name && (
         <Text style={[st.savedAsLabel, { color: colors.textMuted }]}>
@@ -596,7 +590,7 @@ export default function ContactProfileScreen() {
         )}
       </View>
 
-      {/* ── Owned usernames ─── */}
+      {/* ── Owned usernames (marketplace purchases) ─── */}
       {ownedUsernames.length > 0 && (
         <View style={st.ownedUsernamesRow}>
           <Ionicons name="at-circle-outline" size={13} color={colors.textMuted} />
@@ -606,9 +600,12 @@ export default function ContactProfileScreen() {
               <TouchableOpacity
                 key={h}
                 style={[st.ownedUsernamePill, { backgroundColor: colors.backgroundSecondary }]}
-                onPress={() => Clipboard.setStringAsync(`@${h}`)}
+                onPress={() => showHandlePurchase(h)}
                 hitSlop={4}
               >
+                {purchaseLoading ? (
+                  <ActivityIndicator size={10} color={colors.textMuted} style={{ marginRight: 2 }} />
+                ) : null}
                 <Text style={[st.ownedUsernamePillText, { color: colors.textSecondary }]}>@{h}</Text>
               </TouchableOpacity>
             ))}
@@ -930,29 +927,34 @@ export default function ContactProfileScreen() {
             </View>
 
             <View style={{ gap: 12, backgroundColor: colors.backgroundSecondary, borderRadius: 14, padding: 14 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
-                  <Ionicons name="cash-outline" size={16} color={colors.icon} />
-                  <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.textSecondary }}>Price Paid</Text>
-                </View>
-                <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: "#FFD60A" }}>
-                  🪙 {purchasePopup?.price.toLocaleString()} ACoin
-                </Text>
-              </View>
-
-              <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
+              {purchasePopup?.price !== null && purchasePopup?.price !== undefined ? (
+                <>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+                      <Ionicons name="cash-outline" size={16} color={colors.icon} />
+                      <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.textSecondary }}>Price Paid</Text>
+                    </View>
+                    <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: "#FFD60A" }}>
+                      🪙 {purchasePopup.price.toLocaleString()} ACoin
+                    </Text>
+                  </View>
+                  <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
+                </>
+              ) : null}
 
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
                   <Ionicons name="calendar-outline" size={16} color={colors.icon} />
-                  <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.textSecondary }}>Purchased On</Text>
+                  <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.textSecondary }}>
+                    {purchasePopup?.price !== null ? "Purchased On" : "Owned Since"}
+                  </Text>
                 </View>
                 <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.text }}>
                   {purchasePopup ? fmtDate(purchasePopup.purchasedAt) : "—"}
                 </Text>
               </View>
 
-              {purchasePopup?.sellerHandle && (
+              {purchasePopup?.sellerHandle ? (
                 <>
                   <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -965,7 +967,7 @@ export default function ContactProfileScreen() {
                     </Text>
                   </View>
                 </>
-              )}
+              ) : null}
             </View>
 
             <TouchableOpacity
