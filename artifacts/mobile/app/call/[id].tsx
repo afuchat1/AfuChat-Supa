@@ -17,6 +17,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { AvatarViewer } from "@/components/ui/AvatarViewer";
 import { useAuth } from "@/context/AuthContext";
 import {
+  BandwidthTier,
   CallQualityStats,
   CallRecord,
   CallSession,
@@ -26,6 +27,8 @@ import {
   isCallSupported,
   updateCallStatus,
 } from "@/lib/callSignaling";
+import { setActiveCallId } from "@/components/CallManager";
+import { saveLocalCall } from "@/lib/storage/localCallHistory";
 import { WebVideoStream } from "@/components/call/WebVideoStream";
 import { CallChatPanel } from "@/components/call/CallChatPanel";
 import { CallQualityBadge } from "@/components/call/CallQualityBadge";
@@ -64,11 +67,13 @@ export default function CallScreen() {
     jitterMs: null,
     iceState: null,
   });
+  const [bandwidthTier, setBandwidthTier] = useState<BandwidthTier>("hd");
 
   const sessionRef = useRef<CallSession | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ringSound = useRef<Audio.Sound | null>(null);
   const startTimeRef = useRef<number>(0);
+  const callRecordRef = useRef<CallRecord | null>(null);
 
   const isCaller = call ? call.caller_id === user?.id : false;
   const isVideo = call?.call_type === "video";
@@ -86,16 +91,32 @@ export default function CallScreen() {
       sessionRef.current?.cleanup();
       sessionRef.current = null;
 
+      // Unregister from CallManager so background misses work correctly
+      setActiveCallId(null);
+
       const durationSecs =
         startTimeRef.current > 0
           ? Math.floor((Date.now() - startTimeRef.current) / 1000)
           : 0;
 
+      const endedAt = new Date().toISOString();
+
       if (id) {
         await updateCallStatus(id, reason, {
-          ended_at: new Date().toISOString(),
+          ended_at: endedAt,
           ...(durationSecs > 0 ? { duration_seconds: durationSecs } : {}),
         });
+
+        // Persist to local call history (offline-first)
+        const rec = callRecordRef.current;
+        if (rec) {
+          saveLocalCall({
+            ...rec,
+            status: reason,
+            ended_at: endedAt,
+            duration_seconds: durationSecs > 0 ? durationSecs : null,
+          }).catch(() => {});
+        }
       }
       router.back();
     },
@@ -122,6 +143,8 @@ export default function CallScreen() {
       const amCaller = record.caller_id === user!.id;
       setCallState(amCaller ? "ringing" : "connecting");
 
+      callRecordRef.current = record;
+
       const session = new CallSession(record.id, amCaller);
       sessionRef.current = session;
 
@@ -129,6 +152,8 @@ export default function CallScreen() {
       session.onRemoteStream = (s) => {
         setRemoteStream(s);
         setCallState("active");
+        // Register as active so CallManager won't mark it missed on background
+        setActiveCallId(record.id);
         stopRing();
         startTimeRef.current = Date.now();
         timerRef.current = setInterval(
@@ -138,12 +163,14 @@ export default function CallScreen() {
       };
       session.onCallConnected = () => {
         setCallState("active");
+        setActiveCallId(record.id);
       };
       session.onCallEnded = () => {
         endCall("ended");
       };
       session.onError = (msg) => setError(msg);
       session.onQualityChange = (q) => setQuality(q);
+      session.onBandwidthTierChange = (tier) => setBandwidthTier(tier);
 
       if (amCaller) {
         await playRingtone();
@@ -285,6 +312,20 @@ export default function CallScreen() {
           {callState === "active" && (
             <View style={styles.qualityWrap}>
               <CallQualityBadge stats={quality} />
+            </View>
+          )}
+          {callState === "active" && bandwidthTier === "audio_only" && isVideo && (
+            <View style={styles.audioFallbackBadge}>
+              <Ionicons name="mic" size={12} color="#fff" />
+              <Text style={styles.audioFallbackTxt}>Audio only – low signal</Text>
+            </View>
+          )}
+          {callState === "active" && bandwidthTier !== "hd" && bandwidthTier !== "audio_only" && isVideo && (
+            <View style={styles.tierBadge}>
+              <Ionicons name="wifi" size={11} color="rgba(255,255,255,0.7)" />
+              <Text style={styles.tierTxt}>
+                {bandwidthTier === "sd" ? "SD" : "LD"} – saving data
+              </Text>
             </View>
           )}
         </View>
@@ -475,6 +516,36 @@ const styles = StyleSheet.create({
   },
   qualityWrap: {
     marginTop: 10,
+  },
+  audioFallbackBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "rgba(255,149,0,0.75)",
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 14,
+    marginTop: 8,
+  },
+  audioFallbackTxt: {
+    color: "#fff",
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
+  tierBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 6,
+  },
+  tierTxt: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
   },
   localVideoWrap: {
     position: "absolute",

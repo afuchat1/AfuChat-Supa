@@ -12,6 +12,7 @@ export * from "./localConversations";
 export * from "./localFeed";
 export * from "./localNotifications";
 export * from "./localContacts";
+export * from "./localCallHistory";
 export * from "./localProfile";
 export * from "./localSettings";
 export * from "./mediaDownloader";

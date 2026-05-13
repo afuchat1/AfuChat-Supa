@@ -1,5 +1,11 @@
 import { Platform } from "react-native";
 import { supabase } from "./supabase";
+import { getIceServers } from "./calling/turnConfig";
+import {
+  AdaptiveBitrateManager,
+  BandwidthTier,
+  applyTierToPeerConnection,
+} from "./calling/adaptiveBitrate";
 
 let RTCPeerConnection: any;
 let RTCSessionDescription: any;
@@ -26,6 +32,7 @@ if (Platform.OS === "web") {
 }
 
 export { RTCView };
+export type { BandwidthTier } from "./calling/adaptiveBitrate";
 
 export function isCallSupported(): boolean {
   return !!(RTCPeerConnection && mediaDevices?.getUserMedia);
@@ -45,31 +52,10 @@ export function getStreamForRender(stream: any): { url: string | null; raw: any 
   }
 }
 
-const ICE_SERVERS = [
-  { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:stun1.l.google.com:19302" },
-  { urls: "stun:stun2.l.google.com:19302" },
-  { urls: "stun:stun3.l.google.com:19302" },
-  { urls: "stun:stun4.l.google.com:19302" },
-  { urls: "stun:stun.services.mozilla.com" },
-  { urls: "stun:openrelay.metered.ca:80" },
-  { urls: "stun:stun.cloudflare.com:3478" },
-  {
-    urls: "turn:openrelay.metered.ca:80",
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
-  {
-    urls: "turn:openrelay.metered.ca:443",
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
-  {
-    urls: "turn:openrelay.metered.ca:443?transport=tcp",
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
-];
+// ICE servers are loaded dynamically at call-start time via turnConfig.ts.
+// They may come from Supabase app_settings (custom Coturn) or fall back to
+// public STUN + OpenRelay TURN. The static array is kept only as a last-resort
+// fallback inside getIceServers() itself.
 
 export type CallType = "voice" | "video";
 export type CallStatus =
@@ -222,12 +208,23 @@ export class CallSession {
     iceState: null,
   };
 
+  // ── ICE restart state ──────────────────────────────────────────────────────
+  private iceRestartAttempts = 0;
+  private readonly maxIceRestarts = 3;
+  private iceDisconnectedTimer: ReturnType<typeof setTimeout> | null = null;
+  private iceRestartInProgress = false;
+
+  // ── Adaptive bitrate ───────────────────────────────────────────────────────
+  private abrManager = new AdaptiveBitrateManager();
+  private currentBandwidthTier: BandwidthTier = "hd";
+
   public onLocalStream?: (stream: any) => void;
   public onRemoteStream?: (stream: any) => void;
   public onCallEnded?: () => void;
   public onCallConnected?: () => void;
   public onError?: (err: string) => void;
   public onQualityChange?: (stats: CallQualityStats) => void;
+  public onBandwidthTierChange?: (tier: BandwidthTier) => void;
 
   constructor(callId: string, isCaller: boolean) {
     this.callId = callId;
@@ -241,16 +238,25 @@ export class CallSession {
     }
     this.callType = callType;
 
+    // Load TURN/STUN servers (from Supabase app_settings or fallback)
+    const iceServers = await getIceServers();
+
     try {
       this.localStream = await mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
+          // Opus codec preferred: browser/RN-WebRTC will negotiate this
         },
         video:
           callType === "video"
-            ? { facingMode: "user", width: 640, height: 480 }
+            ? {
+                facingMode: "user",
+                width:     { ideal: 1280 },
+                height:    { ideal: 720  },
+                frameRate: { ideal: 24  },
+              }
             : false,
       });
       this.onLocalStream?.(this.localStream);
@@ -259,7 +265,12 @@ export class CallSession {
       throw e;
     }
 
-    this.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    this.pc = new RTCPeerConnection({
+      iceServers,
+      // Bundle policy: all tracks share one transport → lower latency & battery
+      bundlePolicy: "max-bundle",
+      rtcpMuxPolicy: "require",
+    });
 
     this.localStream.getTracks().forEach((track: any) => {
       this.pc.addTrack(track, this.localStream);
@@ -287,13 +298,15 @@ export class CallSession {
       if (state === "connected") {
         this.onCallConnected?.();
         this.startStatsMonitor();
-      } else if (
-        state === "disconnected" ||
-        state === "failed" ||
-        state === "closed"
-      ) {
+        // Clear restart state on successful (re)connect
+        this.iceRestartAttempts = 0;
+        this.iceRestartInProgress = false;
+        this.clearIceDisconnectedTimer();
+      } else if (state === "closed") {
         this.onCallEnded?.();
       }
+      // NOTE: "disconnected" and "failed" are handled in oniceconnectionstatechange
+      // with a delay + ICE restart. We do NOT immediately fire onCallEnded here.
     };
 
     this.pc.oniceconnectionstatechange = () => {
@@ -301,11 +314,26 @@ export class CallSession {
       if (!ice) return;
       this.currentQuality.iceState = ice;
       let next: CallQuality | null = null;
-      if (ice === "checking" || ice === "new") next = "connecting";
-      else if (ice === "disconnected") next = "reconnecting";
-      else if (ice === "failed" || ice === "closed") next = "disconnected";
-      else if (ice === "connected" || ice === "completed") {
-        // keep whatever the stats monitor set, otherwise mark good
+
+      if (ice === "checking" || ice === "new") {
+        next = "connecting";
+        this.clearIceDisconnectedTimer();
+      } else if (ice === "disconnected") {
+        next = "reconnecting";
+        // Wait 4s before triggering ICE restart — transient disconnects resolve on their own
+        this.scheduleIceRestart(4000);
+      } else if (ice === "failed") {
+        next = "disconnected";
+        // Immediate ICE restart on hard failure
+        this.scheduleIceRestart(0);
+      } else if (ice === "closed") {
+        next = "disconnected";
+        this.clearIceDisconnectedTimer();
+        this.onCallEnded?.();
+      } else if (ice === "connected" || ice === "completed") {
+        this.clearIceDisconnectedTimer();
+        this.iceRestartAttempts = 0;
+        this.iceRestartInProgress = false;
         if (
           this.currentQuality.quality === "connecting" ||
           this.currentQuality.quality === "reconnecting" ||
@@ -314,6 +342,7 @@ export class CallSession {
           next = "good";
         }
       }
+
       if (next && next !== this.currentQuality.quality) {
         this.currentQuality = { ...this.currentQuality, quality: next };
         this.onQualityChange?.(this.currentQuality);
@@ -407,6 +436,26 @@ export class CallSession {
       this.onCallEnded?.();
     });
 
+    // Callee requests caller to perform an ICE restart
+    this.channel.on("broadcast", { event: "request-ice-restart" }, () => {
+      if (this.isCaller && !this.iceRestartInProgress) {
+        this.attemptIceRestart().catch(() => {});
+      }
+    });
+
+    // Peer signals a bandwidth tier change (e.g. "audio_only") so we can
+    // show an appropriate UI indicator even on the receiving end.
+    this.channel.on(
+      "broadcast",
+      { event: "bandwidth-tier" },
+      ({ payload }: any) => {
+        if (payload?.tier && payload.tier !== this.currentBandwidthTier) {
+          this.currentBandwidthTier = payload.tier as BandwidthTier;
+          this.onBandwidthTierChange?.(this.currentBandwidthTier);
+        }
+      },
+    );
+
     await this.waitForSubscribed();
 
     if (this.isCaller) {
@@ -494,6 +543,69 @@ export class CallSession {
       clearInterval(this.offerRetransmitTimer);
       this.offerRetransmitTimer = null;
     }
+  }
+
+  // ── ICE Restart ──────────────────────────────────────────────────────────────
+
+  private scheduleIceRestart(delayMs: number) {
+    if (this.iceRestartInProgress) return;
+    this.clearIceDisconnectedTimer();
+    this.iceDisconnectedTimer = setTimeout(() => {
+      this.attemptIceRestart().catch(() => {});
+    }, delayMs);
+  }
+
+  private clearIceDisconnectedTimer() {
+    if (this.iceDisconnectedTimer) {
+      clearTimeout(this.iceDisconnectedTimer);
+      this.iceDisconnectedTimer = null;
+    }
+  }
+
+  private async attemptIceRestart() {
+    if (!this.pc || this.iceRestartInProgress) return;
+    if (this.iceRestartAttempts >= this.maxIceRestarts) {
+      // Exhausted retries — the call is truly lost
+      this.currentQuality = { ...this.currentQuality, quality: "disconnected" };
+      this.onQualityChange?.(this.currentQuality);
+      this.cleanup();
+      this.onCallEnded?.();
+      return;
+    }
+
+    this.iceRestartInProgress = true;
+    this.iceRestartAttempts++;
+
+    try {
+      if (this.isCaller) {
+        // Caller triggers the restart: create a new offer with iceRestart=true
+        const offer = await this.pc.createOffer({ iceRestart: true });
+        await this.pc.setLocalDescription(offer);
+        await this.broadcast("offer", {
+          offer: this.pc.localDescription,
+          iceRestart: true,
+        });
+      } else {
+        // Callee: signal the caller to restart (caller owns the renegotiation)
+        await this.broadcast("request-ice-restart", {});
+      }
+    } catch {
+      // If we can't renegotiate, schedule another attempt
+      this.iceRestartInProgress = false;
+      this.scheduleIceRestart(5000);
+    }
+  }
+
+  // ── Adaptive Bitrate ─────────────────────────────────────────────────────────
+
+  private async applyBandwidthTier(tier: BandwidthTier) {
+    if (tier === this.currentBandwidthTier) return;
+    this.currentBandwidthTier = tier;
+    this.onBandwidthTierChange?.(tier);
+    // Tell the remote peer so they can show an indicator
+    this.broadcast("bandwidth-tier", { tier }).catch(() => {});
+    // Apply constraints to video senders
+    await applyTierToPeerConnection(this.pc, this.localStream, tier);
   }
 
   /**
@@ -623,6 +735,15 @@ export class CallSession {
       next.jitterMs !== this.currentQuality.jitterMs;
     this.currentQuality = next;
     if (changed) this.onQualityChange?.(this.currentQuality);
+
+    // ── Adaptive bitrate ─────────────────────────────────────────────────────
+    // Only adapt video calls. Audio-only calls have no video to degrade.
+    if (this.callType === "video") {
+      const newTier = this.abrManager.sample(next, true);
+      if (newTier) {
+        this.applyBandwidthTier(newTier).catch(() => {});
+      }
+    }
   }
 
   getQuality(): CallQualityStats {
@@ -675,13 +796,20 @@ export class CallSession {
   cleanup() {
     this.stopOfferRetransmit();
     this.stopStatsMonitor();
+    this.clearIceDisconnectedTimer();
+    this.abrManager.reset();
     this.localStream?.getTracks().forEach((t: any) => t.stop());
     this.pc?.close();
     this.channel?.unsubscribe();
     this.localStream = null;
+    this.remoteStream = null;
     this.pc = null;
     this.channel = null;
+    this.iceRestartInProgress = false;
+    this.iceRestartAttempts = 0;
   }
+
+  getBandwidthTier(): BandwidthTier { return this.currentBandwidthTier; }
 
   getLocalStream() {
     return this.localStream;
