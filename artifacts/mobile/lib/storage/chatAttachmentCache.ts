@@ -82,7 +82,8 @@ export function autoDownloadChatAttachments(
   for (const msg of messages) {
     const { attachment_url: url, attachment_type: type } = msg;
     if (!url || !type) continue;
-    if (type === "video") continue; // stream, don't cache
+    if (type === "video") continue;  // too large — stream from URL
+    if (type === "file") continue;   // user must decide to download
     if (_mem.has(url)) continue;
     ensureChatAttachmentDownloaded(url, type, msg.encrypted_content ?? undefined).catch(() => {});
   }
@@ -174,7 +175,9 @@ function _guessExt(url: string, type: string): string {
     image:       ["jpg", "jpeg", "png", "webp", "heic", "avif"],
     gif:         ["gif"],
     audio:       ["m4a", "mp3", "aac", "wav", "ogg", "opus"],
-    file:        ["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "zip", "csv"],
+    file:        ["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "zip", "csv",
+                   "apk", "ipa", "exe", "msi", "dmg", "deb", "rpm",
+                   "7z", "rar", "tar", "gz", "bz2", "xz"],
     story_reply: ["jpg", "jpeg", "png", "webp"],
   };
   const allowed_for_type = allowed[type] ?? [];

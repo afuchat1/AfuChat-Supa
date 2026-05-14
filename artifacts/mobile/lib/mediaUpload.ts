@@ -47,6 +47,14 @@ const MIME_MAP: Record<string, string> = {
   pdf: "application/pdf",
   doc: "application/msword",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  apk: "application/vnd.android.package-archive",
+  ipa: "application/octet-stream",
+  zip: "application/zip",
+  "7z": "application/x-7z-compressed",
+  rar: "application/x-rar-compressed",
+  tar: "application/x-tar",
+  gz: "application/gzip",
+  exe: "application/x-msdownload",
 };
 
 const MIME_TO_EXT: Record<string, string> = {
@@ -67,6 +75,13 @@ const MIME_TO_EXT: Record<string, string> = {
   "application/pdf": "pdf",
   "application/msword": "doc",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "application/vnd.android.package-archive": "apk",
+  "application/zip": "zip",
+  "application/x-7z-compressed": "7z",
+  "application/x-rar-compressed": "rar",
+  "application/x-tar": "tar",
+  "application/gzip": "gz",
+  "application/x-msdownload": "exe",
 };
 
 function getMime(ext: string): string {

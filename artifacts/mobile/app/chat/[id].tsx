@@ -6,6 +6,7 @@ import {
   Image,
   Keyboard,
   LayoutAnimation,
+  Linking,
   Modal,
   PanResponder,
   Platform,
@@ -606,7 +607,8 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   useEffect(() => {
     const url  = msg.attachment_url;
     const type = msg.attachment_type;
-    if (!url || !type || type === "video") return;
+    // Skip video (stream from URL) and file (user must choose to download)
+    if (!url || !type || type === "video" || type === "file") return;
     // Already resolved to a local path — nothing to do
     if (attachUri && !attachUri.startsWith("http")) return;
     ensureChatAttachmentDownloaded(url, type)
@@ -616,12 +618,39 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
 
   async function handleFileTap() {
     if (!msg.attachment_url) return;
-    const local = getLocalAttachmentUri(msg.attachment_url);
-    if (local) { openChatFile(local); return; }
+    const url = msg.attachment_url;
+    const _isApk = Platform.OS === "android" &&
+      (url.toLowerCase().includes(".apk") ||
+       (msg.encrypted_content?.toLowerCase() ?? "").includes(".apk"));
+
+    async function _openOrInstall(localPath: string) {
+      if (_isApk) {
+        // Try to launch Android's package installer via a content:// URI.
+        try {
+          const contentUri = await FileSystem.getContentUriAsync(localPath);
+          await Linking.openURL(contentUri);
+          return;
+        } catch {}
+        // Fallback: share sheet pointing at the APK (still opens installer).
+        try {
+          const Sharing = await import("expo-sharing");
+          await Sharing.shareAsync(localPath, {
+            dialogTitle: "Install app",
+            mimeType: "application/vnd.android.package-archive",
+          });
+        } catch {}
+      } else {
+        openChatFile(localPath);
+      }
+    }
+
+    const local = getLocalAttachmentUri(url);
+    if (local) { await _openOrInstall(local); return; }
+
     setFileDownloading(true);
     try {
-      const downloaded = await ensureChatAttachmentDownloaded(msg.attachment_url, "file");
-      if (downloaded) { setAttachUri(downloaded); openChatFile(downloaded); }
+      const downloaded = await ensureChatAttachmentDownloaded(url, "file");
+      if (downloaded) { setAttachUri(downloaded); await _openOrInstall(downloaded); }
     } finally {
       setFileDownloading(false);
     }
@@ -779,6 +808,11 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
   const hasStoryReply = msg.attachment_url && msg.attachment_type === "story_reply";
   const hasTextContent = msg.encrypted_content && !["📷 Photo", "🎥 Video", "GIF"].includes(msg.encrypted_content);
 
+  // Detect APK files: check both the URL and the message label (📎 filename.apk)
+  const isApk = !!hasFile && Platform.OS === "android" &&
+    ((msg.attachment_url?.toLowerCase() ?? "").includes(".apk") ||
+     (msg.encrypted_content?.toLowerCase() ?? "").includes(".apk"));
+
   const replyIconOpacity = swipeX.interpolate({
     inputRange: isMe ? [-SWIPE_THRESHOLD, -10, 0] : [0, 10, SWIPE_THRESHOLD],
     outputRange: isMe ? [1, 0.3, 0] : [0, 0.3, 1],
@@ -906,9 +940,13 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
                 {fileDownloading
                   ? <ActivityIndicator size={18} color={textColor} />
                   : <Ionicons
-                      name={attachUri && !attachUri.startsWith("http") ? "document-text" : "download-outline"}
+                      name={
+                        attachUri && !attachUri.startsWith("http")
+                          ? (isApk ? "logo-android" : "document-text")
+                          : "download-outline"
+                      }
                       size={22}
-                      color={textColor}
+                      color={isApk && attachUri && !attachUri.startsWith("http") ? "#3DDC84" : textColor}
                     />
                 }
               </View>
@@ -918,8 +956,8 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
                   {fileDownloading
                     ? "Downloading…"
                     : attachUri && !attachUri.startsWith("http")
-                      ? "Tap to open"
-                      : "Tap to download"}
+                      ? (isApk ? "Tap to install" : "Tap to open")
+                      : (isApk ? "Tap to download & install" : "Tap to download")}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -1919,8 +1957,9 @@ function ChatScreen() {
           if (newMsg.sender_id === AFUAI_BOT_ID) return;
           const { data: senderProfile } = await supabase.from("profiles").select("display_name, avatar_url, handle").eq("id", newMsg.sender_id).single();
           setMessages((prev) => [{ ...newMsg, sender: senderProfile as any, reactions: [], status: undefined }, ...prev]);
-          // Auto-download any attachment on the incoming message immediately
-          if (newMsg.attachment_url && newMsg.attachment_type && newMsg.attachment_type !== "video") {
+          // Auto-download images/gifs/audio on incoming messages (NOT files — user must tap)
+          if (newMsg.attachment_url && newMsg.attachment_type &&
+              newMsg.attachment_type !== "video" && newMsg.attachment_type !== "file") {
             ensureChatAttachmentDownloaded(newMsg.attachment_url, newMsg.attachment_type).catch(() => {});
           }
           playNotificationSound();
