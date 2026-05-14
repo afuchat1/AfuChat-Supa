@@ -1,25 +1,17 @@
-import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
-import * as schema from "./schema";
+/**
+ * lib/db — intentionally empty stub.
+ *
+ * AfuChat stores ALL data in Supabase (PostgreSQL managed by Supabase).
+ * This package exists as a workspace placeholder so tooling (tsc, pnpm)
+ * resolves the @workspace/db import without errors.
+ *
+ * There are NO Replit-managed database connections, no Drizzle ORM tables,
+ * and no DATABASE_URL usage anywhere in the application.
+ *
+ * - Mobile data   → Supabase JS client (supabase.from(...))
+ * - Server data   → Supabase Admin client (supabaseAdmin.from(...))
+ * - Media storage → Cloudflare R2 via Supabase Edge Functions
+ * - Auth          → Supabase Auth
+ */
 
-const { Pool } = pg;
-
-const dbUrl = process.env.DATABASE_URL;
-
-let pool: InstanceType<typeof Pool> | null = null;
-let _db: ReturnType<typeof drizzle> | null = null;
-
-if (dbUrl) {
-  pool = new Pool({ connectionString: dbUrl });
-  _db = drizzle(pool, { schema });
-} else {
-  console.warn(
-    "[db] DATABASE_URL is not set — Drizzle ORM is disabled. " +
-    "All app data is served from Supabase. Set DATABASE_URL if you need the local schema.",
-  );
-}
-
-export { pool };
-export const db = _db as ReturnType<typeof drizzle<typeof schema>>;
-
-export * from "./schema";
+export {};

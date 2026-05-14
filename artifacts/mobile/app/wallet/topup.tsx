@@ -3,7 +3,7 @@
  *
  * Hosted checkout flow (Pesapal):
  *  1. User picks a package (or enters custom amount)
- *  2. App calls /api/payments/initiate → Pesapal returns redirect_url
+ *  2. App calls Supabase Edge Function /functions/v1/pesapal-initiate → Pesapal returns redirect_url
  *  3. redirect_url opens full-screen in-app WebView (Pesapal's hosted checkout)
  *  4. User completes payment on Pesapal's page (card, mobile money, etc.)
  *  5. App polls pesapal_orders until status = completed | failed
