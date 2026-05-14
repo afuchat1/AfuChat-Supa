@@ -2,6 +2,7 @@ import { Platform } from "react-native";
 import * as FileSystem from "expo-file-system";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getDB } from "./storage/db";
+import { isCellular } from "./networkQuality";
 
 // ─── Permanent Video Store ──────────────────────────────────────────────────────
 // Videos are stored in documentDirectory once watched — permanently.
@@ -213,9 +214,13 @@ export async function getCachedVideoUri(url: string): Promise<string | null> {
 /**
  * Pre-fetch a video to local storage (e.g. for the next video in the feed).
  * Returns immediately if already on device — no duplicate download.
+ * On cellular connections this is skipped entirely — videos stream instead
+ * of being downloaded, saving significant mobile data.
  */
 export function cacheVideo(url: string): Promise<string | null> {
   if (Platform.OS === "web" || !url) return Promise.resolve(null);
+  // Never pre-download on cellular — stream only to protect mobile data
+  if (isCellular()) return Promise.resolve(null);
   if (memoryMap.has(url)) return Promise.resolve(memoryMap.get(url)!);
   if (inProgress.has(url)) return inProgress.get(url)!;
 
@@ -255,6 +260,8 @@ export async function markVideoWatched(
   meta: { title: string; thumbnail: string | null },
 ): Promise<void> {
   if (Platform.OS === "web" || !url || !postId) return;
+  // On cellular, skip the full download entirely — streaming is enough
+  if (isCellular()) return;
   if (saveInProgress.has(postId)) return;
   saveInProgress.add(postId);
 

@@ -67,7 +67,7 @@ import { useAppAccent } from "@/context/AppAccentContext";
 import { notifyPostLike, notifyNewFollow } from "@/lib/notifyUser";
 import { VideoFeedSkeleton } from "@/components/ui/Skeleton";
 import { useResolvedVideoSource } from "@/hooks/useResolvedVideoSource";
-import { getPreferredVideoHeight } from "@/lib/networkQuality";
+import { getPreferredVideoHeight, isWifi } from "@/lib/networkQuality";
 import { getCachedVideoUri, cacheVideo, markVideoWatched } from "@/lib/videoCache";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -187,14 +187,16 @@ const VideoItem = React.memo(
       : (cachedUri ?? resolved.uri ?? item.video_url);
 
     // ── Preload into local cache once item enters the ±1 window ───────────
+    // Only pre-download on WiFi — on cellular we stream to protect data.
     useEffect(() => {
       if (!isNearActive || cacheAttempted.current || !item.video_url) return;
       cacheAttempted.current = true;
+      // Check cache first (free); only attempt download if on WiFi
       cacheDelayTimer.current = setTimeout(() => {
         getCachedVideoUri(item.video_url).then((existing) => {
           if (existing) {
             setCachedUri(existing);
-          } else {
+          } else if (isWifi()) {
             cacheVideo(item.video_url).then((local) => {
               if (local) setCachedUri(local);
             });

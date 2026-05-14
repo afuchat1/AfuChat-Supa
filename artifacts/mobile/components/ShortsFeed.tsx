@@ -39,6 +39,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useResolvedVideoSource } from "@/hooks/useResolvedVideoSource";
 import { sharePost } from "@/lib/share";
 import { encodeId } from "@/lib/shortId";
+import { getPreferredVideoHeight } from "@/lib/networkQuality";
 
 type ShortPost = {
   id: string;
@@ -146,7 +147,7 @@ function WebShortsPlayer({
         playsInline
         loop
         muted={muted}
-        preload="auto"
+        preload="metadata"
         onClick={handleClick}
         onMouseMove={preloadOnly ? undefined : handlePointer}
         onEnded={onEnded}
@@ -276,9 +277,9 @@ function ShortCard({
   const { colors } = useTheme();
   const [paused, setPaused] = useState(false);
   const heartScale = useRef(new Animated.Value(1)).current;
-  // Mobile fullscreen aims for 480p so the first frame arrives quickly;
-  // desktop card asks for 720p since the surface is larger.
-  const targetHeight = layout === "fullscreen" ? 480 : 720;
+  // Use network-aware quality: cellular gets 360p to protect data,
+  // WiFi gets up to 720p. Desktop card always uses 720p (typically WiFi).
+  const targetHeight = layout === "fullscreen" ? getPreferredVideoHeight() : 720;
   const resolved = useResolvedVideoSource(item.id, item.video_url, { targetHeight });
   const src = resolved.uri || item.video_url;
   const isFullscreen = layout === "fullscreen";
