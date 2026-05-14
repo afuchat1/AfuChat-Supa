@@ -1,5 +1,19 @@
 # EAS Build History
 
+## v2.0.68 — Android APK (preview)
+
+- **Build ID**: `b9ea03d0-6213-42ff-b0a3-cc6276680129`
+- **Dashboard**: https://expo.dev/accounts/afuchat/projects/afuchat/builds/b9ea03d0-6213-42ff-b0a3-cc6276680129
+- **Platform**: Android
+- **Profile**: preview (APK, internal distribution)
+- **versionCode**: 2075 (auto-incremented by EAS remote from 2074)
+- **Keystore**: Build Credentials 3ohDBvKUsq (default, managed by Expo)
+- **Triggered**: 2026-05-14
+- **Fixes in this build**:
+  - Offline hardening: feed load-more from SQLite, post detail SQLite fallback, proactive chat message pre-caching
+  - Dynamic post timestamps (minutes, hours, days, weeks, months, years)
+- **Method**: EAS CLI with `EAS_NO_VCS=1` (filesystem archiver, bypasses Replit git sandbox)
+
 ## v2.0.70 — Android APK (preview)
 
 - **Build ID**: `5f38a277-036a-4e82-9180-7be1b4a81252`
