@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Animated,
   FlatList,
+  InteractionManager,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -77,6 +78,7 @@ type PostItem = {
   video_url: string | null;
   duration_seconds: number | null;
   isFollowing: boolean;
+  language_code?: string | null;
   org_page_id?: string;
   org_slug?: string;
   org_type?: string;
@@ -99,70 +101,8 @@ function formatNum(n: number): string {
   return String(n);
 }
 
-function RecentCommenters({ postId, replyCount, bgColor, accentColor }: { postId: string; replyCount: number; bgColor: string; accentColor: string }) {
-  const [avatars, setAvatars] = useState<{ avatar_url: string | null; display_name: string }[]>([]);
-  useEffect(() => {
-    if (replyCount === 0) { setAvatars([]); return; }
-    let cancelled = false;
-    const t = setTimeout(() => {
-      supabase
-        .from("post_replies")
-        .select("author_id, profiles!post_replies_author_id_fkey(avatar_url, display_name)")
-        .eq("post_id", postId)
-        .order("created_at", { ascending: false })
-        .limit(5)
-        .then(({ data }) => {
-          if (!cancelled && data) {
-            const seen = new Set<string>();
-            const unique = data
-              .filter((r: any) => {
-                const id = r.author_id;
-                if (!id || seen.has(id)) return false;
-                seen.add(id);
-                return true;
-              })
-              .slice(0, 3)
-              .map((r: any) => ({
-                avatar_url: r.profiles?.avatar_url || null,
-                display_name: r.profiles?.display_name || "U",
-              }));
-            setAvatars(unique);
-          }
-        });
-    }, 300 + Math.random() * 500);
-    return () => { cancelled = true; clearTimeout(t); };
-  }, [postId, replyCount]);
-
-  if (avatars.length === 0) return null;
-
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", marginRight: 3 }}>
-      {avatars.map((a, i) => (
-        <View
-          key={i}
-          style={{
-            marginLeft: i === 0 ? 0 : -6,
-            zIndex: 3 - i,
-            width: 20,
-            height: 20,
-            borderRadius: 10,
-            borderWidth: 1.5,
-            borderColor: bgColor,
-            overflow: "hidden",
-            backgroundColor: "#ccc",
-          }}
-        >
-          {a.avatar_url ? (
-            <ExpoImage source={{ uri: a.avatar_url }} style={{ width: 20, height: 20 }} contentFit="cover" />
-          ) : (
-            <View style={{ width: 20, height: 20, backgroundColor: accentColor + "40", alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ fontSize: 8, color: accentColor, fontFamily: "Inter_700Bold" }}>{(a.display_name || "U").slice(0, 1).toUpperCase()}</Text>
-            </View>
-          )}
-        </View>
-      ))}
-    </View>
-  );
+function RecentCommenters(_props: { postId: string; replyCount: number; bgColor: string; accentColor: string }) {
+  return null;
 }
 
 function BookmarkButton({ bookmarked, onPress }: { bookmarked: boolean; onPress: () => void }) {
@@ -210,17 +150,19 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
 
   useEffect(() => {
     if (!preferredLang || !item.content?.trim()) { setDisplayContent(item.content); setIsTranslated(false); return; }
+    if (item.language_code && item.language_code === preferredLang) return;
     let cancelled = false;
-    const timer = setTimeout(() => {
+    const task = InteractionManager.runAfterInteractions(() => {
+      if (cancelled) return;
       translateText(item.content, preferredLang).then((result) => {
         if (!cancelled && result && result !== item.content) {
           setDisplayContent(result);
           setIsTranslated(true);
         }
       });
-    }, Math.random() * 800);
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [preferredLang, item.content]);
+    });
+    return () => { cancelled = true; task.cancel(); };
+  }, [preferredLang, item.content, item.language_code]);
 
   function openPost() {
     if (item.org_page_id) {
@@ -876,6 +818,7 @@ export default function DiscoverScreen() {
           post_type: p.post_type || "post", article_title: p.article_title || null, article_body: p.article_body || null, video_url: p.video_url || null,
           duration_seconds: (() => { const arr = Array.isArray(p.video_assets) ? p.video_assets : (p.video_assets ? [p.video_assets] : []); return arr.length > 0 ? (arr[0].duration_seconds ?? null) : null; })(),
           isFollowing: true,
+          language_code: p.language_code || null,
         }));
 
         if (isRefresh) {
@@ -1152,6 +1095,7 @@ export default function DiscoverScreen() {
           video_url: p.video_url || null,
           duration_seconds: (() => { const arr = Array.isArray(p.video_assets) ? p.video_assets : (p.video_assets ? [p.video_assets] : []); return arr.length > 0 ? (arr[0].duration_seconds ?? null) : null; })(),
           isFollowing: followingSet.has(p.author_id),
+          language_code: p.language_code || null,
         };
       });
 
@@ -1749,10 +1693,10 @@ export default function DiscoverScreen() {
           onEndReachedThreshold={0.3}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
-          initialNumToRender={8}
-          maxToRenderPerBatch={6}
-          windowSize={8}
-          updateCellsBatchingPeriod={50}
+          initialNumToRender={5}
+          maxToRenderPerBatch={3}
+          windowSize={5}
+          updateCellsBatchingPeriod={100}
           removeClippedSubviews={Platform.OS !== "web"}
           refreshControl={
             <RefreshControl

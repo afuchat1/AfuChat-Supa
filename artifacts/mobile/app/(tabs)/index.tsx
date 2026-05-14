@@ -57,6 +57,7 @@ import {
   subscribeStoryViewed,
 } from "@/lib/storyViewedStore";
 import { usePhonebookNames } from "@/hooks/usePhonebookNames";
+import { useContextMenu, ContextMenu } from "@/components/desktop/ContextMenu";
 
 type StoryUser = {
   userId: string;
@@ -171,9 +172,6 @@ function ChatRow({
   onToggleSelect?: () => void;
 }) {
   const { colors } = useTheme();
-  // Lazy import to avoid touching native paths.
-  const { useContextMenu, ContextMenu } =
-    require("@/components/desktop/ContextMenu") as typeof import("@/components/desktop/ContextMenu");
   const { bind, menuProps } = useContextMenu([
     [
       {

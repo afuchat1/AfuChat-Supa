@@ -259,12 +259,22 @@ export default function MeScreen() {
 
   useEffect(() => {
     if (!user) return;
+    const STATS_KEY = `me_stats_${user.id}`;
+    AsyncStorage.getItem(STATS_KEY).then((raw) => {
+      if (raw) {
+        try {
+          const { fc, fgc, pc } = JSON.parse(raw);
+          setFollowerCount(fc ?? 0); setFollowingCount(fgc ?? 0); setPostCount(pc ?? 0);
+        } catch {}
+      }
+    });
     Promise.all([
       supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", user.id),
       supabase.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", user.id),
       supabase.from("posts").select("*", { count: "exact", head: true }).eq("author_id", user.id),
     ]).then(([{ count: fc }, { count: fgc }, { count: pc }]) => {
       setFollowerCount(fc ?? 0); setFollowingCount(fgc ?? 0); setPostCount(pc ?? 0);
+      AsyncStorage.setItem(STATS_KEY, JSON.stringify({ fc, fgc, pc })).catch(() => {});
     });
     Promise.all([
       supabase.from("organization_pages").select("id, is_verified", { count: "exact" }).eq("admin_id", user.id),
