@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { supabase, supabaseUrl, supabaseAnonKey } from "@/lib/supabase";
 import { NOTIF_CATEGORY } from "@/lib/pushNotifications";
 
@@ -14,6 +15,35 @@ type NotifyParams = {
   referenceType?: string | null;
 };
 
+// ── Channel map — mirrors the channels registered in pushNotifications.ts ──
+function _channelId(type?: string): string {
+  switch (type) {
+    case "message":              return "messages";
+    case "call":                 return "calls";
+    case "follow":
+    case "like":
+    case "reply":
+    case "mention":              return "social";
+    case "order":
+    case "escrow":
+    case "payment":              return "marketplace";
+    default:                     return "default";
+  }
+}
+
+/**
+ * Send a push notification to one user.
+ *
+ * Strategy:
+ *   1. Try the Supabase `send-push-notification` edge function (server-side,
+ *      uses service role key — preferred because it bypasses RLS).
+ *   2. If the edge function is unavailable or returns an error, fall back to
+ *      calling the Expo push API directly from the client.  This path reads
+ *      the recipient's expo_push_token from the `profiles` table (requires
+ *      the anon-key RLS policy to allow it) and POSTs straight to Expo.
+ *
+ * Both paths are fire-and-forget from the caller's perspective.
+ */
 async function dispatchPush(
   userId: string,
   title: string,
@@ -21,27 +51,95 @@ async function dispatchPush(
   data?: Record<string, string>,
   categoryIdentifier?: string,
 ) {
+  if (Platform.OS === "web") return;   // push is native-only
   try {
     const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
-    if (!token || !supabaseUrl) return;
+    const accessToken = sessionData?.session?.access_token;
 
-    fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
+    // ── Path 1: Supabase edge function ────────────────────────────────────
+    let sentViaEdge = false;
+    if (accessToken && supabaseUrl) {
+      try {
+        const res = await fetch(
+          `${supabaseUrl}/functions/v1/send-push-notification`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: supabaseAnonKey,
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({ userId, title, body, data: data ?? {}, categoryIdentifier }),
+          },
+        );
+        if (res.ok) {
+          sentViaEdge = true;
+        } else {
+          const txt = await res.text().catch(() => "");
+          console.warn("[Push] Edge fn returned", res.status, txt.slice(0, 120));
+        }
+      } catch (edgeErr: any) {
+        console.warn("[Push] Edge fn unreachable —", edgeErr?.message ?? edgeErr);
+      }
+    }
+
+    if (sentViaEdge) return;
+
+    // ── Path 2: Direct Expo push API (fallback) ───────────────────────────
+    // Read the recipient's token. Requires the profiles RLS policy to expose
+    // expo_push_token to authenticated users (standard for social apps).
+    const { data: profileRow } = await supabase
+      .from("profiles")
+      .select("expo_push_token")
+      .eq("id", userId)
+      .single();
+
+    const pushToken = (profileRow as any)?.expo_push_token as string | null | undefined;
+    if (!pushToken) {
+      console.warn("[Push] No push token found for user", userId);
+      return;
+    }
+
+    const type = data?.type;
+    const payload: Record<string, any> = {
+      to: pushToken,
+      title,
+      body,
+      // Always embed the intended recipient so the tap handler can switch
+      // to the right linked account before navigating.
+      data: { recipientUserId: userId, ...(data ?? {}) },
+      badge: 1,
+      sound: "default",
+      priority: type === "call" ? "high" : "normal",
+      channelId: _channelId(type),
+      ttl: type === "call" ? 30 : 604800,
+    };
+
+    if (categoryIdentifier)           payload.categoryIdentifier = categoryIdentifier;
+    if (type === "message" && data?.chatId) {
+      payload.collapseId    = `chat_${data.chatId}`;
+      payload["thread-id"]  = data.chatId;
+    }
+    if (type === "call") {
+      payload.collapseId = `call_${data?.callId ?? userId}`;
+    }
+
+    const expoRes = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "apikey": supabaseAnonKey,
-        "Authorization": `Bearer ${token}`,
+        Accept: "application/json",
+        "Accept-Encoding": "gzip, deflate",
       },
-      body: JSON.stringify({
-        userId,
-        title,
-        body,
-        data: data || {},
-        categoryIdentifier,
-      }),
-    }).catch(() => {});
-  } catch {
+      body: JSON.stringify(payload),
+    });
+
+    if (!expoRes.ok) {
+      const txt = await expoRes.text().catch(() => "");
+      console.warn("[Push] Expo API returned", expoRes.status, txt.slice(0, 120));
+    }
+  } catch (err: any) {
+    console.warn("[Push] dispatchPush failed:", err?.message ?? err);
   }
 }
 

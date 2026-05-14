@@ -3377,6 +3377,24 @@ STRICT RULES:
           ? { ...m, id: inserted?.id || tempId, attachment_url: publicUrl, _pending: false }
           : m
       ));
+
+      // Notify recipients — same logic as sendMessage()
+      if (chatInfo) {
+        const recipientIds = chatInfo.member_ids.length > 0
+          ? chatInfo.member_ids
+          : chatInfo.other_id ? [chatInfo.other_id] : [];
+        if (recipientIds.length > 0) {
+          notifyNewMessage({
+            recipientIds,
+            senderName: profile?.display_name || "Someone",
+            senderUserId: user.id,
+            messageText: label,
+            chatId: activeChatId,
+            isGroup: chatInfo.is_group,
+            groupName: chatInfo.name || undefined,
+          });
+        }
+      }
     } catch (e: any) {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       showAlert("Upload failed", e?.message || "Could not upload file");
