@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
+import { timeAgo as fmtRel } from "@/lib/timeAgo";
 
 export type ShareablePost = {
   id: string;
@@ -32,14 +33,6 @@ export type ShareablePost = {
 };
 
 const DEFAULT_ACCENT = "#00BCD4";
-
-function fmtRel(iso: string): string {
-  const d = Date.now() - new Date(iso).getTime();
-  if (d < 60000) return "just now";
-  if (d < 3600000) return `${Math.floor(d / 60000)}m ago`;
-  if (d < 86400000) return `${Math.floor(d / 3600000)}h ago`;
-  return `${Math.floor(d / 86400000)}d ago`;
-}
 
 function fmtNum(n: number): string {
   if (!n) return "0";

@@ -27,6 +27,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase";
+import { timeAgo as fmtRel } from "@/lib/timeAgo";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import * as Haptics from "@/lib/haptics";
@@ -73,15 +74,6 @@ type CommentItem = {
   };
   children?: CommentItem[];
 };
-
-function fmtRel(iso: string): string {
-  const d = Date.now() - new Date(iso).getTime();
-  if (d < 60000) return "now";
-  if (d < 3600000) return `${Math.floor(d / 60000)}m`;
-  if (d < 86400000) return `${Math.floor(d / 3600000)}h`;
-  if (d < 604800000) return `${Math.floor(d / 86400000)}d`;
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
 
 function fmtNum(n: number): string {
   if (!n) return "0";
