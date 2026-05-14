@@ -1,4 +1,5 @@
-import { Alert, Platform, ToastAndroid } from "react-native";
+import { Alert, Platform } from "react-native";
+import { showToast as _showToast } from "./toast";
 
 export type AlertButton = {
   text: string;
@@ -25,12 +26,8 @@ export function unregisterAlertListener() {
   _listener = null;
 }
 
-export function showToast(message: string, long = false) {
-  if (Platform.OS === "android") {
-    ToastAndroid.show(message, long ? ToastAndroid.LONG : ToastAndroid.SHORT);
-  } else {
-    showAlert("", message);
-  }
+export function showToast(message: string, _long = false) {
+  _showToast(message, { type: "info" });
 }
 
 export function showAlert(
@@ -48,13 +45,14 @@ export function showAlert(
     return;
   }
 
-  const nativeButtons = (buttons && buttons.length > 0)
-    ? buttons.map((b) => ({
-        text: b.text,
-        style: b.style,
-        onPress: b.onPress,
-      }))
-    : [{ text: "OK" }];
+  const nativeButtons =
+    buttons && buttons.length > 0
+      ? buttons.map((b) => ({
+          text: b.text,
+          style: b.style,
+          onPress: b.onPress,
+        }))
+      : [{ text: "OK" }];
   Alert.alert(title || "", message || "", nativeButtons, { cancelable: true });
 }
 
@@ -99,13 +97,6 @@ function _webFallback(
   else cancelBtn?.onPress?.();
 }
 
-/**
- * Promise-based two-button confirmation built on top of `showAlert`.
- * Resolves to `true` if the user confirms, `false` if they cancel.
- *
- * Useful for destructive actions where we want to await the answer
- * inline instead of nesting callbacks.
- */
 export function confirmAlert(
   title: string,
   message?: string,

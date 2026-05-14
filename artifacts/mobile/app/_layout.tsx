@@ -24,6 +24,8 @@ import { AdvancedFeaturesProvider } from "@/context/AdvancedFeaturesContext";
 import { ChatPreferencesProvider } from "@/context/ChatPreferencesContext";
 import { DataModeProvider } from "@/context/DataModeContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ToastContainer } from "@/components/ui/ToastContainer";
+import { initConnectivityToasts } from "@/lib/toast";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -40,6 +42,10 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError]);
+
+  useEffect(() => {
+    initConnectivityToasts();
+  }, []);
 
   if (!fontsLoaded && !fontError) {
     return null;
@@ -67,6 +73,7 @@ export default function RootLayout() {
                         <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
                         <Stack.Screen name="+not-found" />
                       </Stack>
+                      <ToastContainer />
                     </ChatPreferencesProvider>
                   </AdvancedFeaturesProvider>
                 </LanguageProvider>
