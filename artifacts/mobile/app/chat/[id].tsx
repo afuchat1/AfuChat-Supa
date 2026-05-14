@@ -1557,6 +1557,9 @@ function ChatScreen() {
 
   const loadChatInfo = useCallback(async () => {
     if (!id || !user || isDraft) return;
+    // SQLite fallback (useEffect above) already hydrates chatInfo when offline —
+    // skip the network round-trip so we don't leave a dangling fetch.
+    if (!isOnline()) return;
     const { data: chat } = await supabase
       .from("chats")
       .select(`is_group, is_channel, name, avatar_url, chat_members(user_id, profiles(id, display_name, avatar_url, handle, is_verified, is_organization_verified, last_seen, show_online_status))`)

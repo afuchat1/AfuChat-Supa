@@ -6,7 +6,7 @@ import {
   isOnline,
 } from "./offlineStore";
 import { drainQueue } from "./storage/syncQueue";
-import { getPendingLocalMessages, markMessageSynced } from "./storage/localMessages";
+import { getPendingLocalMessages, markMessageSynced, getLocalMessageCount, saveMessages } from "./storage/localMessages";
 
 let syncing = false;
 
@@ -95,5 +95,36 @@ export function stopOfflineSync(): void {
   if (unsubscribe) {
     unsubscribe();
     unsubscribe = null;
+  }
+}
+
+/**
+ * Proactively pre-caches the last 100 messages for each chat that has no local
+ * messages yet. Called after the chat list loads so opening any visible chat
+ * works offline, even if it was never opened before.
+ *
+ * Fire-and-forget — does not affect UI. Skips conversations already cached.
+ */
+export async function preloadConversationMessages(chatIds: string[]): Promise<void> {
+  if (!isOnline() || chatIds.length === 0) return;
+  for (const chatId of chatIds) {
+    try {
+      // Skip conversations that already have messages in SQLite
+      const count = await getLocalMessageCount(chatId);
+      if (count > 0) continue;
+
+      const { data } = await supabase
+        .from("messages")
+        .select("id, chat_id, sender_id, encrypted_content, sent_at, attachment_url, attachment_type, reply_to_message_id, edited_at, status")
+        .eq("chat_id", chatId)
+        .order("sent_at", { ascending: false })
+        .limit(100);
+
+      if (data && data.length > 0) {
+        await saveMessages(chatId, data);
+      }
+    } catch {
+      // Ignore per-conversation errors — keep going for other chats
+    }
   }
 }

@@ -35,7 +35,7 @@ import { HomeBanner } from "@/components/ui/HomeBanner";
 import { SuggestedUsers } from "@/components/ui/SuggestedUsers";
 import { isOnline } from "@/lib/offlineStore";
 import { getLocalConversations, saveConversations, hasLocalConversations } from "@/lib/storage/localConversations";
-import { addOnlineListener } from "@/lib/offlineSync";
+import { addOnlineListener, preloadConversationMessages } from "@/lib/offlineSync";
 import { wasChatRecentlyVisited, clearChatVisited, getActiveChatId } from "@/lib/chatVisited";
 import { showAlert, confirmAlert } from "@/lib/alert";
 import { useChatPreferences } from "@/context/ChatPreferencesContext";
@@ -927,6 +927,10 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
 
     setChats(items);
     saveConversations(items).catch(() => {});
+    // Proactively pre-cache messages for all visible chats so they open offline
+    // even if the user has never tapped into that conversation before.
+    // Fire-and-forget — skips any chat that already has local messages.
+    preloadConversationMessages(items.map((c) => c.id)).catch(() => {});
     setLoading(false);
     setRefreshing(false);
   }, [user]);

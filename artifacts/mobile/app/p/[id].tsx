@@ -29,6 +29,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import { ImageViewer, useImageViewer } from "@/components/ImageViewer";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { isOnline } from "@/lib/offlineStore";
+import { getLocalFeedPost } from "@/lib/storage/localFeed";
 import { notifyPostLike, notifyPostReply } from "@/lib/notifyUser";
 import { useAutoTranslate } from "@/context/LanguageContext";
 import { LANG_LABELS } from "@/lib/translate";
@@ -257,6 +259,38 @@ export default function PostShortLinkScreen() {
 
   const loadPost = useCallback(async () => {
     if (!id) return;
+
+    // Offline: fall back to local SQLite cache — no network call
+    if (!isOnline()) {
+      const local = await getLocalFeedPost(id);
+      if (local) {
+        setPost({
+          id: local.id,
+          content: local.content ?? "",
+          image_url: local.image_url,
+          images: local.images,
+          post_type: local.post_type || null,
+          article_title: local.article_title,
+          created_at: local.created_at,
+          view_count: local.view_count,
+          visibility: "public",
+          author: {
+            id: local.author_id,
+            display_name: local.author_name ?? "User",
+            avatar_url: local.author_avatar ?? null,
+            handle: local.author_handle ?? "",
+            is_verified: local.is_verified,
+            is_organization_verified: local.is_org_verified,
+          } as any,
+          liked: local.liked,
+          likeCount: local.like_count,
+          replyCount: local.reply_count,
+        });
+      }
+      setLoading(false);
+      return;
+    }
+
     const [postRes, likeCountRes, replyCountRes, myLikeRes, myViewRes] = await Promise.all([
       supabase.from("posts").select(`id, content, image_url, article_title, created_at, view_count, visibility, post_type, video_url, profiles!posts_author_id_fkey(id, display_name, avatar_url, handle, is_verified, is_organization_verified), post_images(image_url, display_order)`).eq("id", id).single(),
       supabase.from("post_acknowledgments").select("id", { count: "exact", head: true }).eq("post_id", id),
@@ -274,7 +308,7 @@ export default function PostShortLinkScreen() {
   }, [id, user]);
 
   const loadReplies = useCallback(async () => {
-    if (!id) return;
+    if (!id || !isOnline()) return;
     const { data } = await supabase.from("post_replies").select("id, content, created_at, parent_reply_id, profiles!post_replies_author_id_fkey(id, display_name, avatar_url, handle, is_verified, is_organization_verified)").eq("post_id", id).order("created_at", { ascending: true }).limit(200);
     if (data) setReplies(data.map((r: any) => ({ ...r, author: r.profiles, parent_reply_id: r.parent_reply_id || null })));
   }, [id]);
