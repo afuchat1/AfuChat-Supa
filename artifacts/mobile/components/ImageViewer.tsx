@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   Modal,
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -48,6 +47,13 @@ function ZoomableSlide({
   const savedOffsetX = useSharedValue(0);
   const savedOffsetY = useSharedValue(0);
 
+  // Pinch gesture start state — saved in onBegin to avoid stale-closure jumps on Android
+  const pinchStartScale = useSharedValue(1);
+  const pinchStartOffX = useSharedValue(0);
+  const pinchStartOffY = useSharedValue(0);
+  const pinchFocalX = useSharedValue(0);
+  const pinchFocalY = useSharedValue(0);
+
   useEffect(() => {
     if (!isActive) {
       scale.value = withSpring(1, SPRING);
@@ -59,16 +65,36 @@ function ZoomableSlide({
     }
   }, [isActive]);
 
+  // Clamp pan offset so image edges can't go past the screen edge
   function clampOffset(val: number, s: number, dim: number) {
+    "worklet";
     const maxPan = Math.max(0, (dim * s - dim) / 2);
     return Math.max(-maxPan, Math.min(maxPan, val));
   }
 
   const pinch = Gesture.Pinch()
+    // Save all state at gesture start so onUpdate has a stable baseline.
+    // This is critical on Android where gestures restart more aggressively.
+    .onBegin((e) => {
+      pinchStartScale.value = savedScale.value;
+      pinchStartOffX.value = savedOffsetX.value;
+      pinchStartOffY.value = savedOffsetY.value;
+      // Focal point relative to container center (content-space)
+      pinchFocalX.value = e.focalX - width / 2;
+      pinchFocalY.value = e.focalY - height / 2;
+    })
     .onUpdate((e) => {
-      const next = Math.max(MIN_SCALE, Math.min(MAX_SCALE, savedScale.value * e.scale));
-      scale.value = next;
-      runOnJS(onScaleChange)(next);
+      const s = Math.max(MIN_SCALE, Math.min(MAX_SCALE, pinchStartScale.value * e.scale));
+      scale.value = s;
+
+      // Focal-point-aware translation:
+      // The screen coordinate under the fingers should remain fixed as scale changes.
+      // Formula: newOffset = focalPoint + (startOffset - focalPoint) * (s / startScale)
+      const scaleRatio = s / (pinchStartScale.value || 1);
+      const fx = pinchFocalX.value;
+      const fy = pinchFocalY.value;
+      offsetX.value = clampOffset(fx + (pinchStartOffX.value - fx) * scaleRatio, s, width);
+      offsetY.value = clampOffset(fy + (pinchStartOffY.value - fy) * scaleRatio, s, height);
     })
     .onEnd(() => {
       if (scale.value < 1) {
@@ -83,11 +109,14 @@ function ZoomableSlide({
         savedScale.value = scale.value;
         savedOffsetX.value = offsetX.value;
         savedOffsetY.value = offsetY.value;
+        runOnJS(onScaleChange)(scale.value);
       }
     });
 
   const pan = Gesture.Pan()
     .minDistance(4)
+    // maxPointers(1) prevents pan from firing during 2-finger pinch on Android
+    .maxPointers(1)
     .onUpdate((e) => {
       if (scale.value > 1.01) {
         offsetX.value = clampOffset(savedOffsetX.value + e.translationX, scale.value, width);
@@ -113,7 +142,8 @@ function ZoomableSlide({
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
-    .maxDuration(250)
+    // 300ms is safer for Android's touch pipeline (vs 250ms which misses on some devices)
+    .maxDuration(300)
     .onEnd((e) => {
       if (scale.value > 1.5) {
         scale.value = withSpring(1, SPRING);
@@ -141,17 +171,21 @@ function ZoomableSlide({
 
   const singleTap = Gesture.Tap()
     .maxDuration(200)
-    .requireExternalGestureToFail(doubleTap)
+    // Do NOT add requireExternalGestureToFail here — it's redundant with
+    // Gesture.Exclusive below and causes double-tap misfires on Android
     .onEnd(() => {
       if (scale.value <= 1.01) {
         runOnJS(onClose)();
       }
     });
 
+  // Compose gestures:
+  // - pinch + pan run simultaneously (two-finger)
+  // - double tap takes priority over single tap (Exclusive)
+  // - all four can coexist in one GestureDetector (Simultaneous outer)
   const composed = Gesture.Simultaneous(
+    Gesture.Simultaneous(pinch, pan),
     Gesture.Exclusive(doubleTap, singleTap),
-    pinch,
-    pan,
   );
 
   const animStyle = useAnimatedStyle(() => ({
@@ -253,6 +287,7 @@ export function ImageViewer({ images, initialIndex = 0, visible, onClose }: Prop
           )}
         </View>
 
+        {/* overflow must be "visible" so the zoomed image is not clipped by the container on Android */}
         <Animated.View style={[styles.slideWrap, { width, height: imgH }, slideStyle]}>
           <ZoomableSlide
             key={index}
@@ -368,7 +403,8 @@ const styles = StyleSheet.create({
   slideWrap: {
     justifyContent: "center",
     alignItems: "center",
-    overflow: "hidden",
+    // overflow must stay "visible" — "hidden" hard-clips zoomed images on Android
+    overflow: "visible",
   },
   navBtn: {
     position: "absolute",
