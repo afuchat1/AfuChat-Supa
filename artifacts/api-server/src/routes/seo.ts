@@ -22,30 +22,66 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 const SITE_URL = "https://afuchat.com";
 
 router.get("/.well-known/assetlinks.json", (_req, res) => {
+  // ANDROID_SHA256_FINGERPRINTS: comma-separated list of SHA256 certificate
+  // fingerprints for the AfuChat Android app signing keys.
+  // Format: "AA:BB:CC:..." (colon-separated hex pairs, uppercase).
+  // Include both the Google Play App Signing key AND any debug/upload key.
+  // Find your fingerprint in: Google Play Console → Setup → App Signing
+  // or by running: eas credentials (for EAS-managed keystore).
+  const raw = (process.env.ANDROID_SHA256_FINGERPRINTS || process.env.ANDROID_SHA256_FINGERPRINT || "").trim();
+  const fingerprints = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && !s.includes("TO_BE_CONFIGURED") && !s.includes("PLACEHOLDER"));
+
+  if (fingerprints.length === 0) {
+    // No valid fingerprints configured — return 404 so Android does not cache
+    // a broken assetlinks.json that would block verification permanently.
+    res.status(404).type("application/json").send(JSON.stringify({ error: "ANDROID_SHA256_FINGERPRINTS not configured" }));
+    return;
+  }
+
+  res.set("Cache-Control", "public, max-age=3600");
   res.type("application/json").send(JSON.stringify([
     {
       relation: ["delegate_permission/common.handle_all_urls"],
       target: {
         namespace: "android_app",
         package_name: "com.afuchat.app",
-        sha256_cert_fingerprints: [
-          process.env.ANDROID_SHA256_FINGERPRINT || "TO_BE_CONFIGURED"
-        ]
+        sha256_cert_fingerprints: fingerprints
       }
     }
   ]));
 });
 
 router.get("/.well-known/apple-app-site-association", (_req, res) => {
+  // APPLE_TEAM_ID: your 10-character Apple Developer Team ID.
+  // Find it at: https://developer.apple.com/account → Membership Details.
+  const teamId = (process.env.APPLE_TEAM_ID || "").trim();
+
+  if (!teamId || teamId === "TEAMID") {
+    res.status(404).type("application/json").send(JSON.stringify({ error: "APPLE_TEAM_ID not configured" }));
+    return;
+  }
+
+  // Modern AASA format (iOS 13+) using appIDs array and components.
+  res.set("Cache-Control", "public, max-age=3600");
   res.type("application/json").send(JSON.stringify({
     applinks: {
-      apps: [],
       details: [
         {
-          appID: `${process.env.APPLE_TEAM_ID || "TEAMID"}.com.afuchat.app`,
-          paths: ["*"]
+          appIDs: [`${teamId}.com.afuchat.app`],
+          components: [
+            { "/": "/*", comment: "Match all paths" }
+          ]
         }
       ]
+    },
+    activitycontinuation: {
+      apps: [`${teamId}.com.afuchat.app`]
+    },
+    webcredentials: {
+      apps: [`${teamId}.com.afuchat.app`]
     }
   }));
 });
