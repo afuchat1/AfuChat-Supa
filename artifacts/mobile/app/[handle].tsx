@@ -359,8 +359,10 @@ export default function HandleScreen() {
       if (!dataReady) return;
       if (profileNotFound) return;
       hasNavigated.current = true;
-      if (typeof window !== "undefined") {
+      if (Platform.OS === "web" && typeof window !== "undefined") {
         window.location.href = session ? "/" : "/register";
+      } else {
+        router.replace(session ? "/" : "/(auth)/login");
       }
     }, 8000);
     return () => clearTimeout(timeout);

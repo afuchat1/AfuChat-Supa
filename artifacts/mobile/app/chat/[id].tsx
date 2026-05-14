@@ -11,6 +11,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Dimensions,
   Text,
   TextInput,
   UIManager,
@@ -18,6 +19,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
+const _SW = Dimensions.get("window").width;
+const ATTACH_W = Math.round(_SW * 0.58);
+const ATTACH_H = Math.round(ATTACH_W * 0.82);
+const STORY_REPLY_W = Math.round(_SW * 0.50);
+const STORY_REPLY_H = Math.round(STORY_REPLY_W * 0.65);
 
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -5525,14 +5532,14 @@ const st = StyleSheet.create({
   },
   translateChipText: { fontSize: 10, fontFamily: "Inter_500Medium" },
 
-  attachImage: { width: 220, height: 180, borderRadius: 10 },
-  attachVideo: { width: 220, height: 180, borderRadius: 10, overflow: "hidden", backgroundColor: "#0D0D0D" },
+  attachImage: { width: ATTACH_W, height: ATTACH_H, borderRadius: 10 },
+  attachVideo: { width: ATTACH_W, height: ATTACH_H, borderRadius: 10, overflow: "hidden", backgroundColor: "#0D0D0D" },
   audioRow: { flexDirection: "row", alignItems: "center", gap: 8, minWidth: 180 },
   fileRow: { flexDirection: "row", alignItems: "center", gap: 10, maxWidth: 260 },
   fileIconBg: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   fileName: { fontSize: 14, fontFamily: "Inter_500Medium" },
   fileMeta: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
-  storyReplyCard: { width: 200, height: 130, borderRadius: 10, overflow: "hidden", borderWidth: 1 },
+  storyReplyCard: { width: STORY_REPLY_W, height: STORY_REPLY_H, borderRadius: 10, overflow: "hidden", borderWidth: 1 },
   storyReplyThumb: { width: "100%", height: "100%" },
   storyReplyOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 5 },
   storyReplyLabel: { fontSize: 11, fontFamily: "Inter_500Medium", color: "rgba(255,255,255,0.9)", flex: 1 },

@@ -2,6 +2,12 @@ import { PixelRatio, useWindowDimensions } from "react-native";
 
 export type ScreenSize = "tiny" | "small" | "medium" | "large" | "xlarge";
 
+/**
+ * Responsive hook — returns live screen dimensions and layout helpers.
+ * Re-renders automatically when the device rotates or window resizes.
+ *
+ * For static StyleSheet values (outside components) use `lib/responsive.ts`.
+ */
 export function useResponsive() {
   const { width, height, fontScale } = useWindowDimensions();
 
@@ -16,14 +22,25 @@ export function useResponsive() {
   const isTiny = width < 320;
   const isTablet = width >= 768;
 
-  const scale = Math.max(0.75, Math.min(width / 390, 1.3));
+  // Scale relative to 375px (iPhone SE — the smallest common phone).
+  // Clamped to [0.8, 1.35] so layouts never shrink/grow too aggressively.
+  const REFERENCE_WIDTH = 375;
+  const scale = Math.max(0.8, Math.min(width / REFERENCE_WIDTH, 1.35));
 
-  const hp = (pct: number) => (width * pct) / 100;
+  /** Width percentage */
+  const wp = (pct: number) => (width * pct) / 100;
+  /** Height percentage */
   const vp = (pct: number) => (height * pct) / 100;
 
-  // Scales by both screen width and device accessibility font size
+  /** Moderate scale — scales size by screen width, dampened by factor */
+  const ms = (base: number, factor = 0.5) => {
+    const scaled = base + (width / REFERENCE_WIDTH - 1) * base * factor;
+    return Math.round(PixelRatio.roundToNearestPixel(scaled));
+  };
+
+  /** Normalize font size — ms() tuned for typography */
   const fontSize = (base: number) => {
-    const widthScaled = Math.round(Math.max(base * 0.8, base * scale));
+    const widthScaled = ms(base, 0.35);
     return Math.round(widthScaled * Math.min(fontScale, 1.4));
   };
 
@@ -45,8 +62,9 @@ export function useResponsive() {
     isSmall,
     isTiny,
     isTablet,
-    hp,
+    wp,
     vp,
+    ms,
     fontSize,
     spacing,
     gridColumns,

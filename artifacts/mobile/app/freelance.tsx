@@ -1341,7 +1341,7 @@ const st = StyleSheet.create({
   catChipText: { fontSize: 12, fontWeight: "600" },
 
   // Featured cards
-  featuredCard: { width: 200, borderRadius: 16, overflow: "hidden" },
+  featuredCard: { width: Math.round(SW * 0.50), borderRadius: 16, overflow: "hidden" },
   featuredGrad: { padding: 14, gap: 8 },
   featuredEmoji: { fontSize: 32 },
   featuredInfo: { gap: 2 },

@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
-import { useAppAccent } from "@/context/AccentContext";
+import { useAppAccent } from "@/context/AppAccentContext";
 import * as Linking from "expo-linking";
 
 export default function InAppBrowser() {

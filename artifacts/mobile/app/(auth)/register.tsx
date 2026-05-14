@@ -146,8 +146,7 @@ function VerifyEmailModal({
 const vmSt = StyleSheet.create({
   overlay: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20 },
   card: { width: "100%", maxWidth: 420, borderRadius: 16, overflow: "hidden",
-    // @ts-ignore
-    boxShadow: "0 20px 60px rgba(0,0,0,0.25)" },
+    shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 20, shadowOffset: { width: 0, height: 10 }, elevation: 12 },
   header: { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: 28, paddingTop: 28, paddingBottom: 20, gap: 12 },
   title: { fontSize: 20, fontFamily: "Inter_700Bold", letterSpacing: -0.3, marginBottom: 6 },
   subtitle: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 22 },

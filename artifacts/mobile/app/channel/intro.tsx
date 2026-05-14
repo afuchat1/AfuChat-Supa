@@ -1,10 +1,17 @@
 import React from "react";
 import {
+  Dimensions,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+
+const _SW = Dimensions.get("window").width;
+const ILLUS_W = Math.round(_SW * 0.56);
+const ILLUS_H = Math.round(ILLUS_W * 1.23);
+const PHONE_W = Math.round(_SW * 0.43);
+const PHONE_H = Math.round(PHONE_W * 1.47);
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -104,15 +111,15 @@ const styles = StyleSheet.create({
   },
 
   illustrationWrap: {
-    width: 220,
-    height: 270,
+    width: ILLUS_W,
+    height: ILLUS_H,
     position: "relative",
     alignItems: "center",
   },
 
   phoneMockup: {
-    width: 170,
-    height: 250,
+    width: PHONE_W,
+    height: PHONE_H,
     backgroundColor: "#1a2940",
     borderRadius: 24,
     overflow: "hidden",
