@@ -14,6 +14,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import { LinearGradient } from "expo-linear-gradient";
 import { Redirect, router, useFocusEffect, useNavigation, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -1501,10 +1502,10 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                       </Text>
                     </View>
                   ) : (
-                    <FlatList
+                    <FlashList
                       data={pageChats}
                       keyExtractor={(item) => item.id}
-                      nestedScrollEnabled
+                      estimatedItemSize={72}
                       renderItem={({ item }) => (
                         <ChatRow
                           item={item}
@@ -1573,9 +1574,10 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                 </Text>
               </View>
             ) : (
-              <FlatList
+              <FlashList
                 data={filtered}
                 keyExtractor={(item) => item.id}
+                estimatedItemSize={72}
                 renderItem={({ item }) => (
                   <ChatRow
                     item={item}

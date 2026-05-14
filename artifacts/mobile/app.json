@@ -8,6 +8,8 @@
     "scheme": "afuchat",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "jsEngine": "hermes",
+    "backgroundColor": "#00BCD4",
     "notification": {
       "icon": "./assets/images/notification-icon-white.png",
       "color": "#00BCD4",

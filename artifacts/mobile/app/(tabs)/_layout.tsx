@@ -277,6 +277,7 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
       screenOptions={{
         headerShown: false,
         lazy: false,
+        freezeOnBlur: true,
         ...(({ contentStyle: { backgroundColor: colors.background } }) as any),
         tabBarStyle: { display: "none" },
       }}
