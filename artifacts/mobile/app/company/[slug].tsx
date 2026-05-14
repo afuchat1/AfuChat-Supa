@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { useOpenLink } from "@/lib/useOpenLink";
 import { supabase, supabaseUrl, supabaseAnonKey } from "@/lib/supabase";
 import { showAlert } from "@/lib/alert";
 import { uploadToStorage } from "@/lib/mediaUpload";
@@ -105,6 +106,7 @@ export default function CompanyPageScreen() {
   const { colors, isDark } = useTheme();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
+  const openLink = useOpenLink();
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const [page, setPage] = useState<OrgPage | null>(null);
@@ -563,7 +565,7 @@ export default function CompanyPageScreen() {
           {page.website ? (
             <TouchableOpacity
               style={[styles.iconBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              onPress={() => Linking.openURL(page.website!.startsWith("http") ? page.website! : `https://${page.website}`)}
+              onPress={() => openLink(page.website!.startsWith("http") ? page.website! : `https://${page.website}`)}
               activeOpacity={0.8}
             >
               <Ionicons name="globe-outline" size={18} color={colors.text} />
@@ -585,7 +587,7 @@ export default function CompanyPageScreen() {
             {socialLinks.instagram ? (
               <TouchableOpacity
                 style={[styles.socialChip, { backgroundColor: "#E1306C18", borderColor: "#E1306C30" }]}
-                onPress={() => Linking.openURL(`https://instagram.com/${socialLinks.instagram.replace("@", "")}`)}
+                onPress={() => openLink(`https://instagram.com/${socialLinks.instagram.replace("@", "")}`)}
                 activeOpacity={0.8}
               >
                 <Ionicons name="logo-instagram" size={14} color="#E1306C" />
@@ -595,7 +597,7 @@ export default function CompanyPageScreen() {
             {socialLinks.x_twitter ? (
               <TouchableOpacity
                 style={[styles.socialChip, { backgroundColor: "#1DA1F218", borderColor: "#1DA1F230" }]}
-                onPress={() => Linking.openURL(`https://x.com/${socialLinks.x_twitter.replace("@", "")}`)}
+                onPress={() => openLink(`https://x.com/${socialLinks.x_twitter.replace("@", "")}`)}
                 activeOpacity={0.8}
               >
                 <Ionicons name="logo-twitter" size={14} color="#1DA1F2" />
@@ -605,7 +607,7 @@ export default function CompanyPageScreen() {
             {socialLinks.linkedin ? (
               <TouchableOpacity
                 style={[styles.socialChip, { backgroundColor: "#0A66C218", borderColor: "#0A66C230" }]}
-                onPress={() => Linking.openURL(`https://linkedin.com/company/${socialLinks.linkedin.replace("@", "")}`)}
+                onPress={() => openLink(`https://linkedin.com/company/${socialLinks.linkedin.replace("@", "")}`)}
                 activeOpacity={0.8}
               >
                 <Ionicons name="logo-linkedin" size={14} color="#0A66C2" />
@@ -957,7 +959,7 @@ export default function CompanyPageScreen() {
                 {job.apply_url ? (
                   <TouchableOpacity
                     style={[styles.applyBtn, { backgroundColor: colors.accent }]}
-                    onPress={() => Linking.openURL(job.apply_url!.startsWith("http") ? job.apply_url! : `https://${job.apply_url}`)}
+                    onPress={() => openLink(job.apply_url!.startsWith("http") ? job.apply_url! : `https://${job.apply_url}`)}
                     activeOpacity={0.8}
                   >
                     <Text style={styles.applyBtnText}>Apply Now</Text>

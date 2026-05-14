@@ -23,6 +23,7 @@ import * as Haptics from "@/lib/haptics";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
+import { useOpenLink } from "@/lib/useOpenLink";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { supabase } from "@/lib/supabase";
 import { getEdgeFnBase, edgeHeaders } from "@/lib/aiHelper";
@@ -1020,6 +1021,7 @@ export default function SearchScreen() {
   // ─── JobCard ─────────────────────────────────────────────────────────────────
 
   function JobCard({ j, i }: { j: JobResult; i: number }) {
+    const openLink = useOpenLink();
     const tc = j.job_type?.toLowerCase().includes("remote") ? SUCCESS
       : j.job_type?.toLowerCase().includes("full") ? "#007AFF"
       : j.job_type?.toLowerCase().includes("part") ? WARN : BRAND;
@@ -1029,7 +1031,7 @@ export default function SearchScreen() {
           style={[ss.contentCard, { backgroundColor: colors.surface }]}
           onPress={() => {
             Haptics.selectionAsync();
-            if (j.apply_url) Linking.openURL(j.apply_url).catch(() => {});
+            if (j.apply_url) openLink(j.apply_url);
             else if (j.company_slug) router.push(`/company/${j.company_slug}` as any);
           }}
           activeOpacity={0.75}

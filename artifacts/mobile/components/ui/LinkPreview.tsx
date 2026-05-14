@@ -8,11 +8,10 @@ import {
   View,
 } from "react-native";
 import { router } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
-import { useAdvancedFeatures } from "@/context/AdvancedFeaturesContext";
+import { useOpenLink } from "@/lib/useOpenLink";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -153,20 +152,10 @@ function UrlPreviewCard({
   accent: string;
 }) {
   const { colors } = useTheme();
-  const { features } = useAdvancedFeatures();
+  const openLink = useOpenLink();
 
   function handlePress() {
-    if (features.in_app_browser) {
-      WebBrowser.openBrowserAsync(card.url, {
-        toolbarColor: "#00BCD4",
-        controlsColor: "#ffffff",
-        presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-        enableBarCollapsing: true,
-        showTitle: true,
-      }).catch(() => {});
-    } else {
-      import("react-native").then(({ Linking }) => Linking.openURL(card.url).catch(() => {}));
-    }
+    openLink(card.url);
   }
 
   const bg = isMe ? "rgba(255,255,255,0.12)" : colors.backgroundSecondary;

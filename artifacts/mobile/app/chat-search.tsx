@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
-  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useOpenLink } from "@/lib/useOpenLink";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
@@ -660,12 +660,13 @@ export default function ChatSearchScreen() {
 
   function LinkRow({ item }: { item: LinkResult }) {
     const domain = (() => { try { return new URL(item.url).hostname.replace("www.", ""); } catch { return item.url.slice(0, 30); } })();
+    const openLink = useOpenLink();
     return (
       <TouchableOpacity
         style={[ss.row, { borderBottomColor: colors.border }]}
         onPress={() => {
           Haptics.selectionAsync();
-          Linking.openURL(item.url).catch(() => {});
+          openLink(item.url);
         }}
         activeOpacity={0.72}
       >

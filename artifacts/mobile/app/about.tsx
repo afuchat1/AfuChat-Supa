@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useOpenLink } from "@/lib/useOpenLink";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -107,6 +108,7 @@ function FaqItem({ item }: { item: { q: string; a: string } }) {
 export default function AboutScreen() {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const openLink = useOpenLink();
 
   return (
     <View style={[st.root, { backgroundColor: colors.backgroundSecondary }]}>
@@ -233,7 +235,7 @@ export default function AboutScreen() {
               <TouchableOpacity
                 style={st.legalRow}
                 activeOpacity={0.7}
-                onPress={() => Linking.openURL(item.url).catch(() => {})}
+                onPress={() => openLink(item.url)}
               >
                 <View style={[st.legalIcon, { backgroundColor: item.iconBg }]}>
                   <Ionicons name={item.icon as any} size={18} color={item.iconColor} />

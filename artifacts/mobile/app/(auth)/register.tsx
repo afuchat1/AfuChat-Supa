@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
+import { useOpenLink } from "@/lib/useOpenLink";
 import { supabase } from "@/lib/supabase";
 
 import { useAuth } from "@/context/AuthContext";
@@ -159,6 +160,7 @@ const vmSt = StyleSheet.create({
 // ─── Terms checkbox ───────────────────────────────────────────────────────────
 function TermsRow({ agreed, onToggle, colors, isDark }: any) {
   const { accent } = useAppAccent();
+  const openLink = useOpenLink();
   return (
     <TouchableOpacity style={termsSt.row} onPress={onToggle} activeOpacity={0.7}>
       <View style={[termsSt.box, { borderColor: agreed ? accent : isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)", backgroundColor: agreed ? accent : "transparent" }]}>
@@ -166,9 +168,9 @@ function TermsRow({ agreed, onToggle, colors, isDark }: any) {
       </View>
       <Text style={[termsSt.text, { color: colors.textSecondary }]}>
         I agree to the{" "}
-        <Text style={{ color: accent }} onPress={() => Linking.openURL("https://afuchat.com/terms")}>Terms of Service</Text>
+        <Text style={{ color: accent }} onPress={() => openLink("https://afuchat.com/terms")}>Terms of Service</Text>
         {" "}and{" "}
-        <Text style={{ color: accent }} onPress={() => Linking.openURL("https://afuchat.com/privacy")}>Privacy Policy</Text>
+        <Text style={{ color: accent }} onPress={() => openLink("https://afuchat.com/privacy")}>Privacy Policy</Text>
       </Text>
     </TouchableOpacity>
   );

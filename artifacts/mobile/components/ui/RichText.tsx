@@ -1,11 +1,9 @@
 import React from "react";
-import { Platform, StyleSheet, Text } from "react-native";
-import { Linking } from "react-native";
+import { Linking, StyleSheet, Text } from "react-native";
 import { router } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAppAccent } from "@/context/AppAccentContext";
-import { useAdvancedFeatures } from "@/context/AdvancedFeaturesContext";
-import * as WebBrowser from "expo-web-browser";
+import { useOpenLink } from "@/lib/useOpenLink";
 
 type RichTextProps = {
   children: string;
@@ -87,7 +85,7 @@ function parseText(text: string): Segment[] {
 
 export function RichText({ children, style, linkColor, numberOfLines, selectable }: RichTextProps) {
   const { accent } = useAppAccent();
-  const { features } = useAdvancedFeatures();
+  const openLink = useOpenLink();
   const effectiveLinkColor = linkColor ?? accent;
 
   function handlePress(segment: Segment) {
@@ -95,17 +93,7 @@ export function RichText({ children, style, linkColor, numberOfLines, selectable
       case "url": {
         let url = segment.text;
         if (!url.startsWith("http")) url = "https://" + url;
-        if (features.in_app_browser && Platform.OS !== "web") {
-          WebBrowser.openBrowserAsync(url, {
-            toolbarColor: "#00BCD4",
-            controlsColor: "#ffffff",
-            presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-            enableBarCollapsing: true,
-            showTitle: true,
-          }).catch(() => Linking.openURL(url).catch(() => {}));
-        } else {
-          Linking.openURL(url).catch(() => {});
-        }
+        openLink(url);
         break;
       }
       case "email": {

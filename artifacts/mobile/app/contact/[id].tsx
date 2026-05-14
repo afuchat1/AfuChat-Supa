@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useOpenLink } from "@/lib/useOpenLink";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -111,6 +112,7 @@ export default function ContactProfileScreen() {
   }>();
   const { id } = params;
   const { colors } = useTheme();
+  const openLink = useOpenLink();
   const { user, profile: myProfile } = useAuth();
   const insets = useSafeAreaInsets();
   const { isDesktop } = useIsDesktop();
@@ -573,7 +575,7 @@ export default function ContactProfileScreen() {
               const url = profile.website_url!.startsWith("http")
                 ? profile.website_url!
                 : `https://${profile.website_url}`;
-              Linking.openURL(url).catch(() => {});
+              openLink(url);
             }}
           >
             <Ionicons name="link-outline" size={11} color={colors.accent} />

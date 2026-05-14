@@ -30,6 +30,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { useOpenLink } from "@/lib/useOpenLink";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width: SW, height: SH } = Dimensions.get("window");
@@ -191,6 +192,7 @@ function ResultSheet({
   result: QRResult; colors: any; insets: any; onClose: () => void; onRescan: () => void; user: any;
 }) {
   const [resolving, setResolving] = useState(false);
+  const openLink = useOpenLink();
 
   async function handleAfuChatId() {
     const rawAfuId = result.raw.replace("afuchat://id/", "").replace(/\s/g, "");
@@ -216,8 +218,8 @@ function ResultSheet({
     onClose();
   }
 
-  async function handleOpenUrl() {
-    try { await Linking.openURL(result.raw); } catch { showAlert("Error", "Could not open URL."); }
+  function handleOpenUrl() {
+    openLink(result.raw);
   }
 
   async function copyToClipboard(text: string) {
