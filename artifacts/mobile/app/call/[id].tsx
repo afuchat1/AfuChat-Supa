@@ -176,6 +176,7 @@ export default function CallScreen() {
         await playRingtone();
         await notifyCallInitiated({
           calleeId: record.callee_id,
+          callerId: record.caller_id,
           callId: record.id,
           callType: record.call_type as CallType,
           callerName: record.caller?.display_name || "Someone",

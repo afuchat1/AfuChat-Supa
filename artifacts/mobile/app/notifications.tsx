@@ -101,6 +101,8 @@ const TYPE_CONFIG: Record<string, TypeConfig> = {
   system:        { icon: "shield-checkmark",label: "system notification",          color: BRAND,     category: "system",      bodyText: "Tap to view details",                     canReply: false, getRoute: () => null },
   verification_approved:{ icon: "checkmark-circle", label: "verification approved",color: "#34C759", category: "system",     bodyText: "Your verified badge is now live ✅",       canReply: false, getRoute: () => "/me" },
   verification_update:{ icon: "information-circle", label: "verification update",  color: "#FF9500", category: "system",      bodyText: "More information needed for verification",canReply: false, getRoute: () => "/me" },
+  new_message:   { icon: "chatbubble-ellipses", label: "sent you a message",       color: BRAND,     category: "social",      bodyText: "Tap to open the conversation",            canReply: true,  getRoute: (n) => n.reference_id ? `/chat/${n.reference_id}` : null },
+  call:          { icon: "call",            label: "called you",                   color: "#34C759", category: "social",      bodyText: "Tap to view call details",                canReply: false, getRoute: () => null },
 };
 
 function getFallbackConfig(_type: string): TypeConfig {

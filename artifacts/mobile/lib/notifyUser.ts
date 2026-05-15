@@ -221,6 +221,10 @@ export async function notifyNewMessage(params: {
         actorId: params.senderUserId,
         notifType: "new_message",
       },
+      notificationType: "new_message",
+      actorId: params.senderUserId,
+      referenceId: params.chatId,
+      referenceType: "chat",
     });
   }
 }
@@ -653,6 +657,7 @@ export async function notifyVerificationStatus(params: {
 
 export async function notifyCallInitiated(params: {
   calleeId: string;
+  callerId: string;
   callId: string;
   callType: "voice" | "video";
   callerName: string;
@@ -666,9 +671,13 @@ export async function notifyCallInitiated(params: {
       type: "call",
       callId: params.callId,
       callType: params.callType,
+      actorId: params.callerId,
       notifType: "call",
       url: `/call/${params.callId}`,
     },
     notificationType: "call",
+    actorId: params.callerId,
+    referenceId: params.callId,
+    referenceType: "call",
   });
 }
