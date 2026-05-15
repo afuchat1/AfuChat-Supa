@@ -338,7 +338,7 @@ export default function EditProfileScreen() {
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}
-      keyboardVerticalOffset={0}
+      keyboardVerticalOffset={insets.top + 48}
     >
       {/* Native-style navigation header */}
       <View style={[styles.navBar, { paddingTop: insets.top, backgroundColor: colors.background, borderBottomColor: colors.border }]}>

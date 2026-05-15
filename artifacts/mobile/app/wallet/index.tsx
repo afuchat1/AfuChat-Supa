@@ -416,6 +416,7 @@ export default function WalletScreen() {
       return;
     }
 
+    try {
     const [
       { data: xpSent },
       { data: xpReceived },
@@ -526,8 +527,11 @@ export default function WalletScreen() {
     all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     setTransactions(all);
     cacheWallet({ acoin: profile?.acoin ?? 0, transactions: all });
-    setLoading(false);
-    setRefreshing(false);
+    } catch (_) {
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [user, profile]);
 
   const loadPendingCount = useCallback(async () => {

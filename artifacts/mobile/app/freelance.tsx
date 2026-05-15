@@ -422,7 +422,7 @@ export default function FreelanceScreen() {
 
       {/* ── Tab Content ── */}
       {loading ? (
-        <View style={{ paddingTop: 8 }}>
+        <View style={{ flex: 1, paddingTop: 8 }}>
           {[1,2,3,4].map(i => <FreelanceCardSkeleton key={i} />)}
         </View>
       ) : tab === "explore" ? (
