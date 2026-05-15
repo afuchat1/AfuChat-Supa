@@ -598,7 +598,7 @@ export default function LabScreen() {
                   } catch {}
                   router.push({
                     pathname: "/ai",
-                    params: { q: `Tell me more about ${result.title}` },
+                    params: { lensIntro: "true" },
                   } as any);
                 }}
                 activeOpacity={0.85}

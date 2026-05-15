@@ -10,7 +10,7 @@ import { AiRedirectSkeleton } from "@/components/ui/Skeleton";
 
 const AI_CHAT_CACHE_KEY = "afuai_direct_chat_id";
 
-function goToAiChat(chatId: string, initialMessage?: string) {
+function goToAiChat(chatId: string, options?: { initialMessage?: string; lensIntro?: string }) {
   router.replace({
     pathname: "/chat/[id]",
     params: {
@@ -20,7 +20,8 @@ function goToAiChat(chatId: string, initialMessage?: string) {
       isGroup: "false",
       isChannel: "false",
       chatName: "",
-      ...(initialMessage ? { initialMessage } : {}),
+      ...(options?.initialMessage ? { initialMessage: options.initialMessage } : {}),
+      ...(options?.lensIntro ? { lensIntro: options.lensIntro } : {}),
     },
   } as any);
 }
@@ -28,14 +29,20 @@ function goToAiChat(chatId: string, initialMessage?: string) {
 export default function AiRedirect() {
   const { user } = useAuth();
   const { colors } = useTheme();
-  const { q } = useLocalSearchParams<{ q?: string }>();
+  const { q, lensIntro } = useLocalSearchParams<{ q?: string; lensIntro?: string }>();
 
   useEffect(() => {
     if (!user) return;
 
+    const opts = q
+      ? { initialMessage: q }
+      : lensIntro
+        ? { lensIntro }
+        : undefined;
+
     AsyncStorage.getItem(AI_CHAT_CACHE_KEY).then((cached) => {
       if (cached) {
-        goToAiChat(cached, q);
+        goToAiChat(cached, opts);
       }
     });
 
@@ -44,7 +51,7 @@ export default function AiRedirect() {
       .then(({ data: chatId }) => {
         if (chatId) {
           AsyncStorage.setItem(AI_CHAT_CACHE_KEY, chatId).catch(() => {});
-          goToAiChat(chatId, q);
+          goToAiChat(chatId, opts);
         } else {
           router.back();
         }

@@ -473,7 +473,15 @@ function parseAiRichText(raw: string): RichSeg[] {
   }
   return segs;
 }
-function stripMd(s: string) { return s.replace(/\*{1,3}/g, "").replace(/^#{1,3}\s*/gm, "").replace(/`/g, ""); }
+function stripMd(s: string) {
+  return s
+    .replace(/\*{1,3}([^*\n]*)\*{1,3}/g, "$1")
+    .replace(/_{1,2}([^_\n]*)_{1,2}/g, "$1")
+    .replace(/\*{1,3}/g, "")
+    .replace(/_{1,2}/g, "")
+    .replace(/^#{1,3}\s*/gm, "")
+    .replace(/`/g, "");
+}
 function stripMdForPreview(s: string): string {
   return s
     .replace(/\[ACTION:[^\]]+\]/g, "")
@@ -905,7 +913,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
                   </View>
                 </TouchableOpacity>
               {hasTextContent && (
-                <RichText style={[st.bubbleText, { color: textColor, marginTop: 6, fontSize: chatPrefsLocal?.font_size ?? 15, lineHeight: (chatPrefsLocal?.font_size ?? 15) + 5 }]} linkColor={isMe ? "#FFFFFF" : BRAND}>{displayText}</RichText>
+                <RichText style={[st.bubbleText, { color: textColor, marginTop: 6, fontSize: chatPrefsLocal?.font_size ?? 15, lineHeight: (chatPrefsLocal?.font_size ?? 15) + 5 }]} linkColor={isMe ? "#FFFFFF" : BRAND}>{stripMd(displayText)}</RichText>
               )}
             </>
           ) : hasVideo ? (
@@ -1026,7 +1034,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
             <TouchableOpacity onLongPress={() => onLongPress(msg)} delayLongPress={300} activeOpacity={0.9}>
               {msg._isAi
                 ? <AiRichContent content={displayText} colors={colors} isUser={isMe} />
-                : <RichText style={[st.bubbleText, { color: textColor, fontSize: chatPrefsLocal?.font_size ?? 15, lineHeight: (chatPrefsLocal?.font_size ?? 15) + 5 }]} linkColor={isMe ? "#FFFFFF" : BRAND} selectable={Platform.OS === "web"}>{displayText}</RichText>
+                : <RichText style={[st.bubbleText, { color: textColor, fontSize: chatPrefsLocal?.font_size ?? 15, lineHeight: (chatPrefsLocal?.font_size ?? 15) + 5 }]} linkColor={isMe ? "#FFFFFF" : BRAND} selectable={Platform.OS === "web"}>{stripMd(displayText)}</RichText>
               }
               {!msg._isAi && !isSpecial && chatPrefsLocal?.link_previews !== false && (
                 <LinkPreview text={displayText} isMe={isMe} />
@@ -1212,6 +1220,7 @@ function ChatScreen() {
     chatName,
     chatAvatar,
     initialMessage,
+    lensIntro,
   } = useLocalSearchParams<{
     id: string;
     contactId?: string;
@@ -1225,6 +1234,7 @@ function ChatScreen() {
     chatName?: string;
     chatAvatar?: string;
     initialMessage?: string;
+    lensIntro?: string;
   }>();
   const isDraft = id === "new";
   const { user, profile, isPremium, subscription, refreshProfile } = useAuth();
@@ -1382,6 +1392,7 @@ function ChatScreen() {
   const oldestCursorRef = useRef<string | null>(null);
   const scrollBtnOpacity = useRef(new Animated.Value(0)).current;
   const autoSentInitialRef = useRef(false);
+  const lensInjectedRef = useRef(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recLocked, setRecLocked] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -2177,6 +2188,49 @@ function ChatScreen() {
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, user, chatInfo?.other_id, initialMessage]);
+
+  // AI Lens → Chat: immediately inject a rich AI intro message so the user
+  // arrives in a chat that already has AI-generated content about their scan.
+  useEffect(() => {
+    if (!lensIntro || lensIntro !== "true") return;
+    if (!user || loading || lensInjectedRef.current) return;
+    if (chatInfo?.other_id !== AFUAI_BOT_ID) return;
+    lensInjectedRef.current = true;
+    AsyncStorage.getItem("afuai_lens_context").then((raw) => {
+      if (!raw) return;
+      try {
+        const ctx = JSON.parse(raw);
+        if (!ctx.expiresAt || ctx.expiresAt <= Date.now()) return;
+        AsyncStorage.removeItem("afuai_lens_context").catch(() => {});
+        const factsBlock = ctx.facts?.length
+          ? `\n\nKey facts:\n${(ctx.facts as string[]).map((f) => `• ${f}`).join("\n")}`
+          : "";
+        const answerBlock = ctx.answer ? `\n\n${ctx.answer}` : "";
+        const suggestions = [
+          `[SUGGEST:Tell me more about ${ctx.title}]`,
+          `[SUGGEST:How is this used?]`,
+          `[SUGGEST:What else should I know?]`,
+        ].join("");
+        const content =
+          `**${ctx.title}**\n\n${ctx.description}${factsBlock}${answerBlock}${suggestions}`;
+        const introMsg: Message = {
+          id: `lens_intro_${Date.now()}`,
+          chat_id: id as string,
+          sender_id: AFUAI_BOT_ID,
+          encrypted_content: content,
+          sent_at: new Date().toISOString(),
+          sender: { display_name: "AfuAI", avatar_url: null, handle: "afuai" },
+          reactions: [],
+          _isAi: true,
+        };
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === introMsg.id)) return prev;
+          return [...prev, introMsg];
+        });
+      } catch {}
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, user, chatInfo?.other_id, lensIntro]);
 
   function handleSmartReply(text: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
