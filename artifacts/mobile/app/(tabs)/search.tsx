@@ -27,6 +27,7 @@ import { useOpenLink } from "@/lib/useOpenLink";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { supabase } from "@/lib/supabase";
 import { getEdgeFnBase, edgeHeaders } from "@/lib/aiHelper";
+import { detectNavIntent, PLATFORM_NAV_MAP, PLATFORM_FEATURES_GUIDE } from "@/lib/platformKnowledge";
 import {
   getSearchHistory,
   addToHistory,
@@ -98,7 +99,7 @@ type EventResult   = { id:string; title:string; description:string|null; emoji:s
 type GiftResult    = { id:string; name:string; emoji:string; base_xp_cost:number; rarity:string; description:string|null };
 type MarketResult  = { id:string; kind:"product"|"freelance"|"community"; title:string; desc:string|null; emoji:string|null; image_url:string|null; price:number; badge:string|null; seller_name:string; route:string };
 type JobResult     = { id:string; title:string; job_type:string|null; location:string|null; description:string|null; apply_url:string|null; created_at:string; company_name:string; company_logo:string|null; company_slug:string|null };
-type AiInsight     = { summary:string; suggestions:string[]; intent:string; bestCategory:string; keyTerms:string[]; explanation:string; actions:string[] };
+type AiInsight     = { summary:string; suggestions:string[]; intent:string; bestCategory:string; keyTerms:string[]; explanation:string; actions:string[]; navigateTo?:string; navigateLabel?:string; directAnswer?:string };
 
 type AllResults = {
   people:   (PersonResult|OrgPageResult)[];
@@ -157,18 +158,25 @@ function parseAiJson(raw: string): Record<string, any> | null {
 }
 
 async function fetchAiInsight(query: string): Promise<AiInsight | null> {
+  // Fast path: check for navigation intent locally before hitting AI
+  const navIntent = detectNavIntent(query);
+
   try {
     const res = await fetch(`${getEdgeFnBase()}/afu-ai-reply`, {
       method: "POST",
       headers: edgeHeaders(),
       body: JSON.stringify({
-        max_tokens: 700,
+        max_tokens: 900,
         messages: [
           {
             role: "system",
-            content: `You are AfuChat's intelligent search assistant. Analyze the user's search query in context of the AfuChat platform and return a JSON guide to help them find exactly what they need.
+            content: `You are AfuChat's intelligent search and navigation assistant. Analyze the user's query in context of the AfuChat platform and return a JSON object that helps them find what they need OR navigate directly to the right screen.
 
-AfuChat search categories:
+${PLATFORM_NAV_MAP}
+
+${PLATFORM_FEATURES_GUIDE}
+
+AfuChat search categories (for content search):
 - people: user profiles, @handles, bios, organisations
 - posts: text posts, articles, photo posts with hashtags/mentions
 - videos: short and long video content, tutorials, vlogs
@@ -178,31 +186,42 @@ AfuChat search categories:
 - market: products, freelance services, paid communities
 - jobs: job and internship listings by companies
 
-Reply ONLY with a single JSON object — no markdown, no code fences, no explanation text outside the JSON:
-{"summary":"2-3 sentences on what the user wants and why","intent":"person|content|video|topic|product|service|event|job|gift|community|mixed","bestCategory":"people|posts|videos|channels|events|gifts|market|jobs|all","keyTerms":["term1","term2"],"suggestions":["refined search 1","related search 2","alternative angle"],"explanation":"one sentence on why bestCategory is best","actions":["specific AfuChat action 1","specific AfuChat action 2","specific AfuChat action 3"]}
+IMPORTANT — detect the query type:
+1. If the query is a NAVIGATION request ("go to wallet", "open settings", "how do I top up", "where is the referral page") → set navigateTo to the exact route path and navigateLabel to a short name, and set directAnswer to a 1-2 sentence how-to.
+2. If the query is a FEATURE QUESTION ("how do I send money", "what is Nexa", "how do referrals work") → set directAnswer to a concise 2-3 sentence answer using platform knowledge, and set navigateTo if relevant.
+3. If the query is a CONTENT SEARCH (looking for users/posts/videos) → set bestCategory and leave navigateTo empty.
 
-Actions must name specific AfuChat tabs/features (People tab, Market > Freelance, subscribe to channel, DM, join group, apply to job, send gift, attend event).`,
+Reply ONLY with a single JSON object — no markdown, no code fences, no explanation outside JSON:
+{"summary":"1-2 sentences on what the user wants","intent":"navigation|question|person|content|video|topic|product|service|event|job|gift|community|mixed","bestCategory":"people|posts|videos|channels|events|gifts|market|jobs|all","keyTerms":["term1","term2"],"suggestions":["refined search 1","related search 2"],"explanation":"one sentence on why bestCategory is best","actions":["specific step 1","specific step 2","specific step 3"],"navigateTo":"","navigateLabel":"","directAnswer":""}
+
+- navigateTo: exact route path like /wallet or /mini-programs/airtime (empty string if not a nav query)
+- navigateLabel: short human name for the destination (empty if no nav)
+- directAnswer: concise answer if this is a how-to or feature question (empty if pure content search)
+- actions: 2-3 concrete steps the user should take in AfuChat`,
           },
           { role: "user", content: `Search query: "${query}"` },
         ],
       }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) return navIntent ? { summary: `Navigate to ${navIntent.label}`, intent: "navigation", bestCategory: "all", keyTerms: [], suggestions: [], explanation: "", actions: [], navigateTo: navIntent.route, navigateLabel: navIntent.label } : null;
     const data = await res.json();
     const raw: string = data?.choices?.[0]?.message?.content ?? data?.content ?? data?.reply ?? "";
     const parsed = parseAiJson(raw);
-    if (!parsed) return null;
+    if (!parsed) return navIntent ? { summary: `Navigate to ${navIntent.label}`, intent: "navigation", bestCategory: "all", keyTerms: [], suggestions: [], explanation: "", actions: [], navigateTo: navIntent.route, navigateLabel: navIntent.label } : null;
     return {
-      summary:      typeof parsed.summary      === "string" ? parsed.summary      : "",
-      intent:       typeof parsed.intent        === "string" ? parsed.intent        : "mixed",
-      bestCategory: typeof parsed.bestCategory  === "string" ? parsed.bestCategory  : "all",
-      keyTerms:     Array.isArray(parsed.keyTerms)   ? parsed.keyTerms   : [],
-      suggestions:  Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
-      explanation:  typeof parsed.explanation  === "string" ? parsed.explanation  : "",
-      actions:      Array.isArray(parsed.actions)    ? parsed.actions    : [],
+      summary:       typeof parsed.summary       === "string" ? parsed.summary       : "",
+      intent:        typeof parsed.intent         === "string" ? parsed.intent         : "mixed",
+      bestCategory:  typeof parsed.bestCategory   === "string" ? parsed.bestCategory   : "all",
+      keyTerms:      Array.isArray(parsed.keyTerms)    ? parsed.keyTerms    : [],
+      suggestions:   Array.isArray(parsed.suggestions)  ? parsed.suggestions  : [],
+      explanation:   typeof parsed.explanation    === "string" ? parsed.explanation    : "",
+      actions:       Array.isArray(parsed.actions)     ? parsed.actions     : [],
+      navigateTo:    typeof parsed.navigateTo     === "string" && parsed.navigateTo ? parsed.navigateTo : (navIntent?.route || undefined),
+      navigateLabel: typeof parsed.navigateLabel  === "string" && parsed.navigateLabel ? parsed.navigateLabel : (navIntent?.label || undefined),
+      directAnswer:  typeof parsed.directAnswer   === "string" && parsed.directAnswer ? parsed.directAnswer : undefined,
     } as AiInsight;
   } catch {
-    return null;
+    return navIntent ? { summary: `Navigate to ${navIntent.label}`, intent: "navigation", bestCategory: "all", keyTerms: [], suggestions: [], explanation: "", actions: [], navigateTo: navIntent.route, navigateLabel: navIntent.label } : null;
   }
 }
 
@@ -1137,11 +1156,37 @@ export default function SearchScreen() {
             <>
               <View style={{ height: 12 }} />
 
+              {/* Navigate button — shown when AI detects navigation intent */}
+              {aiInsight.navigateTo && (
+                <TouchableOpacity
+                  activeOpacity={0.82}
+                  onPress={() => { router.push(aiInsight.navigateTo as any); setInsightExpanded(false); }}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: BRAND + "18", borderRadius: 10, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: BRAND + "40" }}
+                >
+                  <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: BRAND, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Ionicons name="navigate-outline" size={17} color="#fff" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: BRAND, fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.5 }}>TAKE ME THERE</Text>
+                    <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_600SemiBold", marginTop: 1 }}>{aiInsight.navigateLabel || aiInsight.navigateTo}</Text>
+                  </View>
+                  <Ionicons name="arrow-forward-circle" size={22} color={BRAND} />
+                </TouchableOpacity>
+              )}
+
+              {/* Direct answer — shown when AI answers a how-to or feature question */}
+              {aiInsight.directAnswer && (
+                <View style={{ backgroundColor: isDark ? "#ffffff0A" : "#0000000A", borderRadius: 9, padding: 11, marginBottom: 10, borderLeftWidth: 3, borderLeftColor: PURPLE }}>
+                  <Text style={{ color: PURPLE, fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.5, marginBottom: 5 }}>ANSWER</Text>
+                  <Text style={{ color: colors.text, fontSize: 13, lineHeight: 19 }}>{aiInsight.directAnswer}</Text>
+                </View>
+              )}
+
               {/* Summary */}
               <Text style={{ color: colors.text, fontSize: 13, lineHeight: 19, marginBottom: 10 }}>{aiInsight.summary}</Text>
 
               {/* Best category — tappable to switch tab */}
-              {aiInsight.explanation ? (
+              {aiInsight.explanation && aiInsight.intent !== "navigation" ? (
                 <TouchableOpacity
                   activeOpacity={0.75}
                   onPress={() => {

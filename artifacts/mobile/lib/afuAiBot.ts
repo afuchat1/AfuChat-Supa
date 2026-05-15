@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { askAi } from "@/lib/aiHelper";
+import { buildNavigationContext, ACTION_ROUTES_GUIDE } from "@/lib/platformKnowledge";
 
 export const AFUAI_BOT_ID = "c7ec234e-1ae8-499c-8318-6a592c5f81bb";
 
@@ -49,10 +50,18 @@ export async function getAfuAiReply(
 
   const contextBlock = history ? `Conversation so far:\n${history}\n\n` : "";
   const name = userName ? `The user's name is ${userName}. ` : "";
+  const platformContext = buildNavigationContext();
 
   return askAi(
     `${contextBlock}User: ${userText}`,
-    `You are AfuAI, a friendly and capable AI assistant built into AfuChat — a social super app from Uganda. ${name}Help with anything: questions, writing, analysis, coding, creative tasks, advice, translations, and more. Respond in the same language the user writes in. Keep replies conversational and appropriately concise for a chat context. Never mention being built by another company — you are AfuAI.`,
-    { fast: false, maxTokens: 600 }
+    `You are AfuAI, a friendly and capable AI assistant built into AfuChat — a social super app from Uganda. ${name}Help with anything: questions, writing, analysis, coding, creative tasks, advice, translations, and more. Respond in the same language the user writes in. Keep replies conversational and appropriately concise for a chat context. Never mention being built by another company — you are AfuAI.
+
+PLATFORM KNOWLEDGE — use this when the user asks how to do something or where to find something in the app:
+${platformContext}
+
+${ACTION_ROUTES_GUIDE}
+
+When the user asks how to navigate somewhere or how to use a feature, give clear step-by-step guidance and use [ACTION:Button label:/route] tags so they can tap directly to the right screen.`,
+    { fast: false, maxTokens: 800 }
   );
 }
